@@ -79,6 +79,7 @@ export type NotificationType =
   | "fee_dispute_resolved"
   | "fee_payment_requested"
   | "fee_paid_by_client"
+  | "tip_received"
   | "fee_payment_lapsed"
   /** Provider owes money a take-back couldn't recover, and when some is taken from a payout. */
   | "payout_debt_recorded"
@@ -244,6 +245,10 @@ export interface DbProvider {
   service_categories: ServiceCategory[];
   custom_service_type: string | null;
   location_text: string | null;
+  /** Public "How to get there" for the profile — stations, parking,
+   *  landmarks. Never door codes: those are provider_private_details
+   *  .how_to_get_there, released with the address. */
+  public_directions: string | null;
   latitude: number | null;
   longitude: number | null;
   about_text: string | null;
@@ -654,6 +659,9 @@ export interface DbBooking {
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
   provider_address_snapshot: string | null;
+  /** Private venue access instructions snapshotted at booking. The
+   * client_bookings view release-gates this with the address. */
+  provider_directions_snapshot?: string | null;
   provider_phone_snapshot: string | null;
   provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
@@ -681,6 +689,11 @@ export interface DbBooking {
   no_show_disputed_at?: string | null;
   refunded_amount?: number | null;
   policy_retained_amount?: number | null;
+  /** Start of the appointment the client moved away from while already
+   *  inside its cancellation window (migration 20261101130000). */
+  late_reschedule_from?: string | null;
+  /** client_bookings only: booked after that rule went live, so it applies. */
+  late_reschedule_rule_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;
@@ -911,6 +924,7 @@ export type ProviderWithServices = Pick<
   | "service_categories"
   | "custom_service_type"
   | "location_text"
+  | "public_directions"
   | "about_text"
   | "logo_url"
   | "gradient"
@@ -1033,13 +1047,16 @@ export interface DbProviderDailyStat {
   book_taps: number;
   search_appearances: number;
   instagram_taps: number;
+  /** Clients who asked this link-only provider to take bookings on CERVICED. */
+  join_nudges: number;
 }
 
 export type ProviderStatKind =
   | 'profile_view'
   | 'book_tap'
   | 'search_appearance'
-  | 'instagram_tap';
+  | 'instagram_tap'
+  | 'join_nudge';
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {

@@ -25,6 +25,18 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Applied 2026-11-01 (public "How to get there" on the profile)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101140000 | `provider_public_directions` | **APPLIED 2026-11-01** by cerviced-72 (MCP, on the user's OK), behind a guard that aborted unless the frontier was still `20261101115322`; dry-run in a rolled-back transaction first. Verified live: column `text` nullable, 0 of 11 providers filled, `authenticated` can select it, a 301-character value is refused by the CHECK. Frontier after: **20261101140000**. cerviced-e3 (formerly 4b) applied its `20261101130000`/`130100`/`130200` the same afternoon, after this one; they touch none of the same objects, so the order doesn't matter and all five 2026-11-01 versions are recorded live. Branch `feat/profile-how-to-get-there` (stacked on `feat/booking-directions`, #196). Frontier: live `20261101115322` (2026-11-01); cerviced-4b's unapplied `20261101130000`/`130100`/`130200` sit below it and touch none of the same objects, so apply order between them doesn't matter. Adds nullable `providers.public_directions text` with a 300-character CHECK. No backfill, no policy or grant change (table-level grants). Redefines nothing. Records its own version. **Apply before this branch merges**: the profile's public select names the column, so without it every provider profile fails to load. |
+
+### Pending 2026-10-31 (rescheduling can't dodge a late-cancel charge)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101130000 | `late_reschedule_keeps_cancel_charge` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/late-reschedule-keeps-cancel-charge`. Frontier: live `20261101115322` (2026-11-01); first written as `20261031200000` and renumbered above it. The view is rebuilt from that migration's `client_bookings` (keeps `provider_directions_snapshot`) and md5-guarded. Adds `booking_reschedule_requests.requested_inside_cancel_window` and `bookings.late_reschedule_from` (both readable by `authenticated` via column grants). Redefines from live, md5-guarded (the file aborts if any changed): `request_reschedule_own_booking`, `confirm_reschedule_own_booking`, `confirm_group_reschedule`, `cancel_own_booking`, `process_cancel_window_closing_warnings`; replaces the `client_bookings` view with one column added at the end (`security_invoker` kept). Records its own version. **Apply before deploying `apply-cancellation-refund`** from this branch, which selects the new column. |
+
 ### Pending 2026-10-31 (refund requests go to Cerviced after 3 days)
 
 | Authored version | Name | Status |
@@ -56,9 +68,9 @@ Applied by cerviced-74 on the user's direct OK, in this order. Each one ran in a
 | Version | Name | Verified live after |
 |---|---|---|
 | 20261025145000 | `tip_received_notification` (cerviced-a8, PR #163) | 51 types, the same set as the file; trigger `on_booking_tip_succeeded` present. `send-push-notification` NOT deployed yet. |
-| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` NOT deployed yet. |
-| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts`, `stripe-webhook`, `money-daily-summary` NOT deployed yet. |
-| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` NOT deployed yet. |
+| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` v10 deployed 2026-10-30. |
+| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts` v12, `stripe-webhook` v11, `money-daily-summary` v1 deployed 2026-10-30. |
+| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` v9 deployed 2026-10-30. |
 
 Frontier after: **20261025212000**. Still unapplied and now below it: `20261025150000_provider_booked_contact` (#174, cerviced-3f; must renumber). Queued above it: cerviced-14's `20261026100000` / `110000` / `120000`.
 

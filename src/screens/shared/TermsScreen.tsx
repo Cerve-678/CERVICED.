@@ -105,7 +105,7 @@ const SECTIONS = [
   {
     heading: '13. Cancellations by You',
     body: [
-      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest.',
+      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest. If you ask to reschedule once their notice period has already started, their policy still applies if you later cancel the new date, as if you\'d cancelled on the original one. That stays with the booking if you reschedule it again, but not if the provider suggests the new time. We\'ll tell you before you ask.',
       'Cancelling late or missing appointments is recorded, and the provider you booked with can see how often this has happened with them.',
     ].join('\n\n'),
   },
