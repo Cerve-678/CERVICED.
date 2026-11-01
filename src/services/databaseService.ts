@@ -1233,6 +1233,36 @@ export async function searchProvidersAndServices(
   return { providers, services, correctedQuery };
 }
 
+/**
+ * First photo of each service, keyed by service id, for the service cards
+ * Search scatters between its provider rows. search_services_ranked returns
+ * no images, so this is one batched lookup over the ids already on screen.
+ * Services without a photo are simply absent from the result.
+ */
+export async function getServiceCoverImages(serviceIds: string[]): Promise<Record<string, string>> {
+  const ids = [...new Set(serviceIds)].slice(0, SERVICE_SEARCH_LIMIT);
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, service_images!inner ( url, sort_order ), provider: providers!inner ( id )")
+    .in("id", ids)
+    .eq("is_active", true)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    // Only the cover is needed, not the whole gallery for up to 60 services.
+    .order("sort_order", { referencedTable: "service_images", ascending: true })
+    .limit(1, { referencedTable: "service_images" })
+    .limit(ids.length);
+  if (error) throw error;
+
+  const covers: Record<string, string> = {};
+  for (const row of (data ?? []) as unknown as { id: string; service_images: { url: string }[] }[]) {
+    const first = row.service_images[0];
+    if (first?.url) covers[row.id] = first.url;
+  }
+  return covers;
+}
+
 /** Providers only — see searchProvidersAndServices. */
 export async function searchProviders(
   query: string,
