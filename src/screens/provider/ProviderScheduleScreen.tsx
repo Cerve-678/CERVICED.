@@ -39,6 +39,8 @@ import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../../utils/dateUtils';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import CloseScheduleSection from '../../features/providers/CloseScheduleSection';
+import { toReleaseDay } from '../../utils/bookingHorizon';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -138,6 +140,7 @@ export default function ProviderScheduleScreen() {
 
   const [tab, setTab] = useState<'hours' | 'blocked'>('hours');
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [releaseDay, setReleaseDay] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   // Hours tab opens as a read-only summary; the header Edit button flips it
   // into the editable state (tappable chips, day toggles, Add break, Save).
@@ -176,6 +179,7 @@ export default function ProviderScheduleScreen() {
       const profile = await getMyProviderProfile();
       if (!profile) return;
       setProviderId(profile.id);
+      setReleaseDay(toReleaseDay(profile.automation_settings?.scheduleReleaseDay));
 
       const [avail, windows, blocked, ovr] = await Promise.all([
         getProviderAvailability(profile.id),
@@ -452,6 +456,22 @@ export default function ProviderScheduleScreen() {
             scrollable={false}
           />
         </View>
+        )}
+
+        {!hoursOnly && providerId && (
+          <CloseScheduleSection
+            providerId={providerId}
+            releaseDay={releaseDay}
+            palette={P}
+            isDarkMode={isDarkMode}
+            showToast={showToast}
+            onOpenBooking={(bookingId, openReschedule) => {
+              (navigation as unknown as { navigate: (name: string, params: object) => void }).navigate(
+                'BookingDetail',
+                { bookingId, ...(openReschedule ? { openReschedule: true } : {}) },
+              );
+            }}
+          />
         )}
 
         {/* ── Hours tab ───────────────────────────────────────────────────── */}

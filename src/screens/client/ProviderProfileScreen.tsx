@@ -1380,6 +1380,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     portfolioLoading,
     openingHours,
     openingHoursLoading,
+    takingBookings,
     currentUserId,
     currentUserName,
     isOwnProvider,
@@ -2913,6 +2914,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
+    if (!takingBookings) {
+      showAlert("Not taking bookings", "This provider isn't taking bookings right now.", "center");
+      return;
+    }
     if (tryOpenExternalBooking()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -2922,7 +2927,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.error("Error opening booking sheet:", error);
       Alert.alert("Error", "Failed to open booking options. Please try again.");
     }
-  }, [tryOpenExternalBooking, isOwnProvider, showAlert]);
+  }, [tryOpenExternalBooking, isOwnProvider, showAlert, takingBookings]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -3842,7 +3847,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 {canBookProvider && (
                 <View style={styles.serviceActionColumn}>
                   {(() => {
-                    const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || serviceFullyBooked[service.dbId] === true;
+                    const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || !takingBookings || serviceFullyBooked[service.dbId] === true;
 
                     if (selectMode) {
                       const isSelected = selectedServiceIds.has(service.dbId);
@@ -3927,7 +3932,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               : { color: "#fff" },
                           ]}
                         >
-                          {fullyBooked
+                          {!takingBookings
+                              ? "Not taking bookings"
+                              : fullyBooked
                               ? "Fully Booked"
                               : "Book"}
                         </Text>
