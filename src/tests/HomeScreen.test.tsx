@@ -55,6 +55,7 @@ jest.mock('../services/databaseService', () => ({
   getDiscoverServices: jest.fn(() => new Promise(() => {})),
   getProviderIdsByServiceAudience: jest.fn(() => new Promise(() => {})),
   getUnreadNotificationCount: jest.fn(() => new Promise(() => {})),
+  getProvidersAvailability: jest.fn(async () => new Map()),
   prefetchProviderBySlug: jest.fn(),
 }));
 
