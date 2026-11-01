@@ -19,6 +19,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { bookingConfirmationEmail } from '../_shared/emailTemplates.ts';
 import { formatLongDate, formatTime12 } from '../_shared/bookingDates.ts';
+import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -50,8 +51,12 @@ serve(async (req) => {
   }
 
   try {
-    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-    if (!jwt || jwt !== SERVICE_ROLE_KEY) {
+    // Not a plain string compare: the vault holds the legacy eyJ… service key
+    // while the runtime may be handed the newer sb_secret_… one, and an exact
+    // match 403'd every call from 10 Oct 2026 (no confirmation email went out
+    // for three weeks). isServiceRoleRequest accepts either, as release-payouts
+    // has since its own 403 on 11 Oct.
+    if (!(await isServiceRoleRequest(req.headers.get('Authorization')))) {
       return json({ error: 'This endpoint is called by the database only.' }, 403);
     }
 
@@ -116,6 +121,12 @@ serve(async (req) => {
       headers: {
         Authorization: `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
+        // The database retries a confirmation it never saw confirmed
+        // (retry_unsent_booking_confirmations), so the same booking can reach
+        // here more than once. Resend collapses repeats of one key within 24h,
+        // which is what stops a slow first attempt plus a retry becoming two
+        // emails.
+        'Idempotency-Key': `booking-confirmation-${booking.id}`,
       },
       body: JSON.stringify({ from: FROM_EMAIL, to: booking.customer_email, subject, html }),
     });
@@ -131,6 +142,20 @@ serve(async (req) => {
         .eq('id', booking.id);
       console.error(`[booking-confirmation] ${booking.id} failed: ${errText}`);
       return json({ error: 'Send failed.' }, 502);
+    }
+
+    // Recorded here, by the only party that knows Resend accepted it, so the
+    // retry job can tell "never sent" from "sent". Without it, every booking
+    // was sent up to three times once emails got through again (2026-10-31):
+    // this half of a3ffa2fe (25 Sep) never reached main, though its retry job
+    // went live. A failed stamp is logged, not surfaced: the email did go out,
+    // and the idempotency key above covers a needless retry.
+    const { error: stampError } = await supabase
+      .from('bookings')
+      .update({ confirmation_email_sent_at: new Date().toISOString(), confirmation_email_error: null })
+      .eq('id', booking.id);
+    if (stampError) {
+      console.error(`[booking-confirmation] ${booking.id} sent but could not be recorded: ${stampError.message}`);
     }
 
     return json({ sent: true });

@@ -225,12 +225,19 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
 
 async function refund(provider: ProviderRow, chargeId: string): Promise<Response> {
   const { data: fee, error } = await admin.from('booking_fee_charges')
-    .select('id, booking_id, provider_id, client_user_id, kind, amount_pence, status, payment_intent_id, payout_status, stripe_transfer_id, disputed_at, dispute_resolved_at')
+    .select('id, booking_id, provider_id, client_user_id, kind, amount_pence, status, payment_intent_id, payout_status, payout_pence, deducted_pence, release_claimed_at, stripe_transfer_id, disputed_at, dispute_resolved_at')
     .eq('id', chargeId).maybeSingle();
   if (error) throw error;
   if (!fee || fee.provider_id !== provider.id) return json({ error: 'Fee not found' }, 404);
   if (fee.status === 'refunded') return json({ status: 'refunded' }, 200);
   if (fee.status !== 'succeeded' || !fee.payment_intent_id) return json({ error: 'Only a charged fee can be refunded.' }, 409);
+  // release-payouts is sending this fee right now. Cancelling it under the run
+  // would leave a transfer nothing takes back; a minute later it's
+  // 'transferred' and the refund reverses it instead.
+  const payoutInFlight = { error: 'This fee is being paid out to you right now. Try the refund again in a minute.' };
+  if ((fee.payout_status === 'held' || fee.payout_status === 'pending') && fee.release_claimed_at) {
+    return json(payoutInFlight, 409);
+  }
 
   const stripeRefund = await stripe.refunds.create(
     // fee_booking_id, not booking_id: reconcileRefund treats booking_id as a
@@ -242,11 +249,23 @@ async function refund(provider: ProviderRow, chargeId: string): Promise<Response
   // Take the provider's share back: cancel a held payout, or reverse a paid one.
   let payoutStatus = fee.payout_status;
   if (fee.payout_status === 'held' || fee.payout_status === 'pending') {
+    // Only while no release run has claimed it. If one claimed it since the
+    // check above, refuse: the Stripe refund is idempotent, so the retry
+    // reuses it and then takes the money back from the transfer.
+    const { data: cancelled, error: cancelErr } = await admin.from('booking_fee_charges')
+      .update({ payout_status: 'cancelled' })
+      .eq('id', fee.id).eq('payout_status', fee.payout_status).is('release_claimed_at', null)
+      .select('id');
+    if (cancelErr) throw cancelErr;
+    if (!cancelled?.length) return json(payoutInFlight, 409);
     payoutStatus = 'cancelled';
-  } else if (fee.payout_status === 'transferred' && fee.stripe_transfer_id) {
+  } else if (fee.payout_status === 'transferred' && (fee.stripe_transfer_id || fee.deducted_pence > 0)) {
     await takeBackFromProvider(admin, stripe, {
       providerId: fee.provider_id, bookingId: fee.booking_id, source: 'fee_refund',
       transferId: fee.stripe_transfer_id, key: `booking_fee_reversal_${fee.id}`,
+      // Part of this fee paid off an earlier debt instead of being sent, so
+      // the whole payout comes back, not just what the transfer carried.
+      wantPence: fee.deducted_pence > 0 ? fee.payout_pence : undefined,
       metadata: { fee_charge_id: fee.id },
     });
     payoutStatus = 'reversed';

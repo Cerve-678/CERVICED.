@@ -249,8 +249,20 @@ describe('notification preferences gate the push', () => {
 
   it('never lets a provider mute what needs their answer', () => {
     const muted = new Set(providerMap().map(entry => entry.type));
-    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed']) {
+    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed', 'payout_failed']) {
       expect(muted).not.toContain(type);
+    }
+  });
+
+  it('never lets a provider mute money they owe or money taken to pay it', () => {
+    // Muting "Payment Updates" must not hide a debt or a deduction from payouts.
+    const muted = new Set(providerMap().map(entry => entry.type));
+    for (const type of ['payout_debt_recorded', 'payout_debt_recovered']) {
+      expect(muted).not.toContain(type);
+      // Written by DB triggers, so the CHECK constraint must allow them or every
+      // insert fails while tsc and jest stay green.
+      expect(read('supabase', 'migrations', '20261029120000_provider_debt_notices_and_fee_recovery.sql')).toContain(`'${type}'`);
+      expect(tapHandler()).toContain(`'${type}'`);
     }
   });
 

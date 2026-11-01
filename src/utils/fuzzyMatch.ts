@@ -72,6 +72,11 @@ function levenshtein(a: string, b: string): number {
   return row[n]!;
 }
 
+/** Edit distance between two single words (see levenshtein above). */
+export function editDistance(a: string, b: string): number {
+  return levenshtein(a, b);
+}
+
 /**
  * Do two single words count as "the same word", allowing for plurals, shared
  * stems and small typos?
