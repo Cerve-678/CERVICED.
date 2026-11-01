@@ -5,8 +5,8 @@ describe('slotsPillText', () => {
     expect(slotsPillText(20)).toBe('New slots drop on the 20th');
   });
 
-  it('says "Stay tuned" for a provider without a release day', () => {
-    expect(slotsPillText(null)).toBe('Stay tuned');
+  it('says "Stay updated" for a provider without a release day', () => {
+    expect(slotsPillText(null)).toBe('Stay updated');
   });
 
   it('ordinalises the awkward days correctly', () => {

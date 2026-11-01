@@ -3383,7 +3383,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // offers and announcements, and — with a release day — each new month.
       return releaseDay != null
         ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their announcements and offers`
-        : `Stay tuned — you'll hear when ${fullName} has space open up, and about their announcements and offers`;
+        : `Stay updated — you'll hear when ${fullName} has space open up, and about their announcements and offers`;
     } else {
       return providerIsBookmarked
         ? `Added to Your Providers`
@@ -5033,7 +5033,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                 {/* Slots + bell. The pill says when this provider's diary
                     opens — "New slots drop on the 5th" — or, without a
-                    release day, "Stay tuned" beside the bell that delivers
+                    release day, "Stay updated" beside the bell that delivers
                     their updates. See slotsPillText. */}
                 {(() => {
                   if (isLinkOnly) {
