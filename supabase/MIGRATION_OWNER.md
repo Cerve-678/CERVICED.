@@ -56,11 +56,11 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Written 2026-11-01, NOT applied (close a schedule by hand)
+### Applied 2026-11-02 (close a schedule by hand)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261101190000 | `close_schedule_by_hand` | **UNAPPLIED, awaiting the user's OK.** Frontier at authoring: live `20261101180000`. Re-check it and open branches before applying. New private table `provider_schedule_closures` (RLS on, no policies, no grants), helpers `provider_next_release_after` and `provider_schedule_is_closed` (no app access), RPCs `close_my_schedule`, `reopen_my_schedule`, `get_my_schedule_closure`, `provider_is_taking_bookings` (authenticated). Redefines from live, one added check each, with an md5 guard that aborts if any has moved: `enforce_booking_bookability`, `get_services_open_within`, `process_follow_schedule_release_nudges`, `process_follow_openings_alerts`, `invite_next_waitlist_entry`, `expire_waitlist_holds`, `decline_waitlist_hold`. No data changes: nothing closes until a provider closes. The file records its own version. Apply **before** `feat/close-schedule` merges, or Close on the schedule screen fails with an error toast and every profile logs a warning. Clients are unaffected: they can still book. |
+| 20261101190000 | `close_schedule_by_hand` | **APPLIED** by the user (SQL editor), version recorded by the file. Frontier before apply: `20261101180000`. Verified live: table `provider_schedule_closures` (RLS on, 0 policies, 0 rows, not readable by anon or authenticated); `provider_next_release_after`, `provider_schedule_is_closed` (not executable by authenticated); `close_my_schedule`, `reopen_my_schedule`, `get_my_schedule_closure`, `provider_is_taking_bookings` (authenticated, not anon); the closed check present in `enforce_booking_bookability`, `get_services_open_within`, `process_follow_schedule_release_nudges`, `process_follow_openings_alerts`, `invite_next_waitlist_entry`, `expire_waitlist_holds`, `decline_waitlist_hold`. With nobody closed, 10 of 10 live providers report taking bookings and 50 of 50 sampled services still find a slot. Not yet exercised: a real close and reopen from the app. The file records its own version. |
 
 ### Applied 2026-11-01 (provider achievements)
 
