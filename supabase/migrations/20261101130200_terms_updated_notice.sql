@@ -40,9 +40,15 @@ BEGIN
     RAISE EXCEPTION 'notifications_type_check not found; refusing to rebuild it blind';
   END IF;
 
-  SELECT array_agg(DISTINCT r.m[1]) INTO v_types
-    FROM regexp_matches(v_def, '''([a-z_]+)''::text', 'g') AS r(m);
-  -- 54 types live at authoring. Far fewer means the definition wasn't read
+  -- Earlier rebuilds stored the list as one array literal,
+  -- ANY ('{a,b,c}'::text[]); older ones as ARRAY['a'::text, ...]. Read either.
+  IF v_def ~ '''\{[a-z_,]+\}''' THEN
+    v_types := (substring(v_def from '''(\{[a-z_,]+\})'''))::text[];
+  ELSE
+    SELECT array_agg(DISTINCT r.m[1]) INTO v_types
+      FROM regexp_matches(v_def, '''([a-z_]+)''::text', 'g') AS r(m);
+  END IF;
+  -- 54+ types live at authoring. Far fewer means the definition wasn't read
   -- the way this expects; stop rather than shrink the list.
   IF COALESCE(array_length(v_types, 1), 0) < 50 THEN
     RAISE EXCEPTION 'read only % types from notifications_type_check; refusing to rebuild it',

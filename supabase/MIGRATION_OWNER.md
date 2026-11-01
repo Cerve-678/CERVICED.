@@ -29,7 +29,7 @@ OWNER:  (none)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261101130200 | `terms_updated_notice` | **NOT APPLIED.** Branch `feat/terms-updated-notice`; lock released 2026-11-01 (on `feat/late-reschedule-keeps-cancel-charge`). Frontier: live `20261101115322` (2026-11-01); first written as `20261031202000` and renumbered. Independent of `20261101130000` / `130100`. Adds type `terms_updated` to `notifications_type_check` (rebuilt from the live list, refuses below 50) and `send_terms_updated_notice(text, text)` (service role only, one row per hat, skips users already sent that version). Applying sends nothing: run the function on release day, after the new build ships. Records its own version. |
+| 20261101130200 | `terms_updated_notice` | **APPLIED 2026-11-01** by Claude on the user's direct ask (after 130000 + 130100). Verified: 55 types incl. `terms_updated`, function not executable by `authenticated`. The CHECK is stored as one array literal (`'{a,b}'::text[]`), so the rebuild now parses both formats; the first run refused safely (read 0 types). Branch `feat/terms-updated-notice`; lock released 2026-11-01 (on `feat/late-reschedule-keeps-cancel-charge`). Frontier: live `20261101115322` (2026-11-01); first written as `20261031202000` and renumbered. Independent of `20261101130000` / `130100`. Adds type `terms_updated` to `notifications_type_check` (rebuilt from the live list, refuses below 50) and `send_terms_updated_notice(text, text)` (service role only, one row per hat, skips users already sent that version). Applying sends nothing: run the function on release day, after the new build ships. Records its own version. |
 
 ### Applied 2026-10-30 ("Always visible" address on the profile)
 
