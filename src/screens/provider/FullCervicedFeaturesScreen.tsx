@@ -70,7 +70,7 @@ export default function FullCervicedFeaturesScreen() {
 
   return (
     <ThemedBackground style={styles.flex}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
