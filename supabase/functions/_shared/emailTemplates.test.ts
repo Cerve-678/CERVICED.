@@ -213,7 +213,7 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Cerviced platform fee');
     expect(html).toContain('£74.99');
     expect(html).toContain('Paid in full');
-    expect(html).toContain('Remaining');
+    expect(html).toContain('Due at Appointment');
     expect(html).toContain('£0.00');
   });
 
@@ -238,7 +238,7 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Deposit paid');
     expect(html).toContain('>Paid<');
     expect(html).toContain('£21.99');
-    expect(html).toContain('Remaining');
+    expect(html).toContain('Due at Appointment');
     expect(html).toContain('£53.00');
     expect(html).not.toContain('Due to provider');
   });

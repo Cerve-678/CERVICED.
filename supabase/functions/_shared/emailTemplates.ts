@@ -748,7 +748,7 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
 // Money wording follows the app's calculateBookingPaymentBreakdown: paid state
 // comes from payment_status, never payment_type (a hand-added booking is
 // payment_type 'full' with nothing paid), and the payment box is two figures:
-// Paid (what left the card, platform fee included) and Remaining.
+// Paid (what left the card, platform fee included) and Due at Appointment.
 
 /** The CVD mark alone, transparent, in client plum. */
 const BRAND_MARK_PLUM = `${BRAND_ASSETS}/cerviced-mark-plum.png`;
@@ -787,7 +787,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   // PaymentStatus.PAID_IN_FULL ('paid_in_full'), which only exists after mapping.
   const isPaidInFull = params.paymentStatus === 'fully_paid';
   const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
-  // Paid is what left the card, platform fee included; Remaining is the rest.
+  // Paid is what left the card, platform fee included; Due at Appointment is the rest.
   // Same two figures as the in-app receipt (calculateBookingPaymentBreakdown).
   const paidAmount = isUnpaid ? 0 : params.amountPaid;
   const remaining = Math.max(0, total - paidAmount);
@@ -816,7 +816,7 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
 
   const payRows =
     payRow('Paid', paidAmount, remaining <= 0) +
-    payRow('Remaining', remaining, remaining > 0);
+    payRow('Due at Appointment', remaining, remaining > 0);
 
   const e = {
     providerName: esc(params.providerName),

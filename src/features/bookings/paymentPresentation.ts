@@ -35,8 +35,8 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const isUnpaid = !isPaidInFull && paymentStatus !== PaymentStatus.DEPOSIT_PAID;
 
   // Two figures, always (owner's call, 2026-11-01): Paid is what actually left
-  // the client's card, platform fee included, and Remaining is what's still to
-  // pay. Together they make Total, and Paid matches the bank statement.
+  // the client's card, platform fee included, and Due at Appointment is what's
+  // still to pay. Together they make Total, and Paid matches the bank statement.
   //
   // `isUnpaid` is checked first: a booking can carry payment_type 'deposit'
   // while payment_status is still 'pending', and nothing has been paid.

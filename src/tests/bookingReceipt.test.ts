@@ -66,9 +66,10 @@ describe('booking receipt', () => {
     expect(html).toContain('Cerviced platform fee');
     expect(html).toContain('Paid');
     expect(html).toContain('£20.99');
-    expect(html).toContain('Remaining');
+    expect(html).toContain('Due at Appointment');
     expect(html).toContain('£80.00');
     expect(html).not.toContain('Due to provider');
+    expect(html).not.toContain('not through CERVICED');
   });
 
   it('does not add the checkout fee onto an unpaid deposit booking', () => {

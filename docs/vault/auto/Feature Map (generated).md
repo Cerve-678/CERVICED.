@@ -84,7 +84,7 @@ Curated: [[Payments]] · **148 files**
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/services/bookingService.ts` _(101)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
-- `src/features/bookings/receipt.ts` _(88)_
+- `src/features/bookings/receipt.ts` _(83)_
 - `src/screens/client/BookingDetailScreen.tsx` _(75)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(56)_
 - `src/types/database.ts` _(55)_

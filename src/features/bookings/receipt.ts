@@ -188,10 +188,10 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
   const remainingBalance = Math.max(0, payment.remainingBalance);
   const providerName = booking.providerName?.trim() || 'your provider';
 
-  // Paid (what left the card, fee included) and Remaining. Nothing else.
+  // Paid (what left the card, fee included) and Due at Appointment. Nothing else.
   const paymentRows: PaymentRow[] = [
     { label: 'Paid', amount: payment.paidAmount, strong: remainingBalance <= 0 },
-    { label: 'Remaining', amount: remainingBalance, strong: remainingBalance > 0 },
+    { label: 'Due at Appointment', amount: remainingBalance, strong: remainingBalance > 0 },
   ];
 
   // Driven by payment_status, never payment_type: a booking the provider
@@ -202,12 +202,7 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     : payment.isPaidInFull ? 'Paid in full' : 'Awaiting payment';
 
   let aside: string | null = null;
-  if (payment.isDeposit) {
-    // Kept: the remaining balance is off-app, and CERVICED never collects it.
-    aside = remainingBalance > 0
-      ? `The remaining ${money(remainingBalance)} is paid to ${providerName} directly, not through CERVICED.`
-      : null;
-  } else if (payment.isUnpaid && remainingBalance > 0) {
+  if (payment.isUnpaid && remainingBalance > 0) {
     aside = `No payment has been taken through CERVICED for this booking. Payment is arranged directly with ${providerName}.`;
   }
 
