@@ -46,7 +46,7 @@ export default function BeautyBillingScreen({ navigation }: any) {
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.statusBar} translucent />
+        <StatusBar barStyle={theme.statusBar} />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 

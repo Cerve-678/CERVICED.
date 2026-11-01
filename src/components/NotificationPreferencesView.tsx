@@ -187,7 +187,7 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}

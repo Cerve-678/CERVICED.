@@ -32,7 +32,7 @@ export default function TextSizingScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}

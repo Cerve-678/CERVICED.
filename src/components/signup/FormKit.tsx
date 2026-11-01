@@ -18,6 +18,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -95,9 +96,9 @@ export function DobField({
 }: { value: DobValue; onChange: (next: DobValue) => void; onDone: () => void }) {
   const { palette: t } = useTheme();
   const inputStyle = useFieldInputStyle();
-  const monthRef = useRef<TextInput>(null);
-  const yearRef = useRef<TextInput>(null);
-  const dayRef = useRef<TextInput>(null);
+  const monthRef = useRef<TextInputInstance>(null);
+  const yearRef = useRef<TextInputInstance>(null);
+  const dayRef = useRef<TextInputInstance>(null);
 
   const setDay = (raw: string) => {
     let day = raw.replace(/[^0-9]/g, '').slice(0, 2);

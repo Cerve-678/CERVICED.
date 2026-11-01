@@ -73,7 +73,7 @@ export default function ProviderAchievementsScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}

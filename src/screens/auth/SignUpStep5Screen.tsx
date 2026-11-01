@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -78,7 +79,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const { data, updateData, resetData, totalSteps } = useRegistration();
   const { user, upgradeToProvider, addClientProfile } = useAuth();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const servicesY  = useRef(0);
   const locationY  = useRef(0);
   const frequencyY = useRef(0);
@@ -370,7 +371,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       <ScrollView
         ref={scrollRef}

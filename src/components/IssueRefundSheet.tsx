@@ -3,6 +3,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProviderRefundState, refundProviderBooking, type ProviderRefundState } from '../services/providerPaymentService';
@@ -77,7 +78,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
   onRefunded: (result: RefundIssued) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const requestId = useRef<string>(newRequestId());
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');

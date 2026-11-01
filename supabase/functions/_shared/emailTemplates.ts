@@ -783,7 +783,9 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const addOnsTotal = params.addOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
   const total = params.basePrice + addOnsTotal + params.serviceCharge;
   const isDeposit = params.paymentType === 'deposit';
-  const isPaidInFull = params.paymentStatus === 'paid_in_full';
+  // The database value (bookings.payment_status), not the app's
+  // PaymentStatus.PAID_IN_FULL ('paid_in_full'), which only exists after mapping.
+  const isPaidInFull = params.paymentStatus === 'fully_paid';
   const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
   const paidAmount = isUnpaid ? 0 : isDeposit ? params.depositAmount : params.amountPaid;
   const remaining = Math.max(0, total - (isUnpaid ? 0 : params.amountPaid));
