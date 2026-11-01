@@ -925,6 +925,10 @@ export type ProviderAvailabilityStatus = "available" | "limited" | "none";
 
 export interface ProviderAvailabilityInfo {
   status: ProviderAvailabilityStatus;
+  /** At least one ordinarily bookable slot in the corresponding UK date. */
+  availableToday: boolean;
+  availableTomorrow: boolean;
+  availableThisWeek: boolean;
   /**
    * Whether the provider's providers.hair_types_catered matches the
    * requested hair type, per the same empty-means-all rule as
@@ -974,8 +978,17 @@ export async function getProvidersAvailability(
     slug: string;
     status: ProviderAvailabilityStatus;
     hair_match: boolean;
+    available_today: boolean;
+    available_tomorrow: boolean;
+    available_this_week: boolean;
   }[]) {
-    result.set(row.slug, { status: row.status, hairMatch: row.hair_match });
+    result.set(row.slug, {
+      status: row.status,
+      hairMatch: row.hair_match,
+      availableToday: row.available_today,
+      availableTomorrow: row.available_tomorrow,
+      availableThisWeek: row.available_this_week,
+    });
   }
   return result;
 }
