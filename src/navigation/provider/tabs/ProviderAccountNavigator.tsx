@@ -2,7 +2,8 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderAccountScreen from '../../../screens/provider/ProviderAccountScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
-import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
+import ProviderNotificationSettingsScreen from '../../../screens/provider/ProviderNotificationSettingsScreen';
+import ProviderAchievementsScreen from '../../../screens/provider/ProviderAchievementsScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
@@ -15,6 +16,7 @@ import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
 import AboutScreen from '../../../screens/shared/AboutScreen';
 import TermsScreen from '../../../screens/shared/TermsScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
+import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
@@ -74,13 +76,18 @@ export default function ProviderAccountNavigator() {
         }}
       />
 
+      {/* The notifications list itself lives on the Home tab (bell button,
+          push taps); this tab only holds which ones push. */}
       <ProviderAccountStack.Screen
-        name="Notifications"
-        component={NotificationsScreen}
-        options={{
-          headerShown: false,
-          presentation: 'formSheet',
-        }}
+        name="NotificationSettings"
+        component={ProviderNotificationSettingsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Achievements"
+        component={ProviderAchievementsScreen}
+        options={{ headerShown: false }}
       />
 
       <ProviderAccountStack.Screen
@@ -264,6 +271,12 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="ReportProblem"
         component={ReportProblemScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AdminMoney"
+        component={AdminMoneyScreen}
         options={{ headerShown: false }}
       />
 

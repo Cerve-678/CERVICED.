@@ -197,7 +197,7 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <KeyboardDismissView>
         <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
           <TouchableOpacity
@@ -263,7 +263,7 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
                 ListEmptyComponent={
                   query.trim().length >= 2 && !isSearching ? (
                     <Text style={[styles.emptyText, { color: t.sub }]}>No unclaimed listings found. You can still sign up from scratch.</Text>
-                  ) : null
+                  ) : undefined
                 }
               />
             </>

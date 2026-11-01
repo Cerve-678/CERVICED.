@@ -126,6 +126,23 @@ blob — `business_name`/`services`/`current_tool` are provider-only,
 app's `main`, and Vercel has read access to the whole private repo. A separate
 repo would decouple them. Not urgent; worth doing before this sees real traffic.
 
+**5. `legal/index.html` is a draft, not lawyer-reviewed.** It holds all of
+Cerviced's policies on one page (served at `/legal` once on `main`): Client
+Terms, Provider Terms of Business, Privacy, Cookies, Fees & Refunds, Provider
+Standards, Community, Reviews, Health & Safety, Complaints. It was drafted on
+2026-10-19 at the user's direction, and nothing links to it yet. Before linking
+it from the waitlist page (or replacing item 1's placeholder with it):
+- fill the highlighted placeholders: company number, registered office, ICO
+  registration number and the provider liability cap;
+- have a solicitor review it, then remove the `noindex` meta tag;
+- keep the Client Terms in step with the app's `TermsScreen.tsx`. They're the
+  in-app Terms rewrite (PR #115) minus its §31 "For Providers", which moved into
+  the Provider Terms, plus three website-only sentences: other policies form
+  part of the Terms (§1), Cerviced as the provider's commercial agent (§9), and
+  no moving Cerviced bookings off the app (§28). The app needs the same split.
+- Payout timing stays general on purpose (no day counts). That was the user's
+  decision.
+
 ## History
 
 ```

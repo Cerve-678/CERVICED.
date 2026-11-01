@@ -19,6 +19,7 @@ import {
   getUserConversations,
   subscribeToUserConversationChanges,
   UserConversationWithProvider,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -91,6 +92,8 @@ export default function MessagesScreen({ navigation }: any) {
   }, [fetchConversations, user?.id]);
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     setRefreshing(true);
     await fetchConversations();
     setRefreshing(false);
@@ -179,7 +182,7 @@ export default function MessagesScreen({ navigation }: any) {
                 <Text style={[styles.errorRetry, { color: OP.accentText }]}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           loadError ? (

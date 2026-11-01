@@ -311,6 +311,20 @@ export interface Capability {
    * Use sparingly: phrasing is the primary mechanism, this is the exception.
    */
   excludeWhen?: RegExp;
+  /**
+   * Provider hat only: true when this capability fits a link-only provider
+   * (`providers.booking_mode = 'external'`), who takes bookings on their own
+   * booking site rather than through CERVICED.
+   *
+   * Left unset means full-service only. A link-only pro has no CERVICED
+   * bookings, price list, reviews, client list, forms, info packs,
+   * automations or address release, so a capability answering from any of
+   * those would answer about nothing. The engine reads this flag in one
+   * place: an ask that resolves to an unfitting capability gets a plain
+   * "that isn't part of your setup" reply and the capability never runs.
+   * Ignored for the client hat and for full providers.
+   */
+  fitsLinkOnly?: boolean;
   /** Runs the capability against real app data. */
   run: (ctx: CapabilityContext) => Promise<CapabilityResult>;
 }
@@ -352,6 +366,15 @@ export function hasUsefulHistory(p: PersonalContext | undefined): boolean {
  * conversation — that's an LLM's job (§3.1).
  */
 export interface ConversationContext {
+  /**
+   * The hat that created this context. Context is account-role specific:
+   * provider and client turns must never carry entities, result lists or
+   * suggestion memory into one another after a hat switch.
+   *
+   * Optional for backwards-compatible restoration of older local sessions;
+   * the engine treats an unstamped context as safe only for the current turn.
+   */
+  hat?: BeccaHat;
   /** Entities resolved on the previous turn, available for reuse. */
   entities: EntityBag;
   /** What Becca answered last, so "the first one" knows what list it means. */
@@ -423,6 +446,13 @@ export interface CapabilityContext {
   bookings: ConfirmedBooking[];
   /** Signed-in user id, when available. */
   userId?: string;
+  /**
+   * Provider hat only: the provider is link-only (takes bookings on their own
+   * booking site). Only capabilities marked `fitsLinkOnly` ever run with this
+   * set; they read it to keep their wording and follow-up chips to what a
+   * link-only pro actually has.
+   */
+  linkOnly?: boolean;
   /** Today, injected so date logic is testable and never reads the clock directly. */
   now: Date;
   /**

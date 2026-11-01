@@ -35,7 +35,7 @@ export default function AboutScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
@@ -92,7 +92,7 @@ export default function AboutScreen({ navigation }: any) {
             <Text style={[styles.policySubhead, { color: theme.text }]}>How we use it{'\n'}</Text>
             Your data is used to provide and personalise the Cerviced experience, process bookings, send notifications you've opted into, and improve our platform. We do not sell your personal data to third parties.{'\n\n'}
             <Text style={[styles.policySubhead, { color: theme.text }]}>Who we share it with{'\n'}</Text>
-            We share necessary booking information with the provider you book with. We also use trusted third-party providers for services such as secure data storage, notifications, and payment processing, who process data on our behalf under strict agreements. You can request the current list of these providers at privacy@cerviced.app.{'\n\n'}
+            We share necessary booking information with the provider you book with. Professionals also see totals about their own profile, such as how many people viewed or saved it, or told us they booked through it, but never who. We also use trusted third-party providers for services such as secure data storage, notifications, and payment processing, who process data on our behalf under strict agreements. You can request the current list of these providers at privacy@cerviced.app.{'\n\n'}
             <Text style={[styles.policySubhead, { color: theme.text }]}>Businesses listed before they join{'\n'}</Text>
             Search includes some beauty businesses that haven't joined Cerviced. For each one we hold its name or Instagram handle, the area and type of work listed for it, its Instagram and booking links, and the source we took them from: public online directories of beauty businesses and the business's public Instagram profile. We use this to help clients find the business and to let it claim the listing. If a listing is about you or your business, you can ask us to correct or remove it at any time at support@cerviced.co.{'\n\n'}
             <Text style={[styles.policySubhead, { color: theme.text }]}>Payments and saved cards{'\n'}</Text>

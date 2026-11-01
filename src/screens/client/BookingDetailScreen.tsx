@@ -7,10 +7,12 @@ import {
   Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback,
   LayoutAnimation,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { Ionicons } from '@expo/vector-icons';
 import { SlideUpOnMount } from '../../components/SlideUpOnMount';
 import * as Print from 'expo-print';
@@ -34,8 +36,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   submitReview, getProviderIdByDisplayName, hasReviewedBooking,
-  getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName,
-  getProviderContactById,
+  getIntakeFormByBooking, IntakeForm, getBookedClientContact,
   ProviderContactInfo,
   getProviderBookingDetailMetadata,
   type ProviderBookingDetailMetadata,
@@ -43,11 +44,13 @@ import {
   getInfoPacksByBooking, markInfoPackViewed, BookingInfoPack,
   ProviderReschedulePolicy,
   getRebookableService,
-  setBookingTip,
+  startBookingTipPayment,
+  confirmBookingTipPayment,
   getBookingTip,
   getRefundRequestsForBooking,
 } from '../../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
+import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
@@ -63,6 +66,12 @@ import { A4_PRINT_SIZE, buildClientReceiptHTML } from '../../features/bookings/r
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
+import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
+import { isTipWindowOpen } from '../../features/bookings/tipWindow';
+
+const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@stripe/stripe-react-native').useStripe;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -88,6 +97,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   useFont();
   const { bookingId } = route.params;
   const { isDarkMode, palette: C } = useTheme();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { user, hatState } = useAuth();
   const activeMode = hatState.active;
   const { addToCart } = useCart();
@@ -129,15 +139,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     });
   }, [navigation, C]);
 
-  // The pill would sit over the bottom of the booking card and its actions, so
-  // hide it here (same mechanism as RescheduleScreen). useFocusEffect, so it is
-  // hidden again on return from Reschedule/Chat, whose cleanup restores it.
-  useFocusEffect(useCallback(() => {
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [navigation]));
+  // The pill would sit over the bottom of the booking card and its actions.
+  useHideTabBar();
 
   const insets = useSafeAreaInsets();
 
@@ -187,6 +190,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [successIcon, setSuccessIcon] = useState('✓');
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
   const [showCooldownModal, setShowCooldownModal] = useState(false);
+  // Heads-up before rescheduling inside the cancellation window: doing so
+  // keeps the late-cancel policy on this booking (confirm_reschedule_own_booking).
+  const [lateRescheduleNoticeHrs, setLateRescheduleNoticeHrs] = useState<number | null>(null);
   const [showProviderNoShowModal, setShowProviderNoShowModal] = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
@@ -197,7 +203,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [supportKind, setSupportKind] = useState<BookingSupportKind | null>(null);
   const [supportReason, setSupportReason] = useState<string | null>(null);
   const [supportMessage, setSupportMessage] = useState('');
-  const supportFormScrollRef = useRef<ScrollView>(null);
+  const supportFormScrollRef = useRef<ScrollViewInstance>(null);
   const [supportBusy, setSupportBusy] = useState(false);
   // This booking's refund requests, newest first — the latest drives the
   // timeline in the payment section. Reloaded on focus, so returning from a
@@ -283,13 +289,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         setHasRated(true);
         setRatedBookings(prev => new Set(prev).add(bookingId));
       })
-      .catch(() => {});
+      // The buttons just stay in their default state; the server still blocks a second review or tip.
+      .catch(err => logger.warn('[BookingDetail] review state failed to load:', err));
     getBookingTip(bookingId)
       .then(tip => {
         if (cancelled || tip == null || tip <= 0) return;
         setTippedBookings(prev => new Set(prev).add(bookingId));
       })
-      .catch(() => {});
+      .catch(err => logger.warn('[BookingDetail] tip state failed to load:', err));
     return () => { cancelled = true; };
   }, [bookingId]);
 
@@ -416,13 +423,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setContactSheetVisible(true);
     setContactSheetLoading(true);
     try {
-      // By id where possible — a renamed provider no longer matches the name
-      // snapshot stored on their past bookings, which silently collapsed this
-      // sheet to in-app-only (losing email / WhatsApp / phone).
-      const info = b.providerId
-        ? await getProviderContactById(b.providerId)
-        : await getProviderContactByDisplayName(b.providerName);
-      setContactSheetInfo(info);
+      // By booking, not provider: the server only answers the client on
+      // this booking, and swaps in the provider's booked-client details
+      // (set in Communications) where they've given one. Also immune to a
+      // renamed provider no longer matching the booking's name snapshot.
+      setContactSheetInfo(await getBookedClientContact(b.id));
     } catch {
       setContactSheetInfo({ preferred_contact_methods: ['in_app'], whatsapp_number: null, email: null, phone: null });
     } finally { setContactSheetLoading(false); }
@@ -477,6 +482,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     const hoursUntil = (apptMs - Date.now()) / 3_600_000;
     return hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs;
   }, [booking, cancellationNoticeHrs]);
+  // Moved while already inside the window: the policy applies to any cancel,
+  // however far off the new date is (apply-cancellation-refund).
+  const cancelPolicyStillApplies =
+    isPastCancellationWindow || (!!booking?.lateRescheduleFrom && cancellationNoticeHrs > 0);
 
   const handleCancelBooking = useCallback(async () => {
     if (!booking) return;
@@ -653,8 +662,18 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         }
       }
     }
+    // Same measurement request_reschedule_own_booking stamps on the request,
+    // which only covers bookings made since the rule went live.
+    const noticeHrs = cancellationNoticeHrs || (await metadataRef.current)?.cancellationNoticeHours || 0;
+    if (noticeHrs > 0 && booking.lateRescheduleRuleApplies && !booking.lateRescheduleFrom && booking.bookingDate && booking.bookingTime) {
+      const start = createBookingDateTime(booking.bookingDate, booking.bookingTime);
+      if ((start.getTime() - Date.now()) / 3_600_000 < noticeHrs) {
+        setLateRescheduleNoticeHrs(noticeHrs);
+        return;
+      }
+    }
     navigation.navigate('Reschedule', { bookingId: booking.id });
-  }, [booking, canReschedule, reschedulePolicy, navigation]);
+  }, [booking, canReschedule, reschedulePolicy, cancellationNoticeHrs, navigation]);
 
   /**
    * Add a past booking's service back to the cart, revalidated against live data.
@@ -773,11 +792,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setIsLoading(true);
     try {
       const providerId = booking.providerId ?? await getProviderIdByDisplayName(booking.providerName);
-      if (providerId) {
-        const alreadyReviewed = await hasReviewedBooking(booking.id);
-        if (!alreadyReviewed) {
-          await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
-        }
+      if (!providerId) {
+        throw new Error('Provider record is unavailable');
+      }
+      const alreadyReviewed = await hasReviewedBooking(booking.id);
+      if (!alreadyReviewed) {
+        await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
       }
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);
@@ -791,27 +811,33 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
    * discarded on unmount and the provider never saw it — while the UI said
    * "Thank you for tipping".
    *
-   * Tips are stored on the booking's review row (reviews.tip_amount), which
-   * requires a review to exist, so an unrated booking is asked to rate first.
-   * Nothing is marked as tipped unless the write actually succeeded.
+   * A tip is its own Stripe payment and payout ledger entry. The webhook is
+   * authoritative; the explicit confirmation only makes the usual app path
+   * update immediately.
    */
   const handleTipSubmit = useCallback(async () => {
     if (!booking || tipAmount <= 0) { Alert.alert('Invalid Tip', 'Please enter a valid tip amount.'); return; }
     setIsLoading(true);
     try {
-      const attached = await setBookingTip(booking.id, tipAmount);
-      if (!attached) {
-        Alert.alert(
-          'Rate First',
-          'Tips are added to your review, so please rate this appointment before leaving a tip.',
-        );
-        return;
+      const sheet = await startBookingTipPayment(booking.id, Math.round(tipAmount * 100));
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Cerviced', returnURL: 'cerviced://stripe-redirect',
+        customerId: sheet.customerId, customerEphemeralKeySecret: sheet.ephemeralKeySecret,
+        paymentIntentClientSecret: sheet.clientSecret,
+        appearance: buildPaymentSheetAppearance(C, C.text),
+      });
+      if (initError) throw new Error(initError.message || 'Could not open tip payment.');
+      const { error: paymentError } = await presentPaymentSheet();
+      if (paymentError) {
+        if (paymentError.code === 'Canceled') return;
+        throw new Error(paymentError.message || 'Your tip did not go through.');
       }
-      setTippedBookings(prev => new Set(prev).add(booking.id));
+      const tipStatus = await confirmBookingTipPayment(sheet.tipId);
+      if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(booking.id));
       setShowTipModal(false);
-      // Deliberately does NOT say the tip was paid — no payment provider is
-      // wired up for tips, so this records the amount for the provider only.
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been added to your review for ${booking.providerName}.`);
+      setSuccessMessage(tipStatus === 'succeeded'
+        ? `Your £${tipAmount.toFixed(2)} tip has been paid to ${booking.providerName}.`
+        : `Your £${tipAmount.toFixed(2)} tip for ${booking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -821,7 +847,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     } finally {
       setIsLoading(false);
     }
-  }, [booking, tipAmount]);
+  }, [booking, tipAmount, initPaymentSheet, presentPaymentSheet, C]);
 
   /**
    * Open the real chat thread with this provider.
@@ -867,6 +893,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const payment = calculateBookingPaymentBreakdown(booking);
   const hasBeenRated = ratedBookings.has(booking.id);
   const hasBeenTipped = tippedBookings.has(booking.id);
+  // Tipping closes 48 hours after the appointment (the server enforces it too).
+  const tipClosed = !hasBeenTipped && !isTipWindowOpen(booking.bookingDate, booking.endTime || booking.bookingTime);
   const isUpcoming = booking.status === BookingStatus.UPCOMING && !booking.isPendingReschedule;
   const isCompleted = booking.status === BookingStatus.COMPLETED;
   const isPending = booking.status === BookingStatus.PENDING;
@@ -1087,35 +1115,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {refundTimeline && (
               <View style={[st.refundNotice, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Text style={{ color: C.text, fontWeight: '700', fontSize: 14, marginBottom: 4 }}>Your refund request</Text>
-                <View>
-                {refundTimeline.map((step, i) => {
-                  const last = i === refundTimeline.length - 1;
-                  const dot = step.state === 'done' ? '#34C759'
-                    : step.state === 'declined' ? '#F44336'
-                    : step.state === 'current' ? '#FF9500'
-                    : C.border;
-                  return (
-                    <View key={step.key} style={{ flexDirection: 'row', gap: 10 }}>
-                      <View style={{ alignItems: 'center', width: 16 }}>
-                        <View style={[st.refundStepDot, step.state === 'upcoming'
-                          ? { borderColor: dot, borderWidth: 2, backgroundColor: 'transparent' }
-                          : { backgroundColor: dot }]}>
-                          {step.state === 'done' && <Ionicons name="checkmark" size={10} color="#FFFFFF" />}
-                          {step.state === 'declined' && <Ionicons name="close" size={10} color="#FFFFFF" />}
-                        </View>
-                        {!last && <View style={[st.refundStepLine, { backgroundColor: C.border }]} />}
-                      </View>
-                      <View style={{ flex: 1, paddingBottom: last ? 0 : 12 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-                          <Text style={{ color: step.state === 'upcoming' ? C.sub : C.text, fontWeight: '600', fontSize: 13, flex: 1 }}>{step.title}</Text>
-                          {step.date && <Text style={{ color: C.sub, fontSize: 12 }}>{step.date}</Text>}
-                        </View>
-                        {step.detail && <Text style={{ color: C.sub, fontSize: 12, lineHeight: 17, marginTop: 2 }}>{step.detail}</Text>}
-                      </View>
-                    </View>
-                  );
-                })}
-                </View>
+                <RefundRequestTimeline steps={refundTimeline} colors={C} />
               </View>
             )}
             {!showReceipt ? (
@@ -1272,9 +1272,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     style={[st.row, i === policyRows.length - 1 && { borderBottomWidth: 0 }]}
                   >
                     <Text style={[st.rowLabel, { color: C.sub, flex: 0.35 }]}>{row.label}</Text>
-                    <Text style={[st.rowValue, { color: C.text, flex: 0.65 }]}>
-                      {row.value}{row.tag ? `  ·  ${row.tag}` : ''}
-                    </Text>
+                    <View style={{ flex: 0.65 }}>
+                      <Text style={[st.rowValue, { color: C.text, flex: undefined }]}>
+                        {row.value}{row.tag ? `  ·  ${row.tag}` : ''}
+                      </Text>
+                      {row.notes?.map(note => (
+                        <Text key={note} style={[st.rowValue, { color: C.sub, flex: undefined, fontSize: 12, fontWeight: '400', marginTop: 3 }]}>
+                          {note}
+                        </Text>
+                      ))}
+                    </View>
                   </View>
                 ))}
               </View>
@@ -1383,6 +1390,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   )}
                 </View>
+                {!isMobile && !!booking.howToGetThere && !isAddressPending(booking.address) && (
+                  <View style={[st.row, { borderBottomWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, alignItems: 'flex-start' }]}>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>Arrival details</Text>
+                    <Text style={[st.rowValue, { color: C.text }]}>{booking.howToGetThere}</Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -1482,12 +1495,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[st.mapActionBtn, { backgroundColor: '#4CAF5050', borderColor: '#2b6a2eff' }, hasBeenTipped && st.mapActionBtnDisabled, hasBeenTipped && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
-                  disabled={hasBeenTipped}
+                  style={[st.mapActionBtn, { backgroundColor: '#4CAF5050', borderColor: '#2b6a2eff' }, (hasBeenTipped || tipClosed) && st.mapActionBtnDisabled, (hasBeenTipped || tipClosed) && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
+                  disabled={hasBeenTipped || tipClosed}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowTipModal(true); }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
+                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : tipClosed ? 'Tip closed' : 'Tip'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[st.mapActionBtn, { backgroundColor: '#f28f0c58', borderColor: '#b9550dff' }, rebookBusy && st.mapActionBtnDisabled]}
@@ -1556,12 +1569,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.overlay}>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
-                {isPastCancellationWindow ? (
+                {cancelPolicyStillApplies ? (
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
                     <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cancelling Now</Text>
                     <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
-                      {booking.providerName} requires {noticeWindowText} notice to cancel — cancelling now may be subject to their policy.
+                      {isPastCancellationWindow
+                        ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
+                        : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
                     </Text>
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
@@ -1626,6 +1641,30 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCooldownModal(false); }} activeOpacity={0.7}>
                   <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Late Reschedule Modal ───
+            Shown before the Reschedule screen when the client is already
+            inside the cancellation window. Rescheduling stays allowed; this
+            only says what it keeps in place. */}
+        <Modal visible={lateRescheduleNoticeHrs != null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setLateRescheduleNoticeHrs(null)}>
+          <View style={st.overlay}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
+              <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Inside the Cancellation Window</Text>
+              <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
+                {booking.providerName} asks for {formatNoticeWindow(lateRescheduleNoticeHrs ?? 0)} notice to cancel, and that has already started. You can still ask to reschedule, but if you later cancel the new date, their cancellation policy will apply as if you'd cancelled now.
+              </Text>
+              <View style={[st.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setLateRescheduleNoticeHrs(null); }} activeOpacity={0.7}>
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Keep Booking</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setLateRescheduleNoticeHrs(null); navigation.navigate('Reschedule', { bookingId: booking.id }); }} activeOpacity={0.7}>
+                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Reschedule</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1928,7 +1967,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 <Text style={[st.sheetTitle, { color: C.text }]}>Leave a Tip</Text>
-                <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}</Text>
+                <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}. It's paid by card and all of it goes to them: CERVICED covers the card fee. You can tip for 48 hours after your appointment. Tips can't be refunded.</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
                   {[5, 10, 15, 20].map(amt => (
                     <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); setTipAmount(amt); }} activeOpacity={0.7}>
@@ -2180,8 +2219,6 @@ const st = StyleSheet.create({
   // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
   sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
   refundNotice: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6, marginBottom: 10 },
-  refundStepDot: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  refundStepLine: { width: 2, flex: 1, marginTop: 2 },
   disputeInput: {
     width: '100%', minHeight: 96, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14,

@@ -21,10 +21,22 @@ describe('client screen performance contracts', () => {
     expect(source).toContain('DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20');
     expect(source).toContain('DISCOVER_INITIAL_SERVICE_LIMIT = 10');
     expect(source).toContain('const loadNextDiscoverPage');
-    expect(source).toContain('getPortfolioItems(');
+    expect(source).toContain('getExplorePortfolioItems(');
     expect(source).toContain('cursor.portfolioOffset');
     expect(source).toContain("withTimeout(");
     expect(source).toContain("'Explore feed'");
+  });
+
+  it('uses a lean public projection for Explore portfolio cards', () => {
+    const source = readScreen('ExploreScreen');
+    const database = fs.readFileSync(
+      path.join(__dirname, '..', 'services', 'databaseService.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT)');
+    expect(database).toContain('const EXPLORE_PORTFOLIO_SELECT');
+    expect(database).toContain('.select(EXPLORE_PORTFOLIO_SELECT)');
   });
 
   it('progressively mounts Explore cards and only measures fallback ratios', () => {

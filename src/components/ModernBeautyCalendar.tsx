@@ -4,7 +4,13 @@ import * as Haptics from 'expo-haptics';
 import { AvailabilityService } from '../services/AvailabilityService';
 import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
-import { formatLongDateNoYear } from '../utils/dateUtils';
+import { dateToYMD, formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../utils/dateUtils';
+import {
+  isMonthlyRelease,
+  lastBookableDate,
+  nextReleaseMoment,
+  type BookingHorizonSettings,
+} from '../utils/bookingHorizon';
 import { RequestTimePanel } from './RequestTimePanel';
 
 /** Emergency/by-request outline. Deliberately NOT the caller's accent: every
@@ -70,7 +76,7 @@ type ModernBeautyCalendarProps = {
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
   serviceId?: string | undefined; // Real services.id UUID — resolves this service's own buffer override
   style?: ViewStyle;
-  /** Last date clients can book (today + bookingWindowDays). Undefined = no limit. */
+  /** Last date clients can book (utils/bookingHorizon's lastBookableDate). Undefined = no limit. */
   maxDate?: Date;
   /** Selected day/time highlight colour — the caller derives this from its
    *  own backdrop (not the OS/app dark-mode setting, not a fixed brand
@@ -195,6 +201,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
+  // Only used to explain an empty stretch past a monthly-release provider's
+  // horizon ("Dates after … open on …"). The slot lookups already enforce it.
+  const [horizon, setHorizon] = useState<BookingHorizonSettings | null>(null);
   // A provider can go live with zero rows in provider_availability — nothing
   // upstream (search, go-live gating) currently prevents it. Without this,
   // that renders as every day showing 'closed', identical to a provider
@@ -252,6 +261,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       if (!id) return;
       AvailabilityService.getAvailabilitySummary(providerName).then(summary => {
         if (!cancelled && summary?.state === 'unpublished') setProviderUnpublished(true);
+      });
+      AvailabilityService.getBookingHorizon(providerName).then(next => {
+        if (!cancelled) setHorizon(next);
       });
       // The emergency-request opt-ins only ever change what this picker shows
       // when it's allowed to offer request slots at all. When it isn't (the
@@ -660,6 +672,23 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
   const weekDays = getWeekDays();
 
+  // A monthly-release provider's diary has a wall at the end of the month
+  // they've opened. When this week runs past it, say when the next month
+  // opens — otherwise the client just sees empty days and can't tell a
+  // provider who isn't working from one who hasn't released them yet.
+  const releaseNote = (() => {
+    if (!horizon || !isMonthlyRelease(horizon.schedule_release_day)) return null;
+    const last = lastBookableDate(horizon);
+    if (!last) return null;
+    // Compare 'YYYY-MM-DD' strings: day.date carries the time of day the
+    // week was built at, so a Date comparison would put the last open day
+    // itself past the wall.
+    const lastYmd = dateToYMD(last);
+    if (!weekDays.some(day => day.dateString > lastYmd)) return null;
+    const next = nextReleaseMoment(horizon.schedule_release_day);
+    return `Dates after ${formatShortDayDate(last)} open on ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
+  })();
+
   const calendarDays = getCalendarDays();
   const weekDayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -926,6 +955,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           );
         })}
       </View>
+      )}
+
+      {providerFound === true && !providerUnpublished && releaseNote && (
+        <Text style={[styles.fullDayHint, { color: subColor }]}>{releaseNote}</Text>
       )}
 
       {/* ── Time slots ───────────────────────────────────────────────── */}

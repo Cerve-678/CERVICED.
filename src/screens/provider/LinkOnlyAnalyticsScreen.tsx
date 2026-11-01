@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getMyProviderDailyStats, getMyProviderSaverCount } from '../../services/databaseService';
+import { forgetCachedReads, getMyProviderDailyStats, getMyProviderSaverCount } from '../../services/databaseService';
 import type { DbProviderDailyStat } from '../../types/database';
 import {
   LINK_ONLY_PERIOD_DAYS,
@@ -49,7 +49,7 @@ const PERIODS: { key: LinkOnlyPeriod; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
-/** The four counters sit in one row (design Concept B, chosen 2026-10-19). */
+/** Compact, evenly sized tiles; the final nudge tile wraps naturally on phones. */
 const TILE_COLUMNS = 4;
 
 export default function LinkOnlyAnalyticsScreen() {
@@ -88,6 +88,8 @@ export default function LinkOnlyAnalyticsScreen() {
   useEffect(() => { setSelectedBar(null); }, [period]);
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRefreshing(true);
     await load();
@@ -108,6 +110,7 @@ export default function LinkOnlyAnalyticsScreen() {
     { label: 'In Search',      value: totals.searchAppearances, icon: 'search',         color: CHART.teal },
     { label: 'Instagram taps', value: totals.instagramTaps,     icon: 'logo-instagram', color: CHART.pink },
     { label: 'Saves',          value: saves ?? 0,               icon: 'bookmark',       color: accent },
+    { label: 'Join nudges',    value: totals.joinNudges,        icon: 'megaphone',      color: CHART.amber },
   ], [totals, saves, accent]);
 
   return (

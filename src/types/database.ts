@@ -79,9 +79,17 @@ export type NotificationType =
   | "fee_dispute_resolved"
   | "fee_payment_requested"
   | "fee_paid_by_client"
+  | "tip_received"
   | "fee_payment_lapsed"
+  /** Provider owes money a take-back couldn't recover, and when some is taken from a payout. */
+  | "payout_debt_recorded"
+  | "payout_debt_recovered"
   | "refund_requested"
   | "refund_request_updated"
+  /** A payout to the provider (or their own bank payout) failed; they may need to fix their account. */
+  | "payout_failed"
+  /** One-off notice that Terms people already accepted have changed (send_terms_updated_notice). */
+  | "terms_updated"
   | "new_provider"
   | "reschedule_request"
   | "reschedule_provider_response"
@@ -115,7 +123,9 @@ export type NotificationType =
   | "maintenance_due"
   /** Beauty Maintenance: the completed booking's provider wrote aftercare
    *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
-  | "aftercare_available";
+  | "aftercare_available"
+  /** Provider: a daily count of the people who saved them. Never names. */
+  | "provider_saved";
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -136,6 +146,30 @@ export type TransactionType =
   | "remaining"
   | "tip"
   | "refund";
+
+// ── Logo framing ─────────────────────────────────────────
+
+/** How the logo sits in one Home card: `zoom` multiplies the size at which
+ *  the logo just fills the card (1 = fills it, as with no framing; below 1
+ *  shows more of it, down to the whole logo); `x`/`y` move the logo's centre
+ *  from the card's centre, as a fraction of the card's width/height. */
+export interface LogoCardFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+/** The provider's per-card logo framing (`providers.logo_framing`).
+ *  `imageRatio` is the logo image's width ÷ height, which the frames are
+ *  relative to. A missing card means "fill and centre", the default. */
+export interface LogoFraming {
+  imageRatio: number;
+  small?: LogoCardFrame;
+  large?: LogoCardFrame;
+}
+
+/** The two Home card shapes a logo is framed for. */
+export type LogoCardSlot = 'small' | 'large';
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -213,11 +247,18 @@ export interface DbProvider {
   service_categories: ServiceCategory[];
   custom_service_type: string | null;
   location_text: string | null;
+  /** Public "How to get there" for the profile — stations, parking,
+   *  landmarks. Never door codes: those are provider_private_details
+   *  .how_to_get_there, released with the address. */
+  public_directions: string | null;
   latitude: number | null;
   longitude: number | null;
   about_text: string | null;
   slots_text: string | null;
   logo_url: string | null;
+  /** Per-card framing for the small and large Home cards. Null = every card
+   *  fills and centres the logo. */
+  logo_framing: LogoFraming | null;
   gradient: string[] | null;
   accent_color: string | null;
   background_image_url: string | null;
@@ -589,6 +630,11 @@ export interface DbBooking {
   booking_date: string; // 'YYYY-MM-DD'
   booking_time: string; // 'HH:MM:SS'
   end_time: string | null;
+  /** 'YYYY-MM-DDTHH:MM:SS', padded with the booking's own buffers by the
+   *  compute_booking_effective_range trigger. bookings_no_overlap compares
+   *  these, not the raw times. Optional: only `select('*')` reads carry it. */
+  effective_start?: string | null;
+  effective_end?: string | null;
   notes: string | null;
   booking_instructions: string | null;
   payment_type: PaymentType;
@@ -615,6 +661,9 @@ export interface DbBooking {
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
   provider_address_snapshot: string | null;
+  /** Private venue access instructions snapshotted at booking. The
+   * client_bookings view release-gates this with the address. */
+  provider_directions_snapshot?: string | null;
   provider_phone_snapshot: string | null;
   provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
@@ -642,6 +691,11 @@ export interface DbBooking {
   no_show_disputed_at?: string | null;
   refunded_amount?: number | null;
   policy_retained_amount?: number | null;
+  /** Start of the appointment the client moved away from while already
+   *  inside its cancellation window (migration 20261101130000). */
+  late_reschedule_from?: string | null;
+  /** client_bookings only: booked after that rule went live, so it applies. */
+  late_reschedule_rule_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;
@@ -872,6 +926,7 @@ export type ProviderWithServices = Pick<
   | "service_categories"
   | "custom_service_type"
   | "location_text"
+  | "public_directions"
   | "about_text"
   | "logo_url"
   | "gradient"
@@ -954,6 +1009,7 @@ export type PublicProviderSummary = Pick<
   | 'display_name'
   | 'service_category'
   | 'logo_url'
+  | 'logo_framing'
   | 'location_text'
   | 'service_locations'
   | 'latitude'
@@ -993,13 +1049,16 @@ export interface DbProviderDailyStat {
   book_taps: number;
   search_appearances: number;
   instagram_taps: number;
+  /** Clients who asked this link-only provider to take bookings on CERVICED. */
+  join_nudges: number;
 }
 
 export type ProviderStatKind =
   | 'profile_view'
   | 'book_tap'
   | 'search_appearance'
-  | 'instagram_tap';
+  | 'instagram_tap'
+  | 'join_nudge';
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {

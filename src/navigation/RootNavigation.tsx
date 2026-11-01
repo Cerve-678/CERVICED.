@@ -10,9 +10,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { navigationRef } from './navigationRef';
 import { requestMode, resolveModeChange } from './modeController';
+import { openProviderProfileLink, type ProviderProfileLinkOutcome } from './openProviderProfileLink';
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
+import { parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
+import { useAppDialog } from '../components/AppDialog';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';
 
@@ -33,10 +36,20 @@ import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+const PROVIDER_LINK_ALERTS: Record<Exclude<ProviderProfileLinkOutcome, 'opened'>, [string, string]> = {
+  not_found: ['Profile not found', "This code doesn't match a profile on CERVICED any more."],
+  no_client_hat: [
+    'Open this on a client account',
+    "Profiles open on the client side of CERVICED, and this account doesn't have a client profile yet.",
+  ],
+  failed: ["Couldn't open that profile", 'Check your connection and scan the code again.'],
+};
+
 export default function RootNavigation() {
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
   const { isDarkMode } = useTheme();
+  const { showAlert, DialogHost } = useAppDialog();
 
   // The switch overlay always uses the DESTINATION hat's real accent (not a
   // hardcoded placeholder color) — same "you're switching identity" signal
@@ -94,10 +107,17 @@ export default function RootNavigation() {
   // Track whether NavigationContainer has finished mounting
   const [isNavReady, setIsNavReady] = useState(false);
   const [connectReturn, setConnectReturn] = useState<StripeConnectReturn | null>(null);
+  const [providerProfileLink, setProviderProfileLink] = useState<{ providerKey: string; receivedAt: number } | null>(null);
   const handledConnectReturn = useRef<StripeConnectReturn | null>(null);
+  const handledProviderProfileLink = useRef<{ providerKey: string; receivedAt: number } | null>(null);
   useEffect(() => {
     let live = true;
     const receive = (url: string) => {
+      const providerKey = parseProviderProfileDeepLink(url);
+      if (live && providerKey) {
+        setProviderProfileLink({ providerKey, receivedAt: Date.now() });
+        return;
+      }
       const result = parseStripeConnectReturn(url);
       if (live && result) setConnectReturn({ result, receivedAt: Date.now() });
     };
@@ -105,6 +125,14 @@ export default function RootNavigation() {
     const subscription = Linking.addEventListener('url', ({ url }) => receive(url));
     return () => { live = false; subscription.remove(); };
   }, []);
+  useEffect(() => {
+    if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !providerProfileLink ||
+        handledProviderProfileLink.current === providerProfileLink) return;
+    handledProviderProfileLink.current = providerProfileLink;
+    void openProviderProfileLink(providerProfileLink.providerKey).then(outcome => {
+      if (outcome !== 'opened') showAlert(...PROVIDER_LINK_ALERTS[outcome]);
+    });
+  }, [providerProfileLink, isNavReady, isLoggedIn, isLoading, pendingReactivation, showAlert]);
   useEffect(() => {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !connectReturn ||
         handledConnectReturn.current === connectReturn) return;
@@ -244,6 +272,7 @@ export default function RootNavigation() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    <DialogHost />
     </>
   );
 }

@@ -60,6 +60,7 @@ Curated overview: [[Screens & Navigation]].
 - `About`
 - `Terms`
 - `ReportProblem`
+- `AdminMoney`
 - `Points`
 - `Messages`
 - `InfoReg`
@@ -76,6 +77,8 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderServicesMain`
 - `ProviderAccountMain`
 - `MyPublicProfile`
+- `NotificationSettings`
+- `Achievements`
 - `AccountInfo`
 - `BusinessDetails`
 - `ServicesPricing`

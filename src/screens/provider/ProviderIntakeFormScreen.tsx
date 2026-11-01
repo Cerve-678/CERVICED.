@@ -65,7 +65,7 @@ function makeId() { return Math.random().toString(36).slice(2, 9); }
  *  hasn't set any policy yet — nothing to build a form from. */
 function buildPolicyTemplate(policyRows: PolicyDisplayRow[]): FormTemplate | null {
   if (policyRows.length === 0) return null;
-  const body = policyRows.map(r => `${r.label}: ${r.value}`).join('\n');
+  const body = policyRows.map(r => [`${r.label}: ${r.value}`, ...(r.notes ?? [])].join('\n')).join('\n');
   return {
     id: 'policy-agreement',
     category: null,

@@ -57,7 +57,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import {
   getMyProviderProfile,
   updateProviderContactDetails,
-  updateProviderAutomationSettings,
+  mergeProviderAutomationSettings,
 } from '../../services/databaseService';
 import {
   saveProviderPolicies,
@@ -111,18 +111,15 @@ export default function PaymentsScreen({ navigation, route }: any) {
   // Read-only here — PoliciesScreen owns the write. Held only so the card
   // below can show what clients are currently told about refunds.
   const [refundPolicyNote, setRefundPolicyNote] = useState('');
-  // updateProviderAutomationSettings REPLACES the whole automation_settings
-  // blob rather than merging, so every key this screen doesn't edit has to be
-  // carried back through the save or it's silently deleted.
-  const [otherAutomation, setOtherAutomation] = useState<Record<string, unknown>>({});
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Both writes below (booking_policies and automation_settings) are full
-  // REPLACEs, and the keys this screen doesn't own are only preserved via the
-  // otherPolicies/otherAutomation copies read on load. If that read failed
+  // The booking_policies write below is a full REPLACE, and the keys this
+  // screen doesn't own are only preserved via the otherPolicies copy read on
+  // load. (automation_settings is merged server-side, so it needs no copy.)
+  // If that read failed
   // they're empty, so saving would delete PoliciesScreen's cancellation,
   // reschedule and no-show settings outright.
   const [loadFailed, setLoadFailed] = useState(false);
@@ -138,8 +135,6 @@ export default function PaymentsScreen({ navigation, route }: any) {
           setPaymentMethods(profile.preferred_payment_methods ?? []);
           const a = ((profile as any).automation_settings ?? {}) as Record<string, unknown>;
           setDepositRequiredNew(Boolean(a['depositRequiredNew'] ?? false));
-          const { depositRequiredNew: _owned, ...rest } = a;
-          setOtherAutomation(rest);
 
           const saved = (profile.user_id ? await loadProviderPolicies(profile.user_id) : null)
             ?? ((profile as any).booking_policies as Record<string, unknown> | null)
@@ -202,10 +197,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
         updateProviderContactDetails(providerId, {
           preferred_payment_methods: paymentMethods,
         }),
-        updateProviderAutomationSettings(providerId, {
-          ...otherAutomation,
-          depositRequiredNew,
-        } as Parameters<typeof updateProviderAutomationSettings>[1]),
+        mergeProviderAutomationSettings(providerId, { depositRequiredNew }),
         // depositRequired/depositOnly are written alongside depositMode, not
         // instead of it: getProviderDepositPoliciesByDisplayNames still reads
         // the legacy pair as its fallback, and so does any client build that
@@ -232,7 +224,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed]);
+  }, [providerId, userId, paymentMethods, depositRequiredNew, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed]);
 
 
   const acceptedLabels = paymentMethods.map(paymentLabel);
@@ -246,7 +238,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={[s.header, { borderBottomColor: C.border }]}>
           <Text style={[s.headerTitle, { color: C.text }]}>Payments & payouts</Text>
@@ -421,6 +413,23 @@ export default function PaymentsScreen({ navigation, route }: any) {
           </View>
 
           {!loadFailed && <SaveButton saving={saving} onPress={handleSave} />}
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Your policies. Cancellation, rescheduling, late and no-show fees and refunds"
+            style={[st.rowCard, { backgroundColor: C.card, borderColor: C.border, marginTop: 16 }]}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Policies'); }}
+            activeOpacity={0.7}
+          >
+            <View style={[st.iconChip, { backgroundColor: C.surface }]}>
+              <Ionicons name="reader-outline" size={18} color={C.accentText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[st.rowTitle, { color: C.text }]}>Your policies</Text>
+              <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>Cancellation, rescheduling, late and no-show fees</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.accentText} />
+          </TouchableOpacity>
           </>}
           </ProviderStripePayments>
         </ScrollView>

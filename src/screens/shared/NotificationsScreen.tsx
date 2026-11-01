@@ -25,9 +25,16 @@ import {
   getBookingWithAddOnsById,
   getProviderBasicById,
   subscribeToNotificationChanges,
+  forgetCachedReads,
 } from '../../services/databaseService';
 import type { DbNotification } from '../../types/database';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import AnimatedReanimated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated';
 // react-native's own TouchableOpacity runs its own touch responder
 // independently of Swipeable's PanGestureHandler, so a swipe attempt that
 // hasn't yet crossed the pan threshold can still register as a press on this
@@ -56,8 +63,10 @@ interface Notification {
       | 'no_show'            | 'provider_no_show'    | 'no_show_disputed'
       | 'cancellation_settled'
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
-      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed'
-      | 'refund_requested' | 'refund_request_updated'
+      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed' | 'tip_received'
+      | 'payout_debt_recorded' | 'payout_debt_recovered'
+      | 'refund_requested' | 'refund_request_updated' | 'payout_failed'
+      | 'terms_updated'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
@@ -69,7 +78,8 @@ interface Notification {
       | 'info_pack_received' | 'intake_form_completed' | 'address_released'
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
       | 'schedule_fully_booked' | 'points_earned'
-      | 'maintenance_due'    | 'aftercare_available';
+      | 'maintenance_due'    | 'aftercare_available'
+      | 'provider_saved';
   title: string;
   message: string;
   timestamp: string;
@@ -133,6 +143,41 @@ const notifSkeletonStyles = StyleSheet.create({
   line: { height: 12, borderRadius: 6 },
 });
 
+function DeleteSwipeAction({
+  progress,
+  notificationId,
+  onDelete,
+}: {
+  progress: SharedValue<number>;
+  notificationId: string;
+  onDelete: (id: string) => void;
+}) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{
+      scale: interpolate(
+        progress.value,
+        [0, 0.5, 0.7, 1],
+        [0.4, 1.15, 0.92, 1],
+        Extrapolation.CLAMP,
+      ),
+    }],
+  }));
+
+  return (
+    <View style={styles.deleteAction}>
+      <AnimatedReanimated.View style={animatedStyle}>
+        <TouchableOpacity
+          style={styles.deleteBubble}
+          onPress={() => { hapticMedium(); onDelete(notificationId); }}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="trash" size={22} color="#FFF" />
+        </TouchableOpacity>
+      </AnimatedReanimated.View>
+    </View>
+  );
+}
+
 // Role separation is server-authoritative: every notification row carries a
 // `recipient_role` ('provider' | 'client') set at creation time, and both the
 // initial fetch (getMyNotifications) and the realtime subscription filter by it.
@@ -168,11 +213,13 @@ const hapticSelection = () => { Haptics.selectionAsync().catch(() => {}); };
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { textStyles } = useFont();
-  const { user, hatState } = useAuth();
+  const { user, hatState, myBookingMode } = useAuth();
   const activeMode = hatState.active;
   const isProvider = activeMode === 'provider';
   const isProviderRef = useRef(false);
   isProviderRef.current = isProvider;
+  const myBookingModeRef = useRef(myBookingMode);
+  myBookingModeRef.current = myBookingMode;
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -214,7 +261,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // Only one row's delete bubble should be open at a time (iOS Mail
   // behaviour) — closing whichever row is currently open when another one
   // starts to open, rather than letting several sit open simultaneously.
-  const rowSwipeablesRef = useRef<Map<string, React.ElementRef<typeof Swipeable>>>(new Map());
+  const rowSwipeablesRef = useRef<Map<string, SwipeableMethods>>(new Map());
   const openRowIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -348,7 +395,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'refund_requested', 'refund_request_updated', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'tip_received', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -539,7 +586,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'fee_dispute_resolved' ||
         notification.type === 'fee_payment_requested' ||
         notification.type === 'fee_paid_by_client' ||
+        notification.type === 'tip_received' ||
         notification.type === 'fee_payment_lapsed' ||
+        notification.type === 'payout_debt_recorded' ||
+        notification.type === 'payout_debt_recovered' ||
         notification.type === 'refund_requested' ||
         notification.type === 'refund_request_updated' ||
         notification.type === 'booking_reminder' ||
@@ -739,6 +789,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
         );
       }, 300);
+    } else if (notification.type === 'terms_updated') {
+      // Both hats keep a Terms screen in their Profile tab's stack.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Terms'));
+      }, 300);
+    } else if (notification.type === 'payout_failed') {
+      // Provider-only. The fix (Stripe account or bank details) lives on
+      // Payments, not on the booking the payout was for.
+      defer(() => {
+        navigateProviderHome('Payments');
+      }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
@@ -746,13 +807,15 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
-    } else if (notification.type === 'points_earned') {
-      // Loyalty points earned — open the Rewards screen, which lives in the
-      // client Profile tab's stack. Client-only (already guarded above via
-      // CLIENT_ONLY_TYPES), so no provider branch is needed. Same dismiss-then-
-      // navigate-via-root-ref pattern as the other client deep-links.
+    } else if (notification.type === 'provider_saved') {
+      // The daily saves count. Both analytics screens show saves; a link-only
+      // pro's lives on Home, a full provider's on the Profile tab.
       defer(() => {
-        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+        if (myBookingModeRef.current === 'external') {
+          navigateProviderHome('LinkOnlyAnalytics');
+        } else {
+          dismissThenNavigate(() => navigateNested('Profile', 'Analytics'));
+        }
       }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
@@ -780,6 +843,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Refresh control
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh asks for the latest, not the short read cache.
+    forgetCachedReads();
     hapticLight();
     setRefreshing(true);
     await loadNotifications();
@@ -813,17 +878,23 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // an answered dispute is informational.
     if (type === 'fee_charged' || type === 'fee_disputed' || type === 'fee_payment_requested') return '#FF9500';
     if (type === 'fee_dispute_resolved' || type === 'fee_payment_lapsed') return P.accentText;
-    if (type === 'fee_paid_by_client') return '#4CAF50';
+    if (type === 'fee_paid_by_client' || type === 'tip_received') return '#4CAF50';
+    // Money owed needs attention; money taken towards it is a receipt.
+    if (type === 'payout_debt_recorded') return '#FF9500';
+    if (type === 'payout_debt_recovered') return P.accentText;
     // Amber: a request someone still has to act on or decide.
     if (type === 'refund_requested') return '#FF9500';
     if (type === 'refund_request_updated') return P.accentText;
+    // Money that didn't reach the provider: they need to act.
+    if (type === 'payout_failed') return '#FF9500';
+    if (type === 'terms_updated') return P.accentText;
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available'].includes(type)) return P.accentText;
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved'].includes(type)) return P.accentText;
     return '#FF9800';
   };
 
@@ -853,7 +924,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'fee_disputed':
       case 'fee_dispute_resolved':
       case 'fee_paid_by_client':
+      case 'tip_received':
       case 'fee_payment_lapsed':
+      case 'payout_debt_recorded':
+      case 'payout_debt_recovered':
       case 'refund_requested':
       case 'refund_request_updated':
         return 'View Booking';
@@ -906,6 +980,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'payout_failed':
+        return 'Open Payments';
+      case 'terms_updated':
+        return 'Read Terms';
+      case 'provider_saved':
+        return 'View Analytics';
       case 'points_earned':
         return 'View Points';
       case 'maintenance_due':
@@ -922,28 +1002,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // as the row is dragged, so no extra translateX here) that pops in with a
   // spring overshoot as it crosses the reveal threshold, rather than a flat
   // rectangular bar.
-  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, _dragX: Animated.AnimatedInterpolation<number>, item: Notification) => {
-    const scale = progress.interpolate({
-      inputRange: [0, 0.5, 0.7, 1],
-      outputRange: [0.4, 1.15, 0.92, 1],
-      extrapolate: 'clamp',
-    });
-
-    return (
-      <View style={styles.deleteAction}>
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <TouchableOpacity
-            style={styles.deleteBubble}
-            onPress={() => { hapticMedium(); deleteNotification(item.id); }}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="trash" size={22} color="#FFF" />
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    );
-  };
-
   // ✅ Render individual notification card
   const renderNotification = ({ item }: { item: Notification }) => (
     <Swipeable
@@ -951,7 +1009,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         if (ref) rowSwipeablesRef.current.set(item.id, ref);
         else rowSwipeablesRef.current.delete(item.id);
       }}
-      renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
+      renderRightActions={(progress) => (
+        <DeleteSwipeAction
+          progress={progress}
+          notificationId={item.id}
+          onDelete={deleteNotification}
+        />
+      )}
       overshootRight={false}
       onSwipeableWillOpen={() => {
         if (openRowIdRef.current && openRowIdRef.current !== item.id) {
@@ -1063,7 +1127,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle={theme.statusBar} translucent={true} />
+        <StatusBar barStyle={theme.statusBar} />
 
         {/* Pull-down indicator bar */}
         <View style={styles.pullBarContainer}>
@@ -1102,7 +1166,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {/* ✅ Filter Tabs */}
         <View style={styles.filterContainer}>
           <SlidingTabs
-            tabs={(isProvider
+            tabs={(isProvider && myBookingMode === 'external'
+              // Link-only: no CERVICED bookings and no reviews, so those two
+              // tabs would always be empty.
+              ? [
+                  { key: 'all', label: 'All' },
+                  { key: 'unread', label: 'Unread', count: unreadCount },
+                ]
+              : isProvider
               ? [
                   { key: 'all', label: 'All' },
                   { key: 'unread', label: 'Unread', count: unreadCount },

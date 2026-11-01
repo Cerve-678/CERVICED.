@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import Icon from '../../components/IconLibrary';
@@ -32,6 +33,16 @@ const FAQ_KEYS: ReadonlyArray<{ q: TranslationKey; a: TranslationKey }> = [
   { q: 'helpCentre.faq.becca.q', a: 'helpCentre.faq.becca.a' },
   { q: 'helpCentre.faq.points.q', a: 'helpCentre.faq.points.a' },
   { q: 'helpCentre.faq.payment.q', a: 'helpCentre.faq.payment.a' },
+];
+
+// The provider hat's questions. Help Centre is registered in both hats'
+// navigators, and a pro never needs to know how to book an appointment.
+const PROVIDER_FAQ_KEYS: ReadonlyArray<{ q: TranslationKey; a: TranslationKey }> = [
+  { q: 'helpCentre.providerFaq.live.q', a: 'helpCentre.providerFaq.live.a' },
+  { q: 'helpCentre.providerFaq.book.q', a: 'helpCentre.providerFaq.book.a' },
+  { q: 'helpCentre.providerFaq.saves.q', a: 'helpCentre.providerFaq.saves.a' },
+  { q: 'helpCentre.providerFaq.messages.q', a: 'helpCentre.providerFaq.messages.a' },
+  { q: 'helpCentre.providerFaq.becca.q', a: 'helpCentre.providerFaq.becca.a' },
 ];
 
 function FAQItem({ q, a, P }: { q: string; a: string; P: AppTheme }) {
@@ -80,6 +91,8 @@ export default function HelpCentreScreen({ navigation }: any) {
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { hatState } = useAuth();
+  const faqs = hatState.active === 'provider' ? PROVIDER_FAQ_KEYS : FAQ_KEYS;
   const [moreOpen, setMoreOpen] = useState(false);
 
   const actions = buildMoreActions(navigation, t);
@@ -108,7 +121,7 @@ export default function HelpCentreScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
@@ -137,7 +150,7 @@ export default function HelpCentreScreen({ navigation }: any) {
         </Text>
 
         <Text style={[styles.section, { color: P.accentText }]}>{t('helpCentre.section.faqs')}</Text>
-        {FAQ_KEYS.map(item => (
+        {faqs.map(item => (
           <FAQItem key={item.q} q={t(item.q)} a={t(item.a)} P={P} />
         ))}
       </ScrollView>

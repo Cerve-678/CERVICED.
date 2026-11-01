@@ -112,6 +112,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Provider profile creation/edit | ✅ | `src/screens/provider/ProviderMyProfileScreen.tsx` |
+| My Profile "Today" cards (day summary + swipeable booking cards) | ✅ code, ⚠️ not device-run | `src/features/providers/TodayScheduleCards.tsx`, timing rules in `todaySchedule.ts`. Summary leads the Dashboard until 2pm, booking cards lead from 2pm, summary leads again once the last client is done (cards then show tomorrow); the other card sits under Your work. "Needs a patch test" comes from `services.patch_test_required` — nothing records whether one was done |
 | Service management | ✅ | Provider profile / services screens |
 | Portfolio photos | ✅ | Upload service, `portfolios/` storage bucket |
 | Weekly hours + blocked dates | ✅ | `src/screens/provider/ProviderScheduleScreen.tsx` → `provider_availability`, `provider_blocked_dates` |
@@ -128,6 +129,8 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Browse/search/filter providers | ✅ | `HomeScreen`, `SearchScreen`, `ExploreScreen` → `databaseService.getProviders()`, capped at `DEFAULT_PROVIDER_QUERY_LIMIT` (200) |
+| Search services, typo-tolerant | ✅ (migrations `20261025120000` + `20261025130000` live, #171) | `SearchScreen` → `searchProvidersAndServices()` → RPC `search_services_ranked`: matching services as full-width cards scattered between the provider rows, two after each row (`searchResultsLayout.ts`; photo via `getServiceCoverImages`, description with the searched words in bold, the provider's availability tag, max 3 per provider; the card and its Book button open that service's booking sheet, the provider strip opens the profile), query rewritten into words live services use (typos "frsnch" → french, "blowdry"/"pony tail" joined or split, half-typed words), names/headings/tags/category words/descriptions matched, synonyms in SQL `search_synonym_map()`. Graded by `supabase/tests/service_search_eval.sql` (`scripts/search-eval.sh` tests an unapplied version): 91/92 on 2026-10-25. Becca's `searchProviders` gets the same matching |
+| Service tag suggestions + findability checks | ✅ (#179, no migration) | `src/features/providers/serviceTags.ts` (tag lists, templates, `suggestServiceDetails`, `descriptionProblem`) → both service editors (InfoReg `ServiceModal`, My Services `ServiceEditorSheet`) pre-tick tags read from a typed name; a NEW service needs a real description, 1+ tag and who-it's-for; existing ones aren't blocked. My Services shows a "Help clients find your services" card listing live services missing any of those |
 | Directory listings in Search | ✅ (2026-10-19) | Businesses imported from public directories that haven't joined (`providers.is_claimed = false`, `source = 'scraped'`) show in `SearchScreen` after every bookable provider as "Not on CERVICED yet" cards, via `databaseService.getDirectoryListings()`, the one client query exempt from `has_gone_live`. A grey initial stands in for a missing logo (`ListingInitialBadge`). Tapping one opens the read-only listing page in `ProviderProfileScreen` (`UnclaimedProviderView`, data from `getDirectoryListingDetail`, which reads only the columns it shows): link to their own page, Instagram, and claim. Not in Explore (listings have no photos). `is_active = false` takes one down. Rules: `src/features/providers/directoryListings.ts`. |
 | Provider profile view | ✅ | `ProviderProfileScreen` |
 | Add to cart (multi-provider) | ✅ | `CartContext` — reducer pattern, groups items by provider |
@@ -276,6 +279,16 @@ it; no job acts on it).
 - Privacy Policy screen (see `LEGAL-COMPLIANCE-NOTES.md`)
 
 ---
+
+### Provider achievements
+
+Settings > Achievements (`src/screens/provider/ProviderAchievementsScreen.tsx`), private to the provider. Migration `20261101180000_provider_achievements` is applied.
+
+- `get_my_provider_achievements()` owns every rule: what exists, targets, what counts. The app only formats its rows (`src/features/achievements/achievementPresentation.ts`).
+- Earned ones are stored in `provider_achievements` when the screen opens, so they stay earned if a count drops. No push or pop-up when one is earned.
+- Bookings count once `completed`. Paid out = transferred booking payouts, tips, and late and no-show fees. Months with bookings = an unbroken run of calendar months. Months on CERVICED count from `claimed_at`, else `created_at`, because no go-live date is recorded.
+- Link-only providers only get saves, bell followers, live, portfolio photos and time on CERVICED.
+- The Fully Booked group is deliberately absent until the certificate records fully booked events. Add its rows to the function then, and its keys to `achievementPresentation.ts`.
 
 ## Core logic flows worth remembering
 

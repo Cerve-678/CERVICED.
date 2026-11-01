@@ -3,7 +3,6 @@ import {
   Animated,
   LayoutChangeEvent,
   PanResponder,
-  ViewStyle,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -12,6 +11,46 @@ import * as Haptics from 'expo-haptics';
 const DRAG_HOLD_MS = 220;
 /** Finger movement tolerated while waiting to arm. Past this it's a scroll. */
 const HOLD_SLOP = 6;
+
+type RowLayout = { y: number; height: number };
+
+/**
+ * The order a drag would leave, with the carried row SWAPPED with the row
+ * it's over: the two exchange places and every other row stays put. (It used
+ * to insert instead, which pushed every row in between up or down by one —
+ * not what a provider expects from dropping one service onto another.)
+ *
+ * The row "under" the carried one is whichever row's centre is nearest the
+ * carried row's centre, the carried row's own slot included, so hovering at
+ * home swaps nothing.
+ */
+export function swapOrderForDrag(
+  order: string[],
+  layouts: Record<string, RowLayout>,
+  key: string,
+  dy: number,
+): string[] {
+  const carried = layouts[key];
+  const from = order.indexOf(key);
+  if (!carried || from === -1) return order;
+  const centre = carried.y + dy + carried.height / 2;
+  let target = from;
+  let best = Infinity;
+  order.forEach((k, i) => {
+    const row = layouts[k];
+    if (!row) return;
+    const distance = Math.abs(centre - (row.y + row.height / 2));
+    if (distance < best) {
+      best = distance;
+      target = i;
+    }
+  });
+  if (target === from) return order;
+  const next = [...order];
+  next[from] = order[target]!;
+  next[target] = key;
+  return next;
+}
 
 interface Options {
   /** Stable ids, in current display order. */
@@ -37,6 +76,8 @@ interface Options {
  *    and the target index starts jumping around after the first swap. Freezing
  *    it makes the result a pure function of finger position: the same place
  *    always yields the same order, whatever path got you there.
+ *
+ * A drop SWAPS the carried row with the one under it (see swapOrderForDrag).
  */
 export function useVerticalDragReorder({ keys, onReorder }: Options) {
   const [liveKeys, setLiveKeys] = useState<string[] | null>(null);
@@ -83,25 +124,9 @@ export function useVerticalDragReorder({ keys, onReorder }: Options) {
   const applyPosition = useCallback(
     (key: string, dy: number) => {
       dragY.setValue(dy);
-      const carried = baselineLayoutRef.current[key];
-      if (!carried) return;
-      const centre = carried.y + dy + carried.height / 2;
-      const others = baselineOrderRef.current.filter(k => k !== key);
-
-      let target = others.length;
-      for (let i = 0; i < others.length; i++) {
-        const otherKey = others[i];
-        const other = otherKey ? baselineLayoutRef.current[otherKey] : undefined;
-        if (!other) continue;
-        if (centre < other.y + other.height / 2) {
-          target = i;
-          break;
-        }
-      }
-
+      const next = swapOrderForDrag(baselineOrderRef.current, baselineLayoutRef.current, key, dy);
+      const target = next.indexOf(key);
       if (target !== targetIndexRef.current) {
-        const next = [...others];
-        next.splice(target, 0, key);
         targetIndexRef.current = target;
         liveKeysRef.current = next;
         setLiveKeys(next);
@@ -194,10 +219,11 @@ export function useVerticalDragReorder({ keys, onReorder }: Options) {
   // so a swap re-renders and getItemStyle recomputes the shifts.
   const logicalOrder = liveKeys ?? keys;
 
-  /** Where a row sits right now: the carried one follows the finger, the rest
-   *  slide by whole rows to open the gap it will drop into. */
+  /** Where a row sits right now: the carried one follows the finger, and the
+   *  one it's over slides into the carried row's old slot — the swap it'll
+   *  drop as. Every other row stays still. */
   const getItemStyle = useCallback(
-    (key: string): Animated.WithAnimatedObject<ViewStyle> => {
+    (key: string) => {
       if (!draggingKey) return {};
       if (key === draggingKey) {
         return {
@@ -211,13 +237,12 @@ export function useVerticalDragReorder({ keys, onReorder }: Options) {
       const from = baselineOrderRef.current.indexOf(key);
       const to = logicalOrder.indexOf(key);
       if (from === -1 || to === -1 || from === to) return {};
-      // Every row between the carried row's old and new slot shifts by the
-      // carried row's height, which opens a correctly-sized gap. Exact when
-      // rows are the same height, which service cards are; a mixed-height list
-      // would need each row's own measured height summed instead.
+      // Only the swapped row moves, straight into the carried row's measured
+      // slot — measured positions, so card spacing is included exactly.
       const carried = baselineLayoutRef.current[draggingKey];
-      const shift = carried ? carried.height : 0;
-      return { transform: [{ translateY: to > from ? -shift : shift }] };
+      const own = baselineLayoutRef.current[key];
+      if (!carried || !own) return {};
+      return { transform: [{ translateY: carried.y - own.y }] };
     },
     [draggingKey, dragY, logicalOrder],
   );

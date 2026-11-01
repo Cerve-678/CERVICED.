@@ -1,9 +1,12 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
 import { settleCheckout } from '../_shared/settleCheckout.ts';
 import { recordFeePaid } from '../_shared/feePayRequest.ts';
+import { recordTipPaid } from '../_shared/recordTipPaid.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { takeBackFromProvider } from '../_shared/takeBack.ts';
+import { sendSupportAlert } from '../_shared/supportAlert.ts';
+import { payoutFailedSupportEmail } from '../_shared/emailTemplates.ts';
 
 // Signed Stripe events reconcile checkout capture, refunds, connected-account
 // capabilities, and provider transfers. Always retrieve current Stripe state:
@@ -73,6 +76,9 @@ Deno.serve(async (req: Request) => {
         if (intent.metadata.fee_charge_id && event.type === 'payment_intent.succeeded') {
           await recordFeePaid(admin, stripe, intent.metadata.fee_charge_id, intent.id);
         }
+        if (intent.metadata.booking_tip_id && event.type === 'payment_intent.succeeded') {
+          await recordTipPaid(admin, stripe, intent.metadata.booking_tip_id, intent.id);
+        }
         break;
       }
       case 'refund.created':
@@ -113,13 +119,15 @@ Deno.serve(async (req: Request) => {
       }
       case 'payout.failed': {
         // A connected account's bank payout (their balance -> their bank)
-        // failing is the provider's concern with Stripe, not our ledger's, but
-        // it's worth a loud log.
+        // failing is the provider's concern with Stripe, not our ledger's:
+        // Stripe holds the money and pays it again once the bank details are
+        // fixed. Tell the provider and support so it isn't silent.
         const payout = event.data.object as Stripe.Payout;
         console.warn(
-          `[stripe-webhook] payout.failed payout=${payout.id} account_event — ` +
+          `[stripe-webhook] payout.failed payout=${payout.id} account=${event.account ?? 'platform'} — ` +
           `failure=${payout.failure_code ?? 'unknown'} — provider bank payout failed`,
         );
+        if (event.account) await handleBankPayoutFailed(payout, event.account);
         break;
       }
       default:
@@ -139,6 +147,47 @@ Deno.serve(async (req: Request) => {
     headers: { 'Content-Type': 'application/json' },
   });
 });
+
+// A provider's own bank payout failed (payout.failed on their connected
+// account). One notification per Stripe payout id, so Stripe redelivering the
+// event doesn't repeat it, and support hears about it the same once.
+async function handleBankPayoutFailed(payout: Stripe.Payout, accountId: string): Promise<void> {
+  const { data: provider, error } = await admin
+    .from('providers').select('id, user_id, display_name').eq('stripe_account_id', accountId).maybeSingle();
+  if (error) throw error;
+  if (!provider) {
+    console.warn(`[stripe-webhook] payout.failed for unknown account ${accountId}`);
+    return;
+  }
+  const { data: already, error: seenError } = await admin.from('notifications')
+    .select('id').eq('user_id', provider.user_id).eq('type', 'payout_failed')
+    .eq('metadata->>bank_payout_id', payout.id).limit(1);
+  if (seenError) throw seenError;
+  if (already?.length) return;
+
+  const amount = `£${(payout.amount / 100).toFixed(2)}`;
+  const { error: insertError } = await admin.from('notifications').insert({
+    user_id: provider.user_id,
+    type: 'payout_failed',
+    title: `Your bank didn't accept ${amount}`,
+    message: "Your bank turned down a payout from Stripe. Check your bank details in Payments. The money is safe and Stripe sends it again once they're fixed.",
+    priority: 'high',
+    is_actionable: true,
+    provider_id: provider.id,
+    recipient_role: 'provider',
+    metadata: { bank_payout_id: payout.id },
+  });
+  if (insertError) throw insertError;
+  await sendSupportAlert(payoutFailedSupportEmail({
+    kind: 'bank',
+    provider: provider.display_name || 'Unknown provider',
+    amount,
+    booking: null,
+    why: `Their bank turned it down (${payout.failure_code ?? 'no reason given'}).`,
+    tries: null,
+    nextStep: 'The provider has been asked to check their bank details. Stripe keeps the money and pays it again once they do.',
+  }), 'stripe-webhook');
+}
 
 // Mirror the connected account's capability flags onto the provider row. Only
 // writes when something actually changed, so a redelivered event doesn't churn
@@ -258,13 +307,16 @@ async function passDisputeToProvider(dispute: Stripe.Dispute): Promise<void> {
   if (!intentId) return;
 
   const { data: fees, error: feeError } = await admin.from('booking_fee_charges')
-    .select('id, booking_id, provider_id, stripe_transfer_id').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
+    .select('id, booking_id, provider_id, stripe_transfer_id, payout_pence, deducted_pence').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
   if (feeError) throw feeError;
   for (const fee of fees ?? []) {
-    if (!fee.stripe_transfer_id) continue;
+    if (!fee.stripe_transfer_id && !(fee.deducted_pence > 0)) continue;
     await takeBackFromProvider(admin, stripe, {
       providerId: fee.provider_id, bookingId: fee.booking_id, source: 'bank_dispute',
       transferId: fee.stripe_transfer_id, key: `dispute_reversal_fee_${fee.id}`,
+      // Part of this fee paid off an earlier debt instead of being sent, so
+      // the whole payout comes back, not just what the transfer carried.
+      wantPence: fee.deducted_pence > 0 ? fee.payout_pence : undefined,
       metadata: { dispute_id: dispute.id },
     });
     const { error } = await admin.from('booking_fee_charges')

@@ -186,6 +186,8 @@ export type ProfileStackParamList = {
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;
+  /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminMoney: undefined;
   Points: undefined;
   ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
@@ -282,9 +284,15 @@ export type ProviderServicesStackParamList = {
   EditProfile: { transferProviderId?: string } | undefined;
   // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
   // builder opens with the profile editor beneath it instead of at a bare tab
-  // root — same reasoning as Policies below. Only the openTerms shape is
-  // reachable from this stack.
-  ProviderIntakeForm: { openTerms: true } | undefined;
+  // root — same reasoning as Policies below. EditProfile sends the openTerms
+  // shape; BookingDetail (below) sends the booking one.
+  ProviderIntakeForm:
+    | { bookingId: string; clientUserId: string; serviceName: string; formId?: string }
+    | { openTerms: true }
+    | undefined;
+  // Pushed from the dashboard's Today cards, so a booking opens with the
+  // profile beneath it — same reasoning as ProviderSchedule below.
+  BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
@@ -323,7 +331,8 @@ export type ProviderAccountStackParamList = {
   // Their own public profile, exactly as clients see it.
   MyPublicProfile: { providerId: string };
   EditProfile: { transferProviderId?: string } | undefined;
-  Notifications: undefined;
+  NotificationSettings: undefined;
+  Achievements: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Analytics: undefined;
   Promotions: undefined;
@@ -374,6 +383,8 @@ export type ProviderAccountStackParamList = {
   About: undefined;
   Terms: undefined;
   ReportProblem: undefined;
+  /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminMoney: undefined;
   DevSettings: undefined;
 };
 

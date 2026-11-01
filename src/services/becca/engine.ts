@@ -30,7 +30,7 @@ import userLearningService from "../userLearningService";
 import { resolveEntities } from "./entityResolver";
 import { understand } from "./matcher";
 import { normalizeAsk } from "./askNormaliser";
-import { capabilitiesFor, getCapability, toToolSchema } from "./registry";
+import { capabilitiesFor, fitsSetup, getCapability, toToolSchema } from "./registry";
 import { askChip, chip, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
@@ -51,6 +51,13 @@ export interface EngineInput {
   conversation?: ConversationContext;
   /** Exact booking selected from a Becca action card, never free text. */
   selectedBookingId?: string;
+  /**
+   * Provider hat only: the provider is link-only (takes bookings on their
+   * own booking site). Becca then only runs capabilities marked
+   * `fitsLinkOnly` and only offers chips that lead to one; anything else
+   * gets "that isn't part of your setup". Ignored for the client hat.
+   */
+  linkOnly?: boolean;
   /**
    * Optional future AI router. It can select a registered capability only;
    * the deterministic matcher remains the fallback when it is absent, unsure
@@ -252,22 +259,53 @@ function resolveOrdinalReference(
  */
 export async function converse(input: EngineInput): Promise<EngineReply> {
   const reply = await respond(input);
-  return { message: reply, context: lastContext };
+  return { message: reply, context: lastContextByHat[input.hat] };
 }
 
 /**
- * Context produced by the most recent `respond()` call.
+ * Context produced by the most recent `respond()` call for each hat.
  *
  * `respond` has many early returns (confirmations, dismissals, ambiguity,
  * fallbacks) and threading a return-tuple through all of them would obscure
- * the actual logic. This is written once per call and read immediately by
- * `converse`, which is the only supported way to read it.
+ * the actual logic. Keeping one slot per hat means a background client reply
+ * cannot overwrite the context returned by a provider turn (or vice versa).
  */
-let lastContext: ConversationContext = { entities: {} };
+const lastContextByHat: Record<BeccaHat, ConversationContext> = {
+  client: { hat: "client", entities: {} },
+  provider: { hat: "provider", entities: {} },
+};
+
+function setLastContext(hat: BeccaHat, context: ConversationContext): void {
+  lastContextByHat[hat] = { ...context, hat };
+}
+
+/**
+ * Whether this turn is a link-only provider's. Set once at the top of
+ * `respond()`, same reasoning as `lastContextByHat`: every early return and every
+ * chip helper needs it, and threading it through all of them would bury the
+ * logic. Read through `isLinkOnlyTurn()`, which also checks the hat.
+ */
+let turnLinkOnly = false;
+
+function isLinkOnlyTurn(hat: BeccaHat): boolean {
+  return hat === "provider" && turnLinkOnly;
+}
 
 export async function respond(input: EngineInput): Promise<ChatMessage> {
   const now = input.now ?? new Date();
-  const { message, hat, bookings, userId, conversation, interpreter } = input;
+  const { message, hat, bookings, userId, interpreter } = input;
+  // A provider conversation cannot continue a client thread (or vice versa).
+  // BeccaScreen resets its state on a switch, but this is the engine's own
+  // boundary for callers, restored state, and future surfaces.
+  const conversation = input.conversation?.hat && input.conversation.hat !== hat
+    ? undefined
+    : input.conversation;
+  turnLinkOnly = hat === "provider" && input.linkOnly === true;
+  // Early returns (confirmation, safety boundary, social reply) still need
+  // to hand the caller context from THIS hat. Leaving a module-global context
+  // from the prior turn here was enough for a fast hat switch to revive an
+  // old client thread on the next provider message.
+  setLastContext(hat, conversation ?? { hat, entities: {} });
 
   // A confirmation short-circuits everything: it's not natural language and
   // must never be re-parsed as an intent.
@@ -301,6 +339,9 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
 
   if (
     hat === "provider" &&
+    // Link-only pros have no booking rules; the ask falls through to the
+    // matcher and gets the not-in-your-setup reply.
+    !isLinkOnlyTurn(hat) &&
     (
       SET_DAILY_LIMIT_DIRECT_RE.test(message.trim()) ||
       (
@@ -311,7 +352,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   ) {
     // Preserve the active thread: the provider may use Back after changing
     // the setting and should land in the same capacity conversation.
-    lastContext = conversation ?? { entities: {} };
+    setLastContext(hat, conversation ?? { hat, entities: {} });
     return message_(
       {
         content: "You can set it under Booking Rules — choose the maximum bookings per day.",
@@ -403,7 +444,8 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // (ambiguity, low confidence, a capability that threw) then still hands the
   // next turn the topic and the last shown list — losing them on a fallback
   // is what would make one unclear message reset the whole conversation.
-  lastContext = {
+  setLastContext(hat, {
+    hat,
     entities,
     ...(conversation?.lastCapabilityId
       ? { lastCapabilityId: conversation.lastCapabilityId }
@@ -418,7 +460,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     ...(conversation?.offeredSuggestions
       ? { offeredSuggestions: conversation.offeredSuggestions }
       : {}),
-  };
+  });
 
   // "the first one" / "that one" — resolve an ordinal against the list Becca
   // last showed, before intent matching, so the reference behaves like a
@@ -499,6 +541,17 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const capability = getCapability(understanding.capabilityId, hat);
   if (!capability) return buildFallback(understanding, hat);
 
+  // Understood, but not something a link-only pro has. Say so plainly rather
+  // than answer about CERVICED bookings, clients or prices they don't keep
+  // here, and never run the capability.
+  if (!fitsSetup(capability, isLinkOnlyTurn(hat))) {
+    return message_({
+      content:
+        "That isn't part of your setup. Your bookings, clients and prices live on your own booking site, so I can't see them here.",
+      suggestions: defaultStarters(hat),
+    }, hat, { title: "Not part of your setup" });
+  }
+
   // A required entity that never resolved means we can't run the capability
   // honestly — ask for the missing piece instead of running it half-blind.
   const missing = (capability.needs ?? []).find(
@@ -514,6 +567,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const ctx: CapabilityContext = {
     entities,
     hat,
+    linkOnly: isLinkOnlyTurn(hat),
     // The repaired ask, not the raw keystrokes: a capability testing its own
     // modifiers ("walk-in", "vegan", "near me") should see the same text the
     // matcher scored, or a typo that Becca understood well enough to route
@@ -590,7 +644,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // also covered by tests, but filtering here keeps a malformed future
   // capability from reaching a user while development is in progress.
   const routable = offered.filter((suggestion) =>
-    isBeccaNavigationSuggestion(hat, suggestion),
+    isBeccaNavigationSuggestion(hat, suggestion, isLinkOnlyTurn(hat)),
   );
 
   // Don't offer back the thing the user just asked for. Chips send their
@@ -649,7 +703,8 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // Hand the next turn everything it needs to resolve a follow-up: what was
   // being discussed, what was answered, and what was shown (so "the first
   // one" points at a real provider).
-  lastContext = {
+  setLastContext(hat, {
+    hat,
     entities,
     lastCapabilityId: capability.id,
     ...(entities.booking ? { lastBooking: entities.booking } : conversation?.lastBooking ? { lastBooking: conversation.lastBooking } : {}),
@@ -662,7 +717,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       conversation?.offeredSuggestions,
       suggestions,
     ),
-  };
+  });
 
   const factualContent = assumption ? `${assumption}\n\n${result.text}` : result.text;
   const content = await composeWithFallback(interpreter, {
@@ -699,6 +754,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
  * than no chip at all.
  */
 function discoveryChips(hat: BeccaHat): ChatSuggestion[] {
+  if (isLinkOnlyTurn(hat)) return linkOnlyStarterChips();
   if (hat === "provider") {
     return [
       askChip("p-today", "What's on today?", "What's on today?"),
@@ -760,6 +816,7 @@ function rememberOffered(
  * steps — offering a client "Today's bookings" would be meaningless.
  */
 function defaultFollowUps(hat: BeccaHat) {
+  if (isLinkOnlyTurn(hat)) return linkOnlyStarterChips().slice(0, 3);
   if (hat === "provider") {
     return [
       chip("d-today", "Today's bookings", "What's on today?"),
@@ -1043,6 +1100,7 @@ function buildSocialReply(message: string, hat: BeccaHat): ChatMessage | null {
   const plain = message
     .trim()
     .toLowerCase()
+    .replace(/’/g, "'")
     .replace(/[!?.]+$/g, "")
     .replace(/\s+/g, " ");
 
@@ -1053,6 +1111,22 @@ function buildSocialReply(message: string, hat: BeccaHat): ChatMessage | null {
           hat === "provider"
             ? "Hi — I’m here to help you stay on top of your business. What would you like to check?"
             : "Hi — what would you like help with today?",
+        suggestions: defaultStarters(hat),
+      },
+      hat,
+    );
+  }
+
+  // Identity questions are just as common as a greeting, particularly in a
+  // new chat. Keep this before intent matching: neither answer needs account
+  // data, and "what's your name?" should not fall through to uncertainty.
+  if (/^(?:what(?:'s| is) (?:your|ur) n(?:ame|sme)|who are you|what are you|are you becca|is your name becca|tell me your name|your name)$/.test(plain)) {
+    return message_(
+      {
+        content:
+          hat === "provider"
+            ? "I’m Becca, CERVICED’s business assistant. I can help with your diary, clients and business setup."
+            : "I’m Becca, CERVICED’s beauty and booking assistant. I can help you find providers and stay on top of your bookings.",
         suggestions: defaultStarters(hat),
       },
       hat,
@@ -1207,7 +1281,8 @@ function buildAmbiguityReply(
  * when nothing scored at all.
  */
 function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
-  const all = capabilitiesFor(hat);
+  const linkOnly = isLinkOnlyTurn(hat);
+  const all = capabilitiesFor(hat).filter((c) => fitsSetup(c, linkOnly));
 
   const ranked = u.alternatives.length > 0 || u.capabilityId
     ? [
@@ -1293,7 +1368,22 @@ function buildAssumption(
   return `Assuming you meant ${unstated.join(", ")} —`;
 }
 
+/**
+ * A link-only pro's starting points. Every message routes to a capability
+ * marked `fitsLinkOnly` (beccaLinkOnly.test.ts checks this).
+ */
+function linkOnlyStarterChips(): ChatSuggestion[] {
+  return [
+    askChip("lo-inbox", "Any unread messages?", "Any unread messages?"),
+    askChip("lo-notifs", "Anything I've missed?", "Any updates?"),
+    askChip("lo-hours", "What are my hours?", "What are my working hours?"),
+    askChip("lo-reach", "How's my reach?", "How many followers have I got?"),
+    askChip("lo-help", "What can you do?", "What can you do?"),
+  ];
+}
+
 function defaultStarters(hat: BeccaHat) {
+  if (isLinkOnlyTurn(hat)) return linkOnlyStarterChips().slice(0, 3);
   return hat === "provider"
     ? [
         askChip("today", "What's on today?", "What's on today?"),
@@ -1331,18 +1421,46 @@ function message_(
   // an invitation to mis-tap.
   options?: { exactSuggestions?: boolean; title?: string },
 ): ChatMessage {
-  const own = parts.suggestions ?? [];
+  // Last line of defence for a link-only pro: drop any chip that would lead
+  // to "not part of your setup". Exact suggestions (confirm/cancel) are
+  // never filtered.
+  const own = (parts.suggestions ?? []).filter(
+    (s) => options?.exactSuggestions || !isLinkOnlyTurn(hat) || suggestionFitsLinkOnly(s, hat),
+  );
   const suggestions = options?.exactSuggestions || own.length > 0
     ? own
     : defaultFollowUps(hat);
+  // Provider Becca is a business copilot, never marketplace discovery. This
+  // is deliberately enforced at the message envelope as well as by the
+  // provider-only capability registry: a malformed or future capability
+  // cannot make another provider's card or portfolio appear in this hat.
+  const { providerRecommendations, inspiration, ...rest } = parts;
+  const safeParts = hat === "provider"
+    ? rest
+    : {
+      ...rest,
+      ...(providerRecommendations ? { providerRecommendations } : {}),
+      ...(inspiration ? { inspiration } : {}),
+    };
   return {
     id: `becca-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     role: "assistant",
     timestamp: new Date(),
-    ...parts,
-    content: formatForChat(parts.content, options?.title),
+    ...safeParts,
+    content: formatForChat(safeParts.content, options?.title),
     suggestions,
   };
+}
+
+/** Whether a chip leads somewhere a link-only pro has. */
+function suggestionFitsLinkOnly(suggestion: ChatSuggestion, hat: BeccaHat): boolean {
+  if (suggestion.action === "navigate") return isBeccaNavigationSuggestion(hat, suggestion, true);
+  const ask = suggestion.data?.message;
+  if (!ask || ask.startsWith(CONFIRM_PREFIX)) return true;
+  const u = understand(normalizeAsk(ask), {}, hat);
+  if (!u.capabilityId) return true;
+  const capability = getCapability(u.capabilityId, hat);
+  return !capability || fitsSetup(capability, true);
 }
 
 /**

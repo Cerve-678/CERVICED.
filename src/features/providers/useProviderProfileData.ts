@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AvailabilityService } from "../../services/AvailabilityService";
-import type {
-  AvailabilitySummary,
-  WeeklyOpeningHoursDay,
-} from "../../services/AvailabilityService";
+import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import {
   getProviderActivePromotions,
   getProviderBySlug,
@@ -62,8 +59,6 @@ export interface ProviderProfileDataState {
    *  row caps and render in two different places on the profile. */
   portfolio: { work: DbPortfolioItem[]; venue: DbPortfolioItem[] };
   portfolioLoading: boolean;
-  availability: AvailabilitySummary | null;
-  availabilityLoading: boolean;
   openingHours: WeeklyOpeningHoursDay[] | null;
   openingHoursLoading: boolean;
   currentUserId: string | null;
@@ -82,8 +77,15 @@ export interface ProviderProfileDataState {
  */
 export function useProviderProfileData(
   providerSlug: string,
+  knownOwnedProviderId?: string | null,
 ): ProviderProfileDataState {
   const profileGenerationRef = useRef(0);
+  // Keep this current without making a settled AuthContext update restart the
+  // public-profile load. `undefined` means the ownership lookup is not ready.
+  const knownOwnedProviderIdRef = useRef<string | null | undefined>(
+    knownOwnedProviderId,
+  );
+  knownOwnedProviderIdRef.current = knownOwnedProviderId;
   const [provider, setProvider] = useState<ProviderProfileData | null>(null);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,10 +101,6 @@ export function useProviderProfileData(
     venue: DbPortfolioItem[];
   }>({ work: [], venue: [] });
   const [portfolioLoading, setPortfolioLoading] = useState(true);
-  const [availability, setAvailability] = useState<AvailabilitySummary | null>(
-    null,
-  );
-  const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [openingHours, setOpeningHours] = useState<
     WeeklyOpeningHoursDay[] | null
   >(null);
@@ -127,8 +125,6 @@ export function useProviderProfileData(
     setPromotions([]);
     setPortfolio({ work: [], venue: [] });
     setPortfolioLoading(true);
-    setAvailability(null);
-    setAvailabilityLoading(true);
     setOpeningHours(null);
     setOpeningHoursLoading(true);
     setCurrentUserId(null);
@@ -225,19 +221,6 @@ export function useProviderProfileData(
             if (!cancelled) setPortfolioLoading(false);
           });
 
-        void AvailabilityService.getAvailabilitySummary(data.id, {
-          includeExtendedSearch: false,
-        })
-          .then((summary) => {
-            if (!cancelled) setAvailability(summary);
-          })
-          .catch((error: unknown) => {
-            logger.warn("Failed to load provider availability summary:", error);
-          })
-          .finally(() => {
-            if (!cancelled) setAvailabilityLoading(false);
-          });
-
         void AvailabilityService.getWeeklyOpeningHours(data.id)
           .then((hours) => {
             if (!cancelled) setOpeningHours(hours);
@@ -251,8 +234,16 @@ export function useProviderProfileData(
 
         // Booking authority is fail-closed. Never show a booking control
         // until this ownership lookup has answered: a timeout must not turn
-        // an owner into a client for even one tappable frame.
-        void getProviderProfileViewerContext(data.id)
+        // an owner into a client for even one tappable frame. When
+        // AuthContext has already settled who this viewer owns, reuse that
+        // answer instead of issuing another providers lookup per profile.
+        const viewerContextRequest = knownOwnedProviderIdRef.current === undefined
+          ? getProviderProfileViewerContext(data.id)
+          : getProviderProfileViewerContext(
+              data.id,
+              knownOwnedProviderIdRef.current,
+            );
+        void viewerContextRequest
           .then((viewer) => {
             if (cancelled) return;
             if (viewer) {
@@ -311,8 +302,6 @@ export function useProviderProfileData(
     promotions,
     portfolio,
     portfolioLoading,
-    availability,
-    availabilityLoading,
     openingHours,
     openingHoursLoading,
     currentUserId,

@@ -172,7 +172,7 @@ The `payments` and `earnings` tables exist in the schema and have `stripe_paymen
 
 ### Platform fee
 
-If CERVICED takes a percentage (e.g. 10%), this is handled via Stripe Connect — each provider has a connected Stripe account, and when a payment goes through you split it automatically. This is more complex and can come after basic payments work.
+Built: see `docs/PAYMENTS_AND_LOGIC.md` section 1.3 (5% of what's charged + 40p, £1.99–£24.99, paid by the client on top of the price).
 
 ---
 
@@ -386,9 +386,9 @@ how many requests arrive.
     receipt — is a price change after agreement. It has to be visible in the
     booking sheet at the moment they accept the emergency confirmation, and
     again in the cart line.
-  - **Interacts with three existing numbers.** The tiered platform fee
-    (`features/cart/platformFee.ts`, added on top and never taken out of the
-    provider's money), the deposit (percentage or fixed — does the surcharge
+  - **Interacts with three existing numbers.** The platform fee (5% + 40p of
+    what's charged, `features/cart/platformFee.ts`, added on top and never
+    taken out of the provider's money), the deposit (percentage or fixed — does the surcharge
     count toward the deposit base?), and promo codes (can a discount apply to
     a surcharge?). Each needs an answer before implementation, not during.
   - **The provider hasn't accepted yet.** The client pays at checkout and the
@@ -966,7 +966,46 @@ questions — several of which (availability, services) are only meaningful in
 
 ---
 
-## "Slots out every Nth" — a release day that doesn't release anything
+## "Slots out every Nth" — monthly release — BUILT 2026-10-26, migration unapplied
+
+### Status
+
+Built on `feat/monthly-release` (stacked on `fix/follow-bell-tells-the-truth`),
+migration `20261026110000_monthly_release` **written, not applied**. What
+shipped, and where it differs from the design below:
+
+- **Monthly ⇔ a release day is set.** No separate mode column:
+  `automation_settings.scheduleReleaseDay` set means monthly, and it replaces
+  `booking_window_days` (which is kept, so clearing the day restores it).
+- **The horizon is computed from the clock, not stored** (deviation from
+  point 2 below). Before the Nth at 09:00 UTC: bookable to the end of this
+  month. From then: to the end of next month. A day past the month's end means
+  its last day. Computing it means it can't fail to advance, which is the
+  failure point 2 was guarding against. Server: `provider_last_bookable_date()`
+  (used by `enforce_booking_bookability` and `get_services_availability`).
+  App: `src/utils/bookingHorizon.ts` (used by every AvailabilityService horizon
+  and Becca). Keep the two in step.
+- **The push is true when it's sent.** The cron still runs at 09:00 UTC, the
+  release minute, and `process_follow_schedule_release_nudges()` now only
+  sends once `provider_last_bookable_date()` reaches next month: "December has
+  opened up with … Get booking now." (the user's wording). It skips providers
+  who aren't live. A time-only change to an existing booking past the horizon
+  is no longer re-checked.
+- **One control, and nothing can overwrite it** (point 3): Edit Profile
+  (InfoReg) is the only editor — the user's call on 2026-10-29: one change
+  there moves the booking limit, the profile pill and the release message.
+  Scheduling shows it read-only in place of the rolling-window choice, with
+  what's open now and when the next month opens. Automations lost its toggle.
+  Every screen that touches `automation_settings` (Automations, Payments,
+  InfoReg) saves only its own keys through `merge_provider_automation_settings`,
+  so one screen's save can't undo another's.
+- **The wall** (point 4): the client date picker says "Dates after … open on
+  … at …" when the week runs past it. The provider-side line is in Scheduling,
+  not Working Hours.
+- Providers without a release day get the bell's "has space again" alert
+  instead (`fix/follow-bell-tells-the-truth`).
+
+The original write-up follows.
 
 ### What it means
 
@@ -1517,3 +1556,95 @@ in Aesthetics.
   `search_category` from AESTHETICS to BODY in the same migration.
 - A decision on providers still stamped OTHER: offer them BODY, or leave
   them as they are.
+
+---
+
+## Add-ons and service options — what isn't handled yet (2026-10-26)
+
+### What it means
+
+A provider often has choices *inside* one service that aren't extras, for
+example "Knotless braids: Small £180 / 5h, Medium £140 / 4h, Large £110 / 3h".
+That is an **option** (the client must pick exactly one, and it changes both
+the price and the time). An **add-on** is different: an optional extra the
+client can tick any number of, for example "+ curly ends £15".
+
+### What exists today (checked against the live DB)
+
+- **Add-ons only.** `service_add_ons` (name, price, description, is_active).
+  Picked in `AddOnPickerModal`, priced into the cart by
+  `getCartItemFullPrice`, and snapshotted into `booking_add_ons` by
+  `finalize_checkout` (and `provider_create_manual_booking`), which look the
+  price up from `service_add_ons` by id, so a client can't change it. They show
+  on the booking detail, receipts and emails, and rebooking offers to carry
+  them over.
+- **No options at all.** There is no options/variants table. A provider with
+  sizes has to list each size as its own service in one category.
+- **`services.price_max` is half-built.** The column exists and is read by
+  Search's price facets, the provider's My Profile and Becca. No screen writes
+  it (0 of 65 live services have it set), the client profile ignores it, and
+  checkout always charges `price`. So if a provider ever had a range, a client
+  would be charged the bottom of it with no explanation. Not a live bug today
+  only because nothing sets it.
+  (Search's price filter uses the cheapest-to-dearest of a provider's real
+  service prices; the price band picked at sign-up, `price_tier`, is only the
+  fallback for a provider with no priced services.)
+
+### What isn't handled
+
+1. **Add-ons can't add time.** `service_add_ons` has no duration. An add-on
+   that takes 30 extra minutes doesn't lengthen the booking, so availability,
+   holds, the overlap constraint and buffers all use the base service's
+   length, and the next client can be booked into the time the add-on needs.
+   **This is the most urgent item here.**
+2. **No required choice.** Nothing can make a client pick one size/length
+   before booking.
+3. **No per-option duration.** Availability is computed from one fixed
+   `duration_minutes` per service.
+4. **Add-ons can't be changed after booking**, by either side. The only route
+   is cancel and rebook.
+5. **No per-add-on deposit or safety rules.** Deposits are worked out on the
+   whole price; an add-on can't carry its own patch-test or pregnancy flag.
+6. **`price_max` is a leftover** (above).
+
+### How it could be handled
+
+**Step 1, small and worth doing first: `service_add_ons.extra_minutes`.**
+- Add `extra_minutes INT NOT NULL DEFAULT 0 CHECK (extra_minutes BETWEEN 0 AND 480)`.
+- The provider's add-on editor (InfoReg service editor) gets a "Takes extra
+  time" picker next to the price.
+- The booking's length becomes `duration_minutes + sum(extra_minutes)` of the
+  picked add-ons, everywhere a length is computed: `AvailabilityService`
+  (slot grid, `findNextAvailableDate`, near-term checks), the hold
+  (`prepareCheckout`), `finalize_checkout`'s `end_time`, the overlap
+  constraint's `compute_booking_effective_range`, Add Booking, reschedule
+  (keeps the booking's own length), and the "Fully booked" checks.
+- Snapshot the minutes into `booking_add_ons` too, so a later edit to the
+  add-on doesn't change past bookings.
+- Picking add-ons has to happen **before** the time is chosen (or the time
+  re-checked after), because a longer booking may no longer fit the slot.
+
+**Step 2: real options, kept separate from add-ons.**
+- New table `service_options` (service_id, name, price, duration_minutes,
+  sort_order, is_active), plus `booking_option_snapshot` columns on
+  `bookings` (option id, name, price, minutes).
+- A service with options shows "from £110" and a required picker in the
+  booking sheet; the picked option's price and minutes replace the service's
+  own. Add-ons still stack on top.
+- Server-resolved like add-ons: checkout sends the option id only;
+  `finalize_checkout` looks up name/price/minutes.
+- Touches: service editor, both booking sheets, cart, checkout, holds,
+  receipts, emails, reschedule, rebook, Becca's service answers, Search's
+  price facets (use the cheapest option as `min`), the Acuity import.
+- At that point `price_max` should be dropped (options replace it), in the
+  same change.
+
+**Step 3, optional: let add-ons and options be edited on an existing
+booking** (provider-side first, since they can re-check the diary), with the
+price difference handled by the payments rules in
+`docs/PAYMENTS_AND_LOGIC.md`.
+
+### Workaround until then
+
+List each size as its own service in one category. It works with everything
+today; the cost is a longer profile.
