@@ -31,19 +31,19 @@ OWNER:  (none)
 |---|---|---|
 | 20261101140000 | `provider_public_directions` | **APPLIED 2026-11-01** by cerviced-72 (MCP, on the user's OK), behind a guard that aborted unless the frontier was still `20261101115322`; dry-run in a rolled-back transaction first. Verified live: column `text` nullable, 0 of 11 providers filled, `authenticated` can select it, a 301-character value is refused by the CHECK. Frontier after: **20261101140000**. cerviced-e3 (formerly 4b) applied its `20261101130000`/`130100`/`130200` the same afternoon, after this one; they touch none of the same objects, so the order doesn't matter and all five 2026-11-01 versions are recorded live. Branch `feat/profile-how-to-get-there` (stacked on `feat/booking-directions`, #196). Frontier: live `20261101115322` (2026-11-01); cerviced-4b's unapplied `20261101130000`/`130100`/`130200` sit below it and touch none of the same objects, so apply order between them doesn't matter. Adds nullable `providers.public_directions text` with a 300-character CHECK. No backfill, no policy or grant change (table-level grants). Redefines nothing. Records its own version. **Apply before this branch merges**: the profile's public select names the column, so without it every provider profile fails to load. |
 
-### Pending 2026-10-31 (rescheduling can't dodge a late-cancel charge)
+### Applied 2026-11-01 (rescheduling can't dodge a late-cancel charge)
 
 | Authored version | Name | Status |
 |---|---|---|
 | 20261101130000 | `late_reschedule_keeps_cancel_charge` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/late-reschedule-keeps-cancel-charge`. Frontier: live `20261101115322` (2026-11-01); first written as `20261031200000` and renumbered above it. The view is rebuilt from that migration's `client_bookings` (keeps `provider_directions_snapshot`) and md5-guarded. Adds `booking_reschedule_requests.requested_inside_cancel_window` and `bookings.late_reschedule_from` (both readable by `authenticated` via column grants). Redefines from live, md5-guarded (the file aborts if any changed): `request_reschedule_own_booking`, `confirm_reschedule_own_booking`, `confirm_group_reschedule`, `cancel_own_booking`, `process_cancel_window_closing_warnings`; replaces the `client_bookings` view with one column added at the end (`security_invoker` kept). Records its own version. **Apply before deploying `apply-cancellation-refund`** from this branch, which selects the new column. |
 
-### Pending 2026-10-31 (refund requests go to Cerviced after 3 days)
+### Applied 2026-11-01 (refund requests go to Cerviced after 3 days)
 
 | Authored version | Name | Status |
 |---|---|---|
 | 20261101130100 | `refund_request_reply_deadline` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/refund-request-reply-deadline`; lock released 2026-11-01 (on `feat/late-reschedule-keeps-cancel-charge`). Frontier: live `20261101115322` (2026-11-01); first written as `20261031201000` and renumbered. Independent of `20261101130000`, so either order works. Adds `refund_requests.passed_automatically` (granted to `authenticated`) and `provider_reminded_at`; `process_refund_request_deadlines()` (service role only) and cron `refund-request-deadlines` at `25 * * * *`. Redefines from live, md5-guarded: `request_booking_refund` (3-day sentence), `notify_refund_request_status` (automatic-pass wording + provider notice). No new notification types. Records its own version. **Apply before this branch merges**: the app selects `passed_automatically`, so without it every refund-request read fails. |
 
-### Pending 2026-10-31 (one "We've updated our Terms" notice)
+### Applied 2026-11-01 (one "We've updated our Terms" notice)
 
 | Authored version | Name | Status |
 |---|---|---|

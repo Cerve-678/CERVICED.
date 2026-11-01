@@ -6,7 +6,7 @@ what providers receive, when, and what happens when something goes wrong.
 | | |
 |---|---|
 | **Who this is for** | Everyone who handles money questions: support, operations, finance, engineering |
-| **Status as of** | 30 October 2026, checked against the live database and the code on `main` |
+| **Status as of** | 1 November 2026, checked against the live database and the code on `main` |
 | **Stripe mode** | **TEST.** No real money has moved yet. Going live is a key switch (Part 6) |
 | **Owner** | The founder, until a payments owner is hired |
 | **Rule** | Any change to money logic updates this file **in the same pull request**. A PR that changes fees, holds, payouts, refunds, disputes, deposits, tips or debts without updating this handbook isn't done |
@@ -247,8 +247,8 @@ Pay or PayPal.
   the booking, and a later move the provider proposes clears the mark. Only
   bookings made after the rule went live are covered
   (`late_reschedule_rule_starts_at()`, fixed when the migration ran). Client
-  Terms §13 says so. *Live once migration
-  `20261101130000` is applied and `apply-cancellation-refund` redeployed.*
+  Terms §13 says so. *Live since 1 November (migration `20261101130000`,
+  `apply-cancellation-refund` v8). The warnings need the next app build.*
 - When a late cancellation keeps money, both sides are told: the provider
   ("You kept the £20 deposit…") and the client ("£40 refunded…").
 - **PayPal:** the same rules apply. Stripe allows PayPal refunds up to 180
@@ -301,8 +301,8 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
   `passed_automatically`, and both sides are told why. The hourly job is
   `refund-request-deadlines` → `process_refund_request_deadlines()`. The
   first notice, the email, the booking's timeline and both sets of Terms say
-  so (decided 31 October). *Live once migration `20261101130100` is applied;
-  the email wording needs `send-support-request` redeployed.*
+  so (decided 31 October). *Live since 1 November (migration `20261101130100`,
+  `send-support-request` v15). The timeline wording needs the next app build.*
 - An automatically passed request has no provider note. Treat it in R3 like
   any other, and contact the provider for their side if it matters.
 
@@ -355,7 +355,7 @@ a penalty (LEGAL-COMPLIANCE-NOTES §17).
 | The provider receives | The **whole tip**, held 24 hours (not their chosen payout hold), then sent |
 | CERVICED | Takes nothing, and **pays Stripe's card fee** on the tip (about 1.5% + 20p on a UK card). The fee is recorded in `booking_tips.stripe_fee_pence` for CERVICED's books |
 | Refunds | **Non-refundable.** The client Terms and the tip sheet say so, and no refund path touches `booking_tips` |
-| Tip notice | The database writes a `tip_received` notification (trigger `on_booking_tip_succeeded`, live). The app can't show or push it until PR #163 merges and `send-push-notification` is redeployed |
+| Tip notice | The database writes a `tip_received` notification (trigger `on_booking_tip_succeeded`, live). Merged in PR #163; the app shows it from the next build |
 
 - **Changing the amount** before paying updates or replaces the open payment,
   so an old payment sheet can never charge the old amount.
@@ -366,8 +366,7 @@ a penalty (LEGAL-COMPLIANCE-NOTES §17).
 
 **Gaps:** a client can still dispute a tip with their bank. A chargeback
 after the payout lands on CERVICED and isn't taken back from the provider. A
-disputed tip still on hold is skipped rather than marked reversed. Providers
-can't see a list of their tips in the app yet (PR #159).
+disputed tip still on hold is skipped rather than marked reversed.
 
 ### 2.7 Chargebacks (bank disputes)
 
@@ -524,7 +523,7 @@ rows before they can use the Money screen. Every admin action (retry, approve, d
    released on the next run.
 
 **There's no written refund policy for these decisions yet** (Part 6, item
-10). Until there is, take any case you're unsure about to the founder rather
+8). Until there is, take any case you're unsure about to the founder rather
 than deciding it alone. **Legal flag:** consumer-rights law may override a
 provider's own policy, so the policy needs a solicitor's input.
 
@@ -726,7 +725,7 @@ constraint **from the live list**, never from a copied one.
 |---|---|---|
 | `STRIPE_SECRET_KEY` | Edge Function secrets | **Test** key |
 | `STRIPE_WEBHOOK_SECRET` | Edge Function secrets | The platform endpoint's secret |
-| `STRIPE_CONNECT_WEBHOOK_SECRET` | Edge Function secrets | **Not set** (Part 6) |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Edge Function secrets | Set 1 November: signs the "Connected accounts" webhook destination (`account.updated`, `payout.failed`) |
 | `RESEND_API_KEY` | Edge Function secrets | Sends email (alerts, summaries, receipts) |
 | `service_role_key` | Supabase Vault | Lets cron call the functions |
 | `STRIPE_CONNECT_PAYOUTS_ENABLED` | `src/constants/featureFlags.ts` | `true` (build-time) |
@@ -762,16 +761,14 @@ Ranked, most important first.
 | 1 | **Stripe is in test mode.** No real money has moved | Launch blocker | Switch one project to live keys (PRE-LAUNCH-TODO §24), after the items below |
 | 2 | **Only one admin** (the owner, added 31 October) | If they're away, nobody can retry payouts or answer refund requests | Add a second admin before launch (runbook R10) |
 | 3 | **Legal flag:** holding provider money for up to 30 days isn't covered in the Terms, and Stripe may limit how long a platform can delay transfers | A possible breach of Stripe's terms or consumer law | Ask a solicitor and Stripe before the 14- and 30-day options are used with real money |
-| 4 | **Rescheduling can dodge a late-cancel charge.** A client already inside the cancellation window can reschedule (a separate, often looser setting), then cancel the new date for a full refund | The provider loses money they're owed | Built on `feat/late-reschedule-keeps-cancel-charge` (section 2.3). Apply migration `20261101130000`, then deploy `apply-cancellation-refund` |
-| 5 | **Events from providers' Stripe accounts may not arrive** (`STRIPE_CONNECT_WEBHOOK_SECRET` isn't set) | Bank payout failures and account status changes aren't pushed to the app. A provider's status only refreshes when they open Payments | Set up a Connect webhook endpoint in Stripe and add the secret |
-| 6 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
-| 7 | **Refund requests: the 3-day deadline isn't live yet** | Until it is, a request can sit with the provider indefinitely | Built on `feat/refund-request-reply-deadline`. Apply migration `20261101130100`, deploy `send-support-request`, merge |
-| 8 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
-| 9 | **Tip chargebacks land on CERVICED**, and providers can't see their tips in the app (PR #159) | Small losses; provider confusion | Decide whether to take a lost tip dispute back from the provider; merge #159 |
-| 10 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |
-| 11 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
-| 12 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
-| 13 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
+| 4 | **Legal flag:** the late-cancel charge (the whole deposit, or up to half the price) now also follows a late reschedule, and the 3-day and 5-working-day refund promises are new. None of this has been lawyer-reviewed | The charge could be challenged as unfair under consumer law | Ask a solicitor before live money (LEGAL-COMPLIANCE-NOTES) |
+| 5 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
+| 6 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
+| 7 | **Tip chargebacks land on CERVICED** | Small losses | Decide whether to take a lost tip dispute back from the provider |
+| 8 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |
+| 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
+| 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
+| 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
 
 ---
 
