@@ -32,8 +32,9 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { forgetCachedReads, getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
-import type { ProviderAvailabilityStatus } from '../../services/databaseService';
+import { forgetCachedReads, searchProvidersAndServices, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
+import type { ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
+import { formatDurationMinutes } from '../../utils/dateUtils';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
 import { matchesAnySpeciality, normalizeTerm } from '../../utils/fuzzyMatch';
@@ -399,6 +400,53 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
 });
 ProviderCard.displayName = 'ProviderCard';
 
+// ── Service Card — one matching service, in the horizontal row above the
+// provider grid. The description is shown because it's often where the
+// match came from ("Short white French tips" under "Classic French"). ──
+interface ServiceResultCardProps {
+  service: ServiceSearchResult;
+  onPress: (service: ServiceSearchResult) => void;
+  P: AppTheme;
+}
+
+const ServiceResultCard = memo<ServiceResultCardProps>(({ service, onPress, P }) => {
+  const meta = [
+    service.isLinkOnly || service.price == null
+      ? null
+      : formatPriceRange({ min: service.price, max: service.priceMax ?? service.price }),
+    service.durationMinutes ? formatDurationMinutes(service.durationMinutes) : null,
+  ].filter(Boolean).join(' · ');
+  return (
+    <TouchableOpacity
+      style={[styles.serviceCard, { backgroundColor: P.card, borderColor: P.border }]}
+      onPress={() => onPress(service)}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={`${service.name} with ${service.providerName}`}
+    >
+      <View style={styles.serviceCardTop}>
+        <Image
+          source={service.providerLogoUrl ? { uri: service.providerLogoUrl } : require('../../../assets/icon.png')}
+          style={styles.serviceCardLogo}
+          contentFit="cover"
+          transition={0}
+        />
+        <View style={styles.serviceCardHeading}>
+          <Text style={[styles.cardName, { color: P.text }]} numberOfLines={2}>{service.name}</Text>
+          <Text style={[styles.priceText, { color: P.sub }]} numberOfLines={1}>{service.providerName}</Text>
+        </View>
+      </View>
+      {service.description ? (
+        <Text style={[styles.serviceCardDesc, { color: P.sub }]} numberOfLines={2}>{service.description}</Text>
+      ) : null}
+      <Text style={[styles.serviceCardMeta, { color: P.text }]} numberOfLines={1}>
+        {service.isLinkOnly ? 'Books on their own page' : meta}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+ServiceResultCard.displayName = 'ServiceResultCard';
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
   const bottomInset = useSystemBottomInset();
@@ -446,6 +494,11 @@ export default function SearchScreen({ navigation, route }: Props) {
   const [providerData, setProviderData]   = useState<ProviderCardData[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState<string | null>(null);
+  // Individual services matching a typed query, best first, plus the query
+  // as the server read it after fixing typos ("frsnch" → "french"). Both
+  // arrive with providerData from the same search, so they never disagree.
+  const [serviceResults, setServiceResults] = useState<ServiceSearchResult[]>([]);
+  const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
   // The header filters button opens this single sheet — no more per-pill
   // popovers anchored under an always-visible row.
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -615,14 +668,16 @@ export default function SearchScreen({ navigation, route }: Props) {
       setProvidersError(null);
       try {
         const q = searchQuery.trim();
-        const data = q ? await searchProviders(q, catCode) : await getProviders(catCode);
+        const result = await searchProvidersAndServices(q, catCode);
         if (requestId !== providerRequestIdRef.current) return;
-        setProviderData(data.map(mapDbToCardData));
+        setProviderData(result.providers.map(mapDbToCardData));
+        setServiceResults(result.services);
+        setCorrectedQuery(result.correctedQuery);
         if (q) {
           // Zero-result searches are valuable learning signals too.
           logSearchEvent({
             query: q,
-            resultsCount: data.length,
+            resultsCount: result.providers.length,
             ...(catCode && { categoryFilter: catCode }),
             ...(user?.id && { userId: user.id }),
           });
@@ -630,9 +685,12 @@ export default function SearchScreen({ navigation, route }: Props) {
             logger.error('[Search] trackSearch failed:', error),
           );
         }
-      } catch {
+      } catch (err) {
         if (requestId !== providerRequestIdRef.current) return;
+        logger.error('[Search] search failed:', err);
         setProviderData([]);
+        setServiceResults([]);
+        setCorrectedQuery(null);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       } finally {
         if (requestId === providerRequestIdRef.current) setProvidersLoading(false);
@@ -1106,18 +1164,20 @@ export default function SearchScreen({ navigation, route }: Props) {
     setRefreshing(true);
     const requestId = ++providerRequestIdRef.current;
     const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
-    const fn = searchQuery.trim()
-      ? searchProviders(searchQuery.trim(), catCode)
-      : getProviders(catCode);
-    fn
-      .then(data => {
+    searchProvidersAndServices(searchQuery.trim(), catCode)
+      .then(result => {
         if (requestId !== providerRequestIdRef.current) return;
-        setProviderData(data.map(mapDbToCardData));
+        setProviderData(result.providers.map(mapDbToCardData));
+        setServiceResults(result.services);
+        setCorrectedQuery(result.correctedQuery);
         setProvidersError(null);
       })
-      .catch(() => {
+      .catch((err) => {
         if (requestId !== providerRequestIdRef.current) return;
+        logger.error('[Search] refresh failed:', err);
         setProviderData([]);
+        setServiceResults([]);
+        setCorrectedQuery(null);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       })
       .finally(() => {
@@ -1135,6 +1195,30 @@ export default function SearchScreen({ navigation, route }: Props) {
     prefetchProviderBySlug(provider.id);
     navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
   }, [navigation]);
+
+  // Opens the provider on that exact service's booking sheet — the same
+  // openServiceId deep link Explore's "Book Now" uses.
+  const handleServicePress = useCallback((service: ServiceSearchResult) => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    prefetchProviderBySlug(service.providerSlug);
+    navigation.navigate('ProviderProfile', {
+      providerId: service.providerSlug,
+      source: 'search',
+      openServiceId: service.serviceId,
+    });
+  }, [navigation]);
+
+  // Services only from providers still in the grid, so the filter sheet
+  // (rating, distance, city…) narrows both lists the same way.
+  const visibleServices = useMemo(() => {
+    if (serviceResults.length === 0) return serviceResults;
+    const shownProviderIds = new Set(filteredProviders.map(p => p.providerId));
+    return serviceResults.filter(s => shownProviderIds.has(s.providerId));
+  }, [serviceResults, filteredProviders]);
+
+  const renderServiceCard: ListRenderItem<ServiceSearchResult> = useCallback(({ item }) => (
+    <ServiceResultCard service={item} onPress={handleServicePress} P={P} />
+  ), [handleServicePress, P]);
 
   const renderCard: ListRenderItem<ProviderCardData> = useCallback(({ item, index }) => (
     <ProviderCard provider={item} onPress={() => handleProviderPress(item)} index={index} P={P} widthStyle={cardWidthStyle} />
@@ -1260,14 +1344,38 @@ export default function SearchScreen({ navigation, route }: Props) {
     });
   }, [navigation, P, hasActiveFilters, activeFilterChips.length]);
 
-  // ── List header: just result count ─────────────────────────────────────────
+  // ── List header: typo note, matching services, then provider count ─────────
+  const showServices = !providersLoading && visibleServices.length > 0;
   const renderHeader = useCallback(() => (
-    <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
-      <Text style={[styles.countText, { color: P.sub }]}>
-        {providersLoading ? 'Searching…' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
-      </Text>
-    </View>
-  ), [filteredProviders.length, providersLoading, P]);
+    <>
+      {!providersLoading && correctedQuery ? (
+        <Text style={[styles.correctedText, { color: P.sub }]} accessibilityLiveRegion="polite">
+          Showing results for <Text style={[styles.correctedQuery, { color: P.text }]}>{correctedQuery}</Text>
+        </Text>
+      ) : null}
+      {showServices ? (
+        <View style={styles.servicesSection}>
+          <Text style={[styles.countText, styles.servicesTitle, { color: P.sub }]}>
+            {`${visibleServices.length} ${visibleServices.length === 1 ? 'service' : 'services'}`}
+          </Text>
+          <FlatList
+            horizontal
+            data={visibleServices}
+            renderItem={renderServiceCard}
+            keyExtractor={item => item.serviceId}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.servicesRow}
+            initialNumToRender={4}
+          />
+        </View>
+      ) : null}
+      <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
+        <Text style={[styles.countText, { color: P.sub }]}>
+          {providersLoading ? 'Searching…' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
+        </Text>
+      </View>
+    </>
+  ), [filteredProviders.length, providersLoading, P, correctedQuery, showServices, visibleServices, renderServiceCard]);
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1972,6 +2080,60 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
+  },
+  correctedText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    paddingTop: 10,
+  },
+  correctedQuery: {
+    fontWeight: '700',
+  },
+  // Matching services — a horizontal row above the provider grid. Bleeds
+  // full-width like listHeaderBar so cards scroll to the screen edge.
+  servicesSection: {
+    marginHorizontal: -16,
+    paddingTop: 10,
+  },
+  servicesTitle: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  servicesRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  serviceCard: {
+    width: 220,
+    borderRadius: 13,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 10,
+    gap: 6,
+  },
+  serviceCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  serviceCardLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  serviceCardHeading: {
+    flex: 1,
+    gap: 2,
+  },
+  serviceCardDesc: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  serviceCardMeta: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
   },
   // List — two columns, matches BookmarkedProvidersScreen's provider grid
   listContent: {
