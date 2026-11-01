@@ -96,8 +96,8 @@ Curated: [[Payments]] · **148 files**
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(37)_
+- `src/screens/shared/TermsScreen.tsx` _(36)_
 - `supabase/provider_reminder_jobs.sql` _(34)_
-- `src/screens/shared/TermsScreen.tsx` _(33)_
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/booking.ts` _(32)_
 - `src/features/bookings/BookingFeeCard.tsx` _(30)_
@@ -265,7 +265,7 @@ Curated: [[Booking Flow]] · **180 files**
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/screens/client/BookingsScreen.tsx` _(53)_
-- `src/screens/provider/PoliciesScreen.tsx` _(49)_
+- `src/screens/provider/PoliciesScreen.tsx` _(51)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_

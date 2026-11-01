@@ -64,7 +64,7 @@ import {
 import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
 type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
-type CancelPenalty    = '' | 'none' | 'deposit' | 'full';
+type CancelPenalty    = '' | 'none' | 'deposit' | 'half';
 type RescheduleNotice = '' | 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '' | '1' | '2' | 'unlimited';
 // 'charge_full' was offered once and enforced by nothing; it's read back as
@@ -206,6 +206,8 @@ export default function PoliciesScreen({ navigation }: any) {
         setUserId(profile.user_id);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
+        // Saved before 'Full charge' became 'Half the price' (2026-11-01).
+        if ((merged.cancelPenalty as string) === 'full') merged.cancelPenalty = 'half';
         if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
         setPolicies(merged);
         const carried = Object.fromEntries(
@@ -325,7 +327,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Every card opens with one plain line saying what it sets up,
                 so a provider never has to guess from the pills alone. */}
-            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : 'How much notice a client must give to cancel, and what happens if they cancel later than that.'}>
+            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : 'How much notice a client must give to cancel, and what happens if they cancel later than that. If they paid a deposit, you keep the deposit. If they paid in full, you can only charge up to half.'}>
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'none', l: 'None' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
@@ -335,7 +337,7 @@ export default function PoliciesScreen({ navigation }: any) {
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
                 <Pills
-                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'full', l: 'Full charge' }]}
+                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'half', l: 'Half the price' }]}
                   value={policies.cancelPenalty}
                   onChange={v => setPolicy('cancelPenalty', v)}
                 />

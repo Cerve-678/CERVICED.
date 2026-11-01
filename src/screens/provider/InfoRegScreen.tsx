@@ -202,7 +202,7 @@ const REVIEW_WARN_COLOR = '#FF9500';
 
 // ─── Policy types ────────────────────────────────────────────────────────────
 type CancelNotice     = 'none' | '24h' | '48h' | '72h';
-type CancelPenalty    = 'none' | 'deposit' | 'full';
+type CancelPenalty    = 'none' | 'deposit' | 'half';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
 type NoShowAction     = 'none' | 'warn' | 'charge_deposit';
