@@ -224,8 +224,9 @@ Pay or PayPal.
 | Provider doesn't accept within 48 hours, or before the start time | Automatic (every 30 min) | Everything, automatically | Nothing | Refunded |
 | Client cancels **before** the provider's cancellation window | Client | Everything | Nothing | Refunded |
 | Client cancels **inside** the window; the provider's policy is "no charge" | Client | Everything | Nothing | Refunded |
-| Client cancels inside the window; the policy is **keep the deposit** | Client | Everything except the deposit and the fee | The deposit | Kept |
-| Client cancels inside the window; the policy is **keep the full price** | Client | Nothing | Their full share | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit or half the price | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **keep the deposit** | Client | Everything except the kept amount and the fee | The deposit's amount, at most half the service price | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **half the price** | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
 | Provider gives a **full** refund (any reason) | Provider | Everything not yet refunded | Nothing | Refunded |
 | Provider gives a **partial** refund | Provider | The amount they choose, from their share | The rest | Kept |
 | CERVICED approves a refund request | Admin | Same as the provider's full/partial rules | — | As above |
@@ -234,6 +235,11 @@ Pay or PayPal.
 - A booking can be refunded more than once. For example, the policy kept a
   deposit, and later the provider gives it back.
 - A client is never charged more than they originally paid.
+- **The most a provider can keep on a late cancellation** depends on what was
+  paid in the app: the whole deposit if the client paid a deposit, half the
+  service price if they paid in full. Policies and bookings saved as "Full
+  charge" now count as half, including bookings already made. Client Terms §13
+  and the provider Terms say so.
 - **Cancellation window:** set by the provider (none, or 24, 48 or 72 hours
   before the appointment). The policy at the time of booking is frozen onto
   the booking.
@@ -783,7 +789,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 |---|---|---|
 | 29 Sep | Stripe Connect with separate charges and transfers, and Express accounts | CERVICED holds the funds and controls payout timing |
 | 29 Sep | Full refunds return CERVICED's fee; partial refunds keep it | Keeping the fee on a full refund was judged likely unlawful in the UK |
-| 3 Oct | Client cancellations follow the provider's frozen policy: no charge, keep the deposit, or keep the full price | Predictable for both sides; a client is never charged more than they paid |
+| 3 Oct | Client cancellations follow the provider's frozen policy: no charge, keep the deposit, or keep the full price (changed 1 November) | Predictable for both sides; a client is never charged more than they paid |
 | 12–13 Oct | Late/no-show fees: in-app, 50% cap, 24-hour window, no CERVICED cut | Protects providers without CERVICED profiting from penalties |
 | 13 Oct | Fee disputes go to the provider, not CERVICED | CERVICED doesn't judge fees |
 | 18 Oct | Providers choose payout timing: 24 hours, or 3, 7, 14 or 30 days | Provider control; the 24-hour minimum protects against early refunds |
@@ -799,6 +805,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 31 Oct | The reschedule rule covers only bookings made after it went live, and a later move the provider proposes clears it | Older bookings were agreed under the old Terms; a date the provider chose is a fresh start |
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
+| 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 

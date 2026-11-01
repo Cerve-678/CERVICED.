@@ -105,7 +105,7 @@ const SECTIONS = [
   {
     heading: '13. Cancellations by You',
     body: [
-      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest. If you ask to reschedule once their notice period has already started, their policy still applies if you later cancel the new date, as if you\'d cancelled on the original one. That stays with the booking if you reschedule it again, but not if the provider suggests the new time. We\'ll tell you before you ask.',
+      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest. The most they can keep is your deposit, if a deposit is what you paid, or half the service price, if you paid in full. If you ask to reschedule once their notice period has already started, their policy still applies if you later cancel the new date, as if you\'d cancelled on the original one. That stays with the booking if you reschedule it again, but not if the provider suggests the new time. We\'ll tell you before you ask.',
       'Cancelling late or missing appointments is recorded, and the provider you booked with can see how often this has happened with them.',
     ].join('\n\n'),
   },
@@ -216,7 +216,7 @@ const SECTIONS = [
     heading: '31. For Providers',
     body: [
       'Your business. You run your own independent business and aren\'t employed by Cerviced. You\'re responsible for your services and any licences, qualifications and insurance they need, for following the law (including health and safety, consumer law and minimum-age rules), and for keeping your profile, prices, opening hours and policies accurate.',
-      'Bookings and policies. You must honour bookings you accept, at the price and on the terms shown when the client booked. If you can\'t, cancel as early as you can; the client will be refunded in full. Your cancellation, deposit, late arrival and no-show policies must be fair, and must be shown on your profile before clients book.',
+      'Bookings and policies. You must honour bookings you accept, at the price and on the terms shown when the client booked. If you can\'t, cancel as early as you can; the client will be refunded in full. Your cancellation, deposit, late arrival and no-show policies must be fair, and must be shown on your profile before clients book. If a client cancels late, the most you can keep under your policy is the deposit, if that\'s what they paid, or half the service price, if they paid in full.',
       'Payments and payouts. To take payments in the app you need a Stripe account, and Stripe\'s terms apply to it. Clients pay Cerviced\'s service fee on top of your price, so it\'s never taken from what you earn. After each appointment, your share is held for the payout period you choose in Payment settings, then sent to your Stripe account. Stripe then pays your bank on its own schedule. A payout is held while a client\'s refund request is open. You have 3 days to refund a request or pass it to Cerviced; after that it comes to us to review. If money is refunded or reversed after you\'ve been paid, for example a refund or a bank chargeback, it\'s taken back from your Stripe balance or from your next payout. For late arrival and no-show fees, Cerviced takes no cut, but Stripe\'s card fee comes out of your share. Tips clients leave in the app are yours in full: Cerviced takes no cut and covers the card processing fee. A tip is paid out to you 24 hours after the client pays, whatever payout period you\'ve chosen. Clients can tip for up to 48 hours after the appointment, and tips can\'t be refunded.',
       'Taxes. You\'re responsible for your own tax, including any VAT, on the money you earn.',
       'Your clients\' information. Use the details clients share with you, including any health information, only for their bookings. Keep them secure and confidential, and follow data protection law. Don\'t add clients to marketing lists unless they\'ve agreed.',
@@ -278,7 +278,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 31 October 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 1 November 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>
