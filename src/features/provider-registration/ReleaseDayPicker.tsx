@@ -17,16 +17,16 @@ interface ReleaseDayPickerProps {
   borderColor: string;
   onSelect: (day: number) => void;
   onClose: () => void;
-  /** Show a "Don't notify" action that unsets the day entirely. Callers that
-   *  reach this picker from a separate on/off switch don't need it; the one
-   *  that uses the picker AS the control does, or there's no way back to
-   *  "no release day" once a day has been tapped. */
+  /** Show an action that unsets the day (back to a rolling window). The
+   *  picker IS the control in InfoReg, so without it there's no way back to
+   *  "no release day" once a day has been chosen. */
   allowClear?: boolean;
   onClear?: () => void;
-  styles: any;
 }
 
-/** Chooses the monthly day on which followers are notified of fresh slots.
+/** Chooses the monthly release day: next month opens for booking on this day
+ *  (utils/bookingHorizon), and followers with the bell on are told. Its one
+ *  caller is InfoRegScreen (Edit Profile) — the release day's only editor.
  *
  *  A native single-column wheel (UIPickerView on iOS, Spinner on Android) with
  *  our own labels, rather than a date picker. The value is a monthly
@@ -45,7 +45,6 @@ export function ReleaseDayPicker({
   onClose,
   allowClear = false,
   onClear,
-  styles,
 }: ReleaseDayPickerProps) {
   return (
     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
@@ -54,14 +53,14 @@ export function ReleaseDayPicker({
         <View style={[styles.releasePickerSheet, { backgroundColor: cardColor, borderColor }]}>
           <View style={styles.releasePickerHeader}>
             <View>
-              <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING NOTIFICATIONS</Text>
+              <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING RULES</Text>
               <Text style={[styles.releasePickerTitle, { color: textColor }]}>Choose release day</Text>
             </View>
             <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClose(); }} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel="Close release day picker">
               <Ionicons name="close" size={20} color={textColor} />
             </TouchableOpacity>
           </View>
-          <Text style={[styles.releasePickerSubtext, { color: subColor }]}>Followers will be reminded when your next month of slots opens.</Text>
+          <Text style={[styles.releasePickerSubtext, { color: subColor }]}>{RELEASE_DAY_EXPLAINER}</Text>
           <Picker
             selectedValue={value}
             onValueChange={(day) => {
@@ -88,7 +87,7 @@ export function ReleaseDayPicker({
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClear(); onClose(); }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.releasePickerClearText, { color: subColor }]}>Don’t notify followers</Text>
+              <Text style={[styles.releasePickerClearText, { color: subColor }]}>No release day — use a rolling window</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}>
@@ -100,8 +99,88 @@ export function ReleaseDayPicker({
   );
 }
 
-// Geometry/typography only — every colour still comes from the caller's theme
-// tokens. (Same pattern as LocationPicker's localStyles.)
+/** What a release day does, in one place for every screen that sets it. */
+export const RELEASE_DAY_EXPLAINER =
+  'On this day each month, next month opens for booking at 9am (10am in summer) and followers with the bell on are told. Until then clients can book up to the end of this month.';
+
+// Geometry/typography only — every colour comes from the caller's theme
+// tokens via props. (Same pattern as LocationPicker's localStyles.)
+const styles = StyleSheet.create({
+  releasePickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(20,14,18,0.46)',
+  },
+  releasePickerSheet: {
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 34,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  releasePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  releasePickerEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.1,
+    marginBottom: 4,
+  },
+  releasePickerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 21,
+  },
+  releasePickerClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  releasePickerSubtext: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 10,
+    marginBottom: 18,
+  },
+  releasePickerClearButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+  releasePickerClearText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 13,
+    textDecorationLine: 'underline',
+  },
+  releasePickerDoneButton: {
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    marginTop: 20,
+  },
+  releasePickerDoneText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+});
+
 const localStyles = StyleSheet.create({
   wheel: {
     width: '100%',

@@ -47,4 +47,18 @@ describe('mapProviderProfileData', () => {
     const none = mapProviderProfileData({ slug: 's', display_name: 'S', service_category: 'Hair', services: [] } as any);
     expect(none.paymentMethods).toEqual([]);
   });
+
+  it('carries the public How to get there through, trimmed, and empty when unset', () => {
+    const result = mapProviderProfileData({
+      slug: 'studio-c',
+      display_name: 'Studio C',
+      service_category: 'Hair',
+      services: [],
+      public_directions: '  2 minutes from Hackney Central.  ',
+    } as any);
+    expect(result.publicDirections).toBe('2 minutes from Hackney Central.');
+
+    const none = mapProviderProfileData({ slug: 's', display_name: 'S', service_category: 'Hair', services: [] } as any);
+    expect(none.publicDirections).toBe('');
+  });
 });

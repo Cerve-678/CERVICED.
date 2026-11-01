@@ -143,7 +143,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 20 }]}>
         {introState === 'playing' ? (

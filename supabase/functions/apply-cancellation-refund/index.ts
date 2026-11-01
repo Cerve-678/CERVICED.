@@ -3,7 +3,7 @@ import { takeBackFromProvider } from '../_shared/takeBack.ts';
 import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import {
   computeCancellationSettlement,
-  type CancelPenalty,
+  readCancelPenalty,
 } from '../_shared/cancellationSettlement.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
@@ -27,7 +27,10 @@ import Stripe from 'npm:stripe@17.4.0';
 // Model (refund-only — never charges the client more than they paid):
 //   • early cancel, or penalty 'none'  → full refund incl. fee; provider keeps nothing.
 //   • late + 'deposit'                 → provider keeps the deposit, CERVICED keeps the fee, client refunded the rest.
-//   • late + 'full'                    → provider keeps their whole share, CERVICED keeps the fee, client refunded nothing.
+//   • late + 'half'                    → provider keeps half their share, CERVICED keeps the fee, client refunded the other half.
+//   • paid only a deposit              → under 'deposit' or 'half' the provider keeps that whole deposit.
+// "Late" also covers a booking the client asked to move once its window had
+// already started (bookings.late_reschedule_from), whenever it's cancelled.
 //
 // It is SELF-CONTAINED on the payout side (it settles the provider directly)
 // rather than leaning on release-payouts, whose safety checks deliberately
@@ -65,10 +68,6 @@ function noticeHours(cancellationNoticeHours: unknown, policies: Record<string, 
   }
 }
 
-function readPenalty(value: unknown): CancelPenalty {
-  return value === 'deposit' || value === 'full' ? value : 'none';
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -92,7 +91,7 @@ Deno.serve(async (req: Request) => {
     // the frozen policy snapshot and the stored money figures.
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, booking_date, booking_time, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
+      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, booking_date, booking_time, late_reschedule_from, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -131,7 +130,7 @@ Deno.serve(async (req: Request) => {
 
     const snapshot = (booking.policy_snapshot ?? null) as Record<string, unknown> | null;
     const livePolicies = (provider?.booking_policies ?? null) as Record<string, unknown> | null;
-    const penalty = readPenalty(snapshot?.['cancelPenalty'] ?? livePolicies?.['cancelPenalty']);
+    const penalty = readCancelPenalty(snapshot?.['cancelPenalty'] ?? livePolicies?.['cancelPenalty']);
     const hours = noticeHours(provider?.cancellation_notice_hours, livePolicies);
 
     // booking_date/time are UK wall-clock; read as UTC they'd be an hour late
@@ -142,7 +141,11 @@ Deno.serve(async (req: Request) => {
     // turn a late cancel into a full refund.
     const cancelledMs = Date.parse(booking.cancelled_at);
     const hoursUntil = Number.isFinite(apptMs) && Number.isFinite(cancelledMs) ? (apptMs - cancelledMs) / 3_600_000 : 0;
-    const isLateCancel = hours > 0 && hoursUntil >= 0 && hoursUntil < hours;
+    // A client who asked to move this booking while already inside the window
+    // stays inside it (decided 2026-10-25): stamped by
+    // confirm_reschedule_own_booking; only a later provider-proposed move clears it.
+    const movedLate = hours > 0 && !!booking.late_reschedule_from;
+    const isLateCancel = movedLate || (hours > 0 && hoursUntil >= 0 && hoursUntil < hours);
 
     // The provider's payout row for this booking (its stored share, in pence).
     const { data: payout, error: payoutErr } = await admin
@@ -161,6 +164,8 @@ Deno.serve(async (req: Request) => {
       // platform_fee column — reading one made every call fail).
       platformFeePence: Math.round(Number(booking.service_charge ?? 0) * 100),
       payoutAmountPence: payout ? Number(payout.payout_amount) : 0,
+      // payment_status, not payment_type: it records what was actually paid.
+      paidDepositOnly: booking.payment_status === 'deposit_paid',
     });
 
     const chargeId = await latestChargeId(booking.payment_intent_id);
@@ -254,7 +259,7 @@ Deno.serve(async (req: Request) => {
         .eq('id', booking.id);
       if (keptErr) throw keptErr;
     }
-    await notifySettlement(booking, provider, penalty, hours, settlement);
+    await notifySettlement(booking, provider, penalty === 'half' && booking.payment_status !== 'deposit_paid', hours, settlement, movedLate);
     return json({ status: 'settled', clientRefundPence: settlement.clientRefundPence, providerKeepPence: settlement.providerKeepPence }, 200);
   } catch (err) {
     console.error(`[apply-cancellation-refund] fatal: ${String(err)}`);
@@ -270,9 +275,10 @@ Deno.serve(async (req: Request) => {
 async function notifySettlement(
   booking: { id: string; user_id: string; provider_id: string; provider_name_snapshot: string | null; customer_name: string | null },
   provider: { user_id: string | null; display_name: string | null } | null,
-  penalty: CancelPenalty,
+  keptHalf: boolean,
   hours: number,
   settlement: { clientRefundPence: number; providerKeepPence: number },
+  movedLate: boolean,
 ) {
   if (settlement.providerKeepPence <= 0) return;
   // A retried settlement (e.g. a 'full' penalty, which leaves no refund to
@@ -283,38 +289,40 @@ async function notifySettlement(
   if (seenErr) console.error(`[apply-cancellation-refund] notification check failed: ${String(seenErr.message ?? seenErr)}`);
   if ((count ?? 0) > 0) return;
   const kept = `£${(settlement.providerKeepPence / 100).toFixed(2)}`;
-  const what = penalty === 'full' ? `the full ${kept}` : `the ${kept} deposit`;
+  const what = keptHalf ? `${kept}, half the price,` : `the ${kept} deposit`;
   const window = hours > 0 ? `${hours}-hour cancellation policy` : 'cancellation policy';
   const clientName = booking.customer_name?.trim() || 'Your client';
   const providerName = booking.provider_name_snapshot?.trim() || provider?.display_name?.trim() || 'Your provider';
   const refunded = `£${(settlement.clientRefundPence / 100).toFixed(2)}`;
+  const providerWhy = movedLate ? ' They had moved it after that window started.' : '';
+  const clientWhy = movedLate ? ' You moved this booking after that window had started, so it still applied.' : '';
 
   const rows = [
     ...(provider?.user_id ? [{
       user_id: provider.user_id,
       type: 'cancellation_settled',
       title: `${clientName.split(' ')[0]} cancelled late`,
-      message: `You kept ${what} under your ${window}.`,
+      message: `You kept ${what} under your ${window}.${providerWhy}`,
       priority: 'medium',
       is_actionable: false,
       booking_id: booking.id,
       provider_id: booking.provider_id,
       recipient_role: 'provider',
-      metadata: { provider_kept_pence: settlement.providerKeepPence },
+      metadata: { provider_kept_pence: settlement.providerKeepPence, moved_late: movedLate },
     }] : []),
     {
       user_id: booking.user_id,
       type: 'cancellation_settled',
       title: settlement.clientRefundPence > 0 ? `${refunded} refunded` : 'Cancellation charge applied',
       message: settlement.clientRefundPence > 0
-        ? `${providerName} kept ${what} under their ${window}. ${refunded} is on its way back to you.`
-        : `${providerName} kept ${what} under their ${window}, so nothing is refunded.`,
+        ? `${providerName} kept ${what} under their ${window}.${clientWhy} ${refunded} is on its way back to you.`
+        : `${providerName} kept ${what} under their ${window}, so nothing is refunded.${clientWhy}`,
       priority: 'medium',
       is_actionable: false,
       booking_id: booking.id,
       provider_id: booking.provider_id,
       recipient_role: 'client',
-      metadata: { provider_kept_pence: settlement.providerKeepPence, client_refund_pence: settlement.clientRefundPence },
+      metadata: { provider_kept_pence: settlement.providerKeepPence, client_refund_pence: settlement.clientRefundPence, moved_late: movedLate },
     },
   ];
   const { error } = await admin.from('notifications').insert(rows);

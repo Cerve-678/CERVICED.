@@ -19,6 +19,7 @@ import {
   getProviderRegistrationDetails,
   getProviderRegistrationRecord,
   insertProviderRegistrationRow,
+  mergeProviderAutomationSettings,
   promoteUserToProvider,
   providerSlugExists,
   removeStorageObjects,
@@ -89,13 +90,11 @@ export interface ProviderRegistrationData {
   customServiceType: string;
   location: string;
   aboutText: string;
-  /** Day of month (1-31) new slots go out AND clients who've turned on the
-   *  profile bell get notified. Drives the client-facing profile's "Slots
-   *  out every Nth of the month" pill directly (computed live, no separate
-   *  text field to keep in sync). Stored in
-   *  providers.automation_settings.scheduleReleaseDay (merged in, not
-   *  overwritten — that JSONB blob also holds unrelated settings owned by
-   *  ProviderAutomationsScreen). null = no release day set / notifications off. */
+  /** Monthly release day (1-31): next month opens for booking on this day
+   *  (utils/bookingHorizon) and bell followers are told. InfoReg (Edit
+   *  Profile) is its ONLY editor — one change, and the booking limit, the
+   *  profile pill and the release message all follow. Saved by merging just
+   *  this key into automation_settings. null = rolling window instead. */
   scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
@@ -167,6 +166,12 @@ export interface ProviderRegistrationData {
   // the client Search "City" filter. See src/constants/ukCities.ts.
   serviceLocations: string[];
   fullAddress: string;
+  /** Private arrival/access instructions, released to a booked client only
+   * when their appointment location has been released. */
+  howToGetThere: string;
+  /** Public "How to get there" on the profile (providers.public_directions)
+   * — stations, parking, landmarks. Never door codes; those are howToGetThere. */
+  publicDirections: string;
   /** Coordinates returned by the address picker for this exact address.
    *  Kept in form state only and written atomically with fullAddress. */
   fullAddressCoordinates: { latitude: number; longitude: number } | null;
@@ -575,20 +580,9 @@ export async function saveProviderToSupabase(
   // edits silently split across rows. Fail loudly instead.
   let providerId: string;
 
-  // Merged in, never overwritten whole — automation_settings also holds
-  // unrelated keys (rebookingNudgeWeeks, clientReminderTiming, etc.) owned
-  // by ProviderAutomationsScreen, which reads/writes the exact same
-  // scheduleReleaseDay key so the two screens stay in sync automatically
-  // (both fetch fresh from this one column on their own mount — no separate
-  // sync step needed, just don't let either screen clobber the other's keys).
-  const mergedAutomationSettings: NonNullable<DbProvider['automation_settings']> = {
-    ...(existingProvider?.automation_settings ?? {}),
-  };
-  if (data.scheduleReleaseDay != null) {
-    mergedAutomationSettings.scheduleReleaseDay = data.scheduleReleaseDay;
-  } else {
-    delete mergedAutomationSettings.scheduleReleaseDay;
-  }
+  // automation_settings: only scheduleReleaseDay belongs to this screen, and
+  // it's merged in after the row is saved (below). The other keys belong to
+  // Automations and Payments, which merge their own.
 
   if (existingProvider) {
     try {
@@ -615,6 +609,7 @@ export async function saveProviderToSupabase(
           ? data.serviceCategories
           : [data.providerService],
         location_text: data.location,
+        public_directions: data.publicDirections?.trim() || null,
         latitude,
         longitude,
         about_text: data.aboutText,
@@ -649,7 +644,6 @@ export async function saveProviderToSupabase(
         address_release_policy: data.businessType
           ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
           : (data.addressReleasePolicy ?? null),
-        automation_settings: mergedAutomationSettings,
         is_active: true,
       });
     } catch (error) {
@@ -675,6 +669,7 @@ export async function saveProviderToSupabase(
           : [data.providerService],
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
+        public_directions: data.publicDirections?.trim() || null,
         latitude,
         longitude,
         about_text: data.aboutText,
@@ -709,7 +704,6 @@ export async function saveProviderToSupabase(
         address_release_policy: data.businessType
           ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
           : (data.addressReleasePolicy ?? null),
-        automation_settings: mergedAutomationSettings,
         is_active: true,
         terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
         booking_mode: data.bookingMode ?? 'cerviced',
@@ -719,6 +713,12 @@ export async function saveProviderToSupabase(
       throw new Error(`Provider insert failed: ${message}`);
     }
   }
+
+  // The release day — merged server-side so no other key in
+  // automation_settings is touched.
+  await (data.scheduleReleaseDay != null
+    ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
+    : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
 
   // Now that the new logo_url is durably saved, remove the old versioned
   // object it replaced — best-effort, never blocks the save. Without this,
@@ -746,7 +746,8 @@ export async function saveProviderToSupabase(
       providerId,
       data.fullAddress || null,
       addressCoords.latitude,
-      addressCoords.longitude
+      addressCoords.longitude,
+      data.howToGetThere?.trim() || null,
     );
   }
 
@@ -884,6 +885,7 @@ interface RegistrationCatalogue {
   categoryDescriptions: Record<string, string>;
   categoryServiceTypes: Record<string, string>;
   fullAddress: string;
+  howToGetThere: string;
 }
 
 const NO_CATALOGUE: RegistrationCatalogue = {
@@ -891,6 +893,7 @@ const NO_CATALOGUE: RegistrationCatalogue = {
   categoryDescriptions: {},
   categoryServiceTypes: {},
   fullAddress: '',
+  howToGetThere: '',
 };
 
 /**
@@ -914,6 +917,7 @@ export function providerRowToRegistrationData(
     categoryServiceTypes: catalogue.categoryServiceTypes,
     customServiceType: provider.custom_service_type || '',
     location: provider.location_text || '',
+    publicDirections: provider.public_directions || '',
     aboutText: provider.about_text || '',
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     // Unset colours fall back to the provider's own theme, never a
@@ -942,6 +946,7 @@ export function providerRowToRegistrationData(
     serviceLocations: provider.service_locations || [],
     preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress: catalogue.fullAddress,
+    howToGetThere: catalogue.howToGetThere,
     // Existing profiles may predate the picker. A later save falls back to a
     // one-time geocode, while every new picker selection supplies these.
     fullAddressCoordinates: null,
@@ -1007,7 +1012,7 @@ export async function loadProviderFromSupabase(
     logger.warn('loadProviderFromSupabase details error:', detailsResult.error);
     return cached;
   }
-  const { fullAddress } = detailsResult.value;
+  const { fullAddress, howToGetThere } = detailsResult.value;
   const services = detailsResult.value.services as any[];
 
   // Reconstruct categories
@@ -1076,6 +1081,7 @@ export async function loadProviderFromSupabase(
     categoryDescriptions,
     categoryServiceTypes,
     fullAddress,
+    howToGetThere,
   });
   // A live read is also the best offline/startup snapshot. Persist it so the
   // profile editor opened from My Profile can paint its saved fields straight

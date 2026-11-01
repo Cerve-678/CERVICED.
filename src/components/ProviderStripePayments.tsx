@@ -10,13 +10,16 @@ import { useAppDialog } from './AppDialog';
 import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
 import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getProviderTipEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
   cancelled: 'Cancelled', reversed: 'Returned',
 };
+// A held payout with a refund request open waits for that request to close.
+const onRefundHold = (row: ProviderPayout) => row.status === 'held' && row.refundRequestOpen;
+const payoutLabel = (row: ProviderPayout) => (onRefundHold(row) ? 'On hold · refund request' : payoutLabels[row.status]);
 
 /** One-line summaries of the provider's own payment settings, shown as the
  *  "Your setup" tiles on Overview. PaymentsScreen owns those settings, so it
@@ -33,6 +36,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [account, setAccount] = useState<ConnectStatus | null>(null);
   const [payouts, setPayouts] = useState<ProviderPayout[]>([]);
   const [feeEarnings, setFeeEarnings] = useState<ProviderFeeEarning[]>([]);
+  const [tipEarnings, setTipEarnings] = useState<ProviderTipEarning[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -76,6 +80,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       // replacing the booking payments error above.
       getProviderFeeEarnings().then(rows => {
         if (sequence === loadSequence.current) setFeeEarnings(rows);
+      }).catch(() => {}),
+      // Tips too: secondary, so a failed read just leaves the list hidden.
+      getProviderTipEarnings().then(rows => {
+        if (sequence === loadSequence.current) setTipEarnings(rows);
       }).catch(() => {}),
     ]);
     if (sequence === loadSequence.current) setLoading(false);
@@ -260,7 +268,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
         {payouts.slice(0, 3).map(row => <View key={row.id} style={[styles.activity, { borderColor: C.border }]}>
           <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{row.booking?.service_name_snapshot || 'Booking payment'}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>{row.booking?.customer_name || 'Client'} · {payoutLabels[row.status]}</Text></View>
+            <Text style={[styles.caption, { color: C.sub }]}>{row.booking?.customer_name || 'Client'} · {payoutLabel(row)}</Text></View>
           <Text style={[styles.label, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text>
         </View>)}
         <PaymentAction secondary label="View booking payments" disabled={false} onPress={() => setSection('bookings')} />
@@ -299,6 +307,21 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
             <Text style={[styles.amountSmall, { color: C.text }]}>{fee.payoutPence != null ? money(fee.payoutPence, 'gbp') : money(fee.amountPence, 'gbp')}</Text>
           </View>
           <StatusBadge label={feeStatusLabel(fee)} attention={fee.openDispute || fee.payoutStatus === 'failed'} />
+        </View>)}
+      </>}
+      {tipEarnings.length > 0 && <>
+        <Text style={[styles.sectionTitle, { color: C.text }]}>Tips</Text>
+        <Text style={[styles.sectionNote, { color: C.sub }]}>What clients tipped you after their appointment. It's all yours: CERVICED covers the card fee. Tips can't be refunded.</Text>
+        {tipEarnings.map(tip => <View key={tip.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
+          <View style={styles.bookingHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: C.text }]}>Tip{tip.serviceName ? ` · ${tip.serviceName}` : ''}</Text>
+              <Text style={[styles.description, { color: C.text }]}>{tip.customerName || 'Client'}</Text>
+              {!!tip.paidAt && <Text style={[styles.caption, { color: C.sub }]}>Tipped {date(new Date(tip.paidAt).getTime())}</Text>}
+            </View>
+            <Text style={[styles.amountSmall, { color: C.text }]}>{tip.payoutPence != null ? money(tip.payoutPence, 'gbp') : money(tip.amountPence, 'gbp')}</Text>
+          </View>
+          <StatusBadge label={tipStatusLabel(tip)} attention={tip.payoutStatus === 'failed'} />
         </View>)}
       </>}
     </>}
@@ -373,6 +396,16 @@ function feeStatusLabel(fee: ProviderFeeEarning): string {
     default: return 'Processing';
   }
 }
+function tipStatusLabel(tip: ProviderTipEarning): string {
+  switch (tip.payoutStatus) {
+    case 'held': return tip.releaseAfter ? `Paid out from ${date(new Date(tip.releaseAfter).getTime())}` : 'Held';
+    case 'transferred': return 'Paid out';
+    case 'reversed': return 'Reversed by the client\'s bank';
+    case 'failed': return 'Needs attention';
+    case 'cancelled': return 'Cancelled';
+    default: return 'Processing';
+  }
+}
 const bankLabels: Record<string, string> = { pending: 'Scheduled', in_transit: 'On the way', paid: 'Paid', failed: 'Needs attention', canceled: 'Cancelled' };
 const money = (amount: number, currency: string) => new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(amount / 100);
 const balances = (rows: { amount: number; currency: string }[]) => rows.length ? rows.map(row => money(row.amount, row.currency)).join('\n') : '£0.00';
@@ -390,12 +423,12 @@ function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: bo
       </View>
       <View style={{ alignItems: 'flex-end', gap: 8 }}><Text style={[styles.amountSmall, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text><Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={C.accentText} /></View>
     </TouchableOpacity>
-    <StatusBadge label={payoutLabels[row.status]} attention={row.status === 'failed'} />
+    <StatusBadge label={payoutLabel(row)} attention={row.status === 'failed' || onRefundHold(row)} />
     {expanded && <View style={[styles.breakdown, { borderColor: C.border }]}>
       {[['Your share before refunds', row.payout_amount]].map(([label, amount]) => <View key={label} style={styles.row}>
         <Text style={[styles.description, { color: C.text }]}>{label}</Text><Text style={[styles.label, { color: C.text }]}>{money(Number(amount), row.currency)}</Text>
       </View>)}
-      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{row.status === 'held' ? `Eligible for release from ${date(new Date(row.release_after).getTime())}. This is not a bank arrival date.` : row.status === 'transferred' ? 'Your share has been released to Stripe. See Payouts for bank transfers.' : row.status === 'failed' ? 'Your share needs attention before it can be released. Contact support if this continues.' : 'This booking’s payout has been cancelled or returned.'}</Text>
+      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{onRefundHold(row) ? 'Your client asked for a refund, so this payment is on hold until that’s settled. Then whatever is still yours is released as normal.' : row.status === 'held' ? `Eligible for release from ${date(new Date(row.release_after).getTime())}. This is not a bank arrival date.` : row.status === 'transferred' ? 'Your share has been released to Stripe. See Payouts for bank transfers.' : row.status === 'failed' ? 'Your share needs attention before it can be released. Contact support if this continues.' : 'This booking’s payout has been cancelled or returned.'}</Text>
       {['held', 'transferred', 'failed'].includes(row.status) && <PaymentAction secondary disabled={busy} label="Refund client" onPress={onRefund} />}
     </View>}
   </View>;

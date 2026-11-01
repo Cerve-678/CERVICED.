@@ -41,6 +41,8 @@ import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { formatTime12, formatShortDate, dateToYMD, overridesFromDate } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { findBufferClash } from '../../utils/bufferClash';
 import { isDarkColor } from '../../constants/providerThemes';
 
 const WARN = '#E8A13A';
@@ -84,7 +86,6 @@ function timeToMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
 }
-
 export default function AddBookingScreen() {
   const navigation = useNavigation();
   const { showToast, showConfirm, DialogHost } = useAppDialog();
@@ -123,6 +124,8 @@ export default function AddBookingScreen() {
   const [notes, setNotes] = useState('');
   const [creating, setCreating] = useState(false);
   const [providerId, setProviderId] = useState<string | null>(null);
+  // providers.buffer_mins — the after-buffer for any service without its own.
+  const [providerBufferMins, setProviderBufferMins] = useState(0);
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   // 'details' = pick client/service/when; 'confirm' = review contact details
@@ -156,6 +159,7 @@ export default function AddBookingScreen() {
       setClients(c);
       setServices(s);
       setProviderId(profile?.id ?? null);
+      setProviderBufferMins(profile?.buffer_mins ?? 0);
       setMyBookings(bookings);
       if (profile?.id) {
         const [blocked, windows, overrides] = await Promise.all([
@@ -262,9 +266,9 @@ export default function AddBookingScreen() {
   // can: exclude ONLY 'cancelled'/'no_show' (the exact set the constraint
   // ignores — a completed same-day booking still blocks the slot), and fall
   // back to a 60-min duration for a null end_time (the constraint's
-  // COALESCE(end_time, booking_time + 60min)). We can't see buffer_before/after
-  // here, so a buffered booking the DB rejects may not flag — treat this as a
-  // best-effort warning, not a guarantee; the DB is the real gate.
+  // COALESCE(end_time, booking_time + 60min)). Raw times only — the buffer
+  // gap around a booking is bufferClash below. Best-effort either way; the
+  // DB is the real gate.
   const toMinutes = timeToMinutes;
   const chosenStart = time.getHours() * 60 + time.getMinutes();
   // Uses the buffered total (service + extraMinutes), not the service's own
@@ -281,6 +285,27 @@ export default function AddBookingScreen() {
         const bEnd = b.end_time ? toMinutes(b.end_time) : bStart + 60;
         return chosenStart < bEnd && chosenEnd > bStart; // interval overlap
       }) ?? null
+    : null;
+
+  // Not a double-booking, but inside the buffer time kept clear around one —
+  // see findBufferClash. The new booking's buffers follow
+  // compute_booking_effective_range: before defaults to 0, after to the
+  // provider's buffer_mins. Without this the DB's rejection was the first the
+  // provider heard of it, as a bare "Could not add this booking".
+  const bufferClash = selectedService && !conflictBooking
+    ? findBufferClash(
+        myBookings.filter(b => {
+          const st = mapDbBookingStatus(b.status);
+          return st !== BookingStatus.CANCELLED && st !== BookingStatus.NO_SHOW;
+        }),
+        dateYMD,
+        chosenStart,
+        selectedServiceDuration ?? 0,
+        {
+          before: selectedService.buffer_before_mins ?? 0,
+          after: selectedService.buffer_after_mins ?? providerBufferMins,
+        },
+      )
     : null;
 
   // Custom time's own inline blocked/outside-hours read — Available never
@@ -353,14 +378,26 @@ export default function AddBookingScreen() {
   // OVERRIDABLE_PATTERN below), not a hard stop, so Continue still reaches
   // Confirm and the RPC gives the provider a "Proceed anyway?" choice with
   // the actual reason. conflictBooking (a genuinely taken slot),
-  // isTimeAlreadyPassed (a same-day time that has already elapsed), and
-  // selectedSlotIsValid (Available mode requires an actually-tapped,
-  // currently-offered slot — guards against a stale Custom time silently
-  // carrying over) are the only hard stops here — none of these is
-  // something the DB will ever let through, override or not.
-  const canContinue = !!clientId && !!serviceId && !conflictBooking && !isTimeAlreadyPassed && selectedSlotIsValid;
+  // bufferClash (inside the buffer time around one), isTimeAlreadyPassed (a
+  // same-day time that has already elapsed), and selectedSlotIsValid
+  // (Available mode requires an actually-tapped, currently-offered slot —
+  // guards against a stale Custom time silently carrying over) are the only
+  // hard stops here — none of these is something the DB will ever let
+  // through, override or not.
+  const canContinue = !!clientId && !!serviceId && !conflictBooking && !bufferClash && !isTimeAlreadyPassed && selectedSlotIsValid;
   // Gates the Confirm phase's final "Add Booking" submit.
   const canSubmit = canContinue && (!safetyRequired || safetyAcknowledged);
+
+  // What to tell the provider about a buffer clash, here and if the DB is
+  // the one that catches it (23P01 from bookings_no_overlap).
+  const BUFFER_CLASH_MESSAGE = "That's inside the buffer time kept clear around another booking. Pick a time further from it, or shorten the buffer in Scheduling or on the service.";
+  const bufferClashSub = bufferClash
+    ? `${bufferClash.booking.service_name_snapshot} at ${formatTime12(bufferClash.booking.booking_time)} keeps time clear ${bufferClash.after ? 'after' : 'before'} it, and so does this service. `
+      + (bufferClash.suggestedTime
+        ? `The ${bufferClash.after ? 'earliest' : 'latest'} this can start is ${formatTime12(bufferClash.suggestedTime)}.`
+        : 'Pick another time or day.')
+      + ' You can change buffers in Scheduling, or on the service.'
+    : '';
 
   function handleContinue() {
     if (!clientId || !serviceId) {
@@ -377,6 +414,10 @@ export default function AddBookingScreen() {
     }
     if (conflictBooking) {
       showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
+      return;
+    }
+    if (bufferClash) {
+      showToast(BUFFER_CLASH_MESSAGE, 'info');
       return;
     }
     setPhase('confirm');
@@ -434,7 +475,18 @@ export default function AddBookingScreen() {
         goToCalendar();
       }
     } catch (error) {
-      const message = (error instanceof Error ? error.message : 'Could not add this booking.').replace(/^Error:\s*/, '');
+      // A PostgREST error is a plain { message, code } object, not an Error,
+      // so an `instanceof Error` test here swapped every database reason —
+      // including the booking-window ones that offer "Proceed anyway?" below —
+      // for a bare "Could not add this booking". Our own guards (P0001) are
+      // written for the provider and shown as they are; a buffer clash the
+      // check above missed arrives as the constraint's 23P01; anything else
+      // technical gets the friendly fallback.
+      const code = (error as { code?: unknown } | null)?.code;
+      const message = code === '23P01'
+        ? BUFFER_CLASH_MESSAGE
+        : toUserMessageAllowingDbGuard(error, 'Could not add this booking. Please try again.', 'AddBookingScreen.submit')
+            .replace(/^Error:\s*/, '');
 
       // Scheduling-POLICY warning (booking window / minimum notice /
       // provider-blocked date) — not overridden yet, so give the provider
@@ -464,7 +516,7 @@ export default function AddBookingScreen() {
       // and a chance to pick a different time — actually renders) instead of
       // leaving them on Confirm where retrying Add Booking would just fail
       // the same way against stale data.
-      if (HARD_BLOCK_PATTERN.test(message) || OVERRIDABLE_PATTERN.test(message)) {
+      if (code === '23P01' || HARD_BLOCK_PATTERN.test(message) || OVERRIDABLE_PATTERN.test(message)) {
         setPhase('details');
         getProviderBookings().then(setMyBookings).catch(() => {});
       }
@@ -484,6 +536,10 @@ export default function AddBookingScreen() {
     }
     if (conflictBooking) {
       showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
+      return;
+    }
+    if (bufferClash) {
+      showToast(BUFFER_CLASH_MESSAGE, 'info');
       return;
     }
     if (safetyRequired && !safetyAcknowledged) {
@@ -840,6 +896,29 @@ export default function AddBookingScreen() {
                       <Ionicons name="calendar-outline" size={13} color={P.accent} />
                       <Text style={[s.conflictBtnText, { color: P.accent }]}>Reschedule that booking</Text>
                     </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Not on top of a booking, but inside the buffer kept clear
+                  around one — the DB refuses it either way, so say which
+                  booking and the nearest time that does fit. */}
+              {bufferClash && (
+                <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
+                  <Ionicons name="time-outline" size={16} color={WARN} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.conflictTitle, { color: P.text }]}>Too close to another booking</Text>
+                    <Text style={[s.conflictSub, { color: P.sub }]}>{bufferClashSub}</Text>
+                    {bufferClash.suggestedTime && (
+                      <TouchableOpacity
+                        onPress={() => pickSlot(bufferClash.suggestedTime!)}
+                        style={[s.conflictBtn, { borderColor: P.accent }]}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="time-outline" size={13} color={P.accent} />
+                        <Text style={[s.conflictBtnText, { color: P.accent }]}>Use {formatTime12(bufferClash.suggestedTime)}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               )}

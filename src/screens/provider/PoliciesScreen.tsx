@@ -64,7 +64,7 @@ import {
 import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
 type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
-type CancelPenalty    = '' | 'none' | 'deposit' | 'full';
+type CancelPenalty    = '' | 'none' | 'deposit' | 'half';
 type RescheduleNotice = '' | 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '' | '1' | '2' | 'unlimited';
 // 'charge_full' was offered once and enforced by nothing; it's read back as
@@ -206,6 +206,8 @@ export default function PoliciesScreen({ navigation }: any) {
         setUserId(profile.user_id);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
+        // Saved before 'Full charge' became 'Half the price' (2026-11-01).
+        if ((merged.cancelPenalty as string) === 'full') merged.cancelPenalty = 'half';
         if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
         setPolicies(merged);
         const carried = Object.fromEntries(
@@ -297,7 +299,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
@@ -323,7 +325,9 @@ export default function PoliciesScreen({ navigation }: any) {
               <Card title="Your own policies" sub="These show on your profile so clients know them before they book. Clients book and pay on your own booking site, so CERVICED doesn't apply them or charge anything.">{null}</Card>
             )}
 
-            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask for.' : 'What happens if a client cancels late.'}>
+            {/* Every card opens with one plain line saying what it sets up,
+                so a provider never has to guess from the pills alone. */}
+            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : 'How much notice a client must give to cancel, and what happens if they cancel later than that. If they paid a deposit, you keep the deposit. If they paid in full, you can only charge up to half.'}>
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'none', l: 'None' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
@@ -333,7 +337,7 @@ export default function PoliciesScreen({ navigation }: any) {
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
                 <Pills
-                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'full', l: 'Full charge' }]}
+                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'half', l: 'Half the price' }]}
                   value={policies.cancelPenalty}
                   onChange={v => setPolicy('cancelPenalty', v)}
                 />
@@ -341,7 +345,7 @@ export default function PoliciesScreen({ navigation }: any) {
               <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
             </Card>
 
-            <Card title="Rescheduling" sub="How much notice, and how many reschedules you allow per booking.">
+            <Card title="Rescheduling" sub="How much notice a client must give to move their appointment, and how many times they can move one booking.">
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'same_day', l: 'Same day' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
@@ -359,7 +363,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {!isLinkOnly && (<>
               {/* Deposits live on Business Profile → Payments now, not here. */}
-              <Card title="No-show">
+              <Card title="No-show" sub="What happens when a client doesn't turn up, and how long you wait before you can mark them as a no-show.">
                 <SectionLabel text="Action" />
                 <Pills
                   options={[
@@ -381,7 +385,11 @@ export default function PoliciesScreen({ navigation }: any) {
                 <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
               </Card>
 
-              <Card title="Late & no-show fees" sub="Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to them at checkout. Each fee can be at most half the service price. Leave blank for no fee.">
+              {/* The short line says what the card is for; how a fee is
+                  actually charged stays below the fields, word for word as
+                  it was — it's the fee terms clients agree to at checkout,
+                  so it's moved, not reworded. */}
+              <Card title="Late & no-show fees" sub="Optional fees you can charge if a client arrives late or doesn't turn up. Leave blank for no fee.">
                 <Field
                   label="Late arrival fee (£)"
                   value={policies.lateFee}
@@ -398,6 +406,9 @@ export default function PoliciesScreen({ navigation }: any) {
                   keyboardType="decimal-pad"
                   note="For not turning up. You mark the booking as a no-show first."
                 />
+                <Text style={[s.cardSub, { color: C.sub, marginTop: 4, marginBottom: 0 }]}>
+                  Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to them at checkout. Each fee can be at most half the service price.
+                </Text>
               </Card>
             </>)}
 
@@ -405,7 +416,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 refund-processing infra, so there is deliberately no
                 percentage/amount field here that would imply the app
                 calculates or enforces a refund automatically. */}
-            <Card title="Refund Policy" sub={isLinkOnly ? 'Shown on your profile (optional).' : 'Shown to clients on their booking (optional).'}>
+            <Card title="Refund Policy" sub={isLinkOnly ? 'When you give refunds, in your own words, so clients know before they book. Shown on your profile (optional).' : 'When you give refunds, in your own words, so clients know before they book. Shown on their booking (optional).'}>
               <Field
                 label="Your refund policy"
                 value={policies.refundPolicyNote}
@@ -417,7 +428,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Shown on CERVICED bookings, which link-only pros don't have. */}
             {!isLinkOnly && (
-              <Card title="Booking Instructions" sub="Shown to clients on every booking (optional).">
+              <Card title="Booking Instructions" sub="Anything clients need to know before they arrive, like parking, what to bring or how to find you. Shown on every booking (optional).">
                 <Field
                   label="Instructions"
                   value={policies.bookingInstructions}
@@ -455,7 +466,7 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             )}
 
-            <Card title="Detailed Policy Image" sub="Optional — shown as a pop-up on your profile, for anything too specific for the fields above (a full house-rules sheet, a consent form, etc).">
+            <Card title="Detailed Policy Image" sub="A picture of your full policy, for anything too detailed for the fields above, like a house-rules sheet or consent form. Clients open it from your profile (optional).">
               <View style={imgSt.grid}>
                 {policies.policyImageUrl ? (
                   <View style={imgSt.thumbWrap}>
