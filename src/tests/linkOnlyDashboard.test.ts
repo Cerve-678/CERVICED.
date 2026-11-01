@@ -46,6 +46,7 @@ const stat = (day: string, book_taps: number, profile_views = 0) => ({
   profile_views,
   search_appearances: 0,
   instagram_taps: 0,
+  join_nudges: 0,
 });
 
 describe('compareWeeks', () => {
