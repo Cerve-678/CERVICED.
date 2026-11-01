@@ -307,13 +307,16 @@ async function passDisputeToProvider(dispute: Stripe.Dispute): Promise<void> {
   if (!intentId) return;
 
   const { data: fees, error: feeError } = await admin.from('booking_fee_charges')
-    .select('id, booking_id, provider_id, stripe_transfer_id').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
+    .select('id, booking_id, provider_id, stripe_transfer_id, payout_pence, deducted_pence').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
   if (feeError) throw feeError;
   for (const fee of fees ?? []) {
-    if (!fee.stripe_transfer_id) continue;
+    if (!fee.stripe_transfer_id && !(fee.deducted_pence > 0)) continue;
     await takeBackFromProvider(admin, stripe, {
       providerId: fee.provider_id, bookingId: fee.booking_id, source: 'bank_dispute',
       transferId: fee.stripe_transfer_id, key: `dispute_reversal_fee_${fee.id}`,
+      // Part of this fee paid off an earlier debt instead of being sent, so
+      // the whole payout comes back, not just what the transfer carried.
+      wantPence: fee.deducted_pence > 0 ? fee.payout_pence : undefined,
       metadata: { dispute_id: dispute.id },
     });
     const { error } = await admin.from('booking_fee_charges')

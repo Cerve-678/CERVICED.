@@ -6,7 +6,9 @@ import { isInsufficientBalance, planTakeBack } from './takeBackPlan.ts';
 // the Stripe transfer as is left on it; anything Stripe won't reverse (the
 // provider's Stripe balance can't cover it) or that the transfer never carried
 // (part of the payout went to settling an earlier shortfall) is recorded as a
-// shortfall, which release-payouts takes out of their next booking payout.
+// shortfall, which release-payouts takes out of their next booking or
+// late/no-show fee payout. Recording one notifies the provider (a trigger on
+// provider_shortfalls, migration 20261029120000).
 //
 // Used by every path that claws back a paid provider: reconcileRefund,
 // apply-cancellation-refund, booking-fee refunds and bank disputes.
