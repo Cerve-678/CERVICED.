@@ -336,8 +336,8 @@ user chose to keep that (2026-11-01). It stays silent while the schedule is
 closed by hand.
 
 **Fully booked.** No free slot on any date currently bookable, from one check,
-`get_services_open_within`, behind the client profile's Fully Booked, Search's
-badge and "has space again". There is no closed state and no setting for it:
+`get_services_open_within`, behind the client profile's Fully Booked and "has
+space again". There is no closed state and no setting for it:
 when a slot frees up, the waitlist gets it first if the provider has the waitlist
 on (15-minute holds, next person, then anyone), otherwise anyone can book it
 straight away. `WAITLIST.md` has that path, which has barely run live.
@@ -353,10 +353,13 @@ provider's choice, at any time, even with free slots:
 - Existing bookings stay. Closing shows them, and for each the provider picks "I
   can do it", Move or Cancel. Move and Cancel open the booking's own screen, so
   closing adds no second path for refunds or client notifications.
-- Still allowed: the provider's own Add Booking, and a client requesting a move
-  (every client move already needs the provider's answer).
-- Stopped: waitlist invites and "has space again", because a closed schedule
-  offers freed slots to nobody.
+- Still allowed: the provider's own Add Booking and inviting from their waitlist
+  by hand, and a client requesting a move (every client move already needs the
+  provider's answer).
+- Stopped: automatic waitlist invites and "has space again", because a closed
+  schedule offers freed slots to nobody. A slot freed while closed is simply
+  bookable on reopening; it isn't offered to the waitlist first. Entries stay
+  waiting for the next slot.
 - Reopens on the first of: the Reopen button; the date they chose; with no date,
   their next release day. A chosen date wins over the release day. With neither,
   only Reopen opens it.

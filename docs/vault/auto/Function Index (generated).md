@@ -5,7 +5,7 @@
 
 #generated
 
-**2832 functions** across **385 files**.
+**2833 functions** across **385 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -171,7 +171,7 @@
 
 ### `src/features/providers/` (21)
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
-- `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · onDateChange · openBooking · openSheet · reopensLabel · tomorrow
+- `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · tomorrow
 - `DiaryCard.tsx` — createStyles · daySummary · **DiaryCard** · disconnect · load · openChooser · saveChoice · styles · week · weekRangeLabel
 - `diaryDays.ts` — **buildDashboardWeek** · **diaryEventMinutes** · **hoursFor** · **startOfDay**
 - `DidYouBookSheet.tsx` — chip · days · defaultTime · **DidYouBookSheet** · handlePickerChange · handleSubmit · hhmm · startOfToday

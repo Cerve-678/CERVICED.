@@ -43,12 +43,28 @@ describe('closing a schedule by hand', () => {
     expect(fnBody('provider_is_taking_bookings')).toContain('RETURNS boolean');
   });
 
+  it('lets the provider add their own client, but not the automatic invite', () => {
+    expect(gate).toContain('own.user_id = auth.uid()');
+    const invite = fnBody('invite_next_waitlist_entry');
+    expect(invite.indexOf('provider_schedule_is_closed(p_provider_id)')).toBeLessThan(invite.indexOf('FOR w IN'));
+  });
+
+  it('does not read closed as full, or a reopening would announce false space', () => {
+    expect(fnBody('process_follow_openings_alerts')).toContain('AND NOT public.provider_schedule_is_closed(p.id)');
+  });
+
+  it('never tells a closed provider the slot is open to the public', () => {
+    for (const name of ['expire_waitlist_holds', 'decline_waitlist_hold']) {
+      expect(fnBody(name)).toMatch(/IF NOT v_offered_someone AND NOT public\.provider_schedule_is_closed/);
+    }
+  });
+
   it('lets a chosen date win over the release day', () => {
     const closed = fnBody('provider_schedule_is_closed');
     expect(closed.indexOf('WHEN c.reopens_on IS NOT NULL')).toBeLessThan(closed.indexOf('provider_next_release_after'));
   });
 
   it('refuses to apply over a function that changed after this was written', () => {
-    expect(MIGRATION.match(/rebuild from live/g)).toHaveLength(3);
+    expect(MIGRATION.match(/rebuild from live/g)).toHaveLength(7);
   });
 });

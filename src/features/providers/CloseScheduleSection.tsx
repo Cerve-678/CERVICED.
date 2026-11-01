@@ -6,7 +6,7 @@
 // from the server. Moving and cancelling go to the booking's own screen, which
 // already owns group bookings, refunds and the client's notification, so this
 // sheet adds no second way of moving money or a booking.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   closeMySchedule,
   getMyScheduleClosure,
@@ -102,26 +103,17 @@ export default function CloseScheduleSection({
 
   const isClosed = closure?.isClosed === true;
 
-  useEffect(() => {
-    let cancelled = false;
-    getMyScheduleClosure()
-      .then((row) => { if (!cancelled) setClosure(row); })
-      .catch((err) => logger.error('[Schedule] closure load failed:', err))
-      .finally(() => { if (!cancelled) setLoaded(true); });
-    return () => { cancelled = true; };
-  }, []);
-
-  const openSheet = useCallback(() => {
-    setKeptIds(new Set());
-    setReopenDate(null);
+  const loadUpcoming = useCallback(() => {
     setUpcoming(null);
-    setSheetVisible(true);
     getProviderBookings(0, providerId, UPCOMING_DAYS_AHEAD)
       .then((rows) => {
-        const today = dateToYMD(new Date());
+        const now = new Date();
+        const today = dateToYMD(now);
+        const timeNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         setUpcoming(
           rows
-            .filter((b) => (b.status === 'confirmed' || b.status === 'pending') && b.booking_date >= today)
+            .filter((b) => (b.status === 'confirmed' || b.status === 'pending')
+              && (b.booking_date > today || (b.booking_date === today && (b.booking_time ?? '') >= timeNow)))
             .sort((a, b) => `${a.booking_date}${a.booking_time}`.localeCompare(`${b.booking_date}${b.booking_time}`))
             .map((b) => ({
               id: b.id,
@@ -138,6 +130,33 @@ export default function CloseScheduleSection({
         showToast("Couldn't load your upcoming bookings. Check them before closing.", 'error');
       });
   }, [providerId, showToast]);
+
+  // Set when Move or Cancel leaves for the booking's own screen, so coming back
+  // lands on the sheet with their choices intact and the list up to date.
+  const returnToSheet = useRef(false);
+
+  // On focus, not just on mount: a closure can end by the clock while this
+  // screen sits in the stack.
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    getMyScheduleClosure()
+      .then((row) => { if (!cancelled) setClosure(row); })
+      .catch((err) => logger.error('[Schedule] closure load failed:', err))
+      .finally(() => { if (!cancelled) setLoaded(true); });
+    if (returnToSheet.current) {
+      returnToSheet.current = false;
+      setSheetVisible(true);
+      loadUpcoming();
+    }
+    return () => { cancelled = true; };
+  }, [loadUpcoming]));
+
+  const openSheet = useCallback(() => {
+    setKeptIds(new Set());
+    setReopenDate(null);
+    setSheetVisible(true);
+    loadUpcoming();
+  }, [loadUpcoming]);
 
   const handleClose = useCallback(async () => {
     setBusy(true);
@@ -169,6 +188,7 @@ export default function CloseScheduleSection({
   }, [showToast]);
 
   const openBooking = useCallback((bookingId: string, openReschedule: boolean) => {
+    returnToSheet.current = true;
     setSheetVisible(false);
     onOpenBooking(bookingId, openReschedule);
   }, [onOpenBooking]);
