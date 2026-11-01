@@ -1376,7 +1376,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 </View>
                 {!isMobile && !!booking.howToGetThere && !isAddressPending(booking.address) && (
                   <View style={[st.row, { borderBottomWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, alignItems: 'flex-start' }]}>
-                    <Text style={[st.rowLabel, { color: C.sub }]}>How to get there</Text>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>Arrival details</Text>
                     <Text style={[st.rowValue, { color: C.text }]}>{booking.howToGetThere}</Text>
                   </View>
                 )}
