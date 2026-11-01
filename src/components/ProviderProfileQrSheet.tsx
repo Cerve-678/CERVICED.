@@ -17,6 +17,8 @@ type Props = {
   visible: boolean;
   providerSlug: string;
   providerName: string;
+  /** Clients can't open a profile that isn't live, so don't promise they can. */
+  isLive: boolean;
   accentColor: string;
   backgroundColor: string;
   textColor: string;
@@ -30,6 +32,7 @@ export function ProviderProfileQrSheet({
   visible,
   providerSlug,
   providerName,
+  isLive,
   accentColor,
   backgroundColor,
   textColor,
@@ -68,7 +71,9 @@ export function ProviderProfileQrSheet({
             Your profile QR
           </Text>
           <Text style={[styles.copy, { color: subtextColor }]}>
-            Clients can scan this to open {providerName} in CERVICED.
+            {isLive
+              ? `Clients with the CERVICED app can scan this to open ${providerName}.`
+              : "This code starts working once your profile is live."}
           </Text>
           <View
             style={styles.qrFrame}

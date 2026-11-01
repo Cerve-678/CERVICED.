@@ -2299,6 +2299,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             visible={profileQrVisible}
             providerSlug={providerSlug}
             providerName={providerData.providerName || 'your business'}
+            isLive={goLive?.isLive !== false}
             accentColor={accentColor}
             backgroundColor={PP.card}
             textColor={PP.text}
