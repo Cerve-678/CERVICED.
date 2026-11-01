@@ -38,7 +38,7 @@ beforeEach(() => {
   (getProviderPayouts as jest.Mock).mockResolvedValue([{
     id: 'payment', booking_id: 'booking', gross_amount: 10000, platform_fee: 1000, payout_amount: 9000,
     currency: 'gbp', status: 'held', created_at: '2026-10-01T10:00:00Z', release_after: '2026-10-03T10:00:00Z',
-    booking: { service_name_snapshot: 'Hair appointment', customer_name: 'Test client' },
+    booking: { service_name_snapshot: 'Hair appointment', customer_name: 'Test client' }, refundRequestOpen: false,
   }]);
   (getProviderFinance as jest.Mock).mockResolvedValue({ connected: true, livemode: false,
     available: [{ amount: 2000, currency: 'gbp' }], pending: [{ amount: 500, currency: 'gbp' }],
@@ -212,4 +212,18 @@ test('a half-finished Stripe setup offers to continue rather than start again', 
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('Continue with Stripe')).toBeTruthy());
   expect(ui.queryByText('AVAILABLE IN STRIPE')).toBeNull();
+});
+
+test('says a held payment is on hold while the client has a refund request open', async () => {
+  (getProviderPayouts as jest.Mock).mockResolvedValue([{
+    id: 'payment', booking_id: 'booking', gross_amount: 10000, platform_fee: 1000, payout_amount: 9000,
+    currency: 'gbp', status: 'held', created_at: '2026-10-01T10:00:00Z', release_after: '2026-10-03T10:00:00Z',
+    booking: { service_name_snapshot: 'Hair appointment', customer_name: 'Test client' }, refundRequestOpen: true,
+  }]);
+  const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
+  await waitFor(() => expect(ui.getByText('Test client · On hold · refund request')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
+  fireEvent.press(ui.getByText('Hair appointment'));
+  expect(ui.getByText(/on hold until that’s settled/)).toBeTruthy();
+  expect(ui.queryByText(/Eligible for release from/)).toBeNull();
 });
