@@ -654,6 +654,9 @@ export interface DbBooking {
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
   provider_address_snapshot: string | null;
+  /** Private venue access instructions snapshotted at booking. The
+   * client_bookings view release-gates this with the address. */
+  provider_directions_snapshot?: string | null;
   provider_phone_snapshot: string | null;
   provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;

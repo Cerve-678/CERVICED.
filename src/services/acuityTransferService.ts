@@ -114,6 +114,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     serviceLocations: [],
     preferredPaymentMethods: [],
     fullAddress: '',
+    howToGetThere: '',
     fullAddressCoordinates: null,
     addressReleasePolicy: 'on_confirmation',
     backgroundImage: null,

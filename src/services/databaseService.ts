@@ -7155,6 +7155,7 @@ export async function setMyProviderFullAddress(
   fullAddress: string | null,
   latitude: number | null = null,
   longitude: number | null = null,
+  howToGetThere: string | null = null,
 ): Promise<void> {
   const { error } = await supabase.from("provider_private_details").upsert(
     {
@@ -7162,6 +7163,7 @@ export async function setMyProviderFullAddress(
       full_address: fullAddress,
       latitude,
       longitude,
+      how_to_get_there: howToGetThere,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "provider_id" },
@@ -10984,12 +10986,13 @@ export async function getProviderRegistrationRecord(userId: string): Promise<DbP
 
 export async function getProviderRegistrationDetails(providerId: string): Promise<{
   fullAddress: string;
+  howToGetThere: string;
   services: unknown[];
 }> {
   const [privateDetails, services] = await Promise.all([
     supabase
       .from("provider_private_details")
-      .select("full_address")
+      .select("full_address, how_to_get_there")
       .eq("provider_id", providerId)
       .maybeSingle(),
     supabase
@@ -11030,6 +11033,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
   if (services.error) throw services.error;
   return {
     fullAddress: privateDetails.data?.full_address ?? "",
+    howToGetThere: privateDetails.data?.how_to_get_there ?? "",
     services: services.data ?? [],
   };
 }

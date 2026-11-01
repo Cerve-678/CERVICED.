@@ -2819,6 +2819,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     serviceLocations: [],
     preferredPaymentMethods: [],
     fullAddress: '',
+    howToGetThere: '',
     fullAddressCoordinates: null,
     addressReleasePolicy: null,
     backgroundImage: null,
@@ -5379,6 +5380,25 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 accentColor={adaptiveAccentColor}
               />
 
+              <Text style={[styles.policyLabel, { marginTop: 14 }]}>HOW TO GET THERE</Text>
+              <Text style={styles.addressHint}>
+                Optional — door or buzzer codes, which entrance, parking, nearest station. Only booked clients see this, at the same time as your address.
+              </Text>
+              <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+                <TextInput
+                  style={[styles.textInput, styles.textInputMultiline]}
+                  value={providerData.howToGetThere}
+                  onChangeText={(howToGetThere) => setProviderData(prev => ({ ...prev, howToGetThere }))}
+                  placeholder="e.g. Flat 3, buzzer 3B. Use the side entrance beside the blue gate."
+                  placeholderTextColor={chrome.fg(0.4)}
+                  multiline
+                  maxLength={500}
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                  accessibilityLabel="How to get there"
+                />
+              </View>
+
               {/* Which timings each business type may offer is
                   ADDRESS_RELEASE_BY_BUSINESS_TYPE's job, not this screen's.
                   This used to be a hand-maintained `show:` flag per row —
@@ -5521,7 +5541,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ask, same key, same format. */}
               <Text style={[styles.policyLabel, { marginTop: 14 }]}>ANYTHING CLIENTS SHOULD KNOW</Text>
               <Text style={styles.addressHint}>
-                Shown to clients on every booking (optional) — parking, buzzer codes, what to bring, how to find you.
+                Shown to clients on every booking (optional) — what to bring, how early to arrive. Put door or buzzer codes in How to get there instead, which stays private until a booked client's address is released.
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
