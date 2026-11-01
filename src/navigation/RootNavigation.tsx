@@ -10,11 +10,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { navigationRef } from './navigationRef';
 import { requestMode, resolveModeChange } from './modeController';
+import { openProviderProfileLink, type ProviderProfileLinkOutcome } from './openProviderProfileLink';
 import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
-import { isProviderProfileUuid, parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
-import { getProviderBasicById } from '../services/databaseService';
+import { parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
+import { useAppDialog } from '../components/AppDialog';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';
 
@@ -35,10 +36,20 @@ import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+const PROVIDER_LINK_ALERTS: Record<Exclude<ProviderProfileLinkOutcome, 'opened'>, [string, string]> = {
+  not_found: ['Profile not found', "This code doesn't match a profile on CERVICED any more."],
+  no_client_hat: [
+    'Open this on a client account',
+    "Profiles open on the client side of CERVICED, and this account doesn't have a client profile yet.",
+  ],
+  failed: ["Couldn't open that profile", 'Check your connection and scan the code again.'],
+};
+
 export default function RootNavigation() {
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
   const { isDarkMode } = useTheme();
+  const { showAlert, DialogHost } = useAppDialog();
 
   // The switch overlay always uses the DESTINATION hat's real accent (not a
   // hardcoded placeholder color) — same "you're switching identity" signal
@@ -118,25 +129,10 @@ export default function RootNavigation() {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !providerProfileLink ||
         handledProviderProfileLink.current === providerProfileLink) return;
     handledProviderProfileLink.current = providerProfileLink;
-    // New QR codes carry the public slug used by ProviderProfile. Resolve only
-    // legacy UUID QR codes so old printed cards continue to work.
-    const resolveSlug = isProviderProfileUuid(providerProfileLink.providerKey)
-      ? getProviderBasicById(providerProfileLink.providerKey).then(provider => provider?.slug ?? null)
-      : Promise.resolve(providerProfileLink.providerKey);
-    void resolveSlug.then(providerSlug => {
-      if (!providerSlug) return;
-      return requestMode('client').then(mode => {
-        if (mode !== 'client' || !navigationRef.isReady()) return;
-        navigationRef.navigate('MainTabs', {
-          screen: 'Home',
-          params: {
-            screen: 'ProviderProfile',
-            params: { providerId: providerSlug, source: 'profile_qr' },
-          },
-        } as never);
-      });
-    }).catch(() => {});
-  }, [providerProfileLink, isNavReady, isLoggedIn, isLoading, pendingReactivation]);
+    void openProviderProfileLink(providerProfileLink.providerKey).then(outcome => {
+      if (outcome !== 'opened') showAlert(...PROVIDER_LINK_ALERTS[outcome]);
+    });
+  }, [providerProfileLink, isNavReady, isLoggedIn, isLoading, pendingReactivation, showAlert]);
   useEffect(() => {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !connectReturn ||
         handledConnectReturn.current === connectReturn) return;
@@ -276,6 +272,7 @@ export default function RootNavigation() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    <DialogHost />
     </>
   );
 }

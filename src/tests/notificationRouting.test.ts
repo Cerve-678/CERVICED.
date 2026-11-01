@@ -12,7 +12,8 @@ const edgeFunction = () =>
   read('supabase', 'functions', 'send-push-notification', 'index.ts');
 const pushService = () => read('src', 'services', 'pushNotificationService.ts');
 const databaseService = () => read('src', 'services', 'databaseService.ts');
-const rootNavigation = () => read('src', 'navigation', 'RootNavigation.tsx');
+const providerProfileLink = () =>
+  read('src', 'navigation', 'openProviderProfileLink.ts');
 
 /**
  * These are source contracts rather than behavioural tests because the code
@@ -106,9 +107,9 @@ describe('notification routing — deep-link payload', () => {
   });
 
   it('opens slug QR links directly and keeps a UUID fallback for printed legacy QR codes', () => {
-    const source = rootNavigation();
-    expect(source).toContain('isProviderProfileUuid(providerProfileLink.providerKey)');
-    expect(source).toContain('getProviderBasicById(providerProfileLink.providerKey)');
+    const source = providerProfileLink();
+    expect(source).toContain('isProviderProfileUuid(providerKey)');
+    expect(source).toContain('getProviderBasicById(providerKey)');
     expect(source).toContain("params: { providerId: providerSlug, source: 'profile_qr' }");
   });
 

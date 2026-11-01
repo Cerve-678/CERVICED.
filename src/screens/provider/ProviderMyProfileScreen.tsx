@@ -2229,6 +2229,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
+                  {setup.percent === 100 ? statusSection : null}
                 </>
               ) : (
                 <>
@@ -2287,8 +2288,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     ))}
                     </>
                   )}
-
-                  {setup.percent === 100 ? statusSection : null}
                 </>
               )}
             </View>
@@ -2299,6 +2298,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             visible={profileQrVisible}
             providerSlug={providerSlug}
             providerName={providerData.providerName || 'your business'}
+            isLive={goLive?.isLive !== false}
             accentColor={accentColor}
             backgroundColor={PP.card}
             textColor={PP.text}

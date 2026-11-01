@@ -12,6 +12,7 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { Ionicons } from '@expo/vector-icons';
 import { SlideUpOnMount } from '../../components/SlideUpOnMount';
 import * as Print from 'expo-print';
@@ -138,15 +139,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     });
   }, [navigation, C]);
 
-  // The pill would sit over the bottom of the booking card and its actions, so
-  // hide it here (same mechanism as RescheduleScreen). useFocusEffect, so it is
-  // hidden again on return from Reschedule/Chat, whose cleanup restores it.
-  useFocusEffect(useCallback(() => {
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [navigation]));
+  // The pill would sit over the bottom of the booking card and its actions.
+  useHideTabBar();
 
   const insets = useSafeAreaInsets();
 
