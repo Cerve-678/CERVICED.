@@ -34,8 +34,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   submitReview, getProviderIdByDisplayName, hasReviewedBooking,
-  getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName,
-  getProviderContactById,
+  getIntakeFormByBooking, IntakeForm, getBookedClientContact,
   ProviderContactInfo,
   getProviderBookingDetailMetadata,
   type ProviderBookingDetailMetadata,
@@ -429,13 +428,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setContactSheetVisible(true);
     setContactSheetLoading(true);
     try {
-      // By id where possible — a renamed provider no longer matches the name
-      // snapshot stored on their past bookings, which silently collapsed this
-      // sheet to in-app-only (losing email / WhatsApp / phone).
-      const info = b.providerId
-        ? await getProviderContactById(b.providerId)
-        : await getProviderContactByDisplayName(b.providerName);
-      setContactSheetInfo(info);
+      // By booking, not provider: the server only answers the client on
+      // this booking, and swaps in the provider's booked-client details
+      // (set in Communications) where they've given one. Also immune to a
+      // renamed provider no longer matching the booking's name snapshot.
+      setContactSheetInfo(await getBookedClientContact(b.id));
     } catch {
       setContactSheetInfo({ preferred_contact_methods: ['in_app'], whatsapp_number: null, email: null, phone: null });
     } finally { setContactSheetLoading(false); }
