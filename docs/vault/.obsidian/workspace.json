@@ -11,17 +11,14 @@
             "id": "df82c6999956485f",
             "type": "leaf",
             "state": {
-              "type": "canvas",
+              "type": "markdown",
               "state": {
-                "file": "Architecture.canvas",
-                "viewState": {
-                  "x": 790.4319726027401,
-                  "y": 613.8325753424659,
-                  "zoom": -1.2875289677545425
-                }
+                "file": "Link-Only Providers.md",
+                "mode": "source",
+                "source": false
               },
-              "icon": "lucide-layout-dashboard",
-              "title": "Architecture"
+              "icon": "lucide-file",
+              "title": "Link-Only Providers"
             }
           }
         ]
@@ -43,8 +40,10 @@
             "state": {
               "type": "file-explorer",
               "state": {
-                "sortOrder": "alphabetical",
-                "autoReveal": false
+                "sortOrder": "byModifiedTime",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -185,10 +184,11 @@
   },
   "active": "df82c6999956485f",
   "lastOpenFiles": [
+    "~$nk-Only Providers.md",
+    "Architecture.canvas",
     "Untitled 1.base",
     "auto/screens/InfoRegScreen 2.md",
     "auto/screens/BookingsScreen 2.md",
-    "Architecture.canvas",
     "Address Release.md",
     "_templates/feature.md",
     "_templates/decision.md",
