@@ -457,8 +457,8 @@ one broken, it's a top-severity bug: stop and escalate.
 
 **Who is an admin:** anyone with a row in the `admin_users` table. There's no
 in-app way to add one; an engineer adds them in SQL (runbook R10). **There
-are currently no admins**, so nobody can use the Money screen until one is
-added. Every admin action (retry, approve, decline) is permanently logged in
+is one admin (the founder), added 2026-10-30.** Support staff need their own
+rows before they can use the Money screen. Every admin action (retry, approve, decline) is permanently logged in
 `admin_actions` and can't be edited or deleted.
 
 ### R1. A payout failed

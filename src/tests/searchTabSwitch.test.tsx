@@ -42,6 +42,7 @@ jest.mock('../services/databaseService', () => {
     getProvidersAvailability: jest.fn(async () => new Map()),
     getProviderServiceFacets: jest.fn(async () => ({ priceRanges: new Map(), audiences: new Map(), skinTones: new Map() })),
     prefetchProviderBySlug: jest.fn(),
+    getServiceCoverImages: jest.fn(async () => ({})),
   };
 });
 
@@ -139,12 +140,23 @@ describe('Search services', () => {
 
     await waitFor(() => expect(screen.getByText('Classic French')).toBeTruthy(), { timeout: 2000 });
     expect(screen.getByText('Short white French tips')).toBeTruthy();
-    expect(screen.getByText('£30 · 1h')).toBeTruthy();
+    expect(screen.getByText('£30')).toBeTruthy();
+    expect(screen.getByText('1h · Nails')).toBeTruthy();
     expect(screen.getByText('french')).toBeTruthy();
+    expect(screen.getByText('1 service · 1 provider')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('Classic French with Salon nails-studio'));
-    expect(navigate).toHaveBeenCalledWith('ProviderProfile', {
+    expect(navigate).toHaveBeenLastCalledWith('ProviderProfile', {
       providerId: 'nails-studio', source: 'search', openServiceId: 'svc-1',
     });
+
+    fireEvent.press(screen.getByLabelText('Book Classic French'));
+    expect(navigate).toHaveBeenLastCalledWith('ProviderProfile', {
+      providerId: 'nails-studio', source: 'search', openServiceId: 'svc-1',
+    });
+
+    // The provider strip under the service opens the profile, not the sheet.
+    fireEvent.press(screen.getByLabelText('View Salon nails-studio'));
+    expect(navigate).toHaveBeenLastCalledWith('ProviderProfile', { providerId: 'nails-studio', source: 'search' });
   });
 });

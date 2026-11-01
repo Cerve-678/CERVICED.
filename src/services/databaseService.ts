@@ -66,6 +66,7 @@ import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
+import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
 import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
 export type { BookingReviewState } from "../features/bookings/reviewState";
 import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
@@ -924,6 +925,10 @@ export type ProviderAvailabilityStatus = "available" | "limited" | "none";
 
 export interface ProviderAvailabilityInfo {
   status: ProviderAvailabilityStatus;
+  /** At least one ordinarily bookable slot in the corresponding UK date. */
+  availableToday: boolean;
+  availableTomorrow: boolean;
+  availableThisWeek: boolean;
   /**
    * Whether the provider's providers.hair_types_catered matches the
    * requested hair type, per the same empty-means-all rule as
@@ -973,8 +978,17 @@ export async function getProvidersAvailability(
     slug: string;
     status: ProviderAvailabilityStatus;
     hair_match: boolean;
+    available_today: boolean;
+    available_tomorrow: boolean;
+    available_this_week: boolean;
   }[]) {
-    result.set(row.slug, { status: row.status, hairMatch: row.hair_match });
+    result.set(row.slug, {
+      status: row.status,
+      hairMatch: row.hair_match,
+      availableToday: row.available_today,
+      availableTomorrow: row.available_tomorrow,
+      availableThisWeek: row.available_this_week,
+    });
   }
   return result;
 }
@@ -1219,6 +1233,36 @@ export async function searchProvidersAndServices(
   return { providers, services, correctedQuery };
 }
 
+/**
+ * First photo of each service, keyed by service id, for the service cards
+ * Search scatters between its provider rows. search_services_ranked returns
+ * no images, so this is one batched lookup over the ids already on screen.
+ * Services without a photo are simply absent from the result.
+ */
+export async function getServiceCoverImages(serviceIds: string[]): Promise<Record<string, string>> {
+  const ids = [...new Set(serviceIds)].slice(0, SERVICE_SEARCH_LIMIT);
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, service_images!inner ( url, sort_order ), provider: providers!inner ( id )")
+    .in("id", ids)
+    .eq("is_active", true)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    // Only the cover is needed, not the whole gallery for up to 60 services.
+    .order("sort_order", { referencedTable: "service_images", ascending: true })
+    .limit(1, { referencedTable: "service_images" })
+    .limit(ids.length);
+  if (error) throw error;
+
+  const covers: Record<string, string> = {};
+  for (const row of (data ?? []) as unknown as { id: string; service_images: { url: string }[] }[]) {
+    const first = row.service_images[0];
+    if (first?.url) covers[row.id] = first.url;
+  }
+  return covers;
+}
+
 /** Providers only — see searchProvidersAndServices. */
 export async function searchProviders(
   query: string,
@@ -1285,6 +1329,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   service_categories,
   custom_service_type,
   location_text,
+  public_directions,
   about_text,
   logo_url,
   gradient,
@@ -4747,6 +4792,34 @@ export async function getBookingTip(bookingId: string): Promise<number | null> {
   return data ? Number((data as { amount_pence: number }).amount_pence) / 100 : null;
 }
 
+/**
+ * The paid tip on one of the provider's own bookings, or null when there isn't
+ * one. Reads booking_tips only (the provider-read RLS policy scopes it to their
+ * bookings) — never the old recorded-only reviews.tip_amount.
+ */
+export async function getProviderBookingTip(bookingId: string): Promise<ProviderBookingTip | null> {
+  const { data, error } = await supabase
+    .from("booking_tips")
+    .select("amount_pence, payout_pence, payout_status, release_after")
+    .eq("booking_id", bookingId)
+    .eq("status", "succeeded")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as {
+    amount_pence: number;
+    payout_pence: number | null;
+    payout_status: ProviderBookingTip["payoutStatus"];
+    release_after: string | null;
+  };
+  return {
+    amountPence: row.amount_pence,
+    payoutPence: row.payout_pence,
+    payoutStatus: row.payout_status,
+    releaseAfter: row.release_after,
+  };
+}
+
 export interface BookingTipPaymentSheet {
   tipId: string;
   clientSecret: string;
@@ -7155,6 +7228,7 @@ export async function setMyProviderFullAddress(
   fullAddress: string | null,
   latitude: number | null = null,
   longitude: number | null = null,
+  howToGetThere: string | null = null,
 ): Promise<void> {
   const { error } = await supabase.from("provider_private_details").upsert(
     {
@@ -7162,6 +7236,7 @@ export async function setMyProviderFullAddress(
       full_address: fullAddress,
       latitude,
       longitude,
+      how_to_get_there: howToGetThere,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "provider_id" },
@@ -10984,12 +11059,13 @@ export async function getProviderRegistrationRecord(userId: string): Promise<DbP
 
 export async function getProviderRegistrationDetails(providerId: string): Promise<{
   fullAddress: string;
+  howToGetThere: string;
   services: unknown[];
 }> {
   const [privateDetails, services] = await Promise.all([
     supabase
       .from("provider_private_details")
-      .select("full_address")
+      .select("full_address, how_to_get_there")
       .eq("provider_id", providerId)
       .maybeSingle(),
     supabase
@@ -11030,6 +11106,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
   if (services.error) throw services.error;
   return {
     fullAddress: privateDetails.data?.full_address ?? "",
+    howToGetThere: privateDetails.data?.how_to_get_there ?? "",
     services: services.data ?? [],
   };
 }
@@ -11225,6 +11302,77 @@ interface ProviderFeeEarningRow {
   id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; payout_pence: number | null;
   status: BookingFeeCharge['status']; payout_status: ProviderFeeEarning['payoutStatus'];
   release_after: string | null; charged_at: string | null; disputed_at: string | null; dispute_resolved_at: string | null;
+}
+
+export interface ProviderTipEarning extends ProviderBookingTip {
+  id: string;
+  bookingId: string;
+  paidAt: string | null;
+  serviceName: string | null;
+  customerName: string | null;
+}
+
+/**
+ * Latest 50 tips clients paid this provider. Filtered to the caller's OWN
+ * provider row, not just RLS: booking_tips is also readable by the client who
+ * paid, so a pro who has tipped someone else would otherwise see that tip here.
+ */
+export async function getProviderTipEarnings(): Promise<ProviderTipEarning[]> {
+  const { data: { user }, error: authError } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return [];
+  const { data, error } = await supabase.from('booking_tips')
+    .select('id, booking_id, amount_pence, payout_pence, payout_status, release_after, paid_at, providers!inner(user_id)')
+    .eq('providers.user_id', user.id)
+    .eq('status', 'succeeded')
+    .order('paid_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as {
+    id: string; booking_id: string; amount_pence: number; payout_pence: number | null;
+    payout_status: ProviderBookingTip['payoutStatus']; release_after: string | null; paid_at: string | null;
+  }[];
+  if (rows.length === 0) return [];
+  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
+    .select('id, service_name_snapshot, customer_name')
+    .in('id', rows.map(row => row.booking_id));
+  if (bookingsError) throw bookingsError;
+  return rows.map(row => {
+    const booking = bookings?.find(b => b.id === row.booking_id);
+    return {
+      id: row.id,
+      bookingId: row.booking_id,
+      amountPence: row.amount_pence,
+      payoutPence: row.payout_pence,
+      payoutStatus: row.payout_status,
+      releaseAfter: row.release_after,
+      paidAt: row.paid_at,
+      serviceName: booking?.service_name_snapshot ?? null,
+      customerName: booking?.customer_name ?? null,
+    };
+  });
+}
+
+/**
+ * Paid tips on the caller's own bookings, in pounds keyed by booking id, for
+ * Analytics. `sinceDate` (YYYY-MM-DD) bounds it by appointment date to match
+ * the bookings Analytics loaded; null = all time. Filtered to the caller's own
+ * provider row because booking_tips is also readable by the client who paid.
+ */
+export async function getProviderTipsByBooking(sinceDate: string | null): Promise<Map<string, number>> {
+  const { data: { user }, error: authError } = await getSessionUser();
+  if (authError) throw authError;
+  if (!user) return new Map();
+  let query = supabase.from('booking_tips')
+    .select('booking_id, amount_pence, providers!inner(user_id), bookings!inner(booking_date)')
+    .eq('providers.user_id', user.id)
+    .eq('status', 'succeeded');
+  if (sinceDate) query = query.gte('bookings.booking_date', sinceDate);
+  // One tip per booking, so this matches the bookings Analytics can hold.
+  const { data, error } = await query.limit(5000);
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as { booking_id: string; amount_pence: number }[];
+  return new Map(rows.map(row => [row.booking_id, row.amount_pence / 100]));
 }
 
 /** Latest 50 charged fees (RLS scopes booking_fee_charges to the caller's own). */

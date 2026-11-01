@@ -397,6 +397,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     endTime,
     status: mapDbBookingStatus(db.status),
     address: db.provider_address_snapshot ?? '',
+    howToGetThere: db.provider_directions_snapshot ?? undefined,
     // provider_coordinates is stored as { lat, lng } (see CartClaimItem), but the
     // whole app reads coordinates.latitude/.longitude — normalize both shapes so
     // the map marker + Directions work after a DB reload (and only once the

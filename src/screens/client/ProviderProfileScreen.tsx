@@ -96,7 +96,7 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
-import { resolveSlotsRow } from "../../utils/slotsRowText";
+import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
@@ -1375,8 +1375,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     promotions,
     portfolio,
     portfolioLoading,
-    availability,
-    availabilityLoading,
     openingHours,
     openingHoursLoading,
     currentUserId,
@@ -1406,6 +1404,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [didYouBookVisible, setDidYouBookVisible] = useState(false);
   // Bumped on every open so the sheet remounts with a fresh question.
   const [didYouBookKey, setDidYouBookKey] = useState(0);
+  const [joinNudgePending, setJoinNudgePending] = useState(false);
+  const [joinNudgeSent, setJoinNudgeSent] = useState(false);
+  // The bar's ✕ — hides it for this visit only; it's back next time.
+  const [joinNudgeDismissed, setJoinNudgeDismissed] = useState(false);
 
   // Counters behind a link-only provider's Analytics. Never for the owner
   // looking at their own profile; a failed count is logged, never shown.
@@ -1703,6 +1705,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const contactDetails = useMemo(() => ({
     location: publicAddress?.fullAddress ?? provider?.location ?? "",
     locationMapUrl: publicAddress ? mapsUrlFor(publicAddress) : null,
+    // A mobile provider travels to the client, so there is nowhere to direct
+    // them to — an old value left from before a business-type change stays hidden.
+    locationNote: provider?.businessType === "mobile" ? "" : provider?.publicDirections ?? "",
     phone: provider?.phone ?? "",
     whatsapp: provider?.whatsapp ?? "",
     email: provider?.email ?? "",
@@ -1711,6 +1716,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }), [
     publicAddress,
     provider?.location,
+    provider?.businessType,
+    provider?.publicDirections,
     provider?.phone,
     provider?.whatsapp,
     provider?.email,
@@ -2003,6 +2010,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // coordinates with native-stack to prevent that. showConfirm is the
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  // A client can ask a link-only provider to take bookings on CERVICED. The
+  // database records at most one nudge per client/provider/day, so rapid taps
+  // or a stale app state cannot inflate the provider's Analytics.
+  const handleJoinNudge = useCallback(async () => {
+    if (!providerDbId || !isLinkOnly || isOwnProvider || joinNudgePending || joinNudgeSent) return;
+    setJoinNudgePending(true);
+    try {
+      await recordProviderStat([providerDbId], 'join_nudge');
+      setJoinNudgeSent(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (error) {
+      logger.warn('[ProviderProfile] could not record join nudge', error);
+      showAlert("Couldn't send your nudge", 'Please try again in a moment.');
+    } finally {
+      setJoinNudgePending(false);
+    }
+  }, [providerDbId, isLinkOnly, isOwnProvider, joinNudgePending, joinNudgeSent, showAlert]);
   const hasUnsavedSelection =
     (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
   usePreventRemove(hasUnsavedSelection, ({ data }) => {
@@ -3384,8 +3408,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // up after they're fully booked (process_follow_openings_alerts), their
       // offers and announcements, and — with a release day — each new month.
       return releaseDay != null
-        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their offers`
-        : `You'll hear when ${fullName} has space open up, and about their offers`;
+        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their announcements and offers`
+        : `Stay updated — you'll hear when ${fullName} has space open up, and about their announcements and offers`;
     } else {
       return providerIsBookmarked
         ? `Added to Your Providers`
@@ -4866,6 +4890,42 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             "Book" becomes untappable. */}
         {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
 
+        {/* Join nudge — a link-only provider can't be booked here, so this
+            never shares the spot with the selection bar above. */}
+        {isLinkOnly && viewerChecked && currentUserId && !isOwnProvider && !joinNudgeDismissed && (
+          <View style={[styles.joinNudgeBar, { bottom: FLOATING_TAB_BAR_CLEARANCE }]}>
+            <Ionicons
+              name={joinNudgeSent ? "checkmark-circle" : "megaphone-outline"}
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.joinNudgeBarText} numberOfLines={1}>
+              {joinNudgeSent ? "Nudge sent" : "Want them on CERVICED?"}
+            </Text>
+            {!joinNudgeSent && (
+              <TouchableOpacity
+                style={[styles.joinNudgeBarButton, joinNudgePending && styles.joinNudgeButtonMuted]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); void handleJoinNudge(); }}
+                disabled={joinNudgePending}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Nudge ${provider.displayName} to take bookings on CERVICED`}
+              >
+                <Text style={styles.joinNudgeBarButtonText}>{joinNudgePending ? "Sending…" : "Nudge"}</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.joinNudgeBarClose}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); setJoinNudgeDismissed(true); }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss"
+            >
+              <Ionicons name="close" size={18} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* No bottom edge inset — the pink sheet must run under the home indicator */}
         <SafeAreaView style={styles.safeArea} edges={[]}>
           <ScrollView
@@ -5033,23 +5093,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </Text>
                 ) : null}
 
-                {/* Slots + bell — the computed live-availability
-                    headline/detail. The provider's old hand-typed slotsText
-                    field used to take precedence here; that field is gone and
-                    the pill is now always derived from the real schedule, so
-                    there's nothing for a provider to keep in sync by hand.
-                    Hidden entirely for a provider with no schedule published
-                    at all (state === 'unpublished') — the booking RPC rejects
-                    every booking for them, so a "notify me when slots open"
-                    bell wouldn't be true. The bell/notify-on-release-day
-                    logic is unchanged — it was never tied to this text. */}
+                {/* Slots + bell. The pill says when this provider's diary
+                    opens — "New slots drop on the 5th" — or, without a
+                    release day, "Stay updated" beside the bell that delivers
+                    their updates. See slotsPillText. */}
                 {(() => {
-                  // Headline only — the "Next free ..." detail belongs to the
-                  // date/time picker, not to a pill about when a diary opens.
-                  // resolveSlotsRow owns both which of the two sources wins
-                  // and whether the answer is available yet; see its comment
-                  // for why a provider with a release day never waits on the
-                  // availability fetch.
                   if (isLinkOnly) {
                     // In place of the availability pill: Book (their own
                     // page, opened inside CERVICED) with their socials and
@@ -5110,11 +5158,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </View>
                     );
                   }
-                  const row = resolveSlotsRow({
-                    scheduleReleaseDay: provider.scheduleReleaseDay,
-                    availability,
-                    availabilityLoading,
-                  });
+                  const pillText = slotsPillText(provider.scheduleReleaseDay);
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every
@@ -5122,7 +5166,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   // used to sit inside this block's early return and vanished
                   // whenever there was no availability headline to print.
                   const showInstagram = !!provider.instagram;
-                  if (row.kind === 'waiting') return null;
                   return (
                   // Instagram sits OUTSIDE the pill, as its own round button
                   // beside it. Inside, it read as part of the availability
@@ -5146,7 +5189,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         style={styles.slotsCardHighlight}
                       />
                       <Text style={[styles.slotsText, { color: OP.sub }]}>
-                        {row.text}
+                        {pillText}
                       </Text>
                       <TouchableOpacity
                         style={styles.bellButtonInline}
@@ -5376,6 +5419,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 >
                                   {row.value}
                                 </Text>
+                                {row.notes?.map((note) => (
+                                  <Text
+                                    key={note}
+                                    style={[styles.policyNote, { color: OP.sub }]}
+                                  >
+                                    {note}
+                                  </Text>
+                                ))}
                               </View>
                             </View>
                           ))}
@@ -5790,6 +5841,57 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     fontWeight: "600",
+  },
+  joinNudgeButtonMuted: {
+    opacity: 0.55,
+  },
+  // Floating "Want them on CERVICED? [Nudge] ✕" bar — same spot and shadow
+  // as the selection bar, fixed dark so it reads on every provider theme.
+  joinNudgeBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 999,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#26201E",
+    paddingLeft: 18,
+    paddingRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  joinNudgeBarText: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  joinNudgeBarButton: {
+    height: 42,
+    borderRadius: 21,
+    paddingHorizontal: 18,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  joinNudgeBarButtonText: {
+    color: "#26201E",
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  joinNudgeBarClose: {
+    width: 36,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   instagramButtonOutside: {
     borderRadius: 20,
@@ -6457,6 +6559,13 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     fontWeight: "700",
+  },
+  // The section's own note (and the no-show grace period) under its value.
+  policyNote: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 3,
   },
   // Floating circular button, bottom-right of the About/Policy card — opens
   // the provider's uploaded policy photo. Absolutely positioned so it stays

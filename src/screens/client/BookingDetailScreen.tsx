@@ -1280,9 +1280,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     style={[st.row, i === policyRows.length - 1 && { borderBottomWidth: 0 }]}
                   >
                     <Text style={[st.rowLabel, { color: C.sub, flex: 0.35 }]}>{row.label}</Text>
-                    <Text style={[st.rowValue, { color: C.text, flex: 0.65 }]}>
-                      {row.value}{row.tag ? `  ·  ${row.tag}` : ''}
-                    </Text>
+                    <View style={{ flex: 0.65 }}>
+                      <Text style={[st.rowValue, { color: C.text, flex: undefined }]}>
+                        {row.value}{row.tag ? `  ·  ${row.tag}` : ''}
+                      </Text>
+                      {row.notes?.map(note => (
+                        <Text key={note} style={[st.rowValue, { color: C.sub, flex: undefined, fontSize: 12, fontWeight: '400', marginTop: 3 }]}>
+                          {note}
+                        </Text>
+                      ))}
+                    </View>
                   </View>
                 ))}
               </View>
@@ -1391,6 +1398,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   )}
                 </View>
+                {!isMobile && !!booking.howToGetThere && !isAddressPending(booking.address) && (
+                  <View style={[st.row, { borderBottomWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, alignItems: 'flex-start' }]}>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>Arrival details</Text>
+                    <Text style={[st.rowValue, { color: C.text }]}>{booking.howToGetThere}</Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
