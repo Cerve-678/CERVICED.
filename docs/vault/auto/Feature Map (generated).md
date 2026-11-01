@@ -133,7 +133,7 @@ Curated: [[Booking Flow]] · **294 files**
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/booking.ts` _(103)_
-- `src/services/becca/engine.ts` _(100)_
+- `src/services/becca/engine.ts` _(101)_
 - `src/screens/provider/AddBookingScreen.tsx` _(98)_
 - `src/components/BookingSheet.tsx` _(97)_
 - `src/utils/scheduleIssues.ts` _(94)_
@@ -278,12 +278,12 @@ Curated: [[Booking Flow]] · **180 files**
 - … +150 more
 
 ## Auth
-Curated: [[Contexts]] · **188 files**
+Curated: [[Contexts]] · **189 files**
 - `src/services/databaseService.ts` _(283)_
 - `src/contexts/AuthContext.tsx` _(156)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/screens/auth/LoginScreen.tsx` _(119)_
-- `src/screens/shared/BeccaScreen.tsx` _(75)_
+- `src/screens/shared/BeccaScreen.tsx` _(76)_
 - `supabase/storage_policies.sql` _(63)_
 - `src/screens/shared/ChangeCredentialsScreen.tsx` _(54)_
 - `src/screens/client/UserProfileScreen.tsx` _(44)_
@@ -309,16 +309,16 @@ Curated: [[Contexts]] · **188 files**
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- … +158 more
+- … +159 more
 
 ## Becca / AI
 Curated: [[Services]] · **48 files**
-- `src/screens/shared/BeccaScreen.tsx` _(96)_
-- `src/services/becca/engine.ts` _(55)_
+- `src/screens/shared/BeccaScreen.tsx` _(100)_
+- `src/services/becca/engine.ts` _(59)_
 - `src/services/becca/capabilities/client.ts` _(51)_
 - `src/services/databaseService.ts` _(42)_
+- `src/services/becca/types.ts` _(35)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_
-- `src/services/becca/types.ts` _(34)_
 - `src/components/ChatComponents.tsx` _(31)_
 - `src/services/beccaStorageService.ts` _(27)_
 - `src/navigation/types.ts` _(24)_

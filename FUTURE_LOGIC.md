@@ -1556,3 +1556,95 @@ in Aesthetics.
   `search_category` from AESTHETICS to BODY in the same migration.
 - A decision on providers still stamped OTHER: offer them BODY, or leave
   them as they are.
+
+---
+
+## Add-ons and service options — what isn't handled yet (2026-10-26)
+
+### What it means
+
+A provider often has choices *inside* one service that aren't extras, for
+example "Knotless braids: Small £180 / 5h, Medium £140 / 4h, Large £110 / 3h".
+That is an **option** (the client must pick exactly one, and it changes both
+the price and the time). An **add-on** is different: an optional extra the
+client can tick any number of, for example "+ curly ends £15".
+
+### What exists today (checked against the live DB)
+
+- **Add-ons only.** `service_add_ons` (name, price, description, is_active).
+  Picked in `AddOnPickerModal`, priced into the cart by
+  `getCartItemFullPrice`, and snapshotted into `booking_add_ons` by
+  `finalize_checkout` (and `provider_create_manual_booking`), which look the
+  price up from `service_add_ons` by id, so a client can't change it. They show
+  on the booking detail, receipts and emails, and rebooking offers to carry
+  them over.
+- **No options at all.** There is no options/variants table. A provider with
+  sizes has to list each size as its own service in one category.
+- **`services.price_max` is half-built.** The column exists and is read by
+  Search's price facets, the provider's My Profile and Becca. No screen writes
+  it (0 of 65 live services have it set), the client profile ignores it, and
+  checkout always charges `price`. So if a provider ever had a range, a client
+  would be charged the bottom of it with no explanation. Not a live bug today
+  only because nothing sets it.
+  (Search's price filter uses the cheapest-to-dearest of a provider's real
+  service prices; the price band picked at sign-up, `price_tier`, is only the
+  fallback for a provider with no priced services.)
+
+### What isn't handled
+
+1. **Add-ons can't add time.** `service_add_ons` has no duration. An add-on
+   that takes 30 extra minutes doesn't lengthen the booking, so availability,
+   holds, the overlap constraint and buffers all use the base service's
+   length, and the next client can be booked into the time the add-on needs.
+   **This is the most urgent item here.**
+2. **No required choice.** Nothing can make a client pick one size/length
+   before booking.
+3. **No per-option duration.** Availability is computed from one fixed
+   `duration_minutes` per service.
+4. **Add-ons can't be changed after booking**, by either side. The only route
+   is cancel and rebook.
+5. **No per-add-on deposit or safety rules.** Deposits are worked out on the
+   whole price; an add-on can't carry its own patch-test or pregnancy flag.
+6. **`price_max` is a leftover** (above).
+
+### How it could be handled
+
+**Step 1, small and worth doing first: `service_add_ons.extra_minutes`.**
+- Add `extra_minutes INT NOT NULL DEFAULT 0 CHECK (extra_minutes BETWEEN 0 AND 480)`.
+- The provider's add-on editor (InfoReg service editor) gets a "Takes extra
+  time" picker next to the price.
+- The booking's length becomes `duration_minutes + sum(extra_minutes)` of the
+  picked add-ons, everywhere a length is computed: `AvailabilityService`
+  (slot grid, `findNextAvailableDate`, near-term checks), the hold
+  (`prepareCheckout`), `finalize_checkout`'s `end_time`, the overlap
+  constraint's `compute_booking_effective_range`, Add Booking, reschedule
+  (keeps the booking's own length), and the "Fully booked" checks.
+- Snapshot the minutes into `booking_add_ons` too, so a later edit to the
+  add-on doesn't change past bookings.
+- Picking add-ons has to happen **before** the time is chosen (or the time
+  re-checked after), because a longer booking may no longer fit the slot.
+
+**Step 2: real options, kept separate from add-ons.**
+- New table `service_options` (service_id, name, price, duration_minutes,
+  sort_order, is_active), plus `booking_option_snapshot` columns on
+  `bookings` (option id, name, price, minutes).
+- A service with options shows "from £110" and a required picker in the
+  booking sheet; the picked option's price and minutes replace the service's
+  own. Add-ons still stack on top.
+- Server-resolved like add-ons: checkout sends the option id only;
+  `finalize_checkout` looks up name/price/minutes.
+- Touches: service editor, both booking sheets, cart, checkout, holds,
+  receipts, emails, reschedule, rebook, Becca's service answers, Search's
+  price facets (use the cheapest option as `min`), the Acuity import.
+- At that point `price_max` should be dropped (options replace it), in the
+  same change.
+
+**Step 3, optional: let add-ons and options be edited on an existing
+booking** (provider-side first, since they can re-check the diary), with the
+price difference handled by the payments rules in
+`docs/PAYMENTS_AND_LOGIC.md`.
+
+### Workaround until then
+
+List each size as its own service in one category. It works with everything
+today; the cost is a longer profile.
