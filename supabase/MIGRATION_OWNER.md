@@ -62,6 +62,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261101170000 | `close_schedule_by_hand` | **UNAPPLIED, awaiting the user's OK.** Frontier at authoring: live `20261101160000`. Re-check it and open branches before applying. New private table `provider_schedule_closures` (RLS on, no policies, no grants), helpers `provider_next_release_after` and `provider_schedule_is_closed` (no app access), RPCs `close_my_schedule`, `reopen_my_schedule`, `get_my_schedule_closure`, `provider_is_taking_bookings` (authenticated). Redefines from live, one added check each, with an md5 guard that aborts if any has moved: `enforce_booking_bookability`, `get_services_open_within`, `process_follow_schedule_release_nudges`, `process_follow_openings_alerts`, `invite_next_waitlist_entry`, `expire_waitlist_holds`, `decline_waitlist_hold`. No data changes: nothing closes until a provider closes. The file records its own version. Apply **before** `feat/close-schedule` merges, or the schedule screen's banner stays hidden and every profile logs a warning. |
 
+### Applied 2026-11-01 (platform fee becomes 5% + 40p)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101150000 | `platform_fee_percentage` | **APPLIED 2026-11-01** by the user (SQL editor), PR #204. Claude's practice run was blocked by the permission check, so the first run was the real one. Verified live: version recorded, `calculate_platform_fee` gives 1.99 / 2.12 / 2.90 / 24.99 for £25 / £34.30 / £50 / £800, the new split is in `apply_checkout_platform_fee`, its trigger exists, and `authenticated` can't execute it. Frontier at authoring: `20261101140000`. Redefines `calculate_platform_fee` and `apply_checkout_platform_fee` (md5 guards against the live definitions). The file records its own version. `create-payment-intent` deployed as v21 for the PayPal limit. |
+
 ### Applied 2026-11-01 (public "How to get there" on the profile)
 
 | Authored version | Name | Status |
@@ -135,6 +141,12 @@ Frontier after: **20261025212000**. Still unapplied and now below it: `202610251
 |---|---|---|
 | 20261025130000 | `service_search_people_and_price` | **APPLIED 2026-10-25** by Claude (cerviced-16), CLI `db query --linked -f`; the file records its own version. Frontier at apply: `20261025120000` (also mine). Redefines only the `search_*` functions from 20261025120000, plus new `search_audience_words` and `search_clean_query`. Drops the 4-argument `search_services_ranked` for the new one, which adds `p_max_price` (only the unmerged PR #171 calls it). Verified live: one overload remains, eval 102/103, and an anon REST call works with `p_max_price`. |
 | 20261025120000 | `service_search` | **APPLIED 2026-10-25** by Claude (cerviced-16), Supabase CLI `db query --linked -f`, on the user's OK. The file records its own version. Frontier at apply: `20261024100000`; cerviced-3f confirmed it would renumber its unapplied `provider_booked_contact` above whatever is live when it applies. Adds `search_edit_distance`, `search_category_words`, `search_synonym_map`, `search_rewrite_query` and `search_services_ranked` (all SECURITY INVOKER, has_gone_live-gated). Redefines nothing. Verified live: the version is recorded, anon can execute, `supabase/tests/service_search_eval.sql` 91/92, and an anon REST call returns results. PR #171's app code needs this, and can merge now. |
+
+### Applied 2026-11-01 (booked-client contact details)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101160000 | `provider_booked_contact` | **APPLIED 2026-11-01** by Claude on the user's direct ask (`supabase db query --linked -f`), renumbered from 20261025220000 above live 20261101150000. Verified live: version recorded, RLS on with 1 owner policy, anon has no table or function access, `get_booked_client_contact` SECURITY DEFINER and executable by authenticated. Earlier history: The apply on 2026-10-26 was declined at the permission prompt; nothing was written. Moved from 150000 on 2026-10-29 after cerviced-74 applied 145000 and 210000–212000. Renumbered from `20261025130000` (taken by service search) and then `20261025140000` (held by #168's reschedule payout migration; moved by cerviced-a8). Frontier: `20261025212000`. Re-check `max(version)` and renumber above it if anything has landed since. Adds owner-only table `provider_booked_contact` (RLS on, owner ALL policy, anon revoked) + `get_booked_client_contact(uuid)` SECURITY DEFINER (client on that booking only, pending/confirmed/in_progress, switched-on channels only, blank → public value). Redefines nothing. The file records its own version. **Must be applied before `feat/communications-contact-edit-policy-explainers` merges**: Communications and both client Contact sheets call it. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 

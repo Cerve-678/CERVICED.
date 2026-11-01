@@ -172,7 +172,7 @@ The `payments` and `earnings` tables exist in the schema and have `stripe_paymen
 
 ### Platform fee
 
-If CERVICED takes a percentage (e.g. 10%), this is handled via Stripe Connect — each provider has a connected Stripe account, and when a payment goes through you split it automatically. This is more complex and can come after basic payments work.
+Built: see `docs/PAYMENTS_AND_LOGIC.md` section 1.3 (5% of what's charged + 40p, £1.99–£24.99, paid by the client on top of the price).
 
 ---
 
@@ -386,9 +386,9 @@ how many requests arrive.
     receipt — is a price change after agreement. It has to be visible in the
     booking sheet at the moment they accept the emergency confirmation, and
     again in the cart line.
-  - **Interacts with three existing numbers.** The tiered platform fee
-    (`features/cart/platformFee.ts`, added on top and never taken out of the
-    provider's money), the deposit (percentage or fixed — does the surcharge
+  - **Interacts with three existing numbers.** The platform fee (5% + 40p of
+    what's charged, `features/cart/platformFee.ts`, added on top and never
+    taken out of the provider's money), the deposit (percentage or fixed — does the surcharge
     count toward the deposit base?), and promo codes (can a discount apply to
     a surcharge?). Each needs an answer before implementation, not during.
   - **The provider hasn't accepted yet.** The client pays at checkout and the

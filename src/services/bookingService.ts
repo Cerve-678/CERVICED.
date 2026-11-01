@@ -15,7 +15,7 @@ import type { ProviderLocationData } from './databaseService';
 import { getMyBookings } from './databaseService';
 import { logger } from '../utils/logger';
 import { formatTime12, formatShortDate, formatDurationMinutes } from '../utils/dateUtils';
-import { calculatePlatformFee } from '../features/cart/platformFee';
+import { calculatePlatformFeePence, splitPlatformFeePence, toPence } from '../features/cart/platformFee';
 
 
 export interface DepositPolicy {
@@ -39,30 +39,6 @@ export interface PaymentInfo {
 }
 
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit
-
-/**
- * Calculate service charge for a given subtotal
- * Uses the transparent fixed-tier platform fee. Deposits are deliberately
- * excluded by the caller — that money belongs entirely to the provider.
- */
-export const calculateServiceCharge = (subtotal: number, depositOnlyServiceSubtotal = 0): number => {
-  return calculatePlatformFee(subtotal, depositOnlyServiceSubtotal);
-};
-
-/**
- * Calculate per-item service charge when multiple items share the total fee
- * Distributes the cart-level service charge proportionally by item price
- */
-export const calculatePerItemServiceCharge = (
-  itemSubtotal: number,
-  cartSubtotal: number,
-  totalServiceCharge: number
-): number => {
-  if (cartSubtotal === 0) return 0;
-  // Proportional distribution based on item's share of cart
-  const proportion = itemSubtotal / cartSubtotal;
-  return Math.round(totalServiceCharge * proportion * 100) / 100;
-};
 
 export class BookingService {
   /**
@@ -118,8 +94,10 @@ export class BookingService {
    *
    * PAYMENT LOGIC FOR MULTIPLE BOOKINGS:
    * 1. Each item has its own subtotal (base price + add-ons)
-   * 2. Service charge is calculated on the CART TOTAL, then distributed proportionally
-   * 3. Each item can independently choose full payment or deposit (20%)
+   * 2. Each item is charged either that subtotal or its deposit
+   * 3. One platform fee is calculated on the total charged, then shared across
+   *    every item by what it's charged (splitPlatformFeePence), the same split
+   *    apply_checkout_platform_fee makes
    * 4. All items are paid in ONE checkout transaction
    */
   static createAppointmentData(
@@ -130,78 +108,48 @@ export class BookingService {
   ): AppointmentData[] {
     logger.log('Creating appointment data for', items.length, 'items');
 
-    // Only services paid in full in-app contribute to a client platform fee.
-    // A provider's deposit remains exactly the provider-set amount.
-    const feeEligibleSubtotal = items.reduce((total, item) => {
-      if (bookings[item.id]?.isDepositOnly) return total;
-      const basePrice = Number(item.price) || 0;
-      const addOnsTotal = (item.addOns || []).reduce((sum: number, addOn: any) => {
-        return sum + (Number(addOn.price) || 0);
-      }, 0);
-      return total + basePrice + addOnsTotal;
-    }, 0);
-
-    const isDepositOnlyCheckout = items.length > 0 && items.every(item => !!bookings[item.id]?.isDepositOnly);
-    const feeAllocationSubtotal = feeEligibleSubtotal > 0
-      ? feeEligibleSubtotal
-      : items.reduce((total, item) => total + (Number(item.price) || 0) + (item.addOns || []).reduce((sum: number, addOn: any) => sum + (Number(addOn.price) || 0), 0), 0);
-    // A deposit-only checkout is tiered on the full service price of its items.
-    const totalServiceCharge = calculateServiceCharge(feeEligibleSubtotal, isDepositOnlyCheckout ? feeAllocationSubtotal : 0);
-
-    logger.log('Cart totals:', {
-      feeEligibleSubtotal,
-      isDepositOnlyCheckout,
-      totalServiceCharge,
-      itemCount: items.length
-    });
-
-    // Step 2: Create appointment data for each item with proportional service charge
-    return items.map(item => {
+    // What the card is charged for each item, before the fee. A provider's
+    // deposit remains exactly the provider-set amount; the fee sits on top.
+    const priced = items.map(item => {
       const booking = bookings[item.id];
-
       if (!booking) {
         logger.error('Missing booking for:', item.serviceName);
         throw new Error(`Missing booking data for ${item.serviceName}`);
       }
-
-      logger.log('Processing:', item.serviceName);
-
-      // Calculate item subtotal (base price + add-ons)
       const basePrice = Number(item.price) || 0;
       const addOnsTotal = (item.addOns || []).reduce((sum: number, addOn: any) => {
         return sum + (Number(addOn.price) || 0);
       }, 0);
       const itemSubtotal = basePrice + addOnsTotal;
+      const policy: DepositPolicy | number = booking.depositPolicy ?? DEPOSIT_PERCENTAGE;
+      const depositAmount = booking.isDepositOnly ? this.calculateDeposit(itemSubtotal, policy) : 0;
+      const charged = booking.isDepositOnly ? depositAmount : itemSubtotal;
+      return { item, booking, basePrice, addOnsTotal, itemSubtotal, depositAmount, charged };
+    });
 
-      // Proportional service charge for this item
-      const itemServiceCharge = (booking.isDepositOnly && !isDepositOnlyCheckout)
-        ? 0
-        : calculatePerItemServiceCharge(itemSubtotal, feeAllocationSubtotal, totalServiceCharge);
+    // Whole pence throughout, so the fee and its shares round like the server.
+    const chargedPence = priced.map(p => toPence(p.charged));
+    const totalServiceChargePence = calculatePlatformFeePence(chargedPence.reduce((sum, p) => sum + p, 0));
+    const sharesPence = splitPlatformFeePence(totalServiceChargePence, chargedPence);
 
+    logger.log('Cart totals:', {
+      chargedPence,
+      totalServiceChargePence,
+      itemCount: items.length
+    });
+
+    return priced.map(({ item, booking, basePrice, addOnsTotal, itemSubtotal, depositAmount, charged }, index) => {
+      logger.log('Processing:', item.serviceName);
+
+      // This item's share of the fee, by what it's charged.
+      const itemServiceCharge = (sharesPence[index] ?? 0) / 100;
+
+      const paymentType: 'full' | 'deposit' = booking.isDepositOnly ? 'deposit' : 'full';
+      const amountPaid = Math.round((charged + itemServiceCharge) * 100) / 100;
+      const remainingBalance = booking.isDepositOnly
+        ? Math.round((itemSubtotal - depositAmount) * 100) / 100
+        : 0;
       const totalWithServiceCharge = itemSubtotal + itemServiceCharge;
-
-      // Determine payment type and amounts
-      let paymentType: 'full' | 'deposit';
-      let amountPaid: number;
-      let depositAmount: number;
-      let remainingBalance: number;
-
-      if (booking.isDepositOnly) {
-        // Deposit payment — use provider's actual policy if available, otherwise default 20%
-        paymentType = 'deposit';
-        const policy: DepositPolicy | number = booking.depositPolicy ?? DEPOSIT_PERCENTAGE;
-        // Deposit is calculated from the provider's service price only. Any
-        // checkout platform fee is separate, never part of that deposit.
-        depositAmount = this.calculateDeposit(itemSubtotal, policy);
-        amountPaid = depositAmount + itemServiceCharge;
-        remainingBalance = Math.round((itemSubtotal - depositAmount) * 100) / 100;
-      } else {
-        // Full payment
-        paymentType = 'full';
-        amountPaid = totalWithServiceCharge;
-        depositAmount = 0;
-        remainingBalance = 0;
-      }
 
       logger.log(`Payment calculation for ${item.serviceName}:`, {
         basePrice,

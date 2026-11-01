@@ -14,7 +14,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { FEE_TERMS_BODY, FEE_TERMS_HEADING } from '../../constants/feeTerms';
 
 // The Terms & Conditions shown to clients and providers. Rewritten 2026-10-19
-// at the product owner's direction to cover what's live on main (service fee,
+// at the product owner's direction to cover what's live on main (platform fee,
 // refunds, payouts, provider websites shown in the app, health information,
 // Becca, points, account deletion) and the standard topics in comparable
 // platforms' terms (Fresha, Treatwell, Uber, Pinterest, Squarespace/Acuity),
@@ -32,7 +32,7 @@ const SECTIONS = [
   },
   {
     heading: '2. Key Words Used in These Terms',
-    body: '"Booking" means an appointment you request or make with a provider through the app. "Service fee" means the fee Cerviced charges clients for bookings paid in the app. "Own booking page" means a provider\'s booking website outside Cerviced, such as Fresha or Treatwell. "Content" means anything posted in the app, including photos, reviews, profile text and messages.',
+    body: '"Booking" means an appointment you request or make with a provider through the app. "Platform fee" means the fee Cerviced charges clients for bookings paid in the app. "Own booking page" means a provider\'s booking website outside Cerviced, such as Fresha or Treatwell. "Content" means anything posted in the app, including photos, reviews, profile text and messages.',
   },
   {
     heading: '3. Who Can Use Cerviced',
@@ -80,7 +80,7 @@ const SECTIONS = [
   {
     heading: '9. Prices and Payment',
     body: [
-      'Prices are in pounds sterling and are set by each provider. The total you pay in the app, including any deposit and Cerviced\'s service fee, is shown before you pay.',
+      'Prices are in pounds sterling and are set by each provider. The total you pay in the app, including any deposit and Cerviced\'s platform fee, is shown before you pay.',
       'You can pay in the app by card, Apple Pay, Google Pay or PayPal. Payments are processed securely by Stripe, and Cerviced never sees or stores your full card number or your PayPal login. Stripe\'s own terms also apply, and PayPal\'s terms apply when you pay with PayPal. If a provider has a late arrival or no-show fee, that booking is paid by card, because the fee may be charged to it after the appointment. If a provider asks you to save your card for an agreed fee, Stripe stores it, not us.',
       'If a price is clearly wrong because of a mistake, for example a treatment listed at a fraction of its usual price, we or the provider may cancel the booking and refund you in full.',
       'After a completed appointment you can choose to tip the provider in the app, for up to 48 hours after the appointment ends. A tip is optional and is a separate card payment. All of it goes to the provider: Cerviced keeps none of it and covers the card processing fee. Tips can\'t be refunded, so check the amount before you pay.',
@@ -88,10 +88,10 @@ const SECTIONS = [
     ].join('\n\n'),
   },
   {
-    heading: '10. Cerviced Service Fee',
+    heading: '10. Cerviced Platform Fee',
     body: [
-      'Cerviced adds a service fee to each booking you pay for in the app. The fee is shown before you pay. It is charged to you and is never taken from the provider\'s price.',
-      'If your booking is refunded in full, for example because the provider declined or cancelled it, or you cancelled early enough under their policy, the service fee is refunded too. If you get a partial refund, the service fee is not refunded.',
+      'Cerviced adds a platform fee to each booking you pay for in the app. The fee is shown before you pay. It is charged to you and is never taken from the provider\'s price.',
+      'If your booking is refunded in full, for example because the provider declined or cancelled it, or you cancelled early enough under their policy, the platform fee is refunded too. If you get a partial refund, the platform fee is not refunded.',
     ].join('\n\n'),
   },
   {
@@ -105,13 +105,13 @@ const SECTIONS = [
   {
     heading: '13. Cancellations by You',
     body: [
-      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest. If you ask to reschedule once their notice period has already started, their policy still applies if you later cancel the new date, as if you\'d cancelled on the original one. That stays with the booking if you reschedule it again, but not if the provider suggests the new time. We\'ll tell you before you ask.',
+      'Each provider sets their own cancellation policy, which is shown on their profile and before you book. If you cancel a booking you paid for in the app, the provider\'s policy is applied automatically. If you cancel before their notice period, you get a full refund. If you cancel inside it, the provider keeps the share their policy states and you\'re refunded the rest. The most they can keep is your deposit, if a deposit is what you paid, or half the service price, if you paid in full. If you ask to reschedule once their notice period has already started, their policy still applies if you later cancel the new date, as if you\'d cancelled on the original one. That stays with the booking if you reschedule it again, but not if the provider suggests the new time. We\'ll tell you before you ask.',
       'Cancelling late or missing appointments is recorded, and the provider you booked with can see how often this has happened with them.',
     ].join('\n\n'),
   },
   {
     heading: '14. Cancellations by the Provider',
-    body: 'If a provider declines or cancels a booking you\'ve paid for, you\'re refunded in full, including the service fee. We\'ll let you know, and you\'re free to book with someone else.',
+    body: 'If a provider declines or cancels a booking you\'ve paid for, you\'re refunded in full, including the platform fee. We\'ll let you know, and you\'re free to book with someone else.',
   },
   {
     heading: '15. Refunds and Refund Requests',
@@ -216,8 +216,8 @@ const SECTIONS = [
     heading: '31. For Providers',
     body: [
       'Your business. You run your own independent business and aren\'t employed by Cerviced. You\'re responsible for your services and any licences, qualifications and insurance they need, for following the law (including health and safety, consumer law and minimum-age rules), and for keeping your profile, prices, opening hours and policies accurate.',
-      'Bookings and policies. You must honour bookings you accept, at the price and on the terms shown when the client booked. If you can\'t, cancel as early as you can; the client will be refunded in full. Your cancellation, deposit, late arrival and no-show policies must be fair, and must be shown on your profile before clients book.',
-      'Payments and payouts. To take payments in the app you need a Stripe account, and Stripe\'s terms apply to it. Clients pay Cerviced\'s service fee on top of your price, so it\'s never taken from what you earn. After each appointment, your share is held for the payout period you choose in Payment settings, then sent to your Stripe account. Stripe then pays your bank on its own schedule. A payout is held while a client\'s refund request is open. You have 3 days to refund a request or pass it to Cerviced; after that it comes to us to review. If money is refunded or reversed after you\'ve been paid, for example a refund or a bank chargeback, it\'s taken back from your Stripe balance or from your next payout. For late arrival and no-show fees, Cerviced takes no cut, but Stripe\'s card fee comes out of your share. Tips clients leave in the app are yours in full: Cerviced takes no cut and covers the card processing fee. A tip is paid out to you 24 hours after the client pays, whatever payout period you\'ve chosen. Clients can tip for up to 48 hours after the appointment, and tips can\'t be refunded.',
+      'Bookings and policies. You must honour bookings you accept, at the price and on the terms shown when the client booked. If you can\'t, cancel as early as you can; the client will be refunded in full. Your cancellation, deposit, late arrival and no-show policies must be fair, and must be shown on your profile before clients book. If a client cancels late, the most you can keep under your policy is the deposit, if that\'s what they paid, or half the service price, if they paid in full.',
+      'Payments and payouts. To take payments in the app you need a Stripe account, and Stripe\'s terms apply to it. Clients pay Cerviced\'s platform fee on top of your price, so it\'s never taken from what you earn. After each appointment, your share is held for the payout period you choose in Payment settings, then sent to your Stripe account. Stripe then pays your bank on its own schedule. A payout is held while a client\'s refund request is open. You have 3 days to refund a request or pass it to Cerviced; after that it comes to us to review. If money is refunded or reversed after you\'ve been paid, for example a refund or a bank chargeback, it\'s taken back from your Stripe balance or from your next payout. For late arrival and no-show fees, Cerviced takes no cut, but Stripe\'s card fee comes out of your share. Tips clients leave in the app are yours in full: Cerviced takes no cut and covers the card processing fee. A tip is paid out to you 24 hours after the client pays, whatever payout period you\'ve chosen. Clients can tip for up to 48 hours after the appointment, and tips can\'t be refunded.',
       'Taxes. You\'re responsible for your own tax, including any VAT, on the money you earn.',
       'Your clients\' information. Use the details clients share with you, including any health information, only for their bookings. Keep them secure and confidential, and follow data protection law. Don\'t add clients to marketing lists unless they\'ve agreed.',
       'Your own booking link. If you take bookings on your own booking page, you\'re responsible for that page, its terms and the bookings, payments and data handled there. Your booking link must lead to your own genuine booking page, and you must keep it up to date.',
@@ -278,7 +278,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 31 October 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 1 November 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>

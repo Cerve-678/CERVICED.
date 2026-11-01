@@ -727,6 +727,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { user, myBookingMode } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [providerSlug, setProviderSlug] = useState<string | null>(null);
   const [services, setServices] = useState<DbService[]>([]);
   // The catalogue loads after the top of the page, so the hero's Services
   // count reads "—" until it lands rather than claiming 0 and then jumping.
@@ -842,6 +843,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           setProviderData(providerRowToRegistrationData(profile));
           setIsLoading(false);
           setProviderId(profile.id);
+          setProviderSlug(profile.slug);
           setReviewCount(profile.review_count ?? 0);
 
           // First wave: what's on screen when the page opens. The go-live
@@ -2292,10 +2294,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             </View>
           </View>
         </ScrollView>
-        {providerId ? (
+        {providerSlug ? (
           <ProviderProfileQrSheet
             visible={profileQrVisible}
-            providerId={providerId}
+            providerSlug={providerSlug}
             providerName={providerData.providerName || 'your business'}
             accentColor={accentColor}
             backgroundColor={PP.card}
