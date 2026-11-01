@@ -5,7 +5,7 @@ import { join } from 'path';
 // them. Each one protects something a passing app-side test wouldn't notice:
 // the booking gate is the only thing that actually stops a booking.
 const MIGRATION = readFileSync(
-  join(__dirname, '../../supabase/migrations/20261101160000_close_schedule_by_hand.sql'),
+  join(__dirname, '../../supabase/migrations/20261101170000_close_schedule_by_hand.sql'),
   'utf8',
 );
 const fnBody = (name: string): string => {

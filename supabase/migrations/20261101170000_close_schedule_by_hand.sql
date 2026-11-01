@@ -38,7 +38,7 @@
 -- A slot freed while closed isn't offered to the waitlist on reopening: it is
 -- simply bookable. Waitlist entries stay as they were, ready for the next slot.
 --
--- Frontier at authoring: live 20261101150000. Re-check it and open branches
+-- Frontier at authoring: live 20261101160000 (provider_booked_contact). Re-check it and open branches
 -- before applying. The guard below aborts if any of the seven has changed since
 -- this was written.
 
@@ -952,7 +952,7 @@ GRANT EXECUTE ON FUNCTION public.get_my_schedule_closure() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.provider_is_taking_bookings(uuid) TO authenticated;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261101160000', 'close_schedule_by_hand')
+VALUES ('20261101170000', 'close_schedule_by_hand')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

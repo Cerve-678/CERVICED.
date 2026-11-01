@@ -343,7 +343,7 @@ on (15-minute holds, next person, then anyone), otherwise anyone can book it
 straight away. `WAITLIST.md` has that path, which has barely run live.
 
 **Closed by hand** (`provider_schedule_closures`, migration
-`20261101160000_close_schedule_by_hand.sql`, UI in
+`20261101170000_close_schedule_by_hand.sql`, UI in
 `src/features/providers/CloseScheduleSection.tsx` on the schedule screen). The
 provider's choice, at any time, even with free slots:
 - Clients can't make a new booking; the server refuses it in
