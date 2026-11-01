@@ -882,9 +882,8 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
-| 12 | **A confirmation email for a booking paid in full says it hasn't been paid.** The email checks for `paid_in_full`, but the database stores `fully_paid`, so it reads "Awaiting payment", "Total paid £0.00" and the full amount as due to the provider. Deposit emails are right. The email's test uses the wrong value, so it never failed | Clients are told they still owe money they've paid | Fix `bookingConfirmationEmail` and its test, then deploy `send-booking-confirmation` |
-| 13 | **No receipt shows a whole checkout.** Each booking has its own, while the bank shows one payment | A client with several bookings has to add them up to match their statement | Not decided. Say "Part of a £142.15 payment for 3 bookings" on the receipt, or add a combined receipt |
-| 14 | **A deposit receipt doesn't state what the card was charged.** It lists the deposit and the fee separately, never the sum (£63.13 in section 1.3.2) | The receipt doesn't match the statement | Not decided. Add a "Charged to your card" line |
+| 12 | **No receipt shows a whole checkout.** Each booking has its own, while the bank shows one payment | A client with several bookings has to add them up to match their statement | Not decided. Say "Part of a £142.15 payment for 3 bookings" on the receipt, or add a combined receipt |
+| 13 | **A deposit receipt doesn't state what the card was charged.** It lists the deposit and the fee separately, never the sum (£63.13 in section 1.3.2) | The receipt doesn't match the statement | Not decided. Add a "Charged to your card" line |
 
 ---
 
