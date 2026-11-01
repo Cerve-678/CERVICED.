@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native';
 import SearchScreen from '../screens/client/SearchScreen';
-import { getProviders, searchProvidersAndServices } from '../services/databaseService';
+import { getProviders, getProvidersAvailability, searchProvidersAndServices } from '../services/databaseService';
 
 jest.mock('react-native-worklets', () => require('react-native-worklets/lib/module/mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -117,6 +117,28 @@ describe('Search tab switching under races', () => {
     await waitFor(() => expect(screen.getAllByText('Salon nails-one').length).toBeGreaterThan(0));
     fireEvent.press(screen.getByText('Nails'));
     await waitFor(() => expect(screen.getAllByText('Salon all-one').length).toBeGreaterThan(0));
+  });
+});
+
+describe('Search service cards', () => {
+  it('shows the provider\'s availability tag on their service card too', async () => {
+    (getProvidersAvailability as jest.Mock).mockImplementation(async () => new Map([['nails-studio', { status: 'available' }]]));
+    (searchProvidersAndServices as jest.Mock).mockImplementation(async () => ({
+      providers: [provider('nails-studio', 'NAILS')],
+      services: [{
+        serviceId: 'svc-1', providerId: 'id-nails-studio', providerSlug: 'nails-studio',
+        providerName: 'Salon nails-studio', providerLogoUrl: null, providerLocation: 'London',
+        isLinkOnly: false, name: 'Classic French', description: null,
+        menuHeading: null, category: 'NAILS', price: 30, priceMax: null,
+        durationMinutes: 60, rank: 1,
+      }],
+      correctedQuery: null,
+    }));
+    render(<SearchScreen route={{ params: { initialQuery: 'french' } } as never} navigation={{ navigate: jest.fn(), setOptions: jest.fn(), goBack: jest.fn() } as never} />);
+
+    // One on the provider card, one on the service card.
+    await waitFor(() => expect(screen.getAllByText('Slots Available')).toHaveLength(2), { timeout: 2000 });
+    (getProvidersAvailability as jest.Mock).mockImplementation(async () => new Map());
   });
 });
 

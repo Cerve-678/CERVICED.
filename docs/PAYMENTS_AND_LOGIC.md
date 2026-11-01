@@ -6,7 +6,7 @@ what providers receive, when, and what happens when something goes wrong.
 | | |
 |---|---|
 | **Who this is for** | Everyone who handles money questions: support, operations, finance, engineering |
-| **Status as of** | 30 October 2026, checked against the live database and the code on `main` |
+| **Status as of** | 1 November 2026, checked against the live database and the code on `main` |
 | **Stripe mode** | **TEST.** No real money has moved yet. Going live is a key switch (Part 6) |
 | **Owner** | The founder, until a payments owner is hired |
 | **Rule** | Any change to money logic updates this file **in the same pull request**. A PR that changes fees, holds, payouts, refunds, disputes, deposits, tips or debts without updating this handbook isn't done |
@@ -42,7 +42,7 @@ money moves.
 CERVICED is a marketplace. A client books and pays a beauty or wellness
 provider through the app. **CERVICED takes the client's payment, holds the
 provider's share for a short time, then sends it to the provider.** CERVICED
-earns a small service fee, which the client pays on top of the price.
+earns a small platform fee, which the client pays on top of the price.
 
 All money goes through **Stripe**:
 
@@ -57,27 +57,51 @@ CERVICED never sees or stores card numbers.
 
 | Who | Pays | Receives |
 |---|---|---|
-| Client | The service price (or a deposit) **plus** CERVICED's service fee | Refunds, when they're owed |
+| Client | The service price (or a deposit) **plus** CERVICED's platform fee | Refunds, when they're owed |
 | Provider | Nothing to CERVICED. Stripe's card fee comes out of late/no-show fees only | The service price (or deposit), late/no-show fees, the whole of every tip |
-| CERVICED | Stripe's processing costs on bookings and tips, and any losses it can't recover | The service fee |
+| CERVICED | Stripe's processing costs on bookings and tips, and any losses it can't recover | The platform fee |
 
-The provider never pays the service fee and never sees it.
+The provider never pays the platform fee and never sees it.
 
-### 1.3 The service fee
+### 1.3 The platform fee
 
-There's one fee per checkout, based on the value of what's being paid in full:
+There's one fee per checkout: **5% of what the card is charged, plus 40p, at
+least £1.99 and at most £24.99.**
 
-| Value of the booking(s) | Fee |
-|---|---|
-| Under £100 | £1.99 |
-| £100 to £300 | £3.99 |
-| Over £300 | £5.99 |
+"What the card is charged" means the in-app amount before the fee: the full
+price for a service paid in full, and the **deposit** for a deposit service.
+What the client later pays the provider in person never counts.
 
-- **Deposit-only checkout:** the fee is based on the services' **full
-  price**, not the deposit. A £30 deposit on a £100 service pays £3.99.
-- **Mixed basket** (some services paid in full, some by deposit): the fee is
-  based on the pay-in-full services only and spread across them.
+| Booking | Charged in the app | Fee | Client pays |
+|---|---|---|---|
+| £25 brow lamination | £25 | £1.99 (the minimum) | £26.99 |
+| £50 gel nails | £50 | £2.90 | £52.90 |
+| £150 colour and cut | £150 | £7.90 | £157.90 |
+| £400 bridal, paid in full | £400 | £20.40 | £420.40 |
+| £400 bridal, £80 deposit | £80 | £4.40 | £84.40 (+ £320 in person) |
+| £800 bridal party | £800 | £24.99 (the maximum) | £824.99 |
+
+- **Several bookings in one checkout:** one fee on the total charged, shared
+  across every booking by what each is charged. That share is each booking's
+  `service_charge`, which refunds and payouts read.
+- **Why this shape:** Stripe's card fee (~1.5% + 20p), PayPal through Stripe
+  (~3.1% + 40p, not returned on refunds) and the payout to the provider's bank
+  (~0.25% + 10p) all grow with the amount, so a flat fee lost money on larger
+  bookings. The fee always covers those costs on card, and on PayPal up to the
+  £600 PayPal limit (section 2.1).
+- The UK bans charging more for a payment method (PayPal included), so the
+  fee is the same whichever way the client pays.
 - CERVICED takes **no cut** of late/no-show fees or tips.
+
+**Status:** live since 1 November 2026 (migration
+`20261101150000_platform_fee_percentage`, `create-payment-intent` v21). The app
+needs a new build to show it: older builds' cart screens still show the old
+£1.99 / £3.99 / £5.99 before payment, though the payment sheet always shows
+the amount actually charged. **Legal flag:** Terms §10 names no amount (the fee is shown before
+paying), says the fee is added "to each booking" though it's now one fee per
+checkout shared across bookings, and §6 lists PayPal without the £600 limit.
+Whether any of that needs rewording is for the user and a solicitor
+(LEGAL-COMPLIANCE-NOTES §22), not settled here.
 
 ### 1.4 The life of one booking's money (worked example)
 
@@ -87,12 +111,12 @@ the default, 24 hours.
 | When | What happens | Money |
 |---|---|---|
 | Checkout | Amy's slot is held for 10 minutes while she pays | — |
-| Amy pays | Her card is authorised, then captured | Amy pays **£61.99** (£60 + £1.99 fee) |
+| Amy pays | Her card is authorised, then captured | Amy pays **£63.40** (£60 + £3.40 fee) |
 | Booking confirmed | A **held payout** is created for Jo | CERVICED holds £60 |
 | The appointment ends, Tue 3pm | The hold clock starts | — |
 | Wed 3pm (+24h) | The payout job sends Jo's share to her Stripe account | Jo receives **£60** in Stripe |
 | A few working days later | Stripe pays Jo's bank | £60 in Jo's bank |
-| — | CERVICED keeps the fee | CERVICED earns **£1.99** |
+| — | CERVICED keeps the fee | CERVICED earns **£3.40**, and pays Stripe's costs out of it (about £1.40 on a UK card, card fee plus payout) |
 
 If anything changes before Wed 3pm (a cancellation, a refund request, a
 reschedule), CERVICED still holds the money, so it's easy to put right. After
@@ -132,8 +156,13 @@ that, putting it right means taking money back from Jo (section 2.8).
 4. **Pay.** Payment methods offered:
    - Card, Apple Pay and Google Pay: always.
    - PayPal: only when no late/no-show fees apply, because a fee needs a saved
-     card to charge later. PayPal is in **test mode** and needs a new app
-     build. Real PayPal money also needs Stripe's marketplace approval.
+     card to charge later, **and the checkout total (fee included) is £600 or
+     less**, because above that PayPal's cost is more than the capped fee
+     (`PAYPAL_MAX_CHECKOUT_PENCE` in `create-payment-intent`; the app hides
+     the button by the same limit). PayPal is in **test mode** and needs a new
+     app build. Real PayPal money also needs Stripe's marketplace approval.
+     **Legal flag:** limiting a payment method by amount is not a surcharge,
+     but confirm it with the solicitor along with the fee.
 5. **Late/no-show fee agreement.** If the provider has these fees, the client
    must tick to agree before paying. The agreement is stored (section 2.5)
    and the card is saved for a possible later charge.
@@ -253,17 +282,24 @@ Pay or PayPal.
   the booking, and a later move the provider proposes clears the mark. Only
   bookings made after the rule went live are covered
   (`late_reschedule_rule_starts_at()`, fixed when the migration ran). Client
-  Terms §13 says so. *Live once migration
-  `20261101130000` is applied and `apply-cancellation-refund` redeployed.*
+  Terms §13 says so. *Live since 1 November (migration `20261101130000`,
+  `apply-cancellation-refund` v8). The warnings need the next app build.*
 - When a late cancellation keeps money, both sides are told: the provider
   ("You kept the £20 deposit…") and the client ("£40 refunded…").
 - **PayPal:** the same rules apply. Stripe allows PayPal refunds up to 180
   days after payment.
 
-**Worked example.** Amy pays £61.99 for a £60 service whose deposit is set at
+**Worked example.** Amy pays £63.40 for a £60 service whose deposit is set at
 £20, then cancels 3 hours before. Jo's policy is a 24-hour window, keep the
-deposit. Jo keeps £20 (sent straight away), CERVICED keeps £1.99, and Amy
+deposit. Jo keeps £20 (sent straight away), CERVICED keeps £3.40, and Amy
 gets £40 back.
+
+**The fee on a cancellation works like Uber's:** the client gets it back when
+the provider cancels or declines, or when the client cancels early or the
+policy is "no charge"; CERVICED keeps it on a late cancellation that keeps
+money, or a no-show. Stripe and PayPal keep their processing fee on every
+refund, so a refunded booking costs CERVICED that processing fee (about £0.99
+by card or £2.04 by PayPal on a £50 booking).
 
 **Where the provider's money comes from in a refund:**
 
@@ -307,8 +343,8 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
   `passed_automatically`, and both sides are told why. The hourly job is
   `refund-request-deadlines` → `process_refund_request_deadlines()`. The
   first notice, the email, the booking's timeline and both sets of Terms say
-  so (decided 31 October). *Live once migration `20261101130100` is applied;
-  the email wording needs `send-support-request` redeployed.*
+  so (decided 31 October). *Live since 1 November (migration `20261101130100`,
+  `send-support-request` v15). The timeline wording needs the next app build.*
 - An automatically passed request has no provider note. Treat it in R3 like
   any other, and contact the provider for their side if it matters.
 
@@ -361,7 +397,7 @@ a penalty (LEGAL-COMPLIANCE-NOTES §17).
 | The provider receives | The **whole tip**, held 24 hours (not their chosen payout hold), then sent |
 | CERVICED | Takes nothing, and **pays Stripe's card fee** on the tip (about 1.5% + 20p on a UK card). The fee is recorded in `booking_tips.stripe_fee_pence` for CERVICED's books |
 | Refunds | **Non-refundable.** The client Terms and the tip sheet say so, and no refund path touches `booking_tips` |
-| Tip notice | The database writes a `tip_received` notification (trigger `on_booking_tip_succeeded`, live). The app can't show or push it until PR #163 merges and `send-push-notification` is redeployed |
+| Tip notice | The database writes a `tip_received` notification (trigger `on_booking_tip_succeeded`, live). Merged in PR #163; the app shows it from the next build |
 
 - **Changing the amount** before paying updates or replaces the open payment,
   so an old payment sheet can never charge the old amount.
@@ -372,8 +408,7 @@ a penalty (LEGAL-COMPLIANCE-NOTES §17).
 
 **Gaps:** a client can still dispute a tip with their bank. A chargeback
 after the payout lands on CERVICED and isn't taken back from the provider. A
-disputed tip still on hold is skipped rather than marked reversed. Providers
-can't see a list of their tips in the app yet (PR #159).
+disputed tip still on hold is skipped rather than marked reversed.
 
 ### 2.7 Chargebacks (bank disputes)
 
@@ -530,7 +565,7 @@ rows before they can use the Money screen. Every admin action (retry, approve, d
    released on the next run.
 
 **There's no written refund policy for these decisions yet** (Part 6, item
-10). Until there is, take any case you're unsure about to the founder rather
+8). Until there is, take any case you're unsure about to the founder rather
 than deciding it alone. **Legal flag:** consumer-rights law may override a
 provider's own policy, so the policy needs a solicitor's input.
 
@@ -538,9 +573,10 @@ provider's own policy, so the policy needs a solicitor's input.
 
 1. Open the booking. Compare the service price, the fee and what Stripe says
    was captured.
-2. The fee follows the tiers in section 1.3, and deposits are tiered on the
-   full price. Most "wrong amount" reports turn out to be the fee or the
-   deposit.
+2. The fee follows section 1.3: 5% of what was charged in the app + 40p,
+   between £1.99 and £24.99, and a deposit counts as the deposit, not the
+   full price. A checkout prepared before the change used the old tiers.
+   Most "wrong amount" reports turn out to be the fee or the deposit.
 3. If it's genuinely wrong, the provider (or an admin, through a refund
    request) refunds the difference as a partial refund. Escalate to
    engineering: the server should never charge a wrong amount (Part 3,
@@ -732,7 +768,7 @@ constraint **from the live list**, never from a copied one.
 |---|---|---|
 | `STRIPE_SECRET_KEY` | Edge Function secrets | **Test** key |
 | `STRIPE_WEBHOOK_SECRET` | Edge Function secrets | The platform endpoint's secret |
-| `STRIPE_CONNECT_WEBHOOK_SECRET` | Edge Function secrets | **Not set** (Part 6) |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Edge Function secrets | Set 1 November: signs the "Connected accounts" webhook destination (`account.updated`, `payout.failed`) |
 | `RESEND_API_KEY` | Edge Function secrets | Sends email (alerts, summaries, receipts) |
 | `service_role_key` | Supabase Vault | Lets cron call the functions |
 | `STRIPE_CONNECT_PAYOUTS_ENABLED` | `src/constants/featureFlags.ts` | `true` (build-time) |
@@ -768,16 +804,14 @@ Ranked, most important first.
 | 1 | **Stripe is in test mode.** No real money has moved | Launch blocker | Switch one project to live keys (PRE-LAUNCH-TODO §24), after the items below |
 | 2 | **Only one admin** (the owner, added 31 October) | If they're away, nobody can retry payouts or answer refund requests | Add a second admin before launch (runbook R10) |
 | 3 | **Legal flag:** holding provider money for up to 30 days isn't covered in the Terms, and Stripe may limit how long a platform can delay transfers | A possible breach of Stripe's terms or consumer law | Ask a solicitor and Stripe before the 14- and 30-day options are used with real money |
-| 4 | **Rescheduling can dodge a late-cancel charge.** A client already inside the cancellation window can reschedule (a separate, often looser setting), then cancel the new date for a full refund | The provider loses money they're owed | Built on `feat/late-reschedule-keeps-cancel-charge` (section 2.3). Apply migration `20261101130000`, then deploy `apply-cancellation-refund` |
-| 5 | **Events from providers' Stripe accounts may not arrive** (`STRIPE_CONNECT_WEBHOOK_SECRET` isn't set) | Bank payout failures and account status changes aren't pushed to the app. A provider's status only refreshes when they open Payments | Set up a Connect webhook endpoint in Stripe and add the secret |
-| 6 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
-| 7 | **Refund requests: the 3-day deadline isn't live yet** | Until it is, a request can sit with the provider indefinitely | Built on `feat/refund-request-reply-deadline`. Apply migration `20261101130100`, deploy `send-support-request`, merge |
-| 8 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
-| 9 | **Tip chargebacks land on CERVICED**, and providers can't see their tips in the app (PR #159) | Small losses; provider confusion | Decide whether to take a lost tip dispute back from the provider; merge #159 |
-| 10 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |
-| 11 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
-| 12 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
-| 13 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
+| 4 | **Legal flag:** the late-cancel charge (the whole deposit, or up to half the price) now also follows a late reschedule, and the 3-day and 5-working-day refund promises are new. None of this has been lawyer-reviewed | The charge could be challenged as unfair under consumer law | Ask a solicitor before live money (LEGAL-COMPLIANCE-NOTES) |
+| 5 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
+| 6 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
+| 7 | **Tip chargebacks land on CERVICED** | Small losses | Decide whether to take a lost tip dispute back from the provider |
+| 8 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |
+| 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
+| 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
+| 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
 
 ---
 
@@ -806,6 +840,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 

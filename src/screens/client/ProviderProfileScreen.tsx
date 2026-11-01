@@ -5846,7 +5846,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   // Floating "Want them on CERVICED? [Nudge] ✕" bar — same spot and shadow
-  // as the selection bar, fixed dark so it reads on every provider theme.
+  // as the selection bar, fixed near-black so it reads on every provider theme.
   joinNudgeBar: {
     position: "absolute",
     left: 16,
@@ -5854,7 +5854,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
     height: 58,
     borderRadius: 29,
-    backgroundColor: "#26201E",
+    backgroundColor: "#050505",
     paddingLeft: 18,
     paddingRight: 8,
     flexDirection: "row",
@@ -5862,14 +5862,14 @@ const styles = StyleSheet.create({
     gap: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.34,
     shadowRadius: 12,
     elevation: 8,
   },
   joinNudgeBarText: {
     flex: 1,
     color: "#FFFFFF",
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -5883,7 +5883,7 @@ const styles = StyleSheet.create({
   },
   joinNudgeBarButtonText: {
     color: "#26201E",
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     fontWeight: "700",
   },

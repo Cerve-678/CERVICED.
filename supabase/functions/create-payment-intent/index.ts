@@ -16,6 +16,13 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   httpClient: Stripe.createFetchHttpClient(),
 });
 
+// Above this checkout total (fee included) PayPal isn't offered. PayPal costs
+// CERVICED about 3.1% + 40p, and with the fee capped at £24.99 a larger PayPal
+// payment loses money. Card, Apple Pay and Google Pay are always offered.
+// The payment sheet hides its PayPal button by the same limit
+// (PAYPAL_MAX_CHECKOUT_TOTAL in src/features/cart/platformFee.ts).
+const PAYPAL_MAX_CHECKOUT_PENCE = 60000;
+
 interface RequestBody {
   checkoutBatchId: string;
   currency?: string;
@@ -131,10 +138,11 @@ Deno.serve(async (req: Request) => {
       currency: batch.currency,
       customer: customerId,
       metadata: { user_id: user.id, checkout_batch_id: batch.id },
-      // PayPal only when nothing has to be saved for later: a late/no-show fee
-      // is charged off-session by booking-fee, which charges cards only.
+      // PayPal only when nothing has to be saved for later (a late/no-show fee
+      // is charged off-session by booking-fee, which charges cards only) and
+      // the total is within PAYPAL_MAX_CHECKOUT_PENCE.
       // Apple Pay and Google Pay ride on 'card'.
-      payment_method_types: hasFees ? ['card'] : ['card', 'paypal'],
+      payment_method_types: hasFees || amountInPence > PAYPAL_MAX_CHECKOUT_PENCE ? ['card'] : ['card', 'paypal'],
       ...(hasFees ? { setup_future_usage: 'off_session' as const } : {}),
       // The sheet authorises only. Server settlement captures, then confirms
       // the reserved bookings; signed webhooks recover interrupted requests

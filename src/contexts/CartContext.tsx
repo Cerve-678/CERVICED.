@@ -6,7 +6,6 @@ import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
 import type { EmergencyReason } from '../services/AvailabilityService';
-import { calculatePlatformFee } from '../features/cart/platformFee';
 
 /**
  * Resolve a cart item to a real provider UUID: carried providerId → slug lookup
@@ -139,8 +138,6 @@ export interface CartContextType {
   isItemInCart: (providerName: string, serviceId: string, selectedOptions?: Record<string, any>) => boolean;
   getItemQuantity: (providerName: string, serviceId: string, selectedOptions?: Record<string, any>) => number;
   getTotalServiceInstances: () => number;
-  getServiceFee: () => number;
-  getFinalTotal: () => number;
   getBookingSummary: () => BookingSummary;
 }
 
@@ -680,14 +677,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return Object.keys(serviceGroups).length;
   }, [state.items]);
 
-  const getServiceFee = useCallback(() => {
-    return calculatePlatformFee(memoizedTotals.totalPrice);
-  }, [memoizedTotals.totalPrice]);
-
-  const getFinalTotal = useCallback(() => {
-    return memoizedTotals.totalPrice + getServiceFee();
-  }, [memoizedTotals.totalPrice, getServiceFee]);
-
   const getBookingSummary = useCallback((): BookingSummary => {
     const summary: BookingSummary = {
       totalProviders: Object.keys(itemsByProvider).length,
@@ -754,8 +743,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isItemInCart,
     getItemQuantity,
     getTotalServiceInstances,
-    getServiceFee,
-    getFinalTotal,
     getBookingSummary
   }), [
     state.items,
@@ -776,8 +763,6 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isItemInCart,
     getItemQuantity,
     getTotalServiceInstances,
-    getServiceFee,
-    getFinalTotal,
     getBookingSummary
   ]);
 

@@ -19,11 +19,48 @@ Neither was a git problem. Both sessions wrote correct SQL.
 
 ---
 
+## How to apply one safely
+
+Run through this right before applying, not just when writing:
+
+1. **Lock.** Read `OWNER` below, on main *and* on any open PR branch that
+   touches this file. If someone holds it, ask them (ListAgents) first.
+2. **Number above both frontiers.** Above live `max(version)` in
+   `supabase_migrations.schema_migrations` *and* above every unapplied
+   migration on an open PR branch. Re-check at apply time: other tools
+   (ChatGPT, the main folder) apply too. On 2026-11-01 one landed at
+   `20261101115322` between three files being written and applied.
+3. **Redefine from live, never from a repo file.** Copy
+   `pg_get_functiondef` / `pg_get_viewdef` and add an md5 guard that
+   `RAISE`s if live changed. `CREATE OR REPLACE` overwrites a newer version
+   silently.
+4. **`client_bookings`** is rebuilt by several features. Start from the live
+   view, keep every column, and keep `WITH (security_invoker = true)`.
+5. **`notifications_type_check`** is stored as one array literal,
+   `CHECK (type = ANY ('{a,b,…}'::text[]))`. The old per-item regex reads 0
+   types from it. Parse with
+   `(substring(def from '''(\{[a-z_,]+\})'''))::text[]` (see
+   `20261101130200_terms_updated_notice.sql`), add only your new types, and
+   refuse if fewer than 50 are read.
+6. **One transaction.** `BEGIN … COMMIT`; the file inserts its own version
+   (`ON CONFLICT DO NOTHING`); new `SECURITY DEFINER` functions are revoked
+   from `PUBLIC, anon, authenticated` unless the app must call them.
+7. **Verify live, then record it.** Version present, objects present, grants
+   right. Mark the entry here APPLIED and set `OWNER` back to `(none)`.
+
+---
+
 ## Current owner
 
 ```
 OWNER:  (none)
 ```
+
+### Applied 2026-11-01 (platform fee becomes 5% + 40p)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101150000 | `platform_fee_percentage` | **APPLIED 2026-11-01** by the user (SQL editor), PR #204. Claude's practice run was blocked by the permission check, so the first run was the real one. Verified live: version recorded, `calculate_platform_fee` gives 1.99 / 2.12 / 2.90 / 24.99 for £25 / £34.30 / £50 / £800, the new split is in `apply_checkout_platform_fee`, its trigger exists, and `authenticated` can't execute it. Frontier at authoring: `20261101140000`. Redefines `calculate_platform_fee` and `apply_checkout_platform_fee` (md5 guards against the live definitions). The file records its own version. `create-payment-intent` deployed as v21 for the PayPal limit. |
 
 ### Applied 2026-11-01 (public "How to get there" on the profile)
 
@@ -31,19 +68,19 @@ OWNER:  (none)
 |---|---|---|
 | 20261101140000 | `provider_public_directions` | **APPLIED 2026-11-01** by cerviced-72 (MCP, on the user's OK), behind a guard that aborted unless the frontier was still `20261101115322`; dry-run in a rolled-back transaction first. Verified live: column `text` nullable, 0 of 11 providers filled, `authenticated` can select it, a 301-character value is refused by the CHECK. Frontier after: **20261101140000**. cerviced-e3 (formerly 4b) applied its `20261101130000`/`130100`/`130200` the same afternoon, after this one; they touch none of the same objects, so the order doesn't matter and all five 2026-11-01 versions are recorded live. Branch `feat/profile-how-to-get-there` (stacked on `feat/booking-directions`, #196). Frontier: live `20261101115322` (2026-11-01); cerviced-4b's unapplied `20261101130000`/`130100`/`130200` sit below it and touch none of the same objects, so apply order between them doesn't matter. Adds nullable `providers.public_directions text` with a 300-character CHECK. No backfill, no policy or grant change (table-level grants). Redefines nothing. Records its own version. **Apply before this branch merges**: the profile's public select names the column, so without it every provider profile fails to load. |
 
-### Pending 2026-10-31 (rescheduling can't dodge a late-cancel charge)
+### Applied 2026-11-01 (rescheduling can't dodge a late-cancel charge)
 
 | Authored version | Name | Status |
 |---|---|---|
 | 20261101130000 | `late_reschedule_keeps_cancel_charge` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/late-reschedule-keeps-cancel-charge`. Frontier: live `20261101115322` (2026-11-01); first written as `20261031200000` and renumbered above it. The view is rebuilt from that migration's `client_bookings` (keeps `provider_directions_snapshot`) and md5-guarded. Adds `booking_reschedule_requests.requested_inside_cancel_window` and `bookings.late_reschedule_from` (both readable by `authenticated` via column grants). Redefines from live, md5-guarded (the file aborts if any changed): `request_reschedule_own_booking`, `confirm_reschedule_own_booking`, `confirm_group_reschedule`, `cancel_own_booking`, `process_cancel_window_closing_warnings`; replaces the `client_bookings` view with one column added at the end (`security_invoker` kept). Records its own version. **Apply before deploying `apply-cancellation-refund`** from this branch, which selects the new column. |
 
-### Pending 2026-10-31 (refund requests go to Cerviced after 3 days)
+### Applied 2026-11-01 (refund requests go to Cerviced after 3 days)
 
 | Authored version | Name | Status |
 |---|---|---|
 | 20261101130100 | `refund_request_reply_deadline` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/refund-request-reply-deadline`; lock released 2026-11-01 (on `feat/late-reschedule-keeps-cancel-charge`). Frontier: live `20261101115322` (2026-11-01); first written as `20261031201000` and renumbered. Independent of `20261101130000`, so either order works. Adds `refund_requests.passed_automatically` (granted to `authenticated`) and `provider_reminded_at`; `process_refund_request_deadlines()` (service role only) and cron `refund-request-deadlines` at `25 * * * *`. Redefines from live, md5-guarded: `request_booking_refund` (3-day sentence), `notify_refund_request_status` (automatic-pass wording + provider notice). No new notification types. Records its own version. **Apply before this branch merges**: the app selects `passed_automatically`, so without it every refund-request read fails. |
 
-### Pending 2026-10-31 (one "We've updated our Terms" notice)
+### Applied 2026-11-01 (one "We've updated our Terms" notice)
 
 | Authored version | Name | Status |
 |---|---|---|

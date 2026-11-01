@@ -337,7 +337,12 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
           <View style={styles.specialtiesSlot}>
             {provider.specialties.length > 0 && (
               <Text style={[styles.specialtiesText, { color: P.sub }]} numberOfLines={2}>
-                {provider.specialties.join(' · ')}
+                {provider.specialties.map((specialty, i) => (
+                  <React.Fragment key={specialty}>
+                    {i > 0 ? ' · ' : null}
+                    <Text style={styles.specialtyUnderlined}>{specialty}</Text>
+                  </React.Fragment>
+                ))}
               </Text>
             )}
           </View>
@@ -409,13 +414,15 @@ interface ServiceResultCardProps {
   service: ServiceSearchResult;
   imageUrl: string | null;
   rating: number | null;
+  availability: ProviderAvailabilityStatus | null;
   highlightQuery: string;
   onPress: (service: ServiceSearchResult) => void;
   onProviderPress: (service: ServiceSearchResult) => void;
   P: AppTheme;
 }
 
-const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rating, highlightQuery, onPress, onProviderPress, P }) => {
+const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rating, availability, highlightQuery, onPress, onProviderPress, P }) => {
+  const availInfo = availability ? AVAILABILITY_INFO[availability] : null;
   const price = service.isLinkOnly || service.price == null
     ? null
     : formatPriceRange({ min: service.price, max: service.priceMax ?? service.price });
@@ -458,7 +465,17 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
                   : part.text))}
               </Text>
             ) : null}
-            {meta ? <Text style={[styles.serviceCardMeta, { color: P.text }]} numberOfLines={1}>{meta}</Text> : null}
+            {/* minHeight holds the row's height, so the tag landing after the
+                card has rendered doesn't shift the list (same reason as
+                availBadgeSlot on the provider card). */}
+            <View style={styles.serviceCardMetaRow}>
+              {meta ? <Text style={[styles.serviceCardMeta, { color: P.text }]} numberOfLines={1}>{meta}</Text> : null}
+              {availInfo ? (
+                <View style={[styles.availBadge, { backgroundColor: `${availInfo.color}22` }]}>
+                  <Text style={[styles.availBadgeText, { color: availInfo.color }]} numberOfLines={1}>{availInfo.label}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -1316,6 +1333,7 @@ export default function SearchScreen({ navigation, route }: Props) {
           service={item.service}
           imageUrl={serviceCovers[item.service.serviceId] ?? null}
           rating={providerRatings.get(item.service.providerId) ?? null}
+          availability={availabilityBySlug.get(item.service.providerSlug) ?? null}
           highlightQuery={highlightQuery}
           onPress={handleServicePress}
           onProviderPress={handleServiceProviderPress}
@@ -1337,7 +1355,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         ))}
       </View>
     );
-  }, [serviceCovers, providerRatings, highlightQuery, handleServicePress, handleServiceProviderPress, handleProviderPress, P, cardWidthStyle]);
+  }, [serviceCovers, providerRatings, availabilityBySlug, highlightQuery, handleServicePress, handleServiceProviderPress, handleProviderPress, P, cardWidthStyle]);
 
   // Each active (non-default) filter as a dismissible chip — key, label, and
   // the callback to clear just that one. distance's "Any" value is 999, not
@@ -2249,7 +2267,15 @@ const styles = StyleSheet.create({
   serviceCardMatch: {
     fontWeight: '700',
   },
+  serviceCardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    minHeight: 18,
+  },
   serviceCardMeta: {
+    flexShrink: 1,
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '700',
@@ -2338,6 +2364,9 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     letterSpacing: 0.1,
+  },
+  specialtyUnderlined: {
+    textDecorationLine: 'underline',
   },
   servicePill: {
     alignSelf: 'flex-start',
