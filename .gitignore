@@ -75,3 +75,8 @@ supabase/.temp/
 # PRE-LAUNCH-TODO.md section 9.
 docs/vault/auto/**/* [0-9].md
 docs/vault/auto/**/* [0-9][0-9].md
+
+# Obsidian's view state (open notes, graph zoom). It rewrites these whenever
+# the vault is open, so tracking them only leaves the tree permanently dirty.
+docs/vault/.obsidian/workspace.json
+docs/vault/.obsidian/graph.json
