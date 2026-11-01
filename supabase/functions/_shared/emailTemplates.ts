@@ -970,7 +970,7 @@ export function refundRequestedProviderEmail(params: {
         headline(P, `${e.clientName} has asked for a refund`) +
         lede(
           P,
-          'Open the booking in the CERVICED app to read their note, then either refund it or pass it to Cerviced to review.',
+          'Open the booking in the CERVICED app to read their note, then either refund it or pass it to Cerviced to review. If you don\'t reply within 3 days, it goes to Cerviced to review.',
         ) +
         panel(
           P,

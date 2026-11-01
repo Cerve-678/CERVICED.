@@ -233,7 +233,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                 const held = state.heldPence;
                 const settled = state.policySettlement;
                 const modes: RefundMode[] = state.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
-                const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours) : null;
+                const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours, settled.movedLate) : null;
                 const optionCopy: Record<RefundMode, { title: string; sub: string; value: string }> = {
                   full: {
                     title: 'Full refund',

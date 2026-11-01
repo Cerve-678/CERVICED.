@@ -57,7 +57,7 @@ interface Notification {
       | 'no_show'            | 'provider_no_show'    | 'no_show_disputed'
       | 'cancellation_settled'
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
-      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed'
+      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed' | 'tip_received'
       | 'payout_debt_recorded' | 'payout_debt_recovered'
       | 'refund_requested' | 'refund_request_updated' | 'payout_failed'
       | 'terms_updated'
@@ -354,7 +354,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'tip_received', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -545,6 +545,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'fee_dispute_resolved' ||
         notification.type === 'fee_payment_requested' ||
         notification.type === 'fee_paid_by_client' ||
+        notification.type === 'tip_received' ||
         notification.type === 'fee_payment_lapsed' ||
         notification.type === 'payout_debt_recorded' ||
         notification.type === 'payout_debt_recovered' ||
@@ -836,7 +837,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // an answered dispute is informational.
     if (type === 'fee_charged' || type === 'fee_disputed' || type === 'fee_payment_requested') return '#FF9500';
     if (type === 'fee_dispute_resolved' || type === 'fee_payment_lapsed') return P.accentText;
-    if (type === 'fee_paid_by_client') return '#4CAF50';
+    if (type === 'fee_paid_by_client' || type === 'tip_received') return '#4CAF50';
     // Money owed needs attention; money taken towards it is a receipt.
     if (type === 'payout_debt_recorded') return '#FF9500';
     if (type === 'payout_debt_recovered') return P.accentText;
@@ -882,6 +883,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'fee_disputed':
       case 'fee_dispute_resolved':
       case 'fee_paid_by_client':
+      case 'tip_received':
       case 'fee_payment_lapsed':
       case 'payout_debt_recorded':
       case 'payout_debt_recovered':

@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AvailabilityService } from "../../services/AvailabilityService";
-import type {
-  AvailabilitySummary,
-  WeeklyOpeningHoursDay,
-} from "../../services/AvailabilityService";
+import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import {
   getProviderActivePromotions,
   getProviderBySlug,
@@ -62,8 +59,6 @@ export interface ProviderProfileDataState {
    *  row caps and render in two different places on the profile. */
   portfolio: { work: DbPortfolioItem[]; venue: DbPortfolioItem[] };
   portfolioLoading: boolean;
-  availability: AvailabilitySummary | null;
-  availabilityLoading: boolean;
   openingHours: WeeklyOpeningHoursDay[] | null;
   openingHoursLoading: boolean;
   currentUserId: string | null;
@@ -106,10 +101,6 @@ export function useProviderProfileData(
     venue: DbPortfolioItem[];
   }>({ work: [], venue: [] });
   const [portfolioLoading, setPortfolioLoading] = useState(true);
-  const [availability, setAvailability] = useState<AvailabilitySummary | null>(
-    null,
-  );
-  const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [openingHours, setOpeningHours] = useState<
     WeeklyOpeningHoursDay[] | null
   >(null);
@@ -134,8 +125,6 @@ export function useProviderProfileData(
     setPromotions([]);
     setPortfolio({ work: [], venue: [] });
     setPortfolioLoading(true);
-    setAvailability(null);
-    setAvailabilityLoading(true);
     setOpeningHours(null);
     setOpeningHoursLoading(true);
     setCurrentUserId(null);
@@ -232,19 +221,6 @@ export function useProviderProfileData(
             if (!cancelled) setPortfolioLoading(false);
           });
 
-        void AvailabilityService.getAvailabilitySummary(data.id, {
-          includeExtendedSearch: false,
-        })
-          .then((summary) => {
-            if (!cancelled) setAvailability(summary);
-          })
-          .catch((error: unknown) => {
-            logger.warn("Failed to load provider availability summary:", error);
-          })
-          .finally(() => {
-            if (!cancelled) setAvailabilityLoading(false);
-          });
-
         void AvailabilityService.getWeeklyOpeningHours(data.id)
           .then((hours) => {
             if (!cancelled) setOpeningHours(hours);
@@ -326,8 +302,6 @@ export function useProviderProfileData(
     promotions,
     portfolio,
     portfolioLoading,
-    availability,
-    availabilityLoading,
     openingHours,
     openingHoursLoading,
     currentUserId,
