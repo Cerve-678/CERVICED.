@@ -26,7 +26,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
 import type { EmergencyRequest } from '../../contexts/CartContext';
@@ -1140,7 +1140,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const { palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
-    const swipeRef = useRef<Swipeable>(null);
+    const swipeRef = useRef<SwipeableMethods>(null);
 
     const totalPrice = useMemo(() => getCartItemFullPrice(item), [item]);
 
@@ -1215,14 +1215,9 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             overshootRight={false}
             friction={2}
             rightThreshold={40}
-            renderRightActions={(progress: Animated.AnimatedInterpolation<number>) => {
-              const scale = progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.6, 1],
-                extrapolate: 'clamp',
-              });
+            renderRightActions={() => {
               return (
-                <Animated.View style={[styles.swipeDeleteAction, { transform: [{ scale }] }]}>
+                <View style={styles.swipeDeleteAction}>
                   <TouchableOpacity
                     style={[styles.swipeDeleteButton, isLoading && styles.disabledButton]}
                     onPress={() => {
@@ -1238,7 +1233,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                       <Ionicons name="trash" size={20} color="#fff" />
                     )}
                   </TouchableOpacity>
-                </Animated.View>
+                </View>
               );
             }}
           >
@@ -4943,7 +4938,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 showGuide={hasUnscheduledItems}
                 onCheckout={handleCheckout}
               />
-            ) : null}
+            ) : undefined}
             ListEmptyComponent={(
               <View style={styles.emptyCart}>
                 <Text style={dynamicStyles.emptyTitle}>Cart is Empty</Text>

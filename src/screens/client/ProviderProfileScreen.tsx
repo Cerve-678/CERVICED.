@@ -27,6 +27,8 @@ import {
   findNodeHandle,
   UIManager,
 } from "react-native";
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 // expo-image instead of RN's Image — adds disk+memory caching so portfolio/
 // logo/hero images aren't re-downloaded from scratch on every visit to a
 // provider's profile (RN's plain Image has no app-level cache). contentFit/
@@ -1621,8 +1623,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   ]);
 
   // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
-  const scrollRef = useRef<ScrollView>(null);
-  const servicesSectionRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const servicesSectionRef = useRef<ViewInstance>(null);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -4136,8 +4138,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             which is the first-scroll freeze this screen already fixed. */}
         <StatusBar
           barStyle={heroIsDark ? "light-content" : "dark-content"}
-          translucent={true}
-          backgroundColor="transparent"
         />
 
         {/* Notification Alert */}

@@ -279,6 +279,16 @@ it; no job acts on it).
 
 ---
 
+### Provider achievements
+
+Settings > Achievements (`src/screens/provider/ProviderAchievementsScreen.tsx`), private to the provider. Migration `20261101180000_provider_achievements` is applied.
+
+- `get_my_provider_achievements()` owns every rule: what exists, targets, what counts. The app only formats its rows (`src/features/achievements/achievementPresentation.ts`).
+- Earned ones are stored in `provider_achievements` when the screen opens, so they stay earned if a count drops. No push or pop-up when one is earned.
+- Bookings count once `completed`. Paid out = transferred booking payouts, tips, and late and no-show fees. Months with bookings = an unbroken run of calendar months. Months on CERVICED count from `claimed_at`, else `created_at`, because no go-live date is recorded.
+- Link-only providers only get saves, bell followers, live, portfolio photos and time on CERVICED.
+- The Fully Booked group is deliberately absent until the certificate records fully booked events. Add its rows to the function then, and its keys to `achievementPresentation.ts`.
+
 ## Core logic flows worth remembering
 
 Condensed from old `LOGIC.md` — kept only what's non-obvious (why something
@@ -343,7 +353,7 @@ on (15-minute holds, next person, then anyone), otherwise anyone can book it
 straight away. `WAITLIST.md` has that path, which has barely run live.
 
 **Closed by hand** (`provider_schedule_closures`, migration
-`20261101170000_close_schedule_by_hand.sql`, UI in
+`20261101190000_close_schedule_by_hand.sql`, UI in
 `src/features/providers/CloseScheduleSection.tsx` on the schedule screen). The
 provider's choice, at any time, even with free slots:
 - Clients can't make a new booking; the server refuses it in

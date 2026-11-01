@@ -3,8 +3,6 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-
 import SearchScreen from '../screens/client/SearchScreen';
 import { getProviders, getProvidersAvailability, searchProvidersAndServices } from '../services/databaseService';
 
-jest.mock('react-native-worklets', () => require('react-native-worklets/lib/module/mock'));
-jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useFocusEffect: jest.fn(),

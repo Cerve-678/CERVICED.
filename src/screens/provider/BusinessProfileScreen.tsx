@@ -64,7 +64,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 

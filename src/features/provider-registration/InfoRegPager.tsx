@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import type {
   LayoutChangeEvent,
   NativeScrollEvent,
@@ -34,7 +35,7 @@ interface InfoRegPagerProps {
  * Owns all horizontal-navigation behaviour for Info Reg. Form pages remain
  * mounted as children, so swiping never discards unsaved input.
  */
-export const InfoRegPager = forwardRef<ScrollView, InfoRegPagerProps>(
+export const InfoRegPager = forwardRef<ScrollViewInstance, InfoRegPagerProps>(
   function InfoRegPager(
     {
       sections,

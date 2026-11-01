@@ -28,7 +28,13 @@ import {
   forgetCachedReads,
 } from '../../services/databaseService';
 import type { DbNotification } from '../../types/database';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import AnimatedReanimated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated';
 // react-native's own TouchableOpacity runs its own touch responder
 // independently of Swipeable's PanGestureHandler, so a swipe attempt that
 // hasn't yet crossed the pan threshold can still register as a press on this
@@ -137,6 +143,41 @@ const notifSkeletonStyles = StyleSheet.create({
   line: { height: 12, borderRadius: 6 },
 });
 
+function DeleteSwipeAction({
+  progress,
+  notificationId,
+  onDelete,
+}: {
+  progress: SharedValue<number>;
+  notificationId: string;
+  onDelete: (id: string) => void;
+}) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{
+      scale: interpolate(
+        progress.value,
+        [0, 0.5, 0.7, 1],
+        [0.4, 1.15, 0.92, 1],
+        Extrapolation.CLAMP,
+      ),
+    }],
+  }));
+
+  return (
+    <View style={styles.deleteAction}>
+      <AnimatedReanimated.View style={animatedStyle}>
+        <TouchableOpacity
+          style={styles.deleteBubble}
+          onPress={() => { hapticMedium(); onDelete(notificationId); }}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="trash" size={22} color="#FFF" />
+        </TouchableOpacity>
+      </AnimatedReanimated.View>
+    </View>
+  );
+}
+
 // Role separation is server-authoritative: every notification row carries a
 // `recipient_role` ('provider' | 'client') set at creation time, and both the
 // initial fetch (getMyNotifications) and the realtime subscription filter by it.
@@ -220,7 +261,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // Only one row's delete bubble should be open at a time (iOS Mail
   // behaviour) — closing whichever row is currently open when another one
   // starts to open, rather than letting several sit open simultaneously.
-  const rowSwipeablesRef = useRef<Map<string, React.ElementRef<typeof Swipeable>>>(new Map());
+  const rowSwipeablesRef = useRef<Map<string, SwipeableMethods>>(new Map());
   const openRowIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -961,28 +1002,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // as the row is dragged, so no extra translateX here) that pops in with a
   // spring overshoot as it crosses the reveal threshold, rather than a flat
   // rectangular bar.
-  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, _dragX: Animated.AnimatedInterpolation<number>, item: Notification) => {
-    const scale = progress.interpolate({
-      inputRange: [0, 0.5, 0.7, 1],
-      outputRange: [0.4, 1.15, 0.92, 1],
-      extrapolate: 'clamp',
-    });
-
-    return (
-      <View style={styles.deleteAction}>
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <TouchableOpacity
-            style={styles.deleteBubble}
-            onPress={() => { hapticMedium(); deleteNotification(item.id); }}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="trash" size={22} color="#FFF" />
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    );
-  };
-
   // ✅ Render individual notification card
   const renderNotification = ({ item }: { item: Notification }) => (
     <Swipeable
@@ -990,7 +1009,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         if (ref) rowSwipeablesRef.current.set(item.id, ref);
         else rowSwipeablesRef.current.delete(item.id);
       }}
-      renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
+      renderRightActions={(progress) => (
+        <DeleteSwipeAction
+          progress={progress}
+          notificationId={item.id}
+          onDelete={deleteNotification}
+        />
+      )}
       overshootRight={false}
       onSwipeableWillOpen={() => {
         if (openRowIdRef.current && openRowIdRef.current !== item.id) {
@@ -1102,7 +1127,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle={theme.statusBar} translucent={true} />
+        <StatusBar barStyle={theme.statusBar} />
 
         {/* Pull-down indicator bar */}
         <View style={styles.pullBarContainer}>
