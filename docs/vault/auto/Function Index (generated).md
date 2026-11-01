@@ -5,7 +5,7 @@
 
 #generated
 
-**2818 functions** across **384 files**.
+**2819 functions** across **384 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -114,7 +114,7 @@
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **describeRefundOutcome** · **describeSettlementTiming** · money
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
 - `receipt.ts` — appointmentWhen · **buildClientReceiptHTML** · **buildProviderInvoiceHTML** · escapeHtml · methodLabel · money · renderDocument
-- `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen**
+- `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen** · **refundReplyDeadline**
 - `reviewState.ts` — **mergeBookingReviewStates**
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · minutesOfDay · **tipWindowClosesAt**

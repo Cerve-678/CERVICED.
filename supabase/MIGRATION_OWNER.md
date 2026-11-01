@@ -37,6 +37,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261101130000 | `late_reschedule_keeps_cancel_charge` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/late-reschedule-keeps-cancel-charge`. Frontier: live `20261101115322` (2026-11-01); first written as `20261031200000` and renumbered above it. The view is rebuilt from that migration's `client_bookings` (keeps `provider_directions_snapshot`) and md5-guarded. Adds `booking_reschedule_requests.requested_inside_cancel_window` and `bookings.late_reschedule_from` (both readable by `authenticated` via column grants). Redefines from live, md5-guarded (the file aborts if any changed): `request_reschedule_own_booking`, `confirm_reschedule_own_booking`, `confirm_group_reschedule`, `cancel_own_booking`, `process_cancel_window_closing_warnings`; replaces the `client_bookings` view with one column added at the end (`security_invoker` kept). Records its own version. **Apply before deploying `apply-cancellation-refund`** from this branch, which selects the new column. |
 
+### Pending 2026-10-31 (refund requests go to Cerviced after 3 days)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101130100 | `refund_request_reply_deadline` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/refund-request-reply-deadline`; lock released 2026-11-01 (on `feat/late-reschedule-keeps-cancel-charge`). Frontier: live `20261101115322` (2026-11-01); first written as `20261031201000` and renumbered. Independent of `20261101130000`, so either order works. Adds `refund_requests.passed_automatically` (granted to `authenticated`) and `provider_reminded_at`; `process_refund_request_deadlines()` (service role only) and cron `refund-request-deadlines` at `25 * * * *`. Redefines from live, md5-guarded: `request_booking_refund` (3-day sentence), `notify_refund_request_status` (automatic-pass wording + provider notice). No new notification types. Records its own version. **Apply before this branch merges**: the app selects `passed_automatically`, so without it every refund-request read fails. |
+
 ### Applied 2026-10-30 ("Always visible" address on the profile)
 
 | Authored version | Name | Status |

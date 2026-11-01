@@ -11575,13 +11575,14 @@ interface RefundRequestRow {
   refunded_amount: number | string | null;
   created_at: string;
   passed_to_cerviced_at: string | null;
+  passed_automatically: boolean | null;
   resolved_at: string | null;
 }
 
 // provider_note is deliberately absent: its column isn't granted to app users
 // (the provider's reason for passing a request on is for Cerviced only).
 const REFUND_REQUEST_COLUMNS =
-  'id, booking_id, status, reason, message, outcome_note, refunded_amount, created_at, passed_to_cerviced_at, resolved_at';
+  'id, booking_id, status, reason, message, outcome_note, refunded_amount, created_at, passed_to_cerviced_at, passed_automatically, resolved_at';
 
 function mapRefundRequest(r: RefundRequestRow): RefundRequest {
   return {
@@ -11594,6 +11595,7 @@ function mapRefundRequest(r: RefundRequestRow): RefundRequest {
     refundedAmount: r.refunded_amount == null ? null : Number(r.refunded_amount),
     createdAt: r.created_at,
     passedToCervicedAt: r.passed_to_cerviced_at,
+    passedAutomatically: !!r.passed_automatically,
     resolvedAt: r.resolved_at,
   };
 }

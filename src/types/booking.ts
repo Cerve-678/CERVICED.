@@ -202,7 +202,8 @@ export enum PaymentStatus {
 /**
  * Where a client's refund request is (refund_requests.status):
  * - `with_provider` — the provider has been told and can refund it
- * - `under_review`  — the provider passed it to Cerviced, with a reason
+ * - `under_review`  — the provider passed it to Cerviced, with a reason, or
+ *                     didn't reply within 3 days (passedAutomatically)
  * - `refunded`      — money went back while it was open, by any path
  * - `declined`      — Cerviced reviewed it and isn't refunding
  */
@@ -220,6 +221,8 @@ export interface RefundRequest {
   refundedAmount: number | null;
   createdAt: string;
   passedToCervicedAt: string | null;
+  /** Went to Cerviced because the provider didn't reply within 3 days. */
+  passedAutomatically: boolean;
   resolvedAt: string | null;
 }
 
