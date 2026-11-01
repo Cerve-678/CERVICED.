@@ -1,8 +1,8 @@
 -- A one-off "We've updated our Terms" notice, sent on release day.
 --
--- Frontier at authoring: 20261031173214 (verified live 2026-10-31).
--- 20261031200000 and 20261031201000 (same lock holder) touch none of the
--- same objects. Check the lock in MIGRATION_OWNER.md and re-check
+-- Frontier: live 20261101115322 (2026-11-01). First written as
+-- 20261031202000 and renumbered above it the same day. 20261101130000 and
+-- 20261101130100 touch none of the same objects. Check the lock in MIGRATION_OWNER.md and re-check
 -- max(version) before applying.
 --
 -- Decided with the user 2026-10-31: when Terms that people already accepted
@@ -107,7 +107,7 @@ REVOKE ALL ON FUNCTION public.send_terms_updated_notice(text, text) FROM PUBLIC,
 GRANT EXECUTE ON FUNCTION public.send_terms_updated_notice(text, text) TO service_role;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261031202000', 'terms_updated_notice')
+VALUES ('20261101130200', 'terms_updated_notice')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
