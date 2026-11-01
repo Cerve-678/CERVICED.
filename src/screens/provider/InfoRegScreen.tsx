@@ -1087,6 +1087,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setError(null);
     setDurationOpen(false);
     setOpenBuffer(null);
+    // Reseeds once per service opened. applySuggestions is a new function
+    // every render and isEditing arrives with `service`; listing them would
+    // wipe the form on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service, catKey]);
 
   const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) => {
