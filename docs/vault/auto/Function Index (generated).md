@@ -5,7 +5,7 @@
 
 #generated
 
-**2822 functions** across **383 files**.
+**2824 functions** across **384 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -199,11 +199,12 @@
 ### `src/lib/` (1)
 - `sentry.ts` — **initSentry**
 
-### `src/navigation/` (4)
+### `src/navigation/` (5)
 - `AppNavigator.tsx` — AppNavigator
 - `modeController.ts` — **registerModeSetter** · **requestMode** · **resolveModeChange**
 - `rootNavigate.ts` — **navigateAfterDismiss** · **navigateNested** · **navigateTab**
 - `RootNavigation.tsx` — receive · RootNavigation
+- `useHideTabBar.ts` — **useHideTabBar**
 
 ### `src/navigation/client/` (1)
 - `ClientTabNavigator.tsx` — CartBadge · CartTabIcon · TabNavigation
@@ -387,7 +388,7 @@
 - `performance.ts` — for
 - `policyDisplay.ts` — buildLinkOnlyPolicyRows · **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · feeLabel · pushRow · **readProviderTermsSnapshot** · rescheduleSummary · sectionRow
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
-- `providerProfileDeepLink.ts` — **parseProviderProfileDeepLink** · **providerProfileDeepLink**
+- `providerProfileDeepLink.ts` — **isProviderProfileUuid** · **parseProviderProfileDeepLink** · **providerProfileDeepLink**
 - `readCache.ts` — cachedFetch · clear · **createReadCache** · **isCacheableRead** · **isWriteRequest** · pathOf · **readRequestKey** · requestMethod · requestUrl · that · tooLargeToKeep
 - `regionStore.ts` — **getRegion** · **setRegion**
 - `reorderCategories.ts` — exists · **reorderCategoriesWithinType**

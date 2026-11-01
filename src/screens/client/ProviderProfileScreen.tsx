@@ -40,7 +40,8 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { StackScreenProps } from "@react-navigation/stack";
-import { useIsFocused, usePreventRemove } from "@react-navigation/native";
+import { usePreventRemove } from "@react-navigation/native";
+import { useHideTabBar } from "../../navigation/useHideTabBar";
 
 // Correct icon imports - using your IconLibrary.tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -1453,26 +1454,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     prevTotalItemsRef.current = totalItems;
   }, [totalItems]);
 
-  // setOptions targets the parent Tab.Navigator's currently-focused route
-  // (see IslandPillTabBar's own comment on where it reads this from);
-  // re-runs on every focus/blur and on addedThisVisit change so it updates
-  // immediately after a booking succeeds without leaving this screen. The
-  // cleanup resets to visible (undefined) on blur — this screen's hidden
-  // state must never leak into whatever screen the client navigates to
-  // next. "Hidden again on return" is handled separately: addedThisVisit is
+  // The bar comes back as soon as a booking succeeds, without leaving this
+  // screen. "Hidden again on return" is handled separately: addedThisVisit is
   // plain component state, so a fresh mount (navigating back in here is
   // always a new push — see the stack registrations in each tab navigator)
   // starts at false regardless of global cart contents.
-  const isFocused = useIsFocused();
-  useEffect(() => {
-    if (!isFocused) return;
-    navigation.getParent()?.setOptions({
-      tabBarStyle: addedThisVisit ? undefined : { display: "none" },
-    });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [isFocused, addedThisVisit, navigation]);
+  useHideTabBar(!addedThisVisit);
 
   // The macro service type (LASHES / BROWS / ...) whose menu is on screen.
   // A provider with one type never sees the switch, so this just stays on it.

@@ -28,7 +28,7 @@ import { SafeAreaView, WindowControlsInsetProvider } from '../../components/Safe
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StackScreenProps } from '@react-navigation/stack';
-import { useIsFocused } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 // Icon imports
@@ -2680,18 +2680,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // is layered on top of. No zIndex/elevation set from in here can lift a child
   // above its own ancestor's later-painted sibling, which is why the pinned bars
   // stayed covered however high they were raised.
-  //
-  // Same mechanism ProviderProfileScreen uses (see its comment); IslandPillTabBar
-  // already reads this option off the focused tab's route. Cleanup restores the
-  // pill on blur so this screen's hidden state never leaks onto the next one.
-  const isFocused = useIsFocused();
-  useEffect(() => {
-    if (!isFocused) return;
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [isFocused, navigation]);
+  useHideTabBar();
 
   // Load the provider's own Terms & Conditions once. Deliberately NOT keyed on
   // focus: this is an editable field now, not a status label, so refetching on
