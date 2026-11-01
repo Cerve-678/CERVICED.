@@ -14,6 +14,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
+import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
@@ -65,6 +66,8 @@ import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
+import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
+export type { BookingReviewState } from "../features/bookings/reviewState";
 import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
@@ -976,24 +979,84 @@ export async function getProvidersAvailability(
   return result;
 }
 
+/** One matching service from search_services_ranked — only fields the
+ *  public provider profile already shows (no address, nothing private). */
+export interface ServiceSearchResult {
+  serviceId: string;
+  providerId: string;
+  providerSlug: string;
+  providerName: string;
+  providerLogoUrl: string | null;
+  providerLocation: string | null;
+  /** Books on their own page (booking_mode 'external') — no price shown. */
+  isLinkOnly: boolean;
+  name: string;
+  description: string | null;
+  menuHeading: string | null;
+  category: string | null;
+  price: number | null;
+  priceMax: number | null;
+  durationMinutes: number | null;
+  rank: number;
+}
+
+export interface MarketplaceSearchResult {
+  providers: PublicProviderSummary[];
+  services: ServiceSearchResult[];
+  /** The query as the server read it after fixing typos ("frsnch tip" →
+   *  "french tip"); null when nothing needed correcting. */
+  correctedQuery: string | null;
+}
+
+interface RankedServiceRow {
+  service_id: string;
+  provider_id: string;
+  provider_slug: string;
+  provider_name: string;
+  provider_logo_url: string | null;
+  provider_location: string | null;
+  booking_mode: string | null;
+  service_name: string;
+  service_description: string | null;
+  menu_heading: string | null;
+  service_category: string | null;
+  price: number | null;
+  price_max: number | null;
+  duration_minutes: number | null;
+  rank: number;
+  corrected_query: string | null;
+}
+
+/** Services listed for a typed search. The RPC also caps each provider at 3. */
+const SERVICE_SEARCH_LIMIT = 60;
+
 /**
- * Search providers from a plain-English query — e.g. "hairstylist in south
- * london" or "almond nails, nail art in east manchester". Parses out a
- * trailing "in/near/around <place>" as a location filter and the remainder
- * as one or more service terms (split on commas/"and"), matched against
- * service names/descriptions and provider display name/about text/location.
- * A detected category keyword (e.g. "hairstylist" → HAIR) additionally
- * broadens the result to the whole category, since generic words like that
- * rarely appear verbatim in a service name. Optionally further filtered by
- * an explicit service category chip.
+ * Search providers AND individual services from a plain-English query — e.g.
+ * "hairstylist in south london", "almond nails, nail art in east manchester"
+ * or a misspelt "frsnch tip". Parses out a trailing "in/near/around <place>"
+ * as a location filter and the remainder as one or more service terms (split
+ * on commas/"and").
+ *
+ * Providers come from four lookups run together: service name/description
+ * substring, provider name/about/location substring, a detected category
+ * keyword (e.g. "hairstylist" → HAIR, since generic words like that rarely
+ * appear verbatim in a service name), and search_services_ranked — which
+ * rewrites the query into words live services actually use (typos, words
+ * joined or split differently, half-typed words), matches service names,
+ * menu headings, tags, category words AND descriptions, and widens with its
+ * own synonym map ("gel nails" → BIAB). Its services are returned as well, in
+ * rank order. Relevance is graded by supabase/tests/service_search_eval.sql. Optionally filtered by an explicit service category chip.
  */
-export async function searchProviders(
+export async function searchProvidersAndServices(
   query: string,
   category?: string,
   limit = DEFAULT_PROVIDER_QUERY_LIMIT,
-): Promise<PublicProviderSummary[]> {
+): Promise<MarketplaceSearchResult> {
   const q = query.trim();
-  if (!q) return getProviders(category, limit);
+  if (!q) {
+    return { providers: await getProviders(category, limit), services: [], correctedQuery: null };
+  }
+  const empty: MarketplaceSearchResult = { providers: [], services: [], correctedQuery: null };
 
   const parsed = parseSearchQuery(q);
   // Falls back to the whole query when no location preposition was found,
@@ -1002,7 +1065,7 @@ export async function searchProviders(
     parsed.serviceTerms.length ? parsed.serviceTerms : (parsed.locationTerms.length ? parsed.locationTerms : [q])
   ).map(sanitizeIlikeTerm).filter(Boolean);
   const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm).filter(Boolean);
-  if (!textTerms.length) return [];
+  if (!textTerms.length) return empty;
 
   const serviceOr = textTerms
     .map((t) => `name.ilike.%${t}%,description.ilike.%${t}%`)
@@ -1023,12 +1086,16 @@ export async function searchProviders(
       ? parsed.categoryHint
       : null;
 
-  // None of these three lookups depend on each other's result, so run them
+  // A location-only query ("near Manchester") has no service words to rank.
+  const serviceText = parsed.serviceTerms.length ? parsed.serviceText : "";
+
+  // None of these lookups depend on each other's result, so run them
   // together instead of waiting on one before starting the next.
   const [
     { data: serviceMatches, error: serviceError },
     { data: nameMatches, error: nameError },
     { data: categoryMatches, error: categoryError },
+    { data: rankedServices, error: rankedError },
   ] = await Promise.all([
     // 1. Provider IDs where a service name or description matches
     supabase
@@ -1053,22 +1120,58 @@ export async function searchProviders(
           .overlaps("service_categories", [categoryHint])
           .limit(limit)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
+    // 4. Ranked, typo-tolerant service matches (has_gone_live-gated in SQL)
+    serviceText
+      ? supabase.rpc("search_services_ranked", {
+          p_query: serviceText,
+          p_category: category && category !== "ALL" ? category : null,
+          p_locations: locationTerms,
+          p_limit: SERVICE_SEARCH_LIMIT,
+          // "for £70" → only services at or under £70.
+          p_max_price: parsed.maxPrice,
+        })
+      : Promise.resolve({ data: [] as RankedServiceRow[], error: null }),
   ]);
 
-  if (serviceError || nameError || categoryError) {
-    throw serviceError || nameError || categoryError;
+  if (serviceError || nameError || categoryError || rankedError) {
+    throw serviceError || nameError || categoryError || rankedError;
   }
+
+  const rankedRows = (rankedServices ?? []) as RankedServiceRow[];
+  const services: ServiceSearchResult[] = rankedRows.map((r) => ({
+    serviceId: r.service_id,
+    providerId: r.provider_id,
+    providerSlug: r.provider_slug,
+    providerName: r.provider_name,
+    providerLogoUrl: r.provider_logo_url,
+    providerLocation: r.provider_location,
+    isLinkOnly: r.booking_mode === "external",
+    name: r.service_name,
+    description: r.service_description,
+    menuHeading: r.menu_heading,
+    category: r.service_category,
+    price: r.price,
+    priceMax: r.price_max,
+    durationMinutes: r.duration_minutes,
+    rank: r.rank,
+  }));
+  const correctedQuery = rankedRows[0]?.corrected_query ?? null;
 
   const serviceIds = (serviceMatches ?? []).map(
     (r: { provider_id: string }) => r.provider_id,
   );
   const nameIds = (nameMatches ?? []).map((r: { id: string }) => r.id);
   const categoryIds = (categoryMatches ?? []).map((r: { id: string }) => r.id);
-  const allIds = [...new Set([...serviceIds, ...nameIds, ...categoryIds])];
+  // Rows arrive best-first, so the first rank seen per provider is its best.
+  const bestServiceRank = new Map<string, number>();
+  for (const s of services) {
+    if (!bestServiceRank.has(s.providerId)) bestServiceRank.set(s.providerId, s.rank);
+  }
+  const allIds = [...new Set([...serviceIds, ...bestServiceRank.keys(), ...nameIds, ...categoryIds])];
 
-  if (allIds.length === 0) return [];
+  if (allIds.length === 0) return { ...empty, correctedQuery };
 
-  // 4. Fetch those providers, applying the explicit location + category filters
+  // 5. Fetch those providers, applying the explicit location + category filters
   let providerQuery = supabase
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
@@ -1095,7 +1198,8 @@ export async function searchProviders(
   const { data, error } = await providerQuery;
   if (error) throw error;
   // Exact business names and matching services precede broad category recall.
-  // Keep the server's featured/rating order as the tie-breaker.
+  // Among service matches, the better-matching service ranks first; the
+  // server's featured/rating order is the final tie-breaker.
   const serviceIdSet = new Set(serviceIds);
   const nameIdSet = new Set(nameIds);
   const normalizedQuery = parsed.serviceText.toLowerCase();
@@ -1103,13 +1207,25 @@ export async function searchProviders(
     const name = provider.display_name.toLowerCase();
     if (normalizedQuery && name === normalizedQuery) return 4;
     if (normalizedQuery && name.includes(normalizedQuery)) return 3;
+    const ranked = bestServiceRank.get(provider.id);
+    if (ranked !== undefined) return 2 + Math.min(ranked, 1) * 0.5;
     if (serviceIdSet.has(provider.id)) return 2;
     if (nameIdSet.has(provider.id)) return 1;
     return 0;
   };
-  return ((data ?? []) as PublicProviderSummary[])
+  const providers = ((data ?? []) as PublicProviderSummary[])
     .sort((a, b) => relevance(b) - relevance(a))
     .slice(0, limit);
+  return { providers, services, correctedQuery };
+}
+
+/** Providers only — see searchProvidersAndServices. */
+export async function searchProviders(
+  query: string,
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT,
+): Promise<PublicProviderSummary[]> {
+  return (await searchProvidersAndServices(query, category, limit)).providers;
 }
 
 /**
@@ -2351,8 +2467,9 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
 }
 
 /** The fields the My Services manager can set. Everything else on a service
- *  row (safety flags, tags, buffers, add-ons) is still owned by the fuller
- *  editor — this is the day-to-day set, not a second way to write all of it. */
+ *  row (safety flags, buffers, add-ons, and tags once a service has any) is
+ *  still owned by the fuller editor — this is the day-to-day set, not a
+ *  second way to write all of it. */
 export interface MyServiceDraft {
   name: string;
   price: number;
@@ -2362,6 +2479,27 @@ export interface MyServiceDraft {
    *  starts visible. Written in the same UPDATE as the other fields, so a
    *  visibility change can't land while the edit around it fails. */
   isActive?: boolean;
+  /** Only sent while a service has no tags yet (ServiceEditorSheet's "help
+   *  clients find it"). Absent = leave every tag column as it is. */
+  tags?: ServiceTagGroups;
+  /** Absent = leave services.audience as it is. */
+  audience?: Exclude<ServiceAudienceValue, ''>;
+}
+
+/** The tag/audience columns a draft carries, and nothing for what it doesn't. */
+function myServiceFindabilityColumns(draft: MyServiceDraft): Record<string, unknown> {
+  return {
+    ...(draft.tags
+      ? {
+          tags: draft.tags.styleTags,
+          technique_tags: draft.tags.techniqueTags,
+          outcome_tags: draft.tags.outcomeTags,
+          occasion_tags: draft.tags.occasionTags,
+          trend_names: draft.tags.trendNames,
+        }
+      : {}),
+    ...(draft.audience ? { audience: draft.audience } : {}),
+  };
 }
 
 export async function createMyService(
@@ -2393,6 +2531,7 @@ export async function createMyService(
       duration_minutes: draft.durationMinutes,
       sort_order: ((last?.sort_order as number | undefined) ?? -1) + 1,
       is_active: true,
+      ...myServiceFindabilityColumns(draft),
     })
     .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
@@ -2412,6 +2551,7 @@ export async function updateMyService(
       price: draft.price,
       duration_minutes: draft.durationMinutes,
       ...(draft.isActive === undefined ? {} : { is_active: draft.isActive }),
+      ...myServiceFindabilityColumns(draft),
     })
     .eq("id", serviceId)
     .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
@@ -4550,22 +4690,20 @@ export async function submitReview(review: {
 export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
   // maybeSingle, not single: "no review yet" is the normal case and single()
   // treats it as a PGRST116 error. This is called on every booking-detail mount.
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("reviews")
     .select("id")
     .eq("booking_id", bookingId)
     .maybeSingle();
 
+  // A failed read must not look like "not reviewed yet": that re-shows Rate.
+  if (error) throw error;
   return !!data;
 }
 
-export type BookingReviewState = {
-  bookingId: string;
-  tipAmount: number | null;
-};
-
 /**
- * Review state for a set of bookings, fetched together for the Bookings list.
+ * Review and tip state for a set of bookings, fetched together for the
+ * Bookings list.
  *
  * The list used to initialise its rated/tipped buttons from empty component
  * state on every mount. The database rows existed, but the next visit showed
@@ -4580,68 +4718,33 @@ export async function getBookingReviewStates(
   if (ids.length === 0) return [];
 
   const [{ data: reviews, error: reviewError }, { data: tips, error: tipError }] = await Promise.all([
-    supabase.from("reviews").select("booking_id, tip_amount").in("booking_id", ids),
-    supabase.from("booking_tips").select("booking_id, amount_pence").in("booking_id", ids).eq("status", "succeeded"),
+    supabase.from("reviews").select("booking_id").in("booking_id", ids),
+    supabase.from("booking_tips").select("booking_id").in("booking_id", ids).eq("status", "succeeded"),
   ]);
   if (reviewError) throw reviewError;
   if (tipError) throw tipError;
-  const states = (reviews ?? []).map((row: { booking_id: string; tip_amount: number | null }) => ({
-    bookingId: row.booking_id,
-    tipAmount: row.tip_amount == null ? null : Number(row.tip_amount),
-  }));
-  for (const tip of tips ?? []) {
-    const row = tip as { booking_id: string; amount_pence: number };
-    const existing = states.find(state => state.bookingId === row.booking_id);
-    if (existing) existing.tipAmount = Number(row.amount_pence) / 100;
-    else states.push({ bookingId: row.booking_id, tipAmount: Number(row.amount_pence) / 100 });
-  }
-  return states;
+  return mergeBookingReviewStates(
+    (reviews ?? []).map((row: { booking_id: string }) => row.booking_id),
+    (tips ?? []).map((row: { booking_id: string }) => row.booking_id),
+  );
 }
 
-/** The tip recorded against a booking, or null when there's no review/tip yet. */
+/**
+ * The tip actually paid for a booking, or null when there isn't one.
+ *
+ * Only booking_tips counts. reviews.tip_amount is the old recorded-only
+ * amount (no money moved, and the client could write any value to it), so it
+ * must not make a booking read as tipped.
+ */
 export async function getBookingTip(bookingId: string): Promise<number | null> {
-  const { data: paidTip, error: tipError } = await supabase
+  const { data, error } = await supabase
     .from("booking_tips")
     .select("amount_pence")
     .eq("booking_id", bookingId)
     .eq("status", "succeeded")
     .maybeSingle();
-  if (tipError) throw tipError;
-  if (paidTip) return Number((paidTip as { amount_pence: number }).amount_pence) / 100;
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("tip_amount")
-    .eq("booking_id", bookingId)
-    .maybeSingle();
   if (error) throw error;
-  const tip = (data as { tip_amount?: number | null } | null)?.tip_amount;
-  return tip == null ? null : Number(tip);
-}
-
-/**
- * Record a tip against a booking's review.
- *
- * Tips live on the reviews row (reviews.tip_amount) — that table has
- * UNIQUE(booking_id) and a NOT NULL rating, so a tip cannot exist without a
- * review. Returns false when there is no review to attach to, so the caller can
- * ask the client to rate first rather than dropping the tip silently (which is
- * what the UI did before: it only ever set local state).
- *
- * NOTE: this records the AMOUNT only. No payment provider is wired up for tips,
- * so no money moves — the copy shown to the client must not claim otherwise.
- */
-export async function setBookingTip(
-  bookingId: string,
-  tipAmount: number,
-): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("reviews")
-    .update({ tip_amount: tipAmount })
-    .eq("booking_id", bookingId)
-    .select("id");
-
-  if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  return data ? Number((data as { amount_pence: number }).amount_pence) / 100 : null;
 }
 
 export interface BookingTipPaymentSheet {
@@ -4670,9 +4773,12 @@ export async function startBookingTipPayment(bookingId: string, amountPence: num
 }
 
 /** The webhook is authoritative; this closes the normal app path promptly. */
-export async function confirmBookingTipPayment(tipId: string): Promise<void> {
+export async function confirmBookingTipPayment(tipId: string): Promise<'succeeded' | 'processing'> {
   const { data, error } = await supabase.functions.invoke('booking-tip', { body: { action: 'confirm', tipId } });
   if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your tip is processing. Please check again shortly.');
+  // 'processing' = Stripe has it but it isn't recorded yet (the webhook will
+  // finish it). Only 'succeeded' may be shown to the client as paid.
+  return data?.status === 'succeeded' ? 'succeeded' : 'processing';
 }
 
 // ─────────────────────────────────────────────────────────
