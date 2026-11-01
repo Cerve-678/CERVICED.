@@ -91,7 +91,7 @@ export function MyProfileView({
     const isHealth = selectedCategory === 'health';
     return (
       <ThemedBackground style={styles.bg}>
-        <StatusBar barStyle={theme.statusBar} translucent />
+        <StatusBar barStyle={theme.statusBar} />
         <ScrollView contentContainerStyle={scrollStyle} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={onCloseCategory} activeOpacity={0.5} accessibilityRole="button">
@@ -184,7 +184,7 @@ export function MyProfileView({
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
       <ScrollView contentContainerStyle={scrollStyle} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>

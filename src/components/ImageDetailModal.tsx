@@ -14,6 +14,7 @@ import {
   Platform,
   AccessibilityInfo,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 // expo-image instead of RN's Image — see PortfolioCard.tsx for why (Explore's
 // masonry grid is unvirtualized, so caching matters more here than elsewhere).
 import { Image } from 'expo-image';
@@ -110,7 +111,7 @@ export const ImageDetailModal = ({
   // in place without closing the modal — without this, the content
   // ScrollView kept whatever scroll position it was at for the *previous*
   // photo, so the new one could open already scrolled past its info card.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   useEffect(() => {
     if (visible) scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [item?.id, visible]);
@@ -358,7 +359,7 @@ interface ModalBodyProps {
   isBookableService: boolean;
   moreLikeThis: PortfolioItem[];
   moreLikeThisIsFallback: boolean;
-  scrollRef: React.RefObject<ScrollView | null>;
+  scrollRef: React.RefObject<ScrollViewInstance | null>;
   onClose: () => void;
   onSelectItem?: ((item: PortfolioItem) => void) | undefined;
   handleBookmark: (savedItemId: string) => void;

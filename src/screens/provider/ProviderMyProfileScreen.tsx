@@ -39,11 +39,10 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  InteractionManager,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 // Gesture-handler's TouchableOpacity rather than react-native's, for the same
 // reason NotificationsScreen uses it: react-native's runs its own touch
 // responder, so a swipe that hasn't crossed the pan threshold yet can still
@@ -358,7 +357,7 @@ function ProviderProfileLoadingShell({ accent }: { accent: string }) {
 const formatServicePrice = (service: DbService): string =>
   `£${service.price}${service.price_max ? `–£${service.price_max}` : ''}`;
 
-type SwipeableHandle = React.ElementRef<typeof Swipeable>;
+type SwipeableHandle = SwipeableMethods;
 
 /** Lets the screen keep one row swiped open at a time across every category,
  *  the way Mail does, without each card knowing about the others. */
@@ -793,7 +792,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     useCallback(() => {
       let active = true;
       let lowerSectionsStarted = false;
-      let lowerSectionsTask: ReturnType<typeof InteractionManager.runAfterInteractions> | null = null;
+      let lowerSectionsTask: ReturnType<typeof setTimeout> | null = null;
       let lowerSectionsTimer: ReturnType<typeof setTimeout> | null = null;
 
       // Returning providers can render their saved profile before the live
@@ -921,7 +920,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             if (!active || lowerSectionsStarted) return;
             lowerSectionsStarted = true;
             if (lowerSectionsTimer) clearTimeout(lowerSectionsTimer);
-            lowerSectionsTask = InteractionManager.runAfterInteractions(() => {
+            // A tick for the first wave to render before this lower-priority work.
+            lowerSectionsTask = setTimeout(() => {
               if (!active) return;
               setLowerSectionsReady(true);
 
@@ -958,7 +958,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 .catch(error => {
                   logger.warn('[MyServices] saved profile refresh failed:', error);
                 });
-            });
+            }, 0);
           };
           lowerSectionsTimer = setTimeout(startLowerSections, LOWER_SECTIONS_MAX_WAIT_MS);
           void Promise.allSettled(firstWave).then(startLowerSections);
@@ -972,7 +972,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       return () => {
         active = false;
         if (lowerSectionsTimer) clearTimeout(lowerSectionsTimer);
-        lowerSectionsTask?.cancel();
+        if (lowerSectionsTask) clearTimeout(lowerSectionsTask);
       };
     }, [user?.id]),
   );
@@ -2229,6 +2229,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
+                  {setup.percent === 100 ? statusSection : null}
                 </>
               ) : (
                 <>
@@ -2287,8 +2288,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     ))}
                     </>
                   )}
-
-                  {setup.percent === 100 ? statusSection : null}
                 </>
               )}
             </View>

@@ -1565,7 +1565,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={scSt.safe} edges={['top']}>
 
         {/* Header */}

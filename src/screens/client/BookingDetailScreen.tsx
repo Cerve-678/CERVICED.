@@ -7,10 +7,12 @@ import {
   Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback,
   LayoutAnimation,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { Ionicons } from '@expo/vector-icons';
 import { SlideUpOnMount } from '../../components/SlideUpOnMount';
 import * as Print from 'expo-print';
@@ -137,15 +139,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     });
   }, [navigation, C]);
 
-  // The pill would sit over the bottom of the booking card and its actions, so
-  // hide it here (same mechanism as RescheduleScreen). useFocusEffect, so it is
-  // hidden again on return from Reschedule/Chat, whose cleanup restores it.
-  useFocusEffect(useCallback(() => {
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [navigation]));
+  // The pill would sit over the bottom of the booking card and its actions.
+  useHideTabBar();
 
   const insets = useSafeAreaInsets();
 
@@ -208,7 +203,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [supportKind, setSupportKind] = useState<BookingSupportKind | null>(null);
   const [supportReason, setSupportReason] = useState<string | null>(null);
   const [supportMessage, setSupportMessage] = useState('');
-  const supportFormScrollRef = useRef<ScrollView>(null);
+  const supportFormScrollRef = useRef<ScrollViewInstance>(null);
   const [supportBusy, setSupportBusy] = useState(false);
   // This booking's refund requests, newest first — the latest drives the
   // timeline in the payment section. Reloaded on focus, so returning from a

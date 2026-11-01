@@ -199,7 +199,7 @@ export default function AuthScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={theme.statusBar} />
 
       <KeyboardDismissView style={styles.flex}>
         <ScrollView

@@ -247,7 +247,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
       <SafeAreaView style={styles.container} edges={['left', 'right']}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         <ScrollView
           style={styles.content}
