@@ -2737,8 +2737,10 @@ export async function prepareCheckout(
     throw new Error("Checkout could not be prepared. Please try again.");
   }
   // prepare_checkout returns its subtotal as it creates the holds. The
-  // database then applies the (full-payment-only) platform fee atomically,
-  // so read the final client-owned batch rather than trusting the RPC echo.
+  // database then applies the platform fee atomically, so read the final
+  // client-owned batch rather than trusting the RPC echo. This server total is
+  // what the payment sheet shows, so it is right even when an older app
+  // build works the cart's fee out differently.
   const { data: batch, error: batchError } = await supabase
     .from("checkout_batches")
     .select("amount_due, expires_at")

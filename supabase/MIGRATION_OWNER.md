@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-01 (platform fee becomes 5% + 40p)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101150000 | `platform_fee_percentage` | **APPLIED 2026-11-01** by the user (SQL editor), PR #204. Claude's practice run was blocked by the permission check, so the first run was the real one. Verified live: version recorded, `calculate_platform_fee` gives 1.99 / 2.12 / 2.90 / 24.99 for £25 / £34.30 / £50 / £800, the new split is in `apply_checkout_platform_fee`, its trigger exists, and `authenticated` can't execute it. Frontier at authoring: `20261101140000`. Redefines `calculate_platform_fee` and `apply_checkout_platform_fee` (md5 guards against the live definitions). The file records its own version. `create-payment-intent` deployed as v21 for the PayPal limit. |
+
 ### Applied 2026-11-01 (public "How to get there" on the profile)
 
 | Authored version | Name | Status |
