@@ -4,6 +4,7 @@ import { AvailabilityService } from "../../services/AvailabilityService";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import {
   getProviderActivePromotions,
+  isProviderTakingBookings,
   getProviderBySlug,
   getProviderProfilePreviewBySlug,
   getProviderPortfolio,
@@ -61,6 +62,8 @@ export interface ProviderProfileDataState {
   portfolioLoading: boolean;
   openingHours: WeeklyOpeningHoursDay[] | null;
   openingHoursLoading: boolean;
+  /** False only once the server says this provider has closed their schedule. */
+  takingBookings: boolean;
   currentUserId: string | null;
   currentUserName: string;
   isOwnProvider: boolean;
@@ -105,6 +108,7 @@ export function useProviderProfileData(
     WeeklyOpeningHoursDay[] | null
   >(null);
   const [openingHoursLoading, setOpeningHoursLoading] = useState(true);
+  const [takingBookings, setTakingBookings] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("");
   const [isOwnProvider, setIsOwnProvider] = useState(false);
@@ -127,6 +131,7 @@ export function useProviderProfileData(
     setPortfolioLoading(true);
     setOpeningHours(null);
     setOpeningHoursLoading(true);
+    setTakingBookings(true);
     setCurrentUserId(null);
     setCurrentUserName("");
     setIsOwnProvider(false);
@@ -232,6 +237,16 @@ export function useProviderProfileData(
             if (!cancelled) setOpeningHoursLoading(false);
           });
 
+        // The label only: the server refuses the booking either way, so a
+        // failed lookup leaves the buttons as they are rather than hiding them.
+        void isProviderTakingBookings(data.id)
+          .then((taking) => {
+            if (!cancelled) setTakingBookings(taking);
+          })
+          .catch((error: unknown) => {
+            logger.warn("Failed to check whether provider is taking bookings:", error);
+          });
+
         // Booking authority is fail-closed. Never show a booking control
         // until this ownership lookup has answered: a timeout must not turn
         // an owner into a client for even one tappable frame. When
@@ -304,6 +319,7 @@ export function useProviderProfileData(
     portfolioLoading,
     openingHours,
     openingHoursLoading,
+    takingBookings,
     currentUserId,
     currentUserName,
     isOwnProvider,

@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-01 (close a schedule by hand)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101190000 | `close_schedule_by_hand` | **APPLIED** by the user (SQL editor), version recorded by the file. Frontier before apply: `20261101180000`. Verified live: table `provider_schedule_closures` (RLS on, 0 policies, 0 rows, not readable by anon or authenticated); `provider_next_release_after`, `provider_schedule_is_closed` (not executable by authenticated); `close_my_schedule`, `reopen_my_schedule`, `get_my_schedule_closure`, `provider_is_taking_bookings` (authenticated, not anon); the closed check present in `enforce_booking_bookability`, `get_services_open_within`, `process_follow_schedule_release_nudges`, `process_follow_openings_alerts`, `invite_next_waitlist_entry`, `expire_waitlist_holds`, `decline_waitlist_hold`. With nobody closed, 10 of 10 live providers report taking bookings and 50 of 50 sampled services still find a slot. Not yet exercised: a real close and reopen from the app. The file records its own version. |
+
 ### Applied 2026-11-01 (provider achievements)
 
 | Authored version | Name | Status |
