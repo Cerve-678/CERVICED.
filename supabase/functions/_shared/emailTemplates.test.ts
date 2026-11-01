@@ -16,7 +16,6 @@
 // on its default testMatch regardless.
 import {
   bookingConfirmationEmail,
-  claimVerificationEmail,
   clientHatAddedEmail,
   clientWelcomeEmail,
   feePaymentRequestEmail,
@@ -62,7 +61,6 @@ const every = () => [
   ['clientHatAddedEmail', clientHatAddedEmail({ name: HOSTILE })],
   ['providerHatAddedEmail', providerHatAddedEmail({ name: HOSTILE, businessName: HOSTILE })],
   ['passwordChangedEmail', passwordChangedEmail({ name: HOSTILE })],
-  ['claimVerificationEmail', claimVerificationEmail({ code: HOSTILE, businessName: HOSTILE })],
   [
     'bookingConfirmationEmail',
     bookingConfirmationEmail({

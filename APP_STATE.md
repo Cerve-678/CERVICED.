@@ -103,7 +103,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Email verification | ✅ | `src/screens/auth/EmailVerificationScreen.tsx`, edge function `confirm-email` |
 | Forgot/reset password | ✅ | `ForgotPasswordScreen`, `ResetPasswordOTPScreen`, `NewPasswordScreen` |
 | Session persistence | ✅ | Envelope-encrypted via `largeSecureStore.ts` (not plaintext AsyncStorage — hardened Aug 2026) |
-| Provider claim flow | ✅ | `src/screens/auth/ClaimProviderScreen.tsx`, edge function `request-claim-verification` |
+| Provider claim flow | ✅ | `src/screens/auth/ClaimProviderScreen.tsx` → after signup `InfoRegScreen` shows a code to put in the listing's Instagram bio (`request_provider_claim()`, table `provider_claim_requests`). Claims are approved by hand with `review_provider_claim()`, which the app can't call; a Claude session does the checking with the local `/check-claims` command. The email-code claim was retired 2026-10-19 (`20261024100000_listing_claims_checked_by_instagram`): its code was readable by anon. |
 | Provider Acuity Scheduling import | ✅ | `src/services/acuityTransferService.ts` — imports services + pricing from an Acuity link (not a generic provider ID), does not import availability hours |
 | Age verification (16+) | 🚧 | Enforced in sign-up per `LEGAL-COMPLIANCE-NOTES.md`; that file flags open legal questions around this — not a resolved item |
 
@@ -206,7 +206,7 @@ both code paths exist simultaneously on purpose.**
 | Supabase auth + RLS | ✅ | Hardened Aug 2026 — `has_gone_live` gating fixed on 10 tables that were previously app-convention-only; see memory `security-audit-2026-08-02-rls-hardening` |
 | Bookings/notifications DELETE | ❌ by design | No RLS DELETE policy — client-side delete is a silent no-op; use a SECURITY DEFINER RPC |
 | Double-booking prevention | ✅ live | `bookings_no_overlap` constraint, future-only scope; 7 historical conflicts grandfathered (memory `booking-overlap-constraint-undeployed`) |
-| Edge functions | ✅ | `becca-ai`, `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `find-address-by-postcode`, `request-claim-verification`, `send-account-email`, `send-booking-confirmation`, `send-push-notification`, `send-support-request`. All `verify_jwt = true` except `confirm-email`, which is a public link handler by design. The general-purpose `send-email` was **deleted** 2026-08-26 — see "Email & support" below. |
+| Edge functions | ✅ | `becca-ai`, `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `find-address-by-postcode`, `send-account-email`, `send-booking-confirmation`, `send-push-notification`, `send-support-request`. All `verify_jwt = true` except `confirm-email`, which is a public link handler by design. The general-purpose `send-email` was **deleted** 2026-08-26 — see "Email & support" below. |
 | SQL migration tracking | ⚠️ known gap | Most of `supabase/*.sql` has no run/not-run record; a file's existence or absence from `RUN_ALL_MIGRATIONS.sql` is a signal, not proof — see `cerviced-migration-drift` agent before trusting any one file |
 
 ### Email & support (rebuilt 2026-08-24)
