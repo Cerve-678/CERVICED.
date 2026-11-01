@@ -8,7 +8,7 @@
 ## Address release
 Curated: [[Address Release]] · **97 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/services/databaseService.ts` _(184)_
+- `src/services/databaseService.ts` _(185)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(88)_
@@ -109,7 +109,7 @@ Curated: [[Payments]] · **147 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **294 files**
-- `src/services/databaseService.ts` _(900)_
+- `src/services/databaseService.ts` _(903)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(645)_
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **169 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **80 files**
-- `src/services/databaseService.ts` _(79)_
+- `src/services/databaseService.ts` _(80)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_

@@ -68,6 +68,12 @@ Frontier after: **20261025212000**. Still unapplied and now below it: `202610251
 |---|---|---|
 | 20261025140000 | `reschedule_moves_payout_release` | **APPLIED 2026-10-29** by the user (SQL editor; the file's own INSERT records the version). Verified live: version recorded and now the frontier, trigger `after_booking_move_held_payout` on `bookings` (AFTER UPDATE OF booking_date, booking_time, end_time, only when they change), `move_held_payout_with_booking()` SECURITY DEFINER with `search_path=public, pg_temp`, `authenticated` cannot execute it, the one held payout unchanged. Frontier at authoring: `20261025130000` (first written as 20261022100000, renumbered). Adds the function + trigger only; redefines nothing. Shifts a held, unclaimed payout's `release_after` by as much as the appointment moved, either way. |
 
+### Applied 2026-10-25 (service search)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261025130000 | `service_search_people_and_price` | **APPLIED 2026-10-25** by Claude (cerviced-16), CLI `db query --linked -f`; the file records its own version. Frontier at apply: `20261025120000` (also mine). Redefines only the `search_*` functions from 20261025120000, plus new `search_audience_words` and `search_clean_query`. Drops the 4-argument `search_services_ranked` for the new one, which adds `p_max_price` (only the unmerged PR #171 calls it). Verified live: one overload remains, eval 102/103, and an anon REST call works with `p_max_price`. |
+| 20261025120000 | `service_search` | **APPLIED 2026-10-25** by Claude (cerviced-16), Supabase CLI `db query --linked -f`, on the user's OK. The file records its own version. Frontier at apply: `20261024100000`; cerviced-3f confirmed it would renumber its unapplied `provider_booked_contact` above whatever is live when it applies. Adds `search_edit_distance`, `search_category_words`, `search_synonym_map`, `search_rewrite_query` and `search_services_ranked` (all SECURITY INVOKER, has_gone_live-gated). Redefines nothing. Verified live: the version is recorded, anon can execute, `supabase/tests/service_search_eval.sql` 91/92, and an anon REST call returns results. PR #171's app code needs this, and can merge now. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 

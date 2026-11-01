@@ -129,6 +129,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Browse/search/filter providers | ✅ | `HomeScreen`, `SearchScreen`, `ExploreScreen` → `databaseService.getProviders()`, capped at `DEFAULT_PROVIDER_QUERY_LIMIT` (200) |
+| Search services, typo-tolerant | 🟡 needs migration `20261025120000` applied | `SearchScreen` → `searchProvidersAndServices()` → RPC `search_services_ranked`: matching services in a row above the provider grid (max 3 per provider, tap opens that service's booking sheet), query rewritten into words live services use (typos "frsnch" → french, "blowdry"/"pony tail" joined or split, half-typed words), names/headings/tags/category words/descriptions matched, synonyms in SQL `search_synonym_map()`. Graded by `supabase/tests/service_search_eval.sql` (`scripts/search-eval.sh` tests an unapplied version): 91/92 on 2026-10-25. Becca's `searchProviders` gets the same matching |
 | Provider profile view | ✅ | `ProviderProfileScreen` |
 | Add to cart (multi-provider) | ✅ | `CartContext` — reducer pattern, groups items by provider |
 | Cart pricing | ✅ | `CartContext.ts:554` — service fee = `max(subtotal * 0.05, £2)`. Confirmed still exactly this formula. |
