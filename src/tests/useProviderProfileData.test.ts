@@ -30,7 +30,6 @@ jest.mock("../services/databaseService", () => ({
 
 jest.mock("../services/AvailabilityService", () => ({
   AvailabilityService: {
-    getAvailabilitySummary: jest.fn(),
     getWeeklyOpeningHours: jest.fn(),
   },
 }));
@@ -72,9 +71,6 @@ describe("useProviderProfileData", () => {
     (getProviderActivePromotions as jest.Mock).mockReturnValue(pending());
     (getProviderPortfolio as jest.Mock).mockReturnValue(pending());
     (getProviderProfileViewerContext as jest.Mock).mockReturnValue(pending());
-    (AvailabilityService.getAvailabilitySummary as jest.Mock).mockReturnValue(
-      pending(),
-    );
     (AvailabilityService.getWeeklyOpeningHours as jest.Mock).mockReturnValue(
       pending(),
     );
@@ -98,10 +94,6 @@ describe("useProviderProfileData", () => {
     expect(result.current.providerDbId).toBe("provider-1");
     expect(result.current.reviewsLoading).toBe(true);
     expect(result.current.viewerChecked).toBe(false);
-    expect(AvailabilityService.getAvailabilitySummary).toHaveBeenCalledWith(
-      "provider-1",
-      { includeExtendedSearch: false },
-    );
   });
 
   it("paints the lightweight profile before its full catalogue arrives", async () => {
