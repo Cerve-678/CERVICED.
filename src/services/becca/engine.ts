@@ -1100,6 +1100,7 @@ function buildSocialReply(message: string, hat: BeccaHat): ChatMessage | null {
   const plain = message
     .trim()
     .toLowerCase()
+    .replace(/’/g, "'")
     .replace(/[!?.]+$/g, "")
     .replace(/\s+/g, " ");
 
@@ -1110,6 +1111,22 @@ function buildSocialReply(message: string, hat: BeccaHat): ChatMessage | null {
           hat === "provider"
             ? "Hi — I’m here to help you stay on top of your business. What would you like to check?"
             : "Hi — what would you like help with today?",
+        suggestions: defaultStarters(hat),
+      },
+      hat,
+    );
+  }
+
+  // Identity questions are just as common as a greeting, particularly in a
+  // new chat. Keep this before intent matching: neither answer needs account
+  // data, and "what's your name?" should not fall through to uncertainty.
+  if (/^(?:what(?:'s| is) (?:your|ur) n(?:ame|sme)|who are you|what are you|are you becca|is your name becca|tell me your name|your name)$/.test(plain)) {
+    return message_(
+      {
+        content:
+          hat === "provider"
+            ? "I’m Becca, CERVICED’s business assistant. I can help with your diary, clients and business setup."
+            : "I’m Becca, CERVICED’s beauty and booking assistant. I can help you find providers and stay on top of your bookings.",
         suggestions: defaultStarters(hat),
       },
       hat,
