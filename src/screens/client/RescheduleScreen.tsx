@@ -1,7 +1,7 @@
 // RescheduleScreen.tsx
 // Reschedule flow extracted from BookingsScreen. Receives { bookingId } route param.
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
-import { useIsFocused } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Platform, Modal,
@@ -136,17 +136,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     });
   }, [navigation, C]);
 
-  // Same mechanism as InfoRegScreen/ProviderProfileScreen: IslandPillTabBar
-  // reads tabBarStyle off the focused tab's route options. Cleanup restores
-  // the pill on blur so this screen's hidden state never leaks onto the next.
-  const isFocused = useIsFocused();
-  useEffect(() => {
-    if (!isFocused) return;
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [isFocused, navigation]);
+  useHideTabBar();
 
   // A group reschedule proposal (see supabase/fix_group_booking_reschedule.sql)
   // stamps EVERY sibling's request row with the same groupRescheduleBatchId —

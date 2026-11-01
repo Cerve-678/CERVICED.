@@ -5,7 +5,7 @@
 
 #generated
 
-**2832 functions** across **387 files**.
+**2833 functions** across **388 files**.
 
 ### `src/components/` (52)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -203,11 +203,12 @@
 ### `src/lib/` (1)
 - `sentry.ts` — **initSentry**
 
-### `src/navigation/` (4)
+### `src/navigation/` (5)
 - `AppNavigator.tsx` — AppNavigator
 - `modeController.ts` — **registerModeSetter** · **requestMode** · **resolveModeChange**
 - `rootNavigate.ts` — **navigateAfterDismiss** · **navigateNested** · **navigateTab**
 - `RootNavigation.tsx` — receive · RootNavigation
+- `useHideTabBar.ts` — **useHideTabBar**
 
 ### `src/navigation/client/` (1)
 - `ClientTabNavigator.tsx` — CartBadge · CartTabIcon · TabNavigation

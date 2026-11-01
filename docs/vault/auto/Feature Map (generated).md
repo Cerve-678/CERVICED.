@@ -108,7 +108,7 @@ Curated: [[Payments]] · **148 files**
 - … +118 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **295 files**
+Curated: [[Booking Flow]] · **296 files**
 - `src/services/databaseService.ts` _(953)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **295 files**
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
-- … +265 more
+- … +266 more
 
 ## Notifications
 Curated: [[Notifications]] · **168 files**
@@ -244,11 +244,11 @@ Curated: [[Booking Flow]] · **57 files**
 - … +27 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **180 files**
+Curated: [[Booking Flow]] · **181 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
 - `src/services/databaseService.ts` _(238)_
-- `src/screens/client/BookingDetailScreen.tsx` _(199)_
+- `src/screens/client/BookingDetailScreen.tsx` _(197)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/RescheduleScreen.tsx` _(143)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **180 files**
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `src/types/database.ts` _(34)_
-- … +150 more
+- … +151 more
 
 ## Auth
 Curated: [[Contexts]] · **189 files**
@@ -346,7 +346,7 @@ Curated: [[Services]] · **48 files**
 - … +18 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **73 files**
+Curated: [[Payments]] · **74 files**
 - `src/screens/client/CartScreen.tsx` _(408)_
 - `src/services/databaseService.ts` _(97)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **73 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
-- … +43 more
+- … +44 more
