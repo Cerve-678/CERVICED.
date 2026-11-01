@@ -96,7 +96,7 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
-import { resolveSlotsRow } from "../../utils/slotsRowText";
+import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
@@ -1375,8 +1375,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     promotions,
     portfolio,
     portfolioLoading,
-    availability,
-    availabilityLoading,
     openingHours,
     openingHoursLoading,
     currentUserId,
@@ -3384,8 +3382,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // up after they're fully booked (process_follow_openings_alerts), their
       // offers and announcements, and — with a release day — each new month.
       return releaseDay != null
-        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their offers`
-        : `You'll hear when ${fullName} has space open up, and about their offers`;
+        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their announcements and offers`
+        : `Stay updated — you'll hear when ${fullName} has space open up, and about their announcements and offers`;
     } else {
       return providerIsBookmarked
         ? `Added to Your Providers`
@@ -5033,23 +5031,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </Text>
                 ) : null}
 
-                {/* Slots + bell — the computed live-availability
-                    headline/detail. The provider's old hand-typed slotsText
-                    field used to take precedence here; that field is gone and
-                    the pill is now always derived from the real schedule, so
-                    there's nothing for a provider to keep in sync by hand.
-                    Hidden entirely for a provider with no schedule published
-                    at all (state === 'unpublished') — the booking RPC rejects
-                    every booking for them, so a "notify me when slots open"
-                    bell wouldn't be true. The bell/notify-on-release-day
-                    logic is unchanged — it was never tied to this text. */}
+                {/* Slots + bell. The pill says when this provider's diary
+                    opens — "New slots drop on the 5th" — or, without a
+                    release day, "Stay updated" beside the bell that delivers
+                    their updates. See slotsPillText. */}
                 {(() => {
-                  // Headline only — the "Next free ..." detail belongs to the
-                  // date/time picker, not to a pill about when a diary opens.
-                  // resolveSlotsRow owns both which of the two sources wins
-                  // and whether the answer is available yet; see its comment
-                  // for why a provider with a release day never waits on the
-                  // availability fetch.
                   if (isLinkOnly) {
                     // In place of the availability pill: Book (their own
                     // page, opened inside CERVICED) with their socials and
@@ -5110,11 +5096,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </View>
                     );
                   }
-                  const row = resolveSlotsRow({
-                    scheduleReleaseDay: provider.scheduleReleaseDay,
-                    availability,
-                    availabilityLoading,
-                  });
+                  const pillText = slotsPillText(provider.scheduleReleaseDay);
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every
@@ -5122,7 +5104,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   // used to sit inside this block's early return and vanished
                   // whenever there was no availability headline to print.
                   const showInstagram = !!provider.instagram;
-                  if (row.kind === 'waiting') return null;
                   return (
                   // Instagram sits OUTSIDE the pill, as its own round button
                   // beside it. Inside, it read as part of the availability
@@ -5146,7 +5127,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         style={styles.slotsCardHighlight}
                       />
                       <Text style={[styles.slotsText, { color: OP.sub }]}>
-                        {row.text}
+                        {pillText}
                       </Text>
                       <TouchableOpacity
                         style={styles.bellButtonInline}

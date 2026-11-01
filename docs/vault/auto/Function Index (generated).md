@@ -400,7 +400,7 @@
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery** · takePrice
 - `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
-- `slotsRowText.ts` — **resolveSlotsRow**
+- `slotsRowText.ts` — **slotsPillText**
 - `stripeConnectReturn.ts` — **parseStripeConnectReturn**
 - `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**
 - `textAppearanceStore.ts` — **getTextAppearance** · **setTextAppearance** · **subscribeTextAppearance**
