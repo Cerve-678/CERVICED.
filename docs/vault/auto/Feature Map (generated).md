@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **296 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/RescheduleScreen.tsx` _(175)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(138)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(139)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/screens/shared/NotificationsScreen.tsx` _(133)_
@@ -147,7 +147,7 @@ Curated: [[Notifications]] · **168 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(318)_
 - `src/services/databaseService.ts` _(191)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(104)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(106)_
 - `supabase/notification_recipient_role.sql` _(91)_
 - `supabase/provider_reminder_jobs.sql` _(86)_
 - `src/screens/provider/ProviderPromotionsScreen.tsx` _(74)_
@@ -350,7 +350,7 @@ Curated: [[Payments]] · **74 files**
 - `src/screens/client/CartScreen.tsx` _(408)_
 - `src/services/databaseService.ts` _(97)_
 - `src/contexts/BookingContext.tsx` _(70)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(62)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/components/BookingSheet.tsx` _(34)_
 - `src/contexts/CartContext.tsx` _(31)_
 - `src/services/AvailabilityService.ts` _(31)_
