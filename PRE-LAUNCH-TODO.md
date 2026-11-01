@@ -1234,7 +1234,7 @@ Items 1 and 2 stop money going wrong; items 3 and 4 deal with it once it has.
    2026-10-31.
 2. **Rescheduling must not dodge a late-cancel charge.** *Built
    2026-10-31 on `feat/late-reschedule-keeps-cancel-charge`; live once
-   migration `20261031200000` is applied and `apply-cancellation-refund` is
+   migration `20261101130000` is applied and `apply-cancellation-refund` is
    deployed.* A client already too late to cancel for free can reschedule
    (reschedule notice is a separate, often looser setting), then cancel the
    new date for a full refund, because `apply-cancellation-refund` only looks

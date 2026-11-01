@@ -1,7 +1,8 @@
 -- Rescheduling can't be used to dodge a late-cancellation charge.
 --
--- Frontier at authoring: 20261031173214 (verified live 2026-10-31). No open
--- PR branch has an unapplied migration above it. Check the lock in
+-- Frontier: live 20261101115322 (provider_booking_directions, applied
+-- 2026-11-01, which also rebuilt client_bookings). First written as
+-- 20261031200000 and renumbered above it the same day. Check the lock in
 -- MIGRATION_OWNER.md and re-check max(version) before applying.
 --
 -- The loophole (PRE-LAUNCH-TODO §26 item 2, PAYMENTS_AND_LOGIC.md Part 6):
@@ -53,8 +54,9 @@
 --     inside the window. Nothing else changes.
 --   - process_cancel_window_closing_warnings: skips late-rescheduled
 --     bookings, whose "cancel by" time would no longer be true.
---   - client_bookings view: one column added at the end; security_invoker
---     kept.
+--   - client_bookings view: rebuilt from its live definition on 2026-11-01
+--     (md5 guarded, so a newer rebuild stops this file rather than being
+--     dropped), with two columns added at the end; security_invoker kept.
 --
 -- apply-cancellation-refund reads bookings.late_reschedule_from and must be
 -- deployed after this is applied (it selects the column, so deploying it
@@ -81,6 +83,10 @@ BEGIN
   SELECT md5(pg_get_functiondef('public.cancel_own_booking(uuid)'::regprocedure)) INTO v_md5;
   IF v_md5 <> '1edce41092538fc2c52d299ff1e96434' THEN
     RAISE EXCEPTION 'cancel_own_booking changed since this file was written (md5 %). Re-diff before applying.', v_md5;
+  END IF;
+  SELECT md5(pg_get_viewdef('public.client_bookings'::regclass)) INTO v_md5;
+  IF v_md5 <> 'a1f38383fa0d1aef9b4ac6410a82536b' THEN
+    RAISE EXCEPTION 'client_bookings changed since this file was written (md5 %). Rebuild the view below from live before applying.', v_md5;
   END IF;
   SELECT md5(pg_get_functiondef('public.process_cancel_window_closing_warnings()'::regprocedure)) INTO v_md5;
   IF v_md5 <> 'be76bfa78ae2f94833041d4658fcd882' THEN
@@ -592,6 +598,10 @@ CREATE OR REPLACE VIEW public.client_bookings WITH (security_invoker = true) AS
     b.refunded_amount,
     b.cancelled_by,
     b.policy_retained_amount,
+        CASE
+            WHEN is_address_released(b.status, p.address_release_policy, b.address_released_at, b.booking_date, b.booking_time) THEN b.provider_directions_snapshot
+            ELSE NULL::text
+        END AS provider_directions_snapshot,
     b.late_reschedule_from,
     (b.created_at >= late_reschedule_rule_starts_at()) AS late_reschedule_rule_applies
    FROM ((bookings b
@@ -600,7 +610,7 @@ CREATE OR REPLACE VIEW public.client_bookings WITH (security_invoker = true) AS
   WHERE (b.status <> 'on_hold'::text);
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261031200000', 'late_reschedule_keeps_cancel_charge')
+VALUES ('20261101130000', 'late_reschedule_keeps_cancel_charge')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

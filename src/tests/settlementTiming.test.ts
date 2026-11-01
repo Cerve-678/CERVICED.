@@ -42,7 +42,7 @@ describe('describeSettlementTiming', () => {
 describe('rescheduling inside the cancellation window', () => {
   const root = join(__dirname, '..', '..');
   const fn = readFileSync(join(root, 'supabase/functions/apply-cancellation-refund/index.ts'), 'utf8');
-  const sql = readFileSync(join(root, 'supabase/migrations/20261031200000_late_reschedule_keeps_cancel_charge.sql'), 'utf8');
+  const sql = readFileSync(join(root, 'supabase/migrations/20261101130000_late_reschedule_keeps_cancel_charge.sql'), 'utf8');
 
   it('settles a late-moved booking as a late cancel', () => {
     expect(fn).toMatch(/late_reschedule_from/);

@@ -682,7 +682,7 @@ export interface DbBooking {
   refunded_amount?: number | null;
   policy_retained_amount?: number | null;
   /** Start of the appointment the client moved away from while already
-   *  inside its cancellation window (migration 20261031200000). */
+   *  inside its cancellation window (migration 20261101130000). */
   late_reschedule_from?: string | null;
   /** client_bookings only: booked after that rule went live, so it applies. */
   late_reschedule_rule_applies?: boolean | null;
