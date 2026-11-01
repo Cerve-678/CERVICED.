@@ -170,11 +170,11 @@ export function SpecialityMultiSelect({ selected, onChange, options, palette: t,
                       Use &ldquo;{customCandidate}&rdquo;
                     </Text>
                   </TouchableOpacity>
-                ) : null
+                ) : undefined
               }
               ListEmptyComponent={
                 customCandidate
-                  ? null
+                  ? undefined
                   : <Text style={[styles.empty, { color: t.sub }]}>No specialities match &ldquo;{query}&rdquo;</Text>
               }
             />

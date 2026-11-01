@@ -14,6 +14,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { BookingWithAddOns } from '../../types/database';
@@ -275,7 +276,7 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
   // Opens on the next client, with the card before it peeking in from the
   // left. Re-applied only when the lead moves (a client finishing, the day
   // rolling over to tomorrow), never in the middle of someone's swipe.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const laidOut = useRef(false);
   const appliedKey = useRef<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(leadIndex);

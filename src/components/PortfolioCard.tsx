@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
 // expo-image instead of RN's Image — Explore's masonry grid is unvirtualized
 // (every card mounts at once, see MasonryGrid.tsx), so disk/memory caching
 // matters even more here than elsewhere: without it, every image on every
@@ -34,8 +35,8 @@ interface PortfolioCardProps {
   // (see ExploreScreen's tourCardId) so the first-visit tour can spotlight a
   // real heart button and a real price badge, rather than a guessed rect.
   // Every other card gets neither and is unaffected.
-  heartRef?: React.RefObject<View | null>;
-  priceRef?: React.RefObject<View | null>;
+  heartRef?: React.RefObject<ViewInstance | null>;
+  priceRef?: React.RefObject<ViewInstance | null>;
 }
 
 const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef }: PortfolioCardProps) => {

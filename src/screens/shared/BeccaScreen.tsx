@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from "../../components/SafeArea";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
@@ -132,7 +133,7 @@ export default function BeccaScreen({
   // Attached to an `Animated.ScrollView` (see the hero⇄chat transition), which
   // forwards its ref to the underlying ScrollView — so `scrollToEnd` below
   // still resolves and the `ScrollView` type annotation stays accurate.
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   const responseTypingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Resolves the current typewriter wait. The stop button uses this same
   // completion path as the natural final character, so persistence, chips and

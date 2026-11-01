@@ -7,6 +7,7 @@ import {
   Keyboard, KeyboardAvoidingView, TouchableWithoutFeedback,
   LayoutAnimation,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -202,7 +203,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [supportKind, setSupportKind] = useState<BookingSupportKind | null>(null);
   const [supportReason, setSupportReason] = useState<string | null>(null);
   const [supportMessage, setSupportMessage] = useState('');
-  const supportFormScrollRef = useRef<ScrollView>(null);
+  const supportFormScrollRef = useRef<ScrollViewInstance>(null);
   const [supportBusy, setSupportBusy] = useState(false);
   // This booking's refund requests, newest first — the latest drives the
   // timeline in the payment section. Reloaded on focus, so returning from a

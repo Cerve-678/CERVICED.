@@ -21,6 +21,8 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -740,7 +742,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   // padding on the scroll container, which would otherwise throw off the
   // snap points.
   const cardWidth = screenWidth;
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [activeTemplateIdx, setActiveTemplateIdx] = useState(0);
   const handleTemplateScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setActiveTemplateIdx(Math.round(e.nativeEvent.contentOffset.x / cardWidth));
@@ -1008,7 +1010,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [durationOpen, setDurationOpen] = useState(false);
   const [openBuffer, setOpenBuffer] = useState<'before' | 'after' | null>(null);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   // Measured Y position of each input group, captured via onLayout — lets
   // focus scroll precisely to just above the field instead of always
   // jumping to the very bottom of the form.
@@ -2154,7 +2156,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" />
       <View style={[styles.previewContainer, { backgroundColor: PP.bg }]}>
         {/* Hero photo/gradient backdrop — mirror ProviderProfileScreen: a real
             cover photo (with a dark gradient overlay for legible text) when
@@ -2701,21 +2703,21 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Ref for the horizontal pager that moves between the 5 sections — replaces
   // the single vertical ScrollView this screen used to have.
-  const pagerRef = useRef<ScrollView>(null);
+  const pagerRef = useRef<ScrollViewInstance>(null);
 
   // Each section now has its own independent vertical scroll space, so a
   // single shared ref no longer makes sense — these are ref maps keyed by
   // EditorSectionKey (the same key EDITOR_SECTIONS is already indexed by)
   // instead of 5 separate useRef calls, so the mapping stays symmetric with
   // the data-driven section list.
-  const sectionScrollRefs = useRef<Partial<Record<EditorSectionKey, ScrollView | null>>>({});
-  const sectionContentRefs = useRef<Partial<Record<EditorSectionKey, View | null>>>({});
+  const sectionScrollRefs = useRef<Partial<Record<EditorSectionKey, ScrollViewInstance | null>>>({});
+  const sectionContentRefs = useRef<Partial<Record<EditorSectionKey, ViewInstance | null>>>({});
   const registerSectionScroll = useCallback(
-    (key: EditorSectionKey) => (node: ScrollView | null) => { sectionScrollRefs.current[key] = node; },
+    (key: EditorSectionKey) => (node: ScrollViewInstance | null) => { sectionScrollRefs.current[key] = node; },
     [],
   );
   const registerSectionContent = useCallback(
-    (key: EditorSectionKey) => (node: View | null) => { sectionContentRefs.current[key] = node; },
+    (key: EditorSectionKey) => (node: ViewInstance | null) => { sectionContentRefs.current[key] = node; },
     [],
   );
 
@@ -2733,11 +2735,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // With five independent page scrollers, those guesses would be wrong
   // silently. Measuring removes the guesswork entirely: there is no
   // magic number left to keep in sync when the layout changes.
-  const fieldNodes = useRef<Record<string, View | null>>({});
+  const fieldNodes = useRef<Record<string, ViewInstance | null>>({});
 
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const registerField = useCallback(
-    (name: string) => (node: View | null) => { fieldNodes.current[name] = node; },
+    (name: string) => (node: ViewInstance | null) => { fieldNodes.current[name] = node; },
     [],
   );
 
@@ -3298,7 +3300,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Keeps the selected category tab in view — panning back to the start of
   // the strip every time you pick a category (especially one further along
   // the list) was disorienting.
-  const categoryScrollRef = useRef<ScrollView>(null);
+  const categoryScrollRef = useRef<ScrollViewInstance>(null);
   // Category pill order. Dragging uses the handle and commits the new order
   // when the finger is released; there are no hold, lift or reflow effects.
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
@@ -4114,7 +4116,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             already provides that; the branding preview lives only in the
             Preview modal. */}
 
-        <StatusBar barStyle={statusBarStyle} translucent backgroundColor="transparent" />
+        <StatusBar barStyle={statusBarStyle} />
 
         {/* Transfer Data Modal */}
         <TransferDataModal

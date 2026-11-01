@@ -1281,3 +1281,32 @@ for the account Claude Code is signed in to.
 - Run the Today cards on a device. That hasn't been done yet. Check the
   2pm swap, the switch to tomorrow after the last client, and that a tap
   opens the booking and the full day.
+
+---
+
+## 29. BLOCKING before real money — promo codes aren't applied at real checkout (2026-11-01)
+
+**What's wrong:** a client enters a promo code and the review screen shows the
+discount, but the card is charged the full price. The app takes the discount
+off on the client's phone (`itemPromoDiscounts` in `CartScreen.tsx`), while the
+server works out the charge from the service's own price, and
+`prepare_checkout` has no way to receive a promo code.
+
+**Example:** a £120 service with a £30 promo shows £94.90 at review (£90 +
+£4.90 fee). The payment sheet then shows, and the card is charged, £126.40
+(£120 + £6.40 fee). This was there before the percentage fee (PR #204).
+
+**Why it blocks launch:** the client is shown one price and asked to pay
+another, and the offer they were promised isn't honoured.
+
+**To fix:**
+- Send the promo code to `prepare_checkout`, and have the server check it and
+  take the discount off. The app must never decide the amount.
+- Decide who pays for the discount. The provider's payout is what was paid
+  minus the fee, so as things stand a server-side discount would come out of
+  the provider's share. Confirm that's what's wanted.
+- Decide whether the 5% + 40p fee and any deposit are worked out after the
+  discount. The cart currently assumes both are.
+- Update `docs/PAYMENTS_AND_LOGIC.md` in the same change.
+- Test a promo on a full payment, on a deposit, and in a cart with several
+  providers, checking review screen, payment sheet, receipt and payout agree.

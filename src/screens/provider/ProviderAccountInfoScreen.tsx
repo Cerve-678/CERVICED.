@@ -132,7 +132,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
 
   return (
     <View style={[styles.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
 

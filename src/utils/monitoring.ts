@@ -1,4 +1,3 @@
-import { InteractionManager } from 'react-native';
 import { logger } from './logger';
 
 export const MonitoringUtils = {
@@ -13,9 +12,5 @@ export const MonitoringUtils = {
       // Send to analytics in production
       // Analytics.track('screen_load_time', { screenName, loadTime });
     };
-  },
-
-  runAfterInteractions: (callback: () => void) => {
-    InteractionManager.runAfterInteractions(callback);
   }
 };
