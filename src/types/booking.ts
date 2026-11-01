@@ -376,6 +376,8 @@ export interface ConfirmedBooking {
   updatedAt: string;
   confirmedAt?: string | undefined;
   bookingInstructions?: string | undefined;
+  /** Venue access / arrival details, revealed alongside the booking address. */
+  howToGetThere?: string | undefined;
 
   // The provider's cancellation/booking policy as the client agreed to it at
   // checkout (BookingSheet/MultiBookingSheet only — CartScreen's checkbox is

@@ -2904,6 +2904,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     serviceLocations: [],
     preferredPaymentMethods: [],
     fullAddress: '',
+    howToGetThere: '',
     fullAddressCoordinates: null,
     addressReleasePolicy: null,
     backgroundImage: null,
@@ -5474,6 +5475,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   fullAddressCoordinates: coordinates,
                 }))}
                 accentColor={adaptiveAccentColor}
+              />
+
+              <View style={[styles.docFieldRow, { marginTop: 14 }]}>
+                <Text style={styles.policyLabel}>HOW TO GET THERE</Text>
+              </View>
+              <Text style={styles.addressHint}>
+                Optional arrival details such as parking, entrance or nearest transport. Shared only with booked clients when their location is released.
+              </Text>
+              <TextInput
+                value={providerData.howToGetThere}
+                onChangeText={(howToGetThere) => setProviderData(prev => ({ ...prev, howToGetThere: howToGetThere.slice(0, 500) }))}
+                placeholder="e.g. Use the side entrance beside the blue gate."
+                placeholderTextColor="#8B8178"
+                multiline
+                maxLength={500}
+                style={[styles.docInput, { minHeight: 86, textAlignVertical: 'top' }]}
+                accessibilityLabel="How clients get there"
               />
 
               {/* Which timings each business type may offer is

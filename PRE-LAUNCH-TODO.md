@@ -1219,3 +1219,46 @@ Confirm Your Details if the client goes back to the cart tab themselves.
 Closing this needs the address page to intercept back when it was opened
 from checkout (`usePreventRemove`, or a `BackHandler` plus
 `gestureEnabled: false`).
+
+---
+
+## 26. BLOCKING — install the QR-code dependency from PR #167 (2026-10-25)
+
+`src/components/ProviderProfileQrSheet.tsx` imports
+`react-native-qrcode-svg`, added by PR #167. The package was missing from the
+main worktree's `package.json` and lockfile, causing `npm run type-check` /
+`npx tsc --noEmit` to fail with `TS2307`. It was installed locally as
+`react-native-qrcode-svg@^6.3.27` on 2026-10-25 and typecheck now passes; the
+two dependency files still need committing. The Quality workflow runs
+typecheck before lint and tests, so do not treat a passing Jest run alone as
+release-ready.
+
+**Before the next release:** from a clean, current branch run
+`npx expo install react-native-qrcode-svg`, commit both `package.json` and
+the lockfile, then run `npm ci`, `npm run type-check`, lint and the full test
+suite. Make a native development/TestFlight build too: QR rendering includes
+a native dependency and cannot be validated solely through TypeScript.
+
+---
+
+## 27. IMPORTANT — complete Becca replies after the app is backgrounded or closed
+
+Becca now keeps an in-flight reply in the correct, hat-specific chat when a
+person switches between Client and Provider while the app remains active. That
+is not a guarantee if iOS or Android suspends the app, or if the app is closed:
+the current capability execution happens in the mobile process and may stop
+before the reply is saved.
+
+Build a server-side, persisted Becca work queue for requests that need to
+survive app suspension. A worker should complete a queued request, store the
+verified response in the **same hat-specific** Becca session, and send a push
+notification saying the answer is ready. It must retain the current safety
+model: provider and client jobs are separate; a job can only read the active
+account's authorised data; model output can select an approved capability or
+format verified facts, never invent facts or execute unrestricted actions.
+
+This is a larger architecture change, not a background timer: the current
+provider/client capabilities run in the app, so the safe server-side data and
+action boundary must be designed before moving them. Include cancellation,
+expiry, retries, duplicate-tap idempotency, notification failure handling and
+what happens when the account/hat changes while a job is waiting.
