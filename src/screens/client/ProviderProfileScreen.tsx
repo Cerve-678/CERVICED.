@@ -1363,7 +1363,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // A resolved `null` is meaningful (this viewer owns no provider); an
   // unresolved or failed lookup stays `undefined` so the hook retains its
   // authenticated fallback check.
-  const { myProviderId, myProviderIdStatus } = useAuth();
+  const { myProviderId, myProviderIdStatus, hatState } = useAuth();
   const viewerOwnershipHint =
     myProviderIdStatus === "resolved" ? myProviderId : undefined;
   const {
@@ -1400,7 +1400,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     viewerChecked,
   });
 
-  const canSaveProvider = viewerChecked && canBookProvider && providerDbId !== null;
+  // A provider-only account reaches this screen by scanning someone's QR code.
+  // It sees what clients see, but Bookings, Cart and Chat don't exist in the
+  // provider tabs, and saved providers belong to a client profile.
+  const viewingOtherAsProvider = hatState.active === "provider" && !isOwnProvider;
+  const canSaveProvider =
+    viewerChecked && canBookProvider && providerDbId !== null && !viewingOtherAsProvider;
 
   // Link-only provider (booking_mode 'external'): Book opens their own page,
   // and there's no price list, rating or reviews on this profile.
@@ -2000,6 +2005,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // coordinates with native-stack to prevent that. showConfirm is the
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+
+  const refuseBookingAsProvider = useCallback((): boolean => {
+    if (!viewingOtherAsProvider) return false;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+      () => {},
+    );
+    showAlert(
+      "Book from a client profile",
+      "You're signed in with a provider account, so you can look around but not book. You can add a client profile from your Profile tab.",
+      "center",
+    );
+    return true;
+  }, [viewingOtherAsProvider, showAlert]);
   // A client can ask a link-only provider to take bookings on CERVICED. The
   // database records at most one nudge per client/provider/day, so rapid taps
   // or a stale app state cannot inflate the provider's Analytics.
@@ -2372,7 +2390,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // out-of-app system dialog on a heavily themed screen AND a dead end that
     // told you to go and scroll somewhere. Show the options themselves
     // instead, in the app's own bottom sheet.
-    if (isOwnProvider) {
+    if (isOwnProvider || viewingOtherAsProvider) {
       setContactSheetVisible(true);
       return;
     }
@@ -2382,7 +2400,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       providerName: provider.displayName,
       promptMode: "enquiry",
     });
-  }, [provider, providerDbId, navigation, isOwnProvider]);
+  }, [provider, providerDbId, navigation, isOwnProvider, viewingOtherAsProvider]);
 
   // The communication options this provider actually publishes, in the order
   // the Contact card lists them. Built once so the sheet and that card can't
@@ -2655,11 +2673,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const openLinkOnlyBooking = useCallback(() => {
     const url = provider?.externalBookingUrl;
     if (!url) return;
+    if (refuseBookingAsProvider()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     // Straight to their page, inside the app — no "you're leaving" step
     // (product owner, 2026-10-18).
     continueToLinkOnlyBooking(url);
-  }, [provider?.externalBookingUrl, continueToLinkOnlyBooking]);
+  }, [provider?.externalBookingUrl, continueToLinkOnlyBooking, refuseBookingAsProvider]);
 
   const handleDidYouBookSubmit = useCallback(
     async (result: DidYouBookResult) => {
@@ -2705,6 +2724,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
+    if (refuseBookingAsProvider()) return;
 
       // Providers with an external booking link are fully bypassed from
       // Cerviced's in-app booking — hand off to their own booking page
@@ -2818,6 +2838,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       isOwnProvider,
       showAlert,
       openLinkOnlyBooking,
+      refuseBookingAsProvider,
     ],
   );
 
@@ -2914,6 +2935,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
+    if (refuseBookingAsProvider()) return;
     if (!takingBookings) {
       showAlert("Not taking bookings", "This provider isn't taking bookings right now.", "center");
       return;
@@ -2927,7 +2949,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.error("Error opening booking sheet:", error);
       Alert.alert("Error", "Failed to open booking options. Please try again.");
     }
-  }, [tryOpenExternalBooking, isOwnProvider, showAlert, takingBookings]);
+  }, [tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider, takingBookings]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -3070,6 +3092,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
+    if (refuseBookingAsProvider()) return;
     // Defensive only — the "Select" entry point is already hidden for these
     // providers (see tryOpenExternalBooking's other call sites).
     if (tryOpenExternalBooking()) return;
@@ -3086,7 +3109,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     setMultiBookingServices(selectedServicesFlat);
     setShowMultiBookingSheet(true);
-  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showAlert]);
+  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider]);
 
   // Floating "N selected • £total — Book" bar. Rendered from two places (the
   // main screen and the fullscreen "All Services" sheet, which is a separate

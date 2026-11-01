@@ -67,6 +67,16 @@ export default function ProviderAccountNavigator() {
         options={{ headerShown: false }}
       />
 
+      {/* Someone else's profile, opened by a provider-only account scanning their
+          QR code. The screen knows it's in the provider hat: Book explains, and
+          Message opens their public contact options, so nothing here leads into
+          a client-only flow. */}
+      <ProviderAccountStack.Screen
+        name="PublicProviderProfile"
+        component={MyPublicProfileComponent}
+        options={{ headerShown: false }}
+      />
+
       <ProviderAccountStack.Screen
         name="EditProfile"
         component={InfoRegComponent}

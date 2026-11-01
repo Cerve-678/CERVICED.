@@ -110,7 +110,7 @@ describe('notification routing — deep-link payload', () => {
     const source = providerProfileLink();
     expect(source).toContain('isProviderProfileUuid(providerKey)');
     expect(source).toContain('getProviderBasicById(providerKey)');
-    expect(source).toContain("params: { providerId: providerSlug, source: 'profile_qr' }");
+    expect(source).toContain("const params = { providerId: providerSlug, source: 'profile_qr' }");
   });
 
   it('routes review_request to the rating form, not just the booking', () => {

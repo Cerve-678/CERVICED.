@@ -4,17 +4,13 @@ import { isProviderProfileUuid } from '../utils/providerProfileDeepLink';
 import { requestMode } from './modeController';
 import { navigationRef } from './navigationRef';
 
-export type ProviderProfileLinkOutcome =
-  | 'opened'
-  | 'not_found'
-  | 'no_client_hat'
-  | 'failed';
+export type ProviderProfileLinkOutcome = 'opened' | 'not_found' | 'failed';
 
 /**
- * Opens the provider profile a scanned QR code points at, and says what
- * happened so the caller can explain anything other than 'opened'. Someone who
- * has just scanned a code is looking at the screen waiting for something, so no
- * outcome here may end in silence.
+ * Opens the client-facing profile a scanned QR code points at, whichever
+ * account scanned it, and says what happened so the caller can explain anything
+ * other than 'opened'. Someone who has just scanned a code is looking at the
+ * screen waiting for something, so no outcome here may end in silence.
  */
 export async function openProviderProfileLink(
   providerKey: string,
@@ -27,21 +23,22 @@ export async function openProviderProfileLink(
       : providerKey;
     if (!providerSlug) return 'not_found';
 
-    // ProviderProfile only exists in the client stacks, and a provider-only
-    // account is refused the client hat.
+    // An account with a client profile opens it on the client side, where it
+    // can book. A provider-only account is refused the client hat, so it opens
+    // the same screen in its own Profile tab.
     const mode = await requestMode('client');
-    if (mode !== 'client') return 'no_client_hat';
     if (!navigationRef.isReady()) return 'failed';
 
-    // initial: false keeps Home underneath: right after a hat switch the Home
-    // stack hasn't mounted, and the profile would otherwise be its only route,
-    // leaving no back button.
+    const params = { providerId: providerSlug, source: 'profile_qr' };
+    // initial: false keeps the tab's root underneath: right after a hat switch
+    // the stack hasn't mounted, and the profile would otherwise be its only
+    // route, leaving no back button.
     navigationRef.navigate('MainTabs', {
-      screen: 'Home',
+      screen: mode === 'client' ? 'Home' : 'Profile',
       params: {
-        screen: 'ProviderProfile',
+        screen: mode === 'client' ? 'ProviderProfile' : 'PublicProviderProfile',
         initial: false,
-        params: { providerId: providerSlug, source: 'profile_qr' },
+        params,
       },
     } as never);
     return 'opened';
