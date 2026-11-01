@@ -13,6 +13,7 @@ export interface PolicyDisplayData {
   cancelNote?: string;
   rescheduleNotice?: string;
   maxReschedules?: string;
+  rescheduleNote?: string;
   depositMode?: string;
   depositRequired?: boolean;
   depositOnly?: boolean;
@@ -20,6 +21,7 @@ export interface PolicyDisplayData {
   depositAmount?: string;
   noShowAction?: string;
   noShowGraceMinutes?: string;
+  noShowNote?: string;
   /** £ amounts the provider can charge after the appointment ('' = none).
    *  Each booking freezes them at checkout, capped at half its price. */
   lateFee?: string;
@@ -87,6 +89,38 @@ export interface PolicyDisplayRow {
   /** Short badge next to the label — e.g. "ONLY" when the provider requires
    *  the deposit and won't accept payment in full. */
   tag?: string;
+  /** Smaller lines under the value: the provider's own note for that
+   *  section, and the no-show grace period. Renderers show them in order. */
+  notes?: string[];
+}
+
+/** A section row whose value is its first non-empty line. A section with only
+ *  a note (no notice picked, say) still gets its row, with the note as the
+ *  value, rather than the note vanishing for want of a rule to hang under. */
+function sectionRow(
+  icon: PolicyDisplayRow['icon'],
+  label: string,
+  lines: (string | null | undefined)[],
+): PolicyDisplayRow | null {
+  const present = lines.map(l => l?.trim()).filter((l): l is string => !!l);
+  const [value, ...notes] = present;
+  if (value === undefined) return null;
+  return notes.length > 0 ? { icon, label, value, notes } : { icon, label, value };
+}
+
+function rescheduleSummary(policy: PolicyDisplayData): string | null {
+  const parts: string[] = [];
+  if (policy.rescheduleNotice === 'same_day') parts.push('same day OK');
+  else if (policy.rescheduleNotice) parts.push(`${policy.rescheduleNotice} notice`);
+  if (policy.maxReschedules === 'unlimited') parts.push('no limit');
+  else if (policy.maxReschedules) parts.push(`max ${policy.maxReschedules}`);
+  if (parts.length === 0) return null;
+  const text = parts.join(' · ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function pushRow(rows: PolicyDisplayRow[], row: PolicyDisplayRow | null): void {
+  if (row) rows.push(row);
 }
 
 /**
@@ -131,55 +165,39 @@ export function buildPolicyDisplayRows(
   const cancelPenaltyText = policy.cancelPenalty && policy.cancelPenalty !== 'none'
     ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}`
     : '';
+  let cancelRule: string | null = null;
   if (enforcedCancellationNoticeHours && enforcedCancellationNoticeHours > 0) {
-    rows.push({
-      icon: 'time-outline',
-      label: 'Cancellation',
-      value: `${enforcedCancellationNoticeHours} hours' notice${cancelPenaltyText}`,
-    });
+    cancelRule = `${enforcedCancellationNoticeHours} hours' notice${cancelPenaltyText}`;
   } else if (policy.cancelNotice && policy.cancelNotice !== 'none') {
-    rows.push({
-      icon: 'time-outline',
-      label: 'Cancellation',
-      value: `${policy.cancelNotice} notice${cancelPenaltyText}`,
-    });
+    cancelRule = `${policy.cancelNotice} notice${cancelPenaltyText}`;
   }
+  pushRow(rows, sectionRow('time-outline', 'Cancellation', [cancelRule, policy.cancelNote]));
 
-  if (policy.rescheduleNotice || policy.maxReschedules) {
-    const parts: string[] = [];
-    if (policy.rescheduleNotice && policy.rescheduleNotice !== 'same_day') {
-      parts.push(`${policy.rescheduleNotice} notice`);
-    }
-    if (policy.maxReschedules && policy.maxReschedules !== 'unlimited') {
-      parts.push(`max ${policy.maxReschedules}`);
-    }
-    if (parts.length > 0) {
-      rows.push({ icon: 'calendar-outline', label: 'Reschedule', value: parts.join(' · ') });
-    }
-  }
+  pushRow(rows, sectionRow('calendar-outline', 'Reschedule', [rescheduleSummary(policy), policy.rescheduleNote]));
 
-  if (policy.noShowAction && policy.noShowAction !== 'none') {
-    rows.push({
-      icon: 'close-circle-outline',
-      label: 'No-show',
-      // 'charge_full' was never enforced and is read as keeping the deposit;
-      // an actual extra charge is the no-show fee row below.
-      value: policy.noShowAction === 'warn' ? 'Warning issued' : 'Deposit kept',
-    });
-  }
+  // The grace period applies whatever the no-show action is — it's how long
+  // after the start time before the provider can mark a no-show at all
+  // (server-enforced in provider_update_booking_status()) — so it shows here
+  // even when the action itself is "none".
+  const grace = Number(policy.noShowGraceMinutes) || 0;
+  const noShowRule = policy.noShowAction && policy.noShowAction !== 'none'
+    // 'charge_full' was never enforced and is read as keeping the deposit;
+    // an actual extra charge is the no-show fee row below.
+    ? (policy.noShowAction === 'warn' ? 'Warning issued' : 'Deposit kept')
+    : null;
+  pushRow(rows, sectionRow('close-circle-outline', 'No-show', [
+    noShowRule,
+    grace > 0 ? `${grace} min grace period` : null,
+    policy.noShowNote,
+  ]));
 
   const lateFee = feeLabel(policy.lateFee);
   if (lateFee) {
-    const grace = Number(policy.noShowGraceMinutes) || 0;
     rows.push({ icon: 'alarm-outline', label: 'Late fee', value: grace > 0 ? `${lateFee} after ${grace} min` : lateFee });
   }
   const noShowFee = feeLabel(policy.noShowFee);
   if (noShowFee) {
     rows.push({ icon: 'close-circle-outline', label: 'No-show fee', value: noShowFee });
-  }
-
-  if (policy.cancelNote) {
-    rows.push({ icon: 'information-circle-outline', label: 'Note', value: policy.cancelNote });
   }
 
   if (policy.refundPolicyNote) {
@@ -191,22 +209,9 @@ export function buildPolicyDisplayRows(
 
 function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] {
   const rows: PolicyDisplayRow[] = [];
-  if (policy.cancelNotice && policy.cancelNotice !== 'none') {
-    rows.push({ icon: 'time-outline', label: 'Cancellation', value: `${policy.cancelNotice} notice` });
-  }
-  const rescheduleParts: string[] = [];
-  if (policy.rescheduleNotice && policy.rescheduleNotice !== 'same_day') {
-    rescheduleParts.push(`${policy.rescheduleNotice} notice`);
-  }
-  if (policy.maxReschedules && policy.maxReschedules !== 'unlimited') {
-    rescheduleParts.push(`max ${policy.maxReschedules}`);
-  }
-  if (rescheduleParts.length > 0) {
-    rows.push({ icon: 'calendar-outline', label: 'Reschedule', value: rescheduleParts.join(' · ') });
-  }
-  if (policy.cancelNote) {
-    rows.push({ icon: 'information-circle-outline', label: 'Note', value: policy.cancelNote });
-  }
+  const cancelRule = policy.cancelNotice && policy.cancelNotice !== 'none' ? `${policy.cancelNotice} notice` : null;
+  pushRow(rows, sectionRow('time-outline', 'Cancellation', [cancelRule, policy.cancelNote]));
+  pushRow(rows, sectionRow('calendar-outline', 'Reschedule', [rescheduleSummary(policy), policy.rescheduleNote]));
   if (policy.refundPolicyNote) {
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
