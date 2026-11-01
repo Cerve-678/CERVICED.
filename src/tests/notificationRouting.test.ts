@@ -12,6 +12,7 @@ const edgeFunction = () =>
   read('supabase', 'functions', 'send-push-notification', 'index.ts');
 const pushService = () => read('src', 'services', 'pushNotificationService.ts');
 const databaseService = () => read('src', 'services', 'databaseService.ts');
+const rootNavigation = () => read('src', 'navigation', 'RootNavigation.tsx');
 
 /**
  * These are source contracts rather than behavioural tests because the code
@@ -102,6 +103,13 @@ describe('notification routing — deep-link payload', () => {
     const source = tapHandler();
     expect(source).toContain("navigateNested('Home', 'ProviderChat'");
     expect(source).toContain('getProviderBasicById(provider_id)');
+  });
+
+  it('opens slug QR links directly and keeps a UUID fallback for printed legacy QR codes', () => {
+    const source = rootNavigation();
+    expect(source).toContain('isProviderProfileUuid(providerProfileLink.providerKey)');
+    expect(source).toContain('getProviderBasicById(providerProfileLink.providerKey)');
+    expect(source).toContain("params: { providerId: providerSlug, source: 'profile_qr' }");
   });
 
   it('routes review_request to the rating form, not just the booking', () => {

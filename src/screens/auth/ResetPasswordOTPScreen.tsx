@@ -1,5 +1,5 @@
 // src/screens/auth/ResetPasswordOTPScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
@@ -20,9 +20,11 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { toUserMessage } from '../../utils/userFacingError';
 
 type Props = StackScreenProps<RootStackParamList, 'ResetPasswordOTP'>;
 
+const RESEND_WAIT_S = 60;
 
 export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   const { isDarkMode, palette: t } = useTheme();
@@ -32,7 +34,16 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerifying, setIsVerifying] = useState(false);
   const [resending, setResending] = useState(false);
+  // The preceding screen has just requested the first reset email. Do not
+  // offer a resend until the provider will accept one.
+  const [resendIn, setResendIn] = useState(RESEND_WAIT_S);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn(seconds => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   const handleOtpChange = (value: string, index: number) => {
     if (value.length === 6) {
@@ -84,10 +95,15 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
       await sendPasswordReset(email);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
+      setResendIn(RESEND_WAIT_S);
       Alert.alert('Sent!', 'A new code has been sent to your email.');
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Error', "Couldn't resend the code. Please try again.");
+      Alert.alert('Could not resend code', toUserMessage(
+        error,
+        'Please wait a minute before trying again.',
+        'ResetPasswordOTPScreen.sendPasswordReset',
+      ));
     } finally {
       setResending(false);
     }
@@ -146,12 +162,14 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
               style={[styles.secondaryBtn, { backgroundColor: t.surface, borderColor: t.border }]}
               onPress={handleResend}
               activeOpacity={0.6}
-              disabled={resending}
+              disabled={resending || resendIn > 0}
             >
               {resending ? (
                 <ActivityIndicator color={t.text} />
               ) : (
-                <Text style={[styles.secondaryBtnText, { color: t.text }]}>Resend code</Text>
+                <Text style={[styles.secondaryBtnText, { color: resendIn > 0 ? t.sub : t.text }]}>
+                  {resendIn > 0 ? `Resend code in 0:${String(resendIn).padStart(2, '0')}` : 'Resend code'}
+                </Text>
               )}
             </TouchableOpacity>
 

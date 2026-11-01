@@ -2406,7 +2406,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   //     is what publishes it.
   //   • Booking Details → Contact — clients who already hold a confirmed
   //     appointment, driven by the Contact Preferences toggles
-  //     (providers.preferred_contact_methods, see ProviderCommunicationsScreen).
+  //     (providers.preferred_contact_methods) and the booked-client details
+  //     beside them (get_booked_client_contact, see ProviderCommunicationsScreen).
   // Those toggles used to gate this card too, which collapsed both audiences
   // onto one setting and contradicted what both screens' own copy promised.
   const contactOptions = useMemo(() => {

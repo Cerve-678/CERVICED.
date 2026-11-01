@@ -11,17 +11,27 @@
 //     same rule refund-payment already follows).
 //   • late + 'deposit'                       → keep the deposit (it goes to the
 //     provider) and the platform fee (CERVICED keeps it); refund the rest.
-//   • late + 'full'                          → keep everything already paid
-//     (the provider keeps their whole share, CERVICED keeps its fee); refund
-//     nothing. This is a FORFEIT of what was paid, never a charge for the
-//     unpaid balance.
+//   • late + 'half'                          → the provider keeps half their
+//     share, CERVICED keeps its fee, and the client gets the other half back.
+//
+// Based on what was paid in the app (user decision 2026-11-01): a client who
+// paid only a deposit can lose that whole deposit under 'deposit' or 'half'; a
+// client who paid in full never loses more than half the service price. Older
+// policies saying 'full' now mean 'half' (readCancelPenalty). This is only ever
+// a share of what was paid, never a charge for the unpaid balance.
 //
 // All amounts are integer pence. The function reads the booking's STORED
 // figures (amount_paid, deposit, platform_fee) and the payout row's STORED
 // payout_amount, rather than re-deriving the fee formula — so it stays correct
 // regardless of how finalize_checkout computed the split.
 
-export type CancelPenalty = 'none' | 'deposit' | 'full';
+export type CancelPenalty = 'none' | 'deposit' | 'half';
+
+/** Policies and booking snapshots saved before 2026-11-01 can still say 'full'. */
+export function readCancelPenalty(value: unknown): CancelPenalty {
+  if (value === 'deposit') return 'deposit';
+  return value === 'half' || value === 'full' ? 'half' : 'none';
+}
 
 export interface CancellationSettlementInput {
   /** The provider's cancellation penalty for this booking (frozen snapshot preferred). */
@@ -36,6 +46,8 @@ export interface CancellationSettlementInput {
   platformFeePence: number;
   /** The provider's payout for this booking, in pence (their service share; 0 if there is no payout row). */
   payoutAmountPence: number;
+  /** The client paid only a deposit in the app, not the full price. */
+  paidDepositOnly: boolean;
 }
 
 export interface CancellationSettlement {
@@ -60,6 +72,8 @@ export function computeCancellationSettlement(
   const deposit = pence(input.depositPence);
   const fee = pence(input.platformFeePence);
   const payout = pence(input.payoutAmountPence);
+  // Rounds down, so an odd penny goes back to the client.
+  const half = Math.floor(payout / 2);
 
   // Nothing was captured (e.g. Stripe not live, or a free booking) — nothing to
   // settle. The cancel still goes through; this just moves no money.
@@ -74,15 +88,20 @@ export function computeCancellationSettlement(
     // Full refund, fee included. Provider keeps nothing.
     clientRefund = amountPaid;
     providerKeep = 0;
+  } else if (input.paidDepositOnly) {
+    // All the client paid was the deposit: the provider keeps it whole (bounded
+    // by their actual payout share); CERVICED keeps the fee.
+    providerKeep = input.penalty === 'deposit' ? Math.min(deposit, payout) : payout;
+    clientRefund = Math.max(0, amountPaid - providerKeep - fee);
   } else if (input.penalty === 'deposit') {
-    // Provider keeps the deposit (bounded by their actual payout share);
-    // CERVICED keeps the fee; the client gets everything else back.
-    providerKeep = Math.min(deposit, payout);
+    // Paid in full under a 'keep the deposit' policy: the deposit's amount, but
+    // never more than half; the client gets everything else back.
+    providerKeep = Math.min(deposit, half);
     clientRefund = Math.max(0, amountPaid - providerKeep - fee);
   } else {
-    // 'full' — forfeit everything already paid. Provider keeps their whole
-    // share, CERVICED keeps its fee, the client gets nothing back.
-    providerKeep = payout;
+    // 'half', paid in full: half to the provider, CERVICED keeps its fee, the
+    // other half back to the client.
+    providerKeep = half;
     clientRefund = Math.max(0, amountPaid - providerKeep - fee);
   }
 
