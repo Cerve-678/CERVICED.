@@ -325,7 +325,7 @@ export default function PoliciesScreen({ navigation }: any) {
               <Card title="Your own policies" sub="These show on your profile so clients know them before they book. Clients book and pay on your own booking site, so CERVICED doesn't apply them or charge anything.">{null}</Card>
             )}
 
-            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask for.' : 'What happens if a client cancels late. If they paid a deposit, the most you can keep is that deposit. If they paid in full, the most you can keep is half the price.'}>
+            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask for.' : 'What happens if a client cancels late. If they paid a deposit, you keep the deposit. If they paid in full, you can only charge up to half.'}>
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'none', l: 'None' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
