@@ -11498,6 +11498,8 @@ export interface ProviderRefundState {
     hoursBefore: number | null;
     noticeHours: number;
     keptIsDeposit: boolean;
+    /** The client moved it while already inside the window (bookings.late_reschedule_from). */
+    movedLate: boolean;
   } | null;
 }
 
@@ -11513,7 +11515,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     // for the notice window the settlement summary quotes.
     supabase
       .from('bookings')
-      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, providers ( cancellation_notice_hours, booking_policies )')
+      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, late_reschedule_from, providers ( cancellation_notice_hours, booking_policies )')
       .eq('id', bookingId)
       .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
@@ -11557,6 +11559,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
           hoursBefore,
           noticeHours: cancellationNoticeHours(providerRow?.cancellation_notice_hours, providerRow?.booking_policies),
           keptIsDeposit: b.payment_type === 'deposit',
+          movedLate: !!b.late_reschedule_from,
         }
       : null,
   };

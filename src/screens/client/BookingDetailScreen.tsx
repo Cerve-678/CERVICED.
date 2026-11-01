@@ -196,6 +196,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [successIcon, setSuccessIcon] = useState('✓');
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
   const [showCooldownModal, setShowCooldownModal] = useState(false);
+  // Heads-up before rescheduling inside the cancellation window: doing so
+  // keeps the late-cancel policy on this booking (confirm_reschedule_own_booking).
+  const [lateRescheduleNoticeHrs, setLateRescheduleNoticeHrs] = useState<number | null>(null);
   const [showProviderNoShowModal, setShowProviderNoShowModal] = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
@@ -487,6 +490,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     const hoursUntil = (apptMs - Date.now()) / 3_600_000;
     return hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs;
   }, [booking, cancellationNoticeHrs]);
+  // Moved while already inside the window: the policy applies to any cancel,
+  // however far off the new date is (apply-cancellation-refund).
+  const cancelPolicyStillApplies =
+    isPastCancellationWindow || (!!booking?.lateRescheduleFrom && cancellationNoticeHrs > 0);
 
   const handleCancelBooking = useCallback(async () => {
     if (!booking) return;
@@ -663,8 +670,18 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         }
       }
     }
+    // Same measurement request_reschedule_own_booking stamps on the request,
+    // which only covers bookings made since the rule went live.
+    const noticeHrs = cancellationNoticeHrs || (await metadataRef.current)?.cancellationNoticeHours || 0;
+    if (noticeHrs > 0 && booking.lateRescheduleRuleApplies && !booking.lateRescheduleFrom && booking.bookingDate && booking.bookingTime) {
+      const start = createBookingDateTime(booking.bookingDate, booking.bookingTime);
+      if ((start.getTime() - Date.now()) / 3_600_000 < noticeHrs) {
+        setLateRescheduleNoticeHrs(noticeHrs);
+        return;
+      }
+    }
     navigation.navigate('Reschedule', { bookingId: booking.id });
-  }, [booking, canReschedule, reschedulePolicy, navigation]);
+  }, [booking, canReschedule, reschedulePolicy, cancellationNoticeHrs, navigation]);
 
   /**
    * Add a past booking's service back to the cart, revalidated against live data.
@@ -1560,12 +1577,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.overlay}>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
-                {isPastCancellationWindow ? (
+                {cancelPolicyStillApplies ? (
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
                     <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cancelling Now</Text>
                     <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
-                      {booking.providerName} requires {noticeWindowText} notice to cancel — cancelling now may be subject to their policy.
+                      {isPastCancellationWindow
+                        ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
+                        : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
                     </Text>
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
@@ -1630,6 +1649,30 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCooldownModal(false); }} activeOpacity={0.7}>
                   <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Late Reschedule Modal ───
+            Shown before the Reschedule screen when the client is already
+            inside the cancellation window. Rescheduling stays allowed; this
+            only says what it keeps in place. */}
+        <Modal visible={lateRescheduleNoticeHrs != null} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setLateRescheduleNoticeHrs(null)}>
+          <View style={st.overlay}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
+              <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Inside the Cancellation Window</Text>
+              <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
+                {booking.providerName} asks for {formatNoticeWindow(lateRescheduleNoticeHrs ?? 0)} notice to cancel, and that has already started. You can still ask to reschedule, but if you later cancel the new date, their cancellation policy will apply as if you'd cancelled now.
+              </Text>
+              <View style={[st.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setLateRescheduleNoticeHrs(null); }} activeOpacity={0.7}>
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Keep Booking</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setLateRescheduleNoticeHrs(null); navigation.navigate('Reschedule', { bookingId: booking.id }); }} activeOpacity={0.7}>
+                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Reschedule</Text>
                 </TouchableOpacity>
               </View>
             </View>
