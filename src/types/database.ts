@@ -245,6 +245,10 @@ export interface DbProvider {
   service_categories: ServiceCategory[];
   custom_service_type: string | null;
   location_text: string | null;
+  /** Public "How to get there" for the profile — stations, parking,
+   *  landmarks. Never door codes: those are provider_private_details
+   *  .how_to_get_there, released with the address. */
+  public_directions: string | null;
   latitude: number | null;
   longitude: number | null;
   about_text: string | null;
@@ -655,6 +659,9 @@ export interface DbBooking {
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
   provider_address_snapshot: string | null;
+  /** Private venue access instructions snapshotted at booking. The
+   * client_bookings view release-gates this with the address. */
+  provider_directions_snapshot?: string | null;
   provider_phone_snapshot: string | null;
   provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
@@ -912,6 +919,7 @@ export type ProviderWithServices = Pick<
   | "service_categories"
   | "custom_service_type"
   | "location_text"
+  | "public_directions"
   | "about_text"
   | "logo_url"
   | "gradient"

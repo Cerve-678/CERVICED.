@@ -166,6 +166,12 @@ export interface ProviderRegistrationData {
   // the client Search "City" filter. See src/constants/ukCities.ts.
   serviceLocations: string[];
   fullAddress: string;
+  /** Private arrival/access instructions, released to a booked client only
+   * when their appointment location has been released. */
+  howToGetThere: string;
+  /** Public "How to get there" on the profile (providers.public_directions)
+   * — stations, parking, landmarks. Never door codes; those are howToGetThere. */
+  publicDirections: string;
   /** Coordinates returned by the address picker for this exact address.
    *  Kept in form state only and written atomically with fullAddress. */
   fullAddressCoordinates: { latitude: number; longitude: number } | null;
@@ -603,6 +609,7 @@ export async function saveProviderToSupabase(
           ? data.serviceCategories
           : [data.providerService],
         location_text: data.location,
+        public_directions: data.publicDirections?.trim() || null,
         latitude,
         longitude,
         about_text: data.aboutText,
@@ -662,6 +669,7 @@ export async function saveProviderToSupabase(
           : [data.providerService],
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
+        public_directions: data.publicDirections?.trim() || null,
         latitude,
         longitude,
         about_text: data.aboutText,
@@ -738,7 +746,8 @@ export async function saveProviderToSupabase(
       providerId,
       data.fullAddress || null,
       addressCoords.latitude,
-      addressCoords.longitude
+      addressCoords.longitude,
+      data.howToGetThere?.trim() || null,
     );
   }
 
@@ -876,6 +885,7 @@ interface RegistrationCatalogue {
   categoryDescriptions: Record<string, string>;
   categoryServiceTypes: Record<string, string>;
   fullAddress: string;
+  howToGetThere: string;
 }
 
 const NO_CATALOGUE: RegistrationCatalogue = {
@@ -883,6 +893,7 @@ const NO_CATALOGUE: RegistrationCatalogue = {
   categoryDescriptions: {},
   categoryServiceTypes: {},
   fullAddress: '',
+  howToGetThere: '',
 };
 
 /**
@@ -906,6 +917,7 @@ export function providerRowToRegistrationData(
     categoryServiceTypes: catalogue.categoryServiceTypes,
     customServiceType: provider.custom_service_type || '',
     location: provider.location_text || '',
+    publicDirections: provider.public_directions || '',
     aboutText: provider.about_text || '',
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     // Unset colours fall back to the provider's own theme, never a
@@ -934,6 +946,7 @@ export function providerRowToRegistrationData(
     serviceLocations: provider.service_locations || [],
     preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress: catalogue.fullAddress,
+    howToGetThere: catalogue.howToGetThere,
     // Existing profiles may predate the picker. A later save falls back to a
     // one-time geocode, while every new picker selection supplies these.
     fullAddressCoordinates: null,
@@ -999,7 +1012,7 @@ export async function loadProviderFromSupabase(
     logger.warn('loadProviderFromSupabase details error:', detailsResult.error);
     return cached;
   }
-  const { fullAddress } = detailsResult.value;
+  const { fullAddress, howToGetThere } = detailsResult.value;
   const services = detailsResult.value.services as any[];
 
   // Reconstruct categories
@@ -1068,6 +1081,7 @@ export async function loadProviderFromSupabase(
     categoryDescriptions,
     categoryServiceTypes,
     fullAddress,
+    howToGetThere,
   });
   // A live read is also the best offline/startup snapshot. Persist it so the
   // profile editor opened from My Profile can paint its saved fields straight

@@ -181,6 +181,8 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
     /** Set only when `location` is a full address the provider made public
      *  ("Always visible"); the area alone isn't worth a map pin. */
     locationMapUrl: string | null;
+    /** Public "How to get there" — shown full-width under Location. */
+    locationNote: string;
     phone: string;
     whatsapp: string;
     email: string;
@@ -192,16 +194,20 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   onOpenPublicLink: (url: string) => void;
   onGetInTouch: () => void;
 }) {
-  const rows = [
+  type ContactRow = { label: string; value: string; url: string | null; publicLink: boolean; stacked?: boolean | undefined };
+  const rows = ([
     contact.location
       ? { label: "Location", value: contact.locationMapUrl ? `${contact.location} ›` : contact.location, url: contact.locationMapUrl, publicLink: true }
+      : null,
+    contact.locationNote
+      ? { label: "How to get there", value: contact.locationNote, url: null, publicLink: false, stacked: true }
       : null,
     contact.phone ? { label: "Phone", value: "Message ›", url: `sms:${contact.phone.replace(/\s/g, "")}`, publicLink: false } : null,
     contact.whatsapp ? { label: "WhatsApp", value: "Open ›", url: `https://wa.me/${contact.whatsapp.replace(/[^0-9+]/g, "")}`, publicLink: false } : null,
     contact.email ? { label: "Email", value: "Send ›", url: `mailto:${contact.email}`, publicLink: false } : null,
     contact.instagram ? { label: "Instagram", value: `@${contact.instagram} ›`, url: `https://instagram.com/${contact.instagram}`, publicLink: true } : null,
     contact.website ? { label: "Website", value: "Visit ›", url: contact.website, publicLink: true } : null,
-  ].filter((row): row is { label: string; value: string; url: string | null; publicLink: boolean } => row != null);
+  ] as (ContactRow | null)[]).filter((row): row is ContactRow => row != null);
 
   return (
     <BlurView
@@ -212,6 +218,16 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
       <Text style={[styles.cardTitle, { color: palette.text }]}>Contact</Text>
       {rows.map(row => {
+        // A few sentences of directions don't fit the right-aligned value
+        // column, so they sit under their label at full width.
+        if (row.stacked) {
+          return (
+            <View key={row.label} style={[styles.contactRowStacked, { borderBottomColor: palette.separator }]}>
+              <Text style={[styles.hoursLabel, { color: palette.sub }]}>{row.label}</Text>
+              <Text style={[styles.infoText, { color: palette.text, marginTop: 4 }]}>{row.value}</Text>
+            </View>
+          );
+        }
         const content = (
           <>
             <Text style={[styles.hoursLabel, { color: palette.sub }]}>{row.label}</Text>
@@ -518,6 +534,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 16,
+  },
+  contactRowStacked: {
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   contactValue: { flex: 1, textAlign: "right", fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12 },
   contactButton: { minHeight: 46, borderRadius: 15, alignItems: "center", justifyContent: "center", marginTop: 18 },

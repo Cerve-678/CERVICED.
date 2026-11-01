@@ -1701,6 +1701,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const contactDetails = useMemo(() => ({
     location: publicAddress?.fullAddress ?? provider?.location ?? "",
     locationMapUrl: publicAddress ? mapsUrlFor(publicAddress) : null,
+    // A mobile provider travels to the client, so there is nowhere to direct
+    // them to — an old value left from before a business-type change stays hidden.
+    locationNote: provider?.businessType === "mobile" ? "" : provider?.publicDirections ?? "",
     phone: provider?.phone ?? "",
     whatsapp: provider?.whatsapp ?? "",
     email: provider?.email ?? "",
@@ -1709,6 +1712,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }), [
     publicAddress,
     provider?.location,
+    provider?.businessType,
+    provider?.publicDirections,
     provider?.phone,
     provider?.whatsapp,
     provider?.email,

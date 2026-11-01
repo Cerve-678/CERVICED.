@@ -10,8 +10,8 @@ Curated: [[Address Release]] · **97 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(185)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
+- `src/screens/provider/InfoRegScreen.tsx` _(93)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
-- `src/screens/provider/InfoRegScreen.tsx` _(88)_
 - `src/services/providerRegistrationService.ts` _(71)_
 - `src/screens/client/CartScreen.tsx` _(65)_
 - `src/contexts/BookingContext.tsx` _(53)_
@@ -21,13 +21,13 @@ Curated: [[Address Release]] · **97 files**
 - `src/screens/provider/BusinessInfoScreen.tsx` _(40)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
 - `supabase/address_release_notification.sql` _(33)_
+- `src/screens/client/BookingDetailScreen.tsx` _(32)_
 - `supabase/require_provider_address.sql` _(32)_
 - `src/features/business-details/options.ts` _(30)_
-- `src/screens/client/BookingDetailScreen.tsx` _(30)_
-- `src/types/booking.ts` _(29)_
+- `src/types/booking.ts` _(30)_
+- `src/types/database.ts` _(28)_
 - `supabase/address_release_enforcement.sql` _(27)_
 - `supabase/stamp_booking_address_snapshot_fallback_location_text.sql` _(26)_
-- `src/types/database.ts` _(25)_
 - `src/services/bookingService.ts` _(24)_
 - `src/services/becca/capabilities/provider.ts` _(23)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(21)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **294 files**
 - `src/screens/client/CartScreen.tsx` _(645)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(552)_
 - `src/services/becca/capabilities/client.ts` _(504)_
-- `src/screens/client/BookingDetailScreen.tsx` _(428)_
+- `src/screens/client/BookingDetailScreen.tsx` _(431)_
 - `src/screens/client/BookingsScreen.tsx` _(367)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **294 files**
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/types/booking.ts` _(102)_
+- `src/types/booking.ts` _(103)_
 - `src/services/becca/engine.ts` _(100)_
 - `src/screens/provider/AddBookingScreen.tsx` _(98)_
 - `src/components/BookingSheet.tsx` _(97)_
