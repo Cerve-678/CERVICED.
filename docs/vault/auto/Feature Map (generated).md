@@ -10,7 +10,7 @@ Curated: [[Address Release]] · **97 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(185)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
-- `src/screens/provider/InfoRegScreen.tsx` _(91)_
+- `src/screens/provider/InfoRegScreen.tsx` _(93)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/services/providerRegistrationService.ts` _(71)_
 - `src/screens/client/CartScreen.tsx` _(65)_
@@ -25,7 +25,7 @@ Curated: [[Address Release]] · **97 files**
 - `supabase/require_provider_address.sql` _(32)_
 - `src/features/business-details/options.ts` _(30)_
 - `src/types/booking.ts` _(30)_
-- `src/types/database.ts` _(27)_
+- `src/types/database.ts` _(28)_
 - `supabase/address_release_enforcement.sql` _(27)_
 - `supabase/stamp_booking_address_snapshot_fallback_location_text.sql` _(26)_
 - `src/services/bookingService.ts` _(24)_

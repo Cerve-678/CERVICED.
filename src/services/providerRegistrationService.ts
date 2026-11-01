@@ -169,6 +169,9 @@ export interface ProviderRegistrationData {
   /** Private arrival/access instructions, released to a booked client only
    * when their appointment location has been released. */
   howToGetThere: string;
+  /** Public "How to get there" on the profile (providers.public_directions)
+   * — stations, parking, landmarks. Never door codes; those are howToGetThere. */
+  publicDirections: string;
   /** Coordinates returned by the address picker for this exact address.
    *  Kept in form state only and written atomically with fullAddress. */
   fullAddressCoordinates: { latitude: number; longitude: number } | null;
@@ -606,6 +609,7 @@ export async function saveProviderToSupabase(
           ? data.serviceCategories
           : [data.providerService],
         location_text: data.location,
+        public_directions: data.publicDirections?.trim() || null,
         latitude,
         longitude,
         about_text: data.aboutText,
@@ -665,6 +669,7 @@ export async function saveProviderToSupabase(
           : [data.providerService],
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
+        public_directions: data.publicDirections?.trim() || null,
         latitude,
         longitude,
         about_text: data.aboutText,
@@ -912,6 +917,7 @@ export function providerRowToRegistrationData(
     categoryServiceTypes: catalogue.categoryServiceTypes,
     customServiceType: provider.custom_service_type || '',
     location: provider.location_text || '',
+    publicDirections: provider.public_directions || '',
     aboutText: provider.about_text || '',
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     // Unset colours fall back to the provider's own theme, never a

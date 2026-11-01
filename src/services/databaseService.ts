@@ -1285,6 +1285,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   service_categories,
   custom_service_type,
   location_text,
+  public_directions,
   about_text,
   logo_url,
   gradient,

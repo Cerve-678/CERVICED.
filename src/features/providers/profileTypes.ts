@@ -34,6 +34,8 @@ export interface ProviderProfileData {
   providerService: string;
   providerLogo: any;
   location: string;
+  /** Public "How to get there", shown under Location in Contact. */
+  publicDirections: string;
   businessType: BusinessType | null;
   rating: number;
   /** providers.automation_settings.scheduleReleaseDay — day of month (1-31)

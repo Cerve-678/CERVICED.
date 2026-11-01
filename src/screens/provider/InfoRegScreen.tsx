@@ -2820,6 +2820,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     preferredPaymentMethods: [],
     fullAddress: '',
     howToGetThere: '',
+    publicDirections: '',
     fullAddressCoordinates: null,
     addressReleasePolicy: null,
     backgroundImage: null,
@@ -5380,24 +5381,52 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 accentColor={adaptiveAccentColor}
               />
 
-              <Text style={[styles.policyLabel, { marginTop: 14 }]}>HOW TO GET THERE</Text>
-              <Text style={styles.addressHint}>
-                Optional — door or buzzer codes, which entrance, parking, nearest station. Only booked clients see this, at the same time as your address.
-              </Text>
-              <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
-                <TextInput
-                  style={[styles.textInput, styles.textInputMultiline]}
-                  value={providerData.howToGetThere}
-                  onChangeText={(howToGetThere) => setProviderData(prev => ({ ...prev, howToGetThere }))}
-                  placeholder="e.g. Flat 3, buzzer 3B. Use the side entrance beside the blue gate."
-                  placeholderTextColor={chrome.fg(0.4)}
-                  multiline
-                  maxLength={500}
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                  accessibilityLabel="How to get there"
-                />
-              </View>
+              {/* Two fields, split by who may see them. How to get there is
+                  on `providers` (public profile); Arrival details is in
+                  provider_private_details and reaches a client only with the
+                  released address. A mobile provider travels to the client,
+                  so neither applies. */}
+              {providerData.businessType !== 'mobile' && (
+                <>
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>HOW TO GET THERE</Text>
+                  <Text style={styles.addressHint}>
+                    Optional, shown on your profile — nearest station, where to park, landmarks. Anyone can see this, so no door codes.
+                  </Text>
+                  <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+                    <TextInput
+                      style={[styles.textInput, styles.textInputMultiline]}
+                      value={providerData.publicDirections}
+                      onChangeText={(publicDirections) => setProviderData(prev => ({ ...prev, publicDirections }))}
+                      placeholder="e.g. 2 minutes from Hackney Central. Free parking on Mare Street after 6pm."
+                      placeholderTextColor={chrome.fg(0.4)}
+                      multiline
+                      maxLength={300}
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                      accessibilityLabel="How to get there"
+                    />
+                  </View>
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>ARRIVAL DETAILS</Text>
+                  <Text style={styles.addressHint}>
+                    Optional, private — door or buzzer codes, flat number, which entrance. Only booked clients see this, at the same time as your address.
+                  </Text>
+                  <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+                    <TextInput
+                      style={[styles.textInput, styles.textInputMultiline]}
+                      value={providerData.howToGetThere}
+                      onChangeText={(howToGetThere) => setProviderData(prev => ({ ...prev, howToGetThere }))}
+                      placeholder="e.g. Flat 3, buzzer 3B. Use the side entrance beside the blue gate."
+                      placeholderTextColor={chrome.fg(0.4)}
+                      multiline
+                      maxLength={500}
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                      accessibilityLabel="Arrival details"
+                    />
+                  </View>
+                </>
+              )}
 
               {/* Which timings each business type may offer is
                   ADDRESS_RELEASE_BY_BUSINESS_TYPE's job, not this screen's.
@@ -5541,7 +5570,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ask, same key, same format. */}
               <Text style={[styles.policyLabel, { marginTop: 14 }]}>ANYTHING CLIENTS SHOULD KNOW</Text>
               <Text style={styles.addressHint}>
-                Shown to clients on every booking (optional) — what to bring, how early to arrive. Put door or buzzer codes in How to get there instead, which stays private until a booked client's address is released.
+                Shown to clients on every booking (optional) — what to bring, how early to arrive. Put door or buzzer codes in Arrival details instead, which stays private until a booked client's address is released.
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
