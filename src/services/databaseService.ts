@@ -983,7 +983,8 @@ export async function getProvidersAvailability(
  * london" or "almond nails, nail art in east manchester". Parses out a
  * trailing "in/near/around <place>" as a location filter and the remainder
  * as one or more service terms (split on commas/"and"), matched against
- * service names/descriptions and provider display name/about text/location.
+ * the complete client-facing service copy (name, description and category)
+ * as well as provider display name/about text/location.
  * A detected category keyword (e.g. "hairstylist" → HAIR) additionally
  * broadens the result to the whole category, since generic words like that
  * rarely appear verbatim in a service name. Optionally further filtered by
@@ -1007,7 +1008,10 @@ export async function searchProviders(
   if (!textTerms.length) return [];
 
   const serviceOr = textTerms
-    .map((t) => `name.ilike.%${t}%,description.ilike.%${t}%`)
+    .map((t) => (
+      `name.ilike.%${t}%,description.ilike.%${t}%,` +
+      `category_name.ilike.%${t}%,category_description.ilike.%${t}%`
+    ))
     .join(",");
   // location_text is included here too (not just in the dedicated filter
   // below) so a query with no "in/near" preposition still matches on it.
@@ -1032,10 +1036,12 @@ export async function searchProviders(
     { data: nameMatches, error: nameError },
     { data: categoryMatches, error: categoryError },
   ] = await Promise.all([
-    // 1. Provider IDs where a service name or description matches
+    // 1. Provider IDs where any client-visible service copy matches. Fetching
+    // the name too lets us rank an exact service title above a broad match
+    // without an extra request or exposing a service that cannot be booked.
     supabase
       .from("services")
-      .select("provider_id")
+      .select("provider_id,name")
       .eq("is_active", true)
       .or(serviceOr)
       .limit(limit),
@@ -1044,6 +1050,7 @@ export async function searchProviders(
       .from("providers")
       .select("id")
       .eq("is_active", true)
+      .eq("has_gone_live", true)
       .or(nameOr)
       .limit(limit),
     // 3. Provider IDs in the detected category, if any
@@ -1052,6 +1059,7 @@ export async function searchProviders(
           .from("providers")
           .select("id")
           .eq("is_active", true)
+          .eq("has_gone_live", true)
           .overlaps("service_categories", [categoryHint])
           .limit(limit)
       : Promise.resolve({ data: [] as { id: string }[], error: null }),
@@ -1062,7 +1070,7 @@ export async function searchProviders(
   }
 
   const serviceIds = (serviceMatches ?? []).map(
-    (r: { provider_id: string }) => r.provider_id,
+    (r: { provider_id: string; name: string }) => r.provider_id,
   );
   const nameIds = (nameMatches ?? []).map((r: { id: string }) => r.id);
   const categoryIds = (categoryMatches ?? []).map((r: { id: string }) => r.id);
@@ -1101,9 +1109,17 @@ export async function searchProviders(
   const serviceIdSet = new Set(serviceIds);
   const nameIdSet = new Set(nameIds);
   const normalizedQuery = parsed.serviceText.toLowerCase();
+  const exactServiceIdSet = new Set(
+    (serviceMatches ?? [])
+      .filter((r: { provider_id: string; name: string }) => (
+        normalizedQuery && r.name.trim().toLowerCase() === normalizedQuery
+      ))
+      .map((r: { provider_id: string; name: string }) => r.provider_id),
+  );
   const relevance = (provider: PublicProviderSummary): number => {
     const name = provider.display_name.toLowerCase();
-    if (normalizedQuery && name === normalizedQuery) return 4;
+    if (normalizedQuery && name === normalizedQuery) return 5;
+    if (exactServiceIdSet.has(provider.id)) return 4;
     if (normalizedQuery && name.includes(normalizedQuery)) return 3;
     if (serviceIdSet.has(provider.id)) return 2;
     if (nameIdSet.has(provider.id)) return 1;

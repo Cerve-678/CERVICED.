@@ -16,9 +16,9 @@ jest.mock('../lib/supabase', () => ({
 import { searchProviders } from '../services/databaseService';
 
 beforeEach(() => { mockResponses.length = 0; mockCalls.length = 0; });
-it('ranks exact names then services before broad category results, before truncation', async () => {
+it('ranks exact provider and service names before broad category results, before truncation', async () => {
   mockResponses.push(
-    { data: [{ provider_id: 'service' }], error: null },
+    { data: [{ provider_id: 'service', name: 'Nails' }], error: null },
     { data: [{ id: 'exact' }], error: null },
     { data: [{ id: 'broad' }], error: null },
     { data: [
@@ -28,6 +28,17 @@ it('ranks exact names then services before broad category results, before trunca
     ], error: null },
   );
   expect((await searchProviders('nails', undefined, 2)).map(p => p.id)).toEqual(['exact', 'service']);
+});
+it('searches the full client-facing service copy', async () => {
+  mockResponses.push(
+    { data: [], error: null },
+    { data: [], error: null },
+  );
+  await searchProviders('bridal');
+  const serviceFilter = mockCalls.find(c => c.method === 'or')?.args[0];
+  expect(serviceFilter).toBe(
+    'name.ilike.%bridal%,description.ilike.%bridal%,category_name.ilike.%bridal%,category_description.ilike.%bridal%',
+  );
 });
 it('surfaces a failed lookup instead of reporting no matches', async () => {
   const error = { message: 'Connection lost' };
