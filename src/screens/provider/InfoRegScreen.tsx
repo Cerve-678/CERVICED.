@@ -905,6 +905,15 @@ interface ServiceModalProps {
   accentColor?: string;
 }
 
+/** A ServiceData's tags in the shared group shape (serviceTags.ts). */
+const tagGroupsOf = (service?: ServiceData | null): ServiceTagGroups => ({
+  styleTags: service?.tags || [],
+  techniqueTags: service?.techniqueTags || [],
+  outcomeTags: service?.outcomeTags || [],
+  occasionTags: service?.occasionTags || [],
+  trendNames: service?.trendNames || [],
+});
+
 const ServiceModal: React.FC<ServiceModalProps> = ({
   visible,
   onClose,
@@ -1022,6 +1031,27 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     };
   }, []);
 
+  // Tags, who it's for and a description, read from the name and heading
+  // (suggestServiceDetails). Offered on a new service, or one that still has
+  // no tags at all — a provider who typed their own name ("Volume spikes")
+  // used to get none of what a template fills in, which is how half the live
+  // services ended up with no tags. Added to what the sheet opened with (a
+  // template's own tags), never replacing it. Applied from the name's change
+  // handler and once on open, not from an effect that watches the name, so
+  // a keystroke is one render rather than a render and then a second one.
+  const applySuggestions = (nextName: string, opened: ServiceTagGroups, tags: boolean, who: boolean) => {
+    const next = suggestServiceDetails({ name: nextName, categoryName, fallbackKind });
+    if (tags) {
+      const merged = mergeTagGroups(opened, next);
+      setSelectedTags(merged.styleTags);
+      setSelectedTechniques(merged.techniqueTags);
+      setSelectedOutcomes(merged.outcomeTags);
+      setSelectedOccasions(merged.occasionTags);
+      setTrendNames(merged.trendNames);
+    }
+    if (who) setAudience(next.audience);
+  };
+
   React.useEffect(() => {
     setName(service?.name || '');
     setPrice(service?.price ? String(service.price) : '');
@@ -1041,6 +1071,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setAudience(service?.audience || '');
     setTagsTouched(false);
     setAudienceTouched(false);
+    const opened = tagGroupsOf(service);
+    const offerTags = !isEditing || hasNoTags(opened);
+    if (offerTags || !service?.audience) {
+      applySuggestions(service?.name || '', opened, offerTags, !service?.audience);
+    }
     setIsPregnancySafe(service?.isPregnancySafe ?? true);
     setPatchTestRequired(service?.patchTestRequired ?? (!service && PATCH_TEST_DEFAULT_CATEGORIES.has(catKey)));
     setMinAge(service?.minAge?.toString() || '');
@@ -1063,37 +1098,18 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setArr(arr.includes(tag) ? arr : [...arr, tag]);
   };
 
-  // Tags, who it's for and a description, read from the name and heading
-  // (suggestServiceDetails). Offered on a new service, or one that still has
-  // no tags at all — a provider who typed their own name ("Volume spikes")
-  // used to get none of what a template fills in, which is how half the live
-  // services ended up with no tags. Added to what the sheet opened with (a
-  // template's own tags), never replacing it.
-  const openedTags = useMemo<ServiceTagGroups>(() => ({
-    styleTags: service?.tags || [],
-    techniqueTags: service?.techniqueTags || [],
-    outcomeTags: service?.outcomeTags || [],
-    occasionTags: service?.occasionTags || [],
-    trendNames: service?.trendNames || [],
-  }), [service]);
+  const openedTags = useMemo(() => tagGroupsOf(service), [service]);
   const offerSuggestions = !isEditing || hasNoTags(openedTags);
   const suggestion = useMemo(
     () => suggestServiceDetails({ name, categoryName, fallbackKind }),
     [name, categoryName, fallbackKind],
   );
-  useEffect(() => {
-    if (!visible || !offerSuggestions || tagsTouched) return;
-    const merged = mergeTagGroups(openedTags, suggestion);
-    setSelectedTags(merged.styleTags);
-    setSelectedTechniques(merged.techniqueTags);
-    setSelectedOutcomes(merged.outcomeTags);
-    setSelectedOccasions(merged.occasionTags);
-    setTrendNames(merged.trendNames);
-  }, [visible, offerSuggestions, tagsTouched, openedTags, suggestion]);
-  useEffect(() => {
-    if (!visible || audienceTouched || service?.audience) return;
-    setAudience(suggestion.audience);
-  }, [visible, audienceTouched, service?.audience, suggestion.audience]);
+  const handleNameChange = (text: string) => {
+    setName(text);
+    const tags = offerSuggestions && !tagsTouched;
+    const who = !audienceTouched && !service?.audience;
+    if (tags || who) applySuggestions(text, openedTags, tags, who);
+  };
   // A suggestion outside a narrowed subcategory's list stays a chip after
   // it's unticked, so the provider can change their mind.
   const withSuggested = (opts: string[], suggested: string[]) =>
@@ -1328,7 +1344,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* Service Name */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
                 <RequiredLabel required labelStyle={styles.serviceSheetLabel} styles={styles}>Service Name</RequiredLabel>
-                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
+                <TextInput style={[styles.serviceSheetInput, fieldBox]} value={name} onChangeText={handleNameChange} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
                 {suggestedCount > 0 ? (
                   <Text style={styles.serviceSheetHint}>
                     {suggestedCount === 1 ? 'We ticked a tag' : `We ticked ${suggestedCount} tags`} from the name so clients can find this. Check them below.
