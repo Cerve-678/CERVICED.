@@ -71,6 +71,7 @@
 // on — Outlook drops rgba() outright and would leave the element transparent.
 
 import { escapeHtml as esc } from './escapeHtml.ts';
+import type { MoneySummaryLine } from './payoutRetry.ts';
 
 // Every email is light only, whatever the reader's mail app is set to (user,
 // 2026-10-19). The two meta tags in each <head> cover Apple Mail and iOS Mail;
@@ -170,13 +171,15 @@ function letter(
      * receiving it "because you have a CERVICED account", above a support
      * address that is the recipient, is nonsense.
      */
-    audience?: 'user' | 'internal';
+    audience?: 'user' | 'internal' | 'alert';
   },
 ) {
-  const footer = opts.audience === 'internal'
+  const footer = opts.audience === 'internal' || opts.audience === 'alert'
     ? `
           <p style="font-family:${BODY};color:${P.sub};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;">Support inbox</p>
-          <p style="font-family:${BODY};color:${P.sub};font-size:11px;line-height:1.7;padding-top:12px;">Filed from Report a Problem in the CERVICED app. Reply to reach the reporter.</p>`
+          <p style="font-family:${BODY};color:${P.sub};font-size:11px;line-height:1.7;padding-top:12px;">${opts.audience === 'alert'
+            ? 'Sent automatically when money in CERVICED needs a person.'
+            : 'Filed from Report a Problem in the CERVICED app. Reply to reach the reporter.'}</p>`
     : `
           <p style="font-family:${BODY};color:${P.sub};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;">Beauty at your fingertips</p>
           <p style="font-family:${BODY};color:${P.sub};font-size:12px;line-height:1.7;padding-top:14px;">Questions? <a href="mailto:${SUPPORT_ADDRESS}" style="color:${P.accent};text-decoration:underline;">${SUPPORT_ADDRESS}</a></p>
@@ -941,8 +944,11 @@ export function refundRequestedProviderEmail(params: {
   date: string;
   time: string;
   reason: string;
+  /** The provider's payout for the booking while it's held, in pence. */
+  heldPence?: number | null;
 }) {
   const P = PROVIDER;
+  const held = params.heldPence && params.heldPence > 0 ? `£${(params.heldPence / 100).toFixed(2)}` : null;
   const e = {
     clientName: esc(params.clientName),
     service: esc(params.service),
@@ -976,7 +982,8 @@ export function refundRequestedProviderEmail(params: {
         ) +
         note(
           P,
-          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy.",
+          "Nothing has been refunded yet. If you pass it to Cerviced, tell us why and we'll review it against your policy." +
+            (held ? ` Your ${held} for this booking is on hold until it's settled.` : ''),
         ) +
         button(P, 'cerviced://home', 'Open CERVICED') +
         appHint(P),
@@ -1034,6 +1041,109 @@ export function supportRequestEmail(params: {
         </table>`,
           18,
         ),
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Money alerts — also to US
+// ---------------------------------------------------------------------------
+// A payment to a provider that failed (sent the moment it happens), and the
+// daily summary of everything waiting on a person. Same internal shell as the
+// support report; neither is ever addressed to a user.
+
+function internalRows(P: EmailPalette, rows: Array<[string, string]>) {
+  return rows
+    .map(
+      ([label, value]) => `
+          <tr>
+            <td valign="top" style="padding:7px 14px 7px 0;font-family:${DISPLAY};color:${P.sub};font-size:10px;letter-spacing:1.6px;text-transform:uppercase;line-height:1.6;white-space:nowrap;">${esc(label)}</td>
+            <td valign="top" style="padding:7px 0;font-family:${BODY};color:${P.text};font-size:13px;line-height:1.6;word-break:break-word;">${esc(value)}</td>
+          </tr>`,
+    )
+    .join('');
+}
+
+export function payoutFailedSupportEmail(params: {
+  /** 'transfer': our transfer to the provider's Stripe account. 'bank': their
+   *  Stripe balance to their own bank. */
+  kind: 'transfer' | 'bank';
+  provider: string;
+  amount: string;
+  booking: string | null;
+  why: string;
+  /** Tries so far, e.g. "2 of 4". Null for a bank payout (Stripe retries those). */
+  tries: string | null;
+  nextStep: string;
+}) {
+  const P = PROVIDER;
+  const title = params.kind === 'bank' ? "A provider's bank payout failed" : 'A payment to a provider failed';
+  const rows: Array<[string, string]> = [
+    ['Provider', params.provider],
+    ['Amount', params.amount],
+    ...(params.booking ? [['Booking', params.booking] as [string, string]] : []),
+    ['Why', params.why],
+    ...(params.tries ? [['Tries so far', params.tries] as [string, string]] : []),
+  ];
+  return {
+    subject: `${title}: ${params.provider}, ${params.amount}`,
+    html: letter(P, {
+      audience: 'alert',
+      preview: `${esc(params.provider)}, ${esc(params.amount)}: ${esc(params.why)}`,
+      content:
+        eyebrow(P, params.kind === 'bank' ? 'Bank payout failed' : 'Payment failed') +
+        headline(P, title) +
+        panel(
+          P,
+          "What we know",
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${internalRows(P, rows)}
+        </table>`,
+          18,
+        ) +
+        note(P, `<strong>What happens next:</strong> ${esc(params.nextStep)}`, 0),
+    }),
+  };
+}
+
+export function moneySummaryEmail(params: {
+  failed: MoneySummaryLine[];
+  owed: MoneySummaryLine[];
+  refunds: MoneySummaryLine[];
+}) {
+  const P = PROVIDER;
+  const total = params.failed.length + params.owed.length + params.refunds.length;
+  const section = (label: string, lines: MoneySummaryLine[]) =>
+    lines.length === 0
+      ? ''
+      : panel(
+          P,
+          `${label} (${lines.length})`,
+          `
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">${lines
+          .map(
+            (l) => `
+          <tr>
+            <td valign="top" style="padding:7px 14px 7px 0;font-family:${BODY};color:${P.text};font-size:13px;line-height:1.6;">${esc(l.title)}</td>
+            <td valign="top" align="right" style="padding:7px 0;font-family:${BODY};color:${P.text};font-size:13px;font-weight:700;line-height:1.6;white-space:nowrap;">${esc(l.amount)}</td>
+          </tr>`,
+          )
+          .join('')}
+        </table>`,
+          16,
+        );
+  return {
+    subject: `Today: ${total} money ${total === 1 ? 'thing' : 'things'} waiting`,
+    html: letter(P, {
+      audience: 'alert',
+      preview: `${params.failed.length} failed, ${params.owed.length} owed, ${params.refunds.length} refund requests`,
+      content:
+        eyebrow(P, 'Daily money summary') +
+        headline(P, `${total} ${total === 1 ? 'thing is' : 'things are'} waiting`) +
+        section('Failed payments to providers', params.failed) +
+        section('Money providers owe', params.owed) +
+        section('Refund requests', params.refunds) +
+        note(P, 'Open Money (admin) in your settings in the CERVICED app to deal with these.', 0),
     }),
   };
 }

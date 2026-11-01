@@ -19,6 +19,7 @@ import {
   getProviderRegistrationDetails,
   getProviderRegistrationRecord,
   insertProviderRegistrationRow,
+  mergeProviderAutomationSettings,
   promoteUserToProvider,
   providerSlugExists,
   removeStorageObjects,
@@ -89,13 +90,11 @@ export interface ProviderRegistrationData {
   customServiceType: string;
   location: string;
   aboutText: string;
-  /** Day of month (1-31) new slots go out AND clients who've turned on the
-   *  profile bell get notified. Drives the client-facing profile's "Slots
-   *  out every Nth of the month" pill directly (computed live, no separate
-   *  text field to keep in sync). Stored in
-   *  providers.automation_settings.scheduleReleaseDay (merged in, not
-   *  overwritten — that JSONB blob also holds unrelated settings owned by
-   *  ProviderAutomationsScreen). null = no release day set / notifications off. */
+  /** Monthly release day (1-31): next month opens for booking on this day
+   *  (utils/bookingHorizon) and bell followers are told. InfoReg (Edit
+   *  Profile) is its ONLY editor — one change, and the booking limit, the
+   *  profile pill and the release message all follow. Saved by merging just
+   *  this key into automation_settings. null = rolling window instead. */
   scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
@@ -575,20 +574,9 @@ export async function saveProviderToSupabase(
   // edits silently split across rows. Fail loudly instead.
   let providerId: string;
 
-  // Merged in, never overwritten whole — automation_settings also holds
-  // unrelated keys (rebookingNudgeWeeks, clientReminderTiming, etc.) owned
-  // by ProviderAutomationsScreen, which reads/writes the exact same
-  // scheduleReleaseDay key so the two screens stay in sync automatically
-  // (both fetch fresh from this one column on their own mount — no separate
-  // sync step needed, just don't let either screen clobber the other's keys).
-  const mergedAutomationSettings: NonNullable<DbProvider['automation_settings']> = {
-    ...(existingProvider?.automation_settings ?? {}),
-  };
-  if (data.scheduleReleaseDay != null) {
-    mergedAutomationSettings.scheduleReleaseDay = data.scheduleReleaseDay;
-  } else {
-    delete mergedAutomationSettings.scheduleReleaseDay;
-  }
+  // automation_settings: only scheduleReleaseDay belongs to this screen, and
+  // it's merged in after the row is saved (below). The other keys belong to
+  // Automations and Payments, which merge their own.
 
   if (existingProvider) {
     try {
@@ -649,7 +637,6 @@ export async function saveProviderToSupabase(
         address_release_policy: data.businessType
           ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
           : (data.addressReleasePolicy ?? null),
-        automation_settings: mergedAutomationSettings,
         is_active: true,
       });
     } catch (error) {
@@ -709,7 +696,6 @@ export async function saveProviderToSupabase(
         address_release_policy: data.businessType
           ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
           : (data.addressReleasePolicy ?? null),
-        automation_settings: mergedAutomationSettings,
         is_active: true,
         terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
         booking_mode: data.bookingMode ?? 'cerviced',
@@ -719,6 +705,12 @@ export async function saveProviderToSupabase(
       throw new Error(`Provider insert failed: ${message}`);
     }
   }
+
+  // The release day — merged server-side so no other key in
+  // automation_settings is touched.
+  await (data.scheduleReleaseDay != null
+    ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
+    : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
 
   // Now that the new logo_url is durably saved, remove the old versioned
   // object it replaced — best-effort, never blocks the save. Without this,

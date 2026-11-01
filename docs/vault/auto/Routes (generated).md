@@ -60,6 +60,7 @@ Curated overview: [[Screens & Navigation]].
 - `About`
 - `Terms`
 - `ReportProblem`
+- `AdminMoney`
 - `Points`
 - `Messages`
 - `InfoReg`
