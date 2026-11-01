@@ -53,7 +53,7 @@ const BOOKING = {
   depositAmount: 0,
   amountPaid: 74.99,
   paymentType: 'full',
-  paymentStatus: 'paid_in_full',
+  paymentStatus: 'fully_paid',
 };
 
 const every = () => [
@@ -213,6 +213,16 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Cerviced platform fee');
     expect(html).toContain('£74.99');
     expect(html).toContain('Paid in full');
+    expect(html).not.toContain('Due to provider');
+  });
+
+  it('tells a client who paid in full that they paid, using the status the database stores', () => {
+    const { html } = bookingConfirmationEmail({ ...BOOKING, paymentStatus: 'fully_paid' });
+    expect(html).toContain('Paid in full');
+    expect(html).toContain('Paid today');
+    expect(html).toContain('£74.99');
+    expect(html).not.toContain('Awaiting payment');
+    expect(html).not.toContain('Total paid');
     expect(html).not.toContain('Due to provider');
   });
 
