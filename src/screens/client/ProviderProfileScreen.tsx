@@ -83,7 +83,7 @@ import {
 import type { ProviderStatKind } from "../../types/database";
 import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
 import { toUserMessage } from "../../utils/userFacingError";
-import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
+import type { DirectoryListingDetail } from "../../services/directoryListingService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
 import { MultiBookingSheet, type MultiBookingSheetResult } from "../../components/MultiBookingSheet";
@@ -105,6 +105,8 @@ import type { ProviderProfileService } from "../../features/providers/profileTyp
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
+import { listingInstagramUrl, listingLink } from "../../features/providers/directoryListings";
+import { ListingInitialBadge } from "../../components/ListingInitialBadge";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 import {
   ProviderAdditionalInfoSection,
@@ -1024,22 +1026,46 @@ const offersStyles = StyleSheet.create({
 });
 
 // ── Unclaimed Provider View ──────────────────────────────────────────────────
-// Read-only card for an imported-but-unclaimed listing (is_claimed = false).
-// Deliberately has no services/availability/booking UI at all — those don't
-// exist for a row nobody has onboarded yet. Its one job is to show enough to
-// recognise the business and offer a way to claim it.
+// Read-only page for an imported-but-unclaimed listing (is_claimed = false):
+// a business that hasn't joined CERVICED, which clients reach from Search
+// (see directoryListings.ts). Deliberately has no services/availability/
+// booking UI at all — those don't exist for a row nobody has onboarded yet.
+// Its job is to show enough to recognise the business, send the client to
+// the business's own page or Instagram, and offer the owner a way to claim it.
 function UnclaimedProviderView({
   provider,
   theme,
   onBack,
   onClaim,
 }: {
-  provider: UnclaimedProviderDetail;
+  provider: DirectoryListingDetail;
   theme: ProviderThemeTokens;
   onBack: () => void;
   onClaim: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const link = listingLink(provider.website);
+  const instagramUrl = listingInstagramUrl(provider.instagram);
+
+  const openLink = () => {
+    if (!link) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    const opening = link.opensInApp ? openExternalBookingPage(link.url) : Linking.openURL(link.url);
+    opening.catch((error: unknown) => {
+      logger.error("[ProviderProfile] listing link failed to open", error);
+      Alert.alert("Couldn't open their page", "Please try again in a moment.");
+    });
+  };
+
+  const openInstagram = () => {
+    if (!instagramUrl) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Linking.openURL(instagramUrl).catch((error: unknown) => {
+      logger.error("[ProviderProfile] listing Instagram failed to open", error);
+      Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
+    });
+  };
+
   return (
     <View style={[unclaimedStyles.container, { backgroundColor: theme.bg }]}>
       <View style={[unclaimedStyles.header, { paddingTop: insets.top + 8 }]}>
@@ -1067,7 +1093,12 @@ function UnclaimedProviderView({
             transition={0}
           />
         ) : (
-          <View style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]} />
+          <ListingInitialBadge
+            name={provider.displayName}
+            dark={theme.isDark}
+            fontSize={38}
+            style={unclaimedStyles.logo}
+          />
         )}
 
         <Text style={[unclaimedStyles.name, { color: theme.text }]}>
@@ -1080,6 +1111,36 @@ function UnclaimedProviderView({
           </Text>
         </View>
 
+        {(link || instagramUrl) && (
+          <View style={unclaimedStyles.actions}>
+            {link && (
+              <TouchableOpacity
+                style={[unclaimedStyles.linkButton, { backgroundColor: theme.accent }]}
+                onPress={openLink}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+              >
+                <Text style={unclaimedStyles.linkButtonText}>{link.label}</Text>
+                <Ionicons name="open-outline" size={15} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+            {instagramUrl && (
+              <TouchableOpacity
+                style={[unclaimedStyles.instagramButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={openInstagram}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+              >
+                <Ionicons name="logo-instagram" size={16} color={theme.text} />
+                <Text style={[unclaimedStyles.instagramButtonText, { color: theme.text }]} numberOfLines={1}>
+                  @{provider.instagram}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {provider.aboutText && (
           <Text style={[unclaimedStyles.about, { color: theme.sub }]}>
             {provider.aboutText}
@@ -1088,19 +1149,25 @@ function UnclaimedProviderView({
 
         <View style={[unclaimedStyles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[unclaimedStyles.noticeText, { color: theme.sub }]}>
-            This listing hasn't been claimed by its owner yet, so it isn't
-            bookable — details here were imported and may be out of date.
+            This business isn't on CERVICED yet and hasn't partnered with us,
+            so you can't book it in the app. Booking happens on their own
+            page, which CERVICED doesn't run. These details come from public
+            directories and may be out of date. If it's your business, claim
+            it below, or email support@cerviced.co to have it corrected or
+            removed.
           </Text>
         </View>
       </ScrollView>
 
       <View style={[unclaimedStyles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: theme.sep }]}>
         <TouchableOpacity
-          style={[unclaimedStyles.claimButton, { backgroundColor: theme.accent }]}
+          style={[unclaimedStyles.claimButton, { borderColor: theme.border }]}
           onPress={onClaim}
           activeOpacity={0.85}
         >
-          <Text style={unclaimedStyles.claimButtonText}>Claim this business</Text>
+          <Text style={[unclaimedStyles.claimButtonText, { color: theme.text }]}>
+            Is this your business? Claim it
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -1137,6 +1204,35 @@ const unclaimedStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  actions: { alignSelf: "stretch", gap: 10, marginTop: 24 },
+  linkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 16,
+    paddingVertical: 15,
+  },
+  linkButtonText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 14,
+    color: "#FFFFFF",
+  },
+  instagramButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+  },
+  instagramButtonText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   about: {
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
@@ -1160,13 +1256,13 @@ const unclaimedStyles = StyleSheet.create({
   footer: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   claimButton: {
     borderRadius: 16,
-    paddingVertical: 16,
+    borderWidth: 1,
+    paddingVertical: 14,
     alignItems: "center",
   },
   claimButtonText: {
     fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    color: "#FFFFFF",
+    fontSize: 13,
   },
 });
 

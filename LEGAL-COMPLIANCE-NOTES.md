@@ -704,3 +704,43 @@ a late cancellation.
   year), a sixth of every fee is VAT. Not a Terms question, but it changes
   what the fee earns. Ask an accountant. (Assumes the fee is VAT-inclusive; confirm.)
 - **Not lawyer-reviewed**, like the rest of this list.
+
+## 23. Businesses listed before they join ("Not on CERVICED yet") (2026-10-19)
+
+**What it is:** client Search shows unclaimed directory listings: about 521
+London beauty businesses imported from a third party's public directory
+(Gina's Maintenance Directory), plus the booking link from each business's
+Instagram bio (`supabase/import_gina_directory_listings.sql`; not yet run).
+Each shows the Instagram handle as its name, area, category and links, with a
+grey initial instead of a logo. They can't be booked in the app. The owner can
+claim a listing (Instagram bio code, approved by hand) and anyone can email
+support@cerviced.co to have one corrected or removed. Terms §6, the Privacy
+text (About) and the listing page say so. Built on
+`feat/directory-listings-in-search`.
+
+**Gaps to raise (not resolved):**
+- **Lawful basis.** Many listings are sole traders, so handle + area is
+  personal data about people who never signed up. Legitimate interests is the
+  likely basis, and that needs a written legitimate interests assessment.
+- **Article 14 notice.** Data collected indirectly normally has to be told to
+  each person within a month. The in-app Privacy text doesn't reach people who
+  aren't users. Whether a public notice is enough ("disproportionate effort"),
+  or each business must be contacted (e.g. on Instagram), is a solicitor
+  question.
+- **Removal handling.** There's no owner, deadline (one month) or suppression
+  list for removal requests, so a removed business could come back in a later
+  import. Retention for listings that are never claimed isn't set.
+- **The source directory.** A compiled directory can be protected by UK
+  database right and copyright. Check its terms and whether there's
+  permission to re-use 521 entries. Instagram's terms restrict automated
+  collection, which matters for how the bio links were gathered.
+- **Endorsement.** Terms and the listing page now say a listing doesn't mean
+  the business approved of or partnered with CERVICED. Whether chains or
+  registered marks should be excluded is undecided.
+- **Logos.** If real logos or Instagram profile pictures are added later,
+  they're usually the business's copyright, and a sole trader's picture is
+  often their face. That's a bigger step than a handle and an area.
+- **Contact addresses disagree.** The listing text uses support@cerviced.co,
+  while the Privacy Policy's rights section still names privacy@cerviced.app
+  (§13).
+- **Not lawyer-reviewed**, like the rest of the Terms and Privacy text (§19).

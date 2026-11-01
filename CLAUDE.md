@@ -98,8 +98,11 @@ terms. Do not have multiple agents edit the same feature or migration.
   Supabase client and call `.from()`. Screens/components/other services import
   functions from there — never call Supabase directly elsewhere.
 - Every client-facing provider query **must** filter `has_gone_live = true`
-  (and typically `is_active = true`). The only exception is a provider reading
-  their own record — comment the exception inline when you write one.
+  (and typically `is_active = true`). The exceptions are a provider reading
+  their own record, and the unclaimed directory listings Search shows as
+  "Not on CERVICED yet" (`getDirectoryListings`, scoped by `is_claimed =
+  false`; they can never go live) — comment the exception inline when you
+  write one.
 - Never send a provider's private fields (full street address, anything in
   `provider_private_details`) to a client-facing query or screen. Address
   release is policy-gated server-side (`client_bookings` view) — the app is

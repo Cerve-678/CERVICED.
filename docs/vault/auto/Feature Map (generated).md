@@ -40,12 +40,12 @@ Curated: [[Address Release]] · **98 files**
 - … +68 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **182 files**
+Curated: [[Availability & Slots]] · **183 files**
 - `src/services/databaseService.ts` _(318)_
 - `src/services/AvailabilityService.ts` _(304)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/screens/provider/AddBookingScreen.tsx` _(160)_
-- `src/screens/client/SearchScreen.tsx` _(122)_
+- `src/screens/client/SearchScreen.tsx` _(126)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/provider/InfoRegScreen.tsx` _(91)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **182 files**
 - `src/screens/client/BookingsScreen.tsx` _(21)_
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(21)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
-- … +152 more
+- … +153 more
 
 ## Payments
 Curated: [[Payments]] · **148 files**
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **148 files**
 - … +118 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **296 files**
+Curated: [[Booking Flow]] · **297 files**
 - `src/services/databaseService.ts` _(953)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **296 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/RescheduleScreen.tsx` _(175)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(138)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(139)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/screens/shared/NotificationsScreen.tsx` _(133)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **296 files**
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
-- … +266 more
+- … +267 more
 
 ## Notifications
 Curated: [[Notifications]] · **168 files**
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **168 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **80 files**
-- `src/services/databaseService.ts` _(81)_
+- `src/services/databaseService.ts` _(84)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(61)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_

@@ -24,6 +24,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { ListingInitialBadge } from '../../components/ListingInitialBadge';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -249,7 +250,7 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
                     {item.logoUrl ? (
                       <Image source={{ uri: item.logoUrl }} style={styles.resultLogo} />
                     ) : (
-                      <View style={[styles.resultLogo, { backgroundColor: t.border }]} />
+                      <ListingInitialBadge name={item.displayName} dark={isDarkMode} fontSize={20} style={styles.resultLogo} />
                     )}
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.resultName, { color: t.text }]}>{item.displayName}</Text>
