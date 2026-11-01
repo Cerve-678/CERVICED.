@@ -5333,6 +5333,41 @@ export async function getServicesOpenWithin(
   return (data ?? []) as ServiceOpenWithin[];
 }
 
+/** The signed-in provider's own closure. A row can outlive the closure (its
+ *  date has passed), so read isClosed, never whether a row came back. */
+export type MyScheduleClosure = {
+  isClosed: boolean;
+  reopensOn: string | null;
+  nextReleaseAt: string | null;
+};
+
+export async function getMyScheduleClosure(): Promise<MyScheduleClosure | null> {
+  const { data, error } = await supabase.rpc("get_my_schedule_closure");
+  if (error) throw error;
+  const row = (data as Array<{ is_closed: boolean; reopens_on: string | null; next_release_at: string | null }> | null)?.[0];
+  if (!row) return null;
+  return { isClosed: row.is_closed, reopensOn: row.reopens_on, nextReleaseAt: row.next_release_at };
+}
+
+/** Stops new client bookings. With no date, it reopens on the provider's next
+ *  release day, or when they reopen it if they don't have one. */
+export async function closeMySchedule(reopensOn: string | null): Promise<void> {
+  const { error } = await supabase.rpc("close_my_schedule", { p_reopens_on: reopensOn });
+  if (error) throw error;
+}
+
+export async function reopenMySchedule(): Promise<void> {
+  const { error } = await supabase.rpc("reopen_my_schedule");
+  if (error) throw error;
+}
+
+/** All a client learns about a closure: yes or no, never why or until when. */
+export async function isProviderTakingBookings(providerId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("provider_is_taking_bookings", { p_provider_id: providerId });
+  if (error) throw error;
+  return data !== false;
+}
+
 export async function getProviderBookingHorizon(providerId: string): Promise<BookingHorizonSettings> {
   const { data, error } = await supabase
     .from("providers")

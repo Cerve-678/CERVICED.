@@ -25,6 +25,12 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  (none)
 ```
 
+### Written 2026-11-01, NOT applied (close a schedule by hand)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101160000 | `close_schedule_by_hand` | **UNAPPLIED, awaiting the user's OK.** Frontier at authoring: live `20261101140000`; `20261101150000` is on #204 and redefines none of these. Re-check both before applying. New private table `provider_schedule_closures` (RLS on, no policies, no grants), helpers `provider_next_release_after` and `provider_schedule_is_closed` (no app access), RPCs `close_my_schedule`, `reopen_my_schedule`, `get_my_schedule_closure`, `provider_is_taking_bookings` (authenticated). Redefines from live, one added check each, with an md5 guard that aborts if any has moved: `enforce_booking_bookability`, `get_services_open_within`, `process_follow_schedule_release_nudges`. No data changes: nothing closes until a provider closes. The file records its own version. Apply **before** `feat/close-schedule` merges, or the schedule screen's banner stays hidden and every profile logs a warning. |
+
 ### Applied 2026-11-01 (public "How to get there" on the profile)
 
 | Authored version | Name | Status |

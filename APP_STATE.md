@@ -318,6 +318,49 @@ notification call for something a trigger already fires — that's how the
 group-booking notification dedup bug happened (fixed 2026-08-08, keyed on
 `group_booking_id` now).
 
+### Release day, fully booked and closing a schedule
+
+Three different things that are easy to merge in your head. All three are
+worked out from the clock or live data, so none of them can get stuck.
+
+**Release day** (`automation_settings.scheduleReleaseDay`, set only in Edit
+Profile). A calendar day, not an event: nothing being booked up triggers it and
+the provider does nothing. Before the day at 09:00 UTC clients can book to the
+end of this month; from then, to the end of next month
+(`provider_last_bookable_date`, mirrored in `src/utils/bookingHorizon.ts`). A day
+past the month's end means its last day. At that moment bell followers get
+"December has opened up with X. Get booking now." once a month
+(`process_follow_schedule_release_nudges`). It checks the month is open, not that
+a slot is free, so a provider with every date blocked still triggers it: the
+user chose to keep that (2026-11-01). It stays silent while the schedule is
+closed by hand.
+
+**Fully booked.** No free slot on any date currently bookable, from one check,
+`get_services_open_within`, behind the client profile's Fully Booked, Search's
+badge and "has space again". There is no closed state and no setting for it:
+when a slot frees up, the waitlist gets it first if the provider has the waitlist
+on (15-minute holds, next person, then anyone), otherwise anyone can book it
+straight away. `WAITLIST.md` has that path, which has barely run live.
+
+**Closed by hand** (`provider_schedule_closures`, migration
+`20261101160000_close_schedule_by_hand.sql`, UI in
+`src/features/providers/CloseScheduleSection.tsx` on the schedule screen). The
+provider's choice, at any time, even with free slots:
+- Clients can't make a new booking; the server refuses it in
+  `enforce_booking_bookability`. The profile says "Not taking bookings". Clients
+  never learn why or until when: the table is private and they only get a yes or
+  no from `provider_is_taking_bookings`.
+- Existing bookings stay. Closing shows them, and for each the provider picks "I
+  can do it", Move or Cancel. Move and Cancel open the booking's own screen, so
+  closing adds no second path for refunds or client notifications.
+- Still allowed: the provider's own Add Booking, and a client requesting a move
+  (every client move already needs the provider's answer).
+- Stopped: waitlist invites and "has space again", because a closed schedule
+  offers freed slots to nobody.
+- Reopens on the first of: the Reopen button; the date they chose; with no date,
+  their next release day. A chosen date wins over the release day. With neither,
+  only Reopen opens it.
+
 ### Address release is server-enforced
 Clients read the `client_bookings` view, which masks the full address until
 policy-released — the app is not the enforcement point, the database is.
