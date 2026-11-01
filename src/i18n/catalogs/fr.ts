@@ -145,6 +145,8 @@ export const fr: Catalog = {
   'providerAccount.account.info.sub': 'Nom, téléphone, date de naissance et e-mail de connexion',
   'providerAccount.account.notifications.title': 'Notifications',
   'providerAccount.account.notifications.sub': 'Réservations, messages, rappels',
+  'providerAccount.account.achievements.title': 'Réussites',
+  'providerAccount.account.achievements.sub': 'Ce que vous avez obtenu jusqu’ici',
 
   'providerAccount.section.accessibility': 'ACCESSIBILITÉ ET SUPPORT',
   'providerAccount.access.textSizing.title': 'Taille et police du texte',
