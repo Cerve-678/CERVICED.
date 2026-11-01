@@ -93,10 +93,11 @@ What the client later pays the provider in person never counts.
   fee is the same whichever way the client pays.
 - CERVICED takes **no cut** of late/no-show fees or tips.
 
-**Status:** built on `feat/percentage-platform-fee` (migration
-`20261101150000_platform_fee_percentage`, `create-payment-intent`). Until that
-migration is applied, live checkouts still use the old £1.99 / £3.99 / £5.99
-tiers. **Legal flag:** Terms §10 names no amount (the fee is shown before
+**Status:** live since 1 November 2026 (migration
+`20261101150000_platform_fee_percentage`, `create-payment-intent` v21). The app
+needs a new build to show it: older builds' cart screens still show the old
+£1.99 / £3.99 / £5.99 before payment, though the payment sheet always shows
+the amount actually charged. **Legal flag:** Terms §10 names no amount (the fee is shown before
 paying), says the fee is added "to each booking" though it's now one fee per
 checkout shared across bookings, and §6 lists PayPal without the £600 limit.
 Whether any of that needs rewording is for the user and a solicitor

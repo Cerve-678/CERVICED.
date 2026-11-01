@@ -653,7 +653,7 @@ changed to say so.
 
 ## 22. The service fee becomes a percentage, and PayPal gets a £600 limit (2026-11-01)
 
-Branch `feat/percentage-platform-fee` (migration `20261101150000`). The
+Live 2026-11-01 (PR #204, migration `20261101150000`, Stripe test mode). The
 client's service fee changes from £1.99 / £3.99 / £5.99 tiers to **5% of what
 the card is charged + 40p, at least £1.99 and at most £24.99**. A deposit
 booking is charged its deposit, so the fee is on the deposit, not the full
