@@ -78,6 +78,7 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderAccountMain`
 - `MyPublicProfile`
 - `NotificationSettings`
+- `Achievements`
 - `AccountInfo`
 - `BusinessDetails`
 - `ServicesPricing`

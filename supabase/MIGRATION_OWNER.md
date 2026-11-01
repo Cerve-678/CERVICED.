@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-01 (provider achievements)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101180000 | `provider_achievements` | **APPLIED 2026-11-01** by Claude (MCP) on the user's direct OK, behind a guard that aborted unless the frontier was still `20261101160000`. Verified live: version recorded, RLS on with no policies, `authenticated` and `anon` can't read the table, `authenticated` can run `get_my_provider_achievements()` and `anon` can't, `search_path=public, pg_temp`, and the 10 existing live providers have their `live` row. First run done as a full provider (27 rows) and a link-only provider (8 rows), inside aborted transactions, so nothing beyond those 10 rows was stored. `20261101170000_close_schedule_by_hand` on `feat/close-schedule` is still unapplied and now sits below this frontier: renumber it above `20261101180000` before applying. It touches none of the same objects. Branch `feat/achievements-screen`, PR #209. Redefines nothing. Records its own version. |
+
 ### Applied 2026-11-01 (platform fee becomes 5% + 40p)
 
 | Authored version | Name | Status |

@@ -332,6 +332,7 @@ export type ProviderAccountStackParamList = {
   MyPublicProfile: { providerId: string };
   EditProfile: { transferProviderId?: string } | undefined;
   NotificationSettings: undefined;
+  Achievements: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Analytics: undefined;
   Promotions: undefined;
