@@ -54,14 +54,22 @@ describe('booking receipt', () => {
 
     const payment = calculateBookingPaymentBreakdown(booking);
 
-    // The deposit figure is the provider's own, never deposit + fee.
-    expect(payment.paidAmount).toBe(20);
+    // Paid is what left the card (deposit + fee); Paid + Remaining = Total.
+    expect(payment.paidAmount).toBe(20.99);
+    expect(payment.remainingBalance).toBe(80);
+    expect(payment.paidAmount + payment.remainingBalance).toBeCloseTo(payment.total, 10);
     expect(payment.serviceCharge).toBe(0.99);
     // The fee is inside `total` and itemised once, in the services
     // breakdown — it never gets a second "paid" row of its own.
     const html = buildClientReceiptHTML(booking);
     expect(html).not.toContain('platform fee paid');
     expect(html).toContain('Cerviced platform fee');
+    expect(html).toContain('Paid');
+    expect(html).toContain('£20.99');
+    expect(html).toContain('Due at Appointment');
+    expect(html).toContain('£80.00');
+    expect(html).not.toContain('Due to provider');
+    expect(html).not.toContain('not through CERVICED');
   });
 
   it('does not add the checkout fee onto an unpaid deposit booking', () => {
@@ -85,7 +93,7 @@ describe('booking receipt', () => {
     const payment = calculateBookingPaymentBreakdown(booking);
 
     expect(payment.paidAmount).toBe(0);
-    expect(payment.paidLabel).toBe('Total Paid');
+    expect(payment.paidLabel).toBe('Paid');
     expect(buildClientReceiptHTML(booking)).not.toContain('platform fee paid');
   });
 
@@ -193,7 +201,7 @@ describe('booking presentation helpers', () => {
 });
 
 describe('booking payment presentation', () => {
-  it('shows the provider deposit alone, with the checkout fee on its own line', () => {
+  it('shows what left the card on a deposit, with the fee itemised once', () => {
     const breakdown = calculateBookingPaymentBreakdown({
       price: 30,
       addOns: [{ id: 'art', name: 'Nail art', price: 5 }],
@@ -206,11 +214,11 @@ describe('booking payment presentation', () => {
 
     expect(breakdown.total).toBe(35.99);
     expect(breakdown.remainingBalance).toBe(25);
-    // The card was charged 10.99, but the number shown next to "Deposit
-    // Paid" is the provider's own deposit — the platform fee is separate.
+    // The card was charged 10.99, and that is the Paid figure.
     expect(breakdown.amountPaidAtCheckout).toBe(10.99);
-    expect(breakdown.paidLabel).toBe('Deposit Paid');
-    expect(breakdown.paidAmount).toBe(10);
+    expect(breakdown.paidLabel).toBe('Paid');
+    expect(breakdown.paidAmount).toBe(10.99);
+    expect(breakdown.paidAmount + breakdown.remainingBalance).toBeCloseTo(breakdown.total, 10);
     // The platform fee is inside `total` and itemised separately on the
     // receipt — it is never rolled into the deposit figure.
     expect(breakdown.serviceCharge).toBe(0.99);
@@ -232,7 +240,7 @@ describe('booking payment presentation', () => {
 
     expect(breakdown.isPaidInFull).toBe(false);
     expect(breakdown.isUnpaid).toBe(true);
-    expect(breakdown.paidLabel).toBe('Total Paid');
+    expect(breakdown.paidLabel).toBe('Paid');
     expect(breakdown.paidAmount).toBe(0);
     expect(breakdown.remainingBalance).toBe(65.5);
   });
@@ -249,7 +257,7 @@ describe('booking payment presentation', () => {
     } as unknown as ConfirmedBooking);
 
     expect(breakdown.isPaidInFull).toBe(true);
-    expect(breakdown.paidLabel).toBe('Total Paid');
+    expect(breakdown.paidLabel).toBe('Paid');
     expect(breakdown.paidAmount).toBe(46.92);
     expect(breakdown.remainingBalance).toBe(0);
   });

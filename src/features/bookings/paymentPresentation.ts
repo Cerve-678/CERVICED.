@@ -20,7 +20,6 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   // which is why it must NOT be the number shown next to a "Deposit" label.
   const amountPaidAtCheckout = booking.amountPaid || 0;
   const depositAmount = booking.depositAmount || 0;
-  const remainingBalance = total - amountPaidAtCheckout;
 
   // `payment_type` only records WHICH option was taken (deposit vs. pay in
   // full) — it says nothing about whether money ever moved. A booking a
@@ -35,23 +34,15 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const isPaidInFull = paymentStatus === PaymentStatus.PAID_IN_FULL;
   const isUnpaid = !isPaidInFull && paymentStatus !== PaymentStatus.DEPOSIT_PAID;
 
-  // On a deposit the figure shown is the provider's own deposit, never the
-  // deposit + the platform fee bundled together — the fee is CERVICED's, not
-  // part of what the client has put towards the provider's service.
+  // Two figures, always (owner's call, 2026-11-01): Paid is what actually left
+  // the client's card, platform fee included, and Due at Appointment is what's
+  // still to pay. Together they make Total, and Paid matches the bank statement.
   //
-  // The fee gets NO "paid" row of its own anywhere. It is already inside
-  // `total` and already itemised in the receipt's services breakdown, and a
-  // third mention of the same fee next to the deposit made the card read
-  // as if it had been charged twice. Deposit + balance not summing exactly
-  // to Total is the intended reading: what you still owe the provider is the
-  // number that matters at the appointment.
-  //
-  // `isUnpaid` is checked FIRST: a booking can carry payment_type 'deposit'
-  // while payment_status is still 'pending', and labelling that "Deposit
-  // Paid" would assert a payment that never happened. An unpaid booking
-  // reads "Total Paid £0.00", which is simply true.
-  const paidLabel = !isUnpaid && isDeposit ? 'Deposit Paid' : 'Total Paid';
-  const paidAmount = isUnpaid ? 0 : isDeposit ? depositAmount : amountPaidAtCheckout;
+  // `isUnpaid` is checked first: a booking can carry payment_type 'deposit'
+  // while payment_status is still 'pending', and nothing has been paid.
+  const paidLabel = 'Paid';
+  const paidAmount = isUnpaid ? 0 : amountPaidAtCheckout;
+  const remainingBalance = Math.max(0, total - paidAmount);
 
   return {
     servicePrice,
