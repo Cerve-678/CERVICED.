@@ -266,6 +266,13 @@ describe('notification preferences gate the push', () => {
     }
   });
 
+  it('always delivers a Terms change and opens the Terms', () => {
+    const muted = new Set([...clientMap(), ...providerMap()].map(entry => entry.type));
+    expect(muted).not.toContain('terms_updated');
+    expect(read('supabase', 'migrations', '20261101130200_terms_updated_notice.sql')).toContain("ARRAY['terms_updated']");
+    expect(tapHandler()).toMatch(/type === 'terms_updated'\) \{\s+navigateNested\('Profile', 'Terms'\)/);
+  });
+
   it('saves each hat without overwriting the other hat\'s keys', () => {
     const service = databaseService();
     const section = service.slice(

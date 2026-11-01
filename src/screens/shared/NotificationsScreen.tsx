@@ -60,6 +60,7 @@ interface Notification {
       | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed' | 'tip_received'
       | 'payout_debt_recorded' | 'payout_debt_recovered'
       | 'refund_requested' | 'refund_request_updated' | 'payout_failed'
+      | 'terms_updated'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
@@ -747,6 +748,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
         );
       }, 300);
+    } else if (notification.type === 'terms_updated') {
+      // Both hats keep a Terms screen in their Profile tab's stack.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Terms'));
+      }, 300);
     } else if (notification.type === 'payout_failed') {
       // Provider-only. The fix (Stripe account or bank details) lives on
       // Payments, not on the booking the payout was for.
@@ -840,6 +846,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     if (type === 'refund_request_updated') return P.accentText;
     // Money that didn't reach the provider: they need to act.
     if (type === 'payout_failed') return '#FF9500';
+    if (type === 'terms_updated') return P.accentText;
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
@@ -934,6 +941,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Schedule';
       case 'payout_failed':
         return 'Open Payments';
+      case 'terms_updated':
+        return 'Read Terms';
       case 'provider_saved':
         return 'View Analytics';
       case 'points_earned':
