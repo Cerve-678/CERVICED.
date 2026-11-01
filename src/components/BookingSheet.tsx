@@ -19,6 +19,7 @@ import {
   Keyboard,
   Platform,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from './SafeArea';
@@ -307,7 +308,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     typeof effectiveBookingPolicies?.['emergencyBookingPolicy'] === 'string'
       ? (effectiveBookingPolicies['emergencyBookingPolicy'] as string).trim()
       : '';
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const notesScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollOffsetY = useRef(0);
 

@@ -12,6 +12,8 @@ import {
   LayoutAnimation,
   Platform,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
@@ -194,7 +196,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   // Ref for main ScrollView to control scrolling
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
 
   // First-run coach-mark tour for brand-new clients.
   const [showTour, setShowTour] = useState(false);
@@ -203,9 +205,9 @@ export default function HomeScreen() {
   // while its start timer was pending — it just waits for the return to Home.
   const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
-  const searchIconRef = useRef<View>(null);
-  const bellIconRef = useRef<View>(null);
-  const bookingsChipRef = useRef<View>(null);
+  const searchIconRef = useRef<ViewInstance>(null);
+  const bellIconRef = useRef<ViewInstance>(null);
+  const bookingsChipRef = useRef<ViewInstance>(null);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
     // Asked of the tab bar itself rather than re-declared here — the bar lives

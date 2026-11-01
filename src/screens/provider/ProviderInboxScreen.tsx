@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -145,7 +145,7 @@ function ConversationRow({
 }) {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const swipeRef  = useRef<Swipeable>(null);
+  const swipeRef  = useRef<SwipeableMethods>(null);
 
   useEffect(() => {
     const delay = Math.min(index * 45, 300);
@@ -523,7 +523,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     <Text style={[s.errorRetry, { color: P.accent }]}>Retry</Text>
                   </TouchableOpacity>
                 </View>
-              ) : null
+              ) : undefined
             }
             ListEmptyComponent={
               loadError ? (

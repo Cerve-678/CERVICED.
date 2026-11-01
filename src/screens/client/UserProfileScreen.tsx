@@ -146,7 +146,7 @@ export default function UserProfileScreen({ navigation }: any) {
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={appTheme.statusBar} translucent />
+        <StatusBar barStyle={appTheme.statusBar} />
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 

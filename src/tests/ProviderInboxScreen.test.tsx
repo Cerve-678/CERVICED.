@@ -3,6 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import ProviderInboxScreen from '../screens/provider/ProviderInboxScreen';
 import { getProviderConversations } from '../services/databaseService';
 
+// Gesture Handler 3's swipeable installs native bindings as it mounts, and these
+// tests never swipe, so the row just renders its content.
+jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: any) => require('react').useEffect(callback, [callback]),
 }));

@@ -10,6 +10,7 @@ import {
   Easing,
   useWindowDimensions,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
@@ -204,7 +205,7 @@ interface SubTabProps {
   activeTab: 'discover' | 'favourites';
   onTabChange: (tab: 'discover' | 'favourites') => void;
   // Coach-mark target for the first-visit tour's "where your saves land" step.
-  favouritesRef?: React.RefObject<View | null>;
+  favouritesRef?: React.RefObject<ViewInstance | null>;
 }
 
 const SUB_TABS = [
@@ -312,10 +313,10 @@ const ExploreScreen = memo(() => {
   // come back.
   const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
-  const tourHeartRef = useRef<View>(null);
-  const tourPriceRef = useRef<View>(null);
-  const tourFavouritesRef = useRef<View>(null);
-  const tourSavedRef = useRef<View>(null);
+  const tourHeartRef = useRef<ViewInstance>(null);
+  const tourPriceRef = useRef<ViewInstance>(null);
+  const tourFavouritesRef = useRef<ViewInstance>(null);
+  const tourSavedRef = useRef<ViewInstance>(null);
 
   // Category-pill (filter chips) entrance — matches the fade+slide-up every
   // other card/pill row in the app already does on mount.
