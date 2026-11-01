@@ -56,7 +56,7 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Applied 2026-11-02 (close a schedule by hand)
+### Applied 2026-11-01 (close a schedule by hand)
 
 | Authored version | Name | Status |
 |---|---|---|
