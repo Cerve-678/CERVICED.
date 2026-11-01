@@ -3,9 +3,14 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProviderRefundState, refundProviderBooking, type ProviderRefundState } from '../services/providerPaymentService';
+import { getRefundRequestsForBooking } from '../services/databaseService';
+import { describeRefundRequestTimeline, isRefundRequestOpen } from '../features/bookings/refundRequestTimeline';
+import type { RefundRequest } from '../types/booking';
+import RefundRequestTimeline from './RefundRequestTimeline';
 import { describeSettlementTiming } from '../features/bookings/paymentPresentation';
 import { newRequestId } from '../utils/requestId';
 import { logger } from '../utils/logger';
@@ -18,7 +23,9 @@ import { toUserMessage } from '../utils/userFacingError';
 // cancellation was already settled by the provider's policy, that is shown as
 // done and the only choice is refunding MORE on top: never "apply the policy"
 // again. A reason is required before money moves. Issuing a refund does NOT
-// cancel the appointment; that's the separate Cancel action.
+// cancel the appointment; that's the separate Cancel action. When the client
+// has an open refund request, it sits at the top with its timeline, so the
+// provider can see what they're answering while they choose the amount.
 
 // Why a refund is being issued. A refund isn't one thing — it can settle a
 // cancellation, a client dispute, or something that went wrong with a service
@@ -71,7 +78,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
   onRefunded: (result: RefundIssued) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const requestId = useRef<string>(newRequestId());
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -101,6 +108,22 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
   }, [booking.id]);
 
   useEffect(() => { void loadState(); }, [loadState]);
+
+  // The client's open refund request, if any. Loaded here rather than passed
+  // in so both callers (booking detail, Payments) show it.
+  const [clientRequest, setClientRequest] = useState<RefundRequest | null>(null);
+  useEffect(() => {
+    let active = true;
+    getRefundRequestsForBooking(booking.id)
+      .then(rows => { if (active) setClientRequest(rows.find(isRefundRequestOpen) ?? null); })
+      // Without the card the refund itself still works; the request is on the booking.
+      .catch(err => logger.error('[IssueRefundSheet] refund request failed to load:', err));
+    return () => { active = false; };
+  }, [booking.id]);
+  const requestSteps = useMemo(
+    () => (clientRequest ? describeRefundRequestTimeline(clientRequest, null, 'provider') : null),
+    [clientRequest],
+  );
 
   const close = useCallback(() => { if (!busy) onClose(); }, [busy, onClose]);
 
@@ -183,6 +206,18 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                 </View>
               </View>
 
+              {clientRequest && requestSteps && (
+                <View style={[styles.card, { backgroundColor: P.card, gap: 8, marginBottom: 12 }]}>
+                  <Text style={{ color: P.text, fontWeight: '700', fontSize: 14 }}>
+                    {first ? `${first}'s refund request` : 'Refund request'}
+                  </Text>
+                  {!!clientRequest.message && (
+                    <Text style={{ color: P.sub, fontSize: 13, lineHeight: 18 }}>“{clientRequest.message}”</Text>
+                  )}
+                  <RefundRequestTimeline steps={requestSteps} colors={P} />
+                </View>
+              )}
+
               {stateError ? (
                 <View style={[styles.card, { backgroundColor: P.card }]}>
                   <Text style={{ color: P.text, fontSize: 14 }}>Couldn't load this booking's payment.</Text>
@@ -199,7 +234,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                 const held = state.heldPence;
                 const settled = state.policySettlement;
                 const modes: RefundMode[] = state.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
-                const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours) : null;
+                const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours, settled.movedLate) : null;
                 const optionCopy: Record<RefundMode, { title: string; sub: string; value: string }> = {
                   full: {
                     title: 'Full refund',

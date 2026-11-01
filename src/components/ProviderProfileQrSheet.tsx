@@ -15,8 +15,10 @@ import { providerProfileDeepLink } from "../utils/providerProfileDeepLink";
 
 type Props = {
   visible: boolean;
-  providerId: string;
+  providerSlug: string;
   providerName: string;
+  /** Clients can't open a profile that isn't live, so don't promise they can. */
+  isLive: boolean;
   accentColor: string;
   backgroundColor: string;
   textColor: string;
@@ -28,8 +30,9 @@ type Props = {
 /** Provider-owned, print-friendly QR for their public in-app profile. */
 export function ProviderProfileQrSheet({
   visible,
-  providerId,
+  providerSlug,
   providerName,
+  isLive,
   accentColor,
   backgroundColor,
   textColor,
@@ -37,7 +40,7 @@ export function ProviderProfileQrSheet({
   borderColor,
   onClose,
 }: Props) {
-  const deepLink = providerProfileDeepLink(providerId);
+  const deepLink = providerProfileDeepLink(providerSlug);
   const share = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await Share.share({
@@ -68,7 +71,9 @@ export function ProviderProfileQrSheet({
             Your profile QR
           </Text>
           <Text style={[styles.copy, { color: subtextColor }]}>
-            Clients can scan this to open {providerName} in CERVICED.
+            {isLive
+              ? `Clients with the CERVICED app can scan this to open ${providerName}.`
+              : "This code starts working once your profile is live."}
           </Text>
           <View
             style={styles.qrFrame}

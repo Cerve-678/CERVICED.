@@ -182,7 +182,7 @@ export default function MessagesScreen({ navigation }: any) {
                 <Text style={[styles.errorRetry, { color: OP.accentText }]}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           loadError ? (

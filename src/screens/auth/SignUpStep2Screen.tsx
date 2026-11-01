@@ -133,7 +133,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       <KeyboardDismissView style={styles.flex}>
         <ScrollView

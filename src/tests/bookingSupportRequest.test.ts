@@ -9,6 +9,7 @@ jest.mock('../utils/logger', () => ({ logger: { error: jest.fn() } }));
 import { invokeSendSupportRequest, passRefundRequestToCerviced, requestBookingRefund } from '../services/databaseService';
 import {
   buildBookingSupportDescription,
+  composePassOnReason,
   describeRefundScope,
   fileBookingSupportRequest,
   getRefundRequestScope,
@@ -148,5 +149,18 @@ describe('passRefundRequestOn', () => {
     (passRefundRequestToCerviced as jest.Mock).mockRejectedValueOnce(new Error('This refund request has already moved on.'));
     await expect(passRefundRequestOn(booking, { id: 'rr-1', reason: 'x' }, 'note', 'provider')).rejects.toThrow('moved on');
     expect(invokeSendSupportRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('composePassOnReason', () => {
+  it('needs a picked reason, and a note only for Other', () => {
+    expect(composePassOnReason(null, 'anything')).toBeNull();
+    expect(composePassOnReason('Other', '  ')).toBeNull();
+    expect(composePassOnReason('Other', ' Client was rude ')).toBe('Client was rude');
+  });
+
+  it('sends the picked reason, with any note after it', () => {
+    expect(composePassOnReason("Client didn't turn up", '')).toBe("Client didn't turn up");
+    expect(composePassOnReason('Service was done as booked', 'Photos sent at the time')).toBe('Service was done as booked. Photos sent at the time');
   });
 });

@@ -19,6 +19,37 @@ Neither was a git problem. Both sessions wrote correct SQL.
 
 ---
 
+## How to apply one safely
+
+Run through this right before applying, not just when writing:
+
+1. **Lock.** Read `OWNER` below, on main *and* on any open PR branch that
+   touches this file. If someone holds it, ask them (ListAgents) first.
+2. **Number above both frontiers.** Above live `max(version)` in
+   `supabase_migrations.schema_migrations` *and* above every unapplied
+   migration on an open PR branch. Re-check at apply time: other tools
+   (ChatGPT, the main folder) apply too. On 2026-11-01 one landed at
+   `20261101115322` between three files being written and applied.
+3. **Redefine from live, never from a repo file.** Copy
+   `pg_get_functiondef` / `pg_get_viewdef` and add an md5 guard that
+   `RAISE`s if live changed. `CREATE OR REPLACE` overwrites a newer version
+   silently.
+4. **`client_bookings`** is rebuilt by several features. Start from the live
+   view, keep every column, and keep `WITH (security_invoker = true)`.
+5. **`notifications_type_check`** is stored as one array literal,
+   `CHECK (type = ANY ('{a,b,…}'::text[]))`. The old per-item regex reads 0
+   types from it. Parse with
+   `(substring(def from '''(\{[a-z_,]+\})'''))::text[]` (see
+   `20261101130200_terms_updated_notice.sql`), add only your new types, and
+   refuse if fewer than 50 are read.
+6. **One transaction.** `BEGIN … COMMIT`; the file inserts its own version
+   (`ON CONFLICT DO NOTHING`); new `SECURITY DEFINER` functions are revoked
+   from `PUBLIC, anon, authenticated` unless the app must call them.
+7. **Verify live, then record it.** Version present, objects present, grants
+   right. Mark the entry here APPLIED and set `OWNER` back to `(none)`.
+
+---
+
 ## Current owner
 
 ```
@@ -34,6 +65,97 @@ NEXT:   cerviced-c2's tip_received_notification, then cerviced-74's
 | Authored version | Name | Status |
 |---|---|---|
 | 20261024100000 | `listing_claims_checked_by_instagram` | **APPLIED 2026-10-24** by Codex (Supabase MCP execute_sql) on the user's OK, version recorded. Re-verified live by cerviced-ae: the `claim_token*`/`claim_attempts` columns and `claim_provider_profile()` are gone; `provider_claim_requests` has RLS on with one policy (`provider_claim_requests_own_read`, SELECT, authenticated, `user_id = auth.uid()`); anon has no table or column privilege; authenticated can SELECT `bio_code` but not `review_note` and cannot write; `request_provider_claim` is EXECUTE for authenticated only (md5 `6eeb6e4758f83fa5eb36d4aa718b659b`) and `review_provider_claim` for postgres/service_role only (md5 `6554a980bf87c9b7547097cc9bf35566`), both identical to the file. Under `SET LOCAL ROLE anon` the table and both functions give 42501. Authored as `20261019235500` (frontier `20261019233000`), renumbered above the live frontier `20261021112728`. Does not touch `notifications_type_check`. Still to do: delete the old `request-claim-verification` Edge Function in the dashboard. |
+### Applied 2026-11-01 (provider achievements)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101180000 | `provider_achievements` | **APPLIED 2026-11-01** by Claude (MCP) on the user's direct OK, behind a guard that aborted unless the frontier was still `20261101160000`. Verified live: version recorded, RLS on with no policies, `authenticated` and `anon` can't read the table, `authenticated` can run `get_my_provider_achievements()` and `anon` can't, `search_path=public, pg_temp`, and the 10 existing live providers have their `live` row. First run done as a full provider (27 rows) and a link-only provider (8 rows), inside aborted transactions, so nothing beyond those 10 rows was stored. `20261101170000_close_schedule_by_hand` on `feat/close-schedule` is still unapplied and now sits below this frontier: renumber it above `20261101180000` before applying. It touches none of the same objects. Branch `feat/achievements-screen`, PR #209. Redefines nothing. Records its own version. |
+
+### Applied 2026-11-01 (platform fee becomes 5% + 40p)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101150000 | `platform_fee_percentage` | **APPLIED 2026-11-01** by the user (SQL editor), PR #204. Claude's practice run was blocked by the permission check, so the first run was the real one. Verified live: version recorded, `calculate_platform_fee` gives 1.99 / 2.12 / 2.90 / 24.99 for £25 / £34.30 / £50 / £800, the new split is in `apply_checkout_platform_fee`, its trigger exists, and `authenticated` can't execute it. Frontier at authoring: `20261101140000`. Redefines `calculate_platform_fee` and `apply_checkout_platform_fee` (md5 guards against the live definitions). The file records its own version. `create-payment-intent` deployed as v21 for the PayPal limit. |
+
+### Applied 2026-11-01 (public "How to get there" on the profile)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101140000 | `provider_public_directions` | **APPLIED 2026-11-01** by cerviced-72 (MCP, on the user's OK), behind a guard that aborted unless the frontier was still `20261101115322`; dry-run in a rolled-back transaction first. Verified live: column `text` nullable, 0 of 11 providers filled, `authenticated` can select it, a 301-character value is refused by the CHECK. Frontier after: **20261101140000**. cerviced-e3 (formerly 4b) applied its `20261101130000`/`130100`/`130200` the same afternoon, after this one; they touch none of the same objects, so the order doesn't matter and all five 2026-11-01 versions are recorded live. Branch `feat/profile-how-to-get-there` (stacked on `feat/booking-directions`, #196). Frontier: live `20261101115322` (2026-11-01); cerviced-4b's unapplied `20261101130000`/`130100`/`130200` sit below it and touch none of the same objects, so apply order between them doesn't matter. Adds nullable `providers.public_directions text` with a 300-character CHECK. No backfill, no policy or grant change (table-level grants). Redefines nothing. Records its own version. **Apply before this branch merges**: the profile's public select names the column, so without it every provider profile fails to load. |
+
+### Applied 2026-11-01 (rescheduling can't dodge a late-cancel charge)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101130000 | `late_reschedule_keeps_cancel_charge` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/late-reschedule-keeps-cancel-charge`. Frontier: live `20261101115322` (2026-11-01); first written as `20261031200000` and renumbered above it. The view is rebuilt from that migration's `client_bookings` (keeps `provider_directions_snapshot`) and md5-guarded. Adds `booking_reschedule_requests.requested_inside_cancel_window` and `bookings.late_reschedule_from` (both readable by `authenticated` via column grants). Redefines from live, md5-guarded (the file aborts if any changed): `request_reschedule_own_booking`, `confirm_reschedule_own_booking`, `confirm_group_reschedule`, `cancel_own_booking`, `process_cancel_window_closing_warnings`; replaces the `client_bookings` view with one column added at the end (`security_invoker` kept). Records its own version. **Apply before deploying `apply-cancellation-refund`** from this branch, which selects the new column. |
+
+### Applied 2026-11-01 (refund requests go to Cerviced after 3 days)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101130100 | `refund_request_reply_deadline` | **APPLIED 2026-11-01** by Claude on the user's direct ask; verified live. Branch `feat/refund-request-reply-deadline`; lock released 2026-11-01 (on `feat/late-reschedule-keeps-cancel-charge`). Frontier: live `20261101115322` (2026-11-01); first written as `20261031201000` and renumbered. Independent of `20261101130000`, so either order works. Adds `refund_requests.passed_automatically` (granted to `authenticated`) and `provider_reminded_at`; `process_refund_request_deadlines()` (service role only) and cron `refund-request-deadlines` at `25 * * * *`. Redefines from live, md5-guarded: `request_booking_refund` (3-day sentence), `notify_refund_request_status` (automatic-pass wording + provider notice). No new notification types. Records its own version. **Apply before this branch merges**: the app selects `passed_automatically`, so without it every refund-request read fails. |
+
+### Applied 2026-11-01 (one "We've updated our Terms" notice)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101130200 | `terms_updated_notice` | **APPLIED 2026-11-01** by Claude on the user's direct ask (after 130000 + 130100). Verified: 55 types incl. `terms_updated`, function not executable by `authenticated`. The CHECK is stored as one array literal (`'{a,b}'::text[]`), so the rebuild now parses both formats; the first run refused safely (read 0 types). Branch `feat/terms-updated-notice`; lock released 2026-11-01 (on `feat/late-reschedule-keeps-cancel-charge`). Frontier: live `20261101115322` (2026-11-01); first written as `20261031202000` and renumbered. Independent of `20261101130000` / `130100`. Adds type `terms_updated` to `notifications_type_check` (rebuilt from the live list, refuses below 50) and `send_terms_updated_notice(text, text)` (service role only, one row per hat, skips users already sent that version). Applying sends nothing: run the function on release day, after the new build ships. Records its own version. |
+
+### Applied 2026-10-30 ("Always visible" address on the profile)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261026120000 | `always_visible_address_on_profile` | **APPLIED 2026-10-30** by the user (SQL editor), after `20261026110000`, version recorded by the file. Verified live: `anon` cannot execute it; 1 live salon/studio on `always` (stays public, user's call). Frontier: live `20261025130000`; unapplied peers on open branches go up to `20261025212000`, so numbered above them. Re-check both and renumber if anything has landed since. Adds `get_public_provider_address(uuid)` SECURITY DEFINER (authenticated only): returns the full address + coordinates only for a live, active salon/studio on `address_release_policy = 'always'` with a non-blank address; no row otherwise. Redefines nothing. The file records its own version. **Must be applied before `feat/always-visible-address-on-profile` merges**: the provider profile calls it (a missing function only logs and falls back to the area, but every profile open would log an error). |
+
+### Applied 2026-10-30 (monthly release actually releases)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261026110000 | `monthly_release` | **APPLIED 2026-10-30** by the user (SQL editor), straight after `20261026100000`, version recorded by the file. Verified live: the 3 release-day providers (5th/14th/20th) bookable to 2026-11-30, `enforce_booking_bookability` reads `provider_last_bookable_date`, the release nudge carries the "has opened up" copy, `merge_provider_automation_settings` not executable by `anon`. Known gap until the new build ships: from 1 Nov until each release day, the current app's rolling picker offers early-December dates for those 3 providers that the server refuses (accepted by the user). Needs `20261026100000` applied first (it redefines that file's `provider_last_bookable_date`). Frontier: live `20261025130000`; unapplied peers up to `20261025212000`. Re-check both and renumber if anything has landed since. Redefines, each from its live definition on 2026-10-26: `provider_last_bookable_date` (monthly branch), `enforce_booking_bookability` (window check → that helper; everything else verbatim), `process_follow_schedule_release_nudges` (live providers only; sends only once next month is open; names the month). Also adds `merge_provider_automation_settings(uuid, jsonb, text[])` (SECURITY INVOKER, owner-checked, authenticated only), which the app now uses for every automation_settings write — so it must be applied **before** this branch merges or Automations/Payments/Scheduling saves fail. No new tables or columns. Before applying, diff each redefined function against live again — `enforce_booking_bookability` is the gate every booking passes through. The file records its own version. Apply before `feat/monthly-release` merges. |
+
+### Applied 2026-10-30 (the profile bell tells the truth)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261026100000 | `follow_bell_tells_the_truth` | **APPLIED 2026-10-30** by the user (SQL editor), version recorded by the file. Frontier before apply: `20261025212000`, re-checked the same morning; no applied or open-branch migration redefined these functions. Verified live: 5 bell-off follows deleted (6 remain, 0 bell-off), `process_follow_availability_nudges` gone, cron `provider-follow-openings-alerts` `20 * * * *`, `provider_follow_openings_state` present, `provider_last_bookable_date` not executable by `authenticated`. Frontier: live `20261025130000`; unapplied peers on open branches go up to `20261025212000`, so numbered above them. Re-check both and renumber if anything has landed since. **Deletes** the 5 `provider_follows` rows with `notify_enabled = false` (bell switched off; the app now deletes instead of clearing the flag). Drops dead `process_follow_availability_nudges()` (no cron since 2026-08-08). Adds `provider_last_bookable_date(uuid)`, `get_services_open_within(uuid[], int)` (authenticated; the one free-slot check — profile Fully Booked, Search and the bell all use it; `get_services_availability` becomes a 7-day wrapper over it), private table `provider_follow_openings_state` (RLS on, no policies), `process_follow_openings_alerts()` and cron `provider-follow-openings-alerts` at `20 * * * *`. All three functions revoked from anon/authenticated. Redefines nothing else. The file records its own version. Apply **before** `fix/follow-bell-tells-the-truth` merges (the app's bell-off now deletes rows; harmless without the migration, but the openings alert the toast promises only exists once applied). `feat/monthly-release` is stacked on this branch and redefines `provider_last_bookable_date`. Since 2026-10-29 it also redefines, from live, `get_promotion_audience`, `queue_scheduled_announcement` and `send_provider_client_notifications` with the bookmarks branch removed (saving a provider is just a list; the bell is the switch for updates) — diff each against live again before applying. `send-push-notification` **DEPLOYED 2026-10-30 as v21** from this branch (verify_jwt true; live v20 was unchanged since main, the diff is only the bell gate): a promotion or announcement from a provider the client has belled skips the Offers & Promotions switch, which is off by default. |
+
+### Applied 2026-10-29 (tip notification, refund hold notice, payout retries, admin Money screen)
+
+Applied by cerviced-74 on the user's direct OK, in this order. Each one ran in a single transaction behind a guard (it aborts unless `max(version)` and the `notifications_type_check` type count are what the file expects, and 210000 also checks `request_booking_refund`'s live md5). Each was first dry-run in a rolled-back transaction and verified live afterwards. Every file records its own version.
+
+| Version | Name | Verified live after |
+|---|---|---|
+| 20261025145000 | `tip_received_notification` (cerviced-a8, PR #163) | 51 types, the same set as the file; trigger `on_booking_tip_succeeded` present. `send-push-notification` NOT deployed yet. |
+| 20261025210000 | `refund_request_hold_notice` (PR #165) | `request_booking_refund` (md5 was `47298389…`, now `c0bfe47f…`) appends the hold sentence. `send-support-request` v10 deployed 2026-10-30. |
+| 20261025211000 | `payout_retries_and_alerts` (PR #166) | 52 types (`tip_received` + `payout_failed`); `provider_payouts.attempt_count/last_failed_at/failure_cause`; `money_needing_attention()` service-role only; cron `money-daily-summary` `0 8 * * *`. `release-payouts` v12, `stripe-webhook` v11, `money-daily-summary` v1 deployed 2026-10-30. |
+| 20261025212000 | `admin_money_screen` (PR #169) | `admin_users` and `admin_actions` with RLS on and 0 policies, not readable by `authenticated`; 5 functions; append-only trigger; 0 admins. `refund-payment` v9 deployed 2026-10-30. |
+
+Frontier after: **20261025212000**. Still unapplied and now below it: `20261025150000_provider_booked_contact` (#174, cerviced-3f; must renumber). Queued above it: cerviced-14's `20261026100000` / `110000` / `120000`.
+
+### Applied 2026-10-30 (provider debt notices + fee payouts pay off debt)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261029120000 | `provider_debt_notices_and_fee_recovery` | **APPLIED 2026-10-30** by the user (SQL editor; the file's own INSERT records the version). Verified live: version recorded and now the frontier; `booking_fee_charges.deducted_pence` + `release_claimed_at`; `provider_shortfall_recoveries.fee_charge_id` with `payout_id` nullable and the one-target CHECK + per-fee UNIQUE; `notifications_type_check` has 54 types (rebuilt from the live list at apply time, `tip_received` and `payout_failed` kept); three triggers; nine functions; `apply_provider_shortfalls` calls the shared `take_provider_shortfalls`; none executable by anon/authenticated, `apply_/release_fee_payout_shortfalls` granted to service_role. Frontier at authoring: `20261025212000` (re-checked 2026-10-30: `20261026120000`). Edge functions `release-payouts`, `booking-fee`, `stripe-webhook` still to deploy, after #169 and #181 merge. |
+
+### Applied 2026-10-29 (a moved booking moves its payout)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261025140000 | `reschedule_moves_payout_release` | **APPLIED 2026-10-29** by the user (SQL editor; the file's own INSERT records the version). Verified live: version recorded and now the frontier, trigger `after_booking_move_held_payout` on `bookings` (AFTER UPDATE OF booking_date, booking_time, end_time, only when they change), `move_held_payout_with_booking()` SECURITY DEFINER with `search_path=public, pg_temp`, `authenticated` cannot execute it, the one held payout unchanged. Frontier at authoring: `20261025130000` (first written as 20261022100000, renumbered). Adds the function + trigger only; redefines nothing. Shifts a held, unclaimed payout's `release_after` by as much as the appointment moved, either way. |
+
+### Applied 2026-10-25 (service search)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261025130000 | `service_search_people_and_price` | **APPLIED 2026-10-25** by Claude (cerviced-16), CLI `db query --linked -f`; the file records its own version. Frontier at apply: `20261025120000` (also mine). Redefines only the `search_*` functions from 20261025120000, plus new `search_audience_words` and `search_clean_query`. Drops the 4-argument `search_services_ranked` for the new one, which adds `p_max_price` (only the unmerged PR #171 calls it). Verified live: one overload remains, eval 102/103, and an anon REST call works with `p_max_price`. |
+| 20261025120000 | `service_search` | **APPLIED 2026-10-25** by Claude (cerviced-16), Supabase CLI `db query --linked -f`, on the user's OK. The file records its own version. Frontier at apply: `20261024100000`; cerviced-3f confirmed it would renumber its unapplied `provider_booked_contact` above whatever is live when it applies. Adds `search_edit_distance`, `search_category_words`, `search_synonym_map`, `search_rewrite_query` and `search_services_ranked` (all SECURITY INVOKER, has_gone_live-gated). Redefines nothing. Verified live: the version is recorded, anon can execute, `supabase/tests/service_search_eval.sql` 91/92, and an anon REST call returns results. PR #171's app code needs this, and can merge now. |
+
+### Applied 2026-11-01 (booked-client contact details)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101160000 | `provider_booked_contact` | **APPLIED 2026-11-01** by Claude on the user's direct ask (`supabase db query --linked -f`), renumbered from 20261025220000 above live 20261101150000. Verified live: version recorded, RLS on with 1 owner policy, anon has no table or function access, `get_booked_client_contact` SECURITY DEFINER and executable by authenticated. Earlier history: The apply on 2026-10-26 was declined at the permission prompt; nothing was written. Moved from 150000 on 2026-10-29 after cerviced-74 applied 145000 and 210000–212000. Renumbered from `20261025130000` (taken by service search) and then `20261025140000` (held by #168's reschedule payout migration; moved by cerviced-a8). Frontier: `20261025212000`. Re-check `max(version)` and renumber above it if anything has landed since. Adds owner-only table `provider_booked_contact` (RLS on, owner ALL policy, anon revoked) + `get_booked_client_contact(uuid)` SECURITY DEFINER (client on that booking only, pending/confirmed/in_progress, switched-on channels only, blank → public value). Redefines nothing. The file records its own version. **Must be applied before `feat/communications-contact-edit-policy-explainers` merges**: Communications and both client Contact sheets call it. |
 
 ### Applied 2026-10-21 (daily "people saved you" count)
 

@@ -26,7 +26,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
 import type { EmergencyRequest } from '../../contexts/CartContext';
@@ -72,7 +72,7 @@ import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../ut
 import { newestAddedItem } from '../../utils/newestAddedItem';
 import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
-import { calculatePlatformFee } from '../../features/cart/platformFee';
+import { calculatePlatformFee, PAYPAL_MAX_CHECKOUT_TOTAL } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
@@ -289,17 +289,10 @@ function pricedCheckoutItems(
 // drift from each other — see handleCheckout's setPaymentTotal call and the
 // frozenCheckoutTotals memo below.
 function checkoutTotalsFrom(priced: EffectiveCartItem[]): { subtotal: number; fee: number; total: number } {
-  const fullPaymentSubtotal = priced.reduce(
-    (sum, { isDeposit, effectivePrice }) => (isDeposit ? sum : sum + effectivePrice),
-    0,
-  );
-  // A deposit-only checkout is tiered on the full service price, not the deposit.
-  const depositServiceSubtotal = priced.reduce(
-    (sum, { isDeposit, item }) => (isDeposit ? sum + getCartItemFullPrice(item) : sum),
-    0,
-  );
-  const fee = calculatePlatformFee(fullPaymentSubtotal, depositServiceSubtotal);
+  // effectivePrice is what the card is charged for each item (the deposit for
+  // a deposit service), which is exactly what the fee is based on.
   const subtotal = priced.reduce((sum, { effectivePrice }) => sum + effectivePrice, 0);
+  const fee = calculatePlatformFee(subtotal);
   return { subtotal, fee, total: subtotal + fee };
 }
 
@@ -731,10 +724,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
     const hasFees = (fees?.length ?? 0) > 0;
     const canPay = fees !== null && (!hasFees || agreedToFees);
-    // Same rule as create-payment-intent: a late/no-show fee is charged later
-    // to a saved card, so those checkouts are card-only. Hidden in Expo Go,
-    // which can't return from PayPal's page.
-    const paypalShown = fees !== null && !hasFees && !env.isExpoGo;
+    // Same rules as create-payment-intent: a late/no-show fee is charged later
+    // to a saved card, so those checkouts are card-only, and so is a total
+    // over PAYPAL_MAX_CHECKOUT_TOTAL. Hidden in Expo Go, which can't return
+    // from PayPal's page.
+    const paypalShown = fees !== null && !hasFees && totalAmount <= PAYPAL_MAX_CHECKOUT_TOTAL && !env.isExpoGo;
 
     const handlePayment = useCallback(async (method: 'card' | 'wallet' | 'paypal') => {
       const timestamp = () => new Date().toISOString().split('T')[1];
@@ -1146,7 +1140,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const { palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
-    const swipeRef = useRef<Swipeable>(null);
+    const swipeRef = useRef<SwipeableMethods>(null);
 
     const totalPrice = useMemo(() => getCartItemFullPrice(item), [item]);
 
@@ -1221,14 +1215,9 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             overshootRight={false}
             friction={2}
             rightThreshold={40}
-            renderRightActions={(progress: Animated.AnimatedInterpolation<number>) => {
-              const scale = progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.6, 1],
-                extrapolate: 'clamp',
-              });
+            renderRightActions={() => {
               return (
-                <Animated.View style={[styles.swipeDeleteAction, { transform: [{ scale }] }]}>
+                <View style={styles.swipeDeleteAction}>
                   <TouchableOpacity
                     style={[styles.swipeDeleteButton, isLoading && styles.disabledButton]}
                     onPress={() => {
@@ -1244,7 +1233,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                       <Ionicons name="trash" size={20} color="#fff" />
                     )}
                   </TouchableOpacity>
-                </Animated.View>
+                </View>
               );
             }}
           >
@@ -2885,18 +2874,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flaggedProvidersKey]);
 
-  // The fee is separate from provider money: tiered on the full-payment
-  // subtotal, or on the full service price for an all-deposit checkout.
-  const platformFee = useMemo(() => {
-    let fullPaymentSubtotal = 0;
-    let depositServiceSubtotal = 0;
-    for (const item of items) {
-      const price = Math.max(0, getCartItemFullPrice(item) - (itemPromoDiscounts[item.id] ?? 0));
-      if (getServiceBooking(item.id).isDepositOnly) depositServiceSubtotal += price;
-      else fullPaymentSubtotal += price;
-    }
-    return calculatePlatformFee(fullPaymentSubtotal, depositServiceSubtotal);
-  }, [items, getServiceBooking, itemPromoDiscounts]);
+  // The fee is separate from provider money and based on what the card is
+  // charged: effectiveTotal already counts each deposit service as its deposit.
+  const platformFee = useMemo(() => calculatePlatformFee(effectiveTotal), [effectiveTotal]);
 
   const effectiveFinalTotal = useMemo(
     () => effectiveTotal + platformFee,
@@ -4958,7 +4938,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 showGuide={hasUnscheduledItems}
                 onCheckout={handleCheckout}
               />
-            ) : null}
+            ) : undefined}
             ListEmptyComponent={(
               <View style={styles.emptyCart}>
                 <Text style={dynamicStyles.emptyTitle}>Cart is Empty</Text>

@@ -39,11 +39,10 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  InteractionManager,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 // Gesture-handler's TouchableOpacity rather than react-native's, for the same
 // reason NotificationsScreen uses it: react-native's runs its own touch
 // responder, so a swipe that hasn't crossed the pan threshold yet can still
@@ -88,6 +87,13 @@ import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
+import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
+import {
+  TodayBookingCards,
+  TodaySummaryCard,
+  type TodayCardsPalette,
+} from '../../features/providers/TodayScheduleCards';
+import type { BookingWithAddOns } from '../../types/database';
 import { ProviderProfileQrSheet } from '../../components/ProviderProfileQrSheet';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -102,6 +108,7 @@ import ServiceEditorSheet, {
   type ServiceEditorPalette,
   type ServiceEditorValue,
 } from '../../features/providers/ServiceEditorSheet';
+import { descriptionProblem, hasNoTags, type DescriptionProblem } from '../../features/providers/serviceTags';
 import {
   fetchGoLiveStatus,
   buildGoLiveSteps,
@@ -350,7 +357,7 @@ function ProviderProfileLoadingShell({ accent }: { accent: string }) {
 const formatServicePrice = (service: DbService): string =>
   `£${service.price}${service.price_max ? `–£${service.price_max}` : ''}`;
 
-type SwipeableHandle = React.ElementRef<typeof Swipeable>;
+type SwipeableHandle = SwipeableMethods;
 
 /** Lets the screen keep one row swiped open at a time across every category,
  *  the way Mail does, without each card knowing about the others. */
@@ -589,6 +596,124 @@ const ServiceCategoryCard = React.memo(function ServiceCategoryCard({
   );
 });
 
+/** Shown before this many rows of the findability card fold away. */
+const FINDABILITY_ROWS_SHOWN = 4;
+
+const DESCRIPTION_PROBLEM_LABEL: Record<Exclude<DescriptionProblem, null>, string> = {
+  'missing': 'No description',
+  'too-short': 'Short description',
+  'repeats-name': 'Description repeats the name',
+  'looks-like-typing': 'Description looks like stray typing',
+};
+
+/** What stops clients finding a live service, as the short phrases the card
+ *  lists under its name. Empty = nothing to fix. */
+function findabilityGaps(service: DbService): string[] {
+  const gaps: string[] = [];
+  if (hasNoTags({
+    styleTags: service.tags,
+    techniqueTags: service.technique_tags,
+    outcomeTags: service.outcome_tags,
+    occasionTags: service.occasion_tags,
+    trendNames: service.trend_names,
+  })) gaps.push('No tags');
+  const problem = descriptionProblem(service.description, service.name);
+  if (problem) gaps.push(DESCRIPTION_PROBLEM_LABEL[problem]);
+  if (!service.audience) gaps.push('Who it’s for');
+  return gaps;
+}
+
+/** "Help clients find your services": the live services Search can barely
+ *  see, each one tap from the editor, which suggests the fix (tags read from
+ *  the name, pre-ticked; a template description to use). Nothing is changed
+ *  for the provider — they accept each one by saving. Gone once every live
+ *  service has tags, a real description and a who's-it-for. */
+const FindabilityCard = React.memo(function FindabilityCard({
+  services,
+  palette,
+  onEdit,
+}: {
+  services: DbService[];
+  palette: DashPalette;
+  onEdit: (service: DbService) => void;
+}) {
+  const needing = useMemo(
+    () => services
+      .filter(service => service.is_active)
+      .map(service => ({ service, gaps: findabilityGaps(service) }))
+      .filter(row => row.gaps.length > 0),
+    [services],
+  );
+  const [showAll, setShowAll] = useState(false);
+  if (needing.length === 0) return null;
+  const shown = showAll ? needing : needing.slice(0, FINDABILITY_ROWS_SHOWN);
+  const folded = needing.length - shown.length;
+
+  return (
+    <View style={styles.dashCardShadow}>
+      <View style={[styles.menuCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        <LinearGradient
+          colors={palette.highlight}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.cardHighlight}
+        />
+        <View style={styles.menuCardHeader}>
+          <Text style={[styles.menuCardTitle, { color: palette.text }]}>Help clients find your services</Text>
+          <Text style={[styles.menuCardCount, { color: palette.sub }]}>
+            {needing.length === 1
+              ? '1 service is hard to find in Search. Tap it to see what we suggest.'
+              : `${needing.length} services are hard to find in Search. Tap one to see what we suggest.`}
+          </Text>
+        </View>
+
+        {shown.map(({ service, gaps }) => (
+          <TouchableOpacity
+            key={service.id}
+            style={styles.serviceRow}
+            activeOpacity={0.5}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onEdit(service);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${service.name}: ${gaps.join(', ')}`}
+            accessibilityHint="Opens the editor with suggestions"
+          >
+            <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+            <View style={styles.serviceRowLine}>
+              <Text style={[styles.serviceRowName, { color: palette.text }]}>{service.name}</Text>
+              <Ionicons name="chevron-forward" size={15} color={palette.sub} />
+            </View>
+            <View style={styles.serviceRowMeta}>
+              <Text style={[styles.serviceRowMetaText, { color: palette.sub }]}>{gaps.join(' · ')}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {folded > 0 || showAll ? (
+          <TouchableOpacity
+            style={styles.menuCardFold}
+            activeOpacity={0.5}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setShowAll(open => !open);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showAll }}
+          >
+            <View style={[styles.serviceRowRule, { backgroundColor: palette.sep }]} />
+            <Text style={[styles.menuCardFoldText, { color: palette.sub }]}>
+              {showAll ? 'Show fewer' : `${folded} more`}
+            </Text>
+            <Ionicons name={showAll ? 'chevron-down' : 'chevron-forward'} size={15} color={palette.sub} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+});
+
 interface Props {
   navigation: any;
 }
@@ -601,6 +726,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { user, myBookingMode } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [providerSlug, setProviderSlug] = useState<string | null>(null);
   const [services, setServices] = useState<DbService[]>([]);
   // The catalogue loads after the top of the page, so the hero's Services
   // count reads "—" until it lands rather than claiming 0 and then jumping.
@@ -666,7 +792,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     useCallback(() => {
       let active = true;
       let lowerSectionsStarted = false;
-      let lowerSectionsTask: ReturnType<typeof InteractionManager.runAfterInteractions> | null = null;
+      let lowerSectionsTask: ReturnType<typeof setTimeout> | null = null;
       let lowerSectionsTimer: ReturnType<typeof setTimeout> | null = null;
 
       // Returning providers can render their saved profile before the live
@@ -716,6 +842,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           setProviderData(providerRowToRegistrationData(profile));
           setIsLoading(false);
           setProviderId(profile.id);
+          setProviderSlug(profile.slug);
           setReviewCount(profile.review_count ?? 0);
 
           // First wave: what's on screen when the page opens. The go-live
@@ -793,7 +920,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             if (!active || lowerSectionsStarted) return;
             lowerSectionsStarted = true;
             if (lowerSectionsTimer) clearTimeout(lowerSectionsTimer);
-            lowerSectionsTask = InteractionManager.runAfterInteractions(() => {
+            // A tick for the first wave to render before this lower-priority work.
+            lowerSectionsTask = setTimeout(() => {
               if (!active) return;
               setLowerSectionsReady(true);
 
@@ -830,7 +958,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 .catch(error => {
                   logger.warn('[MyServices] saved profile refresh failed:', error);
                 });
-            });
+            }, 0);
           };
           lowerSectionsTimer = setTimeout(startLowerSections, LOWER_SECTIONS_MAX_WAIT_MS);
           void Promise.allSettled(firstWave).then(startLowerSections);
@@ -844,7 +972,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       return () => {
         active = false;
         if (lowerSectionsTimer) clearTimeout(lowerSectionsTimer);
-        lowerSectionsTask?.cancel();
+        if (lowerSectionsTask) clearTimeout(lowerSectionsTask);
       };
     }, [user?.id]),
   );
@@ -953,6 +1081,29 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     Haptics.selectionAsync().catch(() => {});
     navigation.navigate('Branding');
   }, [navigation]);
+
+  // Today's two cards. They haptick on their own presses, so these only
+  // navigate.
+  const todaySchedule = useTodaySchedule(providerId);
+
+  const handleOpenTodayBooking = useCallback(
+    (booking: BookingWithAddOns) => {
+      navigation.navigate('BookingDetail', { bookingId: booking.id, booking });
+    },
+    [navigation],
+  );
+
+  // The day itself lives on the Home tab's calendar, the same jump Add
+  // Booking makes after saving.
+  const handleOpenTodayDay = useCallback(
+    (ymd: string) => {
+      navigation.getParent()?.navigate('ProviderHome', {
+        screen: 'ProviderHomeMain',
+        params: { jumpToDate: ymd },
+      });
+    },
+    [navigation],
+  );
 
   const handleOpenAnalytics = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
@@ -1244,6 +1395,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     ],
   );
 
+  const todayPalette = useMemo<TodayCardsPalette>(
+    () => ({ card: cardSolid, text: PP.text, sub: PP.sub, border: PP.border, accent: accentColor }),
+    [cardSolid, PP.text, PP.sub, PP.border, accentColor],
+  );
+
   const editorPalette = useMemo<ServiceEditorPalette>(
     () => ({
       bg: PP.bg,
@@ -1341,6 +1497,22 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   /* The go-live card. It leads the dashboard while anything is still
      outstanding and drops to the bottom once the profile is finished —
      at that point it's a receipt, not an instruction. */
+  const todaySummaryCard = todaySchedule ? (
+    <TodaySummaryCard
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenTodayBooking}
+      onOpenDay={handleOpenTodayDay}
+    />
+  ) : null;
+  const todayBookingCards = todaySchedule ? (
+    <TodayBookingCards
+      schedule={todaySchedule}
+      palette={todayPalette}
+      onOpenBooking={handleOpenTodayBooking}
+    />
+  ) : null;
+
   const statusSection = (
     <>
       {/* ── Status hero ────────────────────────────────────────
@@ -1701,6 +1873,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 <>
                   {setup.percent === 100 ? null : statusSection}
 
+                  {/* ── Today ──────────────────────────────────────────────────
+                      Two cards around the rest of the dashboard: the summary
+                      leads until 2pm and again once the last client is done,
+                      the booking cards lead in between. Whichever isn't on
+                      top sits under Your work. */}
+                  {todaySchedule?.phase === 'cardsLead' ? todayBookingCards : todaySummaryCard}
+
                   {/* ── What clients say ───────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
 
@@ -1959,6 +2138,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </BlurView>
                   </View>
 
+                  {/* ── Today, the other card ──────────────────────────────── */}
+                  {todaySchedule?.phase === 'cardsLead' ? todaySummaryCard : todayBookingCards}
+
                   {/* ── Manage ─────────────────────────────────────────────── */}
                   <View style={styles.rowHeader}>
                     <Text style={[styles.sectionLabel, { color: PP.sub }]}>MANAGE</Text>
@@ -2047,6 +2229,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
+                  {setup.percent === 100 ? statusSection : null}
                 </>
               ) : (
                 <>
@@ -2082,13 +2265,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       </BlurView>
                     </View>
                   ) : (
-                    /* A price list per category rather than a grid of tiles.
+                    <>
+                    <FindabilityCard services={services} palette={dashPalette} onEdit={openEditService} />
+                    {/* A price list per category rather than a grid of tiles.
                        It reads down like a salon's price board, fits far more
                        of the catalogue on screen, and folds hidden services
                        away instead of fading them in among the live ones.
                        Each card only gets togglingId when the row being
-                       toggled is its own, so the other cards' memo holds. */
-                    catalogue.groups.map(group => (
+                       toggled is its own, so the other cards' memo holds. */}
+                    {catalogue.groups.map(group => (
                       <ServiceCategoryCard
                         key={group.name}
                         name={group.name}
@@ -2100,20 +2285,20 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         onToggleActive={handleToggleActive}
                         swipe={rowSwipe}
                       />
-                    ))
+                    ))}
+                    </>
                   )}
-
-                  {setup.percent === 100 ? statusSection : null}
                 </>
               )}
             </View>
           </View>
         </ScrollView>
-        {providerId ? (
+        {providerSlug ? (
           <ProviderProfileQrSheet
             visible={profileQrVisible}
-            providerId={providerId}
+            providerSlug={providerSlug}
             providerName={providerData.providerName || 'your business'}
+            isLive={goLive?.isLive !== false}
             accentColor={accentColor}
             backgroundColor={PP.card}
             textColor={PP.text}
@@ -2128,6 +2313,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         visible={editorOpen}
         initial={editorInitial}
         categoryName={editingCategory}
+        fallbackKind={providerData?.providerService ?? null}
         isNew={editingId == null}
         saving={saving}
         palette={editorPalette}

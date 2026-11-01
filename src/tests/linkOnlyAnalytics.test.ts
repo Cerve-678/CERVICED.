@@ -6,6 +6,7 @@ const row = (day: string, book_taps: number, profile_views = 0) => ({
   profile_views,
   search_appearances: 2,
   instagram_taps: 1,
+  join_nudges: 4,
 });
 
 describe('sumLinkOnlyStats', () => {
@@ -15,6 +16,7 @@ describe('sumLinkOnlyStats', () => {
       profileViews: 25,
       searchAppearances: 4,
       instagramTaps: 2,
+      joinNudges: 8,
     });
   });
 
@@ -36,11 +38,11 @@ describe('lastSevenDaysOfBookTaps', () => {
 
 describe('bookTapRatio', () => {
   it('says nothing until there is enough to say', () => {
-    expect(bookTapRatio({ bookTaps: 0, profileViews: 100, searchAppearances: 0, instagramTaps: 0 })).toBeNull();
-    expect(bookTapRatio({ bookTaps: 1, profileViews: 4, searchAppearances: 0, instagramTaps: 0 })).toBeNull();
+    expect(bookTapRatio({ bookTaps: 0, profileViews: 100, searchAppearances: 0, instagramTaps: 0, joinNudges: 0 })).toBeNull();
+    expect(bookTapRatio({ bookTaps: 1, profileViews: 4, searchAppearances: 0, instagramTaps: 0, joinNudges: 0 })).toBeNull();
   });
 
   it('rounds to a whole "1 in N"', () => {
-    expect(bookTapRatio({ bookTaps: 48, profileViews: 312, searchAppearances: 0, instagramTaps: 0 })).toBe(7);
+    expect(bookTapRatio({ bookTaps: 48, profileViews: 312, searchAppearances: 0, instagramTaps: 0, joinNudges: 0 })).toBe(7);
   });
 });

@@ -12,6 +12,8 @@ import {
   LayoutAnimation,
   Platform,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
@@ -38,7 +40,7 @@ import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { resolveClientLocation } from '../../services/clientLocationService';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
-import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
+import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
@@ -194,7 +196,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   // Ref for main ScrollView to control scrolling
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
 
   // First-run coach-mark tour for brand-new clients.
   const [showTour, setShowTour] = useState(false);
@@ -203,9 +205,9 @@ export default function HomeScreen() {
   // while its start timer was pending — it just waits for the return to Home.
   const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
-  const searchIconRef = useRef<View>(null);
-  const bellIconRef = useRef<View>(null);
-  const bookingsChipRef = useRef<View>(null);
+  const searchIconRef = useRef<ViewInstance>(null);
+  const bellIconRef = useRef<ViewInstance>(null);
+  const bookingsChipRef = useRef<ViewInstance>(null);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
     // Asked of the tab bar itself rather than re-declared here — the bar lives
@@ -401,6 +403,7 @@ export default function HomeScreen() {
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
+  const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityInfo>>(new Map());
 
   // Per-service audience refinement (services.audience) for the Male/Kids
   // sections — a provider whose whole business isn't registered as MALE/KIDS
@@ -657,6 +660,23 @@ export default function HomeScreen() {
     return () => { cancelled = true; };
   }, [bookmarkedIds, liveProviders, recommendationCandidates, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
 
+  // One batched, server-side slot calculation for Home. It uses the exact
+  // schedule, notice, duration, buffer and live-booking rules used by Search.
+  useEffect(() => {
+    const slugs = liveProviders.map(provider => provider.slug);
+    if (!slugs.length) return;
+    let cancelled = false;
+    getProvidersAvailability(slugs)
+      .then(result => { if (!cancelled) setAvailabilityBySlug(result); })
+      .catch(() => { if (!cancelled) setAvailabilityBySlug(new Map()); });
+    return () => { cancelled = true; };
+  }, [liveProviders]);
+
+  const availableThisWeekProviders = useMemo(
+    () => liveProviders.filter(provider => availabilityBySlug.get(provider.slug)?.availableThisWeek),
+    [liveProviders, availabilityBySlug],
+  );
+
   // "Near You" — nearest-first, not "every active provider" in arbitrary DB
   // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
   // too-small radius rather than showing a near-empty list): try a tight
@@ -834,12 +854,22 @@ export default function HomeScreen() {
     if (activeFilters.serviceType && activeFilters.serviceType !== 'all') {
       providers = providers.filter(p => p.businessType === activeFilters.serviceType);
     }
+    if (activeFilters.availability !== 'any') {
+      providers = providers.filter(provider => {
+        const availability = availabilityBySlug.get(provider.slug);
+        return activeFilters.availability === 'today'
+          ? availability?.availableToday
+          : activeFilters.availability === 'tomorrow'
+            ? availability?.availableTomorrow
+            : availability?.availableThisWeek;
+      });
+    }
 
     return {
       left: providers.slice(0, 8),
       right: providers.slice(8, 15),
     };
-  }, [selectedService, providersData, activeFilters, liveProviders]);
+  }, [selectedService, providersData, activeFilters, liveProviders, availabilityBySlug]);
 
   const handleServicePress = useCallback(async (service: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1706,6 +1736,16 @@ export default function HomeScreen() {
                   <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
                 </View>
                 <RoundProviderRail providers={recentlyViewed} keyPrefix="recent" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
+              </View>
+            )}
+
+            {/* AVAILABLE THIS WEEK — directly under Recently viewed */}
+            {availableThisWeekProviders.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>AVAILABLE THIS WEEK</Text>
+                </View>
+                <ProviderRail providers={availableThisWeekProviders.slice(0, 15)} keyPrefix="available" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               </View>
             )}
 

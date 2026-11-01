@@ -7,10 +7,17 @@
  * changes week to week, opened from the My Services manager without reposting
  * their whole catalogue.
  *
+ * The one exception is findability. A service added here used to get no tags
+ * at all, and client Search can only find what's written down, so a NEW
+ * service — or one that still has no tags or no "who's it for" — gets tags
+ * suggested from its name (suggestServiceDetails, pre-ticked), a who's-it-for
+ * choice, and a description check. Once a service has tags, they're the full
+ * editor's again and this sheet leaves them alone.
+ *
  * Themed from the provider's own palette (passed in), like every other card on
  * that screen, rather than the app's light/dark tokens.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -28,6 +35,18 @@ import { withAlpha } from '../../constants/providerThemes';
 import * as Haptics from 'expo-haptics';
 import type { MyServiceDraft } from '../../services/databaseService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import {
+  DESCRIPTION_PROBLEM_COPY,
+  TAG_GROUP_KEYS,
+  TECHNIQUE_TAGS_BY_CATEGORY,
+  descriptionProblem,
+  emptyTagGroups,
+  hasNoTags,
+  mergeTagGroups,
+  suggestServiceDetails,
+  type ServiceAudienceValue,
+  type ServiceTagGroups,
+} from './serviceTags';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -45,6 +64,9 @@ export interface ServiceEditorValue {
   description: string;
   /** Only offered when editing. A new service always starts on the menu. */
   isActive: boolean;
+  /** As stored. Only offered here while the service has none (see above). */
+  tags: ServiceTagGroups;
+  audience: ServiceAudienceValue;
 }
 
 /** What a service row looks like coming in. Strings, because that's what the
@@ -55,6 +77,12 @@ export function toEditorValue(service: {
   duration_minutes: number;
   description: string | null;
   is_active: boolean;
+  tags?: string[] | null;
+  technique_tags?: string[] | null;
+  outcome_tags?: string[] | null;
+  occasion_tags?: string[] | null;
+  trend_names?: string[] | null;
+  audience?: Exclude<ServiceAudienceValue, ''> | null;
 }): ServiceEditorValue {
   return {
     name: service.name,
@@ -62,6 +90,14 @@ export function toEditorValue(service: {
     duration: String(service.duration_minutes ?? ''),
     description: service.description ?? '',
     isActive: service.is_active,
+    tags: {
+      styleTags: service.tags ?? [],
+      techniqueTags: service.technique_tags ?? [],
+      outcomeTags: service.outcome_tags ?? [],
+      occasionTags: service.occasion_tags ?? [],
+      trendNames: service.trend_names ?? [],
+    },
+    audience: service.audience ?? '',
   };
 }
 
@@ -71,7 +107,23 @@ export const EMPTY_SERVICE_VALUE: ServiceEditorValue = {
   duration: '',
   description: '',
   isActive: true,
+  tags: emptyTagGroups(),
+  audience: '',
 };
+
+const AUDIENCE_OPTIONS: { value: Exclude<ServiceAudienceValue, ''>; label: string }[] = [
+  { value: 'everyone', label: 'Everyone' },
+  { value: 'women', label: 'Women' },
+  { value: 'men', label: 'Men' },
+  { value: 'kids', label: 'Kids' },
+];
+
+/** How many unticked starter chips to offer when nothing can be suggested. */
+const STARTER_CHIP_COUNT = 10;
+
+type TagChip = { group: keyof ServiceTagGroups; tag: string };
+
+const tagLabel = (tag: string) => tag.replace(/-/g, ' ');
 
 /** Null when the value is usable; otherwise the reason, phrased for the
  *  provider rather than for the column that would reject it. */
@@ -88,13 +140,31 @@ function validateServiceValue(value: ServiceEditorValue): string | null {
   return null;
 }
 
-function toDraft(value: ServiceEditorValue, isNew: boolean): MyServiceDraft {
+/** What a NEW service also needs before it's saved: enough for a client to
+ *  know what it is and for Search to find it. Existing services are never
+ *  blocked on these, so a price change can't be held up by an old service's
+ *  missing tags; the My Services review card asks for those instead. */
+function findabilityProblem(value: ServiceEditorValue, tags: ServiceTagGroups, audience: ServiceAudienceValue): string | null {
+  const problem = descriptionProblem(value.description, value.name);
+  if (problem) return DESCRIPTION_PROBLEM_COPY[problem];
+  if (hasNoTags(tags)) return 'Tick at least one tag, so clients searching for it can find this service.';
+  if (!audience) return 'Choose who this service is for.';
+  return null;
+}
+
+function toDraft(
+  value: ServiceEditorValue,
+  isNew: boolean,
+  findability: { tags: ServiceTagGroups | null; audience: ServiceAudienceValue },
+): MyServiceDraft {
   return {
     name: value.name.trim(),
     price: Number(value.price),
     durationMinutes: Number(value.duration),
     description: value.description.trim() || null,
     ...(isNew ? {} : { isActive: value.isActive }),
+    ...(findability.tags ? { tags: findability.tags } : {}),
+    ...(findability.audience ? { audience: findability.audience } : {}),
   };
 }
 
@@ -102,6 +172,7 @@ export default function ServiceEditorSheet({
   visible,
   initial,
   categoryName,
+  fallbackKind,
   isNew,
   saving,
   palette,
@@ -111,6 +182,9 @@ export default function ServiceEditorSheet({
   visible: boolean;
   initial: ServiceEditorValue;
   categoryName: string;
+  /** The business's own category (providers.service_category), for headings
+   *  whose name doesn't say ("French tips"). */
+  fallbackKind?: string | null;
   isNew: boolean;
   saving: boolean;
   palette: ServiceEditorPalette;
@@ -120,6 +194,10 @@ export default function ServiceEditorSheet({
   const bottomInset = useSystemBottomInset();
   const [value, setValue] = useState<ServiceEditorValue>(initial);
   const [error, setError] = useState<string | null>(null);
+  // Until the provider taps a chip, the ticked tags follow the name as it's
+  // typed. After that they're the provider's, and typing changes nothing.
+  const [tagsTouched, setTagsTouched] = useState(false);
+  const [audienceTouched, setAudienceTouched] = useState(false);
 
   // Reseed every time the sheet opens. Without this the second service you
   // tapped would open showing the first one's values.
@@ -127,19 +205,81 @@ export default function ServiceEditorSheet({
     if (visible) {
       setValue(initial);
       setError(null);
+      setTagsTouched(false);
+      setAudienceTouched(false);
     }
   }, [visible, initial]);
 
+  const offerTags = isNew || hasNoTags(initial.tags);
+  const offerAudience = isNew || !initial.audience;
+
+  const suggestion = useMemo(
+    () => suggestServiceDetails({ name: value.name, categoryName, fallbackKind }),
+    [value.name, categoryName, fallbackKind],
+  );
+  const tags = useMemo(
+    () => (tagsTouched ? value.tags : mergeTagGroups(initial.tags, suggestion)),
+    [tagsTouched, value.tags, initial.tags, suggestion],
+  );
+  const audience: ServiceAudienceValue = audienceTouched
+    ? value.audience
+    : initial.audience || suggestion.audience;
+
+  // Ticked first, then what's worth a tap, then (only when nothing could be
+  // read from the name) the category's first few technique tags to start
+  // from. Keyed by group+tag, since one word can be two groups' option.
+  const chips = useMemo<TagChip[]>(() => {
+    const seen = new Set<string>();
+    const out: TagChip[] = [];
+    const push = (group: keyof ServiceTagGroups, tag: string) => {
+      if (seen.has(tag)) return;
+      seen.add(tag);
+      out.push({ group, tag });
+    };
+    for (const group of TAG_GROUP_KEYS) for (const tag of tags[group]) push(group, tag);
+    // A suggestion the provider unticked keeps its chip, so they can change
+    // their mind; dropping it made an untick impossible to undo.
+    for (const group of TAG_GROUP_KEYS) for (const tag of suggestion[group]) push(group, tag);
+    for (const group of TAG_GROUP_KEYS) for (const tag of suggestion.alsoConsider[group]) push(group, tag);
+    if (out.length === 0) {
+      for (const tag of (TECHNIQUE_TAGS_BY_CATEGORY[suggestion.kind] ?? []).slice(0, STARTER_CHIP_COUNT)) {
+        push('techniqueTags', tag);
+      }
+    }
+    return out;
+  }, [tags, suggestion]);
+
+  const toggleChip = useCallback((chip: TagChip) => {
+    Haptics.selectionAsync().catch(() => {});
+    setTagsTouched(true);
+    setValue(v => {
+      const current = tags[chip.group];
+      const next = current.includes(chip.tag) ? current.filter(t => t !== chip.tag) : [...current, chip.tag];
+      return { ...v, tags: { ...tags, [chip.group]: next } };
+    });
+  }, [tags]);
+
+  const descriptionHint = useMemo(() => {
+    if (!value.description.trim()) return null;
+    const problem = descriptionProblem(value.description, value.name);
+    return problem ? DESCRIPTION_PROBLEM_COPY[problem] : null;
+  }, [value.description, value.name]);
+
   const handleSave = useCallback(() => {
-    const problem = validateServiceValue(value);
+    const problem =
+      validateServiceValue(value) ??
+      (isNew ? findabilityProblem(value, tags, audience) : null);
     if (problem) {
       setError(problem);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       return;
     }
     setError(null);
-    onSave(toDraft(value, isNew));
-  }, [value, isNew, onSave]);
+    onSave(toDraft(value, isNew, {
+      tags: offerTags && !hasNoTags(tags) ? tags : null,
+      audience: offerAudience ? audience : '',
+    }));
+  }, [value, isNew, tags, audience, offerTags, offerAudience, onSave]);
 
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="slide" onRequestClose={onClose}>
@@ -246,12 +386,94 @@ export default function ServiceEditorSheet({
                 { color: palette.text, backgroundColor: palette.card, borderColor: palette.border },
               ]}
             />
+            {/* A template's wording, offered, never written in for them. */}
+            {!value.description.trim() && suggestion.description ? (
+              <TouchableOpacity
+                style={[styles.suggestRow, { borderColor: palette.border }]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setValue(v => ({ ...v, description: suggestion.description ?? '' }));
+                }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Use suggested description: ${suggestion.description}`}
+              >
+                <Ionicons name="sparkles-outline" size={14} color={palette.accent} />
+                <Text style={[styles.suggestText, { color: palette.text }]} numberOfLines={2}>
+                  Use: “{suggestion.description}”
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            {descriptionHint ? (
+              <Text style={[styles.hint, { color: palette.sub }]}>{descriptionHint}</Text>
+            ) : null}
+
+            {offerTags ? (
+              <>
+                <Text style={[styles.label, { color: palette.sub }]}>HELP CLIENTS FIND IT</Text>
+                <Text style={[styles.hint, styles.hintTight, { color: palette.sub }]}>
+                  {hasNoTags(tags)
+                    ? 'Tick the words clients would search for.'
+                    : 'Ticked from the name. Untick anything that’s wrong.'}
+                </Text>
+                <View style={styles.chipGrid}>
+                  {chips.map(chip => {
+                    const on = tags[chip.group].includes(chip.tag);
+                    return (
+                      <TouchableOpacity
+                        key={`${chip.group}:${chip.tag}`}
+                        style={[
+                          styles.chip,
+                          { borderColor: on ? palette.accent : palette.border, backgroundColor: on ? withAlpha(palette.accent, 0.16) : palette.card },
+                        ]}
+                        onPress={() => toggleChip(chip)}
+                        activeOpacity={0.75}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                      >
+                        <Text style={[styles.chipText, { color: on ? palette.accent : palette.text }]}>{tagLabel(chip.tag)}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
+
+            {offerAudience ? (
+              <>
+                <Text style={[styles.label, { color: palette.sub }]}>WHO’S IT FOR?</Text>
+                <View style={styles.chipGrid}>
+                  {AUDIENCE_OPTIONS.map(option => {
+                    const on = audience === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.chip,
+                          { borderColor: on ? palette.accent : palette.border, backgroundColor: on ? palette.accent : palette.card },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setAudienceTouched(true);
+                          setValue(v => ({ ...v, audience: on ? '' : option.value }));
+                        }}
+                        activeOpacity={0.75}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on }}
+                      >
+                        <Text style={[styles.chipText, { color: on ? '#FFFFFF' : palette.text }]}>{option.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Text style={[styles.footnote, { color: palette.sub }]}>
-              Photos, add-ons and safety details are edited with the rest of your
-              profile.
+              Photos, add-ons, safety details and the full tag lists are edited
+              with the rest of your profile.
             </Text>
           </ScrollView>
 
@@ -371,6 +593,51 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 12,
     marginTop: 12,
+  },
+  hint: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  hintTight: {
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  suggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginTop: 8,
+  },
+  suggestText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  chipText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
   },
   footnote: {
     fontFamily: 'Jura-VariableFont_wght',

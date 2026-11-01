@@ -30,6 +30,8 @@ import {
   providerHatAddedEmail,
   providerWelcomeEmail,
   refundRequestedProviderEmail,
+  payoutFailedSupportEmail,
+  moneySummaryEmail,
   supportRequestEmail,
 } from './emailTemplates.ts';
 
@@ -50,7 +52,7 @@ const BOOKING = {
   depositAmount: 0,
   amountPaid: 74.99,
   paymentType: 'full',
-  paymentStatus: 'paid_in_full',
+  paymentStatus: 'fully_paid',
 };
 
 const every = () => [
@@ -100,6 +102,20 @@ const every = () => [
   [
     'linkOnlyGoLiveReminderEmail',
     linkOnlyGoLiveReminderEmail({ name: HOSTILE, businessName: HOSTILE, remaining: [HOSTILE] }),
+  ],
+  [
+    'payoutFailedSupportEmail',
+    payoutFailedSupportEmail({
+      kind: 'transfer', provider: HOSTILE, amount: HOSTILE, booking: HOSTILE, why: HOSTILE, tries: HOSTILE, nextStep: HOSTILE,
+    }),
+  ],
+  [
+    'moneySummaryEmail',
+    moneySummaryEmail({
+      failed: [{ title: HOSTILE, amount: HOSTILE }],
+      owed: [{ title: HOSTILE, amount: HOSTILE }],
+      refunds: [{ title: HOSTILE, amount: HOSTILE }],
+    }),
   ],
 ] as Array<[string, { subject: string; html: string }]>;
 
@@ -198,6 +214,16 @@ describe('booking confirmation money', () => {
     expect(html).not.toContain('Due to provider');
   });
 
+  it('tells a client who paid in full that they paid, using the status the database stores', () => {
+    const { html } = bookingConfirmationEmail({ ...BOOKING, paymentStatus: 'fully_paid' });
+    expect(html).toContain('Paid in full');
+    expect(html).toContain('Paid today');
+    expect(html).toContain('£74.99');
+    expect(html).not.toContain('Awaiting payment');
+    expect(html).not.toContain('Total paid');
+    expect(html).not.toContain('Due to provider');
+  });
+
   it("shows a deposit as the provider's own figure, with the balance due", () => {
     const { html } = bookingConfirmationEmail({
       ...BOOKING,
@@ -269,5 +295,14 @@ describe('fee payment request email', () => {
     expect(html).not.toContain('<script>');
     expect(html).toContain('href="https://invoice.stripe.com/i/acct_1/test_abc?s=ap&amp;x=1"');
     expect(html).toContain('Mon 26 Oct');
+  });
+});
+
+describe('refundRequestedProviderEmail', () => {
+  it('says the payout is on hold only when there is one', () => {
+    const base = { clientName: 'Amy', service: 'Lash lift', date: '18 Oct', time: '2:30pm', reason: 'The provider cancelled' };
+    expect(refundRequestedProviderEmail({ ...base, heldPence: 4500 }).html).toContain('Your £45.00 for this booking is on hold');
+    expect(refundRequestedProviderEmail(base).html).not.toContain('on hold');
+    expect(refundRequestedProviderEmail({ ...base, heldPence: 0 }).html).not.toContain('on hold');
   });
 });
