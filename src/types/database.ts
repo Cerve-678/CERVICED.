@@ -79,6 +79,7 @@ export type NotificationType =
   | "fee_dispute_resolved"
   | "fee_payment_requested"
   | "fee_paid_by_client"
+  | "tip_received"
   | "fee_payment_lapsed"
   /** Provider owes money a take-back couldn't recover, and when some is taken from a payout. */
   | "payout_debt_recorded"
