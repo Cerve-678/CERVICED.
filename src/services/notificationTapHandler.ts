@@ -40,6 +40,8 @@ const BOOKING_TYPES = new Set([
   'fee_payment_requested',
   'fee_paid_by_client',
   'fee_payment_lapsed',
+  'payout_debt_recorded',
+  'payout_debt_recovered',
   'refund_requested',
   'refund_request_updated',
   'booking_reminder',
@@ -155,6 +157,14 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
         highlightBookingId: booking_id,
       });
     }
+    return;
+  }
+
+  // ── Failed payout (provider-only) ────────────────────────────────────────────
+  // The fix is on Payments (Stripe account, bank details), not on the booking.
+  if (type === 'payout_failed') {
+    if (isProvider) navigateNested('ProviderHome', 'Payments');
+    else openNotifications();
     return;
   }
 
