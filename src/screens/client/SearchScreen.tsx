@@ -178,18 +178,6 @@ function titleCaseSpeciality(raw: string): string {
     .join(' ');
 }
 
-function specialtiesFor(service: string): string[] {
-  const map: Record<string, string[]> = {
-    HAIR: ['Braids', 'Weaves', 'Wigs'],
-    NAILS: ['Acrylics', 'Gel', 'Nail Art'],
-    MUA: ['Bridal', 'Editorial', 'Glam'],
-    LASHES: ['Classic', 'Volume', 'Hybrid'],
-    BROWS: ['Microblading', 'Lamination', 'Tinting'],
-    AESTHETICS: ['Facials', 'Peels', 'Injectables'],
-  };
-  return map[service] ?? ['Beauty', 'Style'];
-}
-
 // Formats a real £min–£max service-price range for the card — "£25" when
 // every service is the same price, "£25–£60" otherwise. Whole pounds only
 // (services are priced in whole £ in this app), no decimals.
@@ -343,6 +331,14 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
             <Text style={[styles.servicePillText, { color: P.accentText }]}>
               {provider.service}
             </Text>
+          </View>
+
+          <View style={styles.specialtiesSlot}>
+            {provider.specialties.length > 0 && (
+              <Text style={[styles.specialtiesText, { color: P.sub }]} numberOfLines={2}>
+                {provider.specialties.join(' · ')}
+              </Text>
+            )}
           </View>
 
           {provider.isLinkOnly ? (
@@ -604,7 +600,10 @@ export default function SearchScreen({ navigation, route }: Props) {
       priceRange: null,
       priceTier: p.price_tier,
       businessType: p.business_type,
-      specialties: specialtiesFor(p.service_category),
+      // Real provider/service specialities arrive in the batched facets read
+      // below. Keep this empty until then rather than showing category-based
+      // placeholder claims on the card.
+      specialties: [],
       // Resolved separately once the batched RPC returns — see
       // providersWithAvailability below.
       availability: null,
@@ -873,6 +872,17 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
 
+  // Provider-defined specialities and service tags are already in the facets
+  // request used by the filter. Reuse that response rather than making every
+  // card fetch its own profile data. A small cap keeps the two-column cards
+  // readable while still showing the provider's actual specialties.
+  const providersWithSpecialties = useMemo(() => (
+    providersWithPriceRange.map(provider => ({
+      ...provider,
+      specialties: [...(specialityLabelsByProviderId.get(provider.providerId) ?? [])].slice(0, 4),
+    }))
+  ), [providersWithPriceRange, specialityLabelsByProviderId]);
+
   // Audience matches, derived from the tags already fetched above rather than
   // re-queried. Toggling this filter used to cost a round trip each time even
   // though the answer was a re-read of the same services rows; now it is a
@@ -961,7 +971,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // above); rating/price/distance/service-type/availability/sort narrow that
   // result set further, the same way HomeScreen's filter dropdown does. ─────
   const filteredProviders = useMemo(() => {
-    let list = [...providersWithPriceRange];
+    let list = [...providersWithSpecialties];
     if (!filtersAllowLinkOnly(activeFilters)) {
       list = list.filter(p => !p.isLinkOnly);
     }
@@ -1052,7 +1062,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
+  }, [providersWithSpecialties, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
 
   // "In search" on a link-only provider's Analytics. Counted once per provider
   // per search (query + category), and only once the result set has settled —
@@ -2188,6 +2198,15 @@ const styles = StyleSheet.create({
     fontSize: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  specialtiesText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 10,
+    fontWeight: '600',
+    lineHeight: 14,
+  },
+  specialtiesSlot: {
+    height: 28,
   },
   metaRow: {
     flexDirection: 'row',
