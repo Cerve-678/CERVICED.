@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-01, NOT applied (Fully Booked certificate)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261101200000 | `fully_booked_certificate` | **UNAPPLIED, awaiting the user's OK.** Frontier at authoring: live `20261101190000`. Re-check it and open branches before applying. New private tables `provider_fully_booked_state` and `provider_fully_booked_fills` (RLS on, no policies, no grants). Rewrites `process_provider_fully_booked_alerts` (dead until now: nothing could switch it on, 0 ever sent) and moves its cron `provider-fully-booked-alerts` from `0 8 * * *` to `40 * * * *`. Drops the dead column `providers.fully_booked_alert_last_sent_at`. Adds RPCs `get_my_unseen_fully_booked`, `mark_fully_booked_seen` (authenticated). Redefines `get_my_provider_achievements` from live, adding the Fully Booked group. md5 guards on both redefined functions. At authoring, all 9 live booking providers had free slots, so applying it sends nothing. The file records its own version. Apply **before** `feat/fully-booked-certificate` merges, or My Profile logs a warning on every open and Achievements shows no Fully Booked group. |
+
 ### Applied 2026-11-01 (close a schedule by hand)
 
 | Authored version | Name | Status |

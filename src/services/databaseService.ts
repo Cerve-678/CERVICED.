@@ -7954,6 +7954,23 @@ export async function getProviderNotificationPreferences(): Promise<ProviderNoti
 
 /** The signed-in provider's achievements. The server owns the rules and records
  *  anything newly earned as part of this call. */
+/** The newest time the signed-in provider's schedule filled that they haven't
+ *  seen the certificate for. Null when there's nothing to show. */
+export type UnseenFullyBooked = { fillId: string; filledAt: string; throughDate: string };
+
+export async function getMyUnseenFullyBooked(): Promise<UnseenFullyBooked | null> {
+  const { data, error } = await supabase.rpc("get_my_unseen_fully_booked");
+  if (error) throw error;
+  const row = (data as Array<{ fill_id: string; filled_at: string; through_date: string }> | null)?.[0];
+  return row ? { fillId: row.fill_id, filledAt: row.filled_at, throughDate: row.through_date } : null;
+}
+
+/** Marks this fill, and any older unseen ones, as seen, so the certificate shows once. */
+export async function markFullyBookedSeen(fillId: string): Promise<void> {
+  const { error } = await supabase.rpc("mark_fully_booked_seen", { p_fill_id: fillId });
+  if (error) throw error;
+}
+
 export async function getMyProviderAchievements(): Promise<ProviderAchievements> {
   const { data, error } = await supabase.rpc('get_my_provider_achievements');
   if (error) throw error;

@@ -125,6 +125,14 @@ describe('notification routing — deep-link payload', () => {
     );
   });
 
+  it('sends a fully booked provider to their profile, where the certificate shows', () => {
+    const tap = tapHandler();
+    expect(tap).toContain("if (type === 'schedule_fully_booked')");
+    const screen = notificationsScreen();
+    const branch = screen.slice(screen.indexOf("notification.type === 'schedule_fully_booked'"));
+    expect(branch.slice(0, 400)).toContain("navigateTab('MyServices')");
+  });
+
   it('sends a received review to the provider profile, not the booking', () => {
     // "View Review" landed on BookingDetail, which shows no review at all. The
     // Reviews card lives on the provider's own profile — the root of the

@@ -635,8 +635,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           } else {
             // No specific booking to open (shouldn't normally happen for
             // these types, but tapping the action button must never be a
-            // silent no-op) — fall back to the Schedule screen, same as
-            // schedule_fully_booked below.
+            // silent no-op) — fall back to the Schedule screen.
             navigateProviderHome('ProviderSchedule');
             logger.log('Provider — no bookingId, falling back to ProviderSchedule');
           }
@@ -801,11 +800,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         navigateProviderHome('Payments');
       }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
-      // Provider-only — carries no booking_id (it's about the whole
-      // calendar, not one appointment), so go straight to the Schedule
-      // screen rather than through BookingDetail like the booking types.
+      // Provider-only. The certificate shows on their own profile, the root of
+      // the MyServices tab, hence navigateTab.
       defer(() => {
-        navigateProviderHome('ProviderSchedule');
+        dismissThenNavigate(() => navigateTab('MyServices'));
       }, 300);
     } else if (notification.type === 'provider_saved') {
       // The daily saves count. Both analytics screens show saves; a link-only
@@ -979,7 +977,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'address_released':
         return 'View Address';
       case 'schedule_fully_booked':
-        return 'View Schedule';
+        return 'View Certificate';
       case 'payout_failed':
         return 'Open Payments';
       case 'terms_updated':
