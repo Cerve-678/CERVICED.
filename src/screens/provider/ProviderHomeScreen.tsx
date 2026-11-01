@@ -21,6 +21,7 @@ import {
   Easing,
   PanResponder,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -1192,9 +1193,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // while its start timer was pending — it just waits for the return to Home.
   const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
-  const viewModeBtnRef = useRef<View>(null);
-  const fabRef = useRef<View>(null);
-  const bellRef = useRef<View>(null);
+  const viewModeBtnRef = useRef<ViewInstance>(null);
+  const fabRef = useRef<ViewInstance>(null);
+  const bellRef = useRef<ViewInstance>(null);
 
   // Deliberately NOT gated on setupStatus any more. It used to be, because
   // the tour's second step spotlighted the go-live checklist card and that

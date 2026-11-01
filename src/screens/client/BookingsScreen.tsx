@@ -20,6 +20,8 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
@@ -33,12 +35,13 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getCachedMyExternalBookings, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider, getCachedMyExternalBookings } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
+import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
@@ -277,7 +280,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [pastCategoryFilter, setPastCategoryFilter] = useState<string | null>(null);
   const [pastFilterOpen, setPastFilterOpen] = useState(false);
   const [pastFilterAnchor, setPastFilterAnchor] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const pastFilterButtonRef = useRef<View>(null);
+  const pastFilterButtonRef = useRef<ViewInstance>(null);
 
   const openPastFilterMenu = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -302,7 +305,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const mapRef = useRef<MapView>(null);
   const mainScrollRef = useRef<FlatList<BookingsListRow>>(null);
-  const modalScrollRef = useRef<ScrollView>(null);
+  const modalScrollRef = useRef<ScrollViewInstance>(null);
 
   // Category-pill (Upcoming/Past) entrance — the pill row itself used to
   // just appear at rest; this brings it in line with the fade+slide-up
@@ -472,10 +475,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     getBookingReviewStates(bookingIdsForReviewState)
       .then(states => {
         if (!active) return;
-        setRatedBookings(new Set(states.map(state => state.bookingId)));
-        setTippedBookings(new Set(
-          states.filter(state => (state.tipAmount ?? 0) > 0).map(state => state.bookingId),
-        ));
+        setRatedBookings(new Set(states.filter(state => state.reviewed).map(state => state.bookingId)));
+        setTippedBookings(new Set(states.filter(state => state.tipped).map(state => state.bookingId)));
       })
       .catch(error => logger.warn('[Bookings] review state failed to load', error));
     return () => { active = false; };
@@ -534,11 +535,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setContactSheetVisible(true);
     setContactSheetLoading(true);
     try {
-      // Prefer provider id (stable); fall back to name for legacy bookings.
-      const info = booking.providerId
-        ? await getProviderContactById(booking.providerId)
-        : await getProviderContactByDisplayName(booking.providerName);
-      setContactSheetInfo(info);
+      // By booking — see BookingDetailScreen's openContactSheet.
+      setContactSheetInfo(await getBookedClientContact(booking.id));
     } catch {
       setContactSheetInfo({ preferred_contact_methods: ['in_app'], whatsapp_number: null, email: null, phone: null });
     } finally {
@@ -793,11 +791,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         if (paymentError.code === 'Canceled') return;
         throw new Error(paymentError.message || 'Your tip did not go through.');
       }
-      await confirmBookingTipPayment(sheet.tipId);
-
-      setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
+      const tipStatus = await confirmBookingTipPayment(sheet.tipId);
+      if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
       setShowTipModal(false);
-      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been paid to ${selectedBooking.providerName}.`);
+      setSuccessMessage(tipStatus === 'succeeded'
+        ? `Your £${tipAmount.toFixed(2)} tip has been paid to ${selectedBooking.providerName}.`
+        : `Your £${tipAmount.toFixed(2)} tip for ${selectedBooking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -1285,6 +1284,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Check if booking has been rated or tipped
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);
   const hasBookingBeenTipped = useCallback((bookingId: string) => tippedBookings.has(bookingId), [tippedBookings]);
+  // Tipping closes 48 hours after the appointment (the server enforces it too).
+  const isTipClosed = useCallback(
+    (b: ConfirmedBooking) => !hasBookingBeenTipped(b.id) && !isTipWindowOpen(b.bookingDate, b.endTime || b.bookingTime),
+    [hasBookingBeenTipped],
+  );
 
   // Stable renderItem reference so the outer bookings FlatList doesn't hand a
   // brand-new function to every row on every parent re-render.
@@ -1627,7 +1631,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                     <TouchableOpacity
                                       style={[
                                         styles.tipButton,
-                                        hasBookingBeenTipped(booking.id) && styles.buttonDisabled
+                                        (hasBookingBeenTipped(booking.id) || isTipClosed(booking)) && styles.buttonDisabled
                                       ]}
                                       onPress={() => {
                                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1638,10 +1642,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         setSelectedBooking(booking);
                                         setShowTipModal(true);
                                       }}
-                                      disabled={hasBookingBeenTipped(booking.id)}
+                                      disabled={hasBookingBeenTipped(booking.id) || isTipClosed(booking)}
                                     >
                                       <Text style={styles.buttonText}>
-                                        {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : 'Tip'}
+                                        {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : isTipClosed(booking) ? 'Tip closed' : 'Tip'}
                                       </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
@@ -1731,7 +1735,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         <TouchableOpacity
                                           style={[
                                             styles.tipButton,
-                                            hasBookingBeenTipped(currentBooking.id) && styles.buttonDisabled
+                                            (hasBookingBeenTipped(currentBooking.id) || isTipClosed(currentBooking)) && styles.buttonDisabled
                                           ]}
                                           onPress={() => {
                                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1742,10 +1746,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             setSelectedBooking(currentBooking);
                                             setShowTipModal(true);
                                           }}
-                                          disabled={hasBookingBeenTipped(currentBooking.id)}
+                                          disabled={hasBookingBeenTipped(currentBooking.id) || isTipClosed(currentBooking)}
                                         >
                                           <Text style={styles.buttonText}>
-                                            {hasBookingBeenTipped(currentBooking.id) ? 'Tipped ✓' : 'Tip'}
+                                            {hasBookingBeenTipped(currentBooking.id) ? 'Tipped ✓' : isTipClosed(currentBooking) ? 'Tip closed' : 'Tip'}
                                           </Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
@@ -1837,7 +1841,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             <TouchableOpacity
                                               style={[
                                                 styles.tipButton,
-                                                hasBookingBeenTipped(booking.id) && styles.buttonDisabled
+                                                (hasBookingBeenTipped(booking.id) || isTipClosed(booking)) && styles.buttonDisabled
                                               ]}
                                               onPress={() => {
                                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1848,10 +1852,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                                 setSelectedBooking(booking);
                                                 setShowTipModal(true);
                                               }}
-                                              disabled={hasBookingBeenTipped(booking.id)}
+                                              disabled={hasBookingBeenTipped(booking.id) || isTipClosed(booking)}
                                             >
                                               <Text style={styles.buttonText}>
-                                                {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : 'Tip'}
+                                                {hasBookingBeenTipped(booking.id) ? 'Tipped ✓' : isTipClosed(booking) ? 'Tip closed' : 'Tip'}
                                               </Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
@@ -2250,15 +2254,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </KeyboardDismissView>
         </Modal>
 
-        {/* ─── Tip Modal — same dead-state issue as Rating above. handleTipSubmit
-            now actually persists via setBookingTip() instead of only flipping
-            local state. ─── */}
+        {/* ─── Tip Modal — handleTipSubmit takes a real card payment
+            (booking-tip function + Stripe PaymentSheet). ─── */}
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a Tip</Text>
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  Show your appreciation for {selectedBooking?.providerName}
+                  Show your appreciation for {selectedBooking?.providerName}. It's paid by card and all of it goes to them: CERVICED covers the card fee. You can tip for 48 hours after your appointment. Tips can't be refunded.
                 </Text>
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>

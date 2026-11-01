@@ -5,9 +5,9 @@
 
 #generated
 
-**79 screens.** Curated overview: [[Screens & Navigation]].
+**81 screens.** Curated overview: [[Screens & Navigation]].
 
-## Provider (33)
+## Provider (34)
 - `src/screens/client/ProviderChatScreen.tsx`
 - `src/screens/client/ProviderProfileScreen.tsx`
 - `src/screens/provider/AboutYouScreen.tsx`
@@ -24,6 +24,7 @@
 - `src/screens/provider/PoliciesScreen.tsx`
 - `src/screens/provider/ProviderAccountInfoScreen.tsx`
 - `src/screens/provider/ProviderAccountScreen.tsx`
+- `src/screens/provider/ProviderAchievementsScreen.tsx`
 - `src/screens/provider/ProviderAnalyticsScreen.tsx`
 - `src/screens/provider/ProviderAutomationsScreen.tsx`
 - `src/screens/provider/ProviderBookingDetailScreen.tsx`
@@ -42,7 +43,7 @@
 - `src/screens/provider/SchedulingScreen.tsx`
 - `src/screens/provider/ServicesPricingScreen.tsx`
 
-## Client / shared (46)
+## Client / shared (47)
 - `src/screens/auth/AuthScreen.tsx`
 - `src/screens/auth/ClaimProviderScreen.tsx`
 - `src/screens/auth/EmailVerificationScreen.tsx`
@@ -78,6 +79,7 @@
 - `src/screens/client/SubscriptionScreen.tsx`
 - `src/screens/client/UserProfileScreen.tsx`
 - `src/screens/shared/AboutScreen.tsx`
+- `src/screens/shared/AdminMoneyScreen.tsx`
 - `src/screens/shared/BeccaScreen.tsx`
 - `src/screens/shared/ChangeCredentialsScreen.tsx`
 - `src/screens/shared/ChangePasswordScreen.tsx`

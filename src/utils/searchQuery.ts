@@ -26,6 +26,24 @@ export interface ParsedSearchQuery {
   locationTerms: string[];
   /** Best-effort service category detected from keywords anywhere in the query. */
   categoryHint: ServiceCategory | null;
+  /** A budget the client typed ("under £50", "for £70", "70 pounds"), in £.
+   *  Taken out of serviceText, so the money isn't searched for as a word. */
+  maxPrice: number | null;
+}
+
+// "under £50", "for £70", "£35", "budget of £100", "70 pounds", "40 quid".
+// Every form is read as a ceiling: a client who says "for £70" isn't shown a
+// £90 service.
+const PRICE = /(?:\b(?:under|below|less than|max(?:imum)?|up to|upto|for|around|about|budget(?: of)?)\s*)?£\s?(\d+(?:\.\d+)?)|\b(\d+(?:\.\d+)?)\s*(?:pounds|quid|gbp)\b/i;
+
+function takePrice(query: string): { rest: string; maxPrice: number | null } {
+  const m = PRICE.exec(query);
+  if (!m) return { rest: query, maxPrice: null };
+  const amount = Number(m[1] ?? m[2]);
+  return {
+    rest: `${query.slice(0, m.index)} ${query.slice(m.index + m[0].length)}`.replace(/\s+/g, ' ').trim(),
+    maxPrice: Number.isFinite(amount) && amount > 0 ? amount : null,
+  };
 }
 
 // Matches the LAST "in"/"near"/"around"/"close to" in the query, so
@@ -69,7 +87,8 @@ function detectCategory(query: string): ServiceCategory | null {
 }
 
 export function parseSearchQuery(raw: string): ParsedSearchQuery {
-  const q = raw.trim().replace(/\s+/g, ' ');
+  const original = raw.trim().replace(/\s+/g, ' ');
+  const { rest: q, maxPrice } = takePrice(original);
 
   let lastMatch: RegExpExecArray | null = null;
   let m: RegExpExecArray | null;
@@ -96,11 +115,12 @@ export function parseSearchQuery(raw: string): ParsedSearchQuery {
     .filter(Boolean);
 
   return {
-    raw: q,
+    raw: original,
     serviceText,
     serviceTerms,
     locationPhrase,
     locationTerms: locationPhrase ? buildLocationTerms(locationPhrase) : [],
     categoryHint: detectCategory(serviceText),
+    maxPrice,
   };
 }

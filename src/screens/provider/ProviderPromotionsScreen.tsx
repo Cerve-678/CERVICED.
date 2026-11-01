@@ -452,7 +452,7 @@ const tpSt = StyleSheet.create({
 
 // ── Notify Modal ───────────────────────────────────────────────────────────────
 
-type Audience = 'interested' | 'all' | 'repeat' | 'bookmarked';
+type Audience = 'interested' | 'all' | 'repeat' | 'followers';
 
 function tomorrow9am() {
   const d = new Date();
@@ -491,10 +491,10 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   const repeatCount = clients.filter(c => c.booking_count >= 2).length;
 
   const audienceOptions: { key: Audience; label: string; sub: string; count: number | null }[] = [
-    { key: 'interested', label: 'Interested', sub: 'Booked, saved, or following you', count: null },
+    { key: 'interested', label: 'Interested', sub: 'Booked you, or turned on your bell', count: null },
     { key: 'all',        label: 'All',       sub: 'Everyone who has booked you',    count: clients.length },
     { key: 'repeat',     label: 'Repeat',    sub: '2+ bookings with you',           count: repeatCount },
-    { key: 'bookmarked', label: 'Followers', sub: 'People who saved your profile',  count: null },
+    { key: 'followers',  label: 'Followers', sub: 'People who turned on your bell', count: null },
   ];
 
   const handleSend = async () => {
@@ -1565,7 +1565,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={scSt.safe} edges={['top']}>
 
         {/* Header */}

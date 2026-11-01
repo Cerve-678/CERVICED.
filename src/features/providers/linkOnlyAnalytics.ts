@@ -22,6 +22,7 @@ export interface LinkOnlyTotals {
   profileViews: number;
   searchAppearances: number;
   instagramTaps: number;
+  joinNudges: number;
 }
 
 export function sumLinkOnlyStats(rows: readonly DbProviderDailyStat[]): LinkOnlyTotals {
@@ -31,8 +32,9 @@ export function sumLinkOnlyStats(rows: readonly DbProviderDailyStat[]): LinkOnly
       profileViews: acc.profileViews + row.profile_views,
       searchAppearances: acc.searchAppearances + row.search_appearances,
       instagramTaps: acc.instagramTaps + row.instagram_taps,
+      joinNudges: acc.joinNudges + row.join_nudges,
     }),
-    { bookTaps: 0, profileViews: 0, searchAppearances: 0, instagramTaps: 0 },
+    { bookTaps: 0, profileViews: 0, searchAppearances: 0, instagramTaps: 0, joinNudges: 0 },
   );
 }
 

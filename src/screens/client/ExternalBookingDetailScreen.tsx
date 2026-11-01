@@ -10,7 +10,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from '@react-navigation/native';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from '../../components/SafeArea';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -58,15 +58,8 @@ const ExternalBookingDetailScreen: React.FC<Props> = ({ navigation, route }) => 
     });
   }, [navigation, P]);
 
-  // The pill would sit over the bottom of the booking card and its actions, so
-  // hide it here (same as BookingDetailScreen). useFocusEffect, so it is
-  // hidden again on return from the provider profile, whose cleanup restores it.
-  useFocusEffect(useCallback(() => {
-    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
-    return () => {
-      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
-    };
-  }, [navigation]));
+  // The pill would sit over the bottom of the booking card and its actions.
+  useHideTabBar();
 
   const load = useCallback(() => {
     getMyExternalBooking(externalBookingId)

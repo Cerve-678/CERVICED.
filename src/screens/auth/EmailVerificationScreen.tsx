@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -29,6 +30,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
+import { toUserMessage } from '../../utils/userFacingError';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
 
@@ -42,10 +44,10 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerifying, setIsVerifying] = useState(false);
   const [resending, setResending] = useState(false);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
-  // A short wait before the code can be resent, so a second tap doesn't
-  // send a second email while the first is still arriving.
-  const RESEND_WAIT_S = 30;
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
+  // Supabase rate-limits email sends. Keeping this at a minute prevents the
+  // UI from offering a resend the backend will immediately reject.
+  const RESEND_WAIT_S = 60;
   const [resendIn, setResendIn] = useState(RESEND_WAIT_S);
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -227,9 +229,13 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       inputRefs.current[0]?.focus();
       setResendIn(RESEND_WAIT_S);
       Alert.alert('Sent!', 'A new code has been sent to your email.');
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Error', "Couldn't resend the code. Please try again.");
+      Alert.alert('Could not resend code', toUserMessage(
+        error,
+        'Please wait a minute before trying again.',
+        'EmailVerificationScreen.resendSignupOtp',
+      ));
     } finally {
       setResending(false);
     }
@@ -237,7 +243,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <KeyboardDismissView>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: BOTTOM_SAFE_GAP }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 32 }]}>

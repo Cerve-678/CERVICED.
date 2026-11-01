@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from "../../components/SafeArea";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
@@ -132,7 +133,7 @@ export default function BeccaScreen({
   // Attached to an `Animated.ScrollView` (see the hero⇄chat transition), which
   // forwards its ref to the underlying ScrollView — so `scrollToEnd` below
   // still resolves and the `ScrollView` type annotation stays accurate.
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   const responseTypingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Resolves the current typewriter wait. The stop button uses this same
   // completion path as the natural final character, so persistence, chips and
@@ -217,6 +218,11 @@ export default function BeccaScreen({
   // turn reads it inside the same async callback, where a state update
   // wouldn't have landed yet. Reset wherever the thread genuinely ends.
   const conversationRef = useRef<ConversationContext | undefined>(undefined);
+  // A reply can outlive a client/provider hat switch. Without an epoch guard,
+  // a client discovery response can finish late and append provider cards to
+  // the business conversation. Every switch invalidates outstanding work.
+  const beccaHatRef = useRef<BeccaHat>(beccaHat);
+  const conversationEpochRef = useRef(0);
   // Guards handleLoadChat against out-of-order resolution: tapping chat A
   // then chat B before A's fetch lands must never let A's slower response
   // overwrite B's messages onto the screen. Only the load whose token still
@@ -387,10 +393,14 @@ export default function BeccaScreen({
   useEffect(() => {
     if (initializedHatRef.current === beccaHat) return;
     initializedHatRef.current = beccaHat;
+    beccaHatRef.current = beccaHat;
+    conversationEpochRef.current += 1;
     setMessages([buildWelcomeMessage()]);
     setCurrentSessionId(null);
     setReturnActions(null);
     setUsedSuggestionId(null);
+    setStreamingResponse(null);
+    setIsTyping(false);
     conversationRef.current = undefined;
   }, [beccaHat, buildWelcomeMessage]);
 
@@ -459,6 +469,15 @@ export default function BeccaScreen({
     // answers and make the conversation difficult to follow.
     if (isTyping || (!textToSend && !imageToSend)) return;
 
+    // Capture identity before any await. A reply begun in one hat is never
+    // allowed to mutate the other hat's UI, even if it completes later.
+    const requestHat = beccaHat;
+    const requestIsProvider = requestHat === "provider";
+    const requestIsLinkOnly = requestIsProvider && isLinkOnly;
+    const requestEpoch = conversationEpochRef.current;
+    const isActiveTurn = () =>
+      beccaHatRef.current === requestHat && conversationEpochRef.current === requestEpoch;
+
     Keyboard.dismiss();
 
     const userMessage: ChatMessage = {
@@ -474,7 +493,7 @@ export default function BeccaScreen({
     setUsedSuggestionId(null);
     setInputText("");
     setSelectedImage(null);
-    const thinkingSteps = thinkingStepsFor(textToSend, isProviderMode);
+    const thinkingSteps = thinkingStepsFor(textToSend, requestIsProvider);
     setThinkingLabel(thinkingSteps[0] ?? "Looking into that…");
     setIsTyping(true);
     const thinkingStartedAt = Date.now();
@@ -491,9 +510,11 @@ export default function BeccaScreen({
           user.id,
           title,
           userMessage.content.substring(0, 80),
-          beccaHat,
+          requestHat,
         );
-        setCurrentSessionId(sessionId);
+        // Keep the session for the hat that started it, but never let its
+        // late completion select that session in the newly active hat.
+        if (isActiveTurn()) setCurrentSessionId(sessionId);
         // Save welcome message too. If this fails, the session row exists
         // with zero messages — leaving it as-is turns into a permanently
         // "empty history" session, so surface it instead of swallowing it.
@@ -516,21 +537,23 @@ export default function BeccaScreen({
     }
 
     const progressTimers = thinkingSteps.slice(1).map((label, index) =>
-      setTimeout(() => setThinkingLabel(label), 720 + index * 780),
+      setTimeout(() => {
+        if (isActiveTurn()) setThinkingLabel(label);
+      }, 720 + index * 780),
     );
 
     setTimeout(async () => {
       const aiInterpreter = getBeccaAIInterpreter();
       const { message: response, context } = await beccaConverse({
         message: textToSend || "What can you tell me about this?",
-        hat: isProviderMode ? "provider" : "client",
-        linkOnly: isLinkOnly,
+        hat: requestHat,
+        linkOnly: requestIsLinkOnly,
         // `bookings` is BookingContext's cache — the CLIENT hat's own
         // appointments. Provider capabilities query their own data and never
         // read this, so passing it in provider mode is inert today, but it's
         // still an unguarded client→provider handoff that a future capability
         // could start reading. Withhold it outside the client hat.
-        bookings: isProviderMode ? [] : bookings,
+        bookings: requestIsProvider ? [] : bookings,
         ...(user?.id ? { userId: user.id } : {}),
         // What the last turn established. Without this every follow-up
         // ("what about Saturday?", "the first one", "are they any good?")
@@ -543,6 +566,30 @@ export default function BeccaScreen({
           ? { interpreter: aiInterpreter }
           : {}),
       });
+      let responsePersisted = false;
+      const persistResponse = (refreshCurrentHat = false) => {
+        if (!sessionId || responsePersisted) return;
+        responsePersisted = true;
+        // Keep the completed answer in the hat-specific transcript even if
+        // its screen is no longer visible. Returning to that hat then shows
+        // the result naturally, without ever rendering it in the other hat.
+        beccaStorageService.saveMessage(sessionId, response)
+          .catch((err) => logger.error('[Becca] save reply failed:', err));
+        const previewText = stripRichText(response.content);
+        const preview = previewText.length > 80
+          ? previewText.substring(0, 80) + "..."
+          : previewText;
+        const title = messages.find((m) => m.role === "user")?.content ?? userMessage.content;
+        const shortTitle = title.length > 40 ? title.substring(0, 40) + "..." : title;
+        beccaStorageService.updateSession(sessionId, shortTitle, preview)
+          .catch((err) => logger.error('[Becca] session preview update failed:', err));
+        if (refreshCurrentHat) refreshSessions();
+      };
+      if (!isActiveTurn()) {
+        progressTimers.forEach(clearTimeout);
+        persistResponse();
+        return;
+      }
       conversationRef.current = context;
       // A fast local match should still feel intentional rather than making
       // the processing state flash by before a person can read it.
@@ -551,6 +598,10 @@ export default function BeccaScreen({
         await new Promise<void>((resolve) => setTimeout(resolve, remainingThinkingMs));
       }
       progressTimers.forEach(clearTimeout);
+      if (!isActiveTurn()) {
+        persistResponse();
+        return;
+      }
 
       // Keep a markdown heading intact, then type the body at a readable pace.
       // This lets the answer feel present without exposing half a heading or
@@ -564,6 +615,15 @@ export default function BeccaScreen({
       await new Promise<void>((resolve) => {
         responseTypingResolveRef.current = resolve;
         responseTypingTimerRef.current = setInterval(() => {
+          if (!isActiveTurn()) {
+            if (responseTypingTimerRef.current) clearInterval(responseTypingTimerRef.current);
+            responseTypingTimerRef.current = null;
+            const finish = responseTypingResolveRef.current;
+            responseTypingResolveRef.current = null;
+            finish?.();
+            persistResponse();
+            return;
+          }
           characterIndex = Math.min(characterIndex + 3, remainingCharacters.length);
           setStreamingResponse({
             ...streamingBase,
@@ -580,32 +640,16 @@ export default function BeccaScreen({
         }, 18);
       });
 
+      if (!isActiveTurn()) {
+        persistResponse();
+        return;
+      }
+
       setStreamingResponse(null);
       setMessages((prev) => [...prev, response]);
       setIsTyping(false);
 
-      // Save assistant response
-      if (sessionId) {
-        beccaStorageService.saveMessage(sessionId, response).catch((err) => logger.error('[Becca] save reply failed:', err));
-        // Update session preview with last assistant message. Markers are
-        // stripped BEFORE truncating, so the 80-char budget counts real text
-        // rather than markup — and a preview can never be cut mid-`**`,
-        // which would leave a stray asterisk on screen.
-        const previewText = stripRichText(response.content);
-        const preview =
-          previewText.length > 80
-            ? previewText.substring(0, 80) + "..."
-            : previewText;
-        const title =
-          messages.find((m) => m.role === "user")?.content ??
-          userMessage.content;
-        const shortTitle =
-          title.length > 40 ? title.substring(0, 40) + "..." : title;
-        beccaStorageService
-          .updateSession(sessionId, shortTitle, preview)
-          .catch((err) => logger.error('[Becca] session preview update failed:', err));
-        refreshSessions();
-      }
+      persistResponse(true);
     }, 800);
   };
 
@@ -621,12 +665,15 @@ export default function BeccaScreen({
           // Invalidate any in-flight handleLoadChat so it can't resolve
           // after this and overwrite the fresh chat with old messages.
           loadChatRequestRef.current += 1;
+          conversationEpochRef.current += 1;
           setCurrentSessionId(null);
           setMessages([buildWelcomeMessage()]);
           setReturnActions(null);
           setUsedSuggestionId(null);
           setInputText("");
           setSelectedImage(null);
+          setStreamingResponse(null);
+          setIsTyping(false);
           conversationRef.current = undefined;
         },
       },
@@ -636,6 +683,9 @@ export default function BeccaScreen({
   const handleLoadChat = async (session: StoredSession) => {
     historySheetRef.current?.close();
     const requestId = ++loadChatRequestRef.current;
+    // A history selection starts a distinct conversation, so a live answer
+    // from the thread we just left must not append after this load finishes.
+    conversationEpochRef.current += 1;
     try {
       const msgs = await beccaStorageService.loadMessages(session.id);
       // A slower, earlier tap resolving after a newer one must not clobber
@@ -653,6 +703,8 @@ export default function BeccaScreen({
       setReturnActions(null);
       setUsedSuggestionId(null);
       setCurrentSessionId(session.id);
+      setStreamingResponse(null);
+      setIsTyping(false);
       // A loaded chat is not a continuation of the current thread.
       conversationRef.current = undefined;
     } catch {
@@ -669,10 +721,13 @@ export default function BeccaScreen({
         // Invalidate any in-flight handleLoadChat for the session just
         // deleted, so it can't resolve afterward and repopulate it.
         loadChatRequestRef.current += 1;
+        conversationEpochRef.current += 1;
         setCurrentSessionId(null);
         setMessages([buildWelcomeMessage()]);
         setReturnActions(null);
         setUsedSuggestionId(null);
+        setStreamingResponse(null);
+        setIsTyping(false);
         conversationRef.current = undefined;
       }
     } catch {
@@ -704,11 +759,14 @@ export default function BeccaScreen({
               // Invalidate any in-flight handleLoadChat so it can't resolve
               // after this and repopulate a session that was just cleared.
               loadChatRequestRef.current += 1;
+              conversationEpochRef.current += 1;
               setSessions([]);
               setCurrentSessionId(null);
               setMessages([buildWelcomeMessage()]);
               setReturnActions(null);
               setUsedSuggestionId(null);
+              setStreamingResponse(null);
+              setIsTyping(false);
               conversationRef.current = undefined;
               historySheetRef.current?.close();
               Haptics.notificationAsync(
@@ -1093,7 +1151,7 @@ export default function BeccaScreen({
                         indented
                       />
                     )}
-                    {message.role === "assistant" && message.providerRecommendations && (
+                    {!isProviderMode && message.role === "assistant" && message.providerRecommendations && (
                       <ProviderRecommendations
                         providers={message.providerRecommendations}
                         onProviderPress={handleProviderPress}
