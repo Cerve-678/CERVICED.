@@ -14,6 +14,7 @@ import { handleNotificationTap } from '../services/notificationTapHandler';
 import { lightTheme, darkTheme, clientLightTheme, clientDarkTheme } from '../constants/theme';
 import { parseStripeConnectReturn, type StripeConnectReturn } from '../utils/stripeConnectReturn';
 import { parseProviderProfileDeepLink } from '../utils/providerProfileDeepLink';
+import { getProviderBasicById } from '../services/databaseService';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AppLoadingScreen from '../components/AppLoadingScreen';
 
@@ -117,16 +118,23 @@ export default function RootNavigation() {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !providerProfileLink ||
         handledProviderProfileLink.current === providerProfileLink) return;
     handledProviderProfileLink.current = providerProfileLink;
-    void requestMode('client').then(mode => {
-      if (mode !== 'client' || !navigationRef.isReady()) return;
-      navigationRef.navigate('MainTabs', {
-        screen: 'Home',
-        params: {
-          screen: 'ProviderProfile',
-          params: { providerId: providerProfileLink.providerId, source: 'profile_qr' },
-        },
-      } as never);
-    });
+    // Provider QR codes deliberately encode the stable database UUID. The
+    // public profile loader, however, uses the human-readable slug, so resolve
+    // the UUID before navigating instead of presenting the client with an
+    // avoidable "Provider not found" screen.
+    void getProviderBasicById(providerProfileLink.providerId).then(provider => {
+      if (!provider) return;
+      return requestMode('client').then(mode => {
+        if (mode !== 'client' || !navigationRef.isReady()) return;
+        navigationRef.navigate('MainTabs', {
+          screen: 'Home',
+          params: {
+            screen: 'ProviderProfile',
+            params: { providerId: provider.slug, source: 'profile_qr' },
+          },
+        } as never);
+      });
+    }).catch(() => {});
   }, [providerProfileLink, isNavReady, isLoggedIn, isLoading, pendingReactivation]);
   useEffect(() => {
     if (!isNavReady || !isLoggedIn || isLoading || pendingReactivation || !connectReturn ||
