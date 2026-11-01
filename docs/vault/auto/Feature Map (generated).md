@@ -109,7 +109,7 @@ Curated: [[Payments]] · **148 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **296 files**
-- `src/services/databaseService.ts` _(953)_
+- `src/services/databaseService.ts` _(962)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(646)_
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **168 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **80 files**
-- `src/services/databaseService.ts` _(81)_
+- `src/services/databaseService.ts` _(82)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(61)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_

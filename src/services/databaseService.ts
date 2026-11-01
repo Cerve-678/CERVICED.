@@ -4327,6 +4327,32 @@ export async function getProviderBookingsByDateRange(
   return (data ?? []) as BookingWithAddOns[];
 }
 
+/** A provider's next bookings still to come from a date onwards, soonest
+ *  first. A provider reading their own diary, so no has_gone_live filter. */
+export async function getProviderUpcomingBookings(
+  providerId: string,
+  fromDate: string,
+  limit: number,
+): Promise<BookingWithAddOns[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(
+      `
+      *,
+      add_ons: booking_add_ons ( * )
+    `,
+    )
+    .eq("provider_id", providerId)
+    .gte("booking_date", fromDate)
+    .in("status", ["pending", "confirmed", "in_progress"])
+    .order("booking_date", { ascending: true })
+    .order("booking_time", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as BookingWithAddOns[];
+}
+
 // ─────────────────────────────────────────────────────────
 // WAITLIST
 // ─────────────────────────────────────────────────────────
