@@ -651,6 +651,9 @@ export interface DbBooking {
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
   provider_address_snapshot: string | null;
+  /** Private venue access instructions snapshotted at booking. The
+   * client_bookings view release-gates this with the address. */
+  provider_directions_snapshot?: string | null;
   provider_phone_snapshot: string | null;
   provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
@@ -1007,6 +1010,14 @@ export type PublicProviderSummary = Pick<
   | 'booking_mode'
 >;
 
+/** A provider-card payload returned by a typed search.  The service names are
+ * derived from the already client-visible `services` lookup, rather than a
+ * column on `providers`, so callers can tell clients exactly why a provider
+ * was returned without widening the public provider projection. */
+export type ProviderSearchResult = PublicProviderSummary & {
+  matched_service_names?: string[];
+};
+
 /** A client's own record of a booking they made on a link-only provider's
  *  booking page ("Did you book?"). CERVICED doesn't handle the booking itself;
  *  only the client can read or remove the row, and it can't be edited. */
@@ -1030,13 +1041,16 @@ export interface DbProviderDailyStat {
   book_taps: number;
   search_appearances: number;
   instagram_taps: number;
+  /** Clients who asked this link-only provider to take bookings on CERVICED. */
+  join_nudges: number;
 }
 
 export type ProviderStatKind =
   | 'profile_view'
   | 'book_tap'
   | 'search_appearance'
-  | 'instagram_tap';
+  | 'instagram_tap'
+  | 'join_nudge';
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {
@@ -1075,6 +1089,9 @@ export interface DiscoverServiceWithProvider {
     | "review_count"
   >;
 }
+
+/** A photo-backed service result for the client Search screen. */
+export type ServiceSearchResult = DiscoverServiceWithProvider;
 
 /** Booking with add-ons — used by BookingsScreen and ProviderHomeScreen */
 export interface BookingWithAddOns extends DbBooking {

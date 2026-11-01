@@ -32,9 +32,9 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { forgetCachedReads, getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
+import { forgetCachedReads, getProviders, searchProviders, searchServices, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
-import type { PublicProviderSummary, BusinessType } from '../../types/database';
+import type { PublicProviderSummary, ProviderSearchResult, DiscoverServiceWithProvider, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
 import { matchesAnySpeciality, normalizeTerm } from '../../utils/fuzzyMatch';
 import userLearningService from '../../services/userLearningService';
@@ -80,6 +80,8 @@ interface ProviderCardData {
   priceRange: { min: number; max: number } | null;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
   businessType: BusinessType | null;
+  /** Exact service names that caused this card to appear in a typed search. */
+  matchedServices: string[];
   specialties: string[];
   // null = not yet resolved (or unknown) — see providersWithAvailability.
   // Never treat null as "no slots"; the badge simply doesn't render yet.
@@ -175,18 +177,6 @@ function titleCaseSpeciality(raw: string): string {
     .split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
-}
-
-function specialtiesFor(service: string): string[] {
-  const map: Record<string, string[]> = {
-    HAIR: ['Braids', 'Weaves', 'Wigs'],
-    NAILS: ['Acrylics', 'Gel', 'Nail Art'],
-    MUA: ['Bridal', 'Editorial', 'Glam'],
-    LASHES: ['Classic', 'Volume', 'Hybrid'],
-    BROWS: ['Microblading', 'Lamination', 'Tinting'],
-    AESTHETICS: ['Facials', 'Peels', 'Injectables'],
-  };
-  return map[service] ?? ['Beauty', 'Style'];
 }
 
 // Formats a real £min–£max service-price range for the card — "£25" when
@@ -344,6 +334,20 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
             </Text>
           </View>
 
+          {provider.matchedServices.length > 0 && (
+            <Text style={[styles.matchedServicesText, { color: P.accentText }]} numberOfLines={2}>
+              {provider.matchedServices.join(' · ')}
+            </Text>
+          )}
+
+          <View style={styles.specialtiesSlot}>
+            {provider.specialties.length > 0 && (
+              <Text style={[styles.specialtiesText, { color: P.sub }]} numberOfLines={2}>
+                {provider.specialties.join(' · ')}
+              </Text>
+            )}
+          </View>
+
           {provider.isLinkOnly ? (
             <View style={styles.metaRow}>
               <Text style={[styles.reviewCount, { color: P.sub }]}>Books on their own page</Text>
@@ -403,6 +407,31 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
 });
 ProviderCard.displayName = 'ProviderCard';
 
+const ServiceSearchCard = memo<{ service: DiscoverServiceWithProvider; availability: ProviderAvailabilityStatus | null; onPress: () => void; P: AppTheme }>(({ service, availability, onPress, P }) => {
+  const image = [...service.service_images].sort((a, b) => a.sort_order - b.sort_order)[0];
+  const availabilityInfo = availability ? AVAILABILITY_INFO[availability] : null;
+  if (!image) return null;
+  return (
+    <TouchableOpacity style={[styles.serviceSearchCard, { backgroundColor: P.card, borderColor: P.border }]} onPress={onPress} activeOpacity={0.85}>
+      <Image source={{ uri: image.url }} style={styles.serviceSearchImage} contentFit="cover" transition={120} />
+      <View style={styles.serviceSearchInfo}>
+        <Text style={[styles.serviceSearchName, { color: P.text }]} numberOfLines={1}>{service.name}</Text>
+        <Text style={[styles.serviceSearchProvider, { color: P.sub }]} numberOfLines={1}>{service.provider.display_name}</Text>
+        {!!service.description && <Text style={[styles.serviceSearchDescription, { color: P.sub }]} numberOfLines={2}>{service.description}</Text>}
+        <View style={styles.serviceSearchMeta}>
+          <Text style={[styles.serviceSearchPrice, { color: P.accentText }]}>£{Number(service.price).toFixed(0)}</Text>
+          {availabilityInfo && (
+            <View style={[styles.serviceSearchAvailability, { backgroundColor: `${availabilityInfo.color}22` }]}>
+              <Text style={[styles.serviceSearchAvailabilityText, { color: availabilityInfo.color }]}>{availabilityInfo.label}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+ServiceSearchCard.displayName = 'ServiceSearchCard';
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
   const bottomInset = useSystemBottomInset();
@@ -448,6 +477,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     return Object.keys(CATEGORY_CODE_MAP).find(k => CATEGORY_CODE_MAP[k] === code) ?? 'All';
   });
   const [providerData, setProviderData]   = useState<ProviderCardData[]>([]);
+  const [serviceResults, setServiceResults] = useState<DiscoverServiceWithProvider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState<string | null>(null);
   // The header filters button opens this single sheet — no more per-pill
@@ -530,7 +560,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // location, which resolves independently (and possibly later) than this
   // fetch; see providersWithDistance below, which derives them from
   // latitude/longitude once userCoords is known.
-  const mapDbToCardData = useCallback((p: PublicProviderSummary): ProviderCardData => {
+  const mapDbToCardData = useCallback((p: PublicProviderSummary | ProviderSearchResult): ProviderCardData => {
     return {
       id: p.slug,
       providerId: p.id,
@@ -551,7 +581,11 @@ export default function SearchScreen({ navigation, route }: Props) {
       priceRange: null,
       priceTier: p.price_tier,
       businessType: p.business_type,
-      specialties: specialtiesFor(p.service_category),
+      matchedServices: 'matched_service_names' in p ? (p.matched_service_names ?? []) : [],
+      // Real provider/service specialities arrive in the batched facets read
+      // below. Keep this empty until then rather than showing category-based
+      // placeholder claims on the card.
+      specialties: [],
       // Resolved separately once the batched RPC returns — see
       // providersWithAvailability below.
       availability: null,
@@ -616,9 +650,12 @@ export default function SearchScreen({ navigation, route }: Props) {
       setProvidersError(null);
       try {
         const q = searchQuery.trim();
-        const data = q ? await searchProviders(q, catCode) : await getProviders(catCode);
+        const [data, services] = q
+          ? await Promise.all([searchProviders(q, catCode), searchServices(q, catCode)])
+          : [await getProviders(catCode), [] as DiscoverServiceWithProvider[]];
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData(data.map(mapDbToCardData));
+        setServiceResults(services);
         if (q) {
           // Zero-result searches are valuable learning signals too.
           logSearchEvent({
@@ -634,6 +671,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       } catch {
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData([]);
+        setServiceResults([]);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       } finally {
         if (requestId === providerRequestIdRef.current) setProvidersLoading(false);
@@ -687,7 +725,7 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   React.useEffect(() => {
     const hairType = activeFilters.hairType;
-    const slugs = providerData.map(p => p.id);
+    const slugs = [...new Set([...providerData.map(p => p.id), ...serviceResults.map(service => service.provider.slug)])];
     if (slugs.length === 0) {
       setAvailabilityBySlug(new Map());
       setAvailabilityLoading(false);
@@ -726,7 +764,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       })
       .finally(() => { if (!cancelled) setAvailabilityLoading(false); });
     return () => { cancelled = true; };
-  }, [providerData, activeFilters.hairType]);
+  }, [providerData, serviceResults, activeFilters.hairType]);
 
   const providersWithAvailability = useMemo(() => {
     if (availabilityBySlug.size === 0) return providersWithDistance;
@@ -814,6 +852,17 @@ export default function SearchScreen({ navigation, route }: Props) {
       priceRange: priceRangeByProviderId.get(p.providerId) ?? null,
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
+
+  // Provider-defined specialities and service tags are already in the facets
+  // request used by the filter. Reuse that response rather than making every
+  // card fetch its own profile data. A small cap keeps the two-column cards
+  // readable while still showing the provider's actual specialties.
+  const providersWithSpecialties = useMemo(() => (
+    providersWithPriceRange.map(provider => ({
+      ...provider,
+      specialties: [...(specialityLabelsByProviderId.get(provider.providerId) ?? [])].slice(0, 4),
+    }))
+  ), [providersWithPriceRange, specialityLabelsByProviderId]);
 
   // Audience matches, derived from the tags already fetched above rather than
   // re-queried. Toggling this filter used to cost a round trip each time even
@@ -903,7 +952,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // above); rating/price/distance/service-type/availability/sort narrow that
   // result set further, the same way HomeScreen's filter dropdown does. ─────
   const filteredProviders = useMemo(() => {
-    let list = [...providersWithPriceRange];
+    let list = [...providersWithSpecialties];
     if (!filtersAllowLinkOnly(activeFilters)) {
       list = list.filter(p => !p.isLinkOnly);
     }
@@ -994,7 +1043,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
+  }, [providersWithSpecialties, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
 
   // "In search" on a link-only provider's Analytics. Counted once per provider
   // per search (query + category), and only once the result set has settled —
@@ -1096,18 +1145,21 @@ export default function SearchScreen({ navigation, route }: Props) {
     setRefreshing(true);
     const requestId = ++providerRequestIdRef.current;
     const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
-    const fn = searchQuery.trim()
-      ? searchProviders(searchQuery.trim(), catCode)
-      : getProviders(catCode);
+    const q = searchQuery.trim();
+    const fn = q
+      ? Promise.all([searchProviders(q, catCode), searchServices(q, catCode)])
+      : Promise.all([getProviders(catCode), Promise.resolve([] as DiscoverServiceWithProvider[])]);
     fn
-      .then(data => {
+      .then(([data, services]) => {
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData(data.map(mapDbToCardData));
+        setServiceResults(services);
         setProvidersError(null);
       })
       .catch(() => {
         if (requestId !== providerRequestIdRef.current) return;
         setProviderData([]);
+        setServiceResults([]);
         setProvidersError('Could not refresh providers. Pull down to try again.');
       })
       .finally(() => {
@@ -1252,12 +1304,30 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   // ── List header: just result count ─────────────────────────────────────────
   const renderHeader = useCallback(() => (
-    <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
-      <Text style={[styles.countText, { color: P.sub }]}>
-        {providersLoading ? 'Searching…' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
-      </Text>
+    <View>
+      {serviceResults.length > 0 && (
+        <View style={[styles.serviceResultsSection, { borderBottomColor: P.sep }]}>
+          <Text style={[styles.serviceResultsTitle, { color: P.text }]}>SERVICES</Text>
+          <View style={styles.serviceResultsList}>
+            {serviceResults.map(service => (
+              <ServiceSearchCard
+                key={service.id}
+                service={service}
+                availability={availabilityBySlug.get(service.provider.slug) ?? null}
+                P={P}
+                onPress={() => navigation.navigate('ProviderProfile', { providerId: service.provider.slug, source: 'search' })}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+      <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
+        <Text style={[styles.countText, { color: P.sub }]}>
+          {providersLoading ? 'Searching…' : `${filteredProviders.length} ${filteredProviders.length === 1 ? 'provider' : 'providers'}`}
+        </Text>
+      </View>
     </View>
-  ), [filteredProviders.length, providersLoading, P]);
+  ), [filteredProviders.length, providersLoading, P, serviceResults, availabilityBySlug, navigation]);
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -2026,6 +2096,87 @@ const styles = StyleSheet.create({
     fontSize: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  serviceResultsSection: {
+    paddingTop: 14,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  serviceResultsTitle: {
+    marginBottom: 9,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    letterSpacing: 0.6,
+  },
+  serviceResultsList: {
+    gap: 10,
+  },
+  serviceSearchCard: {
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  serviceSearchImage: {
+    width: 112,
+    height: 128,
+  },
+  serviceSearchInfo: {
+    flex: 1,
+    padding: 8,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  serviceSearchName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+  },
+  serviceSearchProvider: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  serviceSearchPrice: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  serviceSearchDescription: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  serviceSearchMeta: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  serviceSearchAvailability: {
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  serviceSearchAvailabilityText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  matchedServicesText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 13,
+  },
+  specialtiesText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 10,
+    fontWeight: '600',
+    lineHeight: 14,
+  },
+  specialtiesSlot: {
+    height: 28,
   },
   metaRow: {
     flexDirection: 'row',
