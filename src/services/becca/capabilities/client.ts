@@ -11,6 +11,7 @@ import {
   dateToYMD,
   formatShortDate,
   formatTime12,
+  ordinalSuffix,
   relativeDayLabel,
 } from "../../../utils/dateUtils";
 import {
@@ -1200,7 +1201,7 @@ const appointmentPlan: Capability = {
   hat: "client",
   describe: "Plan a booking around a service, date and budget",
   phrases: [
-    "plan my appointment", "plan a booking", "help me plan", "help me book",
+    "plan my appointment", "plan my", "plan a booking", "help me plan", "help me book",
     "plan my beauty appointment", "book me something", "help me find someone",
     "i need someone for", "i need a provider for", "make me a booking plan",
   ],
@@ -1715,11 +1716,18 @@ const providerBookingTiming: Capability = {
     const notice = rules.minBookingNoticeHrs > 0
       ? `${rules.minBookingNoticeHrs} hours’ notice`
       : "no minimum notice";
+    // Same horizon shapes as utils/bookingHorizon: a release day replaces the
+    // rolling window, and a 0 window has no limit at all.
+    const bookAhead = rules.scheduleReleaseDay != null
+      ? `a month at a time — next month opens on the **${ordinalSuffix(rules.scheduleReleaseDay)}**`
+      : rules.bookingWindowDays > 0
+        ? `up to **${rules.bookingWindowDays} days**`
+        : "**no limit**";
 
     return {
       text:
         `## Booking timing with ${provider.displayName}\n` +
-        `- **Book ahead:** up to **${rules.bookingWindowDays} days**\n` +
+        `- **Book ahead:** ${bookAhead}\n` +
         `- **Minimum notice:** **${notice}**\n\n` +
         "Availability still depends on open slots at the time you book.",
       suggestions: [
@@ -1882,6 +1890,7 @@ const notifications: Capability = {
   describe: "Have I missed anything / any updates",
   phrases: [
     "notifications", "any updates", "have i missed", "anything new",
+    "anything i've missed", "anything ive missed",
     "what's happened", "whats happened", "alerts", "what did i miss",
     "anything i should know", "any news", "catch me up", "what's new",
     "whats new", "unread", "any alerts",

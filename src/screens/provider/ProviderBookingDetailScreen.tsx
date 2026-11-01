@@ -26,7 +26,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
 import { canDisputeNoShow, PaymentStatus, type RefundRequest } from '../../types/booking';
-import { passRefundRequestOn } from '../../features/bookings/bookingSupportRequest';
+import { composePassOnReason, PASS_ON_REASONS, passRefundRequestOn, type PassOnReason } from '../../features/bookings/bookingSupportRequest';
 import { isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
@@ -64,13 +64,16 @@ import {
   attachInfoPackToBooking,
   getServiceDurationsByIds,
   getRefundRequestsForBooking,
+  getHeldPayoutPence,
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
   BookingInfoPack,
   ProviderInfoPackRow,
   ProviderAddressPolicy,
+  getProviderBookingTip,
 } from '../../services/databaseService';
+import { formatTipAmount, providerTipNote, type ProviderBookingTip } from '../../features/provider-bookings/tipPresentation';
 import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
 import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate } from '../../utils/dateUtils';
@@ -154,6 +157,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     passedProviderBooking?.clientUserId ?? null
   );
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
+  // A tip the client paid in the app after the appointment (booking_tips).
+  const [tip, setTip] = useState<ProviderBookingTip | null>(null);
   const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
@@ -224,9 +229,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // distinct from the idempotency key IssueRefundSheet uses for a refund this
   // provider issues. Issuing any refund closes it server-side.
   const [clientRefundRequest, setClientRefundRequest] = useState<RefundRequest | null>(null);
+  // The provider's payout for this booking while the request holds it back.
+  const [refundHoldPence, setRefundHoldPence] = useState<number | null>(null);
   const [clientRefundNonce, setClientRefundNonce] = useState(0);
   const [showPassOnModal, setShowPassOnModal] = useState(false);
   const [passOnNote, setPassOnNote] = useState('');
+  const [passOnReason, setPassOnReason] = useState<PassOnReason | null>(null);
+  const passOnText = composePassOnReason(passOnReason, passOnNote);
   const [passOnBusy, setPassOnBusy] = useState(false);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
@@ -408,6 +417,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       })
       .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
   }, [clientUserId]);
+
+  useEffect(() => {
+    if (!bookingId) return;
+    let active = true;
+    getProviderBookingTip(bookingId)
+      .then(next => { if (active) setTip(next); })
+      // No tip row is the honest fallback; the money is still recorded server-side.
+      .catch((err) => logger.error('[ProviderBookingDetail] tip load failed:', err));
+    return () => { active = false; };
+  }, [bookingId]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -993,11 +1012,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     void clientRefundNonce;
     if (!bookingId) return undefined;
     let active = true;
-    getRefundRequestsForBooking(bookingId)
-      .then(rows => {
+    // The held payout only matters alongside an open request, but both are
+    // one-row reads, so they go together.
+    Promise.all([getRefundRequestsForBooking(bookingId), getHeldPayoutPence(bookingId)])
+      .then(([rows, heldPence]) => {
         if (!active) return;
         const open = rows.find(isRefundRequestOpen) ?? null;
         setClientRefundRequest(open);
+        setRefundHoldPence(open ? heldPence : null);
       })
       // The request is safe server-side and the notification has it; without
       // the card the provider can still refund from the ⋯ sheet.
@@ -1006,12 +1028,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, [bookingId, clientRefundNonce]);
 
   const submitPassOn = useCallback(async () => {
-    if (!booking || !clientRefundRequest || !passOnNote.trim() || passOnBusy) return;
+    if (!booking || !clientRefundRequest || !passOnText || passOnBusy) return;
     setPassOnBusy(true);
     try {
-      const { ticketNumber } = await passRefundRequestOn(booking, clientRefundRequest, passOnNote, activeMode);
+      const { ticketNumber } = await passRefundRequestOn(booking, clientRefundRequest, passOnText, activeMode);
       setShowPassOnModal(false);
       setPassOnNote('');
+      setPassOnReason(null);
       setClientRefundNonce(n => n + 1);
       showAlert(
         'Passed to Cerviced',
@@ -1029,7 +1052,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     } finally {
       setPassOnBusy(false);
     }
-  }, [booking, clientRefundRequest, passOnNote, passOnBusy, activeMode, showAlert]);
+  }, [booking, clientRefundRequest, passOnText, passOnBusy, activeMode, showAlert]);
 
   // Issue a refund through the same Stripe-backed path the Payments screen
   // uses (IssueRefundSheet -> refund-payment edge function). This returns the
@@ -1312,6 +1335,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {!!clientRefundRequest.message && (
                       <Text style={{ color: P.sub, fontSize: 13, lineHeight: 18 }}>“{clientRefundRequest.message}”</Text>
                     )}
+                    {refundHoldPence != null && refundHoldPence > 0 && (
+                      <Text style={{ color: P.text, fontSize: 12, lineHeight: 17 }}>
+                        Your £{(refundHoldPence / 100).toFixed(2)} for this booking is on hold until this is settled.
+                      </Text>
+                    )}
                     {withCerviced ? (
                       <Text style={{ color: P.sub, fontSize: 12, lineHeight: 17 }}>
                         You passed this to Cerviced. We'll review it against your policy and let you both know.
@@ -1329,7 +1357,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         )}
                         <TouchableOpacity
                           style={[styles.refundAskBtn, { backgroundColor: P.card, borderColor: P.border }]}
-                          onPress={() => { setPassOnNote(''); setShowPassOnModal(true); }}
+                          onPress={() => { setPassOnNote(''); setPassOnReason(null); setShowPassOnModal(true); }}
                           activeOpacity={0.7}
                         >
                           <Text style={[styles.refundAskBtnText, { color: P.text }]}>Pass to Cerviced</Text>
@@ -1972,6 +2000,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Text style={[styles.totalLabel, { color: P.text }]}>TOTAL</Text>
                   <Text style={[styles.totalValue, { color: P.text }]}>£{totalPrice.toFixed(2)}</Text>
                 </View>
+
+                {/* A tip is its own card payment after the appointment, so it
+                    sits under the total rather than being added into it. */}
+                {tip && (
+                  <View style={styles.tipBlock}>
+                    <Row
+                      label="Tip from client"
+                      value={formatTipAmount(tip)}
+                      textColor={P.text}
+                      divColor={rowDiv}
+                      valueColor="#34C759"
+                      bold
+                      last
+                    />
+                    <Text style={[styles.tipNote, { color: P.sub }]}>{providerTipNote(tip)}</Text>
+                  </View>
+                )}
               </View>
 
               {/* ── Reschedule section ── */}
@@ -2809,8 +2854,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       </Modal>
 
       {/* ── Pass a client's refund request to Cerviced ──────────────────
-          Never a final "no" from the provider: Cerviced decides, so the
-          reason is required and goes to support (not to the client). */}
+          Never a final "no" from the provider: Cerviced decides, so a
+          reason is required (picked, plus an optional note; 'Other' needs
+          the note) and goes to support, not to the client. */}
       <Modal
         visible={showPassOnModal}
         transparent statusBarTranslucent navigationBarTranslucent
@@ -2841,6 +2887,25 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <Text style={{ color: P.text, fontSize: 13, lineHeight: 18 }}>
                 Not refunding this? Tell Cerviced why. We'll review it against your policy and let you and the client know. Your reason goes to Cerviced, not to the client.
               </Text>
+              <Text style={[styles.passOnHeading, { color: P.sub }]}>WHY YOU'RE NOT REFUNDING</Text>
+              <View style={styles.passOnChips}>
+                {PASS_ON_REASONS.map(r => {
+                  const selected = passOnReason === r;
+                  return (
+                    <TouchableOpacity
+                      key={r}
+                      activeOpacity={0.7}
+                      disabled={passOnBusy}
+                      onPress={() => setPassOnReason(r)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      style={[styles.passOnChip, { backgroundColor: selected ? P.iconBg : P.card, borderColor: selected ? P.accent : P.border }]}
+                    >
+                      <Text style={{ color: P.text, fontSize: 13, fontWeight: selected ? '600' : '400' }}>{r}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
               <TextInput
                 style={[styles.respondInput, {
                   color: P.text,
@@ -2850,7 +2915,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   textAlignVertical: 'top',
                   marginTop: 12,
                 }]}
-                placeholder="Why you're not refunding (required)"
+                placeholder={passOnReason === 'Other' ? 'Tell Cerviced why (required)' : 'Anything else Cerviced should know (optional)'}
                 placeholderTextColor={P.text + '44'}
                 value={passOnNote}
                 onChangeText={setPassOnNote}
@@ -2861,9 +2926,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             </ScrollView>
             <View style={[styles.refundFoot, { borderTopColor: P.border }]}>
               <TouchableOpacity
-                style={[styles.refundCta, { backgroundColor: P.accent }, !passOnNote.trim() && { opacity: 0.5 }]}
+                style={[styles.refundCta, { backgroundColor: P.accent }, !passOnText && { opacity: 0.5 }]}
                 activeOpacity={0.8}
-                disabled={!passOnNote.trim() || passOnBusy}
+                disabled={!passOnText || passOnBusy}
                 onPress={submitPassOn}
               >
                 {passOnBusy
@@ -3545,6 +3610,8 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: 'BakbakOne-Regular',
   },
+  tipBlock: { marginTop: 14 },
+  tipNote: { fontSize: 12, lineHeight: 17, marginTop: 4 },
 
   // ── Completion banner ──
   completionBanner: {
@@ -3578,6 +3645,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 10,
   },
+  // Same chip and heading as IssueRefundSheet's REASON row.
+  passOnHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
+  passOnChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  passOnChip: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
   slotChip: {
     paddingVertical: 9,
     paddingHorizontal: 13,

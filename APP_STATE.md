@@ -112,6 +112,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Provider profile creation/edit | ✅ | `src/screens/provider/ProviderMyProfileScreen.tsx` |
+| My Profile "Today" cards (day summary + swipeable booking cards) | ✅ code, ⚠️ not device-run | `src/features/providers/TodayScheduleCards.tsx`, timing rules in `todaySchedule.ts`. Summary leads the Dashboard until 2pm, booking cards lead from 2pm, summary leads again once the last client is done (cards then show tomorrow); the other card sits under Your work. "Needs a patch test" comes from `services.patch_test_required` — nothing records whether one was done |
 | Service management | ✅ | Provider profile / services screens |
 | Portfolio photos | ✅ | Upload service, `portfolios/` storage bucket |
 | Weekly hours + blocked dates | ✅ | `src/screens/provider/ProviderScheduleScreen.tsx` → `provider_availability`, `provider_blocked_dates` |
@@ -128,6 +129,8 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Feature | Status | Where |
 |---|---|---|
 | Browse/search/filter providers | ✅ | `HomeScreen`, `SearchScreen`, `ExploreScreen` → `databaseService.getProviders()`, capped at `DEFAULT_PROVIDER_QUERY_LIMIT` (200) |
+| Search services, typo-tolerant | ✅ (migrations `20261025120000` + `20261025130000` live, #171) | `SearchScreen` → `searchProvidersAndServices()` → RPC `search_services_ranked`: matching services as full-width cards scattered between the provider rows, two after each row (`searchResultsLayout.ts`; photo via `getServiceCoverImages`, description with the searched words in bold, the provider's availability tag, max 3 per provider; the card and its Book button open that service's booking sheet, the provider strip opens the profile), query rewritten into words live services use (typos "frsnch" → french, "blowdry"/"pony tail" joined or split, half-typed words), names/headings/tags/category words/descriptions matched, synonyms in SQL `search_synonym_map()`. Graded by `supabase/tests/service_search_eval.sql` (`scripts/search-eval.sh` tests an unapplied version): 91/92 on 2026-10-25. Becca's `searchProviders` gets the same matching |
+| Service tag suggestions + findability checks | ✅ (#179, no migration) | `src/features/providers/serviceTags.ts` (tag lists, templates, `suggestServiceDetails`, `descriptionProblem`) → both service editors (InfoReg `ServiceModal`, My Services `ServiceEditorSheet`) pre-tick tags read from a typed name; a NEW service needs a real description, 1+ tag and who-it's-for; existing ones aren't blocked. My Services shows a "Help clients find your services" card listing live services missing any of those |
 | Provider profile view | ✅ | `ProviderProfileScreen` |
 | Add to cart (multi-provider) | ✅ | `CartContext` — reducer pattern, groups items by provider |
 | Cart pricing | ✅ | `CartContext.ts:554` — service fee = `max(subtotal * 0.05, £2)`. Confirmed still exactly this formula. |

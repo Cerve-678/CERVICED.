@@ -15,6 +15,7 @@ import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
+import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { ProviderServicesStackParamList } from '../../types';
 
@@ -133,6 +134,15 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="Analytics"
         component={ProviderAnalyticsScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      {/* Reached from the dashboard's Today cards. Registered HERE (as well as
+          on the Home/Becca/Account stacks) for the same reason as
+          ProviderSchedule above. */}
+      <ProviderServicesStack.Screen
+        name="BookingDetail"
+        component={ProviderBookingDetailScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

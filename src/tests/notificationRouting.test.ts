@@ -249,9 +249,28 @@ describe('notification preferences gate the push', () => {
 
   it('never lets a provider mute what needs their answer', () => {
     const muted = new Set(providerMap().map(entry => entry.type));
-    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed']) {
+    for (const type of ['booking_pending', 'pending_booking_reminder', 'reschedule_request', 'refund_requested', 'fee_disputed', 'no_show_disputed', 'payout_failed']) {
       expect(muted).not.toContain(type);
     }
+  });
+
+  it('never lets a provider mute money they owe or money taken to pay it', () => {
+    // Muting "Payment Updates" must not hide a debt or a deduction from payouts.
+    const muted = new Set(providerMap().map(entry => entry.type));
+    for (const type of ['payout_debt_recorded', 'payout_debt_recovered']) {
+      expect(muted).not.toContain(type);
+      // Written by DB triggers, so the CHECK constraint must allow them or every
+      // insert fails while tsc and jest stay green.
+      expect(read('supabase', 'migrations', '20261029120000_provider_debt_notices_and_fee_recovery.sql')).toContain(`'${type}'`);
+      expect(tapHandler()).toContain(`'${type}'`);
+    }
+  });
+
+  it('always delivers a Terms change and opens the Terms', () => {
+    const muted = new Set([...clientMap(), ...providerMap()].map(entry => entry.type));
+    expect(muted).not.toContain('terms_updated');
+    expect(read('supabase', 'migrations', '20261101130200_terms_updated_notice.sql')).toContain("ARRAY['terms_updated']");
+    expect(tapHandler()).toMatch(/type === 'terms_updated'\) \{\s+navigateNested\('Profile', 'Terms'\)/);
   });
 
   it('saves each hat without overwriting the other hat\'s keys', () => {
@@ -343,5 +362,43 @@ describe('notification routing — daily saves count', () => {
   it('sends a link-only pro to their own analytics', () => {
     const source = read('src', 'screens', 'shared', 'NotificationsScreen.tsx');
     expect(source).toContain("navigateProviderHome('LinkOnlyAnalytics')");
+  });
+});
+
+describe('notification routing — tip received', () => {
+  const migration = () => read('supabase', 'migrations', '20261025145000_tip_received_notification.sql');
+
+  it('declares tip_received in the DB check, both type unions, the tap handler and the push map', () => {
+    expect(migration()).toMatch(/notifications_type_check[\s\S]*'tip_received'/);
+    expect(read('src', 'types', 'database.ts')).toContain('| "tip_received"');
+    expect(read('src', 'screens', 'shared', 'NotificationsScreen.tsx')).toContain("| 'tip_received'");
+    expect(read('src', 'services', 'notificationTapHandler.ts')).toContain("'tip_received'");
+    expect(edgeFunction()).toContain("tip_received: 'providerPayments'");
+  });
+
+  it('keeps every type the previous check allowed', () => {
+    const list = (sql: string) => {
+      const check = sql.slice(sql.indexOf('ADD CONSTRAINT notifications_type_check'));
+      return new Set([...check.slice(0, check.indexOf(']));')).matchAll(/'(\w+)'/g)].map(m => m[1]));
+    };
+    const before = list(read('supabase', 'migrations', '20261020150000_provider_saved_digest.sql'));
+    const after = list(migration());
+    for (const type of before) expect(after).toContain(type);
+  });
+
+  it('never lets a failed notification undo recording the tip', () => {
+    expect(migration()).toMatch(/EXCEPTION WHEN OTHERS THEN\s+RAISE WARNING/);
+  });
+
+  it('fires once, when the tip is paid, and tells the provider it is all theirs', () => {
+    expect(migration()).toMatch(/AFTER UPDATE OF status[\s\S]*NEW\.status = 'succeeded' AND OLD\.status IS DISTINCT FROM 'succeeded'/);
+    expect(migration()).toContain("'It''s all yours. '");
+    const insert = migration().slice(migration().indexOf('INSERT INTO public.notifications'));
+    expect(insert.slice(0, insert.indexOf('EXCEPTION'))).not.toMatch(/fee/i);
+  });
+
+  it('never names Stripe to the provider', () => {
+    const insert = migration().slice(migration().indexOf('INSERT INTO public.notifications'));
+    expect(insert.slice(0, insert.indexOf('EXCEPTION'))).not.toMatch(/stripe/i);
   });
 });

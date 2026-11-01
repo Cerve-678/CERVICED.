@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { forgetCachedReads, getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '../../services/databaseService';
+import { forgetCachedReads, getProviderBookings, getMyProviderReviews, getMyBookmarkCount, getProviderTipsByBooking } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -71,11 +71,16 @@ function monthKey(dateStr: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function totalForBookings(bs: BookingWithAddOns[]): number {
+/** Service price + add-ons, plus any tip the client paid for that booking. */
+function totalForBookings(bs: BookingWithAddOns[], tips?: ReadonlyMap<string, number>): number {
   return bs.reduce((s, b) => {
     const addOns = b.add_ons?.reduce((a, x) => a + (x.price_snapshot ?? 0), 0) ?? 0;
-    return s + (b.base_price ?? 0) + addOns;
+    return s + (b.base_price ?? 0) + addOns + (tips?.get(b.id) ?? 0);
   }, 0);
+}
+
+function tipsForBookings(bs: BookingWithAddOns[], tips: ReadonlyMap<string, number>): number {
+  return bs.reduce((s, b) => s + (tips.get(b.id) ?? 0), 0);
 }
 
 function revenueOf(b: BookingWithAddOns): number {
@@ -885,6 +890,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   const { width: screenWidth } = useWindowDimensions();
   const accent = accentColor(dark);
   const [bookings, setBookings]         = useState<BookingWithAddOns[]>([]);
+  // Paid tips (pounds) by booking id; added into revenue on top of the price.
+  const [tips, setTips]                 = useState<ReadonlyMap<string, number>>(new Map());
   const [reviews, setReviews]           = useState<ReviewWithUser[]>([]);
   const [followerCount, setFollowerCount] = useState(0);
   const [refreshing, setRefreshing]     = useState(false);
@@ -900,7 +907,15 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
       // The default dashboard and six-month chart need only a bounded recent
       // window. Fetch lifetime history only when the provider explicitly
       // selects All; long-tenured accounts should not pay that cost on entry.
-      setBookings(await getProviderBookings(range === 'all' ? Infinity : 210));
+      const sinceDays = range === 'all' ? Infinity : 210;
+      const since = range === 'all' ? null : dateToYMD(new Date(Date.now() - sinceDays * 86_400_000));
+      const [nextBookings, nextTips] = await Promise.all([
+        getProviderBookings(sinceDays),
+        // Tips are extra: if they fail to load, revenue still shows without them.
+        getProviderTipsByBooking(since).catch(() => new Map<string, number>()),
+      ]);
+      setBookings(nextBookings);
+      setTips(nextTips);
     } catch {}
   }, [range]);
 
@@ -947,7 +962,8 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
 
   const kpi = useMemo(() => {
     const completed  = inRange.filter(b => b.status === 'completed');
-    const revenue    = totalForBookings(completed);
+    const revenue    = totalForBookings(completed, tips);
+    const tipTotal   = tipsForBookings(completed, tips);
     const pending    = inRange.filter(b => b.status === 'pending').length;
     const cancelled  = inRange.filter(b => b.status === 'cancelled').length;
     const noShow     = inRange.filter(b => b.status === 'no_show').length;
@@ -959,12 +975,12 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
 
     // Compared with the equal-length period just before the selected one.
     const prevRevenue = prevPeriod
-      ? totalForBookings(bookings.filter(b => b.status === 'completed' && inWindow(b.booking_date, prevPeriod)))
+      ? totalForBookings(bookings.filter(b => b.status === 'completed' && inWindow(b.booking_date, prevPeriod)), tips)
       : 0;
     const delta = prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : null;
 
-    return { revenue, pending, cancelled, noShow, total, cRate, prevRevenue, delta };
-  }, [inRange, bookings, prevPeriod, today]);
+    return { revenue, tipTotal, pending, cancelled, noShow, total, cRate, prevRevenue, delta };
+  }, [inRange, bookings, prevPeriod, today, tips]);
 
   // Bars tile the selected range, so they add up to the headline revenue.
   const chartData = useMemo(() => {
@@ -975,9 +991,9 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
     );
     return chartBuckets(range, today, earliest).map(bucket => {
       const bs = completed.filter(b => inWindow(b.booking_date, bucket));
-      return { label: bucket.label, revenue: totalForBookings(bs), bookings: bs.length };
+      return { label: bucket.label, revenue: totalForBookings(bs, tips), bookings: bs.length };
     });
-  }, [bookings, range, today]);
+  }, [bookings, range, today, tips]);
 
   const chartBars = useMemo(() => chartData.map(d => ({ label: d.label, value: d.revenue })), [chartData]);
 
@@ -1071,6 +1087,11 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                   {compareLabel && (
                     <Text style={[heroText.sub, { color: theme.secondaryText }]}>
                       vs £{kpi.prevRevenue.toFixed(0)} {compareLabel}
+                    </Text>
+                  )}
+                  {kpi.tipTotal > 0 && (
+                    <Text style={[heroText.sub, { color: theme.secondaryText }]}>
+                      Includes {fmtGBP(kpi.tipTotal)} in tips
                     </Text>
                   )}
 

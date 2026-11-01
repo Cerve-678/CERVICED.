@@ -57,8 +57,10 @@ interface Notification {
       | 'no_show'            | 'provider_no_show'    | 'no_show_disputed'
       | 'cancellation_settled'
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
-      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed'
-      | 'refund_requested' | 'refund_request_updated'
+      | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed' | 'tip_received'
+      | 'payout_debt_recorded' | 'payout_debt_recovered'
+      | 'refund_requested' | 'refund_request_updated' | 'payout_failed'
+      | 'terms_updated'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
@@ -352,7 +354,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'refund_requested', 'refund_request_updated', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'tip_received', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -543,7 +545,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'fee_dispute_resolved' ||
         notification.type === 'fee_payment_requested' ||
         notification.type === 'fee_paid_by_client' ||
+        notification.type === 'tip_received' ||
         notification.type === 'fee_payment_lapsed' ||
+        notification.type === 'payout_debt_recorded' ||
+        notification.type === 'payout_debt_recovered' ||
         notification.type === 'refund_requested' ||
         notification.type === 'refund_request_updated' ||
         notification.type === 'booking_reminder' ||
@@ -743,6 +748,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
         );
       }, 300);
+    } else if (notification.type === 'terms_updated') {
+      // Both hats keep a Terms screen in their Profile tab's stack.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Terms'));
+      }, 300);
+    } else if (notification.type === 'payout_failed') {
+      // Provider-only. The fix (Stripe account or bank details) lives on
+      // Payments, not on the booking the payout was for.
+      defer(() => {
+        navigateProviderHome('Payments');
+      }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
@@ -821,10 +837,16 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // an answered dispute is informational.
     if (type === 'fee_charged' || type === 'fee_disputed' || type === 'fee_payment_requested') return '#FF9500';
     if (type === 'fee_dispute_resolved' || type === 'fee_payment_lapsed') return P.accentText;
-    if (type === 'fee_paid_by_client') return '#4CAF50';
+    if (type === 'fee_paid_by_client' || type === 'tip_received') return '#4CAF50';
+    // Money owed needs attention; money taken towards it is a receipt.
+    if (type === 'payout_debt_recorded') return '#FF9500';
+    if (type === 'payout_debt_recovered') return P.accentText;
     // Amber: a request someone still has to act on or decide.
     if (type === 'refund_requested') return '#FF9500';
     if (type === 'refund_request_updated') return P.accentText;
+    // Money that didn't reach the provider: they need to act.
+    if (type === 'payout_failed') return '#FF9500';
+    if (type === 'terms_updated') return P.accentText;
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     // Amber, not the red used by _declined/_cancelled: nothing was decided and
     // the booking itself is untouched, so red would read as "your appointment
@@ -861,7 +883,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'fee_disputed':
       case 'fee_dispute_resolved':
       case 'fee_paid_by_client':
+      case 'tip_received':
       case 'fee_payment_lapsed':
+      case 'payout_debt_recorded':
+      case 'payout_debt_recovered':
       case 'refund_requested':
       case 'refund_request_updated':
         return 'View Booking';
@@ -914,6 +939,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'payout_failed':
+        return 'Open Payments';
+      case 'terms_updated':
+        return 'Read Terms';
       case 'provider_saved':
         return 'View Analytics';
       case 'points_earned':

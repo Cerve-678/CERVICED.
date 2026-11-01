@@ -25,4 +25,18 @@ describe('search intent', () => {
       serviceTerms: ['nail art'], locationTerms: ['Nottingham'], categoryHint: 'NAILS',
     });
   });
+  it('takes a budget out of the words and keeps it as a ceiling', () => {
+    expect(parseSearchQuery('makeup artists for £70')).toMatchObject({
+      serviceText: 'makeup artists', maxPrice: 70, raw: 'makeup artists for £70',
+    });
+    expect(parseSearchQuery('gel nails under £35 in Manchester')).toMatchObject({
+      serviceTerms: ['gel nails'], locationTerms: ['Manchester'], maxPrice: 35,
+    });
+    expect(parseSearchQuery('lashes 40 quid').maxPrice).toBe(40);
+    expect(parseSearchQuery('£25.50 manicure').maxPrice).toBe(25.5);
+  });
+  it('leaves numbers that are not money alone', () => {
+    expect(parseSearchQuery('lip filler 2ml')).toMatchObject({ serviceText: 'lip filler 2ml', maxPrice: null });
+    expect(parseSearchQuery('lace frontal 13x6').maxPrice).toBeNull();
+  });
 });

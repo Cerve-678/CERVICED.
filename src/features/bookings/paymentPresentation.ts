@@ -140,9 +140,15 @@ export function describeRefundOutcome(
  * Why the policy applied, in one line for the provider's settlement summary:
  * "Cancelled 6 hours before, inside your 24-hour notice." `hoursBefore` is
  * measured from when the client cancelled to the appointment start, the same
- * way the server decides whether it was a late cancel.
+ * way the server decides whether it was a late cancel. `movedLate`: the client
+ * had moved the booking while already inside the window, which keeps the
+ * policy on however early the new date was cancelled.
  */
-export function describeSettlementTiming(hoursBefore: number | null, noticeHours: number): string | null {
+export function describeSettlementTiming(hoursBefore: number | null, noticeHours: number, movedLate = false): string | null {
+  if (movedLate) {
+    const window = noticeHours > 0 ? `your ${noticeHours}-hour notice` : 'your notice period';
+    return `Moved inside ${window}, then cancelled.`;
+  }
   if (hoursBefore == null || !Number.isFinite(hoursBefore)) return null;
   const notice = noticeHours > 0 ? `, inside your ${noticeHours}-hour notice` : '';
   if (hoursBefore < 0) return 'Cancelled after the appointment start time.';

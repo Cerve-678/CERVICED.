@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native';
 import SearchScreen from '../screens/client/SearchScreen';
-import { getProviders } from '../services/databaseService';
+import { getProviders, getProvidersAvailability, searchProvidersAndServices } from '../services/databaseService';
 
 jest.mock('react-native-worklets', () => require('react-native-worklets/lib/module/mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -27,14 +27,24 @@ jest.mock('../services/userLearningService', () => ({
   __esModule: true,
   default: { trackFilter: jest.fn(async () => {}), trackSearch: jest.fn(async () => {}) },
 }));
-jest.mock('../services/databaseService', () => ({
-  getProviders: jest.fn(),
-  searchProviders: jest.fn(async () => []),
-  logSearchEvent: jest.fn(),
-  getProvidersAvailability: jest.fn(async () => new Map()),
-  getProviderServiceFacets: jest.fn(async () => ({ priceRanges: new Map(), audiences: new Map(), skinTones: new Map() })),
-  prefetchProviderBySlug: jest.fn(),
-}));
+jest.mock('../services/databaseService', () => {
+  const getProviders = jest.fn();
+  return {
+    getProviders,
+    // An empty query is served by getProviders, like the real function, so
+    // the tab tests below can keep driving results through it.
+    searchProvidersAndServices: jest.fn(async (_query: string, cat?: string) => ({
+      providers: await getProviders(cat),
+      services: [],
+      correctedQuery: null,
+    })),
+    logSearchEvent: jest.fn(),
+    getProvidersAvailability: jest.fn(async () => new Map()),
+    getProviderServiceFacets: jest.fn(async () => ({ priceRanges: new Map(), audiences: new Map(), skinTones: new Map() })),
+    prefetchProviderBySlug: jest.fn(),
+    getServiceCoverImages: jest.fn(async () => ({})),
+  };
+});
 
 const provider = (slug: string, cat: string) => ({
   id: `id-${slug}`, slug, display_name: `Salon ${slug}`, service_category: cat, service_categories: [cat],
@@ -107,5 +117,68 @@ describe('Search tab switching under races', () => {
     await waitFor(() => expect(screen.getAllByText('Salon nails-one').length).toBeGreaterThan(0));
     fireEvent.press(screen.getByText('Nails'));
     await waitFor(() => expect(screen.getAllByText('Salon all-one').length).toBeGreaterThan(0));
+  });
+});
+
+describe('Search service cards', () => {
+  it('shows the provider\'s availability tag on their service card too', async () => {
+    (getProvidersAvailability as jest.Mock).mockImplementation(async () => new Map([['nails-studio', { status: 'available' }]]));
+    (searchProvidersAndServices as jest.Mock).mockImplementation(async () => ({
+      providers: [provider('nails-studio', 'NAILS')],
+      services: [{
+        serviceId: 'svc-1', providerId: 'id-nails-studio', providerSlug: 'nails-studio',
+        providerName: 'Salon nails-studio', providerLogoUrl: null, providerLocation: 'London',
+        isLinkOnly: false, name: 'Classic French', description: null,
+        menuHeading: null, category: 'NAILS', price: 30, priceMax: null,
+        durationMinutes: 60, rank: 1,
+      }],
+      correctedQuery: null,
+    }));
+    render(<SearchScreen route={{ params: { initialQuery: 'french' } } as never} navigation={{ navigate: jest.fn(), setOptions: jest.fn(), goBack: jest.fn() } as never} />);
+
+    // One on the provider card, one on the service card.
+    await waitFor(() => expect(screen.getAllByText('Slots Available')).toHaveLength(2), { timeout: 2000 });
+    (getProvidersAvailability as jest.Mock).mockImplementation(async () => new Map());
+  });
+});
+
+describe('Search services', () => {
+  it('lists matching services, says what a typo was read as, and opens the service', async () => {
+    (searchProvidersAndServices as jest.Mock).mockImplementation(async (query: string) => query
+      ? {
+          providers: [provider('nails-studio', 'NAILS')],
+          services: [{
+            serviceId: 'svc-1', providerId: 'id-nails-studio', providerSlug: 'nails-studio',
+            providerName: 'Salon nails-studio', providerLogoUrl: null, providerLocation: 'London',
+            isLinkOnly: false, name: 'Classic French', description: 'Short white French tips',
+            menuHeading: 'French tips', category: 'NAILS', price: 30, priceMax: null,
+            durationMinutes: 60, rank: 1,
+          }],
+          correctedQuery: 'french',
+        }
+      : { providers: [], services: [], correctedQuery: null });
+    const navigate = jest.fn();
+    render(<SearchScreen route={{ params: { initialQuery: 'frsnch' } } as never} navigation={{ navigate, setOptions: jest.fn(), goBack: jest.fn() } as never} />);
+
+    await waitFor(() => expect(screen.getByText('Classic French')).toBeTruthy(), { timeout: 2000 });
+    expect(screen.getByText('Short white French tips')).toBeTruthy();
+    expect(screen.getByText('£30')).toBeTruthy();
+    expect(screen.getByText('1h · Nails')).toBeTruthy();
+    expect(screen.getByText('french')).toBeTruthy();
+    expect(screen.getByText('1 service · 1 provider')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Classic French with Salon nails-studio'));
+    expect(navigate).toHaveBeenLastCalledWith('ProviderProfile', {
+      providerId: 'nails-studio', source: 'search', openServiceId: 'svc-1',
+    });
+
+    fireEvent.press(screen.getByLabelText('Book Classic French'));
+    expect(navigate).toHaveBeenLastCalledWith('ProviderProfile', {
+      providerId: 'nails-studio', source: 'search', openServiceId: 'svc-1',
+    });
+
+    // The provider strip under the service opens the profile, not the sheet.
+    fireEvent.press(screen.getByLabelText('View Salon nails-studio'));
+    expect(navigate).toHaveBeenLastCalledWith('ProviderProfile', { providerId: 'nails-studio', source: 'search' });
   });
 });
