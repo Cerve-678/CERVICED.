@@ -22,14 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  cerviced-72 (20261101140000_provider_public_directions, until applied)
+OWNER:  (none)
 ```
 
-### Pending 2026-11-01 (public "How to get there" on the profile)
+### Applied 2026-11-01 (public "How to get there" on the profile)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261101140000 | `provider_public_directions` | **NOT APPLIED.** Branch `feat/profile-how-to-get-there` (stacked on `feat/booking-directions`, #196). Frontier: live `20261101115322` (2026-11-01); cerviced-4b's unapplied `20261101130000`/`130100`/`130200` sit below it and touch none of the same objects, so apply order between them doesn't matter. Adds nullable `providers.public_directions text` with a 300-character CHECK. No backfill, no policy or grant change (table-level grants). Redefines nothing. Records its own version. **Apply before this branch merges**: the profile's public select names the column, so without it every provider profile fails to load. |
+| 20261101140000 | `provider_public_directions` | **APPLIED 2026-11-01** by cerviced-72 (MCP, on the user's OK), behind a guard that aborted unless the frontier was still `20261101115322`; dry-run in a rolled-back transaction first. Verified live: column `text` nullable, 0 of 11 providers filled, `authenticated` can select it, a 301-character value is refused by the CHECK. Frontier after: **20261101140000**, so cerviced-4b's `20261101130000`/`130100`/`130200` now sit below it (they touch none of the same objects, but `migration up` would skip them — renumber above 140000). Branch `feat/profile-how-to-get-there` (stacked on `feat/booking-directions`, #196). Frontier: live `20261101115322` (2026-11-01); cerviced-4b's unapplied `20261101130000`/`130100`/`130200` sit below it and touch none of the same objects, so apply order between them doesn't matter. Adds nullable `providers.public_directions text` with a 300-character CHECK. No backfill, no policy or grant change (table-level grants). Redefines nothing. Records its own version. **Apply before this branch merges**: the profile's public select names the column, so without it every provider profile fails to load. |
 
 ### Applied 2026-10-30 ("Always visible" address on the profile)
 
