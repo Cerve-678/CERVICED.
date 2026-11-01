@@ -42,7 +42,7 @@ money moves.
 CERVICED is a marketplace. A client books and pays a beauty or wellness
 provider through the app. **CERVICED takes the client's payment, holds the
 provider's share for a short time, then sends it to the provider.** CERVICED
-earns a small service fee, which the client pays on top of the price.
+earns a small platform fee, which the client pays on top of the price.
 
 All money goes through **Stripe**:
 
@@ -57,13 +57,13 @@ CERVICED never sees or stores card numbers.
 
 | Who | Pays | Receives |
 |---|---|---|
-| Client | The service price (or a deposit) **plus** CERVICED's service fee | Refunds, when they're owed |
+| Client | The service price (or a deposit) **plus** CERVICED's platform fee | Refunds, when they're owed |
 | Provider | Nothing to CERVICED. Stripe's card fee comes out of late/no-show fees only | The service price (or deposit), late/no-show fees, the whole of every tip |
-| CERVICED | Stripe's processing costs on bookings and tips, and any losses it can't recover | The service fee |
+| CERVICED | Stripe's processing costs on bookings and tips, and any losses it can't recover | The platform fee |
 
-The provider never pays the service fee and never sees it.
+The provider never pays the platform fee and never sees it.
 
-### 1.3 The service fee
+### 1.3 The platform fee
 
 There's one fee per checkout: **5% of what the card is charged, plus 40p, at
 least £1.99 and at most £24.99.**

@@ -690,8 +690,10 @@ a late cancellation.
   about 40% of what's charged.
 - **Notice of the change.** The Terms still say "Last updated 21 October
   2026". Does a change to a charge need a notice or re-acceptance (§10)?
-- **Two names for one fee.** Terms and receipts say "service fee"; the cart,
-  booking detail and receipt email say "Platform Fee".
+- **One name for the fee.** The user chose "Platform Fee" (2026-11-01). The
+  Terms now say platform fee instead of service fee. That is the only Terms
+  wording changed here; §10's "added to each booking" and the rest above are
+  still open.
 - **Rollout order.** The app shows a fee it works out itself, and the server
   charges its own. Between applying the migration and every client updating
   the app, the cart screen can show a different fee from the one charged.

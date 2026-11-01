@@ -5,7 +5,7 @@
 
 #generated
 
-**2819 functions** across **384 files**.
+**2819 functions** across **383 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -79,7 +79,7 @@
 ### `src/contexts/` (8)
 - `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · switchMode · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
-- `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getFinalTotal · getItemQuantity · getProviderTotal · getServiceFee · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
+- `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getItemQuantity · getProviderTotal · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `DisplaySettingsContext.tsx` — apply · **DisplaySettingsProvider** · loadAccountDisplaySettings · persist · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
 - `RegistrationContext.tsx` — **RegistrationProvider** · resetData · updateData · **useRegistration** · value
@@ -124,7 +124,7 @@
 - `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **productsPlaceholder** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
 
 ### `src/features/cart/` (3)
-- `platformFee.ts` — **calculatePlatformFee**
+- `platformFee.ts` — **calculatePlatformFee** · **calculatePlatformFeePence** · **splitPlatformFeePence** · **toPence**
 - `presentation.ts` — **durationToMinutes** · **findCartItemIssues** · **formatTimeSpan** · slotStartMs · **to24hMinutes** · toLabel
 - `pricing.ts` — **getCartAddOnsSummary** · **getCartItemFullPrice** · **resolveDepositPolicyArg** · **toDepositPolicy**
 
@@ -356,7 +356,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (52)
+### `src/utils/` (51)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -364,7 +364,6 @@
 - `bookingHorizon.ts` — **bookableDayCount** · **isBeyondHorizon** · **isMonthlyRelease** · **lastBookableDate** · **nextReleaseMoment** · **releaseMomentInMonth** · **toReleaseDay**
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
-- `cartUtils.ts` — **getCartSummary**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **toArgbHex**
 - `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
