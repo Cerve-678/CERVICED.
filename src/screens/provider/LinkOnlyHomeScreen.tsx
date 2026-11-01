@@ -545,6 +545,22 @@ export default function LinkOnlyHomeScreen() {
             </View>
           )}
 
+          {hasRow && (
+            <TouchableOpacity
+              style={[styles.card, styles.linkHead]}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              <View style={styles.tileIcon}><Ionicons name="sparkles-outline" size={20} color={P.accent} /></View>
+              <View style={styles.flex}>
+                <Text style={styles.cardTitle}>Get more from CERVICED</Text>
+                <Text style={styles.stepHint}>Client beauty profiles, announcements, automations and more</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={P.sub} />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.shortcuts}>
             <Shortcut styles={styles} P={P} icon="camera-outline" label="Add work" onPress={() => goToStep('portfolio')} />
             <Shortcut styles={styles} P={P} icon="time-outline" label="Hours" onPress={() => goToStep('hours')} />

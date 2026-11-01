@@ -37,6 +37,7 @@ import ProviderAccountInfoScreen from '../../../screens/provider/ProviderAccount
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
+import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFeaturesScreen';
 import { ProviderAccountStackParamList } from '../../types';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
@@ -64,6 +65,12 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="MyPublicProfile"
         component={MyPublicProfileComponent}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="FullCervicedFeatures"
+        component={FullCervicedFeaturesScreen}
         options={{ headerShown: false }}
       />
 
