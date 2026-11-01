@@ -85,7 +85,7 @@ describe('the 3-day reply deadline', () => {
   });
 
   it('matches the hourly job: reminder at 2 days, Cerviced at 3', () => {
-    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/20261031201000_refund_request_reply_deadline.sql'), 'utf8');
+    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/20261101130100_refund_request_reply_deadline.sql'), 'utf8');
     expect(sql).toMatch(/created_at <= now\(\) - interval '2 days'/);
     expect(sql).toMatch(/created_at <= now\(\) - interval '3 days';/);
     expect(sql).toMatch(/GRANT SELECT \(passed_automatically\) ON public\.refund_requests TO authenticated/);

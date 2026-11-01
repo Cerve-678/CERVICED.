@@ -289,7 +289,7 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
   `passed_automatically`, and both sides are told why. The hourly job is
   `refund-request-deadlines` → `process_refund_request_deadlines()`. The
   first notice, the email, the booking's timeline and both sets of Terms say
-  so (decided 31 October). *Live once migration `20261031201000` is applied;
+  so (decided 31 October). *Live once migration `20261101130100` is applied;
   the email wording needs `send-support-request` redeployed.*
 - An automatically passed request has no provider note. Treat it in R3 like
   any other, and contact the provider for their side if it matters.
@@ -753,7 +753,7 @@ Ranked, most important first.
 | 4 | **Rescheduling can dodge a late-cancel charge.** A client already inside the cancellation window can reschedule (a separate, often looser setting), then cancel the new date for a full refund | The provider loses money they're owed | Decided 25 October that the late-cancel rule still applies. Not built (PRE-LAUNCH-TODO §26) |
 | 5 | **Events from providers' Stripe accounts may not arrive** (`STRIPE_CONNECT_WEBHOOK_SECRET` isn't set) | Bank payout failures and account status changes aren't pushed to the app. A provider's status only refreshes when they open Payments | Set up a Connect webhook endpoint in Stripe and add the secret |
 | 6 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
-| 7 | **Refund requests: the 3-day deadline isn't live yet** | Until it is, a request can sit with the provider indefinitely | Built on `feat/refund-request-reply-deadline`. Apply migration `20261031201000`, deploy `send-support-request`, merge |
+| 7 | **Refund requests: the 3-day deadline isn't live yet** | Until it is, a request can sit with the provider indefinitely | Built on `feat/refund-request-reply-deadline`. Apply migration `20261101130100`, deploy `send-support-request`, merge |
 | 8 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
 | 9 | **Tip chargebacks land on CERVICED**, and providers can't see their tips in the app (PR #159) | Small losses; provider confusion | Decide whether to take a lost tip dispute back from the provider; merge #159 |
 | 10 | No written refund policy for admins deciding requests | Inconsistent decisions | Write one (Legal flag) |

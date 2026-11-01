@@ -1,9 +1,9 @@
 -- A refund request the provider doesn't answer within 3 days goes to Cerviced.
 --
--- Frontier at authoring: 20261031173214 (verified live 2026-10-31).
--- 20261031200000 (feat/late-reschedule-keeps-cancel-charge, same lock holder)
--- is numbered just below this and touches none of the same objects, so the
--- two can be applied in either order. Check the lock in MIGRATION_OWNER.md
+-- Frontier: live 20261101115322 (2026-11-01). First written as
+-- 20261031201000 and renumbered above it the same day. 20261101130000
+-- (feat/late-reschedule-keeps-cancel-charge) is numbered just below this and
+-- touches none of the same objects, so the two can be applied in either order. Check the lock in MIGRATION_OWNER.md
 -- and re-check max(version) before applying.
 --
 -- The gap (PAYMENTS_AND_LOGIC.md Part 6): a request sat with the provider
@@ -320,7 +320,7 @@ SELECT cron.unschedule('refund-request-deadlines')
 SELECT cron.schedule('refund-request-deadlines', '25 * * * *', 'SELECT public.process_refund_request_deadlines();');
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261031201000', 'refund_request_reply_deadline')
+VALUES ('20261101130100', 'refund_request_reply_deadline')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
