@@ -38,7 +38,7 @@ CREATE FUNCTION public.get_my_provider_achievements()
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_user_id        uuid := auth.uid();
