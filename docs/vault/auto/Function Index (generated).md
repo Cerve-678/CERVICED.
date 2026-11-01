@@ -5,7 +5,7 @@
 
 #generated
 
-**2822 functions** across **383 files**.
+**2823 functions** across **383 files**.
 
 ### `src/components/` (51)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -387,7 +387,7 @@
 - `performance.ts` — for
 - `policyDisplay.ts` — buildLinkOnlyPolicyRows · **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · feeLabel · pushRow · **readProviderTermsSnapshot** · rescheduleSummary · sectionRow
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
-- `providerProfileDeepLink.ts` — **parseProviderProfileDeepLink** · **providerProfileDeepLink**
+- `providerProfileDeepLink.ts` — **isProviderProfileUuid** · **parseProviderProfileDeepLink** · **providerProfileDeepLink**
 - `readCache.ts` — cachedFetch · clear · **createReadCache** · **isCacheableRead** · **isWriteRequest** · pathOf · **readRequestKey** · requestMethod · requestUrl · that · tooLargeToKeep
 - `regionStore.ts` — **getRegion** · **setRegion**
 - `reorderCategories.ts` — exists · **reorderCategoriesWithinType**
