@@ -281,7 +281,7 @@ it; no job acts on it).
 
 ### Provider achievements
 
-Settings > Achievements (`src/screens/provider/ProviderAchievementsScreen.tsx`), private to the provider. **Not live until migration `20261101180000_provider_achievements` is applied.**
+Settings > Achievements (`src/screens/provider/ProviderAchievementsScreen.tsx`), private to the provider. Migration `20261101180000_provider_achievements` is applied.
 
 - `get_my_provider_achievements()` owns every rule: what exists, targets, what counts. The app only formats its rows (`src/features/achievements/achievementPresentation.ts`).
 - Earned ones are stored in `provider_achievements` when the screen opens, so they stay earned if a count drops. No push or pop-up when one is earned.
