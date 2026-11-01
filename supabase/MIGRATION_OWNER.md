@@ -19,6 +19,37 @@ Neither was a git problem. Both sessions wrote correct SQL.
 
 ---
 
+## How to apply one safely
+
+Run through this right before applying, not just when writing:
+
+1. **Lock.** Read `OWNER` below, on main *and* on any open PR branch that
+   touches this file. If someone holds it, ask them (ListAgents) first.
+2. **Number above both frontiers.** Above live `max(version)` in
+   `supabase_migrations.schema_migrations` *and* above every unapplied
+   migration on an open PR branch. Re-check at apply time: other tools
+   (ChatGPT, the main folder) apply too. On 2026-11-01 one landed at
+   `20261101115322` between three files being written and applied.
+3. **Redefine from live, never from a repo file.** Copy
+   `pg_get_functiondef` / `pg_get_viewdef` and add an md5 guard that
+   `RAISE`s if live changed. `CREATE OR REPLACE` overwrites a newer version
+   silently.
+4. **`client_bookings`** is rebuilt by several features. Start from the live
+   view, keep every column, and keep `WITH (security_invoker = true)`.
+5. **`notifications_type_check`** is stored as one array literal,
+   `CHECK (type = ANY ('{a,b,…}'::text[]))`. The old per-item regex reads 0
+   types from it. Parse with
+   `(substring(def from '''(\{[a-z_,]+\})'''))::text[]` (see
+   `20261101130200_terms_updated_notice.sql`), add only your new types, and
+   refuse if fewer than 50 are read.
+6. **One transaction.** `BEGIN … COMMIT`; the file inserts its own version
+   (`ON CONFLICT DO NOTHING`); new `SECURITY DEFINER` functions are revoked
+   from `PUBLIC, anon, authenticated` unless the app must call them.
+7. **Verify live, then record it.** Version present, objects present, grants
+   right. Mark the entry here APPLIED and set `OWNER` back to `(none)`.
+
+---
+
 ## Current owner
 
 ```
