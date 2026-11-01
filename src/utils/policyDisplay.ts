@@ -163,7 +163,7 @@ export function buildPolicyDisplayRows(
   }
 
   const cancelPenaltyText = policy.cancelPenalty && policy.cancelPenalty !== 'none'
-    ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}`
+    ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'half the price kept'}`
     : '';
   let cancelRule: string | null = null;
   if (enforcedCancellationNoticeHours && enforcedCancellationNoticeHours > 0) {
