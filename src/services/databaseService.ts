@@ -154,6 +154,7 @@ export async function signOutCurrentSession(): Promise<void> {
   const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw error;
   invalidateOwnProviderIds();
+  clearExternalBookingsCache();
 }
 
 export async function clearUserStorageFolder(
@@ -176,6 +177,7 @@ export async function clearUserStorageFolder(
  */
 export function forgetCachedReads(): void {
   clearCachedReads();
+  clearExternalBookingsCache();
 }
 
 export function subscribeToUserBookingChanges(
@@ -7588,6 +7590,36 @@ export type ClientExternalBookingWithProvider = DbClientExternalBooking & {
   > | null;
 };
 
+// A just-saved "Did you book?" answer should be visible the moment the
+// client opens Bookings. This deliberately stays memory-only: the database
+// remains the source of truth and the Bookings screen still refreshes it on
+// focus. It only bridges navigation between the profile and Bookings stacks.
+let externalBookingsCache: {
+  userId: string;
+  rows: ClientExternalBookingWithProvider[];
+} | null = null;
+
+function sortExternalBookings(rows: ClientExternalBookingWithProvider[]): ClientExternalBookingWithProvider[] {
+  return [...rows].sort((a, b) =>
+    `${a.booking_date}T${a.start_time}`.localeCompare(`${b.booking_date}T${b.start_time}`),
+  );
+}
+
+function cacheExternalBookings(userId: string, rows: ClientExternalBookingWithProvider[]): void {
+  externalBookingsCache = { userId, rows: sortExternalBookings(rows) };
+}
+
+function clearExternalBookingsCache(): void {
+  externalBookingsCache = null;
+}
+
+/** A same-session handoff for Bookings to render a newly saved entry before
+ *  its normal focus refresh returns. Never use this as persistent data. */
+export function getCachedMyExternalBookings(userId: string): ClientExternalBookingWithProvider[] | null {
+  if (externalBookingsCache?.userId !== userId) return null;
+  return externalBookingsCache.rows;
+}
+
 function mapExternalBookingRow(row: unknown): ClientExternalBookingWithProvider {
   const r = row as DbClientExternalBooking & {
     provider: (ClientExternalBookingWithProvider["provider"] & {
@@ -7634,7 +7666,9 @@ export async function getMyExternalBookings(): Promise<ClientExternalBookingWith
     .order("start_time", { ascending: true })
     .limit(200);
   if (error) throw error;
-  return (data ?? []).map(mapExternalBookingRow);
+  const rows = (data ?? []).map(mapExternalBookingRow);
+  cacheExternalBookings(user.id, rows);
+  return rows;
 }
 
 export async function getMyExternalBooking(
@@ -7674,7 +7708,10 @@ export async function addMyExternalBooking(entry: {
     .select(EXTERNAL_BOOKING_SELECT)
     .single();
   if (error) throw error;
-  return mapExternalBookingRow(data);
+  const saved = mapExternalBookingRow(data);
+  const previous = getCachedMyExternalBookings(user.id) ?? [];
+  cacheExternalBookings(user.id, [...previous.filter(row => row.id !== saved.id), saved]);
+  return saved;
 }
 
 /** Remove one of the client's own entries. Throws if nothing was removed, so
@@ -7688,6 +7725,12 @@ export async function removeMyExternalBooking(id: string): Promise<void> {
   if (error) throw error;
   if (!data || data.length === 0) {
     throw new Error("Booked-elsewhere entry not found or not yours to remove");
+  }
+  if (externalBookingsCache) {
+    cacheExternalBookings(
+      externalBookingsCache.userId,
+      externalBookingsCache.rows.filter(row => row.id !== id),
+    );
   }
 }
 
