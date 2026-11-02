@@ -1087,12 +1087,18 @@ export async function searchProvidersAndServices(
     .join(",");
   // location_text is included here too (not just in the dedicated filter
   // below) so a query with no "in/near" preposition still matches on it.
-  const nameOr = textTerms
-    .map(
+  // A business name typed apart ("face by jen" for FacebyJen) only matches
+  // with the spaces taken out.
+  const compactTerms = textTerms
+    .map((t) => t.replace(/\s+/g, ""))
+    .filter((t, i) => t.length >= 5 && t !== textTerms[i]);
+  const nameOr = [
+    ...textTerms.map(
       (t) =>
         `display_name.ilike.%${t}%,about_text.ilike.%${t}%,location_text.ilike.%${t}%`,
-    )
-    .join(",");
+    ),
+    ...compactTerms.map((t) => `display_name.ilike.%${t}%`),
+  ].join(",");
 
   // A detected category hint only broadens recall when the caller hasn't
   // already pinned a category via the chip filter — that's already narrower.
@@ -1218,18 +1224,29 @@ export async function searchProvidersAndServices(
   const serviceIdSet = new Set(serviceIds);
   const nameIdSet = new Set(nameIds);
   const normalizedQuery = parsed.serviceText.toLowerCase();
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
   const relevance = (provider: PublicProviderSummary): number => {
     const name = provider.display_name.toLowerCase();
-    if (normalizedQuery && name === normalizedQuery) return 4;
-    if (normalizedQuery && name.includes(normalizedQuery)) return 3;
+    const compactName = name.replace(/\s+/g, "");
+    if (normalizedQuery && (name === normalizedQuery || compactName === compactQuery)) return 4;
+    if (normalizedQuery && (name.includes(normalizedQuery)
+      || (compactQuery.length >= 5 && compactName.includes(compactQuery)))) return 3;
     const ranked = bestServiceRank.get(provider.id);
     if (ranked !== undefined) return 2 + Math.min(ranked, 1) * 0.5;
     if (serviceIdSet.has(provider.id)) return 2;
     if (nameIdSet.has(provider.id)) return 1;
     return 0;
   };
+  // Location terms run most specific first ("hackney", then "London"), so
+  // among equally relevant providers the one actually in the named place
+  // comes before the rest of the city.
+  const locationRank = (provider: PublicProviderSummary): number => {
+    const where = (provider.location_text ?? "").toLowerCase();
+    const at = locationTerms.findIndex((t) => where.includes(t.toLowerCase()));
+    return at === -1 ? locationTerms.length : at;
+  };
   const providers = ((data ?? []) as PublicProviderSummary[])
-    .sort((a, b) => relevance(b) - relevance(a))
+    .sort((a, b) => relevance(b) - relevance(a) || locationRank(a) - locationRank(b))
     .slice(0, limit);
   return { providers, services, correctedQuery };
 }
