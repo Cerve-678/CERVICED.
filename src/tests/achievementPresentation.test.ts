@@ -81,7 +81,7 @@ describe('achievement presentation', () => {
     const view = buildAchievementsView({
       average_rating: null,
       achievements: [
-        row('fully_booked', 'fully_booked', 1, 1, '2026-11-01'),
+        row('mystery_badge', 'mystery_group', 1, 1, '2026-11-01'),
         row('saves_25', 'client_love', 1, 25),
       ],
     }, t);
@@ -91,12 +91,14 @@ describe('achievement presentation', () => {
   });
 
   it('knows every achievement the server can send', () => {
-    const sql = readFileSync(join(__dirname, '../../supabase/migrations/20261101180000_provider_achievements.sql'), 'utf8');
+    // The newest definition of get_my_provider_achievements.
+    const sql = readFileSync(join(__dirname, '../../supabase/migrations/20261101200000_fully_booked_certificate.sql'), 'utf8');
     const rows = [...sql.matchAll(/^\s*\(\s*\d+, '([a-z_]+)', '([a-z0-9_]+)'/gm)].map((match) => row(match[2]!, match[1]!, 0, 1));
-    expect(rows).toHaveLength(27);
+    expect(rows).toHaveLength(30);
 
     const view = buildAchievementsView({ average_rating: null, achievements: rows }, t);
-    expect(view.summary).toBe('0 of 27 earned');
+    expect(view.summary).toBe('0 of 30 earned');
+    expect(view.shelves[0]?.key).toBe('fully_booked');
     view.shelves.flatMap((shelf) => shelf.items).forEach((item) => {
       expect(item.name).not.toMatch(/^achievements\./);
       expect(item.how).not.toMatch(/^achievements\./);
