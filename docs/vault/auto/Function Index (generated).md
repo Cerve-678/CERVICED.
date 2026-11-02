@@ -5,7 +5,7 @@
 
 #generated
 
-**2955 functions** across **403 files**.
+**2954 functions** across **403 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -195,7 +195,7 @@
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialitiesSection** · tileHeight · venueImages
-- `SearchGuideSheet.tsx` — GuideRow · Row · SearchGuideSheet · Section
+- `SearchGuideSheet.tsx` — GuideRow · GuideSection · SearchGuideSheet
 - `searchResultsLayout.ts` — **highlightSearchTerms** · isWordChar · pushServices · **scatterServicesBetweenProviders**
 - `ServiceEditorSheet.tsx` — descriptionHint · findabilityProblem · handleSave · push · ServiceEditorSheet · suggestion · tagLabel · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
 - `serviceTags.ts` — add · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · optionsFor · readWords · sameWord · **suggestServiceDetails** · words

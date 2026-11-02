@@ -56,6 +56,10 @@ function GuideRow({ mark, title, body, P }: RowProps) {
   );
 }
 
+function GuideSection({ title, P }: { title: string; P: AppTheme }) {
+  return <Text style={[styles.section, { color: P.sub }]}>{title}</Text>;
+}
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -71,10 +75,6 @@ interface Props {
  */
 export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: Props) {
   const { height } = useWindowDimensions();
-  const Row = (props: Omit<RowProps, 'P'>) => <GuideRow {...props} P={P} />;
-  const Section = ({ title }: { title: string }) => (
-    <Text style={[styles.section, { color: P.sub }]}>{title}</Text>
-  );
 
   return (
     <Modal
@@ -100,23 +100,25 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
             showsVerticalScrollIndicator={false}
             bounces
           >
-            <Section title="Where it happens" />
+            <GuideSection title="Where it happens" P={P} />
             <Text style={[styles.lead, { color: P.sub }]}>The small icon after the price and place.</Text>
             {BUSINESS_TYPES.map(type => (
-              <Row
+              <GuideRow
                 key={type}
+                P={P}
                 mark={<Ionicons name={BUSINESS_TYPE_ICON[type] as keyof typeof Ionicons.glyphMap} size={18} color={P.text} />}
                 title={BUSINESS_TYPE_META[type].label}
                 body={`${BUSINESS_TYPE_META[type].clientVenueLabel}.`}
               />
             ))}
 
-            <Section title="Availability" />
+            <GuideSection title="Availability" P={P} />
             {(['available', 'limited'] as const).map(status => {
               const info = AVAILABILITY_INFO[status]!;
               return (
-                <Row
+                <GuideRow
                   key={status}
+                  P={P}
                   mark={<View style={[styles.dot, { backgroundColor: info.color }]} />}
                   title={
                     <View style={[styles.badge, { backgroundColor: `${info.color}22` }]}>
@@ -127,46 +129,54 @@ export default function SearchGuideSheet({ visible, onClose, P, bottomInset }: P
                 />
               );
             })}
-            <Row
+            <GuideRow
+              P={P}
               mark={<Text style={[styles.markText, { color: P.sub }]}>–</Text>}
               title="No badge"
               body="No open times this week, or they haven't set their hours yet. Their profile shows what's free."
             />
 
-            <Section title="On each card" />
-            <Row
+            <GuideSection title="On each card" P={P} />
+            <GuideRow
+              P={P}
               mark={<Text style={styles.star}>★</Text>}
               title="4.8 (12)"
               body="Their average rating, and how many reviews it comes from."
             />
-            <Row
+            <GuideRow
+              P={P}
               mark={<Text style={[styles.markText, { color: P.text }]}>£</Text>}
               title="£25–£60"
               body="From their cheapest service to their most expensive."
             />
-            <Row
+            <GuideRow
+              P={P}
               mark={<Text style={[styles.markText, styles.underlined, { color: P.text }]}>Aa</Text>}
               title="Underlined words"
               body="Their specialities: the things they're known for."
             />
-            <Row
+            <GuideRow
+              P={P}
               mark={<Ionicons name="open-outline" size={18} color={P.text} />}
               title="Books on their own page"
               body="This pro takes bookings on their own booking site, like Fresha. Booking opens their site, and you book and pay there, not in CERVICED."
             />
-            <Row
+            <GuideRow
+              P={P}
               mark={<Text style={[styles.eyebrow, { color: P.sub }]}>SERVICE</Text>}
               title="Service cards"
               body="One service that matches what you typed, with the matching words highlighted. Tap the name at the bottom to see who offers it."
             />
 
-            <Section title="Search tips" />
-            <Row
+            <GuideSection title="Search tips" P={P} />
+            <GuideRow
+              P={P}
               mark={<TabIcon name="magnifying-glass" size={16} color={P.text} />}
               title="Add a place or a budget"
               body={'Try "braids in Leeds" or "nails under £40". Typos are fine; we\'ll show what we searched for instead.'}
             />
-            <Row
+            <GuideRow
+              P={P}
               mark={<TabIcon name="sliders" size={16} color={P.text} />}
               title="Filters"
               body="The sliders icon at the top filters by price, distance, hair type and more. Its number is how many filters are on. Tap a chip to remove one."
