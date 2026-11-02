@@ -1,4 +1,5 @@
 import { dobToParts } from '../utils/dateUtils';
+import { validateDob } from '../utils/validation';
 
 // The client→provider upgrade enters signup at Step 3, skipping the step where
 // a provider normally gives their date of birth. AuthContext reads `dob != null`
@@ -28,5 +29,20 @@ describe('dobToParts', () => {
     const parts = dobToParts('2001-11-30') as { dobDay: string; dobMonth: string; dobYear: string };
     const rebuilt = `${parts.dobYear}-${parts.dobMonth.padStart(2, '0')}-${parts.dobDay.padStart(2, '0')}`;
     expect(rebuilt).toBe('2001-11-30');
+  });
+});
+
+describe('validateDob', () => {
+  const now = new Date(2026, 10, 2);
+  beforeEach(() => jest.useFakeTimers({ now }));
+  afterEach(() => jest.useRealTimers());
+
+  it('goes by the actual birthday, not just the year', () => {
+    expect(validateDob('02', '11', '2010')).toBeNull();
+    expect(validateDob('03', '11', '2010')).toBe('You must be at least 16');
+  });
+
+  it('refuses a date that does not exist', () => {
+    expect(validateDob('31', '02', '2000')).toBe('Enter a valid date');
   });
 });

@@ -19,8 +19,12 @@ export const validateDob = (d: string, m: string, y: string): string | null => {
   if (!day || !mon || !yr) return 'Enter a valid date';
   if (mon < 1 || mon > 12) return 'Month must be 1–12';
   if (day < 1 || day > 31) return 'Day must be 1–31';
-  if (yr < 1900 || yr > new Date().getFullYear()) return 'Enter a valid year';
-  if (new Date().getFullYear() - yr < 16) return 'You must be at least 16';
+  const today = new Date();
+  if (yr < 1900 || yr > today.getFullYear()) return 'Enter a valid year';
+  // Rolls over for a date that doesn't exist, like 31 February.
+  if (new Date(yr, mon - 1, day).getMonth() !== mon - 1) return 'Enter a valid date';
+  // From the actual birthday: the year alone passes someone still 15.
+  if (new Date(yr + 16, mon - 1, day) > today) return 'You must be at least 16';
   return null;
 };
 

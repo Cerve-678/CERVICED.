@@ -10,6 +10,7 @@ import {
   getUserProfileById,
   upgradeUserToProvider,
   updateUserContactDetails,
+  createSocialProfileIfMissing,
   updateClientProfileFields,
   cancelAccountDeletionRequest,
   deleteClientAccountProfile,
@@ -526,6 +527,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // A first Apple or Google sign-in has a verified session and no users
+      // row, and nothing else creates one. bookings.user_id needs it, as does
+      // every profile save. The Before You Can Book checklist then asks for
+      // whatever the sign-in didn't share. Failing here falls through to the
+      // session-only path below, whose retry comes back through this.
+      const signedInWith = session.user.app_metadata?.['provider'];
+      if (!profile && session.user.email && signedInWith && signedInWith !== 'email') {
+        try {
+          await withTimeout(
+            createSocialProfileIfMissing({
+              id: session.user.id,
+              email: session.user.email,
+              loginMethod: signedInWith,
+              nameFromSession: meta?.['full_name'] ?? meta?.['name'],
+            }),
+            8_000,
+            'Profile create',
+          );
+          profile = await withTimeout(getUserProfileById(session.user.id), 8_000, 'Profile restore');
+        } catch (err: any) {
+          logger.warn('[AuthContext] could not create the profile row for a', signedInWith, 'sign-in:', err?.message);
+        }
+        if (!isCurrent()) return;
+      }
+
       if (profile) {
         logger.log('[AuthContext] profile found — role:', profile.role);
 
@@ -811,6 +837,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (
       partial.name !== undefined
       || partial.phone !== undefined
+      || partial.dob !== undefined
       || partial.clientAddress !== undefined
       || partial.clientArea !== undefined
     ) {
@@ -818,7 +845,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: updated.name,
         phone: updated.phone ?? '',
         // Only written when this call is actually changing it, so an unrelated
-        // updateUser({ name }) can't wipe a saved address.
+        // updateUser({ name }) can't wipe a saved address or date of birth.
+        ...(partial.dob !== undefined ? { dob: partial.dob || null } : {}),
         ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
         ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
       });

@@ -101,7 +101,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         return;
       }
       setIsAppleLoading(true);
-      await signInWithAppleIdToken(credential.identityToken);
+      await signInWithAppleIdToken(credential.identityToken, credential.fullName);
       setIsAppleLoading(false);
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {

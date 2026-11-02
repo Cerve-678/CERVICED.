@@ -99,7 +99,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 |---|---|---|
 | Sign-up (**5 steps**, same flow for client/provider, role picked mid-flow) | ✅ | `src/screens/auth/SignUpStep1Screen.tsx`–`SignUpStep5Screen.tsx`. Corrected: `LOGIC.md` described a stale 4-step flow; the actual flow has 5 screens. |
 | Login (email/password) | ✅ | `src/screens/auth/LoginScreen.tsx`, `AuthContext` |
-| Sign in with Apple | 🚧 known bug | `LoginScreen.tsx`/`WelcomeScreen.tsx` `handleAppleLogin` call `supabase.auth.signInWithIdToken` directly — a first-time Apple sign-in silently creates a `users` row with no name/phone/DOB and drops straight into the main app. `credential.fullName`/`credential.email` (only populated by Apple on first authorization) are read but discarded. No "logged in but profile incomplete" routing exists yet — `RootNavigation.tsx` branches on `isLoggedIn` alone. Instagram/Google buttons are inert placeholders (`Alert.alert('Coming soon')`), not a similar risk. |
+| Sign in with Apple / Google | ✅ built, not device-tested | `LoginScreen.tsx`/`WelcomeScreen.tsx` pass Apple's one-time `credential.fullName` to `signInWithAppleIdToken`; Google (#244) goes through `signInWithGoogleIdToken` and its name comes from the session's `full_name`. A first Apple or Google sign-in has no `users` row, so `AuthContext.loadUserProfile` creates one as a client (`createSocialProfileIfMissing`, which never overwrites an existing row). They can browse straight away. Before booking, `features/bookings/BeforeYouBookSheet.tsx` asks for whichever of name, mobile and date of birth is blank; `ProviderProfileScreen`'s Book actions and `CartScreen`'s checkout both check it. Checkout also waits if the account hasn't finished loading. The check is in the app only: no server rule requires a DOB to book. |
 | Email verification | ✅ | `src/screens/auth/EmailVerificationScreen.tsx`, edge function `confirm-email` |
 | Forgot/reset password | ✅ | `ForgotPasswordScreen`, `ResetPasswordOTPScreen`, `NewPasswordScreen` |
 | Session persistence | ✅ | Envelope-encrypted via `largeSecureStore.ts` (not plaintext AsyncStorage — hardened Aug 2026) |
@@ -472,3 +472,8 @@ not plaintext AsyncStorage.
   with no name/phone/DOB. Confirmed by reading `LoginScreen.tsx`,
   `WelcomeScreen.tsx`, `AuthContext.tsx`, `EmailVerificationScreen.tsx`, and
   `RootNavigation.tsx` directly — not previously documented here.
+- 2026-11-02: Sign in with Apple row moved off "known bug": Apple accounts now
+  get a `users` row at first sign-in and a Before You Can Book checklist for
+  name, mobile and date of birth. This replaces the idea on the unmerged
+  `fix/apple-signin-completes-signup` branch of holding them on the signup steps.
+  Google sign-in (#244) gets the same row creation and checklist.
