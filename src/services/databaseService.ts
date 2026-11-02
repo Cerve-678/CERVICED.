@@ -273,6 +273,13 @@ export async function signInWithAppleIdToken(token: string): Promise<AuthSession
   return summarizeAuthSession(data.session);
 }
 
+export async function signInWithGoogleIdToken(token: string): Promise<AuthSessionSummary> {
+  const { data, error } = await supabase.auth.signInWithIdToken({ provider: "google", token });
+  if (error) throw error;
+  if (!data.session) throw new Error("Authentication succeeded without a session");
+  return summarizeAuthSession(data.session);
+}
+
 export async function sendPasswordReset(email: string): Promise<void> {
   const { error } = await supabase.auth.resetPasswordForEmail(email);
   if (error) throw error;

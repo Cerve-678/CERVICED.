@@ -51,6 +51,7 @@ describe('screen Supabase boundary', () => {
     for (const helper of [
       'signInWithEmailPassword',
       'signInWithAppleIdToken',
+      'signInWithGoogleIdToken',
       'sendPasswordReset',
       'verifyRecoveryOtp',
       'verifySignupOtp',
