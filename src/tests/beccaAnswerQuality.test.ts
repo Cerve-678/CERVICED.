@@ -35,8 +35,7 @@ jest.mock("../services/databaseService", () => {
     getProviders: jest.fn(async () => (mockData.full ? [mockLola, mockLab] : [])),
     getProviderServiceFacets: jest.fn(async () => ({
       priceRanges: mockData.full ? ranges() : new Map(),
-      audiences: new Map(),
-      skinTones: new Map(),
+      services: new Map(),
       specialityText: new Map(mockData.full ? [["p1", new Set(["Volume Lashes Full Set"])], ["p2", new Set(["Classic Set"])]] : []),
       specialityLabels: new Map(),
     })),
