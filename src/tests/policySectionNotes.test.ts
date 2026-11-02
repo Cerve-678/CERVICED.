@@ -38,3 +38,18 @@ test('a note with no rule becomes the section value', () => {
   const rows = buildPolicyDisplayRows({ rescheduleNote: 'Ask me first' });
   expect(find(rows, 'Reschedule')).toEqual({ icon: 'calendar-outline', label: 'Reschedule', value: 'Ask me first' });
 });
+
+test('travel and emergency policies show when written, and only then', () => {
+  const written = buildPolicyDisplayRows({ travelPolicy: 'Up to 10 miles', emergencyBookingPolicy: ' Existing clients only ' }, 0);
+  expect(find(written, 'Travel')?.value).toBe('Up to 10 miles');
+  expect(find(written, 'Emergency appointments')?.value).toBe('Existing clients only');
+
+  const blank = buildPolicyDisplayRows({ travelPolicy: '  ', emergencyBookingPolicy: '' }, 0);
+  expect(find(blank, 'Travel')).toBeUndefined();
+  expect(find(blank, 'Emergency appointments')).toBeUndefined();
+});
+
+test('link-only profiles show them too', () => {
+  const rows = buildPolicyDisplayRows({ travelPolicy: 'Up to 10 miles' }, 0, { linkOnly: true });
+  expect(find(rows, 'Travel')?.value).toBe('Up to 10 miles');
+});
