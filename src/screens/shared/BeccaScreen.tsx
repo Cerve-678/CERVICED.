@@ -48,6 +48,12 @@ import {
   ChatInput,
   ThinkingIndicator,
   stripRichText,
+  AnswerBefore,
+  AnswerAfter,
+  ANSWER_SHOWN,
+  answerRevealStart,
+  answerListsProviders,
+  type AnswerReveal,
 } from "../../components/ChatComponents";
 import { Provider } from "../../services/ProviderDataService";
 import { formatTime12, DAY_NAMES_FULL, ordinalSuffix, relativeDayLabel, formatSectionTitle } from "../../utils/dateUtils";
@@ -67,33 +73,10 @@ function formatHeroDate(date: Date): string {
   return `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())}`;
 }
 
-/**
- * The progress copy describes the work this particular request needs. It is
- * intentionally not a fake model chain-of-thought: these are short, truthful
- * status updates for the app's lookup and routing work.
- */
-function thinkingStepsFor(message: string, isProviderMode: boolean): string[] {
-  const text = message.toLowerCase();
-  const steps = (...labels: string[]) => labels;
-
-  if (isProviderMode) {
-    if (/\b(?:today|schedule|booking|appointment|diary|week)\b/.test(text)) return steps("Checking your schedule…", "Reading the appointment details…", "Preparing the right next step…");
-    if (/\b(?:client|waitlist|form)\b/.test(text)) return steps("Finding the client record…", "Checking their booking history…", "Preparing a clear summary…");
-    if (/\b(?:message|inbox|notification)\b/.test(text)) return steps("Checking your inbox…", "Sorting the latest updates…", "Getting the relevant action ready…");
-    if (/\b(?:review|promotion|analytics|service)\b/.test(text)) return steps("Looking up your business details…", "Pulling together the relevant information…", "Preparing a clear answer…");
-    return steps("Looking into that…", "Checking the relevant business details…", "Preparing the best next step…");
-  }
-  if (/\b(?:reschedule|move|change|cancel)\b/.test(text)) return steps("Finding that appointment…", "Checking the available actions…", "Getting the right screen ready…");
-  if (/\b(?:cost|price|pay|payment|deposit|refund)\b/.test(text)) return steps("Checking booking totals…", "Reading the payment details…", "Putting the costs together…");
-  if (/\b(?:form|prep|prepare|policy|policies|what.*need|what.*bring)\b/.test(text)) return steps("Reading your booking notes…", "Checking forms and policies…", "Preparing what you need to know…");
-  if (/\b(?:booking|appointment|next appointment|when)\b/.test(text)) return steps("Checking your bookings…", "Reading the appointment details…", "Preparing a clear breakdown…");
-  if (/\b(?:free|available|availability|slot)\b/.test(text)) return steps("Searching open slots…", "Checking provider availability…", "Narrowing down the best options…");
-  if (/\b(?:find|search|provider|nails|hair|lashes|brows|makeup|aesthetics)\b/.test(text)) return steps("Searching providers…", "Matching your request…", "Preparing the best options…");
-  if (/\b(?:review|rating|portfolio|photo|look)\b/.test(text)) return steps("Looking up provider details…", "Reading services and reviews…", "Preparing a clear summary…");
-  if (/\b(?:message|notification|waitlist)\b/.test(text)) return steps("Checking your updates…", "Finding the relevant details…", "Preparing the next action…");
-  if (/\b(?:time|date|day)\b/.test(text)) return steps("Checking the current time…", "Making sure it is up to date…");
-  return steps("Looking into that…", "Checking the relevant details…", "Preparing a helpful answer…");
-}
+/** Shown until the engine has understood the message and says what it's doing. */
+const READING_LABEL = "Reading your message…";
+/** How long each of a capability's loading steps stays on screen. */
+const THINKING_STEP_MS = 700;
 
 // ==================== MAIN SCREEN ====================
 
@@ -124,6 +107,8 @@ export default function BeccaScreen({
   // The completed answer is kept separate until its visible type-in has
   // finished, so action chips never belong to the previous answer mid-stream.
   const [streamingResponse, setStreamingResponse] = useState<ChatMessage | null>(null);
+  // How much of the streaming reply's answer (steps, headline, card) is out.
+  const [streamingReveal, setStreamingReveal] = useState<AnswerReveal>(ANSWER_SHOWN);
   // When a quick action opens another screen, keep that answer's actions
   // docked at the bottom for the return journey. The original cards remain
   // in the transcript too; this is the immediately reachable continuation.
@@ -149,7 +134,10 @@ export default function BeccaScreen({
     responseTypingResolveRef.current = null;
   }, []);
 
+  // Set by Stop: the rest of the reply (steps, card rows) appears at once.
+  const skipRevealRef = useRef(false);
   const handleStopTyping = useCallback(() => {
+    skipRevealRef.current = true;
     if (!responseTypingTimerRef.current) return;
     clearInterval(responseTypingTimerRef.current);
     responseTypingTimerRef.current = null;
@@ -493,10 +481,24 @@ export default function BeccaScreen({
     setUsedSuggestionId(null);
     setInputText("");
     setSelectedImage(null);
-    const thinkingSteps = thinkingStepsFor(textToSend, requestIsProvider);
-    setThinkingLabel(thinkingSteps[0] ?? "Looking into that…");
+    setThinkingLabel(READING_LABEL);
     setIsTyping(true);
     const thinkingStartedAt = Date.now();
+    // The steps come from the capability Becca chose (see Capability.thinking),
+    // so they describe this request's real lookups. Each gets a full beat
+    // before the answer replaces it.
+    let progressTimers: ReturnType<typeof setTimeout>[] = [];
+    let stepsFinishAt = 0;
+    const showSteps = (steps: string[]) => {
+      if (!isActiveTurn() || steps.length === 0) return;
+      setThinkingLabel(steps[0]!);
+      progressTimers = steps.slice(1).map((label, index) =>
+        setTimeout(() => {
+          if (isActiveTurn()) setThinkingLabel(label);
+        }, THINKING_STEP_MS * (index + 1)),
+      );
+      stepsFinishAt = Date.now() + THINKING_STEP_MS * steps.length;
+    };
 
     // Create session on first user message
     let sessionId = currentSessionId;
@@ -536,12 +538,6 @@ export default function BeccaScreen({
       beccaStorageService.saveMessage(sessionId, userMessage).catch((err) => logger.error('[Becca] save user message failed:', err));
     }
 
-    const progressTimers = thinkingSteps.slice(1).map((label, index) =>
-      setTimeout(() => {
-        if (isActiveTurn()) setThinkingLabel(label);
-      }, 720 + index * 780),
-    );
-
     setTimeout(async () => {
       const aiInterpreter = getBeccaAIInterpreter();
       const { message: response, context } = await beccaConverse({
@@ -565,6 +561,7 @@ export default function BeccaScreen({
         ...(aiInterpreter
           ? { interpreter: aiInterpreter }
           : {}),
+        onProgress: showSteps,
       });
       let responsePersisted = false;
       const persistResponse = (refreshCurrentHat = false) => {
@@ -593,7 +590,11 @@ export default function BeccaScreen({
       conversationRef.current = context;
       // A fast local match should still feel intentional rather than making
       // the processing state flash by before a person can read it.
-      const remainingThinkingMs = Math.max(0, 2_200 - (Date.now() - thinkingStartedAt));
+      const remainingThinkingMs = Math.max(
+        0,
+        2_200 - (Date.now() - thinkingStartedAt),
+        stepsFinishAt - Date.now(),
+      );
       if (remainingThinkingMs > 0) {
         await new Promise<void>((resolve) => setTimeout(resolve, remainingThinkingMs));
       }
@@ -610,6 +611,45 @@ export default function BeccaScreen({
       const remainingCharacters = Array.from(response.content.slice(heading.length));
       const { suggestions: _suggestions, providerRecommendations: _providerRecommendations, ...streamingBase } = response;
       let characterIndex = 0;
+
+      // An answer plays out in its layout's order: steps tick off and fold
+      // before the text, or the card leads, or the headline sits above. Stop
+      // (skipRevealRef) shows the rest at once.
+      skipRevealRef.current = false;
+      const answer = response.answer;
+      let reveal: AnswerReveal = answer ? answerRevealStart(answer) : ANSWER_SHOWN;
+      const showReveal = (next: Partial<AnswerReveal>) => {
+        reveal = { ...reveal, ...next };
+        setStreamingReveal(reveal);
+      };
+      const beat = async (ms: number) => {
+        if (skipRevealRef.current) return;
+        await new Promise<void>((resolve) => setTimeout(resolve, ms));
+      };
+      setStreamingReveal(reveal);
+      setStreamingResponse({ ...streamingBase, content: answer ? "" : heading });
+      if (answer?.layout === "stepsThenCard") {
+        const steps = answer.work?.length ?? 0;
+        for (let i = 1; i <= steps; i++) {
+          await beat(i === 1 ? 250 : 520);
+          showReveal({ steps: i });
+        }
+        await beat(450);
+        showReveal({ folded: true });
+      } else if (answer?.layout === "cardFirst") {
+        const rows = Math.max(1, answer.card?.rows?.length ?? 0);
+        for (let i = 1; i <= rows; i++) {
+          await beat(130);
+          showReveal({ rows: i });
+        }
+      } else if (answer?.layout === "headline") {
+        await beat(500);
+      }
+      if (!isActiveTurn()) {
+        persistResponse();
+        return;
+      }
+      if (skipRevealRef.current) showReveal(ANSWER_SHOWN);
       setStreamingResponse({ ...streamingBase, content: heading });
 
       await new Promise<void>((resolve) => {
@@ -645,7 +685,21 @@ export default function BeccaScreen({
         return;
       }
 
+      // The card follows the text in the headline and steps layouts.
+      if (answer && answer.layout !== "cardFirst") {
+        const rows = Math.max(1, answer.card?.rows?.length ?? 0);
+        for (let i = 1; i <= rows; i++) {
+          await beat(110);
+          showReveal({ rows: i });
+        }
+        if (!isActiveTurn()) {
+          persistResponse();
+          return;
+        }
+      }
+
       setStreamingResponse(null);
+      setStreamingReveal(ANSWER_SHOWN);
       setMessages((prev) => [...prev, response]);
       setIsTyping(false);
 
@@ -1138,7 +1192,13 @@ export default function BeccaScreen({
 
                 {messages.map((message) => (
                   <React.Fragment key={message.id}>
+                    {message.role === "assistant" && message.answer && (
+                      <AnswerBefore answer={message.answer} onProviderPress={handleProviderPress} />
+                    )}
                     <ChatBubble message={message} />
+                    {message.role === "assistant" && message.answer && (
+                      <AnswerAfter answer={message.answer} onProviderPress={handleProviderPress} />
+                    )}
                     {/* Actions belong to the answer that introduced them.
                         Keeping them inline means a user can open a booking,
                         come back, and still use a prior answer's next step
@@ -1151,7 +1211,7 @@ export default function BeccaScreen({
                         indented
                       />
                     )}
-                    {!isProviderMode && message.role === "assistant" && message.providerRecommendations && (
+                    {!isProviderMode && message.role === "assistant" && message.providerRecommendations && !answerListsProviders(message.answer) && (
                       <ProviderRecommendations
                         providers={message.providerRecommendations}
                         onProviderPress={handleProviderPress}
@@ -1166,8 +1226,14 @@ export default function BeccaScreen({
                   </React.Fragment>
                 ))}
 
-                {streamingResponse && (
+                {streamingResponse?.answer && (
+                  <AnswerBefore answer={streamingResponse.answer} reveal={streamingReveal} onProviderPress={handleProviderPress} />
+                )}
+                {streamingResponse && (streamingResponse.content.length > 0 || !streamingResponse.answer) && (
                   <ChatBubble key={streamingResponse.id} message={streamingResponse} />
+                )}
+                {streamingResponse?.answer && (
+                  <AnswerAfter answer={streamingResponse.answer} reveal={streamingReveal} onProviderPress={handleProviderPress} />
                 )}
 
                 {/* Processing and visible typing are separate moments: once
