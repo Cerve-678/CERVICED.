@@ -621,7 +621,7 @@ async function ownProviderIdExclusion(): Promise<string> {
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
+  "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, price_bands, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -8588,6 +8588,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   languages_spoken: string[] | null;
   specialties: string[] | null;
   price_range: string | null;
+  price_bands: string[] | null;
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
   external_booking_url: string | null;
@@ -8597,7 +8598,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     .select(
       "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
         "service_interests, service_locations, location_text, years_experience, team_size, accessibility_notes, languages_spoken, specialties, " +
-        "price_range, preferred_contact_methods, preferred_payment_methods, external_booking_url",
+        "price_range, price_bands, preferred_contact_methods, preferred_payment_methods, external_booking_url",
     )
     .eq("id", userId)
     .single();
@@ -8624,6 +8625,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     languages_spoken: string[] | null;
     specialties: string[] | null;
     price_range: string | null;
+    price_bands: string[] | null;
     preferred_contact_methods: string[] | null;
     preferred_payment_methods: string[] | null;
     external_booking_url: string | null;
@@ -8664,6 +8666,7 @@ export async function upgradeUserToProvider(
     serviceLocations?: string[];
     yearsExperience?: string;
     priceRange?: string;
+    priceBands?: string[];
     externalBookingUrl?: string;
     preferredContactMethods?: string[];
     accessibilityNotes?: string;
@@ -8718,6 +8721,7 @@ export async function upgradeUserToProvider(
         ? { referral_source: extras.referralSource }
         : {}),
       ...(extras?.priceRange ? { price_range: extras.priceRange } : {}),
+      ...(extras?.priceBands?.length ? { price_bands: extras.priceBands } : {}),
       ...(extras?.preferredContactMethods?.length
         ? { preferred_contact_methods: extras.preferredContactMethods }
         : {}),
@@ -8747,6 +8751,7 @@ export async function upgradeUserToProvider(
       .from("providers")
       .update({
         ...(extras?.priceRange ? { price_tier: extras.priceRange } : {}),
+        ...(extras?.priceBands?.length ? { price_bands: extras.priceBands } : {}),
         ...(extras?.externalBookingUrl
           ? { external_booking_url: extras.externalBookingUrl }
           : {}),
@@ -9726,6 +9731,7 @@ export async function updateProviderContactDetails(
     instagram?: string | null;
     website?: string | null;
     price_tier?: "budget" | "mid" | "premium" | "luxury" | null;
+    price_bands?: string[];
     accessibility_notes?: string | null;
     languages_spoken?: string[] | null;
     // Mirrors the live CHECK constraint providers_team_size_check
