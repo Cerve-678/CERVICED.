@@ -1046,7 +1046,7 @@ const findProviders: Capability = {
     // which almost no provider registers as) — this catches a HAIR
     // provider's individual "Men's Cut" service instead.
     if (service.audience && facets) {
-      dbProviders = dbProviders.filter((p) => facets.audiences.get(p.id)?.has(service.audience!));
+      dbProviders = dbProviders.filter((p) => facets.services.get(p.id)?.some((s) => s.audience === service.audience));
       work.push(`Kept those with services for ${service.audience}: ${dbProviders.length}`);
     }
 
