@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-02, NOT applied (client told about every refund)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261102200000 | `client_told_about_every_refund` | **NOT APPLIED.** Written by session cerviced-cb on `feat/refunds-show-history-and-tell-client`; the user declined the apply on 2026-11-02 pending review. Renumbered from 190000, which `become_full_member` took live first. Before applying: re-check live `max(version)` and open branches, then apply the file as-is (it rebuilds `notifications_type_check` from the live list and adds trigger `after_refund_notify_client` on `booking_refunds`). |
+
 ### Applied 2026-11-02 (become a full member)
 
 | Authored version | Name | Status |

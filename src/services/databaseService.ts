@@ -11741,8 +11741,16 @@ export interface ProviderRefundState {
   sharePence: number;
   /** What the provider still holds from it, in pence — the most a partial refund can be. */
   heldPence: number;
-  /** True once anything has been refunded; a full refund is then no longer offered. */
+  /** True once anything has been refunded; the sheet then opens on a partial refund. */
   anyRefunded: boolean;
+  /** What has already gone back out of the provider's share, outside a policy
+   *  settlement (their own refunds, or CERVICED's), in pence. Fee shares are
+   *  left out, so it never reveals the platform fee. */
+  refundedFromSharePence: number;
+  /** When the latest of those refunds went through (ISO), or null. */
+  lastRefundAt: string | null;
+  /** True once the client has had back everything they paid in app. */
+  fullyRefunded: boolean;
   /** Whether the client paid the full price in app or only a deposit. */
   paidAs: 'full' | 'deposit';
   /** The booking's full price (service + add-ons), in pence. With a deposit,
@@ -11780,7 +11788,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
       .eq('id', bookingId)
       .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
-    supabase.from('booking_refunds').select('amount_pence, kind, provider_kept_pence').eq('booking_id', bookingId).limit(50),
+    supabase.from('booking_refunds').select('amount_pence, kind, provider_kept_pence, payout_adjust_pence, created_at').eq('booking_id', bookingId).limit(50),
   ]);
   if (bookingRes.error) throw bookingRes.error;
   if (payoutRes.error) throw payoutRes.error;
@@ -11795,6 +11803,17 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     ? (payout.status === 'reversed' || payout.status === 'cancelled' ? 0 : Number(payout.payout_amount))
     : Math.max(0, share - refunded);
   const settlementRow = (refundsRes.data ?? []).find(r => r.kind === 'cancellation_settlement');
+  // A full refund's amount includes the client's fee share; payout_adjust_pence
+  // is the part that came out of the provider's share. A row with no recorded
+  // adjustment (an older or outside refund) counts in full, capped at the share.
+  const ownRefunds = (refundsRes.data ?? []).filter(r => r.kind !== 'cancellation_settlement');
+  const refundedFromShare = Math.min(share, ownRefunds.reduce((sum, r) => {
+    const amount = Number(r.amount_pence);
+    const adjust = Number(r.payout_adjust_pence ?? 0);
+    return sum + (adjust > 0 ? Math.min(adjust, amount) : amount);
+  }, 0));
+  const lastRefundAt = ownRefunds.reduce<string | null>(
+    (latest, r) => (r.created_at && (!latest || r.created_at > latest) ? r.created_at : latest), null);
   // A settlement that kept everything refunds nothing, so it writes no
   // booking_refunds row — bookings.policy_retained_amount is the record that
   // is always there once the policy has run on a client's cancellation.
@@ -11811,6 +11830,9 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     sharePence: share,
     heldPence: Math.max(0, Math.min(held, paid - refunded)),
     anyRefunded: refunded > 0,
+    refundedFromSharePence: refundedFromShare,
+    lastRefundAt,
+    fullyRefunded: paid > 0 && refunded >= paid,
     paidAs: b.payment_type === 'deposit' ? 'deposit' : 'full',
     bookingPricePence: Math.round((Number(b.base_price ?? 0) + Number(b.add_ons_total ?? 0)) * 100),
     policySettlement: settled

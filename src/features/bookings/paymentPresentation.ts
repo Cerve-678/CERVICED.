@@ -150,3 +150,39 @@ export function describeSettlementTiming(hoursBefore: number | null, noticeHours
   const hrs = Math.floor(hoursBefore);
   return `Cancelled ${hrs} hour${hrs === 1 ? '' : 's'} before${notice}.`;
 }
+
+/** What the provider's Issue Refund sheet would move, in pence of their share. */
+export interface ProviderRefundPreview {
+  refundPence: number;
+  keepPence: number;
+  error: string | null;
+  /** Sent to the server as a full refund, so the client also gets the fee back. */
+  isFull: boolean;
+}
+
+/**
+ * Mirrors supabase/functions/_shared/refundPlan.ts for display only; the
+ * server re-derives every figure. `heldPence` is what the provider still holds.
+ *
+ * Typing everything they still hold into a partial refund IS a full refund:
+ * the provider is handing all of it back, so the client gets back everything
+ * they paid, fee included, exactly as if they'd picked Full refund. The one
+ * exception is after a late cancellation the provider's policy settled: giving
+ * back the kept amount stays partial and CERVICED keeps its fee, as the
+ * late-cancel rule says (refundPlan.test).
+ */
+export function previewProviderRefund(
+  heldPence: number,
+  mode: 'full' | 'custom',
+  typed: string,
+  policySettled: boolean,
+): ProviderRefundPreview {
+  const held = Math.max(0, heldPence);
+  if (mode === 'full') return { refundPence: held, keepPence: 0, error: null, isFull: true };
+  const text = typed.trim();
+  if (!text) return { refundPence: 0, keepPence: held, error: null, isFull: false };
+  const pence = Math.round(Number(text) * 100);
+  if (!Number.isFinite(pence) || pence <= 0) return { refundPence: 0, keepPence: held, error: 'Enter an amount above £0.00.', isFull: false };
+  if (pence > held) return { refundPence: 0, keepPence: held, error: `You can refund at most £${(held / 100).toFixed(2)}.`, isFull: false };
+  return { refundPence: pence, keepPence: held - pence, error: null, isFull: pence === held && !policySettled };
+}

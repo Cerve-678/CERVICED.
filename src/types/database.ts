@@ -86,6 +86,9 @@ export type NotificationType =
   | "payout_debt_recovered"
   | "refund_requested"
   | "refund_request_updated"
+  /** Money went back to the client, from any refund on a booking or a late/no-show fee
+   *  (notify_client_of_refund / notify_client_of_fee_refund triggers). */
+  | "payment_refunded"
   /** A payout to the provider (or their own bank payout) failed; they may need to fix their account. */
   | "payout_failed"
   /** One-off notice that Terms people already accepted have changed (send_terms_updated_notice). */

@@ -335,7 +335,17 @@ Pay or PayPal.
 | Off-app payment | — | Not CERVICED's business. The client is told it's between them and the provider | — | — |
 
 - A booking can be refunded more than once. For example, the policy kept a
-  deposit, and later the provider gives it back.
+  deposit, and later the provider gives it back. The provider's refund sheet
+  shows what has already gone back and what's left, and after a full refund it
+  only shows the summary.
+- **A partial refund of everything the provider still holds is a full
+  refund**: the client gets back everything they paid, fee included. The one
+  exception is after a late cancellation the policy settled, where giving back
+  the kept amount stays partial and CERVICED keeps its fee. (The app decides
+  this, `previewProviderRefund`; older builds still send it as partial.)
+- **The client is told about every refund** (`payment_refunded`, trigger
+  `after_refund_notify_client` on `booking_refunds`), unless a late-cancel
+  notice or a refund-request update already gave them the amount.
 - A client is never charged more than they originally paid.
 - **The most a provider can keep on a late cancellation** depends on what was
   paid in the app: the whole deposit if the client paid a deposit, half the
@@ -826,6 +836,7 @@ so Stripe retries.
 |---|---|---|
 | `payment_success` | Client | Payment taken |
 | `cancellation_settled` | Both | A late cancellation kept money |
+| `payment_refunded` | Client | Any refund on a booking, whoever made it, unless `cancellation_settled` or `refund_request_updated` already gave the amount (live since 2 November, migration `20261102200000`) |
 | `refund_requested` / `refund_request_updated` | Provider / both | A refund request was opened, or has a day left (provider) / moved on, including to CERVICED after 3 days with no reply (both) |
 | `fee_charged`, `fee_disputed`, `fee_dispute_resolved` | Client / provider | The late/no-show fee lifecycle |
 | `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed` | Client / provider | The card couldn't pay a fee |

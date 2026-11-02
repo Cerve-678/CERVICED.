@@ -11,7 +11,7 @@ import { getRefundRequestsForBooking } from '../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../features/bookings/refundRequestTimeline';
 import type { RefundRequest } from '../types/booking';
 import RefundRequestTimeline from './RefundRequestTimeline';
-import { describeSettlementTiming } from '../features/bookings/paymentPresentation';
+import { describeSettlementTiming, previewProviderRefund } from '../features/bookings/paymentPresentation';
 import { newRequestId } from '../utils/requestId';
 import { logger } from '../utils/logger';
 import { toUserMessage } from '../utils/userFacingError';
@@ -45,6 +45,8 @@ const REFUND_REASONS = [
 export const REFUND_GREEN = { light: '#2F7D55', dark: '#6CC79A' };
 export const REFUND_KEEP = { light: '#A0603A', dark: '#D9A27E' };
 const formatPence = (p: number) => `£${(p / 100).toFixed(2)}`;
+const formatRefundDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 /** 'full' = everything back (fee included); 'custom' = an amount out of the
  *  provider's share — the only option once their policy has settled a
  *  client's cancellation. */
@@ -129,18 +131,13 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
   const close = useCallback(() => { if (!busy) onClose(); }, [busy, onClose]);
 
   // The amount this refund would move, in pence, plus any reason it can't go.
-  // Mirrors supabase/functions/_shared/refundPlan.ts for display only.
-  const preview = useMemo(() => {
-    if (!state) return { refundPence: 0, keepPence: 0, error: null as string | null };
-    const held = state.heldPence;
-    if (mode === 'full') return { refundPence: held, keepPence: 0, error: null };
-    const typed = amountText.trim();
-    const pence = Math.round(Number(typed) * 100);
-    if (!typed) return { refundPence: 0, keepPence: held, error: null };
-    if (!Number.isFinite(pence) || pence <= 0) return { refundPence: 0, keepPence: held, error: 'Enter an amount above £0.00.' };
-    if (pence > held) return { refundPence: 0, keepPence: held, error: `You can refund at most ${formatPence(held)}.` };
-    return { refundPence: pence, keepPence: held - pence, error: null };
-  }, [state, mode, amountText]);
+  // Typing everything that's left becomes a full refund (see previewProviderRefund).
+  const preview = useMemo(
+    () => (state
+      ? previewProviderRefund(state.heldPence, mode, amountText, !!state.policySettlement)
+      : { refundPence: 0, keepPence: 0, error: null, isFull: false }),
+    [state, mode, amountText],
+  );
 
   const submit = useCallback(async () => {
     if (!reason || busy || !state) return;
@@ -149,7 +146,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
     setSubmitError('');
     try {
       const trimmed = note.trim();
-      const isFull = mode === 'full';
+      const isFull = preview.isFull;
       // Throws on failure (see refundProviderBooking).
       const completed = await refundProviderBooking({
         bookingId: booking.id,
@@ -175,13 +172,13 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
     } finally {
       setBusy(false);
     }
-  }, [booking, reason, note, busy, state, preview, mode, onRefunded]);
+  }, [booking, reason, note, busy, state, preview, onRefunded]);
 
   const first = booking.customerName?.split(' ')[0];
   const canSubmit = !!state && state.heldPence > 0 && !!reason
     && !(reason === 'Other' && !note.trim())
     && !preview.error && preview.refundPence > 0;
-  const ctaLabel = mode === 'full' ? `Refund ${first || 'client'} in full` : `Refund ${formatPence(preview.refundPence)} to ${first || 'client'}`;
+  const ctaLabel = preview.isFull ? `Refund ${first || 'client'} in full` : `Refund ${formatPence(preview.refundPence)} to ${first || 'client'}`;
   // Nothing to submit until they opt into a partial refund (or there's
   // nothing left to refund): the sheet is just the summary.
   const summaryOnly = !!state && (state.heldPence <= 0 || (!!state.policySettlement && !partialOpen));
@@ -236,12 +233,12 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                 const settled = state.policySettlement;
                 const modes: RefundMode[] = state.anyRefunded ? ['custom', 'full'] : ['full', 'custom'];
                 const timing = settled ? describeSettlementTiming(settled.hoursBefore, settled.noticeHours, settled.movedLate) : null;
+                // The provider's own share only; the client also gets their fee
+                // share back on a full refund, but providers never see the fee.
                 const optionCopy: Record<RefundMode, { title: string; sub: string; value: string }> = {
                   full: {
-                    title: 'Full refund',
-                    sub: state.paidAs === 'deposit'
-                      ? `The deposit ${name} paid in app, less anything already refunded`
-                      : `Everything ${name} paid that hasn't come back yet`,
+                    title: state.anyRefunded ? 'Refund the rest' : 'Full refund',
+                    sub: `${formatPence(held)} of your share goes back. ${name === 'the client' ? 'The client' : name} gets back everything they paid${state.paidAs === 'deposit' ? ' in app' : ''}.`,
                     value: formatPence(held),
                   },
                   custom: { title: 'Partial refund', sub: 'Choose an amount', value: '' },
@@ -283,10 +280,31 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                           </View>
                         </View>
                       )}
+                      {state.refundedFromSharePence > 0 && (
+                        <View style={[styles.settled, { backgroundColor: green + '1A' }]}>
+                          <View style={styles.rowBetween}>
+                            <Text style={{ color: green, fontWeight: '700', fontSize: 13 }}>
+                              {state.fullyRefunded ? 'Refunded in full' : 'Already refunded'}
+                              {state.lastRefundAt ? ` · ${formatRefundDate(state.lastRefundAt)}` : ''}
+                            </Text>
+                            <Text style={{ color: P.text, fontSize: 13, fontWeight: '700' }}>{formatPence(state.refundedFromSharePence)}</Text>
+                          </View>
+                          {held > 0 && (
+                            <View style={styles.rowBetween}>
+                              <Text style={{ color: P.text, fontSize: 13 }}>Left you can refund</Text>
+                              <Text style={{ color: P.text, fontSize: 13 }}>{formatPence(held)}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
 
                     {held <= 0 ? (
-                      <Text style={{ color: P.sub, fontSize: 14, marginTop: 16 }}>There's nothing left of your share to refund on this booking.</Text>
+                      <Text style={{ color: P.sub, fontSize: 14, marginTop: 16 }}>
+                        {state.fullyRefunded
+                          ? `${name === 'the client' ? 'The client has' : `${name} has`} had back everything they paid. There's nothing left to refund.`
+                          : "There's nothing left of your share to refund on this booking."}
+                      </Text>
                     ) : (
                       <>
                         {settled ? (
@@ -352,6 +370,11 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                                   <Text style={{ color: P.sub, fontSize: 12 }}>max {formatPence(held)}</Text>
                                 </View>
                                 {!!preview.error && <Text style={styles.error}>{preview.error}</Text>}
+                                {preview.isFull && (
+                                  <Text style={{ color: P.sub, fontSize: 12, marginTop: 6 }}>
+                                    That's everything left, so this is a full refund: {name} gets back everything they paid.
+                                  </Text>
+                                )}
                               </>
                             )}
 
@@ -362,7 +385,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                               </View>
                               <View style={{ padding: 12, gap: 6 }}>
                                 <View style={styles.rowBetween}>
-                                  <Text style={{ color: P.text, fontSize: 13 }}><Text style={{ color: green }}>■ </Text>Back to {name}</Text>
+                                  <Text style={{ color: P.text, fontSize: 13 }}><Text style={{ color: green }}>■ </Text>From your share to {name}</Text>
                                   <Text style={{ color: P.text, fontSize: 13, fontWeight: '700' }}>{formatPence(preview.refundPence)}</Text>
                                 </View>
                                 <View style={styles.rowBetween}>
