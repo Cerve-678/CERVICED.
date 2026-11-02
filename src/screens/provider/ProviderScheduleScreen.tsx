@@ -39,13 +39,16 @@ import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../../utils/dateUtils';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import CloseScheduleSection from '../../features/providers/CloseScheduleSection';
+import { navigateAfterDismiss, openProviderBookingOnCalendar } from '../../navigation/rootNavigate';
+import { toReleaseDay } from '../../utils/bookingHorizon';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   ice:     '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
@@ -57,7 +60,7 @@ const DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -138,6 +141,7 @@ export default function ProviderScheduleScreen() {
 
   const [tab, setTab] = useState<'hours' | 'blocked'>('hours');
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [releaseDay, setReleaseDay] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   // Hours tab opens as a read-only summary; the header Edit button flips it
   // into the editable state (tappable chips, day toggles, Add break, Save).
@@ -176,6 +180,7 @@ export default function ProviderScheduleScreen() {
       const profile = await getMyProviderProfile();
       if (!profile) return;
       setProviderId(profile.id);
+      setReleaseDay(toReleaseDay(profile.automation_settings?.scheduleReleaseDay));
 
       const [avail, windows, blocked, ovr] = await Promise.all([
         getProviderAvailability(profile.id),
@@ -448,10 +453,25 @@ export default function ProviderScheduleScreen() {
             onPress={setTab}
             accentColor={P.accent}
             inactiveTextColor={P.sub}
-            activeTextColor={P.ice}
+            activeTextColor={P.onAccent}
             scrollable={false}
           />
         </View>
+        )}
+
+        {!hoursOnly && providerId && (
+          <CloseScheduleSection
+            providerId={providerId}
+            releaseDay={releaseDay}
+            palette={P}
+            isDarkMode={isDarkMode}
+            showToast={showToast}
+            onOpenBooking={(bookingId, date, openReschedule) => {
+              // After the sheet has slid away: iOS won't present the booking's
+              // reschedule sheet while this one is still dismissing.
+              navigateAfterDismiss(() => openProviderBookingOnCalendar(bookingId, date, openReschedule));
+            }}
+          />
         )}
 
         {/* ── Hours tab ───────────────────────────────────────────────────── */}
@@ -536,8 +556,8 @@ export default function ProviderScheduleScreen() {
                 disabled={saving}
               >
                 {saving
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>{editing ? 'Save Hours' : 'Edit Hours'}</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>{editing ? 'Save Hours' : 'Edit Hours'}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -620,8 +640,8 @@ export default function ProviderScheduleScreen() {
                 disabled={addingBlock}
               >
                 {addingBlock
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Block This Date</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>Block This Date</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -721,8 +741,8 @@ export default function ProviderScheduleScreen() {
                 disabled={addingOverride}
               >
                 {addingOverride
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Save Custom Hours</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>Save Custom Hours</Text>
                 }
               </TouchableOpacity>
             </View>

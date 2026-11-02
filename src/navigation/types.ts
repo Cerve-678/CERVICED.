@@ -3,6 +3,7 @@ import { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/n
 import { StackScreenProps } from "@react-navigation/stack";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { ProviderReschedulePolicy } from '../services/databaseService';
 
 // ============================================================================
 // STACK PARAM LISTS
@@ -49,7 +50,8 @@ export type HomeStackParamList = {
     | undefined;
   BookingDetail: { bookingId: string };
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
@@ -96,7 +98,8 @@ export type BeccaStackParamList = {
     | undefined;
   BookingDetail: { bookingId: string };
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   CartMain: undefined;
   DevSettings: undefined;
@@ -159,7 +162,8 @@ export type CartStackParamList = {
     | undefined;
   BookingDetail: { bookingId: string };
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   Notifications: undefined;
   DevSettings: undefined;
@@ -208,7 +212,8 @@ export type ProfileStackParamList = {
     | undefined;
   BookingDetail: { bookingId: string };
   ExternalBookingDetail: { externalBookingId: string };
-  Reschedule: { bookingId: string };
+  // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
+  Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
@@ -334,6 +339,8 @@ export type ProviderAccountStackParamList = {
   // Link-only providers' Profile tab root: their public profile + edit rows.
   // Their own public profile, exactly as clients see it.
   MyPublicProfile: { providerId: string };
+  // Another provider's public profile, opened by scanning their QR code.
+  PublicProviderProfile: { providerId: string; source?: string };
   EditProfile: { transferProviderId?: string } | undefined;
   NotificationSettings: undefined;
   Achievements: undefined;

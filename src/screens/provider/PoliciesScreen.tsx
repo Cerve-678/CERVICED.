@@ -141,7 +141,7 @@ function Pills<T extends string>({ options, value, onChange }: {
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(v); }}
             activeOpacity={0.75}
           >
-            <Text style={[pSt.pillText, { color: active ? C.ice : C.sub }]}>{l}</Text>
+            <Text style={[pSt.pillText, { color: active ? C.onAccent : C.sub }]}>{l}</Text>
           </TouchableOpacity>
         );
       })}
@@ -520,7 +520,7 @@ export default function PoliciesScreen({ navigation }: any) {
               onPress={() => { Haptics.selectionAsync().catch(() => {}); setTermsAcknowledged(prev => !prev); }}
             >
               <View style={[termsSt.checkbox, { borderColor: C.sub }, termsAcknowledged && { backgroundColor: C.accent, borderColor: C.accent }]}>
-                {termsAcknowledged && <Ionicons name="checkmark" size={13} color={C.ice} />}
+                {termsAcknowledged && <Ionicons name="checkmark" size={13} color={C.onAccent} />}
               </View>
               <Text style={[termsSt.text, { color: C.text }]}>
                 I agree to the{' '}

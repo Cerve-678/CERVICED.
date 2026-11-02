@@ -273,6 +273,13 @@ export async function signInWithAppleIdToken(token: string): Promise<AuthSession
   return summarizeAuthSession(data.session);
 }
 
+export async function signInWithGoogleIdToken(token: string): Promise<AuthSessionSummary> {
+  const { data, error } = await supabase.auth.signInWithIdToken({ provider: "google", token });
+  if (error) throw error;
+  if (!data.session) throw new Error("Authentication succeeded without a session");
+  return summarizeAuthSession(data.session);
+}
+
 export async function sendPasswordReset(email: string): Promise<void> {
   const { error } = await supabase.auth.resetPasswordForEmail(email);
   if (error) throw error;
@@ -743,46 +750,24 @@ export async function getProviderPriceRanges(
   return ranges;
 }
 
-/**
- * Of the given provider ids, which have at least one active service tagged
- * services.audience === `audience`. Scoped to `providerIds` (the candidate
- * set Search already server-searched/paginated to) rather than a global
- * lookup, mirroring the hair-type filter's broad-match shape — except this is
- * a per-SERVICE tag, not a provider-level column, so it queries `services`
- * with a providers!inner gate instead of `providers` directly.
- */
-export async function getProviderAudienceMatches(
-  providerIds: string[],
-  audience: "women" | "men" | "kids" | "everyone",
-): Promise<Set<string>> {
-  const matches = new Set<string>();
-  if (providerIds.length === 0) return matches;
-
-  const { data, error } = await supabase
-    .from("services")
-    .select("provider_id, provider:providers!inner ( id )")
-    .eq("is_active", true)
-    .eq("audience", audience)
-    .eq("provider.is_active", true)
-    .eq("provider.has_gone_live", true)
-    .in("provider_id", providerIds);
-  if (error) throw error;
-
-  for (const row of data ?? []) {
-    matches.add(row.provider_id as string);
-  }
-  return matches;
+export interface FacetService {
+  id: string;
+  price: number | null;
+  priceMax: number | null;
+  audience: string | null;
+  skinTones: string[];
 }
 
 export interface ProviderServiceFacets {
   /** £min–£max across the provider's active services. Absent when they have
    *  none priced. */
   priceRanges: Map<string, { min: number; max: number }>;
-  /** The distinct `services.audience` tags each provider actually offers.
-   *  Absent/empty means nothing tagged — the same providers `.eq('audience',
-   *  …)` would simply not have returned. */
-  audiences: Map<string, Set<string>>;
-  skinTones: Map<string, Set<string>>;
+  /** Each provider's active services, one row per service, for the filters
+   *  that must be judged on a single service (price, audience, skin tone —
+   *  see src/utils/serviceFilterMatch.ts). Per-provider aggregates of those
+   *  columns can't answer "does ONE service satisfy all of them", which is
+   *  what let a provider pass "<£30" and "Women" on two different services. */
+  services: Map<string, FacetService[]>;
   /** Free-text "speciality" haystack per provider, for the client Speciality
    *  filter's fuzzy match (src/utils/fuzzyMatch.ts). Unions three sources that
    *  each name what a provider is known for: their chosen business
@@ -800,30 +785,30 @@ export interface ProviderServiceFacets {
 }
 
 /**
- * Price range AND audience tags for a set of providers, in ONE query.
+ * Price range, per-service filter data and speciality text for a set of
+ * providers, in ONE services scan (plus the provider_specialties read beside it).
  *
- * getProviderPriceRanges and getProviderAudienceMatches ask the same table,
+ * getProviderPriceRanges and the former getProviderAudienceMatches asked the same table,
  * over the same provider ids, behind the same has_gone_live/is_active gate —
  * they differ only in which column they read. Search ran both, so a search
  * with the audience filter on paid two round trips for one table scan. Callers
  * that need both should use this; the two single-purpose functions remain for
  * callers that genuinely need only one.
  *
- * Returning the audience SET rather than a pre-filtered match set is
- * deliberate: it lets a caller re-answer "does this provider serve men?" for a
- * different audience without going back to the network, which is what makes
- * toggling that filter free rather than another round trip.
+ * Returning the raw per-service rows rather than a pre-filtered match set is
+ * deliberate: it lets a caller re-answer "does one of this provider's services
+ * fit £30–£60 for men?" for any combination without going back to the network,
+ * which is what makes toggling those filters free rather than another round trip.
  */
 export async function getProviderServiceFacets(
   providerIds: string[],
 ): Promise<ProviderServiceFacets> {
   const priceRanges = new Map<string, { min: number; max: number }>();
-  const audiences = new Map<string, Set<string>>();
-  const skinTones = new Map<string, Set<string>>();
+  const services = new Map<string, FacetService[]>();
   const specialityText = new Map<string, Set<string>>();
   const specialityLabels = new Map<string, Set<string>>();
   if (providerIds.length === 0) {
-    return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
+    return { priceRanges, services, specialityText, specialityLabels };
   }
 
   const addTo = (map: Map<string, Set<string>>, providerId: string, value: string) => {
@@ -854,7 +839,7 @@ export async function getProviderServiceFacets(
     supabase
       .from("services")
       .select(
-        "provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
+        "id, provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
       )
       .eq("is_active", true)
       .eq("providers.has_gone_live", true)
@@ -887,17 +872,15 @@ export async function getProviderServiceFacets(
       }
     }
 
-    for (const tone of row.skin_tones_suitable ?? []) {
-      const set = skinTones.get(providerId) ?? new Set<string>();
-      set.add(tone);
-      skinTones.set(providerId, set);
-    }
-
-    if (row.audience) {
-      const set = audiences.get(providerId) ?? new Set<string>();
-      set.add(row.audience as string);
-      audiences.set(providerId, set);
-    }
+    const own = services.get(providerId) ?? [];
+    own.push({
+      id: row.id as string,
+      price: (row.price as number | null) ?? null,
+      priceMax: (row.price_max as number | null) ?? null,
+      audience: (row.audience as string | null) ?? null,
+      skinTones: (row.skin_tones_suitable as string[] | null) ?? [],
+    });
+    services.set(providerId, own);
 
     // The service name plus every tag column feed the Speciality haystack.
     addSpeciality(providerId, row.name as string | null);
@@ -916,7 +899,7 @@ export async function getProviderServiceFacets(
     addSpecialityLabel(row.provider_id as string, row.specialty as string | null);
   }
 
-  return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
+  return { priceRanges, services, specialityText, specialityLabels };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -1087,12 +1070,18 @@ export async function searchProvidersAndServices(
     .join(",");
   // location_text is included here too (not just in the dedicated filter
   // below) so a query with no "in/near" preposition still matches on it.
-  const nameOr = textTerms
-    .map(
+  // A business name typed apart ("face by jen" for FacebyJen) only matches
+  // with the spaces taken out.
+  const compactTerms = textTerms
+    .map((t) => t.replace(/\s+/g, ""))
+    .filter((t, i) => t.length >= 5 && t !== textTerms[i]);
+  const nameOr = [
+    ...textTerms.map(
       (t) =>
         `display_name.ilike.%${t}%,about_text.ilike.%${t}%,location_text.ilike.%${t}%`,
-    )
-    .join(",");
+    ),
+    ...compactTerms.map((t) => `display_name.ilike.%${t}%`),
+  ].join(",");
 
   // A detected category hint only broadens recall when the caller hasn't
   // already pinned a category via the chip filter — that's already narrower.
@@ -1218,18 +1207,29 @@ export async function searchProvidersAndServices(
   const serviceIdSet = new Set(serviceIds);
   const nameIdSet = new Set(nameIds);
   const normalizedQuery = parsed.serviceText.toLowerCase();
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
   const relevance = (provider: PublicProviderSummary): number => {
     const name = provider.display_name.toLowerCase();
-    if (normalizedQuery && name === normalizedQuery) return 4;
-    if (normalizedQuery && name.includes(normalizedQuery)) return 3;
+    const compactName = name.replace(/\s+/g, "");
+    if (normalizedQuery && (name === normalizedQuery || compactName === compactQuery)) return 4;
+    if (normalizedQuery && (name.includes(normalizedQuery)
+      || (compactQuery.length >= 5 && compactName.includes(compactQuery)))) return 3;
     const ranked = bestServiceRank.get(provider.id);
     if (ranked !== undefined) return 2 + Math.min(ranked, 1) * 0.5;
     if (serviceIdSet.has(provider.id)) return 2;
     if (nameIdSet.has(provider.id)) return 1;
     return 0;
   };
+  // Location terms run most specific first ("hackney", then "London"), so
+  // among equally relevant providers the one actually in the named place
+  // comes before the rest of the city.
+  const locationRank = (provider: PublicProviderSummary): number => {
+    const where = (provider.location_text ?? "").toLowerCase();
+    const at = locationTerms.findIndex((t) => where.includes(t.toLowerCase()));
+    return at === -1 ? locationTerms.length : at;
+  };
   const providers = ((data ?? []) as PublicProviderSummary[])
-    .sort((a, b) => relevance(b) - relevance(a))
+    .sort((a, b) => relevance(b) - relevance(a) || locationRank(a) - locationRank(b))
     .slice(0, limit);
   return { providers, services, correctedQuery };
 }
@@ -4327,6 +4327,32 @@ export async function getProviderBookingsByDateRange(
   return (data ?? []) as BookingWithAddOns[];
 }
 
+/** A provider's next bookings still to come from a date onwards, soonest
+ *  first. A provider reading their own diary, so no has_gone_live filter. */
+export async function getProviderUpcomingBookings(
+  providerId: string,
+  fromDate: string,
+  limit: number,
+): Promise<BookingWithAddOns[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(
+      `
+      *,
+      add_ons: booking_add_ons ( * )
+    `,
+    )
+    .eq("provider_id", providerId)
+    .gte("booking_date", fromDate)
+    .in("status", ["pending", "confirmed", "in_progress"])
+    .order("booking_date", { ascending: true })
+    .order("booking_time", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as BookingWithAddOns[];
+}
+
 // ─────────────────────────────────────────────────────────
 // WAITLIST
 // ─────────────────────────────────────────────────────────
@@ -5334,6 +5360,41 @@ export async function getServicesOpenWithin(
   });
   if (error) throw error;
   return (data ?? []) as ServiceOpenWithin[];
+}
+
+/** The signed-in provider's own closure. A row can outlive the closure (its
+ *  date has passed), so read isClosed, never whether a row came back. */
+export type MyScheduleClosure = {
+  isClosed: boolean;
+  reopensOn: string | null;
+  nextReleaseAt: string | null;
+};
+
+export async function getMyScheduleClosure(): Promise<MyScheduleClosure | null> {
+  const { data, error } = await supabase.rpc("get_my_schedule_closure");
+  if (error) throw error;
+  const row = (data as Array<{ is_closed: boolean; reopens_on: string | null; next_release_at: string | null }> | null)?.[0];
+  if (!row) return null;
+  return { isClosed: row.is_closed, reopensOn: row.reopens_on, nextReleaseAt: row.next_release_at };
+}
+
+/** Stops new client bookings. With no date, it reopens on the provider's next
+ *  release day, or when they reopen it if they don't have one. */
+export async function closeMySchedule(reopensOn: string | null): Promise<void> {
+  const { error } = await supabase.rpc("close_my_schedule", { p_reopens_on: reopensOn });
+  if (error) throw error;
+}
+
+export async function reopenMySchedule(): Promise<void> {
+  const { error } = await supabase.rpc("reopen_my_schedule");
+  if (error) throw error;
+}
+
+/** All a client learns about a closure: yes or no, never why or until when. */
+export async function isProviderTakingBookings(providerId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("provider_is_taking_bookings", { p_provider_id: providerId });
+  if (error) throw error;
+  return data !== false;
 }
 
 export async function getProviderBookingHorizon(providerId: string): Promise<BookingHorizonSettings> {
@@ -7915,6 +7976,23 @@ export async function saveNotificationPreferences(
 export async function getProviderNotificationPreferences(): Promise<ProviderNotificationPreferences> {
   const { stored } = await readStoredNotificationPreferences();
   return pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, stored);
+}
+
+/** The newest time the signed-in provider's schedule filled that they haven't
+ *  seen the certificate for. Null when there's nothing to show. */
+export type UnseenFullyBooked = { fillId: string; filledAt: string; throughDate: string };
+
+export async function getMyUnseenFullyBooked(): Promise<UnseenFullyBooked | null> {
+  const { data, error } = await supabase.rpc("get_my_unseen_fully_booked");
+  if (error) throw error;
+  const row = (data as Array<{ fill_id: string; filled_at: string; through_date: string }> | null)?.[0];
+  return row ? { fillId: row.fill_id, filledAt: row.filled_at, throughDate: row.through_date } : null;
+}
+
+/** Marks this fill, and any older unseen ones, as seen, so the certificate shows once. */
+export async function markFullyBookedSeen(fillId: string): Promise<void> {
+  const { error } = await supabase.rpc("mark_fully_booked_seen", { p_fill_id: fillId });
+  if (error) throw error;
 }
 
 /** The signed-in provider's achievements. The server owns the rules and records

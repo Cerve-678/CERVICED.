@@ -47,7 +47,7 @@ const YOUR_BUSINESS: Section = {
     SAVES_ROW,
     { key: 'providerReviews', icon: 'star', title: 'Reviews', subtitle: 'When a client leaves a review' },
     { key: 'providerDailyRecap', icon: 'stack', title: 'Today’s Schedule', subtitle: 'A morning recap of the day ahead' },
-    { key: 'providerFullyBooked', icon: 'bar-chart', title: 'Fully Booked', subtitle: 'When your calendar has no openings left' },
+    { key: 'providerFullyBooked', icon: 'bar-chart', title: 'Fully Booked', subtitle: 'When every slot you’ve opened is booked, with your certificate' },
   ],
 };
 

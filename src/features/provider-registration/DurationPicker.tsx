@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { isDarkColor } from '../../constants/providerThemes';
 
 const DURATION_PRESETS = ['15 min', '30 min', '45 min', '1 hr', '1 hr 30', '2 hr', '2 hr 30', '3 hr', '3 hr 30', '4 hr'];
 
@@ -25,7 +26,7 @@ export function DurationPicker({ value, onChange, accentColor = '#AF9197', style
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(active ? '' : option); }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.durationChipText, active && styles.durationChipTextActive]}>{option}</Text>
+            <Text style={[styles.durationChipText, active && styles.durationChipTextActive, active && { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{option}</Text>
           </TouchableOpacity>
         );
       })}

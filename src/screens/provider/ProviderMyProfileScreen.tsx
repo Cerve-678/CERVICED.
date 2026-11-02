@@ -79,10 +79,14 @@ import {
   setMyServiceActive,
   updateMyService,
   type MyServiceDraft,
+  getMyUnseenFullyBooked,
+  markFullyBookedSeen,
+  type UnseenFullyBooked,
 } from '../../services/databaseService';
+import FullyBookedCertificate from '../../components/FullyBookedCertificate';
 import type { DbPortfolioItem, DbService } from '../../types/database';
 import type { ProviderServicesStackParamList } from '../../navigation/types';
-import { resolveProviderTheme, withAlpha, isDarkColor, blend } from '../../constants/providerThemes';
+import { resolveProviderTheme, withAlpha, isDarkColor, blend, NEUTRAL_CARD, SHEET_BG } from '../../constants/providerThemes';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
@@ -302,52 +306,90 @@ const DashEmpty = React.memo(function DashEmpty({
 });
 
 /**
- * The profile has several independent reads behind it.  A centred spinner made
- * that work look like an empty route (and, on a slow connection, like a
- * broken one).  Keep the silhouette of the real page on screen immediately;
- * the lower dashboard cards arrive first and the header follows upwards.
+ * Shown on the first open on this device; after that the cached profile paints
+ * straight away. It borrows the real page's layout styles so nothing jumps when
+ * the data lands. The provider's theme is unknown here, so the top stays on the
+ * app's background and only the sheet, always pale on the real page, is fixed.
  */
-function ProviderProfileLoadingShell({ accent }: { accent: string }) {
-  const lowerOpacity = useRef(new Animated.Value(0)).current;
-  const middleOpacity = useRef(new Animated.Value(0)).current;
-  const heroOpacity = useRef(new Animated.Value(0)).current;
+function ProviderProfileLoadingShell({ isDarkMode }: { isDarkMode: boolean }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const reveal = (value: Animated.Value) =>
-      Animated.timing(value, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      });
-    const animation = Animated.sequence([
-      reveal(lowerOpacity),
-      reveal(middleOpacity),
-      reveal(heroOpacity),
-    ]);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ]),
+    );
     animation.start();
     return () => animation.stop();
-  }, [heroOpacity, lowerOpacity, middleOpacity]);
+  }, [pulse]);
+
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+  const heroBone = { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.14)' : 'rgba(126,102,103,0.18)' };
+  const sheetBone = { backgroundColor: 'rgba(126,102,103,0.14)' };
+  const tileWidth = { width: halfWidth(screenWidth) };
 
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.profileLoadingShell} accessibilityLabel="Loading your profile">
-          <Animated.View style={[styles.profileLoadingHero, { opacity: heroOpacity }]}>
-            <View style={[styles.profileLoadingHeroMark, { backgroundColor: accent }]} />
-          </Animated.View>
-          <Animated.View style={[styles.profileLoadingCard, { opacity: middleOpacity }]}>
-            <View style={styles.profileLoadingTitle} />
-            <View style={styles.profileLoadingLine} />
-            <View style={styles.profileLoadingLineShort} />
-          </Animated.View>
-          <Animated.View style={[styles.profileLoadingBottom, { opacity: lowerOpacity }]}>
-            <View style={styles.profileLoadingSectionLabel} />
-            <View style={styles.profileLoadingTileRow}>
-              <View style={styles.profileLoadingTile} />
-              <View style={styles.profileLoadingTile} />
+        <View
+          style={styles.profileLoadingShell}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading your profile"
+        >
+          <Animated.View style={[styles.profileHeader, { opacity }]}>
+            <View style={styles.identityRow}>
+              <View style={styles.identityText}>
+                <View style={[styles.profileLoadingName, heroBone]} />
+                <View style={[styles.profileLoadingHandle, heroBone]} />
+              </View>
+              <View style={[styles.avatar, styles.profileLoadingAvatar, heroBone]} />
             </View>
-            <View style={styles.profileLoadingWideTile} />
+            <View style={styles.statRow}>
+              {['services', 'photos', 'reviews'].map(stat => (
+                <View key={stat} style={styles.stat}>
+                  <View style={[styles.profileLoadingStatValue, heroBone]} />
+                  <View style={[styles.profileLoadingStatLabel, heroBone]} />
+                </View>
+              ))}
+            </View>
+            <View style={styles.actionRow}>
+              <View style={[styles.primaryAction, heroBone]} />
+              {['schedule', 'branding', 'qr'].map(action => (
+                <View key={action} style={[styles.circleAction, styles.profileLoadingCircle, heroBone]} />
+              ))}
+            </View>
           </Animated.View>
+
+          <View style={[styles.contentSheet, { backgroundColor: SHEET_BG }]}>
+            <View style={[styles.contentSheetClip, { minHeight: screenHeight, backgroundColor: SHEET_BG }]}>
+              <Animated.View style={{ opacity }}>
+                <View style={[styles.tabBar, styles.profileLoadingTabBar, sheetBone]}>
+                  <View style={styles.profileLoadingTabSelected} />
+                  <View style={styles.profileLoadingTab} />
+                </View>
+
+                <View style={[styles.profileLoadingLabel, sheetBone]} />
+                <View style={[styles.dashCard, styles.profileLoadingCard]}>
+                  <View style={[styles.profileLoadingCardTitle, sheetBone]} />
+                  <View style={[styles.profileLoadingLine, sheetBone]} />
+                  <View style={[styles.profileLoadingLineShort, sheetBone]} />
+                </View>
+
+                <View style={[styles.profileLoadingLabel, sheetBone]} />
+                <View style={styles.halfRow}>
+                  <View style={[styles.tintCard, styles.profileLoadingTile, sheetBone, tileWidth]} />
+                  <View style={[styles.tintColumn, tileWidth]}>
+                    <View style={[styles.tintCardShort, styles.profileLoadingTile, sheetBone]} />
+                    <View style={[styles.tintCardShort, styles.profileLoadingTile, sheetBone]} />
+                  </View>
+                </View>
+              </Animated.View>
+            </View>
+          </View>
         </View>
       </SafeAreaView>
     </ThemedBackground>
@@ -719,7 +761,7 @@ interface Props {
 }
 
 export default function ProviderMyProfileScreen({ navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
   // Measured per render, not captured at module load: the paired tiles and the
   // quick-action row both divide the screen width between them.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -772,6 +814,33 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [profileQrVisible, setProfileQrVisible] = useState(false);
+  // Shown once per fill: marked seen as it closes, so a refocus doesn't bring it back.
+  const [certificate, setCertificate] = useState<UnseenFullyBooked | null>(null);
+  // Closed on this device. Covers the mark-seen call failing or still being in
+  // flight when the screen refocuses, so it can't pop up a second time.
+  const closedCertificates = useRef(new Set<string>());
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getMyUnseenFullyBooked()
+        .then((row) => {
+          if (active && row && !closedCertificates.current.has(row.fillId)) setCertificate(row);
+        })
+        .catch((err) => logger.warn('[MyProfile] fully booked certificate check failed:', err));
+      return () => { active = false; };
+    }, []),
+  );
+
+  const closeCertificate = useCallback((then?: () => void) => {
+    const shown = certificate;
+    setCertificate(null);
+    if (shown) {
+      closedCertificates.current.add(shown.fillId);
+      markFullyBookedSeen(shown.fillId).catch((err) => logger.error('[MyProfile] marking certificate seen failed:', err));
+    }
+    then?.();
+  }, [certificate]);
 
   // Which half of the sheet is showing. Not navigation state: both halves read
   // the same already-loaded data, so switching must not refetch or reset the
@@ -1457,7 +1526,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   );
 
 
-  if (isLoading && !providerData) return <ProviderProfileLoadingShell accent={theme.accent} />;
+  if (isLoading && !providerData) return <ProviderProfileLoadingShell isDarkMode={isDarkMode} />;
 
   if (!providerData) {
     return (
@@ -1741,7 +1810,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
-                  <Text style={styles.avatarInitials}>
+                  <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
                     {providerData.providerName
                       .split(' ')
                       .map(w => w[0])
@@ -2260,7 +2329,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           onPress={handleEditProfile}
                           activeOpacity={0.85}
                         >
-                          <Text style={styles.primaryButtonText}>Set up services</Text>
+                          <Text style={[styles.primaryButtonText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Set up services</Text>
                         </TouchableOpacity>
                       </BlurView>
                     </View>
@@ -2307,6 +2376,17 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             onClose={() => setProfileQrVisible(false)}
           />
         ) : null}
+        {certificate ? (
+          <FullyBookedCertificate
+            visible
+            providerName={providerData.providerName || 'Your business'}
+            throughDate={certificate.throughDate}
+            filledAt={certificate.filledAt}
+            isDarkMode={isDarkMode}
+            onDone={() => closeCertificate()}
+            onManageSchedule={() => closeCertificate(() => navigation.navigate('ProviderSchedule'))}
+          />
+        ) : null}
       </SafeAreaView>
 
       <ServiceEditorSheet
@@ -2351,76 +2431,85 @@ const styles = StyleSheet.create({
   },
   profileLoadingShell: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-  },
-  profileLoadingHero: {
-    height: 260,
-    borderRadius: 24,
-    backgroundColor: 'rgba(126,102,103,0.16)',
     overflow: 'hidden',
   },
-  profileLoadingHeroMark: {
-    position: 'absolute',
-    right: 24,
-    bottom: 24,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    opacity: 0.28,
+  // Each bone sits inside the same line box as the text it stands in for, so
+  // the header is the same height before and after the data arrives.
+  profileLoadingName: {
+    width: '72%',
+    height: 24,
+    marginVertical: 4,
+    borderRadius: 8,
+  },
+  profileLoadingHandle: {
+    width: '48%',
+    height: 11,
+    marginTop: 9,
+    borderRadius: 6,
+  },
+  profileLoadingAvatar: {
+    borderWidth: 0,
+  },
+  profileLoadingStatValue: {
+    width: 34,
+    height: 20,
+    marginTop: 2,
+    marginBottom: 3,
+    borderRadius: 6,
+  },
+  profileLoadingStatLabel: {
+    width: 54,
+    height: 10,
+    marginTop: 4,
+    marginBottom: 2,
+    borderRadius: 5,
+  },
+  profileLoadingCircle: {
+    borderWidth: 0,
+  },
+  profileLoadingTabBar: {
+    borderWidth: 0,
+  },
+  profileLoadingTabSelected: {
+    flex: 1,
+    height: 35,
+    borderRadius: 18,
+    backgroundColor: NEUTRAL_CARD,
+  },
+  profileLoadingTab: {
+    flex: 1,
+    height: 35,
+  },
+  profileLoadingLabel: {
+    width: 112,
+    height: 10,
+    marginTop: 8,
+    marginBottom: 12,
+    borderRadius: 5,
   },
   profileLoadingCard: {
-    marginTop: -40,
-    marginHorizontal: 12,
-    padding: 22,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    marginBottom: 14,
+    borderWidth: 0,
+    backgroundColor: NEUTRAL_CARD,
   },
-  profileLoadingTitle: {
-    height: 24,
-    width: '58%',
-    borderRadius: 8,
-    backgroundColor: 'rgba(126,102,103,0.20)',
+  profileLoadingCardTitle: {
+    width: '46%',
+    height: 18,
+    borderRadius: 7,
   },
   profileLoadingLine: {
-    height: 13,
+    height: 12,
     marginTop: 16,
-    borderRadius: 7,
-    backgroundColor: 'rgba(126,102,103,0.14)',
+    borderRadius: 6,
   },
   profileLoadingLineShort: {
-    height: 13,
     width: '66%',
+    height: 12,
     marginTop: 9,
-    borderRadius: 7,
-    backgroundColor: 'rgba(126,102,103,0.14)',
-  },
-  profileLoadingBottom: {
-    marginHorizontal: 12,
-    marginTop: 20,
-  },
-  profileLoadingSectionLabel: {
-    width: 92,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(126,102,103,0.14)',
-  },
-  profileLoadingTileRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    borderRadius: 6,
   },
   profileLoadingTile: {
-    flex: 1,
-    height: 112,
-    borderRadius: 18,
-    backgroundColor: 'rgba(126,102,103,0.12)',
-  },
-  profileLoadingWideTile: {
-    height: 84,
-    marginTop: 12,
-    borderRadius: 18,
-    backgroundColor: 'rgba(126,102,103,0.12)',
+    borderWidth: 0,
   },
   emptyTitle: {
     fontSize: 22,

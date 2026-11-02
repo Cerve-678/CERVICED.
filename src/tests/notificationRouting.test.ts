@@ -110,7 +110,7 @@ describe('notification routing — deep-link payload', () => {
     const source = providerProfileLink();
     expect(source).toContain('isProviderProfileUuid(providerKey)');
     expect(source).toContain('getProviderBasicById(providerKey)');
-    expect(source).toContain("params: { providerId: providerSlug, source: 'profile_qr' }");
+    expect(source).toContain("const params = { providerId: providerSlug, source: 'profile_qr' }");
   });
 
   it('routes review_request to the rating form, not just the booking', () => {
@@ -123,6 +123,14 @@ describe('notification routing — deep-link payload', () => {
     expect(read('src', 'screens', 'client', 'BookingsScreen.tsx')).toContain(
       'setShowRatingModal(true)',
     );
+  });
+
+  it('sends a fully booked provider to their profile, where the certificate shows', () => {
+    const tap = tapHandler();
+    expect(tap).toContain("if (type === 'schedule_fully_booked')");
+    const screen = notificationsScreen();
+    const branch = screen.slice(screen.indexOf("notification.type === 'schedule_fully_booked'"));
+    expect(branch.slice(0, 400)).toContain("navigateTab('MyServices')");
   });
 
   it('sends a received review to the provider profile, not the booking', () => {

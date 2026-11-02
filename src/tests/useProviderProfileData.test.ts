@@ -6,6 +6,7 @@ import {
   getProviderBySlug,
   getProviderProfilePreviewBySlug,
   getProviderPortfolio,
+  isProviderTakingBookings,
   getProviderProfileViewerContext,
   getProviderReviews,
   trackUserInteraction,
@@ -23,6 +24,7 @@ jest.mock("../services/databaseService", () => ({
   getProviderBySlug: jest.fn(),
   getProviderProfilePreviewBySlug: jest.fn(),
   getProviderPortfolio: jest.fn(),
+  isProviderTakingBookings: jest.fn(),
   getProviderProfileViewerContext: jest.fn(),
   getProviderReviews: jest.fn(),
   trackUserInteraction: jest.fn(),
@@ -74,6 +76,7 @@ describe("useProviderProfileData", () => {
     (AvailabilityService.getWeeklyOpeningHours as jest.Mock).mockReturnValue(
       pending(),
     );
+    (isProviderTakingBookings as jest.Mock).mockReturnValue(pending());
   });
 
   it("renders the profile shell without waiting for secondary requests", async () => {

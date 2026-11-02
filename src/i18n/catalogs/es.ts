@@ -161,6 +161,8 @@ export const es: Catalog = {
   'providerAccount.forClients.switch.sub': 'Explora Cerviced como cliente',
   'providerAccount.forClients.create.title': 'Crear cuenta de cliente',
   'providerAccount.forClients.create.sub': 'Configura tu perfil de cliente para explorar',
+  'providerAccount.forClients.checking.title': 'Modo cliente',
+  'providerAccount.forClients.checking.sub': 'Comprobando tu cuenta…',
 
   'providerAccount.section.appInfo': 'INFORMACIÓN DE LA APP Y ASPECTOS LEGALES',
   'providerAccount.appInfo.about.title': 'Acerca de Cerviced',

@@ -38,12 +38,12 @@ import type { BookingWithAddOns } from '../../types/database';
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
 const LIGHT_P = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#5C4033',
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#5C4033', onAccent: '#FFFFFF',
   ice: '#FFFFFF', text: '#000000', sub: '#7E6667',
   border: 'rgba(126,102,103,0.14)', iconBg: 'rgba(92,64,51,0.12)',
 };
 const DARK_P = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197',
+  bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', onAccent: '#1A1815',
   ice: '#FFFFFF', text: '#F0ECE7', sub: '#7E6667',
   border: 'rgba(126,102,103,0.18)', iconBg: 'rgba(175,145,151,0.10)',
 };
@@ -443,8 +443,8 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
           {view === 'list' ? (
             <TouchableOpacity onPress={() => setView('create')} style={[s.newBtn, { backgroundColor: P.accent }]} activeOpacity={0.82}>
-              <Ionicons name="add" size={16} color="#fff" />
-              <Text style={s.newBtnText}>New</Text>
+              <Ionicons name="add" size={16} color={P.onAccent} />
+              <Text style={[s.newBtnText, { color: P.onAccent }]}>New</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -492,7 +492,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                 <Text style={[s.emptyTitle, { color: P.text }]}>No info packs yet</Text>
                 <Text style={[s.emptySub, { color: P.sub }]}>Create aftercare guides, prep tips, and more to send clients instantly</Text>
                 <TouchableOpacity style={[s.emptyBtn, { backgroundColor: P.accent }]} onPress={() => setView('create')} activeOpacity={0.85}>
-                  <Text style={s.emptyBtnText}>Create first pack</Text>
+                  <Text style={[s.emptyBtnText, { color: P.onAccent }]}>Create first pack</Text>
                 </TouchableOpacity>
               </View>
             }
@@ -575,7 +575,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
               </View>
 
               <TouchableOpacity style={[s.saveBtn, { backgroundColor: P.accent }]} onPress={handleSave} activeOpacity={0.85}>
-                <Text style={s.saveBtnText}>Save Info Pack</Text>
+                <Text style={[s.saveBtnText, { color: P.onAccent }]}>Save Info Pack</Text>
               </TouchableOpacity>
             </ScrollView>
           </KeyboardDismissView>
@@ -619,7 +619,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                   activeOpacity={0.85}
                   onPress={() => setPreviewing(null)}
                 >
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Close</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: P.onAccent }}>Close</Text>
                 </TouchableOpacity>
               </>
             )}

@@ -111,3 +111,78 @@ test('a later sign-in never uses a saved profile, it waits for the server', asyn
   expect(readAuthProfileSnapshot).not.toHaveBeenCalled();
   expect(result.current.user?.name).toBe('first');
 });
+
+describe('a provider who also has a client account', () => {
+  const providerSession = () => ({ user: {
+    id: 'dual', email: 'dual@example.com', email_confirmed_at: '2026-01-01',
+    user_metadata: { name: 'Dual', role: 'provider' },
+  } }) as unknown as Session;
+  const dualProfile = { id: 'dual', name: 'Dual', role: 'provider', has_client_profile: true };
+  const signIn = async () => {
+    await act(async () => { await mockListener('INITIAL_SESSION', null); });
+    await act(async () => { await mockListener('SIGNED_IN', providerSession()); });
+  };
+
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  test('a slow sign-in leaves the client hat unknown, then a retry confirms it', async () => {
+    mockProfile.mockRejectedValueOnce(new Error('Profile restore timed out')).mockResolvedValue(dualProfile);
+    const { result } = renderHook(useAuth, { wrapper });
+    await signIn();
+    expect(result.current.isLoggedIn).toBe(true);
+    expect(result.current.hatState.clientHatKnown).toBe(false);
+
+    await act(async () => { await jest.advanceTimersByTimeAsync(2_000); });
+    expect(result.current.hatState.clientHatKnown).toBe(true);
+    expect(result.current.hatState.canSwitch).toBe(true);
+  });
+
+  test('a read with no row is retried rather than believed', async () => {
+    mockProfile.mockResolvedValueOnce(null).mockResolvedValue(dualProfile);
+    const { result } = renderHook(useAuth, { wrapper });
+    await signIn();
+    expect(result.current.hatState.clientHatKnown).toBe(false);
+
+    await act(async () => { await jest.advanceTimersByTimeAsync(2_000); });
+    expect(result.current.hatState.canSwitch).toBe(true);
+  });
+
+  test('retries stop after three tries, leaving the hat unknown rather than absent', async () => {
+    mockProfile.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(useAuth, { wrapper });
+    await signIn();
+    await act(async () => { await jest.advanceTimersByTimeAsync(120_000); });
+    expect(mockProfile).toHaveBeenCalledTimes(4);
+    expect(result.current.isLoggedIn).toBe(true);
+    expect(result.current.hatState.clientHatKnown).toBe(false);
+  });
+
+  test('sign-out stops the retries', async () => {
+    mockProfile.mockRejectedValue(new Error('network'));
+    renderHook(useAuth, { wrapper });
+    await signIn();
+    await act(async () => { await mockListener('SIGNED_OUT', null); });
+    await act(async () => { await jest.advanceTimersByTimeAsync(120_000); });
+    expect(mockProfile).toHaveBeenCalledTimes(1);
+  });
+
+  test('a read with no row at launch keeps the saved profile and its copy', async () => {
+    const { clearAuthProfileSnapshot } = jest.requireMock('../services/authProfileSnapshot') as { clearAuthProfileSnapshot: jest.Mock };
+    mockSnapshot.saved = { ...savedUser('dual'), accountType: 'provider' };
+    mockProfile.mockResolvedValue(null);
+    const { result } = renderHook(useAuth, { wrapper });
+    await act(async () => { await mockListener('INITIAL_SESSION', providerSession()); });
+    expect(result.current.hatState.canSwitch).toBe(true);
+    expect(clearAuthProfileSnapshot).not.toHaveBeenCalled();
+  });
+
+  test('a failed reload never takes the client hat off a profile already shown', async () => {
+    mockProfile.mockResolvedValueOnce(dualProfile).mockRejectedValue(new Error('network'));
+    const { result } = renderHook(useAuth, { wrapper });
+    await signIn();
+    expect(result.current.hatState.canSwitch).toBe(true);
+    await act(async () => { await mockListener('SIGNED_IN', providerSession()); });
+    expect(result.current.hatState.canSwitch).toBe(true);
+  });
+});

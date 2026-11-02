@@ -78,6 +78,7 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderServicesMain`
 - `ProviderAccountMain`
 - `MyPublicProfile`
+- `PublicProviderProfile`
 - `NotificationSettings`
 - `Achievements`
 - `AccountInfo`

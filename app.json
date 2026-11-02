@@ -72,6 +72,12 @@
         }
       ],
       "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.357077853920-ql1jouphva11936c33cmp2u2jbgd0bm3"
+        }
+      ],
       "@sentry/react-native",
       [
         "@sentry/react-native/expo",
@@ -100,7 +106,15 @@
       "expo-image",
       "expo-sharing",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

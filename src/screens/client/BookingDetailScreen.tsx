@@ -672,7 +672,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         return;
       }
     }
-    navigation.navigate('Reschedule', { bookingId: booking.id });
+    navigation.navigate('Reschedule', { bookingId: booking.id, knownPolicy: policy ?? undefined });
   }, [booking, canReschedule, reschedulePolicy, cancellationNoticeHrs, navigation]);
 
   /**
@@ -996,25 +996,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {/* To-do: reserve its place from the first frame while intake forms
-              and info packs load, so it cannot pop into an already-laid-out
-              page and push every section beneath it down. The intake
+          {/* To-do: nothing shows until the forms and info packs have loaded,
+              because most bookings have neither and a loader then promised a
+              section that never came. It fades in if there's something to do.
+              The intake
               form row stays visible after completion (dimmed, "Completed"
               badge) instead of disappearing — it used to only render while
               status === 'pending', so once submitted there was no way back
               into ClientIntakeFormScreen to see the answers you'd just filled in. */}
-          {!isPast && !todoLoaded && (
-            <View style={st.section} accessibilityLabel="Loading appointment tasks">
-              <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
-              <View style={[st.todoCard, st.todoLoadingCard, { backgroundColor: C.card, borderColor: C.border }]}>
-                <ActivityIndicator size="small" color={C.accent} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={[st.todoSkeletonLine, { backgroundColor: C.border, width: '48%' }]} />
-                  <View style={[st.todoSkeletonLine, { backgroundColor: C.border, width: '76%', marginTop: 8, opacity: 0.65 }]} />
-                </View>
-              </View>
-            </View>
-          )}
           {!isPast && todoLoaded && todoLoadError && (
             <View style={st.section}>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, padding: 14, flexDirection: 'row', alignItems: 'center' }]}>
@@ -1090,7 +1079,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT STATUS</Text>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowReceipt(v => !v); }} activeOpacity={0.7}>
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowReceipt(v => !v); }} activeOpacity={0.7}>
                 <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
@@ -1121,16 +1110,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {!showReceipt ? (
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
-                <View style={[st.row, payment.remainingBalance <= 0 && { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
-                {/* Three rows, deliberately: Total, what's paid, what's left.
-                    The platform fee gets no row of its own — it's inside
-                    Total and itemised in the receipt below, and repeating it
-                    here read as a second charge. A settled booking ends at
-                    the paid row, since "Due at Appointment £0.00" only
-                    invites the question. */}
-                {payment.remainingBalance > 0 && (
-                  <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: '#FF9500' }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
-                )}
+                <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
+                {/* Three rows: Total, Paid (what left the card, fee included)
+                    and Due at Appointment. Paid + Due = Total. */}
+                <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
               </View>
             ) : (
               <View style={[st.receiptContainer, { backgroundColor: C.surface }]}>
@@ -1200,12 +1183,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
-                  {payment.remainingBalance > 0 && (
-                    <View style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
-                      <Text style={{ color: '#FF9500', fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
-                    </View>
-                  )}
+                  <View style={st.rcptRow}>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
+                    <Text style={{ color: payment.remainingBalance > 0 ? '#FF9500' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
+                  </View>
                   <View style={st.rcptRow}>
                     <Text style={{ color: C.sub, fontSize: 13 }}>Payment Method</Text>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
@@ -1376,6 +1357,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                         Send {booking.providerName} your address in Messages
                       </Text>
                     )
+                  ) : isPending ? (
+                    // A request isn't a booking yet, so there's no location
+                    // to go to until the provider accepts it.
+                    <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>TBA</Text>
                   ) : hasMapDestination(booking) ? (
                     <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openInMaps(booking); }} activeOpacity={0.7} style={{ flex: 0.6 }}>
                       <Text style={[st.rowValue, { color: C.accent, flex: undefined }]}>{booking.address}</Text>
@@ -1390,7 +1375,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   )}
                 </View>
-                {!isMobile && !!booking.howToGetThere && !isAddressPending(booking.address) && (
+                {!isMobile && !isPending && !!booking.howToGetThere && !isAddressPending(booking.address) && (
                   <View style={[st.row, { borderBottomWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, alignItems: 'flex-start' }]}>
                     <Text style={[st.rowLabel, { color: C.sub }]}>Arrival details</Text>
                     <Text style={[st.rowValue, { color: C.text }]}>{booking.howToGetThere}</Text>
@@ -2177,8 +2162,6 @@ const st = StyleSheet.create({
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   statusText: { color: '#FFF', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
   todoCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 8 },
-  todoLoadingCard: { minHeight: 72 },
-  todoSkeletonLine: { height: 9, borderRadius: 5 },
   todoBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   todoBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
   receiptContainer: { borderRadius: 8, padding: 12 },

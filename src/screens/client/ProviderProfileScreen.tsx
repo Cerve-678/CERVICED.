@@ -1171,7 +1171,12 @@ const unclaimedStyles = StyleSheet.create({
 });
 
 // ── Provider Profile Skeleton ────────────────────────────────────────────────
+// Borrows the real page's layout styles so nothing jumps when the data lands.
+// The provider's theme isn't known yet, so it stays on the pale 'app' preset
+// even in dark mode: the page never follows the viewer's dark mode, and the
+// back button's tint already assumes this background.
 function ProviderProfileSkeleton() {
+  const { height: screenHeight } = useWindowDimensions();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -1191,153 +1196,91 @@ function ProviderProfileSkeleton() {
     loop.start();
     return () => loop.stop();
   }, [shimmer]);
-  // Provider theme isn't known yet while loading — use the 'app' preset.
   const opacity = shimmer.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.3, 0.65],
+    outputRange: [0.5, 1],
   });
   const skeletonTheme = resolveProviderTheme("app");
-  const base = "#DDD5CC";
-  const bg = skeletonTheme.bg;
+  const bone = { backgroundColor: "rgba(126,102,103,0.16)" };
+  const card = {
+    backgroundColor: skeletonTheme.card,
+    borderColor: skeletonTheme.border,
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg }}>
-      {/* Header / logo area */}
-      <Animated.View style={{ height: 220, backgroundColor: base, opacity }} />
-      {/* Avatar circle overlapping header */}
-      <View style={{ alignItems: "center", marginTop: -40 }}>
-        <Animated.View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: base,
-            opacity,
-          }}
-        />
-      </View>
-      {/* Name + service lines */}
+    <ThemedBackground style={{ backgroundColor: skeletonTheme.bg }}>
+      <StatusBar barStyle="dark-content" />
       <View
-        style={{
-          alignItems: "center",
-          marginTop: 14,
-          gap: 10,
-          paddingHorizontal: 40,
-        }}
+        style={styles.skeletonShell}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Loading profile"
       >
-        <Animated.View
-          style={{
-            width: "55%",
-            height: 18,
-            borderRadius: 9,
-            backgroundColor: base,
-            opacity,
-          }}
-        />
-        <Animated.View
-          style={{
-            width: "35%",
-            height: 13,
-            borderRadius: 6,
-            backgroundColor: base,
-            opacity,
-          }}
-        />
-      </View>
-      {/* Stats row */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "center",
-          gap: 24,
-          marginTop: 20,
-          paddingHorizontal: 24,
-        }}
-      >
-        {[80, 80, 80].map((w, i) => (
-          <Animated.View
-            key={i}
-            style={{
-              width: w,
-              height: 36,
-              borderRadius: 10,
-              backgroundColor: base,
-              opacity,
-            }}
-          />
-        ))}
-      </View>
-      {/* Tab row */}
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 12,
-          marginTop: 24,
-          paddingHorizontal: 20,
-        }}
-      >
-        {[80, 70, 90, 60].map((w, i) => (
-          <Animated.View
-            key={i}
-            style={{
-              width: w,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: base,
-              opacity,
-            }}
-          />
-        ))}
-      </View>
-      {/* Service item rows */}
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 14 }}>
-        {[1, 2, 3].map((i) => (
-          <View
-            key={i}
-            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-          >
-            <Animated.View
-              style={{
-                width: 60,
-                height: 60,
-                borderRadius: 30,
-                backgroundColor: base,
-                opacity,
-              }}
-            />
-            <View style={{ flex: 1, gap: 8 }}>
-              <Animated.View
-                style={{
-                  width: "60%",
-                  height: 14,
-                  borderRadius: 7,
-                  backgroundColor: base,
-                  opacity,
-                }}
-              />
-              <Animated.View
-                style={{
-                  width: "40%",
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: base,
-                  opacity,
-                }}
-              />
-            </View>
-            <Animated.View
-              style={{
-                width: 60,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: base,
-                opacity,
-              }}
-            />
+        <Animated.View style={[styles.heroInfoWrap, { opacity }]}>
+          <View style={styles.logoContainer}>
+            <View style={[styles.logoWrapper, styles.skeletonLogo, bone]} />
           </View>
-        ))}
+          <View style={styles.providerInfoCenter}>
+            <View style={styles.providerNameRow}>
+              <View style={[styles.skeletonName, bone]} />
+            </View>
+            <View style={styles.providerMetaRow}>
+              <View style={[styles.skeletonMeta, bone]} />
+            </View>
+            <View style={styles.ratingRow}>
+              <View style={[styles.skeletonRating, bone]} />
+            </View>
+            <View style={styles.slotsRowOuter}>
+              <View style={[styles.skeletonSlots, bone]} />
+            </View>
+          </View>
+        </Animated.View>
+
+        <View
+          style={[
+            styles.contentSheet,
+            { minHeight: screenHeight, backgroundColor: skeletonTheme.bg },
+          ]}
+        >
+          <Animated.View style={{ opacity }}>
+            <View style={styles.aboutCardShadowWrap}>
+              <View style={[styles.aboutCard, card]}>
+                <View style={[styles.skeletonAboutTitle, bone]} />
+                <View style={[styles.skeletonAboutLine, bone]} />
+                <View style={[styles.skeletonAboutLine, bone]} />
+                <View style={[styles.skeletonAboutLineShort, bone]} />
+              </View>
+            </View>
+
+            <View style={styles.servicesSection}>
+              <View style={styles.skeletonSectionTitleRow}>
+                <View style={[styles.skeletonSectionTitle, bone]} />
+              </View>
+              <View style={[styles.categoryTabs, styles.skeletonCategoryRow]}>
+                {[92, 76, 104].map((width) => (
+                  <View key={width} style={[styles.skeletonCategory, bone, { width }]} />
+                ))}
+              </View>
+              <View style={styles.categoryServicesContainer}>
+                {["first", "second", "third"].map((row) => (
+                  <View key={row} style={[styles.serviceItemCard, card]}>
+                    <View style={styles.serviceItem}>
+                      <View style={[styles.serviceImageContainer, bone]} />
+                      <View style={styles.serviceInfo}>
+                        <View style={[styles.skeletonServiceName, bone]} />
+                        <View style={[styles.skeletonServiceLine, bone]} />
+                        <View style={[styles.skeletonServiceDetail, bone]} />
+                      </View>
+                      <View style={[styles.skeletonBook, bone]} />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </Animated.View>
+        </View>
       </View>
-    </View>
+    </ThemedBackground>
   );
 }
 
@@ -1363,7 +1306,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // A resolved `null` is meaningful (this viewer owns no provider); an
   // unresolved or failed lookup stays `undefined` so the hook retains its
   // authenticated fallback check.
-  const { myProviderId, myProviderIdStatus } = useAuth();
+  const { myProviderId, myProviderIdStatus, hatState } = useAuth();
   const viewerOwnershipHint =
     myProviderIdStatus === "resolved" ? myProviderId : undefined;
   const {
@@ -1380,6 +1323,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     portfolioLoading,
     openingHours,
     openingHoursLoading,
+    takingBookings,
     currentUserId,
     currentUserName,
     isOwnProvider,
@@ -1399,7 +1343,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     viewerChecked,
   });
 
-  const canSaveProvider = viewerChecked && canBookProvider && providerDbId !== null;
+  // A provider-only account reaches this screen by scanning someone's QR code.
+  // It sees what clients see, but Bookings, Cart and Chat don't exist in the
+  // provider tabs, and saved providers belong to a client profile.
+  const viewingOtherAsProvider = hatState.active === "provider" && !isOwnProvider;
+  const canSaveProvider =
+    viewerChecked && canBookProvider && providerDbId !== null && !viewingOtherAsProvider;
 
   // Link-only provider (booking_mode 'external'): Book opens their own page,
   // and there's no price list, rating or reviews on this profile.
@@ -1999,6 +1948,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // coordinates with native-stack to prevent that. showConfirm is the
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+
+  const refuseBookingAsProvider = useCallback((): boolean => {
+    if (!viewingOtherAsProvider) return false;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+      () => {},
+    );
+    showAlert(
+      "Book from a client profile",
+      "You're signed in with a provider account, so you can look around but not book. You can add a client profile from your Profile tab.",
+      "center",
+    );
+    return true;
+  }, [viewingOtherAsProvider, showAlert]);
   // A client can ask a link-only provider to take bookings on CERVICED. The
   // database records at most one nudge per client/provider/day, so rapid taps
   // or a stale app state cannot inflate the provider's Analytics.
@@ -2371,7 +2333,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // out-of-app system dialog on a heavily themed screen AND a dead end that
     // told you to go and scroll somewhere. Show the options themselves
     // instead, in the app's own bottom sheet.
-    if (isOwnProvider) {
+    if (isOwnProvider || viewingOtherAsProvider) {
       setContactSheetVisible(true);
       return;
     }
@@ -2381,7 +2343,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       providerName: provider.displayName,
       promptMode: "enquiry",
     });
-  }, [provider, providerDbId, navigation, isOwnProvider]);
+  }, [provider, providerDbId, navigation, isOwnProvider, viewingOtherAsProvider]);
 
   // The communication options this provider actually publishes, in the order
   // the Contact card lists them. Built once so the sheet and that card can't
@@ -2654,11 +2616,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const openLinkOnlyBooking = useCallback(() => {
     const url = provider?.externalBookingUrl;
     if (!url) return;
+    if (refuseBookingAsProvider()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     // Straight to their page, inside the app — no "you're leaving" step
     // (product owner, 2026-10-18).
     continueToLinkOnlyBooking(url);
-  }, [provider?.externalBookingUrl, continueToLinkOnlyBooking]);
+  }, [provider?.externalBookingUrl, continueToLinkOnlyBooking, refuseBookingAsProvider]);
 
   const handleDidYouBookSubmit = useCallback(
     async (result: DidYouBookResult) => {
@@ -2704,6 +2667,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
+    if (refuseBookingAsProvider()) return;
 
       // Providers with an external booking link are fully bypassed from
       // Cerviced's in-app booking — hand off to their own booking page
@@ -2817,6 +2781,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       isOwnProvider,
       showAlert,
       openLinkOnlyBooking,
+      refuseBookingAsProvider,
     ],
   );
 
@@ -2913,6 +2878,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
+    if (refuseBookingAsProvider()) return;
+    if (!takingBookings) {
+      showAlert("Not taking bookings", "This provider isn't taking bookings right now.", "center");
+      return;
+    }
     if (tryOpenExternalBooking()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -2922,7 +2892,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.error("Error opening booking sheet:", error);
       Alert.alert("Error", "Failed to open booking options. Please try again.");
     }
-  }, [tryOpenExternalBooking, isOwnProvider, showAlert]);
+  }, [tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider, takingBookings]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -3065,6 +3035,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
+    if (refuseBookingAsProvider()) return;
     // Defensive only — the "Select" entry point is already hidden for these
     // providers (see tryOpenExternalBooking's other call sites).
     if (tryOpenExternalBooking()) return;
@@ -3081,7 +3052,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     setMultiBookingServices(selectedServicesFlat);
     setShowMultiBookingSheet(true);
-  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showAlert]);
+  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider]);
 
   // Floating "N selected • £total — Book" bar. Rendered from two places (the
   // main screen and the fullscreen "All Services" sheet, which is a separate
@@ -3842,7 +3813,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 {canBookProvider && (
                 <View style={styles.serviceActionColumn}>
                   {(() => {
-                    const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || serviceFullyBooked[service.dbId] === true;
+                    const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || !takingBookings || serviceFullyBooked[service.dbId] === true;
 
                     if (selectMode) {
                       const isSelected = selectedServiceIds.has(service.dbId);
@@ -3927,7 +3898,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               : { color: "#fff" },
                           ]}
                         >
-                          {fullyBooked
+                          {!takingBookings
+                              ? "Not taking bookings"
+                              : fullyBooked
                               ? "Fully Booked"
                               : "Book"}
                         </Text>
@@ -5622,6 +5595,95 @@ const styles = StyleSheet.create({
   // from both edges so the photo stays visible down its sides.
   contentSheetFloating: {
     marginHorizontal: 10,
+  },
+  skeletonShell: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  // Each bone sits inside the same line box as the text it stands in for, so
+  // the hero is the same height before and after the data arrives.
+  skeletonLogo: {
+    borderRadius: 74,
+  },
+  skeletonName: {
+    width: 210,
+    height: 28,
+    marginVertical: 6,
+    borderRadius: 9,
+  },
+  skeletonMeta: {
+    width: 170,
+    height: 10,
+    marginVertical: 3,
+    borderRadius: 5,
+  },
+  skeletonRating: {
+    width: 96,
+    height: 12,
+    marginVertical: 2,
+    borderRadius: 6,
+  },
+  skeletonSlots: {
+    width: 190,
+    height: 36,
+    borderRadius: 20,
+  },
+  skeletonAboutTitle: {
+    width: "44%",
+    height: 14,
+    marginBottom: 17,
+    borderRadius: 7,
+  },
+  skeletonAboutLine: {
+    height: 11,
+    marginBottom: 9,
+    borderRadius: 6,
+  },
+  skeletonAboutLineShort: {
+    width: "62%",
+    height: 11,
+    marginBottom: 9,
+    borderRadius: 6,
+  },
+  skeletonSectionTitleRow: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  skeletonSectionTitle: {
+    width: 96,
+    height: 18,
+    borderRadius: 7,
+  },
+  skeletonCategoryRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  skeletonCategory: {
+    height: 38,
+    borderRadius: 22,
+  },
+  skeletonServiceName: {
+    width: "70%",
+    height: 12,
+    marginBottom: 9,
+    borderRadius: 6,
+  },
+  skeletonServiceLine: {
+    width: "95%",
+    height: 10,
+    marginBottom: 9,
+    borderRadius: 5,
+  },
+  skeletonServiceDetail: {
+    width: "45%",
+    height: 10,
+    borderRadius: 5,
+  },
+  skeletonBook: {
+    width: 72,
+    height: 34,
+    borderRadius: 20,
   },
   loading: {
     flex: 1,
