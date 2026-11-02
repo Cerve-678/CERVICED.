@@ -91,6 +91,7 @@ import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
+import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
 import {
   TodayBookingCards,
@@ -1157,7 +1158,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
   const handleOpenTodayBooking = useCallback(
     (booking: BookingWithAddOns) => {
-      navigation.navigate('BookingDetail', { bookingId: booking.id, booking });
+      // The cards hold raw rows; the detail screen reads a ConfirmedBooking, and
+      // shows no client or service on anything else.
+      navigation.navigate('BookingDetail', { bookingId: booking.id, booking: mapDbBookingToConfirmed(booking) });
     },
     [navigation],
   );
