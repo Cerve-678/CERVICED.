@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
-import { PROVIDER_SETTINGS_TAB, settingsStackHidesTabBar } from '../navigation/settingsTabBar';
+import { SETTINGS_TAB, settingsStackHidesTabBar } from '../navigation/settingsTabBar';
 import { useExploreFocusStore } from '../stores/useExploreFocusStore';
 import { explorePillVisible } from '../utils/exploreTabBarScroll';
 import {
@@ -64,12 +64,7 @@ export function tabBarSpotlightRect(
   return tabBarRect(IS_ANDROID, screenWidth, screenHeight, bottomInset);
 }
 
-type Props = BottomTabBarProps & {
-  /** Provider hat: hide the bar on every Settings-tab screen but the two in settingsTabBar.ts. */
-  hideOnSettingsStack?: boolean;
-};
-
-export default function IslandPillTabBar({ state, descriptors, navigation, hideOnSettingsStack = false }: Props) {
+export default function IslandPillTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   // The gap between the bar and the bottom of the screen. On Android that is
@@ -111,8 +106,8 @@ export default function IslandPillTabBar({ state, descriptors, navigation, hideO
   }, []);
   const keyboardHidden = !!focusedRouteOptions?.tabBarHideOnKeyboard && keyboardVisible;
   const focusedTab = state.routes[state.index];
-  const settingsStackHidden = hideOnSettingsStack
-    && focusedTab?.name === PROVIDER_SETTINGS_TAB
+  // Both hats' Settings tab: only the screens listed in settingsTabBar.ts keep the bar.
+  const settingsStackHidden = focusedTab?.name === SETTINGS_TAB
     && settingsStackHidesTabBar(getFocusedRouteNameFromRoute(focusedTab));
   const forceHidden = keyboardHidden
     || settingsStackHidden
