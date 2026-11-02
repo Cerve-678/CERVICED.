@@ -5,7 +5,7 @@
 
 #generated
 
-**2894 functions** across **393 files**.
+**2902 functions** across **394 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -152,6 +152,9 @@
 - `ui.tsx` — **Chip** · **GhostButton** · **hapticError** · **hapticLight** · **hapticMedium** · **hapticSelection** · **hapticSuccess** · **Note** · **Pill** · **PrimaryButton** · **ProgressBar** · **SectionLabel** · **semanticColors** · **Sheet** · step · **SwitchRow** · **WeekStepper**
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
 - `useMaintenanceDueCount.ts` — **useMaintenanceDueCount**
+
+### `src/features/notifications/` (1)
+- `notificationPresentation.ts` — **isCertificateNotification** · **notificationAmount** · **notificationDayHeadings** · **notificationDayLabel** · **notificationKindLabel** · startOfDay
 
 ### `src/features/payments/` (3)
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
@@ -319,7 +322,7 @@
 - `HelpCentreScreen.tsx` — buildMoreActions · FAQItem · handleContactSupport · HelpCentreScreen · openMore · runAction
 - `InfoScreen.tsx` — ScreenNameHere
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow
-- `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
+- `NotificationsScreen.tsx` — actionLabelFor · closeMessagePopup · dayHeadings · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TermsScreen.tsx` — TermsScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
