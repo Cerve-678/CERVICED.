@@ -5,7 +5,7 @@
 
 #generated
 
-**2877 functions** across **391 files**.
+**2883 functions** across **391 files**.
 
 ### `src/components/` (52)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -19,7 +19,7 @@
 - `BookingSheet.tsx` — **BookingSheet** · cancelEmergency · confirmEmergency · depositPolicyArg · goToStep · handleBack · handleLocalApplyPromo · handleLocalRemovePromo · handleNext · handleSelectDate · handleSelectTime · handleSubmit · localPromoDiscount · onAccentColor · stepBlocker · summaryRemaining · toggleAddOn · tokens · totalAddOnsPrice
 - `CartTabBadge.tsx` — **useCartBadge**
 - `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
-- `ChatComponents.tsx` — ActionCard · **AmbientMark** · animatedStyle · **AnswerAfter** · **AnswerBefore** · **answerListsProviders** · **answerRevealStart** · Appear · CardView · **ChatBubble** · **ChatInput** · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · HeadlineView · **InspirationGallery** · **Mark** · PillChip · press · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator** · toggle · WorkFold · WorkSteps
+- `ChatComponents.tsx` — ActionCard · along · **AmbientMark** · animatedStyle · **AnswerAfter** · **AnswerBefore** · **answerListsProviders** · **answerRevealStart** · Appear · CardView · **ChatBubble** · **ChatInput** · content · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · HeadlineView · **InspirationGallery** · **Mark** · PillChip · press · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator** · toggle · WorkFold · WorkSteps
 - `CityMultiSelect.tsx` — add · addArea · addOther · **CityMultiSelect** · close · filtered · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
@@ -354,9 +354,9 @@
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 
 ### `src/services/becca/capabilities/` (3)
-- `client.ts` — availabilityThinking · bookingChoiceMessage · bookingChoices · categoryWords · soleUpcoming · sortUpcoming
+- `client.ts` — availabilityThinking · bookingChoiceMessage · bookingChoices · bookingTicket · categoryWords · providerRow · soleUpcoming · sortUpcoming · ticketStamp
 - `provider.ts` — cutoff · inRange
-- `shared.ts` — **askChip** · **chip** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
+- `shared.ts` — **askChip** · **chip** · **dayLabel** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
 
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles

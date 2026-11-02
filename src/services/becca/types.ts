@@ -63,6 +63,10 @@ export interface AnswerCardRow {
   tag?: string;
   /** Makes the row open that provider's profile, and shows their logo. */
   provider?: Provider;
+  /** A price range drawn as a bar on the card's `scale`. */
+  range?: { min: number; max: number };
+  /** Draws this row's bar in the highlight colour: the cheapest, the busiest. */
+  highlight?: boolean;
 }
 
 export interface AnswerCard {
@@ -74,6 +78,13 @@ export interface AnswerCard {
   /** Big-number tiles, e.g. 2 / moves per booking. */
   stats?: { value: string; label: string }[];
   footer?: string;
+  /**
+   * A ticket's date block on the left ("MON / 10 / NOV"), for a single
+   * appointment. Replaces the band.
+   */
+  stamp?: { top: string; big: string; bottom: string };
+  /** The shared scale every row's `range` is drawn on, with its axis labels. */
+  scale?: { min: number; max: number; labels: string[] };
 }
 
 export interface BeccaAnswer {
@@ -323,6 +334,8 @@ export interface CapabilityResult {
   card?: AnswerCard;
   /** The steps this run really took, with their real counts. */
   work?: string[];
+  /** Names the layout outright, when the default rule (see chooseLayout) doesn't fit. */
+  layout?: AnswerLayout;
   /** A write awaiting confirmation. The engine renders the confirm chips. */
   pendingAction?: PendingAction;
   /**

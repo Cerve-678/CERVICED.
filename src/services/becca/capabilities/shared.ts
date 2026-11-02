@@ -12,6 +12,7 @@ import { getProviderIdByDisplayName } from "../../databaseService";
 import { resolveClientLocation } from "../../clientLocationService";
 import { getDistanceKm } from "../../../utils/distance";
 import { CATEGORY_LABELS } from "../serviceCatalogue";
+import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV, toLocalDate } from "../../../utils/dateUtils";
 
 /** GBP. This app is £ — never format money any other way. */
 export function money(amount: number): string {
@@ -40,6 +41,17 @@ export function providerWords(entities: EntityBag, fallback: string): string {
  */
 export function oneOf(...wordings: string[]): string {
   return wordings[Math.floor(Math.random() * wordings.length)] ?? wordings[0] ?? "";
+}
+
+/**
+ * A date the way Becca says it: "Mon 10 Nov". Words, not "10/11/2026" — a
+ * numeric date reads as a form field, and is ambiguous across regions. Never
+ * "Today"/"Tomorrow", so "on ${dayLabel(x)}" always reads right; pair it with
+ * relativeDayLabel where a relative day is wanted.
+ */
+export function dayLabel(ymd: string): string {
+  const date = toLocalDate(ymd);
+  return `${DAY_NAMES_ABBREV[date.getDay()] ?? ""} ${date.getDate()} ${MONTH_NAMES_ABBREV[date.getMonth()] ?? ""}`.trim();
 }
 
 /** "Lola’s", "James’". */

@@ -81,7 +81,10 @@ describe("The answers that now have a shape", () => {
 
   it("shows the next appointment as a card, with what it checked", async () => {
     const result = await getCapability("booking.next", "client")!.run(ctx({}, [booking]));
-    expect(result.card?.title).toBe("NEXT APPOINTMENT");
+    // A ticket: the appointment's own date block, not a generic band.
+    // 10 Nov 2026 is a Tuesday.
+    expect(result.card?.stamp).toEqual({ top: "TUE", big: "10", bottom: "NOV" });
+    expect(result.card?.meta).toBe("NEXT APPOINTMENT");
     expect(result.card?.rows?.[0]).toMatchObject({ title: "Volume Lashes Full Set", tag: "£55" });
     expect(result.card?.rows?.[0]?.detail).toMatch(/^Lola Studio · /);
     expect(result.work).toEqual(["Checked your 1 upcoming booking"]);

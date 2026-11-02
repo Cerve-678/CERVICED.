@@ -718,12 +718,12 @@ function CardView({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     onProviderPress?.(provider);
   };
-  return (
-    <View style={[answerStyles.card, { backgroundColor: P.card, shadowColor: '#000' }]}>
-      <View style={[answerStyles.band, { backgroundColor: P.accent }]}>
-        <Text style={[answerStyles.bandTitle, { color: P.onAccent }]} numberOfLines={1}>{card.title}</Text>
-        {!!card.meta && <Text style={[answerStyles.bandMeta, { color: P.onAccent }]}>{card.meta}</Text>}
-      </View>
+  const scale = card.scale;
+  // Where a price sits along the card's shared scale, as a percentage.
+  const along = (value: number) =>
+    scale && scale.max > scale.min ? Math.min(100, Math.max(0, ((value - scale.min) / (scale.max - scale.min)) * 100)) : 0;
+  const content = (
+    <>
       {shownRows.map((row, i) => {
         const body = (
           <>
@@ -741,6 +741,20 @@ function CardView({
             <View style={answerStyles.rowBody}>
               <Text style={[answerStyles.rowTitle, { color: P.text }]} numberOfLines={1}>{row.title}</Text>
               {!!row.detail && <Text style={[answerStyles.rowDetail, { color: P.sub }]} numberOfLines={2}>{row.detail}</Text>}
+              {row.range && scale && (
+                <View style={[answerStyles.track, { backgroundColor: P.sep }]}>
+                  <View
+                    style={[
+                      answerStyles.range,
+                      {
+                        backgroundColor: row.highlight ? P.secondaryText : P.accent,
+                        left: `${along(row.range.min)}%`,
+                        width: `${Math.max(3, along(row.range.max) - along(row.range.min))}%`,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
             </View>
             {!!row.tag && (
               <View style={[answerStyles.tag, { backgroundColor: P.secondary }]}>
@@ -774,11 +788,45 @@ function CardView({
           </View>
         </Appear>
       )}
+      {!!scale?.labels.length && rows >= (card.rows?.length ?? 0) && (
+        <View style={answerStyles.axis}>
+          {scale.labels.map((label) => (
+            <Text key={label} style={[answerStyles.axisText, { color: P.sub }]}>{label}</Text>
+          ))}
+        </View>
+      )}
       {!!card.footer && rows >= (card.rows?.length ?? 0) && (
         <View style={[answerStyles.footer, { backgroundColor: P.surface }]}>
           <Text style={[answerStyles.footerText, { color: P.sub }]}>{card.footer}</Text>
         </View>
       )}
+    </>
+  );
+
+  // One appointment: a ticket, its date block where the band would be.
+  if (card.stamp) {
+    return (
+      <View style={[answerStyles.card, answerStyles.ticket, { backgroundColor: P.card, shadowColor: '#000' }]}>
+        <View style={[answerStyles.stamp, { backgroundColor: P.accent }]}>
+          <Text style={[answerStyles.stampSmall, { color: P.onAccent }]}>{card.stamp.top}</Text>
+          <Text style={[answerStyles.stampBig, { color: P.onAccent }]}>{card.stamp.big}</Text>
+          <Text style={[answerStyles.stampSmall, { color: P.onAccent }]}>{card.stamp.bottom}</Text>
+        </View>
+        <View style={answerStyles.ticketBody}>
+          {!!card.meta && <Text style={[answerStyles.ticketMeta, { color: P.sub }]}>{card.meta}</Text>}
+          {content}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[answerStyles.card, { backgroundColor: P.card, shadowColor: '#000' }]}>
+      <View style={[answerStyles.band, { backgroundColor: P.accent }]}>
+        <Text style={[answerStyles.bandTitle, { color: P.onAccent }]} numberOfLines={1}>{card.title}</Text>
+        {!!card.meta && <Text style={[answerStyles.bandMeta, { color: P.onAccent }]}>{card.meta}</Text>}
+      </View>
+      {content}
     </View>
   );
 }
@@ -1432,6 +1480,16 @@ const answerStyles = StyleSheet.create({
   stat: { flex: 1, padding: 14, gap: 2 },
   statValue: { fontFamily: 'BakbakOne-Regular', fontSize: 28, lineHeight: 32 },
   statLabel: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12 },
+  track: { height: 8, borderRadius: 4, marginTop: 6, overflow: 'hidden' },
+  range: { position: 'absolute', top: 0, bottom: 0, borderRadius: 4 },
+  axis: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 10 },
+  axisText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 10.5, fontVariant: ['tabular-nums'] },
+  ticket: { flexDirection: 'row' },
+  stamp: { width: 70, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, gap: 2 },
+  stampSmall: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 10, letterSpacing: 1.4 },
+  stampBig: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 34 },
+  ticketBody: { flex: 1, minWidth: 0, paddingTop: 6 },
+  ticketMeta: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11, paddingHorizontal: 14, paddingTop: 4 },
   footer: { paddingHorizontal: 14, paddingVertical: 9 },
   footerText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 11.5 },
 });

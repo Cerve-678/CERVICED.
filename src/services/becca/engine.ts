@@ -13,7 +13,6 @@
 // thing, and it's the exact seam a model later improves.
 
 import { BookingStatus, type ConfirmedBooking } from "../../types/booking";
-import { formatShortDate } from "../../utils/dateUtils";
 import type {
   AnswerLayout,
   BeccaAnswer,
@@ -36,7 +35,7 @@ import { understand } from "./matcher";
 import { normalizeAsk } from "./askNormaliser";
 import { capabilitiesFor, fitsSetup, getCapability, thinkingFor, toToolSchema } from "./registry";
 import { smallTalkReply } from "./smallTalk";
-import { askChip, chip, navChip } from "./capabilities/shared";
+import { askChip, chip, dayLabel, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
 
@@ -761,6 +760,8 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
  * fold away; anything else with a card is a quick look-up, card first.
  */
 export function chooseLayout(result: CapabilityResult): AnswerLayout | null {
+  if (!result.headline && !result.card) return null;
+  if (result.layout) return result.layout;
   if (result.headline) return "headline";
   if (!result.card) return null;
   return (result.work?.length ?? 0) >= 2 ? "stepsThenCard" : "cardFirst";
@@ -1321,7 +1322,7 @@ function buildMissingEntityReply(
     return message_({
       content: "Which appointment do you mean?",
       suggestions: upcoming.map((b) =>
-        askChip(`pick-${b.id}`, `${b.serviceName} · ${formatShortDate(b.bookingDate)}`, message, { bookingId: b.id }),
+        askChip(`pick-${b.id}`, `${b.serviceName} · ${dayLabel(b.bookingDate)}`, message, { bookingId: b.id }),
       ),
     }, hat, { title: "Choose an appointment" });
   }

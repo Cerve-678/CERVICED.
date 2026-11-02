@@ -85,7 +85,7 @@ describe("Finding someone who does a specific service", () => {
     expect(result.text).toMatch(/\*\*1\b.*volume lashes|volume lashes.*\*\*1\b|1 provider who lists volume lashes/);
     expect(result.card?.meta).toBe("1 match");
     expect(result.card?.rows?.map((r) => r.title)).toEqual(["Lash Lab"]);
-    expect(result.work).toEqual(["Searched 2 lashes providers", "Checked whose menus include volume lashes: 1 does"]);
+    expect(result.work).toEqual(["Searched 2 providers for lashes", "Checked whose menus include volume lashes: 1 does"]);
     expect(result.suggestions?.some((s) => s.data?.message === "Find lashes")).toBe(true);
   });
 
