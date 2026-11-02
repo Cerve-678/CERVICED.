@@ -49,6 +49,13 @@ describe('search intent', () => {
     );
     expect(buildLocationTerms('Leeds')).toEqual(['Leeds']);
   });
+  it('fixes a mistyped place after "in", to a place the app knows', () => {
+    expect(parseSearchQuery('nails in hackny').locationTerms).toEqual(['hackny', 'Hackney', 'London']);
+    expect(parseSearchQuery('hair in lndon').locationTerms).toEqual(['lndon', 'London']);
+    expect(parseSearchQuery('lashes in manchster').locationTerms).toContain('Manchester');
+    // A real place is never "corrected" into a neighbouring one.
+    expect(buildLocationTerms('Bath')).toEqual(['Bath']);
+  });
   it('reads an area the way providers store it: area, then its city', () => {
     expect(buildLocationTerms('hackney')).toEqual(['hackney', 'London']);
     expect(parseSearchQuery('hackney')).toMatchObject({ serviceTerms: [], locationTerms: ['hackney', 'London'] });

@@ -80,6 +80,34 @@ for (const { city, regions } of CITY_AREAS) {
   }
 }
 
+// Every place name the app knows, lowercase → as providers see it.
+const KNOWN_PLACES = new Map<string, string>();
+for (const place of [...UK_CITIES, ...CITY_AREAS.map(c => c.city)]) KNOWN_PLACES.set(place.toLowerCase(), place);
+for (const { regions } of CITY_AREAS) {
+  for (const { region, areas } of regions) {
+    KNOWN_PLACES.set(region.toLowerCase(), region);
+    for (const area of areas) KNOWN_PLACES.set(area.toLowerCase(), area);
+  }
+}
+
+/**
+ * The known place a mistyped one most likely means ("hackny" → Hackney,
+ * "lndon" → London), or null. Same first letter, one slip for a short name
+ * and two for a long one; a name that's already known is left alone.
+ */
+function nearestPlace(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (lower.length < 4 || KNOWN_PLACES.has(lower)) return null;
+  const allowed = lower.length >= 7 ? 2 : 1;
+  let best: { name: string; d: number } | null = null;
+  for (const [key, name] of KNOWN_PLACES) {
+    if (key[0] !== lower[0] || Math.abs(key.length - lower.length) > allowed) continue;
+    const d = editDistance(lower, key);
+    if (d <= allowed && (!best || d < best.d)) best = { name, d };
+  }
+  return best?.name ?? null;
+}
+
 // Areas long enough to recognise at the end of a query with no "in": short
 // ones are often ordinary words too ("Idle", "Falls", "Penn").
 const IMPLICIT_AREAS = [...AREA_CITIES.keys()].filter(area => area.length >= 6);
@@ -102,7 +130,8 @@ const CATEGORY_KEYWORDS: [ServiceCategory, string[]][] = [
 
 /**
  * The places to match, most specific first: the phrase as typed, then with a
- * mistyped compass word fixed ("weat london"), then a region's areas ("east
+ * mistyped compass word or place fixed ("weat london", "hackny"), then a
+ * region's areas ("east
  * london" → Tower Hamlets, Newham…), then without the compass word, then the
  * city an area belongs to ("hackney" → London). Never splits a place into its
  * individual words ("New York" must not also match every provider in York).
@@ -112,10 +141,13 @@ export function buildLocationTerms(phrase: string): string[] {
   const location = phrase.trim().replace(/\s+/g, ' ');
   if (!location) return [];
   const fixedWords = location.split(' ').map(fixCompassTypo);
-  const fixed = fixedWords.join(' ');
-  const core = fixedWords.filter(word => !LOCATION_QUALIFIERS.has(word.toLowerCase())).join(' ');
+  const typed = fixedWords.join(' ');
+  const fixed = nearestPlace(typed) ?? typed;
+  const typedCore = fixed.split(' ').filter(word => !LOCATION_QUALIFIERS.has(word.toLowerCase())).join(' ');
+  const core = nearestPlace(typedCore) ?? typedCore;
   const terms = [
     location,
+    typed,
     fixed,
     ...(REGION_AREAS.get(fixed.toLowerCase()) ?? []),
     core,
