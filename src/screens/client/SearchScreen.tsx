@@ -48,6 +48,7 @@ import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
 import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import SearchGuideSheet, { AVAILABILITY_INFO } from '../../features/providers/SearchGuideSheet';
 import {
   resolveProviderPriceRange,
   priceRangeMatchesBucket,
@@ -286,22 +287,7 @@ const AUDIENCE_OPTIONS: { label: string; value: 'women' | 'men' | 'kids' }[] = [
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
 
-// ── Availability colour/label — real status from get_providers_availability,
-// resolved asynchronously per-card (see providersWithAvailability). null
-// (not yet resolved, or no data) renders no badge at all rather than
-// guessing — this used to be hardcoded to 'Slots Available' on every card.
-// 'none' is deliberately absent from this map (not just an unused key): the
-// RPC collapses two different causes into it — a provider who's genuinely
-// fully booked this week, AND a provider who has never published a schedule
-// at all (has_any_open_day is false either way, see get_providers_availability).
-// A "Fully Booked" badge is a false claim for the second case, so neither
-// case gets a badge — the card falls through to availInfo === null below,
-// same as an unresolved/no-data card. Filtering (availability === 'available'
-// || 'limited') already excludes both correctly; this only affects the badge. ──
-const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: string; color: string }>> = {
-  available: { label: 'Slots Available', color: '#4CAF50' },
-  limited:   { label: 'Slots Limited',   color: '#FF9500' },
-};
+// Availability badge labels/colours live in SearchGuideSheet, which explains them.
 
 
 
@@ -579,6 +565,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // The header filters button opens this single sheet — no more per-pill
   // popovers anchored under an always-visible row.
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [guideVisible, setGuideVisible] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
     sortBy: 'recommended',
     serviceType: 'all',
@@ -1518,6 +1505,19 @@ export default function SearchScreen({ navigation, route }: Props) {
       headerTintColor: P.accentText,
       headerBackButtonDisplayMode: 'minimal',
       headerRight: () => (
+        <View style={styles.headerRightRow}>
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => {
+            if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setGuideVisible(true);
+          }}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel="What things mean"
+        >
+          <Ionicons name="information-circle-outline" size={20} color={P.sub} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.filterBtn}
           onPress={() => {
@@ -1533,6 +1533,7 @@ export default function SearchScreen({ navigation, route }: Props) {
             </View>
           )}
         </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation, P, hasActiveFilters, activeFilterChips.length]);
@@ -1633,6 +1634,13 @@ export default function SearchScreen({ navigation, route }: Props) {
           </ScrollView>
         </View>
       )}
+
+      <SearchGuideSheet
+        visible={guideVisible}
+        onClose={() => setGuideVisible(false)}
+        P={P}
+        bottomInset={bottomInset}
+      />
 
       {/* ── Filter sheet — opened from the header filters icon. All six
           groups in one scrollable sheet rather than a panel per pill. ── */}
@@ -2075,6 +2083,7 @@ const styles = StyleSheet.create({
   },
 
   // Header filters button — bare icon, matches OffersScreen's headerRight.
+  headerRightRow: { flexDirection: 'row', alignItems: 'center' },
   filterBtn: {
     width: 34,
     height: 34,
