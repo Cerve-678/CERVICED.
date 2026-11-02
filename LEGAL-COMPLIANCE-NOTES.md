@@ -478,8 +478,9 @@ See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
    the switch sheet say "£25.99 a month, 2 months free on us", but nothing is
    charged and the Terms don't mention a provider subscription. A stated price
    and free period reads as a promise: before anyone is billed, the Terms need
-   the price, when the free months start, auto-renewal, cancellation and
-   refunds, and whether App Store / Play billing rules apply (a subscription
+   the price, that the free months start the day they go live again
+   (decided 2026-11-02, recorded in `providers.full_member_free_from`),
+   auto-renewal, cancellation and refunds, and whether App Store / Play billing rules apply (a subscription
    sold inside the app). Until then, providers who switched were told a price
    that may change, which is worth checking with a solicitor.
 

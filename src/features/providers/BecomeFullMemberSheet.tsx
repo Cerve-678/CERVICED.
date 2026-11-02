@@ -19,6 +19,7 @@ import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import {
   FULL_MEMBER_FREE_MONTHS,
+  FULL_MEMBER_FREE_START_LINE,
   FULL_MEMBER_PRICE_LINE,
 } from '../../constants/fullMembership';
 
@@ -90,6 +91,7 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
               <Text style={[styles.offerSub, { color: P.onAccent }]}>{FULL_MEMBER_PRICE_LINE}</Text>
             </View>
           </View>
+          <Text style={[styles.freeStart, { color: P.sub }]}>{FULL_MEMBER_FREE_START_LINE}</Text>
 
           <Text style={[styles.sectionLabel, { color: P.sub }]}>WHAT CHANGES</Text>
           <View style={styles.changes}>
@@ -141,6 +143,7 @@ const styles = StyleSheet.create({
   offerNumber: { fontFamily: 'BakbakOne-Regular', fontSize: 44, lineHeight: 50 },
   offerKicker: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1.4 },
   offerSub: { fontSize: 13, marginTop: 2, opacity: 0.88 },
+  freeStart: { fontSize: 13, lineHeight: 18, marginTop: 8 },
   sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.4, marginTop: 22 },
   changes: { gap: 14, marginTop: 12 },
   change: { flexDirection: 'row', gap: 12 },

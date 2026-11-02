@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **173 files**
 - … +143 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **81 files**
+Curated: [[Provider Onboarding & Go-Live]] · **82 files**
 - `src/services/databaseService.ts` _(82)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(61)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **81 files**
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
-- … +51 more
+- … +52 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **60 files**

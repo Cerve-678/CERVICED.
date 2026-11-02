@@ -43,9 +43,9 @@ Exactly four things: **logo**, **About**, **opening hours**, **at least one port
 Self-serve, from link-only Home (product owner, 2026-11-02; design canvas https://claude.ai/artifact/SorjEEw3DPKAa8y7NSpzjJ, concept C plus B):
 
 - **Where:** a quiet "Become a full member" card at the end of Home, always there; the "What full CERVICED adds" page ends with the same button. Once clients have nudged them enough (`JOIN_NUDGE_BAR_THRESHOLD`, 5 join nudges in the last 90 days), a bar beside Becca says so. Its X hides it until 5 more nudges arrive (per account, on the device).
-- **What happens:** every entry opens `BecomeFullMemberSheet`, which says what changes first. Confirming calls `become_full_member()` (20261102170000): `booking_mode` → `'cerviced'`, the booking link is cleared from `providers` and `users`, and `full_member_since` is stamped. The mode change re-runs `check_and_set_provider_live()` on the full checklist, so they're **off Search until they go live again**. AuthContext flips `myBookingMode` and the app swaps to the full provider tabs, whose Home shows that checklist.
+- **What happens:** every entry opens `BecomeFullMemberSheet`, which says what changes first. Confirming calls `become_full_member()` (20261102190000): `booking_mode` → `'cerviced'`, the booking link is cleared from `providers` and `users`, and `full_member_since` is stamped. The mode change re-runs `check_and_set_provider_live()` on the full checklist, so they're **off Search until they go live again**. AuthContext flips `myBookingMode` and the app swaps to the full provider tabs, whose Home shows that checklist.
 - **One way.** There's no switch back in the app.
-- **Price shown, nothing charged:** "£25.99 a month, 2 months free on us" (`src/constants/fullMembership.ts`). No billing exists. When the free months start isn't decided.
+- **Price shown, nothing charged:** "£25.99 a month, 2 months free on us" (`src/constants/fullMembership.ts`). No billing exists. The free months start **the day they go live again**, not the tap: `full_member_free_from` is stamped by a trigger the first time `has_gone_live` turns true after the switch (or at the switch if they're somehow still live).
 
 ## Pricing (planned, not active)
 

@@ -10,14 +10,43 @@
 --    on_provider_about_or_mode_change, which re-runs check_and_set_provider_live
 --    on the CERVICED branch (hours, a service, private address, policies, logo).
 --  - The app shows £25.99 a month with two months free, but nothing is charged.
---    full_member_since records the switch so whatever billing comes later
---    knows when it happened.
+--    The free months start the day they go live again (product owner,
+--    2026-11-02), so two stamps: full_member_since when they switch, and
+--    full_member_free_from the first time they're live after it. Whatever
+--    billing comes later reads those.
 
 alter table public.providers
-  add column if not exists full_member_since timestamptz;
+  add column if not exists full_member_since timestamptz,
+  add column if not exists full_member_free_from timestamptz;
 
 comment on column public.providers.full_member_since is
   'When a link-only provider switched to CERVICED bookings via become_full_member(). Null for providers who started on CERVICED bookings.';
+comment on column public.providers.full_member_free_from is
+  'The first time a full member (full_member_since set) went live after switching. Their free months count from here. Set once by stamp_full_member_free_from.';
+
+-- BEFORE, so the stamp rides on the gate's own UPDATE instead of a second one.
+create or replace function public.stamp_full_member_free_from()
+ returns trigger
+ language plpgsql
+ security definer
+ set search_path to 'public', 'pg_temp'
+as $function$
+begin
+  new.full_member_free_from := now();
+  return new;
+end;
+$function$;
+
+revoke execute on function public.stamp_full_member_free_from() from public, anon, authenticated;
+
+drop trigger if exists stamp_full_member_free_from on public.providers;
+create trigger stamp_full_member_free_from
+  before update of has_gone_live on public.providers
+  for each row
+  when (new.has_gone_live and not coalesce(old.has_gone_live, false)
+        and new.full_member_since is not null
+        and new.full_member_free_from is null)
+  execute function public.stamp_full_member_free_from();
 
 create or replace function public.become_full_member()
  returns void
@@ -54,6 +83,13 @@ begin
       external_booking_url = null,
       full_member_since = now()
   where id = v_provider_id;
+
+  -- Already passing the full gate (rare: everything set up while link-only)
+  -- means still live, so the trigger above never sees a go-live. Start the
+  -- free months now.
+  update public.providers
+  set full_member_free_from = now()
+  where id = v_provider_id and has_gone_live and full_member_free_from is null;
 
   update public.users
   set external_booking_url = null

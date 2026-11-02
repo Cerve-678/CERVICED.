@@ -9476,7 +9476,7 @@ export async function getProviderOwnershipForUserId(userId: string): Promise<{
 /** A link-only provider becomes a full member: CERVICED takes their bookings
  *  from now on, their booking link is removed, and the go-live gate re-runs on
  *  the full checklist, so they're off Search until they finish it. One way.
- *  See 20261102170000_become_full_member.sql. */
+ *  See 20261102190000_become_full_member.sql. */
 export async function becomeFullMember(): Promise<void> {
   const { error } = await supabase.rpc("become_full_member");
   if (error) throw error;

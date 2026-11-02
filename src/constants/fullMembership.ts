@@ -7,5 +7,8 @@ export const FULL_MEMBER_FREE_MONTHS = 2;
 
 /** "2 months free on us" */
 export const FULL_MEMBER_FREE_LINE = `${FULL_MEMBER_FREE_MONTHS} months free on us`;
+/** The free months count from the day they go live again after switching,
+ *  not from the tap (product owner, 2026-11-02; providers.full_member_free_from). */
+export const FULL_MEMBER_FREE_START_LINE = 'Your free months start the day you go live.';
 /** "Then £25.99 a month" */
 export const FULL_MEMBER_PRICE_LINE = `Then ${FULL_MEMBER_MONTHLY_PRICE} a month`;
