@@ -743,37 +743,6 @@ export async function getProviderPriceRanges(
   return ranges;
 }
 
-/**
- * Of the given provider ids, which have at least one active service tagged
- * services.audience === `audience`. Scoped to `providerIds` (the candidate
- * set Search already server-searched/paginated to) rather than a global
- * lookup, mirroring the hair-type filter's broad-match shape — except this is
- * a per-SERVICE tag, not a provider-level column, so it queries `services`
- * with a providers!inner gate instead of `providers` directly.
- */
-export async function getProviderAudienceMatches(
-  providerIds: string[],
-  audience: "women" | "men" | "kids" | "everyone",
-): Promise<Set<string>> {
-  const matches = new Set<string>();
-  if (providerIds.length === 0) return matches;
-
-  const { data, error } = await supabase
-    .from("services")
-    .select("provider_id, provider:providers!inner ( id )")
-    .eq("is_active", true)
-    .eq("audience", audience)
-    .eq("provider.is_active", true)
-    .eq("provider.has_gone_live", true)
-    .in("provider_id", providerIds);
-  if (error) throw error;
-
-  for (const row of data ?? []) {
-    matches.add(row.provider_id as string);
-  }
-  return matches;
-}
-
 export interface ProviderServiceFacets {
   /** £min–£max across the provider's active services. Absent when they have
    *  none priced. */
@@ -802,7 +771,7 @@ export interface ProviderServiceFacets {
 /**
  * Price range AND audience tags for a set of providers, in ONE query.
  *
- * getProviderPriceRanges and getProviderAudienceMatches ask the same table,
+ * getProviderPriceRanges and the former getProviderAudienceMatches asked the same table,
  * over the same provider ids, behind the same has_gone_live/is_active gate —
  * they differ only in which column they read. Search ran both, so a search
  * with the audience filter on paid two round trips for one table scan. Callers
@@ -7950,6 +7919,23 @@ export async function saveNotificationPreferences(
 export async function getProviderNotificationPreferences(): Promise<ProviderNotificationPreferences> {
   const { stored } = await readStoredNotificationPreferences();
   return pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, stored);
+}
+
+/** The newest time the signed-in provider's schedule filled that they haven't
+ *  seen the certificate for. Null when there's nothing to show. */
+export type UnseenFullyBooked = { fillId: string; filledAt: string; throughDate: string };
+
+export async function getMyUnseenFullyBooked(): Promise<UnseenFullyBooked | null> {
+  const { data, error } = await supabase.rpc("get_my_unseen_fully_booked");
+  if (error) throw error;
+  const row = (data as Array<{ fill_id: string; filled_at: string; through_date: string }> | null)?.[0];
+  return row ? { fillId: row.fill_id, filledAt: row.filled_at, throughDate: row.through_date } : null;
+}
+
+/** Marks this fill, and any older unseen ones, as seen, so the certificate shows once. */
+export async function markFullyBookedSeen(fillId: string): Promise<void> {
+  const { error } = await supabase.rpc("mark_fully_booked_seen", { p_fill_id: fillId });
+  if (error) throw error;
 }
 
 /** The signed-in provider's achievements. The server owns the rules and records

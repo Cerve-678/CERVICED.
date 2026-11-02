@@ -26,6 +26,8 @@ export interface ChatMessage {
   providerRecommendations?: Provider[];
   /** Real portfolio work shown inline for style and inspiration requests. */
   inspiration?: BeccaInspiration[];
+  /** The answer's own shape, when it has one. See BeccaAnswer. */
+  answer?: BeccaAnswer;
   imageUri?: string;
   /**
    * Populated only by a vision model. Nothing writes this today — the image
@@ -33,6 +35,67 @@ export interface ChatMessage {
    * BECCA_CAPABILITIES.md §3.3.
    */
   imageAnalysis?: string;
+}
+
+/**
+ * How a reply is laid out around its text. The engine picks one from what
+ * the capability returned (see chooseLayout in engine.ts):
+ *  - `headline`: one number, rule or yes/no, shown big, with what was checked
+ *    as small proof tags, then the text, then any card.
+ *  - `stepsThenCard`: a real search. The steps tick off, fold into a "How I
+ *    found these" line, then the text and the card.
+ *  - `cardFirst`: a quick look-up. The card leads, the steps wait behind a
+ *    "How I found this" line underneath.
+ */
+export type AnswerLayout = "headline" | "stepsThenCard" | "cardFirst";
+
+export interface AnswerHeadline {
+  /** The big part: "2 moves", "Yes", "3". Always a fact from the data. */
+  value: string;
+  /** What it means, in a few words: "per booking, with 48h notice". */
+  label: string;
+}
+
+export interface AnswerCardRow {
+  title: string;
+  detail?: string;
+  /** A short highlighted fact on the right: a price, a date. */
+  tag?: string;
+  /** Makes the row open that provider's profile, and shows their logo. */
+  provider?: Provider;
+  /** A price range drawn as a bar on the card's `scale`. */
+  range?: { min: number; max: number };
+  /** Draws this row's bar in the highlight colour: the cheapest, the busiest. */
+  highlight?: boolean;
+}
+
+export interface AnswerCard {
+  /** The band across the top, e.g. "VOLUME LASHES". */
+  title: string;
+  /** Small text on the right of the band, e.g. "3 matches". */
+  meta?: string;
+  rows?: AnswerCardRow[];
+  /** Big-number tiles, e.g. 2 / moves per booking. */
+  stats?: { value: string; label: string }[];
+  footer?: string;
+  /**
+   * A ticket's date block on the left ("MON / 10 / NOV"), for a single
+   * appointment. Replaces the band.
+   */
+  stamp?: { top: string; big: string; bottom: string };
+  /** The shared scale every row's `range` is drawn on, with its axis labels. */
+  scale?: { min: number; max: number; labels: string[] };
+}
+
+export interface BeccaAnswer {
+  layout: AnswerLayout;
+  headline?: AnswerHeadline;
+  card?: AnswerCard;
+  /**
+   * What Becca actually did, past tense, with the real counts: "Searched 14
+   * lash providers". Never a step that didn't run.
+   */
+  work?: string[];
 }
 
 /** A safe, client-visible slice of an Explore portfolio item. */
@@ -265,6 +328,14 @@ export interface CapabilityResult {
   providers?: Provider[];
   /** Portfolio imagery from Explore, only from live providers. */
   inspiration?: BeccaInspiration[];
+  /** The answer as one big fact; makes the layout `headline`. */
+  headline?: AnswerHeadline;
+  /** The answer as a card. Replaces the provider strip when it lists providers. */
+  card?: AnswerCard;
+  /** The steps this run really took, with their real counts. */
+  work?: string[];
+  /** Names the layout outright, when the default rule (see chooseLayout) doesn't fit. */
+  layout?: AnswerLayout;
   /** A write awaiting confirmation. The engine renders the confirm chips. */
   pendingAction?: PendingAction;
   /**
@@ -325,8 +396,22 @@ export interface Capability {
    * Ignored for the client hat and for full providers.
    */
   fitsLinkOnly?: boolean;
+  /**
+   * What Becca shows while this capability runs — one to three short steps,
+   * each describing work `run` really does ("Reading Lola's deposit policy…"),
+   * never a fact from the answer. Shown in order once the engine has decided
+   * on this capability; see EngineInput.onProgress.
+   */
+  thinking: string[] | ((turn: ThinkingTurn) => string[]);
   /** Runs the capability against real app data. */
   run: (ctx: CapabilityContext) => Promise<CapabilityResult>;
+}
+
+/** What a capability's loading steps may read: the turn, before it runs. */
+export interface ThinkingTurn {
+  entities: EntityBag;
+  /** The repaired ask — the same text the capability's `run` will see. */
+  message: string;
 }
 
 /**
