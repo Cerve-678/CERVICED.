@@ -21,15 +21,15 @@ export const CITY_AREAS: CityAreaData[] = [
       },
       {
         region: 'South London',
-        areas: ['Croydon', 'Lambeth', 'Southwark', 'Wandsworth', 'Lewisham', 'Bromley'],
+        areas: ['Croydon', 'Lambeth', 'Southwark', 'Wandsworth', 'Lewisham', 'Bromley', 'Greenwich', 'Bexley', 'Merton', 'Sutton', 'Kingston upon Thames'],
       },
       {
         region: 'East London',
-        areas: ['Tower Hamlets', 'Newham', 'Waltham Forest', 'Redbridge', 'Barking and Dagenham'],
+        areas: ['Tower Hamlets', 'Newham', 'Waltham Forest', 'Redbridge', 'Barking and Dagenham', 'Havering'],
       },
       {
         region: 'West London',
-        areas: ['Hammersmith and Fulham', 'Ealing', 'Hounslow', 'Hillingdon', 'Brent'],
+        areas: ['Hammersmith and Fulham', 'Ealing', 'Hounslow', 'Hillingdon', 'Brent', 'Harrow', 'Richmond upon Thames'],
       },
       {
         region: 'Central London',
@@ -1158,9 +1158,277 @@ export const CITY_AREAS: CityAreaData[] = [
       },
     ],
   },
+  // Kent (Maidstone and Gillingham are above, with the original towns).
+  {
+    city: 'Canterbury',
+    regions: [
+      {
+        region: 'City Centre',
+        areas: ['Canterbury City Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Wincheap', 'Hales Place', 'Sturry', 'Thanington', 'Harbledown'],
+      },
+    ],
+  },
+  {
+    city: 'Dartford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dartford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Greenhithe', 'Stone', 'Swanscombe', 'Wilmington', 'Temple Hill'],
+      },
+    ],
+  },
+  {
+    city: 'Gravesend',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Gravesend Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Northfleet', 'Riverview Park', 'Singlewell', 'Higham'],
+      },
+    ],
+  },
+  {
+    city: 'Chatham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Chatham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Walderslade', 'Lordswood', 'Princes Park', 'Wayfield'],
+      },
+    ],
+  },
+  {
+    city: 'Rochester',
+    regions: [
+      {
+        region: 'City Centre',
+        areas: ['Rochester City Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Strood', 'Frindsbury', 'Borstal', 'Wainscott'],
+      },
+    ],
+  },
+  {
+    city: 'Ashford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Ashford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Kennington', 'Willesborough', 'Singleton', 'Repton Park'],
+      },
+    ],
+  },
+  {
+    city: 'Tunbridge Wells',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Tunbridge Wells Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Southborough', 'Rusthall', 'Pembury', 'Sherwood'],
+      },
+    ],
+  },
+  {
+    city: 'Tonbridge',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Tonbridge Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hildenborough', 'Hadlow'],
+      },
+    ],
+  },
+  {
+    city: 'Sevenoaks',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Sevenoaks Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Riverhead', 'Dunton Green', 'Kemsing', 'Otford'],
+      },
+    ],
+  },
+  {
+    city: 'Swanley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Swanley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hextable', 'Crockenhill'],
+      },
+    ],
+  },
+  {
+    city: 'Sittingbourne',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Sittingbourne Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Milton Regis', 'Kemsley', 'Murston', 'Iwade'],
+      },
+    ],
+  },
+  {
+    city: 'Faversham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Faversham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ospringe', 'Boughton under Blean'],
+      },
+    ],
+  },
+  {
+    city: 'Whitstable',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Whitstable Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Tankerton', 'Seasalter', 'Chestfield'],
+      },
+    ],
+  },
+  {
+    city: 'Herne Bay',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Herne Bay Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Herne', 'Greenhill', 'Beltinge'],
+      },
+    ],
+  },
+  {
+    city: 'Margate',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Margate Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Cliftonville', 'Westbrook', 'Garlinge', 'Westgate-on-Sea'],
+      },
+    ],
+  },
+  {
+    city: 'Ramsgate',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Ramsgate Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Pegwell', 'Newington'],
+      },
+    ],
+  },
+  {
+    city: 'Broadstairs',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Broadstairs Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['St Peter\'s', 'Dumpton'],
+      },
+    ],
+  },
+  {
+    city: 'Folkestone',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Folkestone Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Cheriton', 'Sandgate', 'Hythe', 'Hawkinge'],
+      },
+    ],
+  },
+  {
+    city: 'Dover',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dover Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['River', 'Whitfield', 'Temple Ewell'],
+      },
+    ],
+  },
+  {
+    city: 'Deal',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Deal Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Walmer', 'Sholden'],
+      },
+    ],
+  },
 ];
 
 export const CITY_AREA_NAMES = CITY_AREAS.map(c => c.city);
+
+/** Towns above that sit in a county people search by name ("nails in kent").
+ *  Locations are stored as "<Area>, <Town>", so the county name itself never
+ *  appears in one; search widens the county to these towns instead. */
+export const COUNTY_TOWNS: Record<string, string[]> = {
+  Kent: ['Maidstone', 'Gillingham', 'Canterbury', 'Dartford', 'Gravesend', 'Chatham', 'Rochester', 'Ashford', 'Tunbridge Wells', 'Tonbridge', 'Sevenoaks', 'Swanley', 'Sittingbourne', 'Faversham', 'Whitstable', 'Herne Bay', 'Margate', 'Ramsgate', 'Broadstairs', 'Folkestone', 'Dover', 'Deal'],
+};
 
 export const getCityAreaData = (city: string): CityAreaData | undefined =>
   CITY_AREAS.find(c => c.city.toLowerCase() === city.trim().toLowerCase());

@@ -56,6 +56,12 @@ describe('search intent', () => {
     // A real place is never "corrected" into a neighbouring one.
     expect(buildLocationTerms('Bath')).toEqual(['Bath']);
   });
+  it('widens a county to its towns, since stored locations name the town', () => {
+    const terms = parseSearchQuery('nails in kent').locationTerms;
+    expect(terms).toEqual(expect.arrayContaining(['kent', 'Canterbury', 'Dartford', 'Maidstone']));
+    expect(parseSearchQuery('kent')).toMatchObject({ serviceTerms: [], locationTerms: expect.arrayContaining(['Ashford']) });
+    expect(parseSearchQuery('lashes in dartfrod').locationTerms).toContain('Dartford');
+  });
   it('reads an area the way providers store it: area, then its city', () => {
     expect(buildLocationTerms('hackney')).toEqual(['hackney', 'London']);
     expect(parseSearchQuery('hackney')).toMatchObject({ serviceTerms: [], locationTerms: ['hackney', 'London'] });
