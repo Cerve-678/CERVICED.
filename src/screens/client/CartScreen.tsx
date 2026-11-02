@@ -40,7 +40,7 @@ import {
   validatePromoCode,
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
-  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards } from '../../services/databaseService';
+  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards, getCachedSavedCards } from '../../services/databaseService';
 import {
   savedCardBrandName, savedCardExpiryLabel, savedCardExpiryState, type SavedCard,
 } from '../../features/payments/savedCards';
@@ -81,6 +81,8 @@ import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 // includes the SDK-compatible Stripe module, so it can show the card form;
 // wallet payments still require a development build.
 const USE_STRIPE_PAYMENTS = env.stripePaymentsEnabled;
+// The Cart warms the saved-card list; a list this recent isn't read again.
+const SAVED_CARDS_FRESH_MS = 60_000;
 
 // Expo SDK 57 ships a compatible Stripe module in Expo Go, so use the real
 // module in both Expo Go and custom native builds.
@@ -662,23 +664,37 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     // The client's saved cards (Payment Methods), so they can pay with one in
     // a tap. 'new' = type a card into the CardForm. Expired cards are left
     // out: Stripe would only decline them. A failed load just shows the form.
+    // The Cart screen starts the read, so the list is usually already here;
+    // it is shown at once and checked again in the background.
+    const { user } = useAuth();
+    const userId = user?.id ?? null;
     const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
     const [selectedCard, setSelectedCard] = useState<string>('new');
+    // Once the client taps a row, a background refresh keeps their pick.
+    const pickedCardRef = useRef(false);
     useEffect(() => {
       if (!isVisible) return;
       let cancelled = false;
-      setSavedCards([]);
+      pickedCardRef.current = false;
+      const showCards = (cards: SavedCard[]) => {
+        const usable = cards.filter(card => savedCardExpiryState(card) !== 'expired');
+        setSavedCards(usable);
+        setSelectedCard(current => {
+          if (current !== 'new' && usable.some(card => card.id === current)) return current;
+          if (current === 'new' && pickedCardRef.current) return current;
+          return usable[0]?.id ?? 'new';
+        });
+      };
       setSelectedCard('new');
-      listSavedCards()
+      showCards((userId && getCachedSavedCards(userId)) || []);
+      listSavedCards({ maxAgeMs: SAVED_CARDS_FRESH_MS })
         .then(cards => {
-          if (cancelled) return;
-          const usable = cards.filter(card => savedCardExpiryState(card) !== 'expired');
-          setSavedCards(usable);
-          if (usable[0]) setSelectedCard(usable[0].id);
+          if (cancelled || processingRef.current) return;
+          showCards(cards);
         })
         .catch(err => logger.error('[checkout] could not load saved cards', err));
       return () => { cancelled = true; };
-    }, [isVisible]);
+    }, [isVisible, userId]);
     const payingWithSavedCard = selectedCard !== 'new';
 
     // Apple Pay / Google Pay need a development build (env.isExpoGo).
@@ -1026,6 +1042,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                             activeOpacity={0.7}
                             onPress={() => {
                               Haptics.selectionAsync().catch(() => {});
+                              pickedCardRef.current = true;
                               setSelectedCard(option.id);
                               setPayError(null);
                             }}
@@ -3004,6 +3021,18 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     return () => { cancelled = true; };
   };
   useFocusEffect(useCallback(() => revalidateRef.current(), []));
+
+  // Start reading the client's saved cards while they look over the cart, so
+  // the payment sheet has them the moment it opens (the read takes seconds).
+  // Not for an empty cart, and not again within SAVED_CARDS_FRESH_MS.
+  const hasCartItems = items.length > 0;
+  const signedInUserId = user?.id ?? null;
+  useFocusEffect(useCallback(() => {
+    if (!USE_STRIPE_PAYMENTS || !hasCartItems || !signedInUserId) return;
+    listSavedCards({ maxAgeMs: SAVED_CARDS_FRESH_MS })
+      // The sheet reads them again when it opens, and shows the form if that fails too.
+      .catch(e => logger.warn('[checkout] could not read saved cards ahead of the sheet', e));
+  }, [hasCartItems, signedInUserId]));
 
   // Picking a single service out of the chooser. If that service is currently
   // part of a group, editing it means it no longer runs back-to-back with the

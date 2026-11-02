@@ -70,6 +70,7 @@ import {
 import { PAYMENT_OPTS } from '../../features/business-details/options';
 import { resolveEditorDepositMode, type DepositMode } from '../../utils/depositPolicy';
 import { toUserMessage } from '../../utils/userFacingError';
+import { closeWithinTab } from '../../navigation/closeWithinTab';
 
 // `sub` is the full explanation, read out as each option's accessibility hint;
 // the button itself only has room for `label` + `hint`.
@@ -244,7 +245,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
           <Text style={[s.headerTitle, { color: C.text }]}>Payments & payouts</Text>
           <TouchableOpacity
             style={[s.closeBtn, { backgroundColor: C.surface }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); closeWithinTab(navigation); }}
             activeOpacity={0.5}
           >
             <Ionicons name="close" size={22} color={C.sub} />

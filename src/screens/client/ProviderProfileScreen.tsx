@@ -1172,7 +1172,12 @@ const unclaimedStyles = StyleSheet.create({
 });
 
 // ── Provider Profile Skeleton ────────────────────────────────────────────────
+// Borrows the real page's layout styles so nothing jumps when the data lands.
+// The provider's theme isn't known yet, so it stays on the pale 'app' preset
+// even in dark mode: the page never follows the viewer's dark mode, and the
+// back button's tint already assumes this background.
 function ProviderProfileSkeleton() {
+  const { height: screenHeight } = useWindowDimensions();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -1192,153 +1197,91 @@ function ProviderProfileSkeleton() {
     loop.start();
     return () => loop.stop();
   }, [shimmer]);
-  // Provider theme isn't known yet while loading — use the 'app' preset.
   const opacity = shimmer.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.3, 0.65],
+    outputRange: [0.5, 1],
   });
   const skeletonTheme = resolveProviderTheme("app");
-  const base = "#DDD5CC";
-  const bg = skeletonTheme.bg;
+  const bone = { backgroundColor: "rgba(126,102,103,0.16)" };
+  const card = {
+    backgroundColor: skeletonTheme.card,
+    borderColor: skeletonTheme.border,
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg }}>
-      {/* Header / logo area */}
-      <Animated.View style={{ height: 220, backgroundColor: base, opacity }} />
-      {/* Avatar circle overlapping header */}
-      <View style={{ alignItems: "center", marginTop: -40 }}>
-        <Animated.View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: base,
-            opacity,
-          }}
-        />
-      </View>
-      {/* Name + service lines */}
+    <ThemedBackground style={{ backgroundColor: skeletonTheme.bg }}>
+      <StatusBar barStyle="dark-content" />
       <View
-        style={{
-          alignItems: "center",
-          marginTop: 14,
-          gap: 10,
-          paddingHorizontal: 40,
-        }}
+        style={styles.skeletonShell}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Loading profile"
       >
-        <Animated.View
-          style={{
-            width: "55%",
-            height: 18,
-            borderRadius: 9,
-            backgroundColor: base,
-            opacity,
-          }}
-        />
-        <Animated.View
-          style={{
-            width: "35%",
-            height: 13,
-            borderRadius: 6,
-            backgroundColor: base,
-            opacity,
-          }}
-        />
-      </View>
-      {/* Stats row */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "center",
-          gap: 24,
-          marginTop: 20,
-          paddingHorizontal: 24,
-        }}
-      >
-        {[80, 80, 80].map((w, i) => (
-          <Animated.View
-            key={i}
-            style={{
-              width: w,
-              height: 36,
-              borderRadius: 10,
-              backgroundColor: base,
-              opacity,
-            }}
-          />
-        ))}
-      </View>
-      {/* Tab row */}
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 12,
-          marginTop: 24,
-          paddingHorizontal: 20,
-        }}
-      >
-        {[80, 70, 90, 60].map((w, i) => (
-          <Animated.View
-            key={i}
-            style={{
-              width: w,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: base,
-              opacity,
-            }}
-          />
-        ))}
-      </View>
-      {/* Service item rows */}
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 14 }}>
-        {[1, 2, 3].map((i) => (
-          <View
-            key={i}
-            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-          >
-            <Animated.View
-              style={{
-                width: 60,
-                height: 60,
-                borderRadius: 30,
-                backgroundColor: base,
-                opacity,
-              }}
-            />
-            <View style={{ flex: 1, gap: 8 }}>
-              <Animated.View
-                style={{
-                  width: "60%",
-                  height: 14,
-                  borderRadius: 7,
-                  backgroundColor: base,
-                  opacity,
-                }}
-              />
-              <Animated.View
-                style={{
-                  width: "40%",
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: base,
-                  opacity,
-                }}
-              />
-            </View>
-            <Animated.View
-              style={{
-                width: 60,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: base,
-                opacity,
-              }}
-            />
+        <Animated.View style={[styles.heroInfoWrap, { opacity }]}>
+          <View style={styles.logoContainer}>
+            <View style={[styles.logoWrapper, styles.skeletonLogo, bone]} />
           </View>
-        ))}
+          <View style={styles.providerInfoCenter}>
+            <View style={styles.providerNameRow}>
+              <View style={[styles.skeletonName, bone]} />
+            </View>
+            <View style={styles.providerMetaRow}>
+              <View style={[styles.skeletonMeta, bone]} />
+            </View>
+            <View style={styles.ratingRow}>
+              <View style={[styles.skeletonRating, bone]} />
+            </View>
+            <View style={styles.slotsRowOuter}>
+              <View style={[styles.skeletonSlots, bone]} />
+            </View>
+          </View>
+        </Animated.View>
+
+        <View
+          style={[
+            styles.contentSheet,
+            { minHeight: screenHeight, backgroundColor: skeletonTheme.bg },
+          ]}
+        >
+          <Animated.View style={{ opacity }}>
+            <View style={styles.aboutCardShadowWrap}>
+              <View style={[styles.aboutCard, card]}>
+                <View style={[styles.skeletonAboutTitle, bone]} />
+                <View style={[styles.skeletonAboutLine, bone]} />
+                <View style={[styles.skeletonAboutLine, bone]} />
+                <View style={[styles.skeletonAboutLineShort, bone]} />
+              </View>
+            </View>
+
+            <View style={styles.servicesSection}>
+              <View style={styles.skeletonSectionTitleRow}>
+                <View style={[styles.skeletonSectionTitle, bone]} />
+              </View>
+              <View style={[styles.categoryTabs, styles.skeletonCategoryRow]}>
+                {[92, 76, 104].map((width) => (
+                  <View key={width} style={[styles.skeletonCategory, bone, { width }]} />
+                ))}
+              </View>
+              <View style={styles.categoryServicesContainer}>
+                {["first", "second", "third"].map((row) => (
+                  <View key={row} style={[styles.serviceItemCard, card]}>
+                    <View style={styles.serviceItem}>
+                      <View style={[styles.serviceImageContainer, bone]} />
+                      <View style={styles.serviceInfo}>
+                        <View style={[styles.skeletonServiceName, bone]} />
+                        <View style={[styles.skeletonServiceLine, bone]} />
+                        <View style={[styles.skeletonServiceDetail, bone]} />
+                      </View>
+                      <View style={[styles.skeletonBook, bone]} />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </Animated.View>
+        </View>
       </View>
-    </View>
+    </ThemedBackground>
   );
 }
 
@@ -5664,6 +5607,95 @@ const styles = StyleSheet.create({
   // from both edges so the photo stays visible down its sides.
   contentSheetFloating: {
     marginHorizontal: 10,
+  },
+  skeletonShell: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  // Each bone sits inside the same line box as the text it stands in for, so
+  // the hero is the same height before and after the data arrives.
+  skeletonLogo: {
+    borderRadius: 74,
+  },
+  skeletonName: {
+    width: 210,
+    height: 28,
+    marginVertical: 6,
+    borderRadius: 9,
+  },
+  skeletonMeta: {
+    width: 170,
+    height: 10,
+    marginVertical: 3,
+    borderRadius: 5,
+  },
+  skeletonRating: {
+    width: 96,
+    height: 12,
+    marginVertical: 2,
+    borderRadius: 6,
+  },
+  skeletonSlots: {
+    width: 190,
+    height: 36,
+    borderRadius: 20,
+  },
+  skeletonAboutTitle: {
+    width: "44%",
+    height: 14,
+    marginBottom: 17,
+    borderRadius: 7,
+  },
+  skeletonAboutLine: {
+    height: 11,
+    marginBottom: 9,
+    borderRadius: 6,
+  },
+  skeletonAboutLineShort: {
+    width: "62%",
+    height: 11,
+    marginBottom: 9,
+    borderRadius: 6,
+  },
+  skeletonSectionTitleRow: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  skeletonSectionTitle: {
+    width: 96,
+    height: 18,
+    borderRadius: 7,
+  },
+  skeletonCategoryRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  skeletonCategory: {
+    height: 38,
+    borderRadius: 22,
+  },
+  skeletonServiceName: {
+    width: "70%",
+    height: 12,
+    marginBottom: 9,
+    borderRadius: 6,
+  },
+  skeletonServiceLine: {
+    width: "95%",
+    height: 10,
+    marginBottom: 9,
+    borderRadius: 5,
+  },
+  skeletonServiceDetail: {
+    width: "45%",
+    height: 10,
+    borderRadius: 5,
+  },
+  skeletonBook: {
+    width: 72,
+    height: 34,
+    borderRadius: 20,
   },
   loading: {
     flex: 1,

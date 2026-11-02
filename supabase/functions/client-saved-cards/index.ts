@@ -65,10 +65,27 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } },
     );
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return json({ error: 'Invalid session' }, 401);
-
     const body: RequestBody = await req.json().catch(() => ({}));
+
+    // Listing only reads the caller's own cards, so it checks the token's
+    // signature here against the project's published key instead of asking the
+    // auth server, which shares the database and took 1–3s under load. A
+    // legacy HS256 token falls back to that server check inside getClaims.
+    // setup and remove still ask, so a signed-out session can't change cards.
+    let user: { id: string; email?: string | null };
+    if (body.action === 'list') {
+      const token = authHeader.replace(/^Bearer\s+/i, '');
+      const { data: verified, error: claimsError } = await supabase.auth.getClaims(token);
+      const sub = verified?.claims.sub;
+      if (claimsError || !sub || verified.claims.role !== 'authenticated') {
+        return json({ error: 'Invalid session' }, 401);
+      }
+      user = { id: sub };
+    } else {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) return json({ error: 'Invalid session' }, 401);
+      user = authUser;
+    }
 
     if (body.action === 'list') {
       // Don't create a Customer just to show an empty list.

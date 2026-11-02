@@ -18,7 +18,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { getIntakeFormById, submitIntakeFormAnswers, IntakeForm, IntakeFormQuestion } from '../../services/databaseService';
 import { HomeScreenProps } from '../../navigation/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useSettingsStackHidesTabBar } from '../../navigation/settingsTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { ThemedBackground } from '../../components/ThemedBackground';
 
@@ -27,6 +29,9 @@ type Props = HomeScreenProps<'ClientIntakeForm'>;
 export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   const { formId, serviceName } = route.params;
   const { palette: P } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Opened from the Profile tab there is no tab bar to clear, only the home indicator.
+  const tabBarHidden = useSettingsStackHidesTabBar();
 
   const [form, setForm]         = useState<IntakeForm | null>(null);
   const [answers, setAnswers]   = useState<Record<string, string>>({});
@@ -242,7 +247,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
 
           {/* Submit button — hidden once completed, since there's nothing left to submit */}
           {!submitted && (
-            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border, paddingBottom: keyboardVisible ? 12 : FLOATING_TAB_BAR_CLEARANCE }]}>
+            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border, paddingBottom: keyboardVisible ? 12 : tabBarHidden ? Math.max(insets.bottom, 12) : FLOATING_TAB_BAR_CLEARANCE }]}>
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: P.accent }]}
                 onPress={handleSubmit}

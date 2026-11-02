@@ -63,3 +63,8 @@ export const TOUR_SEEN_PREFIXES = {
 export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];
 
 export const tourSeenKey = (prefix: TourSeenPrefix, userId: string): string => `${prefix}${userId}`;
+
+/** The day (YYYY-MM-DD) a link-only provider last closed the "Become a full
+ *  member" nudge bar on Home, per account. Only a per-device convenience: an
+ *  empty value just means the bar can show again once enough nudges arrive. */
+export const joinNudgeBarDismissedKey = (userId: string): string => `@cerviced_join_nudge_bar_dismissed_${userId}`;
