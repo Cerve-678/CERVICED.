@@ -59,6 +59,7 @@ const todaySchedule: Capability = {
   id: "pv.today",
   hat: "provider",
   describe: "What's on today / my schedule",
+  thinking: ["Checking today’s diary…", "Reading the appointment details…"],
   phrases: [
     "today", "what's on", "whats on", "my day", "schedule", "agenda",
     "diary", "appointments", "bookings", "who's coming", "whos coming", "next client",
@@ -128,6 +129,7 @@ const weekAhead: Capability = {
   id: "pv.week",
   hat: "provider",
   describe: "How busy am I this week",
+  thinking: ["Checking this week’s diary…", "Counting your bookings…"],
   phrases: [
     "this week", "how busy", "week ahead", "rest of the week", "next few days",
     "how's my week", "hows my week", "busy week", "what's my week like",
@@ -191,6 +193,7 @@ const scheduleGaps: Capability = {
   id: "pv.gaps",
   hat: "provider",
   describe: "Which upcoming days are quiet or have booking gaps",
+  thinking: ["Checking the days ahead…", "Finding the quiet ones…"],
   phrases: [
     "where are my gaps", "where are the gaps", "my gaps", "quiet days",
     "quiet day", "empty days", "free days", "slow days", "days with space",
@@ -246,6 +249,7 @@ const waitlist: Capability = {
   id: "pv.waitlist",
   hat: "provider",
   describe: "Who's waiting on a cancellation",
+  thinking: ["Checking your waitlist…"],
   phrases: [
     "waitlist", "waiting list", "cancellation list", "who's waiting",
     "whos waiting", "fill a gap", "anyone waiting", "who wants a slot",
@@ -296,6 +300,7 @@ const clientele: Capability = {
   id: "pv.clients",
   hat: "provider",
   describe: "My clients / clientele",
+  thinking: ["Opening your client list…"],
   phrases: [
     "my clients", "clientele", "how many clients", "regulars", "client list",
     "customers", "my customers", "client base", "who are my clients",
@@ -329,6 +334,7 @@ const inbox: Capability = {
   id: "pv.inbox",
   hat: "provider",
   describe: "Any unread messages",
+  thinking: ["Checking your messages…"],
   phrases: [
     "messages", "inbox", "unread", "replies", "anyone messaged", "dm",
     "any messages", "unread messages", "has anyone messaged", "my inbox",
@@ -380,6 +386,7 @@ const outstandingForms: Capability = {
   id: "pv.forms",
   hat: "provider",
   describe: "Which clients haven't filled their forms in",
+  thinking: ["Checking your intake forms…", "Finding who hasn’t filled theirs in…"],
   phrases: [
     "forms", "intake", "consultation form", "not filled", "outstanding forms",
     "consent", "who hasn't filled", "who hasnt filled", "missing forms",
@@ -412,6 +419,7 @@ const lapsedClients: Capability = {
   id: "pv.lapsed",
   hat: "provider",
   describe: "Which clients haven't been back in a while",
+  thinking: ["Opening your client list…", "Finding who hasn’t been back in a while…"],
   phrases: [
     "hasn't been back", "havent been back", "lapsed", "haven't seen",
     "havent seen", "win back", "not returned", "stopped coming", "quiet clients",
@@ -470,6 +478,7 @@ const myServices: Capability = {
   id: "pv.myservices",
   hat: "provider",
   describe: "What services and prices do I offer",
+  thinking: ["Reading your services and prices…"],
   // Read-only phrasings only. An "edit"/"add"/"change" intent belongs to
   // `services`, which opens the editor — answering it with a price list is
   // technically responsive and practically useless.
@@ -521,6 +530,7 @@ const providerNotifications: Capability = {
   id: "pv.notifications",
   hat: "provider",
   describe: "Any updates or notifications I've missed",
+  thinking: ["Checking your notifications…"],
   phrases: [
     "notifications", "any updates", "have i missed", "anything new", "alerts",
     "what did i miss", "any news", "catch me up", "what's new", "whats new",
@@ -576,6 +586,7 @@ const timeOff: Capability = {
   id: "pv.timeoff",
   hat: "provider",
   describe: "Am I off / what days have I blocked out",
+  thinking: ["Checking your blocked-out days…"],
   phrases: [
     "day off", "days off", "time off", "am i off", "blocked out",
     "holiday", "annual leave", "closed on", "not working",
@@ -621,6 +632,7 @@ const myReviews: Capability = {
   id: "pv.reviews",
   hat: "provider",
   describe: "What are my clients saying / my rating",
+  thinking: ["Reading your reviews…", "Working out your rating…"],
   phrases: [
     "my reviews", "my rating", "what are clients saying", "my feedback",
     "how am i rated", "my stars", "any new reviews", "what do clients say",
@@ -660,6 +672,7 @@ const myHours: Capability = {
   id: "pv.hours",
   hat: "provider",
   describe: "What are my working hours",
+  thinking: ["Checking your working hours…"],
   phrases: [
     "my hours", "my working hours", "when am i open", "what time do i open",
     "what time do i close", "my opening hours", "my working days",
@@ -711,6 +724,7 @@ const myCapacity: Capability = {
   id: "pv.capacity",
   hat: "provider",
   describe: "How many bookings can I take a day / am I full",
+  thinking: ["Checking your daily booking limit…"],
   phrases: [
     "how many bookings a day", "my daily limit", "am i full", "my capacity",
     "max bookings", "booking limit", "how many can i take", "fully booked",
@@ -762,6 +776,7 @@ const myReach: Capability = {
   id: "pv.reach",
   hat: "provider",
   describe: "How many followers do I have / how many services",
+  thinking: ["Counting your followers and services…"],
   phrases: [
     "my followers", "how many followers", "how many people follow me",
     "how many services do i have", "my reach", "my audience",
@@ -802,6 +817,7 @@ const myAddress: Capability = {
   id: "pv.address",
   hat: "provider",
   describe: "What address are clients seeing",
+  thinking: ["Checking the address clients see…"],
   phrases: [
     "my address", "what address", "my location", "where do clients think",
     "my studio address", "do clients see my address",
@@ -841,6 +857,7 @@ const availability: Capability = {
   id: "pv.availability",
   hat: "provider",
   describe: "Set working hours, days off, availability",
+  thinking: ["Finding your availability settings…"],
   phrases: ["availability", "working hours", "day off", "time off", "holiday", "block out", "open hours", "close"],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {
@@ -866,6 +883,7 @@ const services: Capability = {
   id: "pv.services",
   hat: "provider",
   describe: "Edit my services, prices, portfolio",
+  thinking: ["Finding your services editor…"],
   phrases: [
     "my services", "my prices", "price list", "menu", "portfolio",
     "add a service", "edit profile", "my profile", "my listing",
@@ -938,6 +956,7 @@ const analytics: Capability = {
   id: "pv.analytics",
   hat: "provider",
   describe: "How my business is doing — booking volume and patterns",
+  thinking: ["Looking through your bookings…", "Spotting the patterns…"],
   phrases: [
     "earnings", "revenue", "income", "analytics", "stats", "performance",
     "insights", "how am i doing", "how's business", "hows business",
@@ -1033,6 +1052,7 @@ const automations: Capability = {
   id: "pv.automations",
   hat: "provider",
   describe: "My deposit, cancellation and reschedule policies",
+  thinking: ["Reading your booking policies…"],
   phrases: [
     "automation", "automations", "reminders", "deposit", "my deposit",
     "policy", "policies", "my policies", "auto message", "settings",
@@ -1130,6 +1150,7 @@ const infoPacks: Capability = {
   id: "pv.infopacks",
   hat: "provider",
   describe: "Info packs, forms and message templates I send clients",
+  thinking: ["Finding your info packs and templates…"],
   phrases: [
     "info pack", "info packs", "aftercare", "prep notes", "instructions",
     "prep info", "care instructions", "what i send clients", "my packs",
@@ -1187,6 +1208,7 @@ const help: Capability = {
   id: "pv.help",
   hat: "provider",
   describe: "What can Becca do for my business",
+  thinking: ["Getting my options ready…"],
   phrases: ["what can you do", "help", "how do you work", "what are you", "who are you"],
   fitsLinkOnly: true,
   async run({ linkOnly }): Promise<CapabilityResult> {

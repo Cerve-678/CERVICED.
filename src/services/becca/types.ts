@@ -325,8 +325,22 @@ export interface Capability {
    * Ignored for the client hat and for full providers.
    */
   fitsLinkOnly?: boolean;
+  /**
+   * What Becca shows while this capability runs — one to three short steps,
+   * each describing work `run` really does ("Reading Lola's deposit policy…"),
+   * never a fact from the answer. Shown in order once the engine has decided
+   * on this capability; see EngineInput.onProgress.
+   */
+  thinking: string[] | ((turn: ThinkingTurn) => string[]);
   /** Runs the capability against real app data. */
   run: (ctx: CapabilityContext) => Promise<CapabilityResult>;
+}
+
+/** What a capability's loading steps may read: the turn, before it runs. */
+export interface ThinkingTurn {
+  entities: EntityBag;
+  /** The repaired ask — the same text the capability's `run` will see. */
+  message: string;
 }
 
 /**

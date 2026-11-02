@@ -30,7 +30,8 @@ import userLearningService from "../userLearningService";
 import { resolveEntities } from "./entityResolver";
 import { understand } from "./matcher";
 import { normalizeAsk } from "./askNormaliser";
-import { capabilitiesFor, fitsSetup, getCapability, toToolSchema } from "./registry";
+import { capabilitiesFor, fitsSetup, getCapability, thinkingFor, toToolSchema } from "./registry";
+import { smallTalkReply } from "./smallTalk";
 import { askChip, chip, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
@@ -64,6 +65,12 @@ export interface EngineInput {
    * or invalid. See aiInterpreter.ts for the safety boundary.
    */
   interpreter?: BeccaAIInterpreter;
+  /**
+   * Called once, with the chosen capability's loading steps, after the
+   * message is understood and before the capability runs. Not called for
+   * small talk, fallbacks or ambiguity — nothing is being fetched for those.
+   */
+  onProgress?: (steps: string[]) => void;
 }
 
 /**
@@ -558,6 +565,10 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     (n) => n.required && entities[n.kind as keyof EntityBag] == null,
   );
   if (missing) return buildMissingEntityReply(missing.kind, hat);
+
+  // Understood and about to run: say what Becca is actually doing now, in
+  // place of the screen's generic "reading your message".
+  input.onProgress?.(thinkingFor(capability, { entities, message: ask }));
 
   // Client hat only: a provider's own habits as a client say nothing useful
   // about their business questions. Resolved once here rather than per
@@ -1088,75 +1099,20 @@ function isSafeLeadIn(value: string): boolean {
 }
 
 /**
- * Handles complete, non-task social turns before intent matching.
- *
- * The registry's help capability intentionally recognises "hi" as a useful
- * first touch, but its full feature list is an awkward answer to a simple
- * greeting. Likewise, a "thanks" used to land in the generic uncertainty
- * fallback. These are response-quality cases, not capabilities: no data is
- * read and no app action is implied.
+ * Handles complete, non-task social turns before intent matching — see
+ * smallTalk.ts for what counts. The registry's help capability recognises
+ * "hi" too, but its full feature list is an awkward answer to a greeting.
  */
 function buildSocialReply(message: string, hat: BeccaHat): ChatMessage | null {
-  const plain = message
-    .trim()
-    .toLowerCase()
-    .replace(/’/g, "'")
-    .replace(/[!?.]+$/g, "")
-    .replace(/\s+/g, " ");
-
-  if (/^(?:hi|hello|hey|hiya|morning|good morning|afternoon|good afternoon|evening|good evening|becca)$/.test(plain)) {
-    return message_(
-      {
-        content:
-          hat === "provider"
-            ? "Hi — I’m here to help you stay on top of your business. What would you like to check?"
-            : "Hi — what would you like help with today?",
-        suggestions: defaultStarters(hat),
-      },
-      hat,
-    );
-  }
-
-  // Identity questions are just as common as a greeting, particularly in a
-  // new chat. Keep this before intent matching: neither answer needs account
-  // data, and "what's your name?" should not fall through to uncertainty.
-  if (/^(?:what(?:'s| is) (?:your|ur) n(?:ame|sme)|who are you|what are you|are you becca|is your name becca|tell me your name|your name)$/.test(plain)) {
-    return message_(
-      {
-        content:
-          hat === "provider"
-            ? "I’m Becca, CERVICED’s business assistant. I can help with your diary, clients and business setup."
-            : "I’m Becca, CERVICED’s beauty and booking assistant. I can help you find providers and stay on top of your bookings.",
-        suggestions: defaultStarters(hat),
-      },
-      hat,
-    );
-  }
-
-  if (/^(?:thanks|thank you|cheers|ta|perfect|great thanks)$/.test(plain)) {
-    return message_(
-      {
-        content:
-          hat === "provider"
-            ? "You’re welcome. I’m here whenever you need a hand with the business."
-            : "You’re welcome. I’m here whenever you need a hand.",
-        suggestions: defaultFollowUps(hat),
-      },
-      hat,
-    );
-  }
-
-  if (/^(?:bye|goodbye|see you|see ya|that'?s all)$/.test(plain)) {
-    return message_(
-      {
-        content: "Speak soon — I’ll be right here when you need me.",
-        suggestions: defaultStarters(hat),
-      },
-      hat,
-    );
-  }
-
-  return null;
+  const reply = smallTalkReply(message, hat);
+  if (!reply) return null;
+  return message_(
+    {
+      content: reply.content,
+      suggestions: reply.chips === "starters" ? defaultStarters(hat) : defaultFollowUps(hat),
+    },
+    hat,
+  );
 }
 
 /**
