@@ -1,6 +1,6 @@
 import type { ServiceCategory } from '../types/database';
 import { UK_CITIES } from '../constants/ukCities';
-import { CITY_AREAS } from '../data/cityAreas';
+import { CITY_AREAS, COUNTY_TOWNS } from '../data/cityAreas';
 import { editDistance } from './fuzzyMatch';
 
 // ─────────────────────────────────────────────────────────
@@ -80,8 +80,12 @@ for (const { city, regions } of CITY_AREAS) {
   }
 }
 
+// "kent" → its towns. Stored locations name the town, never the county.
+const COUNTY_TOWNS_BY_KEY = new Map(Object.entries(COUNTY_TOWNS).map(([county, towns]) => [county.toLowerCase(), towns]));
+
 // Every place name the app knows, lowercase → as providers see it.
 const KNOWN_PLACES = new Map<string, string>();
+for (const county of Object.keys(COUNTY_TOWNS)) KNOWN_PLACES.set(county.toLowerCase(), county);
 for (const place of [...UK_CITIES, ...CITY_AREAS.map(c => c.city)]) KNOWN_PLACES.set(place.toLowerCase(), place);
 for (const { regions } of CITY_AREAS) {
   for (const { region, areas } of regions) {
@@ -152,6 +156,7 @@ export function buildLocationTerms(phrase: string): string[] {
     ...(REGION_AREAS.get(fixed.toLowerCase()) ?? []),
     core,
     ...(AREA_CITIES.get(core.toLowerCase()) ?? []),
+    ...(COUNTY_TOWNS_BY_KEY.get(core.toLowerCase()) ?? []),
   ];
   const seen = new Set<string>();
   return terms.filter(term => {
@@ -190,7 +195,7 @@ export function parseSearchQuery(raw: string): ParsedSearchQuery {
   const implicitCity = lastMatch ? null : [...UK_CITIES, ...IMPLICIT_AREAS]
     .sort((a, b) => b.length - a.length)
     .find(endsWithPlace)
-    ?? (AREA_CITIES.has(q.toLowerCase()) ? q : undefined);
+    ?? (AREA_CITIES.has(q.toLowerCase()) || COUNTY_TOWNS_BY_KEY.has(q.toLowerCase()) ? q : undefined);
   const locationPhrase = lastMatch
     ? q.slice(lastMatch.index + lastMatch[0].length).trim() || null
     // As typed, so a lowercase area key never replaces the client's spelling.

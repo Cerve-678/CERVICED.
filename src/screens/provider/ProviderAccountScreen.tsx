@@ -217,6 +217,12 @@ export default function ProviderAccountScreen({ navigation }: any) {
     }
   };
 
+  const clientCardCopy = !hatState.clientHatKnown
+    ? { title: t('providerAccount.forClients.checking.title'), sub: t('providerAccount.forClients.checking.sub') }
+    : hatState.owned.client
+      ? { title: t('providerAccount.forClients.switch.title'), sub: t('providerAccount.forClients.switch.sub') }
+      : { title: t('providerAccount.forClients.create.title'), sub: t('providerAccount.forClients.create.sub') };
+
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     logout();
@@ -483,8 +489,11 @@ export default function ProviderAccountScreen({ navigation }: any) {
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.forClients')}</Text>
               <TouchableOpacity
-                style={[styles.providerCard, { backgroundColor: P.accent, shadowColor: P.shadow }]}
+                style={[styles.providerCard, { backgroundColor: P.accent, shadowColor: P.shadow }, !hatState.clientHatKnown && { opacity: 0.6 }]}
                 onPress={handleSwitchToClient}
+                // Setting up a "new" client profile rewrites the existing one,
+                // so nothing can be offered until we know which this account has.
+                disabled={!hatState.clientHatKnown}
                 activeOpacity={0.85}
               >
                 <View style={styles.providerCardIcon}>
@@ -492,10 +501,10 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.providerCardTitle}>
-                    {hatState.owned.client ? t('providerAccount.forClients.switch.title') : t('providerAccount.forClients.create.title')}
+                    {clientCardCopy.title}
                   </Text>
                   <Text style={styles.providerCardSub}>
-                    {hatState.owned.client ? t('providerAccount.forClients.switch.sub') : t('providerAccount.forClients.create.sub')}
+                    {clientCardCopy.sub}
                   </Text>
                 </View>
                 {clientUnread > 0 && (

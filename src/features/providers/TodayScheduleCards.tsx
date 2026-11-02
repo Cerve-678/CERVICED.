@@ -1,7 +1,7 @@
 // src/features/providers/TodayScheduleCards.tsx
 // The two "today" cards on My Profile's Dashboard (owner's pick, 2026-10-29):
 //   - TodaySummaryCard: the whole day at a glance, on the profile's accent.
-//   - TodayBookingCards: one swipeable card per client, opened on the next one.
+//   - TodayBookingCards: one swipeable card for each of the next few bookings, on any date.
 // Which one sits at the top and which sits under Your work is decided by
 // todaySchedule.ts. Designs X and Y: https://claude.ai/artifact/GAhSKrF5aDFEiNJsThtmMy
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -21,9 +21,7 @@ import type { BookingWithAddOns } from '../../types/database';
 import { isDarkColor, withAlpha } from '../../constants/providerThemes';
 import {
   DAY_NAMES_ABBREV,
-  DAY_NAMES_FULL,
   MONTH_NAMES_ABBREV,
-  MONTH_NAMES_FULL,
   formatDurationMinutes,
   toLocalDate,
 } from '../../utils/dateUtils';
@@ -52,8 +50,6 @@ const MAX_SUMMARY_ROWS = 6;
 const CARD_WIDTH = 140;
 const CARD_GAP = 10;
 const CARD_STRIDE = CARD_WIDTH + CARD_GAP;
-/** How much of the finished card before the next client stays in view. */
-const PEEK = 30;
 const SHEET_GUTTER = 20;
 
 const TODO_BG = '#FFD9B3';
@@ -76,11 +72,6 @@ function plural(n: number, word: string): string {
 function shortDayLabel(ymd: string): string {
   const d = toLocalDate(ymd);
   return `${DAY_NAMES_ABBREV[d.getDay()]} ${d.getDate()} ${MONTH_NAMES_ABBREV[d.getMonth()]}`.toUpperCase();
-}
-
-function longDayLabel(ymd: string): string {
-  const d = toLocalDate(ymd);
-  return `${DAY_NAMES_FULL[d.getDay()]} ${d.getDate()} ${MONTH_NAMES_FULL[d.getMonth()]}`;
 }
 
 /** "NOW", "NEXT · 25 MIN", "NEXT · 1H 30M", "REQUEST", "DONE" — or '' for
@@ -266,41 +257,24 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
   palette: TodayCardsPalette;
   onOpenBooking: (booking: BookingWithAddOns) => void;
 }) {
-  const { phase, today, tomorrow, todos, doneCount, bookedValue } = schedule;
-  const showingTomorrow = phase === 'dayDone';
-  const slots = showingTomorrow ? tomorrow : today;
-  const leadIndex = showingTomorrow ? 0 : schedule.leadIndex ?? 0;
+  const { phase, upcoming: slots, todos, todayYmd, tomorrowYmd } = schedule;
 
   const leadInk = isDarkColor(palette.accent) ? '#FFF8F2' : '#26201E';
 
-  // Opens on the next client, with the card before it peeking in from the
-  // left. Re-applied only when the lead moves (a client finishing, the day
-  // rolling over to tomorrow), never in the middle of someone's swipe.
+  // Back to the first card when it changes (a client finishing), so the next
+  // booking is always what's showing. Never in the middle of someone's swipe.
   const scrollRef = useRef<ScrollViewInstance>(null);
-  const laidOut = useRef(false);
-  const appliedKey = useRef<string | null>(null);
-  const [activeIndex, setActiveIndex] = useState(leadIndex);
-  const scrollKey = `${phase}:${leadIndex}:${slots.length}`;
-  const applyLeadScroll = useCallback(() => {
-    if (!laidOut.current || appliedKey.current === scrollKey) return;
-    appliedKey.current = scrollKey;
-    scrollRef.current?.scrollTo({ x: Math.max(0, leadIndex * CARD_STRIDE - PEEK), animated: false });
-    setActiveIndex(leadIndex);
-  }, [scrollKey, leadIndex]);
-  // A scrollTo before the first layout is dropped, so the first one waits
-  // for the content; later lead changes apply straight away.
-  const handleContentSizeChange = useCallback(() => {
-    laidOut.current = true;
-    applyLeadScroll();
-  }, [applyLeadScroll]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const firstId = slots[0]?.booking.id;
   useEffect(() => {
-    applyLeadScroll();
-  }, [applyLeadScroll]);
+    scrollRef.current?.scrollTo({ x: 0, animated: false });
+    setActiveIndex(0);
+  }, [firstId]);
 
   const handleScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const x = e.nativeEvent.contentOffset.x;
-      setActiveIndex(Math.min(slots.length - 1, Math.max(0, Math.round((x + PEEK) / CARD_STRIDE))));
+      setActiveIndex(Math.min(slots.length - 1, Math.max(0, Math.round(x / CARD_STRIDE))));
     },
     [slots.length],
   );
@@ -308,25 +282,16 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
   if (slots.length === 0) return null;
 
   const total = slots.length;
-  const [countValue, countLabel] = showingTomorrow
-    ? [String(total), total === 1 ? 'booking' : 'bookings']
-    : phase === 'cardsLead'
-      ? [`${total - doneCount} to go`, `of ${total} today`]
-      : [`${total} · ${money(bookedValue)}`, 'bookings · booked'];
   const todoFirst = phase === 'cardsLead' ? todos[0] : undefined;
 
   return (
     <View style={styles.cardsSection}>
       <View style={styles.cardsHeader}>
         <View>
-          <Text style={[styles.cardsTitle, { color: palette.text }]}>{showingTomorrow ? 'TOMORROW' : 'TODAY'}</Text>
+          <Text style={[styles.cardsTitle, { color: palette.text }]}>COMING UP</Text>
           <Text style={[styles.cardsDate, { color: palette.sub }]}>
-            {longDayLabel(showingTomorrow ? schedule.tomorrowYmd : schedule.todayYmd)}
+            {total === 1 ? 'Your next booking' : `Your next ${total} bookings`}
           </Text>
-        </View>
-        <View style={styles.cardsCount}>
-          <Text style={[styles.cardsCountValue, { color: palette.text }]}>{countValue}</Text>
-          <Text style={[styles.cardsCountLabel, { color: palette.sub }]}>{countLabel}</Text>
         </View>
       </View>
 
@@ -338,15 +303,18 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
         contentContainerStyle={styles.cardsTrack}
         snapToInterval={CARD_STRIDE}
         decelerationRate="fast"
-        onContentSizeChange={handleContentSizeChange}
         onMomentumScrollEnd={handleScrollEnd}
       >
-        {slots.map(slot => {
-          const lead = showingTomorrow ? slot.state === 'next' : slot.state === 'now' || slot.state === 'next';
-          const done = slot.state === 'done';
+        {slots.map((slot, index) => {
+          const lead = index === 0;
+          const onToday = slot.booking.booking_date === todayYmd;
           const fg = lead ? leadInk : palette.text;
           const fgSub = lead ? withAlpha(leadInk, 0.75) : palette.sub;
-          const tag = showingTomorrow ? (lead ? 'FIRST' : 'LATER') : slotTag(slot) || 'LATER';
+          const tag = onToday
+            ? slotTag(slot) || 'LATER TODAY'
+            : slot.booking.booking_date === tomorrowYmd
+              ? 'TOMORROW'
+              : shortDayLabel(slot.booking.booking_date);
           return (
             <TouchableOpacity
               key={slot.booking.id}
@@ -355,7 +323,6 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
                 lead
                   ? [styles.bookingCardLead, { backgroundColor: palette.accent, borderColor: palette.accent }]
                   : { backgroundColor: palette.card, borderColor: palette.border },
-                done && styles.bookingCardDone,
               ]}
               onPress={() => { tap(); onOpenBooking(slot.booking); }}
               activeOpacity={0.75}
@@ -374,7 +341,12 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
               <Text style={[styles.cardService, { color: fgSub }]} numberOfLines={2}>
                 {slot.booking.service_name_snapshot}
               </Text>
-              {slot.needsPatchTest && !done ? (
+              {slot.isRequest && !onToday ? (
+                <View style={styles.flag}>
+                  <Text style={styles.flagText}>REQUEST</Text>
+                </View>
+              ) : null}
+              {slot.needsPatchTest ? (
                 <View style={styles.flag}>
                   <Text style={styles.flagText}>NEEDS PATCH TEST</Text>
                 </View>
@@ -571,19 +543,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 1,
   },
-  cardsCount: {
-    alignItems: 'flex-end',
-  },
-  cardsCountValue: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    lineHeight: 22,
-  },
-  cardsCountLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 11,
-  },
   // Runs edge to edge under the sheet's padding so the cards scroll off the
   // screen rather than being clipped at the gutter.
   cardsScroller: {
@@ -614,9 +573,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 18,
     elevation: 6,
-  },
-  bookingCardDone: {
-    opacity: 0.5,
   },
   cardTag: {
     fontFamily: 'Jura-VariableFont_wght',

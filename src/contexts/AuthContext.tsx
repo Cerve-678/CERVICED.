@@ -29,6 +29,9 @@ import type { ProviderBookingMode } from '../types/database';
 
 export type AccountType = 'user' | 'provider';
 
+/** Gaps between background retries of a profile load that failed. */
+const PROFILE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000];
+
 /** Whether the once-per-session "which provider profile do I own?" lookup has
  *  produced an answer. 'failed' is deliberately distinct from a 'resolved'
  *  null: both leave myProviderId null, but only one of them means the account
@@ -245,7 +248,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The auth subscription is intentionally installed once. Keep the latest
   // profile loader in a ref so it does not close over stale role-resolution
   // logic without repeatedly tearing down the Supabase subscription.
-  const loadUserProfileRef = useRef<(activeSession: Session) => Promise<void>>(async () => {});
+  const loadUserProfileRef = useRef<(activeSession: Session, options?: { isRetry?: boolean }) => Promise<void>>(async () => {});
+  const userRef = useRef(user);
+  userRef.current = user;
   // Launch only: the first profile load may open the app from the saved
   // profile copy instead of waiting on the server (authProfileSnapshot.ts).
   const startupRestorePendingRef = useRef(true);
@@ -262,6 +267,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void saveAuthProfileSnapshot(user);
     }
   }, [isLoggedIn, user]);
+
+  // Signed in, but the users row couldn't be read, so the app is running on
+  // session metadata with hats unknown. Nothing else would read it again until
+  // the next launch, leaving a provider who has a client account being offered
+  // a new one. Keep trying in the background, and again on every resume.
+  const profileUnconfirmed = isLoggedIn && !!user && user.hasClientProfile === undefined;
+  useEffect(() => {
+    if (!profileUnconfirmed || !session) return;
+    let stopped = false;
+    let inFlight = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tryAgain = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
+      await loadUserProfileRef.current(session, { isRetry: true }).catch(() => {});
+      inFlight = false;
+    };
+    const schedule = (attempt: number) => {
+      const delay = PROFILE_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) return;
+      timer = setTimeout(() => {
+        void tryAgain().then(() => {
+          if (!stopped) schedule(attempt + 1);
+        });
+      }, delay);
+    };
+    schedule(0);
+    const appStateSub = AppState.addEventListener('change', state => {
+      if (state === 'active') void tryAgain();
+    });
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      appStateSub.remove();
+    };
+  }, [profileUnconfirmed, session]);
 
   // Expo Go can't receive remote push (dropped in SDK 53) — mirror notification
   // rows as local notifications instead so content is still visible while
@@ -367,11 +408,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const loadUserProfile = useCallback(async (session: Session) => {
+  const loadUserProfile = useCallback(async (session: Session, options?: { isRetry?: boolean }) => {
     const version = ++profileLoadVersion.current;
     const isCurrent = () => version === profileLoadVersion.current;
+    const isRetry = options?.isRetry === true;
     // Set when launch opened the app from the saved profile copy.
     let shownFromSnapshot = false;
+    // A failed read must never replace a profile that's already on screen with
+    // session metadata, which can't say whether a provider has a client hat.
+    const keepsShownProfile = () => {
+      const current = userRef.current;
+      return isRetry
+        || shownFromSnapshot
+        || (current?.id === session.user.id && typeof current.hasClientProfile === 'boolean');
+    };
     // Consumed up front so that only the very first load after launch, with
     // any outcome, can ever use the copy.
     const isLaunchRestore = startupRestorePendingRef.current;
@@ -416,7 +466,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         profile = await withTimeout(
           getUserProfileById(session.user.id),
-          8_000,
+          // The short limit is there so sign-in isn't held on the loading
+          // screen. A retry holds nothing up, and a slow answer is still an answer.
+          isRetry ? 30_000 : 8_000,
           'Profile restore',
         );
       } catch (err: any) {
@@ -425,10 +477,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!isCurrent()) return;
 
-      if (profileError && shownFromSnapshot) {
-        // Already showing the saved profile, which is better than session
+      if (profileError && keepsShownProfile()) {
+        // Already showing a real profile, which is better than session
         // metadata. Keep it; the next launch or sign-in tries again.
-        logger.warn('[AuthContext] profile refresh failed — keeping saved profile:', profileError.message);
+        logger.warn('[AuthContext] profile refresh failed — keeping shown profile:', profileError.message);
         registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
         return;
       }
@@ -530,12 +582,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
         registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
+      } else if (keepsShownProfile()) {
+        // RLS answers a read sent without a valid token with zero rows, which
+        // looks exactly like a missing row, so this isn't proof the row is gone.
+        logger.warn('[AuthContext] profile read returned no row — keeping shown profile');
       } else {
         // PGRST116: no profile row yet.
         // (a) New signup race — upsert in EmailVerificationScreen hasn't completed.
         //     user_metadata carries name/role from signUp call.
         // (b) Missing row for an existing account.
-        // In both cases: session is valid, keep the user logged in.
+        // (c) A read sent without a valid token, which RLS answers with zero rows.
+        // In all cases: session is valid, keep the user logged in. The retry
+        // effect reads the row again.
         profileConfirmedRef.current = false;
         void clearAuthProfileSnapshot();
         if (meta?.['name']) {
@@ -577,9 +635,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Unexpected JS error. Don't sign the user out — the session is still valid.
       // Fall back to session metadata so they stay in the app.
       logger.error('[AuthContext] unexpected error in loadUserProfile:', error);
-      // Already showing the saved profile: keep it rather than downgrading
+      // Already showing a real profile: keep it rather than downgrading
       // to session metadata.
-      if (shownFromSnapshot) return;
+      if (keepsShownProfile()) return;
       // The metadata user below must never be saved over a real copy.
       profileConfirmedRef.current = false;
       try {

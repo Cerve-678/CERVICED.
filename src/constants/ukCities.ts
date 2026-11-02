@@ -20,6 +20,10 @@ export const UK_CITIES = [
   'Oxford', 'Dundee', 'Basildon', 'Solihull', 'Chelmsford',
   'Doncaster', 'Basingstoke', 'Colchester', 'Crawley', 'St Albans',
   'Woking', 'Maidstone', 'Bath', 'Worthing', 'Gillingham',
+  // Kent
+  'Canterbury', 'Dartford', 'Gravesend', 'Chatham', 'Rochester', 'Ashford', 'Tunbridge Wells',
+  'Tonbridge', 'Sevenoaks', 'Swanley', 'Sittingbourne', 'Faversham', 'Whitstable', 'Herne Bay',
+  'Margate', 'Ramsgate', 'Broadstairs', 'Folkestone', 'Dover', 'Deal',
 ] as const;
 
 export type UkCity = (typeof UK_CITIES)[number];

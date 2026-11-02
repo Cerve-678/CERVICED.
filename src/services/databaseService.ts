@@ -743,15 +743,24 @@ export async function getProviderPriceRanges(
   return ranges;
 }
 
+export interface FacetService {
+  id: string;
+  price: number | null;
+  priceMax: number | null;
+  audience: string | null;
+  skinTones: string[];
+}
+
 export interface ProviderServiceFacets {
   /** £min–£max across the provider's active services. Absent when they have
    *  none priced. */
   priceRanges: Map<string, { min: number; max: number }>;
-  /** The distinct `services.audience` tags each provider actually offers.
-   *  Absent/empty means nothing tagged — the same providers `.eq('audience',
-   *  …)` would simply not have returned. */
-  audiences: Map<string, Set<string>>;
-  skinTones: Map<string, Set<string>>;
+  /** Each provider's active services, one row per service, for the filters
+   *  that must be judged on a single service (price, audience, skin tone —
+   *  see src/utils/serviceFilterMatch.ts). Per-provider aggregates of those
+   *  columns can't answer "does ONE service satisfy all of them", which is
+   *  what let a provider pass "<£30" and "Women" on two different services. */
+  services: Map<string, FacetService[]>;
   /** Free-text "speciality" haystack per provider, for the client Speciality
    *  filter's fuzzy match (src/utils/fuzzyMatch.ts). Unions three sources that
    *  each name what a provider is known for: their chosen business
@@ -769,7 +778,8 @@ export interface ProviderServiceFacets {
 }
 
 /**
- * Price range AND audience tags for a set of providers, in ONE query.
+ * Price range, per-service filter data and speciality text for a set of
+ * providers, in ONE services scan (plus the provider_specialties read beside it).
  *
  * getProviderPriceRanges and the former getProviderAudienceMatches asked the same table,
  * over the same provider ids, behind the same has_gone_live/is_active gate —
@@ -778,21 +788,20 @@ export interface ProviderServiceFacets {
  * that need both should use this; the two single-purpose functions remain for
  * callers that genuinely need only one.
  *
- * Returning the audience SET rather than a pre-filtered match set is
- * deliberate: it lets a caller re-answer "does this provider serve men?" for a
- * different audience without going back to the network, which is what makes
- * toggling that filter free rather than another round trip.
+ * Returning the raw per-service rows rather than a pre-filtered match set is
+ * deliberate: it lets a caller re-answer "does one of this provider's services
+ * fit £30–£60 for men?" for any combination without going back to the network,
+ * which is what makes toggling those filters free rather than another round trip.
  */
 export async function getProviderServiceFacets(
   providerIds: string[],
 ): Promise<ProviderServiceFacets> {
   const priceRanges = new Map<string, { min: number; max: number }>();
-  const audiences = new Map<string, Set<string>>();
-  const skinTones = new Map<string, Set<string>>();
+  const services = new Map<string, FacetService[]>();
   const specialityText = new Map<string, Set<string>>();
   const specialityLabels = new Map<string, Set<string>>();
   if (providerIds.length === 0) {
-    return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
+    return { priceRanges, services, specialityText, specialityLabels };
   }
 
   const addTo = (map: Map<string, Set<string>>, providerId: string, value: string) => {
@@ -823,7 +832,7 @@ export async function getProviderServiceFacets(
     supabase
       .from("services")
       .select(
-        "provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
+        "id, provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
       )
       .eq("is_active", true)
       .eq("providers.has_gone_live", true)
@@ -856,17 +865,15 @@ export async function getProviderServiceFacets(
       }
     }
 
-    for (const tone of row.skin_tones_suitable ?? []) {
-      const set = skinTones.get(providerId) ?? new Set<string>();
-      set.add(tone);
-      skinTones.set(providerId, set);
-    }
-
-    if (row.audience) {
-      const set = audiences.get(providerId) ?? new Set<string>();
-      set.add(row.audience as string);
-      audiences.set(providerId, set);
-    }
+    const own = services.get(providerId) ?? [];
+    own.push({
+      id: row.id as string,
+      price: (row.price as number | null) ?? null,
+      priceMax: (row.price_max as number | null) ?? null,
+      audience: (row.audience as string | null) ?? null,
+      skinTones: (row.skin_tones_suitable as string[] | null) ?? [],
+    });
+    services.set(providerId, own);
 
     // The service name plus every tag column feed the Speciality haystack.
     addSpeciality(providerId, row.name as string | null);
@@ -885,7 +892,7 @@ export async function getProviderServiceFacets(
     addSpecialityLabel(row.provider_id as string, row.specialty as string | null);
   }
 
-  return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
+  return { priceRanges, services, specialityText, specialityLabels };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -4331,6 +4338,32 @@ export async function getProviderBookingsByDateRange(
     .gte("booking_date", startDate)
     .lte("booking_date", endDate)
     .not("status", "in", '("cancelled","on_hold")')
+    .order("booking_date", { ascending: true })
+    .order("booking_time", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as BookingWithAddOns[];
+}
+
+/** A provider's next bookings still to come from a date onwards, soonest
+ *  first. A provider reading their own diary, so no has_gone_live filter. */
+export async function getProviderUpcomingBookings(
+  providerId: string,
+  fromDate: string,
+  limit: number,
+): Promise<BookingWithAddOns[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(
+      `
+      *,
+      add_ons: booking_add_ons ( * )
+    `,
+    )
+    .eq("provider_id", providerId)
+    .gte("booking_date", fromDate)
+    .in("status", ["pending", "confirmed", "in_progress"])
     .order("booking_date", { ascending: true })
     .order("booking_time", { ascending: true })
     .limit(limit);
