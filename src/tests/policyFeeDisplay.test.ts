@@ -19,3 +19,17 @@ test('never promises a full no-show charge — the retired option reads as depos
   expect(row(buildPolicyDisplayRows({ noShowAction: 'charge_full' }), 'No-show')).toBe('Deposit kept');
   expect(row(buildPolicyDisplayRows({ noShowAction: 'charge_deposit' }), 'No-show')).toBe('Deposit kept');
 });
+
+test('a custom no-show action shows only the fee, not a deposit it never keeps', () => {
+  const rows = buildPolicyDisplayRows({ noShowAction: 'custom', noShowFee: '20' });
+  expect(row(rows, 'No-show')).toBeUndefined();
+  expect(row(rows, 'No-show fee')).toBe('£20');
+});
+
+test('a custom cancellation charge shows its amount and its cap', () => {
+  const cancellation = (policy: Parameters<typeof buildPolicyDisplayRows>[0]) => row(buildPolicyDisplayRows(policy), 'Cancellation');
+  expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'custom', cancelCustomFee: '20' }))
+    .toBe('24h notice · £20 kept, at most half the price');
+  expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'custom', cancelCustomFee: '' })).toBe('24h notice');
+  expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'half' })).toBe('24h notice · half the price kept');
+});
