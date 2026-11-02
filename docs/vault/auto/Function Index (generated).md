@@ -5,7 +5,7 @@
 
 #generated
 
-**2858 functions** across **391 files**.
+**2861 functions** across **391 files**.
 
 ### `src/components/` (52)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -346,7 +346,7 @@
 - `askNormaliser.ts` — **normalizeAsk**
 - `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
-- `matcher.ts` — scoreEntities · scorePhrases · **understand**
+- `matcher.ts` — containsGappedPhrase · escape · plainAsk · scoreEntities · scorePhrases · **understand**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
 - `nvidiaInterpreter.ts` — validComposition · validInterpretation
 - `registry.ts` — **capabilitiesFor** · **fitsSetup** · **getCapability** · **thinkingFor** · **toToolSchema**

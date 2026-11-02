@@ -237,6 +237,11 @@ const bookingDetails: Capability = {
     "more about my appointment", "more about my booking",
     "booking details", "appointment details", "details of my appointment",
     "break down my booking", "break down my appointment", "booking breakdown",
+    // The service and provider sit in the middle: "tell me about my gel
+    // manicure appointment with Lola" (the Booking breakdown card's message).
+    "tell me about my * appointment", "tell me about my * booking",
+    "more about my * appointment", "more about my * booking",
+    "break down my * appointment", "details of my * appointment",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -296,6 +301,7 @@ const bookingInfoPacks: Capability = {
     "what did they send me", "my prep notes", "my aftercare", "aftercare notes",
     "my information pack", "my info pack", "booking notes", "appointment notes",
     "instructions for my appointment", "what do i need to read",
+    "what did * send me", "what has * sent me",
   ],
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -385,6 +391,9 @@ const bookingCost: Capability = {
     "cost of my booking", "how much have i paid", "how much did i pay",
     "what's the total", "whats the total", "how much will it be",
     "have i paid", "is it paid", "what's left to pay", "outstanding balance",
+    "how much is my appointment", "how much is my booking",
+    "how much is my * appointment", "how much is my * booking",
+    "what am i paying for my * appointment",
   ],
   async run({ bookings, entities }): Promise<CapabilityResult> {
     const upcoming = sortUpcoming(bookings);
@@ -900,7 +909,11 @@ const findProviders: Capability = {
   // Style-name phrases ("soft glam", "bridal look") are included for the same
   // reason: they name a LOOK, not a person, so "looking for soft glam" is a
   // request for images even without the word "looks" in it.
-  excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b/i,
+  //
+  // A rating clause hands it to discover.top the same way: "best rated near
+  // me" after a nails search otherwise came back as nails-near-me with the
+  // rating silently dropped. discover.top does its own nearby reordering.
+  excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look|top[\s-]?rated|best[\s-]?rated|highest[\s-]?rated)\b/i,
   needs: [{ kind: "service", required: true }],
   thinking: ({ entities, message }) => {
     const service = entities.service?.value;
@@ -1058,6 +1071,10 @@ const pickFromList: Capability = {
     "tell me about", "more about", "what about them", "who are they",
     "book the first", "book that one", "go with", "i'll take", "ill take",
   ],
+  // "Tell me about MY appointment with Lola" is about the booking, not about
+  // Lola: booking.details answers it. Without this, naming the provider was
+  // enough for this capability to win on the provider entity alone.
+  excludeWhen: /\bmy (?:[\w'’-]+ ){0,5}(?:appointments?|bookings?)\b/i,
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const provider = entities.provider!.value;
@@ -1143,7 +1160,9 @@ const followUpPrice: Capability = {
   // are resolved ("how much do they charge for nails"), so registration order
   // alone decided it, and this one is registered first. An explicit veto is
   // the mechanism built for exactly this, rather than relying on file order.
-  excludeWhen: /\b(they|them|their|theirs|she|her|hers|he|him|his)\b/i,
+  // Also vetoed for the user's own booking: "how much is my gel manicure
+  // appointment" asks what THEY are paying (booking.cost), not the going rate.
+  excludeWhen: /\b(they|them|their|theirs|she|her|hers|he|him|his)\b|\bmy (?:[\w'’-]+ ){0,5}(?:appointments?|bookings?)\b/i,
   needs: [{ kind: "service", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const service = entities.service!.value;
@@ -1401,7 +1420,10 @@ const providerServices: Capability = {
         text: `${provider.displayName} hasn't listed any services yet.`,
         suggestions: [
           navChip("profile", "View profile", "ProviderProfile", { providerId: provider.slug, source: "becca" }),
-          askChip("similar", "Find someone similar", "Show me all services"),
+          // "Similar" means the same kind of provider, not the category list.
+          full.service_category
+            ? askChip("similar", "Find someone similar", `Find ${categoryWords(full.service_category)}`)
+            : askChip("similar", "Browse services", "Show me all services"),
         ],
       };
     }
@@ -1843,6 +1865,9 @@ const providerAvailability: Capability = {
     "when are they free", "when is she free", "when is he free", "when are you free",
     "when is the next slot", "their next slot", "next available", "when can i see them",
     "when can i book them", "when is this provider free",
+    // The provider's name sits mid-phrase: "when is Lola Studio next free?"
+    "when is * free", "when is * next free", "when is * available",
+    "when is * next available", "when can i see *", "when can i book in with *",
   ],
   needs: [{ kind: "provider", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -1869,7 +1894,7 @@ const providerAvailability: Capability = {
             providerId: provider.slug,
             source: "becca",
           }),
-          askChip("similar", "Find someone similar", "Show me all services"),
+          askChip("elsewhere", "Who else is free?", "Who's free this week?"),
         ],
       };
     }
