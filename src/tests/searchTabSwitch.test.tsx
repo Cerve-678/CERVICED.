@@ -40,6 +40,7 @@ jest.mock('../services/databaseService', () => {
     getProvidersAvailability: jest.fn(async () => new Map()),
     getProviderServiceFacets: jest.fn(async () => ({ priceRanges: new Map(), audiences: new Map(), skinTones: new Map() })),
     prefetchProviderBySlug: jest.fn(),
+    recordSearchTap: jest.fn(async () => undefined),
     getServiceCoverImages: jest.fn(async () => ({})),
   };
 });

@@ -59,7 +59,7 @@ const SECTIONS = [
   {
     heading: '6. How Search and Explore Work',
     body: [
-      'In Search, providers that match your search and filters are shown with providers Cerviced has chosen to feature first, then by rating. You can change the order, for example to nearest or price. Providers can\'t pay to be featured or to appear higher.',
+      'In Search, results are shown by how closely they match what you searched for, then with providers Cerviced has chosen to feature first, then by rating. Search also learns from what clients tap after searching: when several different clients looking for the same thing choose the same result, it can appear higher for that search, or appear for that search when it wouldn\'t otherwise. You can change the order, for example to nearest or price. Providers can\'t pay to be featured or to appear higher.',
       'Explore, Becca and some reminders are personalised. We use your activity in the app, such as the looks and providers you save, view and book, and the beauty profile you fill in, to suggest things you\'re likely to want. Our Privacy Policy explains this in more detail.',
       'Providers only appear to clients once they\'ve completed their profile and gone live.',
     ].join('\n\n'),

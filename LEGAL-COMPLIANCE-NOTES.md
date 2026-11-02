@@ -592,8 +592,12 @@ pros instead of treating a save as consent; Terms say 30-day deletion grace.
 **Open before launch:**
 - `[company number]` and `[registered address]` placeholders in clause 1.
 - The app's deletion grace is still 1 day for testing. The Terms say 30.
-- Clause 4 describes Search order as featured-then-rating (main today). Update
-  it when ranked search ships, and say so if featuring is ever paid.
+- Clause 6 describes Search order: match first, then featured, then rating,
+  plus learning from what clients tap (`search_result_taps`, 2026-11-02). Say
+  so if featuring is ever paid. The website copy on `copy/legal-policies-page`
+  still has the old "featured first, then by rating" sentence, and its Privacy
+  Policy should say search taps are kept against the account for up to 180
+  days to improve Search for everyone (not just to personalise it for you).
 - No in-app report button for reviews: clause 13 routes reports to the support
   inbox (§7).
 - Things to put to a solicitor: 16 as the contracting age (§5); provider-set

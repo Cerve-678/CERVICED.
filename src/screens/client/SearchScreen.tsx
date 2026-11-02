@@ -32,7 +32,7 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
+import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat, recordSearchTap } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
 import { formatDurationMinutes } from '../../utils/dateUtils';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
@@ -46,6 +46,7 @@ import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
 import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
+import { earlierSearchesToCredit, type FruitlessSearch } from '../../features/providers/searchLearning';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
@@ -579,6 +580,9 @@ export default function SearchScreen({ navigation, route }: Props) {
   // Every request carries a monotonically increasing id. This prevents a slow
   // response for an old category/query from replacing the newer results.
   const providerRequestIdRef = useRef(0);
+  // Searches this sitting that found nothing — a tap after rewording answers
+  // them too (see searchLearning.ts). Cleared by the tap that answers them.
+  const fruitlessSearchesRef = useRef<FruitlessSearch[]>([]);
 
   // ── "Float up and merge" entrance — plays when arriving from an element
   // that visually looks like this screen's search bar/pills: a Home screen
@@ -742,6 +746,9 @@ export default function SearchScreen({ navigation, route }: Props) {
         setServiceResults(result.services);
         setCorrectedQuery(result.correctedQuery);
         if (q) {
+          if (result.providers.length === 0 && result.services.length === 0) {
+            fruitlessSearchesRef.current = [...fruitlessSearchesRef.current.slice(-9), { query: q, at: Date.now() }];
+          }
           // Zero-result searches are valuable learning signals too.
           logSearchEvent({
             query: q,
@@ -1256,25 +1263,39 @@ export default function SearchScreen({ navigation, route }: Props) {
       });
   }, [searchQuery, selectedFilter, mapDbToCardData]);
 
+  // Teaches Search what this query meant. Never in the way of opening the
+  // result: a failure here is logged and forgotten.
+  const noteSearchTap = useCallback((providerId: string, serviceId: string | null) => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    const earlier = earlierSearchesToCredit(fruitlessSearchesRef.current, q, Date.now());
+    fruitlessSearchesRef.current = [];
+    recordSearchTap(q, providerId, serviceId, earlier).catch((error: unknown) => {
+      logger.warn('[Search] could not record a search tap', error);
+    });
+  }, [searchQuery]);
+
   const handleProviderPress = useCallback((provider: ProviderCardData) => {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    noteSearchTap(provider.providerId, null);
     // The 'view' interaction is tracked once, by ProviderProfileScreen itself
     // on load — tracking it again here double-counted every visit.
     prefetchProviderBySlug(provider.id);
     navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
-  }, [navigation]);
+  }, [navigation, noteSearchTap]);
 
   // Opens the provider on that exact service's booking sheet — the same
   // openServiceId deep link Explore's "Book Now" uses.
   const handleServicePress = useCallback((service: ServiceSearchResult) => {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    noteSearchTap(service.providerId, service.serviceId);
     prefetchProviderBySlug(service.providerSlug);
     navigation.navigate('ProviderProfile', {
       providerId: service.providerSlug,
       source: 'search',
       openServiceId: service.serviceId,
     });
-  }, [navigation]);
+  }, [navigation, noteSearchTap]);
 
   // Services only from providers still in the grid, so the filter sheet
   // (rating, distance, city…) narrows both lists the same way.
@@ -1288,9 +1309,10 @@ export default function SearchScreen({ navigation, route }: Props) {
   // booking sheet the rest of the card opens.
   const handleServiceProviderPress = useCallback((service: ServiceSearchResult) => {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    noteSearchTap(service.providerId, null);
     prefetchProviderBySlug(service.providerSlug);
     navigation.navigate('ProviderProfile', { providerId: service.providerSlug, source: 'search' });
-  }, [navigation]);
+  }, [navigation, noteSearchTap]);
 
   // Each service card's photo — the search RPC returns none, so they're
   // fetched in one batch once the services are known. A card shows the
