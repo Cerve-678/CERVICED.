@@ -126,9 +126,9 @@ Curated: [[Booking Flow]] · **298 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(142)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
+- `src/screens/shared/NotificationsScreen.tsx` _(130)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
-- `src/screens/shared/NotificationsScreen.tsx` _(120)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `supabase/automation_jobs.sql` _(107)_
@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **298 files**
 ## Notifications
 Curated: [[Notifications]] · **171 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(329)_
+- `src/screens/shared/NotificationsScreen.tsx` _(339)_
 - `src/services/databaseService.ts` _(191)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_
@@ -230,9 +230,9 @@ Curated: [[Booking Flow]] · **58 files**
 - `src/types/database.ts` _(8)_
 - `src/constants/waitlist.ts` _(7)_
 - `src/i18n/catalogs/en.ts` _(6)_
+- `src/screens/shared/NotificationsScreen.tsx` _(6)_
 - `supabase/fix_reschedule_flow_completion.sql` _(6)_
 - `src/features/achievements/achievementPresentation.ts` _(5)_
-- `src/screens/shared/NotificationsScreen.tsx` _(5)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(5)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(5)_
 - `supabase/fix_backfill_null_booking_end_time.sql` _(4)_
@@ -258,12 +258,12 @@ Curated: [[Booking Flow]] · **183 files**
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
+- `src/screens/shared/NotificationsScreen.tsx` _(63)_
 - `src/screens/provider/InfoRegScreen.tsx` _(61)_
 - `src/services/bookingService.ts` _(58)_
 - `src/utils/policyDisplay.ts` _(57)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
-- `src/screens/shared/NotificationsScreen.tsx` _(54)_
 - `src/screens/client/BookingsScreen.tsx` _(53)_
 - `src/screens/provider/PoliciesScreen.tsx` _(51)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_

@@ -868,6 +868,39 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     );
   }
 
+  // ✅ Bell color logic based on notification type
+  const getBellColor = (type: string) => {
+    if (['booking_cancelled', 'booking_declined', 'no_show', 'provider_no_show', 'reschedule_declined'].includes(type)) return '#FF1744';
+    // Amber, not the red the no-show itself uses: nothing was decided here.
+    // The booking is untouched and the disagreement is open, which is
+    // exactly what amber means everywhere else on this screen.
+    if (type === 'no_show_disputed') return '#FF9500';
+    // Money already settled by the provider's own policy — informational.
+    if (type === 'cancellation_settled') return P.accentText;
+    // A fee charged or disputed is money that needs the reader's attention;
+    // an answered dispute is informational.
+    if (type === 'fee_charged' || type === 'fee_disputed' || type === 'fee_payment_requested') return '#FF9500';
+    if (type === 'fee_dispute_resolved' || type === 'fee_payment_lapsed') return P.accentText;
+    if (type === 'fee_paid_by_client' || type === 'tip_received') return '#4CAF50';
+    // Money owed needs attention; money taken towards it is a receipt.
+    if (type === 'payout_debt_recorded') return '#FF9500';
+    if (type === 'payout_debt_recovered') return P.accentText;
+    // Amber: a request someone still has to act on or decide.
+    if (type === 'refund_requested') return '#FF9500';
+    if (type === 'refund_request_updated') return P.accentText;
+    // Money that didn't reach the provider: they need to act.
+    if (type === 'payout_failed') return '#FF9500';
+    if (type === 'terms_updated') return P.accentText;
+    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
+    // Amber, not the red used by _declined/_cancelled: nothing was decided and
+    // the booking itself is untouched, so red would read as "your appointment
+    // is off" when the appointment is exactly as it was.
+    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
+    if (['review_received', 'review_request'].includes(type)) return '#FFD700';
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved'].includes(type)) return P.accentText;
+    return '#FF9800';
+  };
+
   // ✅ Get action button text based on notification type
   const getActionButtonText = (type: string) => {
     switch (type) {
@@ -1046,8 +1079,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   <Ionicons name="star-outline" size={22} color={P.accentText} />
                 </View>
               ) : (
-                <View style={[styles.iconContainer, { backgroundColor: P.accentDim }, item.read && styles.iconSettled]}>
-                  <BellIcon size={20} color={P.accentText} />
+                <View style={[
+                  styles.iconContainer,
+                  { backgroundColor: `${getBellColor(item.type)}${item.read ? '0D' : '15'}` },
+                  item.read && styles.iconSettled,
+                ]}>
+                  <BellIcon size={20} color={getBellColor(item.type)} />
                 </View>
               )}
 
@@ -1297,10 +1334,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                       const amount = notificationAmount(selectedNotification.type, selectedNotification.title, selectedNotification.message);
                       return (
                         <>
+                          {/* Accent Rail — the one saturated colour on the card,
+                              keyed to the notification type (green/amber/gold/…). */}
+                          <View style={[styles.popupAccentRail, { backgroundColor: getBellColor(selectedNotification.type) }]} />
+
                           <View style={styles.popupHeader}>
                             <View style={styles.popupHeaderLeft}>
-                              <View style={[styles.popupIconContainer, { backgroundColor: P.accentDim }]}>
-                                <BellIcon size={22} color={P.accentText} />
+                              <View style={[styles.popupIconContainer, { backgroundColor: `${getBellColor(selectedNotification.type)}20` }]}>
+                                <BellIcon size={22} color={getBellColor(selectedNotification.type)} />
                               </View>
                               <Text style={[styles.popupKicker, { color: quietText }]} numberOfLines={1}>
                                 {notificationKindLabel(selectedNotification.type)}
@@ -1337,11 +1378,16 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
                             {selectedNotification.actionable && (
                               <TouchableOpacity
-                                style={[styles.popupActionButton, { backgroundColor: P.accent }]}
+                                style={[
+                                  styles.popupActionButton,
+                                  // Colour-outlined rather than solid-filled — quieter,
+                                  // so the rail stays the loudest use of the type colour.
+                                  { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: getBellColor(selectedNotification.type) },
+                                ]}
                                 onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
                                 activeOpacity={0.8}
                               >
-                                <Text style={[textStyles.button, styles.popupActionText, { color: P.onAccent }]}>
+                                <Text style={[textStyles.button, styles.popupActionText, { color: getBellColor(selectedNotification.type) }]}>
                                   {actionLabelFor(selectedNotification)}
                                 </Text>
                               </TouchableOpacity>
@@ -1545,10 +1591,23 @@ const styles = StyleSheet.create({
   modalContainer: { width: '94%', maxWidth: 460, maxHeight: '80%' },
   messagePopup: {
     borderRadius: 24,
-    paddingHorizontal: 22,
+    paddingLeft: 28, // clear the accent rail on the left edge
+    paddingRight: 22,
     paddingVertical: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  // Accent Rail — type-coloured stripe flush to the card's left edge. It's a
+  // plain square bar that deliberately overshoots the top and bottom edges;
+  // the card's overflow:hidden + borderRadius clip it into a clean rounded
+  // corner, filling the strip's ends completely rather than leaving a white
+  // sliver where a straight bar (or a taper) meets the curve.
+  popupAccentRail: {
+    position: 'absolute',
+    left: 0,
+    top: -40,
+    bottom: -40,
+    width: 6,
   },
   popupHeader: {
     flexDirection: 'row',
