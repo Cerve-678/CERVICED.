@@ -92,12 +92,14 @@ BEGIN
     RAISE EXCEPTION 'Unknown checkout outcome %', p_outcome;
   END IF;
 
-  -- Once only: a second settle of the same checkout records nothing more.
+  -- Once only: a second settle of the same checkout records nothing more. The
+  -- one exception is 'abandoned', which says nothing was taken: if money did
+  -- move after all, the real outcome replaces it and the client is told.
   UPDATE public.checkout_batches
      SET outcome = p_outcome,
          status  = CASE WHEN status = 'prepared' THEN 'expired' ELSE status END
    WHERE id = p_checkout_batch_id
-     AND outcome IS NULL
+     AND (outcome IS NULL OR (outcome = 'abandoned' AND p_outcome <> 'abandoned'))
      AND status <> 'finalised'
   RETURNING user_id, amount_due INTO v_user_id, v_amount;
   IF NOT FOUND THEN
