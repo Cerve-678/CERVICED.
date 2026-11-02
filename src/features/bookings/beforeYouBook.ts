@@ -7,6 +7,14 @@
 
 export type BookingDetail = 'name' | 'phone' | 'dob';
 
+/** Undefined means the users row hasn't been read yet and these fields came
+ * from the session, so a blank says nothing about what's saved. */
+export function accountStillLoading(
+  user: { hasClientProfile?: boolean | undefined } | null | undefined,
+): boolean {
+  return !!user && user.hasClientProfile === undefined;
+}
+
 export function missingBookingDetails(
   user: {
     name?: string | null;
@@ -15,9 +23,9 @@ export function missingBookingDetails(
     hasClientProfile?: boolean | undefined;
   } | null | undefined,
 ): BookingDetail[] {
-  // Undefined means the users row hasn't been read yet and these fields came
-  // from the session, so a blank here says nothing about what's saved.
-  if (!user || user.hasClientProfile === undefined) return [];
+  // Nobody is asked for details that may already be saved. Checkout waits for
+  // the row instead, so this can't let someone through unchecked.
+  if (!user || accountStillLoading(user)) return [];
   const missing: BookingDetail[] = [];
   if (!user.name?.trim()) missing.push('name');
   if (!user.phone?.trim()) missing.push('phone');

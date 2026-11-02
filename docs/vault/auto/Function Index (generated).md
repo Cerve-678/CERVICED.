@@ -5,7 +5,7 @@
 
 #generated
 
-**2928 functions** across **397 files**.
+**2929 functions** across **397 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -106,7 +106,7 @@
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 
 ### `src/features/bookings/` (19)
-- `beforeYouBook.ts` — **missingBookingDetails**
+- `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · kindLabel · load · payFee · pounds · run

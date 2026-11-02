@@ -112,7 +112,7 @@ Curated: [[Booking Flow]] · **302 files**
 - `src/services/databaseService.ts` _(964)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/screens/client/CartScreen.tsx` _(655)_
+- `src/screens/client/CartScreen.tsx` _(656)_
 - `src/services/becca/capabilities/client.ts` _(574)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(552)_
 - `src/screens/client/BookingDetailScreen.tsx` _(452)_
@@ -346,7 +346,7 @@ Curated: [[Services]] · **49 files**
 - … +19 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **74 files**
+Curated: [[Payments]] · **75 files**
 - `src/screens/client/CartScreen.tsx` _(416)_
 - `src/services/databaseService.ts` _(97)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **74 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/components/ModernBeautyCalendar.tsx` _(3)_
-- … +44 more
+- … +45 more

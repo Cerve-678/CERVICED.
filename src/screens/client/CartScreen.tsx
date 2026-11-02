@@ -58,6 +58,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBeforeYouBook } from '../../features/bookings/BeforeYouBookSheet';
+import { accountStillLoading } from '../../features/bookings/beforeYouBook';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
@@ -3207,6 +3208,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const handleCheckout = useCallback(async () => {
   // The profile checks this as well, but a rebook or an offer can fill the cart
   // without passing through there. Checkout is where every booking ends up.
+  if (accountStillLoading(user)) {
+    showAlert('One moment', 'We’re still loading your account. Please try again shortly.');
+    return;
+  }
   if (holdForDetails(() => { void handleCheckoutRef.current(); })) return;
   try {
     setIsLoading(true);

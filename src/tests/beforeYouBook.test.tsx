@@ -16,7 +16,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('../utils/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 
-import { missingBookingDetails } from '../features/bookings/beforeYouBook';
+import { accountStillLoading, missingBookingDetails } from '../features/bookings/beforeYouBook';
 import { BeforeYouBookSheet } from '../features/bookings/BeforeYouBookSheet';
 
 describe('missingBookingDetails', () => {
@@ -35,6 +35,15 @@ describe('missingBookingDetails', () => {
   it('asks nothing while the users row has not been read', () => {
     expect(missingBookingDetails({ name: 'ana', phone: '', dob: '' })).toEqual([]);
     expect(missingBookingDetails(null)).toEqual([]);
+  });
+});
+
+describe('accountStillLoading', () => {
+  it('is true only while the users row has not been read', () => {
+    expect(accountStillLoading({})).toBe(true);
+    expect(accountStillLoading({ hasClientProfile: false })).toBe(false);
+    expect(accountStillLoading({ hasClientProfile: true })).toBe(false);
+    expect(accountStillLoading(null)).toBe(false);
   });
 });
 
