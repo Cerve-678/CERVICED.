@@ -88,6 +88,7 @@ import { formatBookingRef } from '../../features/bookings/presentation';
 import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings/receipt';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
+import { closeWithinTab } from '../../navigation/closeWithinTab';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -1212,7 +1213,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         {/* ── Calendar-style header ── */}
         <View style={styles.header}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => closeWithinTab(navigation)}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={[styles.iconBtn, { backgroundColor: P.surface }]}
           >

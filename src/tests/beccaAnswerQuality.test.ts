@@ -1,4 +1,3 @@
-import * as fs from "fs";
 import { chooseLayout } from "../services/becca/engine";
 import { getCapability } from "../services/becca/registry";
 import { resolveService } from "../services/becca/entityResolver";
@@ -167,12 +166,6 @@ async function run(id: string, hat: BeccaHat): Promise<CapabilityResult> {
   return capability.run(ctx);
 }
 
-const report: string[] = [];
-afterAll(() => {
-  const out = process.env["BECCA_ANSWER_REPORT"];
-  if (out) fs.writeFileSync(out, report.join("\n"));
-});
-
 describe.each([
   ["a full diary", true],
   ["an empty one", false],
@@ -184,16 +177,6 @@ describe.each([
     async (id, hat) => {
       const result = await run(id, hat);
       const layout = chooseLayout(result);
-      report.push(
-        `\n### ${id} · ${full ? "full" : "empty"} · ${layout ?? "text"}`,
-        result.headline ? `HEADLINE ${result.headline.value} | ${result.headline.label}` : "",
-        result.card ? `CARD ${result.card.title}${result.card.meta ? ` | ${result.card.meta}` : ""}${result.card.stamp ? " | ticket" : ""}` : "",
-        ...(result.card?.rows ?? []).map((r) => `  - ${r.title}${r.detail ? ` | ${r.detail}` : ""}${r.tag ? ` | ${r.tag}` : ""}${r.range ? " | bar" : ""}`),
-        ...(result.card?.stats ?? []).map((s) => `  # ${s.value} ${s.label}`),
-        ...(result.work ?? []).map((w) => `  ✓ ${w}`),
-        `TEXT ${result.text.replace(/\n+/g, " ⏎ ")}`,
-      );
-
       expect(result.text.trim().length).toBeGreaterThan(0);
       for (const s of strings(result)) {
         expect(s).not.toMatch(/undefined|NaN|\[object Object\]|\bnull\b/);
