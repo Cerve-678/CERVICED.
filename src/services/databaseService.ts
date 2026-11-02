@@ -8079,17 +8079,16 @@ export async function getMyBookmarkCount(): Promise<number> {
   return count ?? 0;
 }
 
-/** The provider's own services ranked by how often they were actually booked
- *  in the last `sinceDaysAgo` days, busiest first.
+/** The provider's own bookings by service and date, from `sinceDaysAgo` on, for
+ *  the dashboard's graphs.
  *
- *  Reads the snapshot name only — a count per service, not the bookings
- *  themselves — so a dashboard tile costs one narrow query rather than the
- *  full booking history the analytics screen pulls. Counts confirmed and
- *  completed appointments: a cancellation is not evidence of popularity. */
-export async function getMyTopServices(
-  sinceDaysAgo = 90,
-  limit = 3,
-): Promise<{ name: string; count: number }[]> {
+ *  Reads the snapshot name and date only, not the bookings themselves, so the
+ *  dashboard costs one narrow query rather than the full booking history the
+ *  analytics screen pulls. Counts confirmed and completed appointments: a
+ *  cancellation is not evidence of popularity. */
+export async function getMyServiceBookingRows(
+  sinceDaysAgo: number,
+): Promise<{ name: string; date: string }[]> {
   const provider = await getMyProviderProfile();
   if (!provider) return [];
 
@@ -8098,23 +8097,16 @@ export async function getMyTopServices(
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("service_name_snapshot")
+    .select("service_name_snapshot, booking_date")
     .eq("provider_id", provider.id)
     .in("status", ["completed", "confirmed"])
     .gte("booking_date", cutoff.toISOString().split("T")[0])
     .limit(DEFAULT_LIFETIME_BOOKINGS_QUERY_LIMIT);
   if (error) throw error;
 
-  const counts = new Map<string, number>();
-  for (const row of (data ?? []) as { service_name_snapshot: string | null }[]) {
-    const name = row.service_name_snapshot?.trim();
-    if (!name) continue;
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
-
-  return Array.from(counts, ([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
+  return ((data ?? []) as { service_name_snapshot: string | null; booking_date: string }[])
+    .filter((row) => !!row.service_name_snapshot)
+    .map((row) => ({ name: row.service_name_snapshot as string, date: row.booking_date }));
 }
 
 /** Update the maximum number of confirmed bookings a provider accepts per day (0 = unlimited) */
