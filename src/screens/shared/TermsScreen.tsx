@@ -71,7 +71,7 @@ const SECTIONS = [
   {
     heading: '8. Making a Booking',
     body: [
-      'When you book through Cerviced, you send the provider a request. Your booking is confirmed when the provider accepts it, and we\'ll let you know. If they decline it, or don\'t respond before it expires, any payment you made is refunded in full automatically.',
+      'When you book through Cerviced, you send the provider a request. Your booking is confirmed when the provider accepts it, and we\'ll let you know. If they decline it, or don\'t respond within 24 hours or by your appointment time if that\'s sooner, it\'s cancelled and any payment you made is refunded in full automatically.',
       'Before you book, check the provider\'s profile, prices, cancellation policy and any terms they ask you to accept. Arrive on time and tell the provider anything they need to know, such as allergies or health conditions.',
       'If a provider comes to you, your address is only shared with them once they\'ve accepted your booking.',
       'If you book for someone else, you\'re responsible for that booking, and you must have their permission to share their details with the provider.',
@@ -278,7 +278,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 1 November 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 2 November 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>
