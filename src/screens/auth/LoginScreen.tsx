@@ -19,8 +19,10 @@ import {
   refreshAuthSession,
   signInWithAppleIdToken,
   signInWithEmailPassword,
+  signInWithGoogleIdToken,
 } from '../../services/databaseService';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { env } from '../../utils/env';
 import {
   isBiometricAvailable,
   isBiometricEnabled,
@@ -58,6 +60,8 @@ export default function LoginScreen({ navigation }: Props) {
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
   // Guards re-entrant taps synchronously — see handleAppleLogin below.
   const isAppleInFlightRef = useRef(false);
+  // Same re-entrancy guard as isAppleInFlightRef, for handleGoogleLogin below.
+  const isGoogleInFlightRef = useRef(false);
 
   // useFocusEffect (not a mount-only useEffect) — a failed login attempt
   // doesn't unmount this screen, and a stale one-time check could otherwise
@@ -172,9 +176,48 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    Alert.alert('Coming soon', `${provider} login will be available soon.`);
+  const handleGoogleLogin = async () => {
+    // Same re-entrancy problem as Apple below — a fast double-tap must not
+    // fire a second concurrent GoogleSignin.signIn() while the first is
+    // still showing its native sheet.
+    if (isGoogleInFlightRef.current) return;
+    isGoogleInFlightRef.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      if (!env.googleSignInEnabled) {
+        Alert.alert('Not available', 'Google sign-in requires a development build.');
+        return;
+      }
+      // @react-native-google-signin/google-signin's native module isn't
+      // bundled in Expo Go — lazy-required the same way App.tsx/CartScreen
+      // guard the Stripe native module, so importing this file never
+      // crashes under Expo Go.
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({
+        webClientId: env.googleWebClientId,
+        ...(env.googleIosClientId ? { iosClientId: env.googleIosClientId } : {}),
+      });
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSignin.signIn();
+      if (response.type === 'cancelled') return;
+      const idToken = response.data?.idToken;
+      if (!idToken) {
+        Alert.alert('Sign in failed', 'No identity token received from Google.');
+        return;
+      }
+      setIsLoading(true);
+      const session = await signInWithGoogleIdToken(idToken);
+      setIsLoading(false);
+      maybePromptEnableBiometric(session.refreshToken ?? undefined);
+      // On success, AuthContext.onAuthStateChange handles navigation
+    } catch (e: any) {
+      if (!isLoggedIn) {
+        Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+      isGoogleInFlightRef.current = false;
+    }
   };
 
   const handleAppleLogin = async () => {
@@ -309,9 +352,12 @@ export default function LoginScreen({ navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.outlineBtn, { borderColor: t.border, marginTop: 10 }]}
-            onPress={() => handleSocialLogin('Google')}
+            onPress={handleGoogleLogin}
             activeOpacity={0.7}
+            disabled={isLoading}
+            accessibilityLabel="Continue with Google"
           >
+            <Ionicons name="logo-google" size={18} color={t.text} />
             <Text style={[styles.outlineText, { color: t.text }]}>Continue with Google</Text>
           </TouchableOpacity>
 
