@@ -115,7 +115,7 @@ export type NotificationType =
   | "post_appt_check_in" // provider's automated post-appointment check-in (client-facing)
   | "rebooking_nudge" // "it's been a while" nudge to rebook (client-facing)
   | "daily_recap" // provider's automated today's-schedule summary (provider-facing)
-  | "schedule_fully_booked" // provider's whole calendar has no openings in their alert window (provider-facing)
+  | "schedule_fully_booked" // every slot the provider has opened is booked; opens their certificate (provider-facing)
   | "pending_booking_reminder" // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
   | "points_earned" // client earned loyalty points (client-facing)
   /** Beauty Maintenance: something the client tracks is due. Generic copy;
@@ -452,10 +452,6 @@ export interface DbProvider {
      *  notify_enabled = TRUE on that day each month. Unset = never fires. */
     scheduleReleaseDay?: number;
   } | null;
-  // Cooldown guard for process_provider_fully_booked_alerts() (provider_
-  // fully_booked_alert.sql) — read-only from the app, written only by that
-  // cron job. Fixed weekly check for now, not provider-configurable.
-  fully_booked_alert_last_sent_at: string | null;
   // Claimable-profile fields (supabase/claimable_provider_profiles.sql).
   // is_claimed=false rows are imported placeholders with no owner yet —
   // see searchUnclaimedProviders/getUnclaimedProviderDetail in
