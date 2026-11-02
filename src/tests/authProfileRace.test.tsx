@@ -88,6 +88,22 @@ test('a first Apple sign-in creates the users row and reads it back', async () =
   expect(result.current.isLoggedIn).toBe(true);
 });
 
+test('a first Google sign-in creates the users row with the name Google shared', async () => {
+  mockProfile.mockResolvedValueOnce(null).mockResolvedValueOnce({ ...profile('google'), name: 'Gia Lane', phone: null, dob: null });
+  mockCreateRow.mockResolvedValue(undefined);
+  const googleSession = { user: {
+    ...session('google').user,
+    app_metadata: { provider: 'google' },
+    user_metadata: { full_name: 'Gia Lane' },
+  } } as unknown as Session;
+  const { result } = renderHook(useAuth, { wrapper });
+  await act(async () => { await mockListener('SIGNED_IN', googleSession); });
+  expect(mockCreateRow).toHaveBeenCalledWith(expect.objectContaining({
+    id: 'google', loginMethod: 'google', nameFromSession: 'Gia Lane',
+  }));
+  expect(result.current.user).toMatchObject({ name: 'Gia Lane', phone: '', dob: '', hasClientProfile: true });
+});
+
 test('an email account with no row yet is left to its own signup', async () => {
   mockProfile.mockResolvedValue(null);
   const { result } = renderHook(useAuth, { wrapper });

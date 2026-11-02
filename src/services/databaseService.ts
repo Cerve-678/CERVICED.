@@ -284,6 +284,9 @@ export async function signInWithAppleIdToken(
 }
 
 export async function signInWithGoogleIdToken(token: string): Promise<AuthSessionSummary> {
+  // Google's name comes from the session; don't let an earlier Apple attempt's
+  // name land on this account.
+  appleNameFromSignIn = "";
   const { data, error } = await supabase.auth.signInWithIdToken({ provider: "google", token });
   if (error) throw error;
   if (!data.session) throw new Error("Authentication succeeded without a session");

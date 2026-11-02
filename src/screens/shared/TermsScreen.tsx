@@ -37,7 +37,7 @@ const SECTIONS = [
   {
     heading: '3. Who Can Use Cerviced',
     body: [
-      'You must be at least 16 to create a Cerviced account. If you sign in with Apple, we\'ll ask for your date of birth before your first booking. Some treatments have a legal minimum age. For example, Botox and dermal fillers can\'t be given to anyone under 18 in England, and other treatments may need a parent\'s consent. Providers must follow these rules and can refuse a booking that breaks them.',
+      'You must be at least 16 to create a Cerviced account. If you sign in with Apple or Google, we\'ll ask for your date of birth before your first booking. Some treatments have a legal minimum age. For example, Botox and dermal fillers can\'t be given to anyone under 18 in England, and other treatments may need a parent\'s consent. Providers must follow these rules and can refuse a booking that breaks them.',
       'You may have one account, which is for your own use. The details you give us, including your name, date of birth and contact details, must be true and kept up to date. We may check the details you give us and may refuse or close an account if they aren\'t accurate.',
       'If you use Cerviced as a business, you must do so through a provider account and follow the "For Providers" section of these Terms.',
     ].join('\n\n'),

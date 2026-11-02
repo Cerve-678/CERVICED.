@@ -527,11 +527,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // A first Apple sign-in has a verified session and no users row, and
-      // nothing else creates one. bookings.user_id needs it, as does every
-      // profile save. The Before You Can Book checklist then asks for whatever
-      // Apple didn't share. Failing here falls through to the session-only
-      // path below, whose retry comes back through this.
+      // A first Apple or Google sign-in has a verified session and no users
+      // row, and nothing else creates one. bookings.user_id needs it, as does
+      // every profile save. The Before You Can Book checklist then asks for
+      // whatever the sign-in didn't share. Failing here falls through to the
+      // session-only path below, whose retry comes back through this.
       const signedInWith = session.user.app_metadata?.['provider'];
       if (!profile && session.user.email && signedInWith && signedInWith !== 'email') {
         try {
@@ -547,7 +547,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           );
           profile = await withTimeout(getUserProfileById(session.user.id), 8_000, 'Profile restore');
         } catch (err: any) {
-          logger.warn('[AuthContext] could not create the Apple profile row:', err?.message);
+          logger.warn('[AuthContext] could not create the profile row for a', signedInWith, 'sign-in:', err?.message);
         }
         if (!isCurrent()) return;
       }
