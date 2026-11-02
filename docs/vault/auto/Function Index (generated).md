@@ -5,7 +5,7 @@
 
 #generated
 
-**2910 functions** across **395 files**.
+**2913 functions** across **395 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -411,7 +411,7 @@
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
-- `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery** · takePrice
+- `searchQuery.ts` — **buildLocationTerms** · detectCategory · endsWithPlace · fixCompassTypo · nearestPlace · **parseSearchQuery** · takePrice
 - `serviceFilterMatch.ts` — **candidateServices** · **hasServiceCriteria** · **priceRangeAcrossServices** · **serviceMatchesCriteria** · **serviceRange**
 - `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
