@@ -15,6 +15,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { isDarkColor } from '../../constants/providerThemes';
 
 // ── Input component ──────────────────────────────────────────────────────────
 
@@ -222,9 +223,9 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
                   activeOpacity={0.8}
                 >
                   {passwordLoading ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={isDarkColor(theme.accent) ? '#FFFFFF' : '#1B2740'} />
                   ) : (
-                    <Text style={styles.buttonText}>Update Password</Text>
+                    <Text style={[styles.buttonText, { color: isDarkColor(theme.accent) ? '#FFFFFF' : '#1B2740' }]}>Update Password</Text>
                   )}
                 </TouchableOpacity>
               </View>

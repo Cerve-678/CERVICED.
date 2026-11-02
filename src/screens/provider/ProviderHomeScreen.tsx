@@ -361,7 +361,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
           )}
           <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
           <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={() => { tap(); onViewMessages(); }}>
-            <Text style={[bc.msgBtnTxt, { color: '#fff' }]}>View Messages</Text>
+            <Text style={[bc.msgBtnTxt, { color: P.onAccent }]}>View Messages</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -881,7 +881,7 @@ function WeekView({
                 ]}>
                   <Text style={[
                     s.tileNum,
-                    { color: isSel ? '#fff' : isToday ? P.bg : P.text, fontWeight: '700' },
+                    { color: isSel ? P.onAccent : isToday ? P.bg : P.text, fontWeight: '700' },
                   ]}>
                     {dt.getDate()}
                   </Text>
@@ -1828,7 +1828,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               onPress={() => handleDateTap(TODAY_STR)}
               style={[s.todayChip, { backgroundColor: P.accent }]}
             >
-              <Text style={[s.todayChipTxt, { color: P.ice }]}>Today</Text>
+              <Text style={[s.todayChipTxt, { color: P.onAccent }]}>Today</Text>
             </TouchableOpacity>
             <TouchableOpacity
               ref={viewModeBtnRef}
@@ -1839,7 +1839,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               <Ionicons
                 name={viewMode === 'list' ? 'list-outline' : viewMode === 'timeline' ? 'time-outline' : 'calendar-outline'}
                 size={17}
-                color={P.ice}
+                color={P.onAccent}
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -1881,8 +1881,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 backgroundColor: P.accent,
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Get started</Text>
-              <Ionicons name="chevron-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: P.onAccent }}>Get started</Text>
+              <Ionicons name="chevron-forward" size={14} color={P.onAccent} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           </View>
         )}
@@ -1998,7 +1998,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                     ]}>
                       <Text style={[
                         s.calNum,
-                        isSel && { color: '#fff', fontWeight: '700' },
+                        isSel && { color: P.onAccent, fontWeight: '700' },
                         isToday && !isSel && { color: P.bg, fontWeight: '700' },
                         !isSel && !isToday && { color: P.text },
                       ]}>
@@ -2056,7 +2056,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                   ]}>
                     <Text style={[
                       s.tileNum,
-                      isSel && { color: '#fff', fontWeight: '700' },
+                      isSel && { color: P.onAccent, fontWeight: '700' },
                       isToday && !isSel && { color: P.bg, fontWeight: '700' },
                       !isSel && !isToday && { color: P.text },
                     ]}>
@@ -2182,7 +2182,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         ]}
         onPress={openSheet}
       >
-        <Ionicons name="add" size={26} color={P.ice} />
+        <Ionicons name="add" size={26} color={P.onAccent} />
       </TouchableOpacity>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
@@ -2214,7 +2214,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); setShowGoLiveCelebration(false); }}
               style={{ marginTop: 20, backgroundColor: P.accent, paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12 }}
             >
-              <Text style={{ color: P.ice, fontWeight: '700', fontSize: 15 }}>Let's go</Text>
+              <Text style={{ color: P.onAccent, fontWeight: '700', fontSize: 15 }}>Let's go</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -2259,7 +2259,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 onPress={() => { closeSheet(); navigation.navigate(item.route as any); }}
               >
                 <View style={[s.sheetIconWrap, { backgroundColor: P.accent }]}>
-                  <Ionicons name={item.icon} size={21} color={P.ice} />
+                  <Ionicons name={item.icon} size={21} color={P.onAccent} />
                 </View>
                 <View style={s.sheetRowText}>
                   <Text style={[s.sheetRowTitle, { color: P.text }]}>{item.title}</Text>

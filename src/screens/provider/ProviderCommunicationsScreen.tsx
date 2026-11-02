@@ -29,7 +29,7 @@ const CP_DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   // Lighter than `accent` for standalone text (e.g. the "Add" template
   // label) — the muted dusty rose reads as faint at small sizes against
   // near-black cards.
@@ -45,7 +45,7 @@ const CP_LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   accentText: '#5C4033',
   ice:     '#FFFFFF',
   text:    '#1C1A18',
@@ -279,7 +279,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                         <Ionicons
                           name={meta.icon as any}
                           size={18}
-                          color={isOn ? C.ice : C.sub}
+                          color={isOn ? C.onAccent : C.sub}
                         />
                       </View>
                       <View style={s.rowText}>
@@ -287,7 +287,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                           <Text style={[s.rowLabel, { color: C.text }]}>{meta.label}</Text>
                           {isLocked && (
                             <View style={[s.alwaysOnBadge, { backgroundColor: C.accent }]}>
-                              <Text style={[s.alwaysOnText, { color: C.ice }]}>Always on</Text>
+                              <Text style={[s.alwaysOnText, { color: C.onAccent }]}>Always on</Text>
                             </View>
                           )}
                         </View>
@@ -337,8 +337,8 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
               activeOpacity={0.8}
             >
               {saving
-                ? <ActivityIndicator color={C.ice} size="small" />
-                : <Text style={[s.saveTxt, { color: C.ice }]}>Save Preferences</Text>
+                ? <ActivityIndicator color={C.onAccent} size="small" />
+                : <Text style={[s.saveTxt, { color: C.onAccent }]}>Save Preferences</Text>
               }
             </TouchableOpacity>
           </ScrollView>

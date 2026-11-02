@@ -96,7 +96,7 @@ const LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   ice:     '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
@@ -108,7 +108,7 @@ const DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -1352,7 +1352,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             onPress={handleRefund}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.refundAskBtnText, { color: '#FFFFFF' }]}>Issue a refund</Text>
+                            <Text style={[styles.refundAskBtnText, { color: P.onAccent }]}>Issue a refund</Text>
                           </TouchableOpacity>
                         )}
                         <TouchableOpacity
@@ -1658,7 +1658,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       onPress={handleOpenChat}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.contactBtnText, { color: '#FFFFFF' }]}>Message</Text>
+                      <Text style={[styles.contactBtnText, { color: P.onAccent }]}>Message</Text>
                     </TouchableOpacity>
                     {booking.customerPhone ? (
                       <TouchableOpacity
@@ -2117,7 +2117,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           <View style={styles.actions}>
             {booking.status === BookingStatus.UPCOMING && (
               isApptToday ? (
-                <ActionButton color={P.accent} label="Start Appointment" onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
+                <ActionButton color={P.accent} label="Start Appointment" textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
               ) : (
                 <Text style={{ textAlign: 'center', fontSize: 13, color: P.sub, marginBottom: 10 }}>
                   {apptStartPassed
@@ -2127,7 +2127,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               )
             )}
             {booking.status === BookingStatus.IN_PROGRESS && (
-              <ActionButton color={P.accent} label="Mark Complete" onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
+              <ActionButton color={P.accent} label="Mark Complete" textColor={P.onAccent} onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
             )}
             <View style={styles.secondaryActions}>
               {/* Mirrors provider_update_booking_status()'s server-side no_show
@@ -2436,7 +2436,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         style={[styles.timeChip, initSelectedTimes.includes(t) && { backgroundColor: P.accent }]}
                         onPress={() => toggleInitTime(t)}
                       >
-                        <Text style={[styles.timeChipText, { color: initSelectedTimes.includes(t) ? '#fff' : P.text }]}>{formatTime12(t)}</Text>
+                        <Text style={[styles.timeChipText, { color: initSelectedTimes.includes(t) ? P.onAccent : P.text }]}>{formatTime12(t)}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -2932,8 +2932,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 onPress={submitPassOn}
               >
                 {passOnBusy
-                  ? <ActivityIndicator size="small" color="#FFFFFF" />
-                  : <Text style={styles.refundCtaText}>Pass to Cerviced</Text>}
+                  ? <ActivityIndicator size="small" color={P.onAccent} />
+                  : <Text style={[styles.refundCtaText, { color: P.onAccent }]}>Pass to Cerviced</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -3186,11 +3186,14 @@ function ActionButton({
   label,
   onPress,
   ghost,
+  textColor,
 }: {
   color: string;
   label: string;
   onPress: () => void;
   ghost?: boolean;
+  /** For a solid fill that white doesn't read on, such as the dark accent. */
+  textColor?: string;
 }) {
   return (
     <TouchableOpacity
@@ -3209,7 +3212,7 @@ function ActionButton({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Text style={[styles.actionBtnText, ghost && { color }]}>{label}</Text>
+      <Text style={[styles.actionBtnText, !!textColor && { color: textColor }, ghost && { color }]}>{label}</Text>
     </TouchableOpacity>
   );
 }

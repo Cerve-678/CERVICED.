@@ -6,12 +6,16 @@
 //
 // Which card leads (owner's call, 2026-10-29): the summary until 2pm, the
 // booking cards from 2pm, and the summary again once the last client is done,
-// when the booking cards switch to tomorrow. The other card sits under Your
-// work. Designs: https://claude.ai/artifact/GAhSKrF5aDFEiNJsThtmMy
+// The other card sits under Your work. The booking cards always show the next
+// few bookings still to come, on any date (owner's call, 2026-11-01).
+// Designs: https://claude.ai/artifact/GAhSKrF5aDFEiNJsThtmMy
 import type { BookingStatus } from '../../types/database';
 
 /** From this hour the booking cards lead instead of the summary. */
 export const CARDS_LEAD_FROM_HOUR = 14;
+
+/** How many bookings the swipeable cards show. */
+export const UPCOMING_CARD_COUNT = 5;
 
 /** The booking fields the cards read — a structural subset of
  *  BookingWithAddOns, so tests don't have to build whole rows. */
@@ -36,6 +40,14 @@ const ON_THE_DAY: ReadonlySet<BookingStatus> = new Set<BookingStatus>([
   'confirmed',
   'in_progress',
   'completed',
+]);
+
+/** The statuses of a booking that hasn't happened yet, for the cards' look
+ *  ahead. Also what getProviderUpcomingBookings fetches. */
+const STILL_TO_COME: ReadonlySet<BookingStatus> = new Set<BookingStatus>([
+  'pending',
+  'confirmed',
+  'in_progress',
 ]);
 
 /** summaryLeads: before 2pm. cardsLead: from 2pm. dayDone: nothing left today
@@ -71,6 +83,9 @@ export interface TodaySchedule<B extends ScheduleBooking> {
   tomorrowYmd: string;
   today: ScheduleSlot<B>[];
   tomorrow: ScheduleSlot<B>[];
+  /** The next bookings still to come, soonest first, on any date: what the
+   *  swipeable cards show. At most UPCOMING_CARD_COUNT. */
+  upcoming: ScheduleSlot<B>[];
   /** Index into `today` of the 'now' or 'next' slot; null once the day is done. */
   leadIndex: number | null;
   doneCount: number;
@@ -167,6 +182,22 @@ export function buildTodaySchedule<B extends ScheduleBooking>(input: {
     needsPatchTest: needsPatchTest(booking),
   }));
 
+  const stillToday = today.filter(s => s.state !== 'done');
+  const afterToday = input.bookings
+    .filter(b => b.booking_date > input.todayYmd && STILL_TO_COME.has(b.status))
+    .sort((a, b) => a.booking_date.localeCompare(b.booking_date) || a.booking_time.localeCompare(b.booking_time));
+  const upcoming: ScheduleSlot<B>[] = [
+    ...stillToday,
+    ...afterToday.map((booking, index): ScheduleSlot<B> => ({
+      booking,
+      state: stillToday.length === 0 && index === 0 ? 'next' : 'later',
+      lengthMinutes: lengthOf(booking),
+      minutesUntil: null,
+      isRequest: booking.status === 'pending',
+      needsPatchTest: needsPatchTest(booking),
+    })),
+  ].slice(0, UPCOMING_CARD_COUNT);
+
   const doneCount = today.filter(s => s.state === 'done').length;
   const phase: DayPhase =
     leadIndex === null
@@ -181,6 +212,7 @@ export function buildTodaySchedule<B extends ScheduleBooking>(input: {
     tomorrowYmd: input.tomorrowYmd,
     today,
     tomorrow,
+    upcoming,
     leadIndex,
     doneCount,
     bookedValue: today.reduce(

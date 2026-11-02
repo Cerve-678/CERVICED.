@@ -45,8 +45,8 @@ import {
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
 
-const DARK  = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)' };
-const LIGHT = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#5C4033', ice: '#FFFFFF', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(92,64,51,0.12)' };
+const DARK  = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', onAccent: '#1A1815', ice: '#FFFFFF', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)' };
+const LIGHT = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#5C4033', onAccent: '#FFFFFF', ice: '#FFFFFF', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(92,64,51,0.12)' };
 // AdaptiveTabBar: position absolute, bottom: 34, minHeight: 80
 const TAB_BAR_CLEARANCE = 80;
 
@@ -495,7 +495,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={[styles.iconBtn, { backgroundColor: P.accent }]}
             >
-              <Ionicons name="add" size={20} color="#fff" />
+              <Ionicons name="add" size={20} color={P.onAccent} />
             </TouchableOpacity>
           )}
           {mode === 'builder' && (
@@ -877,7 +877,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 disabled={saving || !canSave}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.sendBtnText, { color: canSave ? '#fff' : P.sub }]}>Save & Send</Text>
+                <Text style={[styles.sendBtnText, { color: canSave ? P.onAccent : P.sub }]}>Save & Send</Text>
               </TouchableOpacity>
             </View>
           </View>

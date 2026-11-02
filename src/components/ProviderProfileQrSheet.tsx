@@ -12,6 +12,7 @@ import QRCode from "react-native-qrcode-svg";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { providerProfileDeepLink } from "../utils/providerProfileDeepLink";
+import { isDarkColor } from '../constants/providerThemes';
 
 type Props = {
   visible: boolean;
@@ -96,8 +97,8 @@ export function ProviderProfileQrSheet({
             onPress={() => void share()}
             activeOpacity={0.85}
           >
-            <Ionicons name="share-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.shareText}>SHARE PROFILE LINK</Text>
+            <Ionicons name="share-outline" size={18} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
+            <Text style={[styles.shareText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>SHARE PROFILE LINK</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.closeButton}
