@@ -9,7 +9,7 @@
 //     so wiring a model in means swapping the parser — not rewriting the
 //     assistant. See BECCA_CAPABILITIES.md §3.1.
 
-import type { BeccaHat, Capability } from "./types";
+import type { BeccaHat, Capability, ThinkingTurn } from "./types";
 import { CLIENT_CAPABILITIES } from "./capabilities/client";
 import { PROVIDER_CAPABILITIES } from "./capabilities/provider";
 
@@ -50,6 +50,14 @@ export function getCapability(id: string, hat: BeccaHat): Capability | undefined
 export function fitsSetup(capability: Capability, linkOnly: boolean): boolean {
   if (!linkOnly || capability.hat !== "provider") return true;
   return capability.fitsLinkOnly === true;
+}
+
+/** A capability's loading steps for this turn. At most three, so none flashes past. */
+export function thinkingFor(capability: Capability, turn: ThinkingTurn): string[] {
+  const steps = typeof capability.thinking === "function"
+    ? capability.thinking(turn)
+    : capability.thinking;
+  return steps.filter(Boolean).slice(0, 3);
 }
 
 /**
