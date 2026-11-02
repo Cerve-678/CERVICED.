@@ -4513,7 +4513,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     The separate "cities you cover" multi-select (serviceLocations
                     → providers.service_locations, feeding the client Search
                     "City" filter) lives in Business Details › AboutYouScreen —
-                    not duplicated here.
+                    not duplicated here. About You also edits this same location,
+                    with this same picker, so the two always agree.
 
                     Same stepped city → region → area picker the client uses for
                     "Your area" (AreaPicker) — "Other city…" / "Other…" fall back

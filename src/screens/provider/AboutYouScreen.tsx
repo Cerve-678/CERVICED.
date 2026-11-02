@@ -3,8 +3,9 @@
  * third of what used to be the single 671-line Business Details screen.
  *
  * Scope: credentials & policies (qualifications, insurance, DBS, patch test,
- * online consultations), where you're based (cities covered + travel radius),
- * languages, and accessibility.
+ * online consultations), where you're based (the same place as InfoReg, then
+ * other cities covered + travel radius), who you take (new clients, walk-ins,
+ * groups), languages, and accessibility.
  *
  * Two things worth knowing before editing:
  *
@@ -23,17 +24,19 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
+import AreaPicker from '../../components/AreaPicker';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import {
   getMyProviderProfile,
   updateProviderContactDetails,
 } from '../../services/databaseService';
+import { geocodePublicLocation } from '../../services/providerRegistrationService';
 import {
   Card, Field, ChipGroup, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
-  LANGUAGE_OPTS, ACCESSIBILITY_OPTS, PATCH_OPTS,
+  LANGUAGE_OPTS, ACCESSIBILITY_OPTS, PATCH_OPTS, NEW_CLIENTS_OPTS,
 } from '../../features/business-details/options';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -51,11 +54,17 @@ export default function AboutYouScreen({ navigation }: any) {
   const [onlineConsult, setOnlineConsult]   = useState(false);
   const [patchTest, setPatchTest]           = useState('');
 
+  // location_text as loaded, so saving only re-geocodes a place that changed.
+  const [savedLocation, setSavedLocation]   = useState('');
+  const [location, setLocation]             = useState('');
   const [citiesCovered, setCitiesCovered]   = useState<string[]>([]);
   const [travelRadius, setTravelRadius]     = useState('');
   const [languages, setLanguages]           = useState<string[]>([]);
   const [languagesOther, setLanguagesOther] = useState('');
   const [accessibility, setAccessibility]   = useState<string[]>([]);
+  const [acceptsNew, setAcceptsNew]         = useState('yes');
+  const [walkIns, setWalkIns]               = useState(false);
+  const [groupBookings, setGroupBookings]   = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -89,7 +98,12 @@ export default function AboutYouScreen({ navigation }: any) {
           setDbsChecked(providerData.dbs_checked_self_declared ?? false);
           setOnlineConsult(providerData.online_consultations_available ?? false);
           setPatchTest(providerData.patch_test_policy ?? '');
+          setSavedLocation(providerData.location_text ?? '');
+          setLocation(providerData.location_text ?? '');
           setCitiesCovered(providerData.service_locations ?? []);
+          setAcceptsNew(providerData.accepts_new_clients ?? 'yes');
+          setWalkIns(providerData.walk_ins_welcome ?? false);
+          setGroupBookings(providerData.group_bookings_available ?? false);
           setTravelRadius(providerData.travel_radius ?? '');
           setLanguages(providerData.languages_spoken ?? []);
           // accessibility_notes is a single TEXT column, so the chip list is
@@ -132,7 +146,18 @@ export default function AboutYouScreen({ navigation }: any) {
         ? [...languages.filter(l => l !== 'Other'), recognizeLanguage(languagesOther)]
         : languages.filter(l => l !== 'Other');
 
+      // A location is required to go live, so this never clears one, and a
+      // place that can't be geocoded still saves, as it does from InfoReg.
+      const newLocation = location.trim();
+      const locationChanged = !!newLocation && newLocation !== savedLocation.trim();
+      const coordinates = locationChanged ? await geocodePublicLocation(newLocation) : null;
+
       await updateProviderContactDetails(providerId, {
+        ...(locationChanged && { location_text: newLocation }),
+        ...(coordinates && { latitude: coordinates.latitude, longitude: coordinates.longitude }),
+        accepts_new_clients: (acceptsNew as 'yes' | 'waitlist' | 'no') || null,
+        walk_ins_welcome: walkIns,
+        group_bookings_available: groupBookings,
         qualifications: qualifications.trim() || null,
         is_insured_self_declared: isInsured,
         dbs_checked_self_declared: dbsChecked,
@@ -201,24 +226,41 @@ export default function AboutYouScreen({ navigation }: any) {
               <RadioGroup options={PATCH_OPTS} value={patchTest} onChange={setPatchTest} />
             </Card>
 
-            {/* Cities covered, not a single base location — this writes
-                service_locations, the same list the client Search "City"
-                filter reads, so every city selected here is one a client can
-                actually filter by. */}
-            <Card title="Where You're Based" sub="Select every city you cover. Clients filter search by these, so add anywhere you'll travel to.">
-              {/* The shared searchable city finder — same component signup
-                  (Step 4), InfoRegScreen and the client Search "City" filter
-                  all use, so a city always means the same thing on both
-                  sides. A flat 60-chip grid was the wrong shape for a list
-                  this long. */}
+            <Card title="Where You're Based" sub="Shown on your public profile and used to place you in local searches — not your exact address.">
+              {/* The same picker and column as "Where you're based" in InfoReg
+                  (location_text), so the two can't name different places. */}
+              <AreaPicker
+                value={location}
+                onChange={setLocation}
+                accentColor={C.accent}
+                palette={C}
+                subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
+              />
+              <View style={{ height: 18 }} />
+              <SectionLabel text="Other cities you cover" />
+              {/* service_locations, the list the client Search "City" filter
+                  reads, so every city selected here is one a client can
+                  actually filter by. The shared searchable city finder, same
+                  as that filter and signup (Step 4), so a city means the same
+                  thing on both sides. */}
               <CityMultiSelect
                 selected={citiesCovered}
                 onChange={setCitiesCovered}
                 palette={C}
-                placeholder="Select the cities you cover"
+                placeholder="Add anywhere else you'll travel to"
               />
               <View style={{ height: 18 }} />
               <Field label="Travel Radius" value={travelRadius} onChange={setTravelRadius} placeholder="e.g. 10 miles" note="Optional — how far you're willing to travel within those areas." />
+            </Card>
+
+            {/* The only editor of these three columns. They used to sit on
+                Scheduling, which is about when clients can book, not who. */}
+            <Card title="Who You Take" sub="Clients see these on your profile and can filter Search by walk-ins and group bookings.">
+              <SectionLabel text="New clients" />
+              <RadioGroup options={NEW_CLIENTS_OPTS} value={acceptsNew} onChange={setAcceptsNew} />
+              <View style={{ height: 14 }} />
+              <ToggleRow label="Walk-ins welcome" sub="Clients can book without advance notice" value={walkIns} onChange={setWalkIns} />
+              <ToggleRow label="Group bookings" sub="Bridal parties, hen dos, group sessions" value={groupBookings} onChange={setGroupBookings} />
             </Card>
 
             <Card title="Languages Spoken" sub="Clients often search for providers who speak their language.">

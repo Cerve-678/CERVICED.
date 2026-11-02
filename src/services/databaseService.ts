@@ -9692,6 +9692,11 @@ export async function updateProviderContactDetails(
     // Cities covered, from src/constants/ukCities.ts — the same list the
     // client Search "City" filter reads, so anything selected here is
     // immediately filterable by clients.
+    /** The one place the business is based, "<Area>, <City>" from AreaPicker.
+     *  Send the coordinates it geocoded to with it (geocodePublicLocation). */
+    location_text?: string;
+    latitude?: number;
+    longitude?: number;
     service_locations?: string[] | null;
     clientele?: string[] | null;
     // Provider-level hair types catered to (HAIR_TYPES vocabulary). Empty/null

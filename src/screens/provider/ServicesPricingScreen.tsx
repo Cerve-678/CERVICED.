@@ -117,9 +117,10 @@ export default function ServicesPricingScreen({ navigation }: any) {
           price_tier: (priceTier as 'budget' | 'mid' | 'premium' | 'luxury') || null,
           team_size: (teamSize as 'solo' | 'small_team' | 'large_team') || null,
           clientele,
-          // availability_windows / accepts_new_clients / walk_ins_welcome /
-          // group_bookings_available are owned by SchedulingScreen now, and
-          // preferred_payment_methods by PaymentsScreen. They must stay out of
+          // availability_windows is owned by SchedulingScreen now,
+          // accepts_new_clients / walk_ins_welcome / group_bookings_available
+          // by AboutYouScreen, and preferred_payment_methods by PaymentsScreen.
+          // They must stay out of
           // this payload: updateProviderContactDetails writes every key it's
           // given, so re-sending stale local copies would silently clobber
           // whatever those screens had just saved.

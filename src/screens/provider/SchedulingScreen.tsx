@@ -7,6 +7,8 @@
  * provider could reason about it:
  *
  *   • ServicesPricingScreen  — typical windows, new clients, walk-ins, groups
+ *     (new clients, walk-ins and groups then moved to AboutYouScreen: they're
+ *     who you take, not when)
  *   • ProviderAutomationsScreen — buffer, booking horizon, min notice, slot
  *     intervals, daily cap
  *   • ProviderScheduleScreen — the actual working-hours calendar
@@ -46,7 +48,7 @@ import {
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
-  AVAILABILITY_OPTS, NEW_CLIENTS_OPTS,
+  AVAILABILITY_OPTS,
   BUFFER_OPTS, BOOKING_WINDOW_OPTS, MIN_NOTICE_OPTS, SLOT_INTERVAL_OPTS, MAX_PER_DAY_OPTS,
   REQUEST_WINDOW_OPTS,
 } from '../../features/business-details/options';
@@ -61,9 +63,6 @@ export default function SchedulingScreen({ navigation }: any) {
 
   // Availability shape (moved from ServicesPricingScreen)
   const [availWindows, setAvailWindows]   = useState<string[]>([]);
-  const [acceptsNew, setAcceptsNew]       = useState('yes');
-  const [walkIns, setWalkIns]             = useState(false);
-  const [groupBookings, setGroupBookings] = useState(false);
 
   // Booking rules (moved from ProviderAutomationsScreen)
   const [bufferMins, setBufferMins]             = useState('0');
@@ -107,9 +106,6 @@ export default function SchedulingScreen({ navigation }: any) {
         if (profile) {
           setProviderId(profile.id ?? null);
           setAvailWindows(profile.availability_windows ?? []);
-          setAcceptsNew(profile.accepts_new_clients ?? 'yes');
-          setWalkIns(profile.walk_ins_welcome ?? false);
-          setGroupBookings(profile.group_bookings_available ?? false);
           // No user_metadata fallback for these — they were born on the
           // providers row and have never been mirrored anywhere else.
           setAllowOutOfHours(profile.allow_out_of_hours_requests ?? false);
@@ -170,9 +166,6 @@ export default function SchedulingScreen({ navigation }: any) {
 
         updateProviderContactDetails(providerId, {
           availability_windows: availWindows,
-          accepts_new_clients: (acceptsNew as 'yes' | 'waitlist' | 'no') || null,
-          walk_ins_welcome: walkIns,
-          group_bookings_available: groupBookings,
         }),
 
         updateProviderScheduleSettings(providerId, {
@@ -206,7 +199,7 @@ export default function SchedulingScreen({ navigation }: any) {
       setSaving(false);
     }
   }, [
-    providerId, availWindows, acceptsNew, walkIns, groupBookings,
+    providerId, availWindows,
     bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
     allowBeyondWindow, requestBefore, requestAfter, navigation,
@@ -290,14 +283,6 @@ export default function SchedulingScreen({ navigation }: any) {
               selected={availWindows}
               onToggle={v => toggleChip(availWindows, setAvailWindows, v)}
             />
-
-            <View style={{ height: 18 }} />
-            <SectionLabel text="New clients" />
-            <RadioGroup options={NEW_CLIENTS_OPTS} value={acceptsNew} onChange={setAcceptsNew} />
-
-            <View style={{ height: 14 }} />
-            <ToggleRow label="Walk-ins welcome" sub="Clients can book without advance notice" value={walkIns} onChange={setWalkIns} />
-            <ToggleRow label="Group bookings" sub="Bridal parties, hen dos, group sessions" value={groupBookings} onChange={setGroupBookings} />
           </Card>
 
           <Card

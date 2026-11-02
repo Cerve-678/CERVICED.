@@ -107,7 +107,7 @@ _no named exports_
 _no named exports_
 
 ### `src/services/providerRegistrationService.ts`
-`geocodeAndValidateUkAddress` · `getCachedProviderData` · `loadProviderFromSupabase` · `loadProviderPolicies` · `MAX_UPLOAD_IMAGE_EDGE_PX` · `patchCachedProviderBranding` · `providerRowToRegistrationData` · `saveProviderPolicies` · `saveProviderToSupabase` · `uploadToStorage`
+`geocodeAndValidateUkAddress` · `geocodePublicLocation` · `getCachedProviderData` · `loadProviderFromSupabase` · `loadProviderPolicies` · `MAX_UPLOAD_IMAGE_EDGE_PX` · `patchCachedProviderBranding` · `providerRowToRegistrationData` · `saveProviderPolicies` · `saveProviderToSupabase` · `uploadToStorage`
 
 ### `src/services/pushNotificationService.ts`
 `isExpoGo` · `registerForPushNotifications` · `startExpoGoNotificationBridge` · `unregisterPushToken`
