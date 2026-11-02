@@ -58,9 +58,14 @@ import {
   uploadToStorage,
 } from '../../services/providerRegistrationService';
 import {
-  Card, Field, SectionLabel, Toast, SaveButton,
+  Card, ChipGroup, Field, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
+import {
+  BOOKING_INSTRUCTION_SUGGESTIONS,
+  selectedBookingInstructions,
+  toggleBookingInstruction,
+} from '../../features/business-details/bookingInstructions';
 import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
 type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
@@ -428,13 +433,18 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Shown on CERVICED bookings, which link-only pros don't have. */}
             {!isLinkOnly && (
-              <Card title="Booking Instructions" sub="Anything clients need to know before they arrive, like parking, what to bring or how to find you. Shown on every booking (optional).">
+              <Card title="Booking Instructions" sub="Anything clients need to know before they arrive, like parking, what to bring or how to find you. Clients see this in their booking details on every new booking (optional). Changing it later won't update bookings already made.">
                 <Field
                   label="Instructions"
                   value={policies.bookingInstructions}
                   onChange={v => setPolicy('bookingInstructions', v)}
-                  placeholder='e.g. "Please arrive 10 minutes early", parking info…'
+                  placeholder="Write your own or tap a suggestion below"
                   multiline
+                />
+                <ChipGroup
+                  options={BOOKING_INSTRUCTION_SUGGESTIONS}
+                  selected={selectedBookingInstructions(policies.bookingInstructions)}
+                  onToggle={line => setPolicy('bookingInstructions', toggleBookingInstruction(policies.bookingInstructions, line))}
                 />
               </Card>
             )}

@@ -87,6 +87,11 @@ import { DurationPicker } from '../../features/provider-registration/DurationPic
 import { BufferPicker, bufferOptionLabel } from '../../features/provider-registration/BufferPicker';
 import { SERVICE_BUFFER_BEFORE_OPTS, SERVICE_BUFFER_AFTER_OPTS } from '../../features/business-details/options';
 import { ChipSelect } from '../../features/provider-registration/ChipSelect';
+import {
+  BOOKING_INSTRUCTION_SUGGESTIONS,
+  selectedBookingInstructions,
+  toggleBookingInstruction,
+} from '../../features/business-details/bookingInstructions';
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
@@ -3762,11 +3767,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           section: 'about',
           title: 'About & portfolio',
           rows: [
-            { label: 'Introduction', value: filled(providerData.aboutText) ? 'Written' : '' },
             {
               label: 'Portfolio',
               value: workPhotos.length > 0 ? `${workPhotos.length} photo${workPhotos.length === 1 ? '' : 's'}` : '',
             },
+            { label: 'Introduction', value: filled(providerData.aboutText) ? 'Written' : '' },
           ],
         },
         {
@@ -4568,7 +4573,56 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>02</Text>
               <Text style={styles.docHeading}>About & Portfolio</Text>
-              <Text style={styles.docSub}>Your introduction and the work clients see</Text>
+              <Text style={styles.docSub}>The work clients see and your introduction</Text>
+
+            {/* Portfolio — client work gallery shown on your public profile */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Portfolio</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Photos of your work, shown on your public profile in a two-column gallery.
+                </Text>
+
+                {portfolioLoading ? (
+                  <View style={styles.portfolioLoadingRow}>
+                    <ActivityIndicator color="#AF9197" />
+                  </View>
+                ) : (
+                  <View style={styles.portfolioGrid}>
+                    {workPhotos.map(item => (
+                      <View key={item.id} style={styles.portfolioThumbWrap}>
+                        <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
+                        <TouchableOpacity
+                          style={styles.portfolioRemoveBtn}
+                          onPress={() => { tapWarn(); handleRemovePortfolioItem(item); }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.portfolioRemoveText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+
+                    <TouchableOpacity
+                      style={styles.portfolioAddTile}
+                      onPress={() => { tapMedium(); handleAddPortfolioImages(); }}
+                      activeOpacity={0.8}
+                      disabled={portfolioUploading || !providerDbId}
+                    >
+                      {portfolioUploading ? (
+                        <ActivityIndicator color="#000" />
+                      ) : (
+                        <>
+                          <Text style={styles.portfolioAddPlus}>+</Text>
+                          <Text style={styles.portfolioAddText}>Add Photos</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {!providerDbId && !portfolioLoading && (
+                  <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
+                )}
+              </View>
 
             {/* About Section */}
               <View
@@ -4591,6 +4645,30 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     onFocus={() => handleInputFocus('about', 'about')}
                   />
                 </View>
+              </View>
+
+              {/* The only editor of years of experience once a profile exists.
+                  Sign-up asks too and stages its answer on the user row, which
+                  prefills this. */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('yearsExperience')}
+              >
+                <Text style={styles.inputLabel}>Years of Experience</Text>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.yearsExperience}
+                    onChangeText={(text) =>
+                      setProviderData(prev => ({ ...prev, yearsExperience: text.replace(/[^0-9]/g, '') }))
+                    }
+                    placeholder="e.g. 5"
+                    placeholderTextColor={chrome.fg(0.4)}
+                    keyboardType="number-pad"
+                    onFocus={() => handleInputFocus('yearsExperience', 'about')}
+                  />
+                </View>
+                <Text style={styles.inputHint}>Shown on your public profile (optional).</Text>
               </View>
 
               {/* The release day's ONLY editor. One stored value
@@ -4620,52 +4698,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
                 </TouchableOpacity>
               </View>
-
-            {/* Portfolio — client work gallery shown on your public profile */}
-              <Text style={styles.sectionSubtitle}>
-                Photos of your work, shown on your public profile in a two-column gallery.
-              </Text>
-
-              {portfolioLoading ? (
-                <View style={styles.portfolioLoadingRow}>
-                  <ActivityIndicator color="#AF9197" />
-                </View>
-              ) : (
-                <View style={styles.portfolioGrid}>
-                  {workPhotos.map(item => (
-                    <View key={item.id} style={styles.portfolioThumbWrap}>
-                      <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
-                      <TouchableOpacity
-                        style={styles.portfolioRemoveBtn}
-                        onPress={() => { tapWarn(); handleRemovePortfolioItem(item); }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.portfolioRemoveText}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-
-                  <TouchableOpacity
-                    style={styles.portfolioAddTile}
-                    onPress={() => { tapMedium(); handleAddPortfolioImages(); }}
-                    activeOpacity={0.8}
-                    disabled={portfolioUploading || !providerDbId}
-                  >
-                    {portfolioUploading ? (
-                      <ActivityIndicator color="#000" />
-                    ) : (
-                      <>
-                        <Text style={styles.portfolioAddPlus}>+</Text>
-                        <Text style={styles.portfolioAddText}>Add Photos</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {!providerDbId && !portfolioLoading && (
-                <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
-              )}
 
               <TouchableOpacity
                 style={styles.docNextButton}
@@ -4867,13 +4899,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </Text>
               </View>
               )}
-
-              {/* Years of Experience moved to Business Profile → Business
-                  Details → Business Info — it's an ongoing business fact a
-                  provider updates over time, not first-publish setup.
-                  providerData.yearsExperience still round-trips through this
-                  screen untouched (hero preview reads it) so an existing
-                  value is never lost by editing/saving here. */}
 
               {isLinkOnly ? documentEnd : (
                 <TouchableOpacity
@@ -5560,20 +5585,27 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ask, same key, same format. */}
               <Text style={[styles.policyLabel, { marginTop: 14 }]}>ANYTHING CLIENTS SHOULD KNOW</Text>
               <Text style={styles.addressHint}>
-                Shown to clients on every booking (optional) — what to bring, how early to arrive. Put door or buzzer codes in Arrival details instead, which stays private until a booked client's address is released.
+                Clients see this in their booking details on every new booking (optional). Changing it later won't update bookings already made. Put door or buzzer codes in Arrival details instead, which stays private until a booked client's address is released.
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={policies.bookingInstructions}
                   onChangeText={(text) => setPolicies(prev => ({ ...prev, bookingInstructions: text }))}
-                  placeholder="e.g. Please arrive 10 minutes early. Free parking on the street outside."
+                  placeholder="Write your own or tap a suggestion below"
                   placeholderTextColor={chrome.fg(0.4)}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
               </View>
+              <ChipSelect
+                options={BOOKING_INSTRUCTION_SUGGESTIONS}
+                selected={selectedBookingInstructions(policies.bookingInstructions)}
+                onToggle={(line) => setPolicies(prev => ({ ...prev, bookingInstructions: toggleBookingInstruction(prev.bookingInstructions, line) }))}
+                accentColor={adaptiveAccentColor}
+                styles={styles}
+              />
 
               {/* The provider's OWN client-facing Terms & Conditions — the
                   prose a client must agree to before adding this provider to
