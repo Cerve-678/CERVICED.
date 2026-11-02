@@ -778,12 +778,17 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [profileQrVisible, setProfileQrVisible] = useState(false);
   // Shown once per fill: marked seen as it closes, so a refocus doesn't bring it back.
   const [certificate, setCertificate] = useState<UnseenFullyBooked | null>(null);
+  // Closed on this device. Covers the mark-seen call failing or still being in
+  // flight when the screen refocuses, so it can't pop up a second time.
+  const closedCertificates = useRef(new Set<string>());
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       getMyUnseenFullyBooked()
-        .then((row) => { if (active && row) setCertificate(row); })
+        .then((row) => {
+          if (active && row && !closedCertificates.current.has(row.fillId)) setCertificate(row);
+        })
         .catch((err) => logger.warn('[MyProfile] fully booked certificate check failed:', err));
       return () => { active = false; };
     }, []),
@@ -793,6 +798,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     const shown = certificate;
     setCertificate(null);
     if (shown) {
+      closedCertificates.current.add(shown.fillId);
       markFullyBookedSeen(shown.fillId).catch((err) => logger.error('[MyProfile] marking certificate seen failed:', err));
     }
     then?.();

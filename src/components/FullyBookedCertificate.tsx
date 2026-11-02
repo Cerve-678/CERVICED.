@@ -163,7 +163,9 @@ export default function FullyBookedCertificate({
 }: Props) {
   const P = isDarkMode ? DARK : LIGHT;
   const { width, height } = useWindowDimensions();
-  const [reduceMotion, setReduceMotion] = useState(false);
+  // null until the setting is read, so confetti never flashes up for someone
+  // who has motion turned down.
+  const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
   const pieces = useMemo(
     () => makePieces(isDarkMode ? CONFETTI_DARK : CONFETTI_LIGHT, height),
     [isDarkMode, height],
@@ -171,11 +173,25 @@ export default function FullyBookedCertificate({
   const cardIn = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!visible) return;
+    let active = true;
     AccessibilityInfo.isReduceMotionEnabled()
-      .then(setReduceMotion)
-      .catch(() => setReduceMotion(false));
+      .then((enabled) => { if (active) setReduceMotion(enabled); })
+      .catch(() => { if (active) setReduceMotion(false); });
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { active = false; sub.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || reduceMotion === null) return;
+    if (reduceMotion) {
+      cardIn.setValue(1);
+      return;
+    }
     cardIn.setValue(0);
     Animated.timing(cardIn, {
       toValue: 1,
@@ -183,7 +199,7 @@ export default function FullyBookedCertificate({
       easing: Easing.bezier(0.2, 0.8, 0.3, 1),
       useNativeDriver: true,
     }).start();
-  }, [visible, cardIn]);
+  }, [visible, reduceMotion, cardIn]);
 
   const filled = new Date(filledAt);
   const filledOn = `${filled.getDate()} ${MONTH_NAMES_FULL[filled.getMonth()]} ${filled.getFullYear()}`;
@@ -248,7 +264,7 @@ export default function FullyBookedCertificate({
           </TouchableOpacity>
         </Animated.View>
 
-        {visible && !reduceMotion ? (
+        {visible && reduceMotion === false ? (
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
             {pieces.map((piece, i) => (
               // Pieces never reorder, and each is regenerated only with the

@@ -350,8 +350,10 @@ closed by hand.
 space again". The provider side (migration
 `20261101200000_fully_booked_certificate.sql`): an hourly job,
 `process_provider_fully_booked_alerts`, records a fill on the change from space
-to full, only during the day (08:00 to 20:59 UK time). A cancellation filled
-again within 24 hours is the same fill. Each fill sends one "You're Fully
+to full, only during the day (08:00 to 20:59 UK time). Full also needs at least
+one booking (a blocked-out diary isn't full) and at least 7 days left to book (a
+release-day provider just before next month opens isn't full). A fill counts
+again only after a day with space, and at most once a week. Each fill sends one "You're Fully
 Booked!" notification under the provider's Fully Booked switch, and tapping it
 opens My Profile. There, the certificate (`src/components/FullyBookedCertificate.tsx`)
 pops up once, with confetti. Fills also drive the Fully Booked achievements: the

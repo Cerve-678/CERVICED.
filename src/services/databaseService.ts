@@ -7952,8 +7952,6 @@ export async function getProviderNotificationPreferences(): Promise<ProviderNoti
   return pickPreferences(DEFAULT_PROVIDER_NOTIF_PREFS, stored);
 }
 
-/** The signed-in provider's achievements. The server owns the rules and records
- *  anything newly earned as part of this call. */
 /** The newest time the signed-in provider's schedule filled that they haven't
  *  seen the certificate for. Null when there's nothing to show. */
 export type UnseenFullyBooked = { fillId: string; filledAt: string; throughDate: string };
@@ -7971,6 +7969,8 @@ export async function markFullyBookedSeen(fillId: string): Promise<void> {
   if (error) throw error;
 }
 
+/** The signed-in provider's achievements. The server owns the rules and records
+ *  anything newly earned as part of this call. */
 export async function getMyProviderAchievements(): Promise<ProviderAchievements> {
   const { data, error } = await supabase.rpc('get_my_provider_achievements');
   if (error) throw error;

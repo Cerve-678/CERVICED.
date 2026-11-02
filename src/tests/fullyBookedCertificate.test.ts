@@ -44,6 +44,23 @@ describe('noticing a schedule has filled', () => {
     expect(check).toContain("v_open_since > now() - INTERVAL '24 hours'");
   });
 
+  it('says nothing with under a week left to book, so month end before a release is never "full"', () => {
+    expect(check).toContain('CONTINUE WHEN v_horizon < 7;');
+    expect(check.indexOf('CONTINUE WHEN v_horizon < 7;')).toBeLessThan(check.indexOf('INSERT INTO public.provider_fully_booked_state'));
+  });
+
+  it('never calls a blocked-out diary with no bookings full', () => {
+    expect(check).toContain("v_open := v_open OR NOT EXISTS (");
+  });
+
+  it('counts at most once a week, so a rolling window gaining a day does not keep re-awarding it', () => {
+    expect(check).toContain("f.filled_at > now() - INTERVAL '7 days'");
+  });
+
+  it('logs one provider failing instead of stopping everyone', () => {
+    expect(check).toContain("RAISE WARNING 'fully booked check failed for provider %");
+  });
+
   it('only tells them during the day', () => {
     expect(check.indexOf('CONTINUE WHEN NOT v_daytime')).toBeLessThan(check.indexOf('INSERT INTO public.provider_fully_booked_fills'));
   });

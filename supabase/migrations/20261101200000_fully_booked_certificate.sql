@@ -2,16 +2,24 @@
 -- give them a certificate and the Fully Booked achievements.
 --
 -- "Fully booked" is the client profile's own check (get_services_open_within):
--- no free slot for any active service on any date they've opened. Checked every
--- hour by the existing cron job, now hourly instead of daily at 08:00. A fill is
--- recorded only on the change from space to full, during the day (08:00-20:59
--- UK time, re-checked hourly), and a cancellation filled again within 24 hours
--- is the same fill. Each fill sends one "You're Fully Booked!" notification,
--- which pushes under the provider's Fully Booked switch, and the app shows the
--- certificate once, the next time they open My Profile.
+-- no free slot for any active service on any date they've opened, and at least
+-- one booking in that time. Checked every hour by the existing cron job, now
+-- hourly instead of daily at 08:00, looking 14 days ahead first and the full 180
+-- only when those are taken. A fill is recorded on the change from space to
+-- full, and when a provider is first seen already full, during the day
+-- (08:00-20:59 UK time, re-checked hourly). It counts again only after a full
+-- day with space, and at most once a week, so a rolling window gaining a day at
+-- midnight doesn't keep re-awarding it. Each fill sends one "You're Fully
+-- Booked!" notification, which pushes under the provider's Fully Booked switch,
+-- and the app shows the certificate once, the next time they open My Profile.
 --
--- Not counted: a schedule closed by hand (nothing can be booked, so nothing
--- filled), link-only providers, and anyone with no active service or no hours.
+-- Not counted, and their state left as it was:
+--   • a schedule closed by hand (nothing can be booked, so nothing filled);
+--   • fewer than 7 days left to book. A release-day provider near month end has
+--     a day or two before next month opens, and a finished day has no slots,
+--     which isn't being fully booked.
+-- Never counted: link-only providers, anyone with no active service or no hours,
+-- and no free slot with no bookings at all (every date blocked for a holiday).
 --
 -- Replaces the old daily process_provider_fully_booked_alerts, which nothing in
 -- the app could switch on (automation_settings.fullyBookedAlertEnabled had no
@@ -86,10 +94,29 @@ DECLARE
   v_was_full  boolean;
   v_open_since timestamptz;
   v_through   date;
+  v_last      date;
+  v_horizon   integer;
+  v_services  uuid[];
   v_fill_id   uuid;
   v_today     date := (now() AT TIME ZONE 'Europe/London')::date;
   v_daytime   boolean := EXTRACT(HOUR FROM (now() AT TIME ZONE 'Europe/London'))::int BETWEEN 8 AND 20;
 BEGIN
+  -- Forget anyone who has left (offline, inactive, link-only, nothing set up),
+  -- so they come back with a fresh first look instead of a stale "full". A
+  -- closed schedule keeps its state: it's only paused.
+  DELETE FROM public.provider_fully_booked_state st
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public.providers p
+      WHERE p.id = st.provider_id
+        AND p.has_gone_live = TRUE
+        AND p.is_active = TRUE
+        AND COALESCE(p.booking_mode, '') <> 'external'
+        AND EXISTS (SELECT 1 FROM public.services s
+                     WHERE s.provider_id = p.id AND s.is_active = TRUE AND s.duration_minutes > 0)
+        AND (EXISTS (SELECT 1 FROM public.provider_availability_windows w WHERE w.provider_id = p.id)
+             OR EXISTS (SELECT 1 FROM public.provider_availability a WHERE a.provider_id = p.id AND a.is_closed = FALSE))
+   );
+
   FOR r IN
     SELECT p.id AS provider_id, p.user_id
       FROM public.providers p
@@ -110,15 +137,29 @@ BEGIN
          OR EXISTS (SELECT 1 FROM public.provider_availability a WHERE a.provider_id = p.id AND a.is_closed = FALSE)
        )
   LOOP
+   -- One provider's failure is logged and skipped, not allowed to stop the run.
+   BEGIN
+    v_last := public.provider_last_bookable_date(r.provider_id);
+    v_horizon := CASE WHEN v_last IS NULL THEN 180
+                      ELSE LEAST(180, v_last - v_today + 1) END;
+    -- Too little left to book to say anything (see the header).
+    CONTINUE WHEN v_horizon < 7;
+
+    v_services := ARRAY(SELECT s.id FROM public.services s
+                         WHERE s.provider_id = r.provider_id AND s.is_active = TRUE);
+
     -- The same check as the client profile's Fully Booked: no free slot for
-    -- any active service on any date they've opened.
-    v_open := EXISTS (
-      SELECT 1
-        FROM public.get_services_open_within(
-               ARRAY(SELECT s.id FROM public.services s
-                      WHERE s.provider_id = r.provider_id AND s.is_active = TRUE),
-               180) o
-       WHERE o.has_slot
+    -- any active service on any date they've opened. The near term first,
+    -- which answers it for almost everyone; 180 days only when that's taken.
+    v_open := EXISTS (SELECT 1 FROM public.get_services_open_within(v_services, 14) o WHERE o.has_slot)
+           OR EXISTS (SELECT 1 FROM public.get_services_open_within(v_services, 180) o WHERE o.has_slot);
+
+    -- No free slot and nothing booked is a blocked-out diary, not a full one.
+    v_open := v_open OR NOT EXISTS (
+      SELECT 1 FROM public.bookings b
+       WHERE b.provider_id = r.provider_id
+         AND b.booking_date BETWEEN v_today AND v_today + v_horizon - 1
+         AND b.status IN ('pending', 'confirmed', 'in_progress')
     );
 
     SELECT s.is_full, s.open_since INTO v_was_full, v_open_since
@@ -155,9 +196,14 @@ BEGIN
       AND v_open_since IS NOT NULL
       AND v_open_since > now() - INTERVAL '24 hours'
       AND EXISTS (SELECT 1 FROM public.provider_fully_booked_fills f WHERE f.provider_id = r.provider_id);
+    -- And at most once a week.
+    CONTINUE WHEN EXISTS (
+      SELECT 1 FROM public.provider_fully_booked_fills f
+       WHERE f.provider_id = r.provider_id AND f.filled_at > now() - INTERVAL '7 days'
+    );
 
-    -- No booking limit: the 180 days the check looked at.
-    v_through := COALESCE(public.provider_last_bookable_date(r.provider_id), v_today + 179);
+    -- The last date the check looked at.
+    v_through := v_today + v_horizon - 1;
 
     INSERT INTO public.provider_fully_booked_fills (provider_id, through_date)
     VALUES (r.provider_id, v_through)
@@ -177,6 +223,9 @@ BEGIN
       'provider',
       jsonb_build_object('kind', 'fully_booked_certificate', 'fill_id', v_fill_id)
     );
+   EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'fully booked check failed for provider %: % (%)', r.provider_id, SQLERRM, SQLSTATE;
+   END;
   END LOOP;
 END;
 $function$;
@@ -357,7 +406,9 @@ BEGIN
   FROM provider_fully_booked_fills f
   WHERE f.provider_id = v_provider_id;
 
-  SELECT COALESCE((p.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]{1,2}$', false)
+  -- CASE, so the cast only runs on one or two digits; 1-31 as everywhere else.
+  SELECT COALESCE(CASE WHEN (p.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]{1,2}$'
+                       THEN (p.automation_settings->>'scheduleReleaseDay')::int BETWEEN 1 AND 31 END, false)
     INTO v_release_day
   FROM providers p
   WHERE p.id = v_provider_id;
