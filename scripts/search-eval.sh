@@ -21,10 +21,15 @@ trap 'rm -f "$tmp"' EXIT
   # public.search_* -> pg_temp.search_*. Drop grants, comment-only lines, the
   # transaction, and the file's own schema_migrations record: an eval must
   # never mark the migration as applied.
-  sed -e '/^INSERT INTO supabase_migrations/,/;$/d' \
+  # Live-version guards (DO $guard$ … $guard$;) check the real schema before
+  # an apply; they mean nothing for session-only copies, so they're dropped.
+  sed -e '/^DO \$guard\$/,/^\$guard\$;/d' \
+      -e '/^INSERT INTO supabase_migrations/,/;$/d' \
       -e 's/CREATE OR REPLACE FUNCTION public\./CREATE FUNCTION pg_temp./' \
+      -e 's/CREATE OR REPLACE FUNCTION private\./CREATE FUNCTION pg_temp./' \
       -e 's/public\.search_/pg_temp.search_/g' \
-      -e '/^GRANT/d' -e '/^ *--/d' -e '/^CREATE EXTENSION/d' \
+      -e 's/private\.search_/pg_temp.search_/g' \
+      -e '/^GRANT/d' -e '/^REVOKE/d' -e '/^ *--/d' -e '/^CREATE EXTENSION/d' \
       -e '/^BEGIN;$/d' -e '/^COMMIT;$/d' -e '/^DROP FUNCTION/d' "$migration"
   sed -e 's/search_services_ranked(/pg_temp.search_services_ranked(/' \
       "$repo/supabase/tests/service_search_eval.sql"

@@ -1228,6 +1228,32 @@ export async function searchProvidersAndServices(
 }
 
 /**
+ * A client tapped this result after searching, which is how Search learns what
+ * people mean (see 20261102150000_search_result_taps.sql). Sends the service
+ * words only, because that's what search_services_ranked ranks by: "nails in
+ * london" and "nails under £30" must teach the same thing as "nails". A search
+ * with no service words (just a place) has nothing to learn.
+ */
+export async function recordSearchTap(
+  query: string,
+  providerId: string,
+  serviceId: string | null,
+  earlierQueries: string[],
+): Promise<void> {
+  const serviceText = parseSearchQuery(query).serviceText.trim();
+  if (!serviceText) return;
+  const { error } = await supabase.rpc("record_search_tap", {
+    p_query: serviceText,
+    p_provider_id: providerId,
+    p_service_id: serviceId,
+    p_earlier_queries: earlierQueries
+      .map((q) => parseSearchQuery(q).serviceText.trim())
+      .filter(Boolean),
+  });
+  if (error) throw error;
+}
+
+/**
  * First photo of each service, keyed by service id, for the service cards
  * Search scatters between its provider rows. search_services_ranked returns
  * no images, so this is one batched lookup over the ids already on screen.
