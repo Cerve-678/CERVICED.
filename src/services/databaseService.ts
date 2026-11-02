@@ -743,15 +743,24 @@ export async function getProviderPriceRanges(
   return ranges;
 }
 
+export interface FacetService {
+  id: string;
+  price: number | null;
+  priceMax: number | null;
+  audience: string | null;
+  skinTones: string[];
+}
+
 export interface ProviderServiceFacets {
   /** £min–£max across the provider's active services. Absent when they have
    *  none priced. */
   priceRanges: Map<string, { min: number; max: number }>;
-  /** The distinct `services.audience` tags each provider actually offers.
-   *  Absent/empty means nothing tagged — the same providers `.eq('audience',
-   *  …)` would simply not have returned. */
-  audiences: Map<string, Set<string>>;
-  skinTones: Map<string, Set<string>>;
+  /** Each provider's active services, one row per service, for the filters
+   *  that must be judged on a single service (price, audience, skin tone —
+   *  see src/utils/serviceFilterMatch.ts). Per-provider aggregates of those
+   *  columns can't answer "does ONE service satisfy all of them", which is
+   *  what let a provider pass "<£30" and "Women" on two different services. */
+  services: Map<string, FacetService[]>;
   /** Free-text "speciality" haystack per provider, for the client Speciality
    *  filter's fuzzy match (src/utils/fuzzyMatch.ts). Unions three sources that
    *  each name what a provider is known for: their chosen business
@@ -769,7 +778,8 @@ export interface ProviderServiceFacets {
 }
 
 /**
- * Price range AND audience tags for a set of providers, in ONE query.
+ * Price range, per-service filter data and speciality text for a set of
+ * providers, in ONE services scan (plus the provider_specialties read beside it).
  *
  * getProviderPriceRanges and the former getProviderAudienceMatches asked the same table,
  * over the same provider ids, behind the same has_gone_live/is_active gate —
@@ -778,21 +788,20 @@ export interface ProviderServiceFacets {
  * that need both should use this; the two single-purpose functions remain for
  * callers that genuinely need only one.
  *
- * Returning the audience SET rather than a pre-filtered match set is
- * deliberate: it lets a caller re-answer "does this provider serve men?" for a
- * different audience without going back to the network, which is what makes
- * toggling that filter free rather than another round trip.
+ * Returning the raw per-service rows rather than a pre-filtered match set is
+ * deliberate: it lets a caller re-answer "does one of this provider's services
+ * fit £30–£60 for men?" for any combination without going back to the network,
+ * which is what makes toggling those filters free rather than another round trip.
  */
 export async function getProviderServiceFacets(
   providerIds: string[],
 ): Promise<ProviderServiceFacets> {
   const priceRanges = new Map<string, { min: number; max: number }>();
-  const audiences = new Map<string, Set<string>>();
-  const skinTones = new Map<string, Set<string>>();
+  const services = new Map<string, FacetService[]>();
   const specialityText = new Map<string, Set<string>>();
   const specialityLabels = new Map<string, Set<string>>();
   if (providerIds.length === 0) {
-    return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
+    return { priceRanges, services, specialityText, specialityLabels };
   }
 
   const addTo = (map: Map<string, Set<string>>, providerId: string, value: string) => {
@@ -823,7 +832,7 @@ export async function getProviderServiceFacets(
     supabase
       .from("services")
       .select(
-        "provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
+        "id, provider_id, price, price_max, audience, skin_tones_suitable, name, tags, technique_tags, outcome_tags, occasion_tags, trend_names, providers!inner(has_gone_live, is_active)",
       )
       .eq("is_active", true)
       .eq("providers.has_gone_live", true)
@@ -856,17 +865,15 @@ export async function getProviderServiceFacets(
       }
     }
 
-    for (const tone of row.skin_tones_suitable ?? []) {
-      const set = skinTones.get(providerId) ?? new Set<string>();
-      set.add(tone);
-      skinTones.set(providerId, set);
-    }
-
-    if (row.audience) {
-      const set = audiences.get(providerId) ?? new Set<string>();
-      set.add(row.audience as string);
-      audiences.set(providerId, set);
-    }
+    const own = services.get(providerId) ?? [];
+    own.push({
+      id: row.id as string,
+      price: (row.price as number | null) ?? null,
+      priceMax: (row.price_max as number | null) ?? null,
+      audience: (row.audience as string | null) ?? null,
+      skinTones: (row.skin_tones_suitable as string[] | null) ?? [],
+    });
+    services.set(providerId, own);
 
     // The service name plus every tag column feed the Speciality haystack.
     addSpeciality(providerId, row.name as string | null);
@@ -885,7 +892,7 @@ export async function getProviderServiceFacets(
     addSpecialityLabel(row.provider_id as string, row.specialty as string | null);
   }
 
-  return { priceRanges, audiences, skinTones, specialityText, specialityLabels };
+  return { priceRanges, services, specialityText, specialityLabels };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -1056,12 +1063,18 @@ export async function searchProvidersAndServices(
     .join(",");
   // location_text is included here too (not just in the dedicated filter
   // below) so a query with no "in/near" preposition still matches on it.
-  const nameOr = textTerms
-    .map(
+  // A business name typed apart ("face by jen" for FacebyJen) only matches
+  // with the spaces taken out.
+  const compactTerms = textTerms
+    .map((t) => t.replace(/\s+/g, ""))
+    .filter((t, i) => t.length >= 5 && t !== textTerms[i]);
+  const nameOr = [
+    ...textTerms.map(
       (t) =>
         `display_name.ilike.%${t}%,about_text.ilike.%${t}%,location_text.ilike.%${t}%`,
-    )
-    .join(",");
+    ),
+    ...compactTerms.map((t) => `display_name.ilike.%${t}%`),
+  ].join(",");
 
   // A detected category hint only broadens recall when the caller hasn't
   // already pinned a category via the chip filter — that's already narrower.
@@ -1187,18 +1200,29 @@ export async function searchProvidersAndServices(
   const serviceIdSet = new Set(serviceIds);
   const nameIdSet = new Set(nameIds);
   const normalizedQuery = parsed.serviceText.toLowerCase();
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
   const relevance = (provider: PublicProviderSummary): number => {
     const name = provider.display_name.toLowerCase();
-    if (normalizedQuery && name === normalizedQuery) return 4;
-    if (normalizedQuery && name.includes(normalizedQuery)) return 3;
+    const compactName = name.replace(/\s+/g, "");
+    if (normalizedQuery && (name === normalizedQuery || compactName === compactQuery)) return 4;
+    if (normalizedQuery && (name.includes(normalizedQuery)
+      || (compactQuery.length >= 5 && compactName.includes(compactQuery)))) return 3;
     const ranked = bestServiceRank.get(provider.id);
     if (ranked !== undefined) return 2 + Math.min(ranked, 1) * 0.5;
     if (serviceIdSet.has(provider.id)) return 2;
     if (nameIdSet.has(provider.id)) return 1;
     return 0;
   };
+  // Location terms run most specific first ("hackney", then "London"), so
+  // among equally relevant providers the one actually in the named place
+  // comes before the rest of the city.
+  const locationRank = (provider: PublicProviderSummary): number => {
+    const where = (provider.location_text ?? "").toLowerCase();
+    const at = locationTerms.findIndex((t) => where.includes(t.toLowerCase()));
+    return at === -1 ? locationTerms.length : at;
+  };
   const providers = ((data ?? []) as PublicProviderSummary[])
-    .sort((a, b) => relevance(b) - relevance(a))
+    .sort((a, b) => relevance(b) - relevance(a) || locationRank(a) - locationRank(b))
     .slice(0, limit);
   return { providers, services, correctedQuery };
 }

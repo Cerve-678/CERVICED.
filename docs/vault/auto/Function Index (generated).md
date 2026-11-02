@@ -5,7 +5,7 @@
 
 #generated
 
-**2893 functions** across **392 files**.
+**2914 functions** across **395 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -44,7 +44,7 @@
 - `ProviderFontPicker.tsx` — ProviderFontPicker
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
-- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipStatusLabel
+- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
@@ -153,9 +153,13 @@
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
 - `useMaintenanceDueCount.ts` — **useMaintenanceDueCount**
 
-### `src/features/payments/` (2)
+### `src/features/notifications/` (1)
+- `notificationPresentation.ts` — **isCertificateNotification** · **notificationAmount** · **notificationDayHeadings** · **notificationDayLabel** · **notificationKindLabel** · startOfDay
+
+### `src/features/payments/` (3)
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
+- `tipsByBooking.ts` — **groupTipsByBooking**
 
 ### `src/features/provider-bookings/` (1)
 - `tipPresentation.ts` — **formatTipAmount** · pounds · **providerTipNote**
@@ -270,7 +274,7 @@
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
 - `ProviderProfileScreen.tsx` — additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · formatDate · goodToKnowText · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openImageViewer · openLinkOnlyBooking · openOffersPanel · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · minPickerDate · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen
-- `SearchScreen.tsx` — activeFilterChips · add · audienceMatchIds · clearFilter · description · filteredProviders · formatPriceRange · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceIdsKey · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleServices
+- `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleServices
 - `SubscriptionScreen.tsx` — SubscriptionScreen
 - `UserProfileScreen.tsx` — handleBiometricToggle · handleLogout · UserProfileScreen
 
@@ -318,7 +322,7 @@
 - `HelpCentreScreen.tsx` — buildMoreActions · FAQItem · handleContactSupport · HelpCentreScreen · openMore · runAction
 - `InfoScreen.tsx` — ScreenNameHere
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow
-- `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
+- `NotificationsScreen.tsx` — actionLabelFor · closeMessagePopup · dayHeadings · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TermsScreen.tsx` — TermsScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
@@ -366,7 +370,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (51)
+### `src/utils/` (52)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -407,7 +411,8 @@
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
-- `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery** · takePrice
+- `searchQuery.ts` — **buildLocationTerms** · detectCategory · endsWithPlace · fixCompassTypo · nearestPlace · **parseSearchQuery** · takePrice
+- `serviceFilterMatch.ts` — **candidateServices** · **hasServiceCriteria** · **priceRangeAcrossServices** · **serviceMatchesCriteria** · **serviceRange**
 - `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
 - `slotsRowText.ts` — **slotsPillText**
