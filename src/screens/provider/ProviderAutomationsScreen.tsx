@@ -26,7 +26,7 @@ const C_DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   // Lighter than `accent` for standalone text (section labels, "Done" links) —
   // the muted dusty rose reads as faint at small sizes against near-black cards.
   accentText: '#D9AEB6',
@@ -40,7 +40,7 @@ const C_LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   accentText: '#5C4033',
   text:    '#1C1A18',
   sub:     '#8A8680',
@@ -143,7 +143,7 @@ function ChipSelect({
             style={[st.chip, { borderColor: C.border, backgroundColor: C.surface }, isOn(v) && { backgroundColor: C.accent, borderColor: C.accent }]}
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onSelect(v); }}
           >
-            <Text style={[st.chipText, { color: C.sub }, isOn(v) && { color: '#fff' }]}>{l}</Text>
+            <Text style={[st.chipText, { color: C.sub }, isOn(v) && { color: C.onAccent }]}>{l}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -315,8 +315,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           disabled={saving}
         >
           {saving
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={st.saveBtnText}>Save</Text>
+            ? <ActivityIndicator size="small" color={C.onAccent} />
+            : <Text style={[st.saveBtnText, { color: C.onAccent }]}>Save</Text>
           }
         </TouchableOpacity>
       </View>
@@ -354,7 +354,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
                   style={[st.chip, { borderColor: C.border, backgroundColor: C.surface }, on && { backgroundColor: C.accent, borderColor: C.accent }]}
                   onPress={() => toggleReminder(v)}
                 >
-                  <Text style={[st.chipText, { color: C.sub }, on && { color: '#fff' }]}>{l}</Text>
+                  <Text style={[st.chipText, { color: C.sub }, on && { color: C.onAccent }]}>{l}</Text>
                 </TouchableOpacity>
               );
             })}

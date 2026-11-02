@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  isDarkColor,
   PROVIDER_THEMES,
   DEFAULT_PROVIDER_THEME,
   SHEET_BG,
@@ -359,9 +360,9 @@ export default function BrandingScreen({ navigation }: any) {
                   disabled={uploadingImage}
                 >
                   {uploadingImage ? (
-                    <ActivityIndicator color="#fff" size="small" />
+                    <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} size="small" />
                   ) : (
-                    <Text style={styles.imageBtnText}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
+                    <Text style={[styles.imageBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
                   )}
                 </TouchableOpacity>
                 {backgroundImage && (
@@ -385,9 +386,9 @@ export default function BrandingScreen({ navigation }: any) {
             disabled={saving || uploadingImage}
           >
             {saving ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
             ) : (
-              <Text style={styles.saveBtnText}>Save Changes</Text>
+              <Text style={[styles.saveBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Save Changes</Text>
             )}
           </TouchableOpacity>
 

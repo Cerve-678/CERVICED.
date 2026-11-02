@@ -232,8 +232,9 @@ other recently-built screens actually render:
 
 Text and icons on a solid accent fill use `onAccent` here too: white in light
 mode, `#1A1815` in dark mode, because white on `#AF9197` is only about 3:1.
-Many older provider screens still hardcode white on the accent. Don't copy
-them, and move them to `onAccent` when you touch them.
+On a colour the provider chose themselves, or a palette passed in as a prop,
+use `isDarkColor(accent) ? '#FFFFFF' : '#1B2740'`. White stays right on red,
+orange and green fills and over photos.
 
 (This doc previously stated `#AF9197` for both modes — that was inaccurate;
 `#AF9197` is dark-mode-only in the app as it actually ships. If you're

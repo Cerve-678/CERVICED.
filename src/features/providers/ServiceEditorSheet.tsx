@@ -31,7 +31,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { withAlpha } from '../../constants/providerThemes';
+import { isDarkColor, withAlpha } from '../../constants/providerThemes';
 import * as Haptics from 'expo-haptics';
 import type { MyServiceDraft } from '../../services/databaseService';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
@@ -483,7 +483,7 @@ export default function ServiceEditorSheet({
             disabled={saving}
             activeOpacity={0.85}
           >
-            <Text style={styles.saveButtonText}>
+            <Text style={[styles.saveButtonText, { color: isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740' }]}>
               {saving ? 'Saving…' : isNew ? 'Add service' : 'Save changes'}
             </Text>
           </TouchableOpacity>

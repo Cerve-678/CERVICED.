@@ -48,7 +48,7 @@ const LIGHT = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   ice:     '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
@@ -60,7 +60,7 @@ const DARK = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -453,7 +453,7 @@ export default function ProviderScheduleScreen() {
             onPress={setTab}
             accentColor={P.accent}
             inactiveTextColor={P.sub}
-            activeTextColor={P.ice}
+            activeTextColor={P.onAccent}
             scrollable={false}
           />
         </View>
@@ -556,8 +556,8 @@ export default function ProviderScheduleScreen() {
                 disabled={saving}
               >
                 {saving
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>{editing ? 'Save Hours' : 'Edit Hours'}</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>{editing ? 'Save Hours' : 'Edit Hours'}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -640,8 +640,8 @@ export default function ProviderScheduleScreen() {
                 disabled={addingBlock}
               >
                 {addingBlock
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Block This Date</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>Block This Date</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -741,8 +741,8 @@ export default function ProviderScheduleScreen() {
                 disabled={addingOverride}
               >
                 {addingOverride
-                  ? <ActivityIndicator color={P.ice} size="small" />
-                  : <Text style={[s.saveTxt, { color: P.ice }]}>Save Custom Hours</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.onAccent }]}>Save Custom Hours</Text>
                 }
               </TouchableOpacity>
             </View>

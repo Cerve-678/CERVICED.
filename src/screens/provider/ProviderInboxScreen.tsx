@@ -128,6 +128,7 @@ function ConversationRow({
   text,
   sub,
   accent,
+  onAccent,
   border,
   onPress,
   onReply,
@@ -138,6 +139,7 @@ function ConversationRow({
   text: string;
   sub: string;
   accent: string;
+  onAccent: string;
   border: string;
   onPress: () => void;
   onReply: () => void;
@@ -172,8 +174,8 @@ function ConversationRow({
         style={[row.swipeBtn, { backgroundColor: accent }]}
         onPress={() => { swipeRef.current?.close(); onReply(); }}
       >
-        <Ionicons name="arrow-undo" size={18} color="#fff" />
-        <Text style={row.swipeBtnText}>Reply</Text>
+        <Ionicons name="arrow-undo" size={18} color={onAccent} />
+        <Text style={[row.swipeBtnText, { color: onAccent }]}>Reply</Text>
       </TouchableOpacity>
     </View>
   );
@@ -221,7 +223,7 @@ const LIGHT_P = {
   bg:      '#F5F1EC',
   surface: '#EDE8E2',
   card:    '#FFFFFF',
-  accent:  '#5C4033',
+  accent:  '#5C4033', onAccent: '#FFFFFF',
   text:    '#000000',
   sub:     '#7E6667',
   border:  'rgba(126,102,103,0.14)',
@@ -231,7 +233,7 @@ const DARK_P = {
   bg:      '#1A1815',
   surface: '#201D1A',
   card:    '#252220',
-  accent:  '#AF9197',
+  accent:  '#AF9197', onAccent: '#1A1815',
   text:    '#F0ECE7',
   sub:     '#7E6667',
   border:  'rgba(126,102,103,0.18)',
@@ -501,6 +503,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 text={P.text}
                 sub={P.sub}
                 accent={P.accent}
+                onAccent={P.onAccent}
                 border={P.border}
                 onPress={() => navigation.navigate('ProviderConversation', {
                   conversationId: item.id,
@@ -601,7 +604,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                     onPress={handleSendReply}
                     disabled={!replyText.trim() || replySending}
                   >
-                    <Text style={m.replySendText}>{replySending ? 'Sending…' : 'Send'}</Text>
+                    <Text style={[m.replySendText, { color: P.onAccent }]}>{replySending ? 'Sending…' : 'Send'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -707,8 +710,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                       activeOpacity={0.8}
                     >
                       {templatesSaving
-                        ? <ActivityIndicator color="#FFFFFF" size="small" />
-                        : <Text style={t.saveText}>Save Templates</Text>}
+                        ? <ActivityIndicator color={P.onAccent} size="small" />
+                        : <Text style={[t.saveText, { color: P.onAccent }]}>Save Templates</Text>}
                     </TouchableOpacity>
                   </View>
                 </KeyboardDismissView>

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
 import { ordinalSuffix } from '../../utils/dateUtils';
+import { isDarkColor } from '../../constants/providerThemes';
 
 const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
 
@@ -91,7 +92,7 @@ export function ReleaseDayPicker({
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}>
-            <Text style={styles.releasePickerDoneText}>Done</Text>
+            <Text style={[styles.releasePickerDoneText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Done</Text>
           </TouchableOpacity>
         </View>
       </View>
