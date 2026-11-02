@@ -20,6 +20,12 @@
 // policies saying 'full' now mean 'half' (readCancelPenalty). This is only ever
 // a share of what was paid, never a charge for the unpaid balance.
 //
+// Non-refundable deposit (user decision 2026-11-02): where the booking's frozen
+// policy says so, the deposit is kept whenever the client cancels, even in good
+// time, under the same rules as a late 'deposit' penalty. Only a client's own
+// cancel reaches this function, so a provider who cancels, declines or never
+// answers still refunds everything.
+//
 // All amounts are integer pence. The function reads the booking's STORED
 // figures (amount_paid, deposit, platform_fee) and the payout row's STORED
 // payout_amount, rather than re-deriving the fee formula — so it stays correct
@@ -48,6 +54,8 @@ export interface CancellationSettlementInput {
   payoutAmountPence: number;
   /** The client paid only a deposit in the app, not the full price. */
   paidDepositOnly: boolean;
+  /** The booking's frozen policy makes its deposit non-refundable. */
+  depositNonRefundable?: boolean;
 }
 
 export interface CancellationSettlement {
@@ -84,16 +92,21 @@ export function computeCancellationSettlement(
   let clientRefund: number;
   let providerKeep: number;
 
-  if (!input.isLateCancel || input.penalty === 'none') {
+  const keepsDepositAnyway = input.depositNonRefundable === true && deposit > 0;
+  const penalty: CancelPenalty = input.isLateCancel
+    ? (input.penalty === 'none' && keepsDepositAnyway ? 'deposit' : input.penalty)
+    : (keepsDepositAnyway ? 'deposit' : 'none');
+
+  if (penalty === 'none') {
     // Full refund, fee included. Provider keeps nothing.
     clientRefund = amountPaid;
     providerKeep = 0;
   } else if (input.paidDepositOnly) {
     // All the client paid was the deposit: the provider keeps it whole (bounded
     // by their actual payout share); CERVICED keeps the fee.
-    providerKeep = input.penalty === 'deposit' ? Math.min(deposit, payout) : payout;
+    providerKeep = penalty === 'deposit' ? Math.min(deposit, payout) : payout;
     clientRefund = Math.max(0, amountPaid - providerKeep - fee);
-  } else if (input.penalty === 'deposit') {
+  } else if (penalty === 'deposit') {
     // Paid in full under a 'keep the deposit' policy: the deposit's amount, but
     // never more than half; the client gets everything else back.
     providerKeep = Math.min(deposit, half);

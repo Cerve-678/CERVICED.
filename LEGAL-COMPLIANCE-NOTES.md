@@ -217,6 +217,17 @@ Until then, the app reads the provider's policy only to *display* it and to
 *warn* the client they're inside the notice window — it does not act on it
 financially.
 
+**Added 2026-11-02 — non-refundable deposits (user-directed, branch
+`feat/non-refundable-deposit-rule`).** A provider can require one: it's kept
+whenever the client cancels, even well before the notice window, and CERVICED
+keeps its fee. Open questions for a solicitor: whether keeping a deposit on a
+cancellation made well in advance is fair under the Consumer Rights Act 2015
+(the amount against the provider's real loss), whether the Consumer Contracts
+Regulations 2013 give a cooling-off right on these bookings (there is no stated
+position), and whether keeping the fee as well is fair. Terms clauses 13 and 31
+carry wording that is **not lawyer-reviewed**, and Provider Terms have no
+re-consent step (section 10).
+
 ## 7. Reviews and user-generated content
 
 T&Cs already prohibit "false reviews" and fraudulent activity (good). Worth

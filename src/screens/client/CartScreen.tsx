@@ -73,6 +73,7 @@ import { env } from '../../utils/env';
 import { toArgbHex } from '../../utils/color';
 import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
 import { newestAddedItem } from '../../utils/newestAddedItem';
+import { resolveDepositMode } from '../../utils/depositPolicy';
 import { CART_ISSUE, describeReserveFailure, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee, PAYPAL_MAX_CHECKOUT_TOTAL } from '../../features/cart/platformFee';
@@ -4558,8 +4559,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   return f && (f.patchTestRequired || !f.isPregnancySafe);
                 });
                 const needsSafetyAck = safetyItems.length > 0;
+                const nonRefundableProviders = [...new Set(checkoutSnapshot.items
+                  .filter(i => i.policySnapshot?.['depositNonRefundable'] === true
+                    && resolveDepositMode(i.policySnapshot) !== 'full_only')
+                  .map(i => i.providerName))];
                 return (
                   <>
+                    {nonRefundableProviders.length > 0 && (
+                      <View style={[styles.safetyAckNotice, { backgroundColor: P.surface, borderColor: P.border }]}>
+                        <Text style={[styles.safetyAckNoticeText, { color: P.sub }]}>
+                          {`The deposit for ${nonRefundableProviders.join(' and ')} is non-refundable. If you cancel, even in good time, the provider keeps it, CERVICED keeps its platform fee, and the rest of what you paid comes back. Both come back if the provider cancels, declines or doesn't respond.`}
+                        </Text>
+                      </View>
+                    )}
                     {needsSafetyAck && (
                       <View style={[styles.safetyAckNotice, { backgroundColor: P.surface, borderColor: P.border }]}>
                         <Text style={[styles.safetyAckNoticeText, { color: P.sub }]}>

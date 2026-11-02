@@ -16,6 +16,49 @@ const base: CancellationSettlementInput = {
   paidDepositOnly: false,
 };
 
+describe('non-refundable deposit', () => {
+  it('keeps the deposit and the fee on an early cancel', () => {
+    const s = computeCancellationSettlement({ ...base, isLateCancel: false, depositNonRefundable: true });
+    expect(s.providerKeepPence).toBe(1000);
+    expect(s.clientRefundPence).toBe(4000);
+  });
+
+  it('keeps the whole deposit when only a deposit was paid', () => {
+    const s = computeCancellationSettlement({
+      ...base, isLateCancel: false, depositNonRefundable: true,
+      paidDepositOnly: true, amountPaidPence: 1100, platformFeePence: 100, payoutAmountPence: 1000,
+    });
+    expect(s.providerKeepPence).toBe(1000);
+    expect(s.clientRefundPence).toBe(0);
+  });
+
+  it('applies on a late cancel even with no penalty set', () => {
+    const s = computeCancellationSettlement({ ...base, penalty: 'none', isLateCancel: true, depositNonRefundable: true });
+    expect(s.providerKeepPence).toBe(1000);
+  });
+
+  it("doesn't turn an early cancel into half the price", () => {
+    const s = computeCancellationSettlement({ ...base, penalty: 'half', isLateCancel: false, depositNonRefundable: true });
+    expect(s.providerKeepPence).toBe(1000);
+  });
+
+  it('leaves a late half-price penalty as it was', () => {
+    const s = computeCancellationSettlement({ ...base, penalty: 'half', isLateCancel: true, depositNonRefundable: true });
+    expect(s.providerKeepPence).toBe(2500);
+  });
+
+  it('refunds in full when the booking has no deposit', () => {
+    const s = computeCancellationSettlement({ ...base, depositPence: 0, isLateCancel: false, depositNonRefundable: true });
+    expect(s.clientRefundPence).toBe(5500);
+    expect(s.providerKeepPence).toBe(0);
+  });
+
+  it('never keeps more than half when paid in full', () => {
+    const s = computeCancellationSettlement({ ...base, depositPence: 4000, isLateCancel: false, depositNonRefundable: true });
+    expect(s.providerKeepPence).toBe(2500);
+  });
+});
+
 describe('computeCancellationSettlement', () => {
   it('refunds everything (fee included) on an early cancel, whatever the penalty', () => {
     for (const penalty of ['none', 'deposit', 'half'] as const) {

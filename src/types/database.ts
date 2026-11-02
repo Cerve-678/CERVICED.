@@ -340,6 +340,8 @@ export interface DbProvider {
     noShowGraceMinutes?: string;
     /** Stamped onto every new booking, shown to clients in booking details. */
     bookingInstructions?: string;
+    /** Kept whenever the client cancels, even in good time. Frozen per booking. */
+    depositNonRefundable?: boolean;
     /** Optional photo of a fuller policy document, shown to clients via a
      *  pop-up on their profile view (see ProviderProfileScreen). */
     policyImageUrl?: string;

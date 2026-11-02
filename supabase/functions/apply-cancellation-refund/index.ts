@@ -132,6 +132,9 @@ Deno.serve(async (req: Request) => {
     const livePolicies = (provider?.booking_policies ?? null) as Record<string, unknown> | null;
     const penalty = readCancelPenalty(snapshot?.['cancelPenalty'] ?? livePolicies?.['cancelPenalty']);
     const hours = noticeHours(provider?.cancellation_notice_hours, livePolicies);
+    // Snapshot only: a provider turning this on later can't change what an
+    // existing booking agreed to.
+    const depositNonRefundable = snapshot?.['depositNonRefundable'] === true;
 
     // booking_date/time are UK wall-clock; read as UTC they'd be an hour late
     // in summer, handing a late canceller an extra hour of notice.
@@ -166,6 +169,7 @@ Deno.serve(async (req: Request) => {
       payoutAmountPence: payout ? Number(payout.payout_amount) : 0,
       // payment_status, not payment_type: it records what was actually paid.
       paidDepositOnly: booking.payment_status === 'deposit_paid',
+      depositNonRefundable,
     });
 
     const chargeId = await latestChargeId(booking.payment_intent_id);
@@ -259,7 +263,7 @@ Deno.serve(async (req: Request) => {
         .eq('id', booking.id);
       if (keptErr) throw keptErr;
     }
-    await notifySettlement(booking, provider, penalty === 'half' && booking.payment_status !== 'deposit_paid', hours, settlement, movedLate);
+    await notifySettlement(booking, provider, penalty === 'half' && isLateCancel && booking.payment_status !== 'deposit_paid', hours, settlement, movedLate, !isLateCancel);
     return json({ status: 'settled', clientRefundPence: settlement.clientRefundPence, providerKeepPence: settlement.providerKeepPence }, 200);
   } catch (err) {
     console.error(`[apply-cancellation-refund] fatal: ${String(err)}`);
@@ -279,6 +283,9 @@ async function notifySettlement(
   hours: number,
   settlement: { clientRefundPence: number; providerKeepPence: number },
   movedLate: boolean,
+  // Cancelled in good time, so what was kept is down to the non-refundable
+  // deposit alone. "Cancelled late" would be untrue.
+  depositRuleOnly: boolean,
 ) {
   if (settlement.providerKeepPence <= 0) return;
   // A retried settlement (e.g. a 'full' penalty, which leaves no refund to
@@ -290,7 +297,9 @@ async function notifySettlement(
   if ((count ?? 0) > 0) return;
   const kept = `£${(settlement.providerKeepPence / 100).toFixed(2)}`;
   const what = keptHalf ? `${kept}, half the price,` : `the ${kept} deposit`;
-  const window = hours > 0 ? `${hours}-hour cancellation policy` : 'cancellation policy';
+  const window = depositRuleOnly
+    ? 'non-refundable deposit policy'
+    : hours > 0 ? `${hours}-hour cancellation policy` : 'cancellation policy';
   const clientName = booking.customer_name?.trim() || 'Your client';
   const providerName = booking.provider_name_snapshot?.trim() || provider?.display_name?.trim() || 'Your provider';
   const refunded = `£${(settlement.clientRefundPence / 100).toFixed(2)}`;
@@ -301,7 +310,7 @@ async function notifySettlement(
     ...(provider?.user_id ? [{
       user_id: provider.user_id,
       type: 'cancellation_settled',
-      title: `${clientName.split(' ')[0]} cancelled late`,
+      title: `${clientName.split(' ')[0]} cancelled${depositRuleOnly ? '' : ' late'}`,
       message: `You kept ${what} under your ${window}.${providerWhy}`,
       priority: 'medium',
       is_actionable: false,

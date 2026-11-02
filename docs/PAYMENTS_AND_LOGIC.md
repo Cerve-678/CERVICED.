@@ -348,6 +348,7 @@ Pay or PayPal.
 | Provider doesn't accept within 48 hours, or before the start time | Automatic (every 30 min) | Everything, automatically | Nothing | Refunded |
 | Client cancels **before** the provider's cancellation window | Client | Everything | Nothing | Refunded |
 | Client cancels **inside** the window; the provider's policy is "no charge" | Client | Everything | Nothing | Refunded |
+| Client cancels **at any time**, and the booking's frozen policy has a **non-refundable deposit** | Client | Everything except the deposit and the fee | The deposit (at most half the service price if they paid in full) | Kept |
 | Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit or half the price | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
 | Client cancels inside the window, **paid in full**; the policy is **keep the deposit** | Client | Everything except the kept amount and the fee | The deposit's amount, at most half the service price | Kept |
 | Client cancels inside the window, **paid in full**; the policy is **half the price** | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
@@ -957,6 +958,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | 2 Nov | Link-only pros can become full members themselves. The app shows £25.99 a month with 2 months free, counted from the day they go live again, but charges nothing until pricing is final | Lets demand from client nudges turn into full providers now, without building billing first |
+| 2 Nov | Providers can require a non-refundable deposit: kept whenever the client cancels, frozen per booking, still refunded if the provider cancels, declines or doesn't answer. CERVICED keeps its fee, as with any kept deposit | The user's call. **Not lawyer-reviewed**: UK consumer law may limit keeping a deposit on a cancellation made in good time |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 
