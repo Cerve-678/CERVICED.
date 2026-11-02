@@ -161,7 +161,7 @@ test('lists late and no-show fees with the provider\'s share and where the money
   expect(ui.getByText('Released to Stripe')).toBeTruthy();
 });
 
-test('lists tips the provider received, all theirs', async () => {
+test('shows a tip inside its booking\'s payment card, not in a list of its own', async () => {
   (getProviderTipEarnings as jest.Mock).mockResolvedValue([{
     id: 'tip', bookingId: 'booking', amountPence: 1000, payoutPence: 1000, payoutStatus: 'transferred',
     releaseAfter: null, paidAt: '2026-10-21T10:00:00Z', serviceName: 'Hair appointment', customerName: 'Test client',
@@ -169,9 +169,24 @@ test('lists tips the provider received, all theirs', async () => {
   const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
-  await waitFor(() => expect(ui.getByText('Tip · Hair appointment')).toBeTruthy());
+  await waitFor(() => expect(ui.getByText('Tip')).toBeTruthy());
   expect(ui.getByText('£10.00')).toBeTruthy();
   expect(ui.getByText('Paid out')).toBeTruthy();
+  expect(ui.queryByText('Tip · Hair appointment')).toBeNull();
+  expect(ui.queryByText('Tips')).toBeNull();
+});
+
+test('a tip whose booking payment is outside the list keeps its own section', async () => {
+  (getProviderTipEarnings as jest.Mock).mockResolvedValue([{
+    id: 'tip', bookingId: 'older-booking', amountPence: 1000, payoutPence: 1000, payoutStatus: 'transferred',
+    releaseAfter: null, paidAt: '2026-10-21T10:00:00Z', serviceName: 'Hair appointment', customerName: 'Test client',
+  }]);
+  const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
+  await waitFor(() => expect(ui.getByText('Tip · Hair appointment')).toBeTruthy());
+  expect(ui.getByText('Tips')).toBeTruthy();
+  expect(ui.getByText('£10.00')).toBeTruthy();
 });
 
 test('an account with no professional profile is told to finish setting one up, not offered a choice that cannot save', async () => {

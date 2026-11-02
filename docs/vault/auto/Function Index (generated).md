@@ -5,7 +5,7 @@
 
 #generated
 
-**2857 functions** across **391 files**.
+**2859 functions** across **392 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -44,7 +44,7 @@
 - `ProviderFontPicker.tsx` — ProviderFontPicker
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
-- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipStatusLabel
+- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
@@ -153,9 +153,10 @@
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
 - `useMaintenanceDueCount.ts` — **useMaintenanceDueCount**
 
-### `src/features/payments/` (2)
+### `src/features/payments/` (3)
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
+- `tipsByBooking.ts` — **groupTipsByBooking**
 
 ### `src/features/provider-bookings/` (1)
 - `tipPresentation.ts` — **formatTipAmount** · pounds · **providerTipNote**
