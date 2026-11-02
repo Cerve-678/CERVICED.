@@ -1,4 +1,4 @@
-import { SKIN_TONES, matchesSkinTone } from '../../constants/skinTones';
+import { SKIN_TONES } from '../../constants/skinTones';
 // SearchScreen.tsx
 import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect, useEffect } from 'react';
 import {
@@ -33,7 +33,7 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/provider
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
 import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, logSearchEvent, getProvidersAvailability, getProviderServiceFacets, prefetchProviderBySlug, recordProviderStat } from '../../services/databaseService';
-import type { ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
+import type { FacetService, ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
 import { formatDurationMinutes } from '../../utils/dateUtils';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
@@ -52,7 +52,16 @@ import {
   resolveProviderPriceRange,
   priceRangeMatchesBucket,
   priceSortKey,
+  type PriceRange,
 } from '../../utils/providerPriceMatch';
+import {
+  candidateServices,
+  hasServiceCriteria,
+  priceRangeAcrossServices,
+  serviceMatchesCriteria,
+  serviceRange,
+  type ServiceFilterCriteria,
+} from '../../utils/serviceFilterMatch';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -871,8 +880,9 @@ export default function SearchScreen({ navigation, route }: Props) {
   // "Price on request" fallback with real data (or nothing, while
   // unresolved/absent) on the card.
   const [priceRangeByProviderId, setPriceRangeByProviderId] = useState<Map<string, { min: number; max: number }>>(new Map());
-  const [skinTonesByProviderId, setSkinTonesByProviderId] = useState<Map<string, Set<string>>>(new Map());
-  const [audiencesByProviderId, setAudiencesByProviderId] = useState<Map<string, Set<string>>>(new Map());
+  // One row per active service — price, audience and skin tone are judged
+  // against a single service, never against a provider's whole menu at once.
+  const [servicesByProviderId, setServicesByProviderId] = useState<Map<string, FacetService[]>>(new Map());
   // Speciality haystack per provider (business specialities + service tags +
   // service names) — the Speciality filter matches its chosen labels against
   // this, fuzzily. Comes off the same getProviderServiceFacets call as the maps
@@ -896,8 +906,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     const ids = providerData.map(p => p.providerId);
     if (ids.length === 0) {
       setPriceRangeByProviderId(new Map());
-      setAudiencesByProviderId(new Map());
-      setSkinTonesByProviderId(new Map());
+      setServicesByProviderId(new Map());
       setSpecialityTextByProviderId(new Map());
       setSpecialityLabelsByProviderId(new Map());
       setFacetsLoaded(true);
@@ -911,18 +920,16 @@ export default function SearchScreen({ navigation, route }: Props) {
       .then(facets => {
         if (cancelled) return;
         setPriceRangeByProviderId(facets.priceRanges);
-        setAudiencesByProviderId(facets.audiences);
-        setSkinTonesByProviderId(facets.skinTones ?? new Map());
+        setServicesByProviderId(facets.services ?? new Map());
         setSpecialityTextByProviderId(facets.specialityText ?? new Map());
         setSpecialityLabelsByProviderId(facets.specialityLabels ?? new Map());
       })
       .catch(() => {
         if (cancelled) return;
         setPriceRangeByProviderId(new Map());
-        setAudiencesByProviderId(new Map());
-      setSkinTonesByProviderId(new Map());
-      setSpecialityTextByProviderId(new Map());
-      setSpecialityLabelsByProviderId(new Map());
+        setServicesByProviderId(new Map());
+        setSpecialityTextByProviderId(new Map());
+        setSpecialityLabelsByProviderId(new Map());
       })
       .finally(() => {
         if (cancelled) return;
@@ -951,22 +958,63 @@ export default function SearchScreen({ navigation, route }: Props) {
     }))
   ), [providersWithPriceRange, specialityLabelsByProviderId]);
 
-  // Audience matches, derived from the tags already fetched above rather than
-  // re-queried. Toggling this filter used to cost a round trip each time even
-  // though the answer was a re-read of the same services rows; now it is a
-  // pure narrowing of data the screen already holds. null = filter off, which
-  // the filter step below treats as "don't narrow" (distinct from an empty
-  // set, which means "nobody matches").
-  const audienceMatchIds = useMemo(() => {
-    const audience = activeFilters.audience;
-    if (!audience) return null;
-    if (!facetsLoaded) return null;
-    const matches = new Set<string>();
-    for (const [providerId, tags] of audiencesByProviderId) {
-      if (tags.has(audience)) matches.add(providerId);
+  // Price, audience and skin tone, judged together on ONE service at a time
+  // (src/utils/serviceFilterMatch.ts). Each used to be answered per provider
+  // on its own, so a £20 men's trim and a £120 women's braid together passed
+  // "<£30 + Women". With a typed query only the services that matched it count,
+  // so "braids" + "<£30" means cheap braids, not a cheap anything.
+  const serviceCriteria = useMemo<ServiceFilterCriteria>(() => ({
+    priceBucket: activeFilters.priceRange,
+    audience: activeFilters.audience,
+    skinTone: activeFilters.skinTone,
+  }), [activeFilters.priceRange, activeFilters.audience, activeFilters.skinTone]);
+
+  // The search's own matched service ids per provider, from the ranked results.
+  const queryMatchedServiceIds = useMemo(() => {
+    const byProvider = new Map<string, Set<string>>();
+    for (const s of serviceResults) {
+      const set = byProvider.get(s.providerId) ?? new Set<string>();
+      set.add(s.serviceId);
+      byProvider.set(s.providerId, set);
     }
-    return matches;
-  }, [audiencesByProviderId, facetsLoaded, activeFilters.audience]);
+    return byProvider;
+  }, [serviceResults]);
+
+  // Per provider: whether any candidate service passes every service-level
+  // filter, and the £ range of those that do (what the price sort reads, so
+  // "low to high" orders by what the client was actually shown a match for).
+  // null = no service-level filter on, or the facets haven't answered yet —
+  // filteredProviders tells those apart, same "don't claim a match before the
+  // lookup lands" rule as hair type.
+  const serviceMatchByProviderId = useMemo(() => {
+    if (!hasServiceCriteria(serviceCriteria) || !facetsLoaded) return null;
+    const out = new Map<string, PriceRange | null>();
+    for (const p of providerData) {
+      const services = servicesByProviderId.get(p.providerId) ?? [];
+      if (services.length === 0) {
+        // No service rows at all: only a price-only filter can still be
+        // answered, from the provider's self-described tier.
+        const tierRange = resolveProviderPriceRange(null, p.priceTier);
+        if (!serviceCriteria.audience && !serviceCriteria.skinTone && serviceCriteria.priceBucket
+          && priceRangeMatchesBucket(tierRange, serviceCriteria.priceBucket)) {
+          out.set(p.providerId, tierRange);
+        }
+        continue;
+      }
+      const passing = candidateServices(services, queryMatchedServiceIds.get(p.providerId))
+        .filter(service => serviceMatchesCriteria(service, serviceCriteria));
+      if (passing.length > 0) out.set(p.providerId, priceRangeAcrossServices(passing));
+    }
+    return out;
+  }, [serviceCriteria, facetsLoaded, providerData, servicesByProviderId, queryMatchedServiceIds]);
+
+  const serviceFacetById = useMemo(() => {
+    const byId = new Map<string, FacetService>();
+    for (const services of servicesByProviderId.values()) {
+      for (const service of services) byId.set(service.id, service);
+    }
+    return byId;
+  }, [servicesByProviderId]);
 
   // Speciality matches, derived from the same facet data. null = filter off
   // (don't narrow); a Set (possibly empty) once the facets have answered. Same
@@ -1047,16 +1095,13 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.rating && activeFilters.rating > 0) {
       list = list.filter(p => p.rating >= activeFilters.rating!);
     }
-    if (activeFilters.priceRange) {
+    if (hasServiceCriteria(serviceCriteria)) {
       // Same "don't answer until the batched lookup has" rule Available Now
       // follows below. Real prices arrive after the cards do, and judging a
       // provider before theirs land rejects every one of them — the client
       // would watch a full grid blink to "No providers found" and back.
-      if (priceRangeLoading) return [];
-      const bucket = activeFilters.priceRange;
-      list = list.filter(p =>
-        priceRangeMatchesBucket(resolveProviderPriceRange(p.priceRange, p.priceTier), bucket),
-      );
+      if (!serviceMatchByProviderId) return [];
+      list = list.filter(p => serviceMatchByProviderId.has(p.providerId));
     }
     if (activeFilters.availableOnly) {
       // Don't claim a provider is bookable until the batched availability
@@ -1076,21 +1121,11 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.city?.length) {
       list = list.filter(p => activeFilters.city!.some(c => p.serviceLocations.includes(c)));
     }
-    if (activeFilters.skinTone) {
-      if (!facetsLoaded) return [];
-      list = list.filter(p => matchesSkinTone([...skinTonesByProviderId.get(p.providerId) ?? []], activeFilters.skinTone!));
-    }
     if (activeFilters.hairType) {
       // Same "don't claim a match until the batched lookup has answered" rule
       // as Available Now above — hairTypeMatchIds is null while unresolved.
       if (!hairTypeMatchIds) return [];
       list = list.filter(p => hairTypeMatchIds.has(p.providerId));
-    }
-    if (activeFilters.audience) {
-      // null here means the facets query hasn't answered for this result set
-      // yet — same rule as hairType above, don't claim matches prematurely.
-      if (!audienceMatchIds) return [];
-      list = list.filter(p => audienceMatchIds.has(p.providerId));
     }
     if (activeFilters.specialty?.length) {
       // Same "don't claim a match until the batched facets have answered" rule
@@ -1119,7 +1154,10 @@ export default function SearchScreen({ navigation, route }: Props) {
       const keyed: { p: ProviderCardData; key: number }[] = [];
       const unpriced: ProviderCardData[] = [];
       for (const p of list) {
-        const key = priceSortKey(resolveProviderPriceRange(p.priceRange, p.priceTier), direction);
+        // With a price/audience/skin-tone filter on, sort by the services that
+        // matched it rather than the whole menu.
+        const matched = serviceMatchByProviderId?.get(p.providerId);
+        const key = priceSortKey(matched ?? resolveProviderPriceRange(p.priceRange, p.priceTier), direction);
         if (key == null) unpriced.push(p);
         else keyed.push({ p, key });
       }
@@ -1130,7 +1168,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithSpecialties, activeFilters, availabilityLoading, priceRangeLoading, hairTypeMatchIds, audienceMatchIds, specialityMatchIds, facetsLoaded, skinTonesByProviderId]);
+  }, [providersWithSpecialties, activeFilters, availabilityLoading, serviceCriteria, serviceMatchByProviderId, hairTypeMatchIds, specialityMatchIds]);
 
   // "In search" on a link-only provider's Analytics. Counted once per provider
   // per search (query + category), and only once the result set has settled —
@@ -1276,13 +1314,35 @@ export default function SearchScreen({ navigation, route }: Props) {
     });
   }, [navigation]);
 
-  // Services only from providers still in the grid, so the filter sheet
-  // (rating, distance, city…) narrows both lists the same way.
+  // Service cards obey the filters too: only from providers still in the grid
+  // (rating, distance, city…), each card itself passing price/audience/skin
+  // tone, and ordered by the chosen sort rather than search rank. Before, a
+  // "braids" search with "<£30" still showed the £90 braids, in rank order.
   const visibleServices = useMemo(() => {
     if (serviceResults.length === 0) return serviceResults;
-    const shownProviderIds = new Set(filteredProviders.map(p => p.providerId));
-    return serviceResults.filter(s => shownProviderIds.has(s.providerId));
-  }, [serviceResults, filteredProviders]);
+    const providerOrder = new Map(filteredProviders.map((p, i) => [p.providerId, i]));
+    const filtering = hasServiceCriteria(serviceCriteria);
+    const list = serviceResults.filter(s => {
+      if (!providerOrder.has(s.providerId)) return false;
+      if (!filtering) return true;
+      const facet = serviceFacetById.get(s.serviceId);
+      return !!facet && serviceMatchesCriteria(facet, serviceCriteria);
+    });
+    const sortBy = activeFilters.sortBy;
+    if (sortBy === 'price-low' || sortBy === 'price-high') {
+      // Unpriced services keep their order at the end, same as providers.
+      const keyOf = (s: ServiceSearchResult) => priceSortKey(serviceRange(s), sortBy);
+      const priced = list.filter(s => keyOf(s) != null);
+      const unpriced = list.filter(s => keyOf(s) == null);
+      priced.sort((a, b) => (sortBy === 'price-low' ? keyOf(a)! - keyOf(b)! : keyOf(b)! - keyOf(a)!));
+      return [...priced, ...unpriced];
+    }
+    if (sortBy === 'rating' || sortBy === 'distance') {
+      // Follow the provider grid's order, which already applied that sort.
+      return [...list].sort((a, b) => providerOrder.get(a.providerId)! - providerOrder.get(b.providerId)!);
+    }
+    return list;
+  }, [serviceResults, filteredProviders, serviceCriteria, serviceFacetById, activeFilters.sortBy]);
 
   // The provider strip on a service card opens the profile itself, not the
   // booking sheet the rest of the card opens.
@@ -1918,7 +1978,7 @@ export default function SearchScreen({ navigation, route }: Props) {
           <View style={styles.emptyWrap}>
             {providersLoading
               || (activeFilters.availableOnly && availabilityLoading)
-              || (!!activeFilters.priceRange && priceRangeLoading) ? (
+              || (hasServiceCriteria(serviceCriteria) && !serviceMatchByProviderId) ? (
               <>
                 <ActivityIndicator size="large" color={P.accent} />
                 <Text style={[styles.emptyTitle, { color: P.text }]}>Checking providers…</Text>
