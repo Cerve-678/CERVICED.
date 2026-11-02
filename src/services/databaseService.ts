@@ -11136,20 +11136,37 @@ export async function keepDisputedBookingFee(chargeId: string, response: string)
   if (error) throw error;
 }
 
+/** Settles (capture) or abandons (cancel) a checkout's payment. Returns the
+ *  server's answer: 'succeeded' (booked), 'refunded' (the time had gone, so the
+ *  payment was refunded), 'canceled' (cancelled before it was taken). Throws
+ *  only when there was no answer, which the payment sheet treats as "still
+ *  confirming" (features/cart/checkoutOutcome.ts). */
 export async function finalizeCheckoutPaymentIntent(
   checkoutBatchId: string,
   paymentIntentId: string,
   action: 'capture' | 'cancel',
-): Promise<void> {
+): Promise<string> {
   const { data, error } = await supabase.functions.invoke('finalize-payment-intent', {
     body: { checkoutBatchId, paymentIntentId, action },
   });
   if (error) throw error;
-  if (action === 'capture' && data?.status !== 'succeeded') {
-    throw new Error(data?.status === 'refunded'
-      ? 'Your reservation expired. Your payment is being refunded.'
-      : 'Payment has not been confirmed. Check your bookings before trying again.');
-  }
+  const status = typeof data?.status === 'string' ? data.status : '';
+  if (!status) throw new Error('Payment confirmation came back without a status.');
+  return status;
+}
+
+/** How one of the client's own checkouts stands, read while waiting for a
+ *  payment to settle. outcome is set only when it ended without bookings. */
+export async function getCheckoutOutcome(
+  checkoutBatchId: string,
+): Promise<{ status: string; outcome: string | null } | null> {
+  const { data, error } = await supabase
+    .from('checkout_batches')
+    .select('status, outcome')
+    .eq('id', checkoutBatchId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { status: String(data.status), outcome: data.outcome ?? null } : null;
 }
 
 export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unknown> {

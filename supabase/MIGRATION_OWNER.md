@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-02, NOT applied (payment outcomes reach the client)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261102210000 | `payment_outcomes_reach_the_client` | **NOT APPLIED.** Written by session cerviced-cb on `feat/payment-outcome-notifications`. Apply after `20261102200000` so the versions stay in order; each rebuilds `notifications_type_check` from the live list, so neither loses the other's type. Adds `checkout_batches.outcome`, `record_checkout_outcome`, the "Payment received" trigger, `process_stale_checkouts` + cron `reconcile-checkouts`; drops the uncalled `expire_checkout_batches`. The app and the edge functions tolerate it being missing: notices just don't go out until it runs. |
+
 ### Written 2026-11-02, NOT applied (client told about every refund)
 
 | Authored version | Name | Status |
