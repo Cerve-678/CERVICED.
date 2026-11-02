@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **98 files**
+Curated: [[Address Release]] · **99 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(185)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **98 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(18)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
-- … +68 more
+- … +69 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **184 files**
@@ -58,8 +58,8 @@ Curated: [[Availability & Slots]] · **184 files**
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/client/CartScreen.tsx` _(48)_
 - `src/screens/client/HomeScreen.tsx` _(44)_
-- `src/screens/provider/SchedulingScreen.tsx` _(44)_
 - `supabase/waitlist_holds.sql` _(43)_
+- `src/screens/provider/SchedulingScreen.tsx` _(42)_
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
 - `src/components/BookingSheet.tsx` _(35)_
 - `supabase/add_providers_availability_rpc.sql` _(31)_
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **170 files**
 - … +140 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **80 files**
+Curated: [[Provider Onboarding & Go-Live]] · **81 files**
 - `src/services/databaseService.ts` _(80)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(61)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **80 files**
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
-- … +50 more
+- … +51 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **58 files**

@@ -460,6 +460,25 @@ export async function geocodeAndValidateUkAddress(
   return { latitude, longitude };
 }
 
+/**
+ * Coordinates for the public "where you're based" text, for the Distance
+ * filter and Nearest sort. A vague location geocoding to a vague coordinate is
+ * correct, not a bug. null when it can't be found: never blocks a save, and the
+ * caller leaves whatever coordinates the row already had.
+ */
+export async function geocodePublicLocation(
+  location: string,
+): Promise<{ latitude: number; longitude: number } | null> {
+  const trimmed = location.trim();
+  if (!trimmed) return null;
+  try {
+    const [match] = await Location.geocodeAsync(trimmed);
+    return match ? { latitude: match.latitude, longitude: match.longitude } : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── saveProviderToSupabase ───────────────────────────────────────────────────
 // Upserts the provider row, uploads images, replaces services/images/add-ons.
 // Also updates the user's role to 'provider' and refreshes the AsyncStorage cache.
@@ -552,19 +571,9 @@ export async function saveProviderToSupabase(
   // address before the provider's chosen release policy allows it. A vague
   // public location just geocodes to a vague (safe) coordinate, which is the
   // correct behaviour, not a bug. Never blocks the save on failure.
-  let latitude: number | undefined;
-  let longitude: number | undefined;
-  if (data.location?.trim()) {
-    try {
-      const [match] = await Location.geocodeAsync(data.location.trim());
-      if (match) {
-        latitude = match.latitude;
-        longitude = match.longitude;
-      }
-    } catch {
-      // Silent failure — providers row keeps whatever lat/lng it already had
-    }
-  }
+  const coordinates = await geocodePublicLocation(data.location ?? '');
+  const latitude = coordinates?.latitude;
+  const longitude = coordinates?.longitude;
 
   // 2. Upsert provider row
   let existingProvider: Awaited<ReturnType<typeof getProviderRegistrationCore>>;

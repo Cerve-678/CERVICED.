@@ -40,6 +40,9 @@ export type AreaPickerProps = {
   disabled?: boolean;
   /** Explanatory line under the modal heading. Defaults to the client wording. */
   subtitle?: string;
+  /** The closed field's colours, for a screen with its own palette. The default
+   *  look is only legible on a light background. */
+  palette?: { surface: string; border: string; text: string };
 };
 
 type Step = 'city' | 'region' | 'area';
@@ -58,6 +61,7 @@ export default function AreaPicker({
   accentColor = '#AF9197',
   disabled,
   subtitle = DEFAULT_SUBTITLE,
+  palette,
 }: AreaPickerProps) {
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
@@ -173,7 +177,11 @@ export default function AreaPicker({
   return (
     <>
       <TouchableOpacity
-        style={[styles.field, disabled && styles.disabled]}
+        style={[
+          styles.field,
+          palette && { backgroundColor: palette.surface, borderColor: palette.border },
+          disabled && styles.disabled,
+        ]}
         onPress={open}
         disabled={disabled}
         activeOpacity={0.75}
@@ -181,7 +189,7 @@ export default function AreaPicker({
         accessibilityLabel="Choose your area"
       >
         <Ionicons name="map-outline" size={20} color={accentColor} />
-        <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
+        <Text style={[styles.fieldText, palette && { color: palette.text }, !value && styles.placeholder]} numberOfLines={2}>
           {value || 'Select your area'}
         </Text>
         <Ionicons name="chevron-forward" size={18} color="#8B8B95" />

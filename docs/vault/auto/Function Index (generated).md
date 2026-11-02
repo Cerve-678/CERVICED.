@@ -5,7 +5,7 @@
 
 #generated
 
-**2892 functions** across **392 files**.
+**2893 functions** across **392 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -337,7 +337,7 @@
 - `ImageLoader.ts` — **useImageLoader**
 - `notificationTapHandler.ts` — **handleNotificationTap** · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
-- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **patchCachedProviderBranding** · **providerRowToRegistrationData** · readLocalFileBytes · **saveProviderPolicies** · **saveProviderToSupabase** · shrinkImageForUpload · sniffImageType · **uploadToStorage** · used
+- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **geocodePublicLocation** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **patchCachedProviderBranding** · **providerRowToRegistrationData** · readLocalFileBytes · **saveProviderPolicies** · **saveProviderToSupabase** · shrinkImageForUpload · sniffImageType · **uploadToStorage** · used
 - `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
