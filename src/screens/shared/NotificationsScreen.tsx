@@ -70,7 +70,7 @@ interface Notification {
       | 'fee_charged'        | 'fee_disputed'        | 'fee_dispute_resolved'
       | 'fee_payment_requested' | 'fee_paid_by_client' | 'fee_payment_lapsed' | 'tip_received'
       | 'payout_debt_recorded' | 'payout_debt_recovered'
-      | 'refund_requested' | 'refund_request_updated' | 'payout_failed'
+      | 'refund_requested' | 'refund_request_updated' | 'payment_refunded' | 'payout_failed'
       | 'terms_updated'
       | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
@@ -398,7 +398,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'tip_received', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'tip_received', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_refunded', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -597,6 +597,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'payout_debt_recovered' ||
         notification.type === 'refund_requested' ||
         notification.type === 'refund_request_updated' ||
+        notification.type === 'payment_refunded' ||
         notification.type === 'booking_reminder' ||
         notification.type === 'booking_cancelled' ||
         notification.type === 'payment_success' ||
@@ -888,6 +889,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // Amber: a request someone still has to act on or decide.
     if (type === 'refund_requested') return '#FF9500';
     if (type === 'refund_request_updated') return P.accentText;
+    // Money coming back to the client: good news, same green as a payment.
+    if (type === 'payment_refunded') return '#4CAF50';
     // Money that didn't reach the provider: they need to act.
     if (type === 'payout_failed') return '#FF9500';
     if (type === 'terms_updated') return P.accentText;
@@ -933,6 +936,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'payout_debt_recovered':
       case 'refund_requested':
       case 'refund_request_updated':
+      case 'payment_refunded':
         return 'View Booking';
       case 'reschedule_declined':
       // The request is closed and the booking is unchanged, so the only useful

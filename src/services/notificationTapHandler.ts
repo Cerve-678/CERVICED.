@@ -47,6 +47,8 @@ const BOOKING_TYPES = new Set([
   'payout_debt_recovered',
   'refund_requested',
   'refund_request_updated',
+  // Any refund the client got back, whoever issued it: opens that booking.
+  'payment_refunded',
   'booking_reminder',
   'booking_cancelled',
   'payment_success',
