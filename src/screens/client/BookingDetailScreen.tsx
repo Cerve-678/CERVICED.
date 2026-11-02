@@ -672,7 +672,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         return;
       }
     }
-    navigation.navigate('Reschedule', { bookingId: booking.id });
+    navigation.navigate('Reschedule', { bookingId: booking.id, knownPolicy: policy ?? undefined });
   }, [booking, canReschedule, reschedulePolicy, cancellationNoticeHrs, navigation]);
 
   /**
