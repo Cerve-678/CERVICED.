@@ -230,10 +230,10 @@ other recently-built screens actually render:
 - **Light mode: `#5C4033`** — dark chocolate brown.
 - **Dark mode: `#AF9197`** — muted dusty rose/mauve.
 
-Unlike the client hat's dark-mode accent, `#AF9197` is dark enough that plain
-white text/icons on top of a solid fill are fine here — the provider hat has
-never needed an `onAccent`-style split. If you're porting a provider-hat
-pattern to a client screen, don't assume white-on-accent carries over.
+Text and icons on a solid accent fill use `onAccent` here too: white in light
+mode, `#1A1815` in dark mode, because white on `#AF9197` is only about 3:1.
+Many older provider screens still hardcode white on the accent. Don't copy
+them, and move them to `onAccent` when you touch them.
 
 (This doc previously stated `#AF9197` for both modes — that was inaccurate;
 `#AF9197` is dark-mode-only in the app as it actually ships. If you're
@@ -867,7 +867,7 @@ Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}
 | Primary text | `#000000` | `#F0ECE7` |
 | Secondary text | `#7E6667` | `#7E6667` |
 | Accent | `#5C4033` | `#AF9197` |
-| Text/icon on a solid accent fill | `#FFFFFF` | `#FFFFFF` |
+| Text/icon on a solid accent fill (`onAccent`) | `#FFFFFF` | `#1A1815` |
 | Borders | `rgba(126,102,103,0.14)` | `rgba(126,102,103,0.18)` |
 | Status bar | dark-content | light-content |
 
