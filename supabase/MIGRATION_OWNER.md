@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-02, NOT applied ("has space again" after a short or blocked-out diary)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261102100000 | `openings_alert_short_horizon` | **UNAPPLIED, awaiting the user's OK.** Frontier at authoring: live `20261101190000`; `20261101200000` (Fully Booked certificate, #219) is unapplied and does not touch this function. **Apply that one first** so the numbers stay in order. Redefines `process_follow_openings_alerts` from live (md5 guard): skips providers with under 7 days left to book, and blocked-out diaries with nothing booked, leaving their state alone. No tables, no data changes. The file records its own version. No app change, so it can be applied any time. |
+
 ### Applied 2026-11-01 (close a schedule by hand)
 
 | Authored version | Name | Status |

@@ -347,7 +347,10 @@ closed by hand.
 
 **Fully booked.** No free slot on any date currently bookable, from one check,
 `get_services_open_within`, behind the client profile's Fully Booked and "has
-space again". There is no closed state and no setting for it:
+space again". "Has space again" (`process_follow_openings_alerts`) skips
+providers with under 7 days left to book and blocked-out diaries with nothing
+booked, leaving their state alone, so neither can fake a change from full to open
+(`20261102100000_openings_alert_short_horizon.sql`). There is no closed state and no setting for it:
 when a slot frees up, the waitlist gets it first if the provider has the waitlist
 on (15-minute holds, next person, then anyone), otherwise anyone can book it
 straight away. `WAITLIST.md` has that path, which has barely run live.
