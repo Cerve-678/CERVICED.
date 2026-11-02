@@ -376,9 +376,14 @@ straight away. `WAITLIST.md` has that path, which has barely run live.
 `src/features/providers/CloseScheduleSection.tsx` on the schedule screen). The
 provider's choice, at any time, even with free slots:
 - Clients can't make a new booking; the server refuses it in
-  `enforce_booking_bookability`. The profile says "Not taking bookings". Clients
-  never learn why or until when: the table is private and they only get a yes or
-  no from `provider_is_taking_bookings`.
+  `enforce_booking_bookability`. The profile says "Not taking bookings". The
+  provider can pick an optional reason (holiday, time off, training, fully booked)
+  and choose whether clients see it, through `get_provider_closure_reason`. Clients
+  never learn until when, and the table stays private.
+- With the waitlist off, a provider can have it close by itself when they fill
+  up (`automation_settings.autoCloseWhenFull`, in
+  `process_provider_fully_booked_alerts`). It only closes at the moment of filling,
+  so reopening by hand while still full sticks, and it doesn't tell clients why.
 - Existing bookings stay. Closing shows them, and for each the provider picks "I
   can do it", Move or Cancel. Move and Cancel open the booking's own screen, so
   closing adds no second path for refunds or client notifications.

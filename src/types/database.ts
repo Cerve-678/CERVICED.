@@ -443,6 +443,8 @@ export interface DbProvider {
     postApptCheckIn?: boolean;
     birthdayGreeting?: boolean;
     waitlistEnabled?: boolean;
+    /** Close the schedule when it fills. Only acted on with waitlistEnabled false. */
+    autoCloseWhenFull?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;
     /** Daily 07:00 provider recap push. Read by
