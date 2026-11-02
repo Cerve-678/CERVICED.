@@ -62,6 +62,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261102190000 | `become_full_member` | **APPLIED 2026-11-02** by the user (SQL editor), version recorded by the file. Renumbered from `20261102170000` after `20261102180000` landed live first; frontier re-checked just before. Verified live: `providers.full_member_since` and `full_member_free_from` exist; trigger `stamp_full_member_free_from` (BEFORE UPDATE OF has_gone_live); `become_full_member()` SECURITY DEFINER, executable by authenticated, not anon; the trigger function not executable by authenticated. Adds only (two columns, one trigger, two new functions); no existing function redefined. |
 
+### Applied 2026-11-02 (own-provider booking message reaches the client)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261102180000 | `own_provider_booking_message_reaches_client` | **APPLIED 2026-11-02** by session cerviced-cb at the user's request (MCP `execute_sql`, the file's own BEGIN…COMMIT), version recorded by the file. Frontier before apply: `20261102130000`; open branches held `20261102150000`/`150100` (#230) and `20261102170000` (#246), so this numbered above both; busy peer cerviced-4d confirmed it had nothing pending. md5 guard checked `prevent_booking_with_own_provider` against live first. Verified live: version present, the body now raises P0001, trigger still attached to `bookings`. Changes only the error code; no tables, no data, no grants. |
+
 ### Applied 2026-11-02 (search understands more)
 
 | Authored version | Name | Status |

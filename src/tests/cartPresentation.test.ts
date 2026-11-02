@@ -1,8 +1,10 @@
 import {
   CART_ISSUE,
+  describeReserveFailure,
   durationToMinutes,
   findCartItemIssues,
   formatTimeSpan,
+  RESERVE_FAILURE,
   to24hMinutes,
 } from '../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice } from '../features/cart/pricing';
@@ -130,5 +132,42 @@ describe('findCartItemIssues', () => {
     ], NOW);
     expect(issues.get('a')).toBe(CART_ISSUE.noSchedule);
     expect(issues.has('b')).toBe(false);
+  });
+});
+
+describe('describeReserveFailure', () => {
+  // Shaped like supabase-js's PostgrestError: an Error carrying a SQLSTATE.
+  const pgError = (code: string, message: string) => Object.assign(new Error(message), { code });
+
+  it("shows a database guard's own words", () => {
+    expect(describeReserveFailure(pgError('P0001', "You can't book your own provider profile.")).message)
+      .toBe("You can't book your own provider profile.");
+  });
+
+  it('names a slot another booking took at the same moment', () => {
+    const result = describeReserveFailure(pgError('23P01', 'conflicting key value violates exclusion constraint "bookings_no_overlap"'));
+    expect(result).toEqual({ title: 'Scheduling Conflict', message: RESERVE_FAILURE.slotJustTaken });
+    expect(describeReserveFailure(pgError('23505', 'duplicate key')).message).toBe(RESERVE_FAILURE.slotJustTaken);
+  });
+
+  it('says the server is busy on a statement timeout', () => {
+    expect(describeReserveFailure(pgError('57014', 'canceling statement due to statement timeout')).message)
+      .toBe(RESERVE_FAILURE.serverBusy);
+  });
+
+  it('never shows the fetch failure text the client library produces', () => {
+    expect(describeReserveFailure(pgError('', 'TypeError: Network request failed')).message)
+      .toBe(RESERVE_FAILURE.noConnection);
+  });
+
+  it('hides any other technical code behind the catch-all', () => {
+    expect(describeReserveFailure(pgError('42501', 'permission denied for table bookings')).message)
+      .toBe(RESERVE_FAILURE.generic);
+  });
+
+  it("shows the app's own thrown errors and falls back for anything else", () => {
+    expect(describeReserveFailure(new Error('Every service needs a provider, date and time before payment.')).message)
+      .toBe('Every service needs a provider, date and time before payment.');
+    expect(describeReserveFailure('something odd').message).toBe(RESERVE_FAILURE.generic);
   });
 });
