@@ -5,7 +5,7 @@
 
 #generated
 
-**160 edges** across **47 screens**. Node-graph version: [[Screen Flow (generated)]].
+**159 edges** across **46 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -137,7 +137,6 @@ graph LR
   ProviderProfileScreen --> ClaimProvider
   ProviderProfileScreen --> ProviderChatScreen
   ProviderPromotionsScreen --> ProviderClienteleScreen
-  ProviderScheduleScreen --> ProviderBookingDetailScreen
   ResetPasswordOTPScreen --> Login
   ResetPasswordOTPScreen --> NewPassword
   SchedulingScreen --> ProviderScheduleScreen
@@ -217,7 +216,6 @@ graph LR
 - `provider/ProviderInboxScreen` → `provider/ProviderConversationScreen`
 - `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderScheduleScreen`, `provider/SchedulingScreen`, `ProviderHome`
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`
-- `provider/ProviderScheduleScreen` → `provider/ProviderBookingDetailScreen`
 - `provider/SchedulingScreen` → `provider/ProviderScheduleScreen`
 - `provider/ServicesPricingScreen` → `provider/BusinessInfoScreen`
 - `shared/BeccaScreen` → `client/ProviderProfileScreen`, `Explore`, `Profile`

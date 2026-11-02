@@ -3,9 +3,10 @@
 // the bookings they already have so they can decide what happens to each.
 //
 // Keep and Move/Cancel are deliberately different weights. Keeping needs nothing
-// from the server. Moving and cancelling go to the booking's own screen, which
-// already owns group bookings, refunds and the client's notification, so this
-// sheet adds no second way of moving money or a booking.
+// from the server. Moving and cancelling open the booking from the Home
+// calendar, on its day, the same as tapping it there: its own screen already
+// owns group bookings, refunds and the client's notification, so this sheet
+// adds no second way of moving money or a booking.
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -63,7 +64,8 @@ type Props = {
   palette: Palette;
   isDarkMode: boolean;
   showToast: (message: string, kind?: 'success' | 'error' | 'info') => void;
-  onOpenBooking: (bookingId: string, openReschedule: boolean) => void;
+  /** Leave for the booking's own screen; `date` is its YYYY-MM-DD day. */
+  onOpenBooking: (bookingId: string, date: string, openReschedule: boolean) => void;
 };
 
 // Bookings can only be booked this far ahead anyway; the widest window is 180.
@@ -187,10 +189,10 @@ export default function CloseScheduleSection({
     }
   }, [showToast]);
 
-  const openBooking = useCallback((bookingId: string, openReschedule: boolean) => {
+  const openBooking = useCallback((bookingId: string, date: string, openReschedule: boolean) => {
     returnToSheet.current = true;
     setSheetVisible(false);
-    onOpenBooking(bookingId, openReschedule);
+    onOpenBooking(bookingId, date, openReschedule);
   }, [onOpenBooking]);
 
   const keepBooking = useCallback((bookingId: string) => {
@@ -329,7 +331,7 @@ export default function CloseScheduleSection({
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[st.actionBtn, { backgroundColor: P.surface }]}
-                              onPress={() => openBooking(b.id, true)}
+                              onPress={() => openBooking(b.id, b.date, true)}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                             >
@@ -337,7 +339,7 @@ export default function CloseScheduleSection({
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[st.actionBtn, { backgroundColor: P.surface }]}
-                              onPress={() => openBooking(b.id, false)}
+                              onPress={() => openBooking(b.id, b.date, false)}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                             >

@@ -47,6 +47,33 @@ export function navigateTab(tab: string): void {
   (navigationRef as any).navigate(tab);
 }
 
+/**
+ * Open one of the provider's bookings the way tapping it on the Home calendar
+ * does: the calendar on that booking's day underneath, its detail page on top
+ * (with the reschedule sheet up, when asked). Back lands on the calendar.
+ *
+ * One reset of the Home stack, not two navigates. Two in a row overwrite each
+ * other's nested params before the stack re-renders, and in v7 a navigate to
+ * ProviderHomeMain while something sits above it pushes a SECOND calendar
+ * rather than returning to the first.
+ */
+export function openProviderBookingOnCalendar(
+  bookingId: string,
+  date: string,
+  openReschedule: boolean,
+): void {
+  if (!navigationRef.isReady()) return;
+  (navigationRef as any).navigate('ProviderHome', {
+    state: {
+      index: 1,
+      routes: [
+        { name: 'ProviderHomeMain', params: { jumpToDate: date } },
+        { name: 'BookingDetail', params: { bookingId, ...(openReschedule ? { openReschedule: true } : {}) } },
+      ],
+    },
+  });
+}
+
 /** Only one dismiss-then-navigate can be in flight at a time — a second tap
  *  supersedes the first rather than firing two navigations in a row. */
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;

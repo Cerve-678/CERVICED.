@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `ProviderSchedule`
 
 ## → Navigates to
-- [[ProviderBookingDetailScreen\|BookingDetail]]
+- _— none —_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
