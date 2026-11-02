@@ -32,7 +32,7 @@ import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
   navigation: any;
-  route: { params: { bookingId: string } };
+  route: { params: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined } };
 };
 
 interface DateOption {
@@ -70,6 +70,7 @@ async function fetchRealRescheduleDates(
   providerId: string,
   currentDate: string,
   isActive: () => boolean = () => true,
+  onDates: (dates: DateOption[]) => void = () => {},
 ): Promise<DateOption[]> {
   const candidateDates = rescheduleCandidateDates(currentDate);
 
@@ -97,6 +98,8 @@ async function fetchRealRescheduleDates(
       });
       if (openDates.length >= RESCHEDULE_MAX_DATES) return openDates;
     }
+    // Show what's found so far rather than making the client wait for all of it.
+    if (openDates.length > 0) onDates([...openDates]);
   }
   return openDates;
 }
@@ -105,7 +108,7 @@ async function fetchRealRescheduleDates(
 export default function RescheduleScreen({ navigation, route }: Props) {
   const bottomInset = useSystemBottomInset();
   useFont();
-  const { bookingId } = route.params;
+  const { bookingId, knownPolicy } = route.params;
   const { palette: C, isDarkMode } = useTheme();
   const { showConfirm, showAlert, DialogHost } = useAppDialog();
   const {
@@ -150,12 +153,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     [isGroupReschedule, booking, getBookingsByGroupId]
   );
 
-  const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
+  const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(knownPolicy ?? null);
   // Distinct from reschedulePolicy being null, which is also the "still
   // loading" value. Without it the notice check below reads 0 hours while the
   // fetch is in flight, renders the whole picker, then replaces it with the
   // "Too Close to Reschedule" block once the real number arrives.
-  const [policyLoaded, setPolicyLoaded] = useState(false);
+  const [policyLoaded, setPolicyLoaded] = useState(!!knownPolicy);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -193,8 +196,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!booking) return;
     let active = true;
-    setReschedulePolicy(null);
-    setPolicyLoaded(false);
+    // A policy handed over by the booking screen shows straight away; this read
+    // still refreshes it behind the picker. The server has the final say on submit.
+    if (!knownPolicy) {
+      setReschedulePolicy(null);
+      setPolicyLoaded(false);
+    }
     (booking.providerId
       ? getProviderReschedulePolicyById(booking.providerId)
       : getProviderReschedulePolicyByDisplayName(booking.providerName)
@@ -231,7 +238,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         setLoadingDates(true);
         setProviderUnpublished(false);
         Promise.all([
-          fetchRealRescheduleDates(providerRef, booking.bookingDate, () => active),
+          fetchRealRescheduleDates(providerRef, booking.bookingDate, () => active, dates => {
+            if (!active) return;
+            setDateOptions(dates);
+            setLoadingDates(false);
+          }),
           AvailabilityService.getAvailabilitySummary(providerRef).catch(() => null),
         ])
           .then(([options, summary]) => {
@@ -244,7 +255,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       }
     }
     return () => { active = false; };
-  }, [booking]);
+  }, [booking, knownPolicy]);
 
   const handleDateSelect = useCallback((date: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});

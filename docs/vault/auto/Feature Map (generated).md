@@ -122,7 +122,7 @@ Curated: [[Booking Flow]] · **300 files**
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(193)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
-- `src/screens/client/RescheduleScreen.tsx` _(175)_
+- `src/screens/client/RescheduleScreen.tsx` _(176)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(142)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
@@ -252,7 +252,7 @@ Curated: [[Booking Flow]] · **183 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/services/becca/capabilities/client.ts` _(146)_
-- `src/screens/client/RescheduleScreen.tsx` _(143)_
+- `src/screens/client/RescheduleScreen.tsx` _(144)_
 - `src/screens/client/CartScreen.tsx` _(124)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
