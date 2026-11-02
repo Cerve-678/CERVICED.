@@ -290,7 +290,7 @@ const waitlist: Capability = {
         `\n\nTo offer one of them a slot, open your booking history and pick a time.`,
       suggestions: [
         navChip("history", "Invite from waitlist", "history"),
-        askChip("gaps", "Where are my gaps?", "How busy am I this week?"),
+        askChip("gaps", "Where are my gaps?", "Where are my gaps this week?"),
       ],
     };
   },
