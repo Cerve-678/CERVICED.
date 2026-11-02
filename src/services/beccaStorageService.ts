@@ -65,11 +65,14 @@ const beccaStorageService = {
   },
 
   async saveMessage(sessionId: string, message: ChatMessage): Promise<void> {
-    const { suggestions, providerRecommendations, inspiration } = message as any;
+    const { suggestions, providerRecommendations, inspiration, answer } = message as any;
     const metadata: Record<string, any> = {};
     if (suggestions) metadata['suggestions'] = suggestions;
     if (providerRecommendations) metadata['providerRecommendations'] = providerRecommendations;
     if (inspiration) metadata['inspiration'] = inspiration;
+    // The reply's shape (headline, card, steps), so a reopened chat looks the
+    // way it did when Becca answered.
+    if (answer) metadata['answer'] = answer;
 
     await upsertBeccaMessage({
       id: message.id,

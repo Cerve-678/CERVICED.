@@ -7,6 +7,13 @@ describe("ProviderProfileScreen data architecture", () => {
     "utf8",
   );
 
+  it("keeps a provider-only viewer out of the client-only flows", () => {
+    expect(source).toContain('hatState.active === "provider" && !isOwnProvider');
+    expect(source).toContain("if (isOwnProvider || viewingOtherAsProvider) {");
+    // Every way into a booking: Book, Quick Book, multi-select, the link-only page.
+    expect(source.match(/if \(refuseBookingAsProvider\(\)\) return;/g)).toHaveLength(4);
+  });
+
   it("uses the progressive hook instead of restoring the blocking loader", () => {
     expect(source).toContain("useProviderProfileData(providerId, viewerOwnershipHint)");
     expect(source).not.toContain("getProviderBySlug(providerId)");
@@ -23,7 +30,7 @@ describe("ProviderProfileScreen data architecture", () => {
       "utf8",
     );
 
-    expect(source).toContain("const { myProviderId, myProviderIdStatus } = useAuth()");
+    expect(source).toContain("const { myProviderId, myProviderIdStatus, hatState } = useAuth()");
     expect(source).toContain('myProviderIdStatus === "resolved" ? myProviderId : undefined');
     expect(source).toContain("const canBookProvider = shouldShowBookingCta({");
     expect(auth).toContain("getProviderOwnershipForUserId");

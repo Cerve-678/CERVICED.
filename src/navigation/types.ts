@@ -330,6 +330,8 @@ export type ProviderAccountStackParamList = {
   // Link-only providers' Profile tab root: their public profile + edit rows.
   // Their own public profile, exactly as clients see it.
   MyPublicProfile: { providerId: string };
+  // Another provider's public profile, opened by scanning their QR code.
+  PublicProviderProfile: { providerId: string; source?: string };
   EditProfile: { transferProviderId?: string } | undefined;
   NotificationSettings: undefined;
   Achievements: undefined;

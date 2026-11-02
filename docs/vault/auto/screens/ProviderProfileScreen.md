@@ -4,7 +4,7 @@ tags: [screen, provider]
 # ProviderProfileScreen
 #screen · `src/screens/client/ProviderProfileScreen.tsx`
 
-**Registered route(s):** `MyPublicProfile`, `ProviderProfile`
+**Registered route(s):** `MyPublicProfile`, `ProviderProfile`, `PublicProviderProfile`
 
 ## → Navigates to
 - [[ProviderChatScreen\|ProviderChat]]
