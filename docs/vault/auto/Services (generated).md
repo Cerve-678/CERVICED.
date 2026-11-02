@@ -38,10 +38,10 @@ _no named exports_
 `PROVIDER_CAPABILITIES`
 
 ### `src/services/becca/capabilities/shared.ts`
-`askChip` · `chip` · `money` · `navChip` · `NEAR_ME_RE` · `possessive` · `providerFromDb` · `providerWords` · `resolveProviderDbId` · `serviceWords` · `sortByProximity`
+`askChip` · `chip` · `money` · `navChip` · `NEAR_ME_RE` · `oneOf` · `possessive` · `providerFromDb` · `providerWords` · `resolveProviderDbId` · `serviceWords` · `sortByProximity`
 
 ### `src/services/becca/engine.ts`
-`confirmToken` · `converse` · `respond`
+`chooseLayout` · `confirmToken` · `converse` · `respond`
 
 ### `src/services/becca/entityResolver.ts`
 `containsPhrase` · `resolveBooking` · `resolveDate` · `resolveEntities` · `resolveMoney` · `resolveProvider` · `resolveService` · `resolveTimeOfDay`

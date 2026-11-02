@@ -48,6 +48,12 @@ import {
   ChatInput,
   ThinkingIndicator,
   stripRichText,
+  AnswerBefore,
+  AnswerAfter,
+  ANSWER_SHOWN,
+  answerRevealStart,
+  answerListsProviders,
+  type AnswerReveal,
 } from "../../components/ChatComponents";
 import { Provider } from "../../services/ProviderDataService";
 import { formatTime12, DAY_NAMES_FULL, ordinalSuffix, relativeDayLabel, formatSectionTitle } from "../../utils/dateUtils";
@@ -101,6 +107,8 @@ export default function BeccaScreen({
   // The completed answer is kept separate until its visible type-in has
   // finished, so action chips never belong to the previous answer mid-stream.
   const [streamingResponse, setStreamingResponse] = useState<ChatMessage | null>(null);
+  // How much of the streaming reply's answer (steps, headline, card) is out.
+  const [streamingReveal, setStreamingReveal] = useState<AnswerReveal>(ANSWER_SHOWN);
   // When a quick action opens another screen, keep that answer's actions
   // docked at the bottom for the return journey. The original cards remain
   // in the transcript too; this is the immediately reachable continuation.
@@ -126,7 +134,10 @@ export default function BeccaScreen({
     responseTypingResolveRef.current = null;
   }, []);
 
+  // Set by Stop: the rest of the reply (steps, card rows) appears at once.
+  const skipRevealRef = useRef(false);
   const handleStopTyping = useCallback(() => {
+    skipRevealRef.current = true;
     if (!responseTypingTimerRef.current) return;
     clearInterval(responseTypingTimerRef.current);
     responseTypingTimerRef.current = null;
@@ -600,6 +611,45 @@ export default function BeccaScreen({
       const remainingCharacters = Array.from(response.content.slice(heading.length));
       const { suggestions: _suggestions, providerRecommendations: _providerRecommendations, ...streamingBase } = response;
       let characterIndex = 0;
+
+      // An answer plays out in its layout's order: steps tick off and fold
+      // before the text, or the card leads, or the headline sits above. Stop
+      // (skipRevealRef) shows the rest at once.
+      skipRevealRef.current = false;
+      const answer = response.answer;
+      let reveal: AnswerReveal = answer ? answerRevealStart(answer) : ANSWER_SHOWN;
+      const showReveal = (next: Partial<AnswerReveal>) => {
+        reveal = { ...reveal, ...next };
+        setStreamingReveal(reveal);
+      };
+      const beat = async (ms: number) => {
+        if (skipRevealRef.current) return;
+        await new Promise<void>((resolve) => setTimeout(resolve, ms));
+      };
+      setStreamingReveal(reveal);
+      setStreamingResponse({ ...streamingBase, content: answer ? "" : heading });
+      if (answer?.layout === "stepsThenCard") {
+        const steps = answer.work?.length ?? 0;
+        for (let i = 1; i <= steps; i++) {
+          await beat(i === 1 ? 250 : 520);
+          showReveal({ steps: i });
+        }
+        await beat(450);
+        showReveal({ folded: true });
+      } else if (answer?.layout === "cardFirst") {
+        const rows = Math.max(1, answer.card?.rows?.length ?? 0);
+        for (let i = 1; i <= rows; i++) {
+          await beat(130);
+          showReveal({ rows: i });
+        }
+      } else if (answer?.layout === "headline") {
+        await beat(500);
+      }
+      if (!isActiveTurn()) {
+        persistResponse();
+        return;
+      }
+      if (skipRevealRef.current) showReveal(ANSWER_SHOWN);
       setStreamingResponse({ ...streamingBase, content: heading });
 
       await new Promise<void>((resolve) => {
@@ -635,7 +685,21 @@ export default function BeccaScreen({
         return;
       }
 
+      // The card follows the text in the headline and steps layouts.
+      if (answer && answer.layout !== "cardFirst") {
+        const rows = Math.max(1, answer.card?.rows?.length ?? 0);
+        for (let i = 1; i <= rows; i++) {
+          await beat(110);
+          showReveal({ rows: i });
+        }
+        if (!isActiveTurn()) {
+          persistResponse();
+          return;
+        }
+      }
+
       setStreamingResponse(null);
+      setStreamingReveal(ANSWER_SHOWN);
       setMessages((prev) => [...prev, response]);
       setIsTyping(false);
 
@@ -1128,7 +1192,13 @@ export default function BeccaScreen({
 
                 {messages.map((message) => (
                   <React.Fragment key={message.id}>
+                    {message.role === "assistant" && message.answer && (
+                      <AnswerBefore answer={message.answer} onProviderPress={handleProviderPress} />
+                    )}
                     <ChatBubble message={message} />
+                    {message.role === "assistant" && message.answer && (
+                      <AnswerAfter answer={message.answer} onProviderPress={handleProviderPress} />
+                    )}
                     {/* Actions belong to the answer that introduced them.
                         Keeping them inline means a user can open a booking,
                         come back, and still use a prior answer's next step
@@ -1141,7 +1211,7 @@ export default function BeccaScreen({
                         indented
                       />
                     )}
-                    {!isProviderMode && message.role === "assistant" && message.providerRecommendations && (
+                    {!isProviderMode && message.role === "assistant" && message.providerRecommendations && !answerListsProviders(message.answer) && (
                       <ProviderRecommendations
                         providers={message.providerRecommendations}
                         onProviderPress={handleProviderPress}
@@ -1156,8 +1226,14 @@ export default function BeccaScreen({
                   </React.Fragment>
                 ))}
 
-                {streamingResponse && (
+                {streamingResponse?.answer && (
+                  <AnswerBefore answer={streamingResponse.answer} reveal={streamingReveal} onProviderPress={handleProviderPress} />
+                )}
+                {streamingResponse && (streamingResponse.content.length > 0 || !streamingResponse.answer) && (
                   <ChatBubble key={streamingResponse.id} message={streamingResponse} />
+                )}
+                {streamingResponse?.answer && (
+                  <AnswerAfter answer={streamingResponse.answer} reveal={streamingReveal} onProviderPress={handleProviderPress} />
                 )}
 
                 {/* Processing and visible typing are separate moments: once

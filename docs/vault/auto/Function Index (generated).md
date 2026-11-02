@@ -5,7 +5,7 @@
 
 #generated
 
-**2861 functions** across **391 files**.
+**2877 functions** across **391 files**.
 
 ### `src/components/` (52)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -19,7 +19,7 @@
 - `BookingSheet.tsx` — **BookingSheet** · cancelEmergency · confirmEmergency · depositPolicyArg · goToStep · handleBack · handleLocalApplyPromo · handleLocalRemovePromo · handleNext · handleSelectDate · handleSelectTime · handleSubmit · localPromoDiscount · onAccentColor · stepBlocker · summaryRemaining · toggleAddOn · tokens · totalAddOnsPrice
 - `CartTabBadge.tsx` — **useCartBadge**
 - `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
-- `ChatComponents.tsx` — ActionCard · **AmbientMark** · animatedStyle · **ChatBubble** · **ChatInput** · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · **InspirationGallery** · **Mark** · PillChip · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator**
+- `ChatComponents.tsx` — ActionCard · **AmbientMark** · animatedStyle · **AnswerAfter** · **AnswerBefore** · **answerListsProviders** · **answerRevealStart** · Appear · CardView · **ChatBubble** · **ChatInput** · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · HeadlineView · **InspirationGallery** · **Mark** · PillChip · press · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator** · toggle · WorkFold · WorkSteps
 - `CityMultiSelect.tsx` — add · addArea · addOther · **CityMultiSelect** · close · filtered · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
@@ -310,7 +310,7 @@
 ### `src/screens/shared/` (13)
 - `AboutScreen.tsx` — AboutScreen · ExpandableSection
 - `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · decline · failed · load · now · onRefresh · owed · RefundReview · refunds · retry
-- `BeccaScreen.tsx` — BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · isActiveTurn · persistResponse · refreshSessions · scheduleNextTick · showSteps
+- `BeccaScreen.tsx` — beat · BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · isActiveTurn · persistResponse · refreshSessions · scheduleNextTick · showReveal · showSteps
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave
 - `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · didn · exportBookings · fullClientReset · fullProviderReset · is · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
@@ -344,7 +344,7 @@
 ### `src/services/becca/` (10)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
 - `askNormaliser.ts` — **normalizeAsk**
-- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
+- `engine.ts` — answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
 - `matcher.ts` — containsGappedPhrase · escape · plainAsk · scoreEntities · scorePhrases · **understand**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
@@ -356,7 +356,7 @@
 ### `src/services/becca/capabilities/` (3)
 - `client.ts` — availabilityThinking · bookingChoiceMessage · bookingChoices · categoryWords · soleUpcoming · sortUpcoming
 - `provider.ts` — cutoff · inRange
-- `shared.ts` — **askChip** · **chip** · **money** · **navChip** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
+- `shared.ts` — **askChip** · **chip** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
 
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles

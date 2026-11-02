@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { BeccaInspiration, ChatMessage, ChatSuggestion } from '../services/becca/types';
+import { AnswerCard, AnswerHeadline, BeccaAnswer, BeccaInspiration, ChatMessage, ChatSuggestion } from '../services/becca/types';
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatTime12 } from '../utils/dateUtils';
@@ -584,6 +584,246 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
   );
 }
 
+// ==================== ANSWER LAYOUTS ====================
+// A reply with an `answer` is drawn in one of three shapes (see AnswerLayout
+// in becca/types.ts). The parts above the text and the parts below it are
+// separate components so the screen can keep ChatBubble in between.
+
+/** How much of an answer is showing. The screen steps this while a reply plays out. */
+export interface AnswerReveal {
+  /** Steps ticked off so far, while the trail is open. */
+  steps: number;
+  /** The trail has folded into its "How I found these" line. */
+  folded: boolean;
+  headline: boolean;
+  /** Card rows (or the stat tiles) showing so far. */
+  rows: number;
+}
+
+/** A finished answer: what every saved message shows. */
+export const ANSWER_SHOWN: AnswerReveal = { steps: Infinity, folded: true, headline: true, rows: Infinity };
+
+/** Where an answer starts before it plays out, for its layout. */
+export function answerRevealStart(answer: BeccaAnswer): AnswerReveal {
+  switch (answer.layout) {
+    case 'stepsThenCard':
+      return { steps: 0, folded: false, headline: false, rows: 0 };
+    case 'headline':
+      return { steps: Infinity, folded: true, headline: true, rows: 0 };
+    case 'cardFirst':
+      return { steps: Infinity, folded: true, headline: false, rows: 0 };
+  }
+}
+
+/** Fades a part in once, when it first appears. */
+function Appear({ children }: { children: React.ReactNode }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(v, { toValue: 1, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  }, [v]);
+  const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [6, 0] });
+  return <Animated.View style={{ opacity: v, transform: [{ translateY }] }}>{children}</Animated.View>;
+}
+
+function WorkSteps({ work, done }: { work: string[]; done: number }) {
+  const { palette: P } = useTheme();
+  return (
+    <View style={[answerStyles.trail, { backgroundColor: P.surface }]}>
+      {work.map((step, i) => {
+        const ticked = i < done;
+        return (
+          <View key={step} style={answerStyles.step}>
+            <View
+              style={[
+                answerStyles.tick,
+                ticked
+                  ? { backgroundColor: P.accent, borderColor: P.accent }
+                  : { borderColor: P.border },
+              ]}
+            >
+              {ticked && <Ionicons name="checkmark" size={10} color={P.onAccent} />}
+            </View>
+            <Text style={[answerStyles.stepText, { color: ticked ? P.text : P.sub }]}>{step}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/** "How I found these" — the steps, folded, reopened on tap. */
+function WorkFold({ work, label, outlined }: { work: string[]; label: string; outlined?: boolean }) {
+  const { palette: P } = useTheme();
+  const [open, setOpen] = useState(false);
+  const toggle = () => {
+    Haptics.selectionAsync().catch(() => {});
+    setOpen((o) => !o);
+  };
+  return (
+    <View style={answerStyles.fold}>
+      <TouchableOpacity
+        onPress={toggle}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={[
+          answerStyles.foldRow,
+          outlined
+            ? { borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed' }
+            : { backgroundColor: P.surface },
+        ]}
+      >
+        <Text style={[answerStyles.foldText, { color: P.sub }]}>
+          {label} · {work.length} step{work.length !== 1 ? 's' : ''}
+        </Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={P.sub} />
+      </TouchableOpacity>
+      {open && <WorkSteps work={work} done={work.length} />}
+    </View>
+  );
+}
+
+function HeadlineView({ headline, work }: { headline: AnswerHeadline; work?: string[] }) {
+  const { palette: P } = useTheme();
+  return (
+    <View style={answerStyles.headline}>
+      <Text style={[answerStyles.headlineValue, { color: P.text }]}>{headline.value}</Text>
+      <Text style={[answerStyles.headlineLabel, { color: P.text }]}>{headline.label}</Text>
+      {!!work?.length && (
+        <View style={answerStyles.proofRow}>
+          {work.map((step) => (
+            <View key={step} style={[answerStyles.proof, { backgroundColor: P.surface }]}>
+              <Ionicons name="checkmark" size={10} color={P.sub} />
+              <Text style={[answerStyles.proofText, { color: P.sub }]}>{step}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CardView({
+  card,
+  rows,
+  onProviderPress,
+}: {
+  card: AnswerCard;
+  rows: number;
+  onProviderPress?: (provider: Provider) => void;
+}) {
+  const { palette: P } = useTheme();
+  const shownRows = (card.rows ?? []).slice(0, rows);
+  const press = (provider: Provider) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onProviderPress?.(provider);
+  };
+  return (
+    <View style={[answerStyles.card, { backgroundColor: P.card, shadowColor: '#000' }]}>
+      <View style={[answerStyles.band, { backgroundColor: P.accent }]}>
+        <Text style={[answerStyles.bandTitle, { color: P.onAccent }]} numberOfLines={1}>{card.title}</Text>
+        {!!card.meta && <Text style={[answerStyles.bandMeta, { color: P.onAccent }]}>{card.meta}</Text>}
+      </View>
+      {shownRows.map((row, i) => {
+        const body = (
+          <>
+            {row.provider && (
+              <View style={[answerStyles.rowLogo, { backgroundColor: P.iconBg }]}>
+                {row.provider.logo ? (
+                  <Image source={row.provider.logo} style={answerStyles.rowLogoImage} contentFit="cover" transition={0} />
+                ) : (
+                  <Text style={[answerStyles.rowLogoText, { color: P.accentText }]}>
+                    {row.title.trim().charAt(0).toUpperCase() || '?'}
+                  </Text>
+                )}
+              </View>
+            )}
+            <View style={answerStyles.rowBody}>
+              <Text style={[answerStyles.rowTitle, { color: P.text }]} numberOfLines={1}>{row.title}</Text>
+              {!!row.detail && <Text style={[answerStyles.rowDetail, { color: P.sub }]} numberOfLines={2}>{row.detail}</Text>}
+            </View>
+            {!!row.tag && (
+              <View style={[answerStyles.tag, { backgroundColor: P.secondary }]}>
+                <Text style={[answerStyles.tagText, { color: P.secondaryText }]}>{row.tag}</Text>
+              </View>
+            )}
+          </>
+        );
+        const rowStyle = [answerStyles.row, i > 0 && { borderTopColor: P.sep, borderTopWidth: StyleSheet.hairlineWidth }];
+        return (
+          <Appear key={`${row.title}-${row.detail ?? ''}`}>
+            {row.provider ? (
+              <TouchableOpacity style={rowStyle} activeOpacity={0.7} onPress={() => press(row.provider!)} accessibilityRole="button">
+                {body}
+              </TouchableOpacity>
+            ) : (
+              <View style={rowStyle}>{body}</View>
+            )}
+          </Appear>
+        );
+      })}
+      {!!card.stats?.length && rows > 0 && (
+        <Appear>
+          <View style={answerStyles.stats}>
+            {card.stats.map((stat, i) => (
+              <View key={stat.label} style={[answerStyles.stat, i > 0 && { borderLeftColor: P.sep, borderLeftWidth: StyleSheet.hairlineWidth }]}>
+                <Text style={[answerStyles.statValue, { color: P.text }]}>{stat.value}</Text>
+                <Text style={[answerStyles.statLabel, { color: P.sub }]}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
+        </Appear>
+      )}
+      {!!card.footer && rows >= (card.rows?.length ?? 0) && (
+        <View style={[answerStyles.footer, { backgroundColor: P.surface }]}>
+          <Text style={[answerStyles.footerText, { color: P.sub }]}>{card.footer}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+interface AnswerPartsProps {
+  answer: BeccaAnswer;
+  reveal?: AnswerReveal;
+  onProviderPress?: (provider: Provider) => void;
+}
+
+/** The parts of an answer that sit above its text. */
+export function AnswerBefore({ answer, reveal = ANSWER_SHOWN, onProviderPress }: AnswerPartsProps) {
+  const work = answer.work ?? [];
+  let part: React.ReactNode = null;
+  if (answer.layout === 'headline' && answer.headline && reveal.headline) {
+    part = <HeadlineView headline={answer.headline} work={work} />;
+  } else if (answer.layout === 'stepsThenCard' && work.length > 0) {
+    part = reveal.folded
+      ? <WorkFold work={work} label="How I found these" />
+      : <WorkSteps work={work} done={reveal.steps} />;
+  } else if (answer.layout === 'cardFirst' && answer.card && reveal.rows > 0) {
+    part = <CardView card={answer.card} rows={reveal.rows} {...(onProviderPress ? { onProviderPress } : {})} />;
+  }
+  if (!part) return null;
+  return <View style={[styles.sectionWrap, styles.sectionWrapIndented]}>{part}</View>;
+}
+
+/** The parts of an answer that sit below its text. */
+export function AnswerAfter({ answer, reveal = ANSWER_SHOWN, onProviderPress }: AnswerPartsProps) {
+  const work = answer.work ?? [];
+  let part: React.ReactNode = null;
+  if (answer.layout !== 'cardFirst' && answer.card && reveal.rows > 0) {
+    part = <CardView card={answer.card} rows={reveal.rows} {...(onProviderPress ? { onProviderPress } : {})} />;
+  } else if (answer.layout === 'cardFirst' && work.length > 0 && reveal.rows >= (answer.card?.rows?.length ?? 0)) {
+    part = <WorkFold work={work} label="How I found this" outlined />;
+  }
+  if (!part) return null;
+  return <View style={[styles.sectionWrap, styles.sectionWrapIndented]}>{part}</View>;
+}
+
+/** Whether an answer's card already lists providers, so the separate strip would repeat it. */
+export function answerListsProviders(answer: BeccaAnswer | undefined): boolean {
+  return !!answer?.card?.rows?.some((row) => row.provider);
+}
+
 // ==================== EXPLORE INSPIRATION ====================
 
 interface InspirationGalleryProps {
@@ -1152,4 +1392,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+});
+
+const answerStyles = StyleSheet.create({
+  trail: { borderRadius: 14, paddingHorizontal: 13, paddingVertical: 11, gap: 8 },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  tick: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  stepText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13, lineHeight: 18 },
+  fold: { gap: 8 },
+  foldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9 },
+  foldText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 12 },
+  headline: { gap: 4 },
+  headlineValue: { fontFamily: 'BakbakOne-Regular', fontSize: 42, lineHeight: 46 },
+  headlineLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 16, lineHeight: 21 },
+  proofRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 },
+  proof: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  proofText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+  card: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  band: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  bandTitle: { flexShrink: 1, fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1.5 },
+  bandMeta: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11, opacity: 0.85 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  rowLogo: { width: 34, height: 34, borderRadius: 17, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  rowLogoImage: { width: 34, height: 34 },
+  rowLogoText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  rowBody: { flex: 1, minWidth: 0, gap: 2 },
+  rowTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  rowDetail: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12 },
+  tag: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4 },
+  tagText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+  stats: { flexDirection: 'row' },
+  stat: { flex: 1, padding: 14, gap: 2 },
+  statValue: { fontFamily: 'BakbakOne-Regular', fontSize: 28, lineHeight: 32 },
+  statLabel: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12 },
+  footer: { paddingHorizontal: 14, paddingVertical: 9 },
+  footerText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 11.5 },
 });

@@ -33,6 +33,15 @@ export function providerWords(entities: EntityBag, fallback: string): string {
   return entities.provider?.value.displayName ?? entities.booking?.value.providerName ?? fallback;
 }
 
+/**
+ * One of several wordings of the same answer, so Becca doesn't say a thing
+ * the same way every time. Every wording must carry the same facts; only the
+ * phrasing around them may differ.
+ */
+export function oneOf(...wordings: string[]): string {
+  return wordings[Math.floor(Math.random() * wordings.length)] ?? wordings[0] ?? "";
+}
+
 /** "Lola’s", "James’". */
 export function possessive(name: string): string {
   return /s$/i.test(name) ? `${name}’` : `${name}’s`;

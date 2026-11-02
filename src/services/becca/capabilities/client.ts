@@ -65,6 +65,7 @@ import {
   navChip,
   askChip,
   money,
+  oneOf,
   possessive,
   providerFromDb,
   providerWords,
@@ -131,15 +132,24 @@ const nextBooking: Capability = {
 
     const rel = relativeDayLabel(next.bookingDate);
     const when = rel ?? formatShortDate(next.bookingDate);
+    const whenInSentence = rel ? rel.toLowerCase() : `on ${when}`;
+    const more = upcoming.length - 1;
     return {
-      text:
-        `## Your next appointment\n` +
-        `**${next.serviceName}** with **${next.providerName}**\n` +
-        `- **When:** ${when} at ${formatTime12(next.bookingTime)}\n` +
-        `- **Cost:** ${money(next.price)}` +
-        (upcoming.length > 1
-          ? `\n\n**Also booked:** ${upcoming.length - 1} more appointment${upcoming.length > 2 ? "s" : ""}.`
-          : ""),
+      text: oneOf(
+        `Your next one is **${whenInSentence}** with **${next.providerName}**.`,
+        `Next up: **${next.serviceName}**, ${whenInSentence}.`,
+        `You’re booked in with **${next.providerName}** ${whenInSentence}.`,
+      ),
+      card: {
+        title: "NEXT APPOINTMENT",
+        ...(more > 0 ? { meta: `${more} more booked` } : {}),
+        rows: [{
+          title: next.serviceName,
+          detail: `${next.providerName} · ${when} at ${formatTime12(next.bookingTime)}`,
+          tag: money(next.price),
+        }],
+      },
+      work: [`Checked your ${upcoming.length} upcoming booking${upcoming.length !== 1 ? "s" : ""}`],
       suggestions: [
         askChip(
           "details",
@@ -931,10 +941,13 @@ const findProviders: Capability = {
     const priceFilter = entities.money?.value;
 
     let dbProviders = await getProviders(service.category);
+    // What this run really did, with its real counts — shown as the reply's
+    // steps. Only filters that actually ran add a line.
+    const work = [`Searched ${dbProviders.length} ${categoryWords(service.category)} provider${dbProviders.length !== 1 ? "s" : ""}`];
 
-    // Audience, budget and the named service all read the providers' active
-    // services, so they share one batched read rather than one each.
-    const facets = dbProviders.length > 0 && (service.audience || service.specific || priceFilter)
+    // Audience, budget, the named service and each card's price all read the
+    // providers' active services, so they share one batched read.
+    const facets = dbProviders.length > 0
       ? await getProviderServiceFacets(dbProviders.map((p) => p.id))
       : null;
 
@@ -947,6 +960,7 @@ const findProviders: Capability = {
     // provider's individual "Men's Cut" service instead.
     if (service.audience && facets) {
       dbProviders = dbProviders.filter((p) => facets.audiences.get(p.id)?.has(service.audience!));
+      work.push(`Kept those with services for ${service.audience}: ${dbProviders.length}`);
     }
 
     // "someone who does volume lashes" asks for a person who offers THAT, not
@@ -965,6 +979,7 @@ const findProviders: Capability = {
       );
       namesSpecific = offering.length > 0;
       if (namesSpecific) dbProviders = offering;
+      work.push(`Checked whose menus include ${service.specific}: ${namesSpecific ? `${offering.length} ${offering.length === 1 ? "does" : "do"}` : "none do yet"}`);
     }
 
     // Simple keyword → provider-column matching, same ad-hoc shape as the
@@ -979,6 +994,7 @@ const findProviders: Capability = {
     const activePracticeFilters = practiceFilters.filter((f) => f.keywords.test(rawMessage));
     if (activePracticeFilters.length > 0) {
       dbProviders = dbProviders.filter((p) => activePracticeFilters.every((f) => f.matches(p)));
+      work.push(`Kept those with ${activePracticeFilters.map((f) => f.label).join(" and ")}: ${dbProviders.length}`);
     }
 
     // "any nail techs near me" — a location clause narrows nothing, it
@@ -990,6 +1006,7 @@ const findProviders: Capability = {
       const nearest = await sortByProximity(dbProviders);
       dbProviders = nearest.providers;
       proximityNote = `\n\n${nearest.note}`;
+      if (nearest.ranked) work.push("Sorted them by distance from you");
     }
 
     let providers = dbProviders.map(providerFromDb);
@@ -1013,6 +1030,7 @@ const findProviders: Capability = {
           if (priceFilter.min != null && p.maxPrice < priceFilter.min) return false;
           return true;
         });
+      work.push(`Kept those ${entities.money!.label}: ${providers.length}`);
     }
 
     const priceSuffix = priceFilter ? ` ${entities.money!.label}` : "";
@@ -1036,15 +1054,50 @@ const findProviders: Capability = {
     const count = providers.length;
     const plural = count !== 1 ? "s" : "";
     const categoryLabel = categoryWords(service.category);
+    const filters = `${priceSuffix}${practiceSuffix}`;
     const text =
       namesSpecific === true
-        ? `I found **${count} provider${plural} who list${count === 1 ? "s" : ""} ${label}**${priceSuffix}${practiceSuffix}.`
+        ? oneOf(
+          `I found **${count} provider${plural} who list${count === 1 ? "s" : ""} ${label}**${filters}.`,
+          `**${count}** provider${plural}${filters} list${count === 1 ? "s" : ""} ${label} on their menu.`,
+          `Good news: **${count}** provider${plural}${filters} do${count === 1 ? "es" : ""} ${label}.`,
+        )
         : namesSpecific === false
-          ? `Nobody names ${label} on their menu yet, so here ${count === 1 ? "is" : "are"} **${count} ${categoryLabel} provider${plural}**${priceSuffix}${practiceSuffix} — worth checking their menus.`
-          : `I found **${count} ${label} provider${plural}**${priceSuffix}${practiceSuffix}.`;
+          ? `Nobody names ${label} on their menu yet, so here ${count === 1 ? "is" : "are"} **${count} ${categoryLabel} provider${plural}**${filters}. Worth checking their menus.`
+          : oneOf(
+            `I found **${count} ${label} provider${plural}**${filters}.`,
+            `Here ${count === 1 ? "is" : "are"} **${count} ${label} provider${plural}**${filters}.`,
+            `**${count}** ${label} provider${plural}${filters} to choose from.`,
+          );
+
+    // Prices come from the same facets read; a provider with none priced
+    // simply has no tag rather than a made-up one.
+    const slugToDbId = new Map(dbProviders.map((p) => [p.slug, p.id]));
+    const priceTag = (slug: string): string | undefined => {
+      const id = slugToDbId.get(slug);
+      const range = id ? facets?.priceRanges.get(id) : undefined;
+      if (!range) return undefined;
+      return range.min === range.max ? money(range.min) : `${money(range.min)}–${money(range.max)}`;
+    };
+    const shown = providers.slice(0, 8);
 
     return {
       text: `${text}${proximityNote}`,
+      work,
+      card: {
+        title: label.toUpperCase(),
+        meta: `${count} ${count === 1 ? "match" : "matches"}`,
+        rows: shown.map((p) => {
+          const tag = priceTag(p.id);
+          return {
+            title: p.name,
+            detail: p.location ?? categoryLabel,
+            ...(tag ? { tag } : {}),
+            provider: p,
+          };
+        }),
+        ...(count > shown.length ? { footer: `Showing ${shown.length} of ${count}` } : {}),
+      },
       providers: providers.slice(0, 12),
       suggestions: [
         askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),
@@ -1760,9 +1813,15 @@ const providerDeposit: Capability = {
       provider.displayName
     ];
 
+    const work = [`Read ${possessive(provider.displayName)} deposit policy`];
     if (!policy || !policy.depositAvailable) {
       return {
-        text: `**${provider.displayName}** doesn’t offer a deposit option in checkout.`,
+        text: oneOf(
+          `**${provider.displayName}** doesn’t offer a deposit option in checkout.`,
+          `There’s no deposit option with **${provider.displayName}** at checkout.`,
+        ),
+        headline: { value: "No", label: "deposit option at checkout" },
+        work,
         suggestions: [
           navChip("profile", "View provider profile", "ProviderProfile", {
             providerId: provider.slug,
@@ -1776,8 +1835,13 @@ const providerDeposit: Capability = {
       ? money(policy.depositAmount)
       : `${policy.depositAmount}%`;
     return {
+      headline: { value: "Yes", label: `${amount} deposit` },
+      work,
       text:
-        `**${provider.displayName}** offers a **${amount} deposit** at checkout.` +
+        oneOf(
+          `**${provider.displayName}** offers a **${amount} deposit** at checkout.`,
+          `You can pay a **${amount} deposit** with **${provider.displayName}** at checkout.`,
+        ) +
         (policy.depositOnly
           ? " This deposit is required to secure the booking."
           : " You’ll see the available payment options before you confirm."),
@@ -2851,7 +2915,20 @@ const reschedulePolicy: Capability = {
         : ", right up to the day";
 
     return {
-      text: `With **${name}** you can move a booking ${times}${notice}.`,
+      text: oneOf(
+        `With **${name}** you can move a booking ${times}${notice}.`,
+        `**${name}** lets you move a booking ${times}${notice}.`,
+        `You can move a booking with **${name}** ${times}${notice}.`,
+      ),
+      headline: {
+        value: policy.maxReschedules === null
+          ? "No limit"
+          : `${policy.maxReschedules} move${policy.maxReschedules !== 1 ? "s" : ""}`,
+        label: policy.rescheduleNoticeHours > 0
+          ? `per booking, with ${policy.rescheduleNoticeHours}h notice`
+          : "per booking, right up to the day",
+      },
+      work: [`Opened ${possessive(name)} policies`, "Read the rescheduling rules"],
       suggestions: [askChip("resched", "Move a booking", "Reschedule my booking")],
     };
   },
