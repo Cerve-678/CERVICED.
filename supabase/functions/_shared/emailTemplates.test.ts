@@ -213,20 +213,20 @@ describe('booking confirmation money', () => {
     expect(html).toContain('Cerviced platform fee');
     expect(html).toContain('£74.99');
     expect(html).toContain('Paid in full');
-    expect(html).not.toContain('Due to provider');
+    expect(html).toContain('Due at Appointment');
+    expect(html).toContain('£0.00');
   });
 
   it('tells a client who paid in full that they paid, using the status the database stores', () => {
     const { html } = bookingConfirmationEmail({ ...BOOKING, paymentStatus: 'fully_paid' });
     expect(html).toContain('Paid in full');
-    expect(html).toContain('Paid today');
+    expect(html).toContain('>Paid<');
     expect(html).toContain('£74.99');
     expect(html).not.toContain('Awaiting payment');
-    expect(html).not.toContain('Total paid');
     expect(html).not.toContain('Due to provider');
   });
 
-  it("shows a deposit as the provider's own figure, with the balance due", () => {
+  it('shows a deposit as what left the card and what remains', () => {
     const { html } = bookingConfirmationEmail({
       ...BOOKING,
       paymentType: 'deposit',
@@ -234,11 +234,13 @@ describe('booking confirmation money', () => {
       depositAmount: 20,
       amountPaid: 21.99,
     });
-    expect(html).toContain('Deposit paid to provider');
-    expect(html).toContain('£20.00');
-    expect(html).not.toContain('£21.99');
-    expect(html).toContain('Due to provider at appointment');
+    // £65 + £8 add-on + £1.99 fee = £74.99 total; £21.99 paid, £53.00 left.
+    expect(html).toContain('Deposit paid');
+    expect(html).toContain('>Paid<');
+    expect(html).toContain('£21.99');
+    expect(html).toContain('Due at Appointment');
     expect(html).toContain('£53.00');
+    expect(html).not.toContain('Due to provider');
   });
 
   it('never calls a hand-added unpaid booking paid in full', () => {

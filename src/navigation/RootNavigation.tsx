@@ -38,10 +38,6 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 const PROVIDER_LINK_ALERTS: Record<Exclude<ProviderProfileLinkOutcome, 'opened'>, [string, string]> = {
   not_found: ['Profile not found', "This code doesn't match a profile on CERVICED any more."],
-  no_client_hat: [
-    'Open this on a client account',
-    "Profiles open on the client side of CERVICED, and this account doesn't have a client profile yet.",
-  ],
   failed: ["Couldn't open that profile", 'Check your connection and scan the code again.'],
 };
 

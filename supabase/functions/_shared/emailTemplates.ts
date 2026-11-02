@@ -747,8 +747,8 @@ export function claimVerificationEmail(params: { code: string; businessName?: st
 //
 // Money wording follows the app's calculateBookingPaymentBreakdown: paid state
 // comes from payment_status, never payment_type (a hand-added booking is
-// payment_type 'full' with nothing paid), and a deposit is the provider's own
-// figure, never deposit + platform fee.
+// payment_type 'full' with nothing paid), and the payment box is two figures:
+// Paid (what left the card, platform fee included) and Due at Appointment.
 
 /** The CVD mark alone, transparent, in client plum. */
 const BRAND_MARK_PLUM = `${BRAND_ASSETS}/cerviced-mark-plum.png`;
@@ -787,11 +787,12 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   // PaymentStatus.PAID_IN_FULL ('paid_in_full'), which only exists after mapping.
   const isPaidInFull = params.paymentStatus === 'fully_paid';
   const isUnpaid = !isPaidInFull && params.paymentStatus !== 'deposit_paid';
-  const paidAmount = isUnpaid ? 0 : isDeposit ? params.depositAmount : params.amountPaid;
-  const remaining = Math.max(0, total - (isUnpaid ? 0 : params.amountPaid));
+  // Paid is what left the card, platform fee included; Due at Appointment is the rest.
+  // Same two figures as the in-app receipt (calculateBookingPaymentBreakdown).
+  const paidAmount = isUnpaid ? 0 : params.amountPaid;
+  const remaining = Math.max(0, total - paidAmount);
 
   const state = isUnpaid ? 'Awaiting payment' : isDeposit ? 'Deposit paid' : 'Paid in full';
-  const paidLabel = isUnpaid ? 'Total paid' : isDeposit ? 'Deposit paid to provider' : 'Paid today';
 
   const label = (text: string, colour = P.sub) =>
     `<span style="font-family:${DISPLAY};font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:${colour};">${text}</span>`;
@@ -814,8 +815,8 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
     (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
 
   const payRows =
-    payRow(paidLabel, paidAmount, remaining <= 0) +
-    (remaining > 0 ? payRow('Due to provider at appointment', remaining, true) : '');
+    payRow('Paid', paidAmount, remaining <= 0) +
+    payRow('Due at Appointment', remaining, remaining > 0);
 
   const e = {
     providerName: esc(params.providerName),

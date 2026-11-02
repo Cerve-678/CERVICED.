@@ -347,7 +347,10 @@ closed by hand.
 
 **Fully booked.** No free slot on any date currently bookable, from one check,
 `get_services_open_within`, behind the client profile's Fully Booked and "has
-space again". The provider side (migration
+space again". "Has space again" (`process_follow_openings_alerts`) skips
+providers with under 7 days left to book and blocked-out diaries with nothing
+booked, leaving their state alone, so neither can fake a change from full to open
+(`20261102100000_openings_alert_short_horizon.sql`). The provider side (migration
 `20261101200000_fully_booked_certificate.sql`): an hourly job,
 `process_provider_fully_booked_alerts`, notices two kinds of fill, only during the
 day (08:00 to 20:59 UK time). Full needs at least one booking (a blocked-out
