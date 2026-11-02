@@ -131,7 +131,7 @@ const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: T
  * send the client. The client already knows their own address, so the card
  * confirms it has gone to the provider rather than reading it back to them.
  * Non-mobile bookings keep the release-gated provider address (null until
- * the policy unlocks it, hence the fallback).
+ * the policy unlocks it, hence the fallback), and a request reads TBA.
  */
 const bookingLocationLine = (b: ConfirmedBooking): string => {
   if (isMobileBooking(b)) {
@@ -139,6 +139,8 @@ const bookingLocationLine = (b: ConfirmedBooking): string => {
       ? 'Your address has been sent to the mobile provider'
       : 'Send your address in Messages';
   }
+  // A request isn't a booking yet, so there's no location until it's accepted.
+  if (b.status === BookingStatus.PENDING) return 'TBA';
   return b.address || 'Address to be confirmed';
 };
 
