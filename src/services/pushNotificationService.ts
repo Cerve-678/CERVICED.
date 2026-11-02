@@ -77,6 +77,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
       name: 'CERVICED',
+      // A real export (re-exported through `export *`), which the import plugin
+      // can't follow here; tsc checks it.
+      // eslint-disable-next-line import/namespace
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF9500',
