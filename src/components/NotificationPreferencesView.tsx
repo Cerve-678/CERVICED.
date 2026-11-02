@@ -30,7 +30,8 @@ export interface NotificationPreferenceSection<T> {
   rows: NotificationPreferenceRow<T>[];
 }
 
-/** A row shown with no switch, for notifications that always send. */
+/** A row shown with no switch: a notification that always sends, or one
+ *  that isn't built yet. */
 export interface AlwaysOnRow {
   icon: string;
   title: string;
@@ -46,6 +47,9 @@ interface Props<T extends { [K in keyof T]: boolean }> {
   save: (prefs: T) => Promise<void>;
   sections: NotificationPreferenceSection<T>[];
   alwaysOn?: { title: string; note: string; rows: AlwaysOnRow[] } | undefined;
+  /** Notifications on the way, shown under the switches with no switch of
+   *  their own, since there's nothing to turn on yet. */
+  comingUp?: { title: string; rows: AlwaysOnRow[] } | undefined;
   /** Prefix for dev logs, e.g. '[NotificationsSettings]'. */
   logTag: string;
 }
@@ -58,6 +62,19 @@ interface ToggleRowProps {
   onToggle: () => void;
   palette: AppTheme;
 }
+
+const StaticRow = ({ row, label, palette: P }: { row: AlwaysOnRow; label: string; palette: AppTheme }) => (
+  <View style={[styles.row, { backgroundColor: P.card, borderColor: P.border }]}>
+    <View style={styles.rowLeft}>
+      <Icon name={row.icon} size={20} color={P.accentText} style={{ marginRight: 12 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.rowTitle, { color: P.text }]}>{row.title}</Text>
+        <Text style={[styles.rowSub, { color: P.sub }]}>{row.subtitle}</Text>
+      </View>
+    </View>
+    <Text style={[styles.alwaysOn, { color: P.sub }]}>{label}</Text>
+  </View>
+);
 
 const ToggleRow = ({ icon, title, subtitle, value, onToggle, palette: P }: ToggleRowProps) => (
   <View style={[styles.row, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -82,7 +99,7 @@ const ToggleRow = ({ icon, title, subtitle, value, onToggle, palette: P }: Toggl
  * its own rows and its own load/save, since each writes only its own keys.
  */
 export default function NotificationPreferencesView<T extends { [K in keyof T]: boolean }>({
-  navigation, initial, load: loadPrefs, save, sections, alwaysOn, logTag,
+  navigation, initial, load: loadPrefs, save, sections, alwaysOn, comingUp, logTag,
 }: Props<T>) {
   const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
@@ -236,16 +253,7 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
               <>
                 <Text style={[styles.section, { color: P.accentText }]}>{alwaysOn.title}</Text>
                 {alwaysOn.rows.map(row => (
-                  <View key={row.title} style={[styles.row, { backgroundColor: P.card, borderColor: P.border }]}>
-                    <View style={styles.rowLeft}>
-                      <Icon name={row.icon} size={20} color={P.accentText} style={{ marginRight: 12 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.rowTitle, { color: P.text }]}>{row.title}</Text>
-                        <Text style={[styles.rowSub, { color: P.sub }]}>{row.subtitle}</Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.alwaysOn, { color: P.sub }]}>Always on</Text>
-                  </View>
+                  <StaticRow key={row.title} row={row} label="Always on" palette={P} />
                 ))}
                 <Text style={[styles.sectionNote, { color: P.sub }]}>{alwaysOn.note}</Text>
               </>
@@ -267,6 +275,15 @@ export default function NotificationPreferencesView<T extends { [K in keyof T]: 
                 ))}
               </React.Fragment>
             ))}
+
+            {comingUp && (
+              <>
+                <Text style={[styles.section, { color: P.accentText }]}>{comingUp.title}</Text>
+                {comingUp.rows.map(row => (
+                  <StaticRow key={row.title} row={row} label="Coming soon" palette={P} />
+                ))}
+              </>
+            )}
 
             {saveError ? (
               <View style={styles.saveFailed}>
