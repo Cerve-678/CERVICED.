@@ -12,9 +12,11 @@
 // honest about not understanding rather than confidently doing the wrong
 // thing, and it's the exact seam a model later improves.
 
-import type { ConfirmedBooking } from "../../types/booking";
+import { BookingStatus, type ConfirmedBooking } from "../../types/booking";
+import { formatShortDate } from "../../utils/dateUtils";
 import type {
   BeccaHat,
+  Capability,
   CapabilityContext,
   CapabilityResult,
   ChatMessage,
@@ -564,7 +566,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const missing = (capability.needs ?? []).find(
     (n) => n.required && entities[n.kind as keyof EntityBag] == null,
   );
-  if (missing) return buildMissingEntityReply(missing.kind, hat);
+  if (missing) return buildMissingEntityReply(missing.kind, hat, message, bookings);
 
   // Understood and about to run: say what Becca is actually doing now, in
   // place of the screen's generic "reading your message".
@@ -639,7 +641,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // Medium confidence: state the assumption rather than let it pass silently.
   const assumption =
     understanding.confidence === "medium"
-      ? result.assumption ?? buildAssumption(entities, result.text, fromMessage)
+      ? result.assumption ?? buildAssumption(entities, result.text, fromMessage, capability)
       : undefined;
 
   // Every reply ends with somewhere to go next. Capabilities that supply
@@ -1269,7 +1271,33 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
   }, hat, { title: "Let’s narrow it down" });
 }
 
-function buildMissingEntityReply(kind: string, hat: BeccaHat): ChatMessage {
+function buildMissingEntityReply(
+  kind: string,
+  hat: BeccaHat,
+  message: string,
+  bookings: ConfirmedBooking[],
+): ChatMessage {
+  // Understood, but not which appointment. Each card re-asks the same
+  // question with that exact booking attached (selectedBookingId), so it
+  // lands on the same capability — "I didn't catch that" would be untrue.
+  if (kind === "booking") {
+    const upcoming = bookings
+      .filter((b) => b.status === BookingStatus.UPCOMING)
+      .sort((a, b) => `${a.bookingDate} ${a.bookingTime}`.localeCompare(`${b.bookingDate} ${b.bookingTime}`))
+      .slice(0, 4);
+    if (upcoming.length === 0) {
+      return message_({
+        content: "You haven't got any upcoming appointments for me to look at.",
+        suggestions: defaultStarters(hat),
+      }, hat, { title: "No upcoming appointments" });
+    }
+    return message_({
+      content: "Which appointment do you mean?",
+      suggestions: upcoming.map((b) =>
+        askChip(`pick-${b.id}`, `${b.serviceName} · ${formatShortDate(b.bookingDate)}`, message, { bookingId: b.id }),
+      ),
+    }, hat, { title: "Choose an appointment" });
+  }
   if (kind === "service") {
     return message_({
       content: "What are you after?",
@@ -1300,12 +1328,19 @@ function buildAssumption(
   entities: EntityBag,
   answer: string,
   resolvedFromMessage: EntityBag,
+  capability: Capability,
 ): string | undefined {
   // Only entities CARRIED from an earlier turn are assumptions. Something the
   // user just typed is not an interpretation Becca made — saying "assuming
   // you meant today" back at someone who wrote "today" reads as not listening.
+  // And only ones this capability reads: "assuming you meant nails" on a
+  // booking-prep answer that never looked at the service is noise. A booking
+  // is the exception — it's only carried on an explicit "that booking"
+  // follow-up, and several booking answers read it without declaring it.
+  const uses = new Set<string>((capability.needs ?? []).map((need) => need.kind));
+  uses.add("booking");
   const carried = <K extends keyof EntityBag>(k: K) =>
-    entities[k] != null && resolvedFromMessage[k] == null;
+    uses.has(k) && entities[k] != null && resolvedFromMessage[k] == null;
 
   const parts: string[] = [];
   if (carried("booking")) parts.push(entities.booking!.label);

@@ -50,7 +50,7 @@ Curated: [[Availability & Slots]] · **182 files**
 - `src/screens/provider/InfoRegScreen.tsx` _(91)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/contexts/BookingContext.tsx` _(80)_
-- `src/services/becca/capabilities/client.ts` _(77)_
+- `src/services/becca/capabilities/client.ts` _(79)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(72)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(67)_
 - `src/features/providers/TodayScheduleCards.tsx` _(58)_
@@ -114,7 +114,7 @@ Curated: [[Booking Flow]] · **298 files**
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(646)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(552)_
-- `src/services/becca/capabilities/client.ts` _(527)_
+- `src/services/becca/capabilities/client.ts` _(538)_
 - `src/screens/client/BookingDetailScreen.tsx` _(452)_
 - `src/screens/client/BookingsScreen.tsx` _(366)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
@@ -129,11 +129,11 @@ Curated: [[Booking Flow]] · **298 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(133)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
+- `src/services/becca/engine.ts` _(120)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/booking.ts` _(106)_
-- `src/services/becca/engine.ts` _(101)_
 - `src/screens/provider/AddBookingScreen.tsx` _(98)_
 - `src/components/BookingSheet.tsx` _(97)_
 - `src/utils/scheduleIssues.ts` _(94)_
