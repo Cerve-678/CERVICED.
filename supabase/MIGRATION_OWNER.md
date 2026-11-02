@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-02 (become a full member)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261102190000 | `become_full_member` | **APPLIED 2026-11-02** by the user (SQL editor), version recorded by the file. Renumbered from `20261102170000` after `20261102180000` landed live first; frontier re-checked just before. Verified live: `providers.full_member_since` and `full_member_free_from` exist; trigger `stamp_full_member_free_from` (BEFORE UPDATE OF has_gone_live); `become_full_member()` SECURITY DEFINER, executable by authenticated, not anon; the trigger function not executable by authenticated. Adds only (two columns, one trigger, two new functions); no existing function redefined. |
+
 ### Applied 2026-11-02 (search understands more)
 
 | Authored version | Name | Status |
