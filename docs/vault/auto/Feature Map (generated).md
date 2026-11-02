@@ -75,8 +75,8 @@ Curated: [[Availability & Slots]] · **187 files**
 
 ## Payments
 Curated: [[Payments]] · **153 files**
-- `src/screens/client/CartScreen.tsx` _(515)_
-- `src/services/databaseService.ts` _(223)_
+- `src/screens/client/CartScreen.tsx` _(518)_
+- `src/services/databaseService.ts` _(225)_
 - `src/screens/provider/PaymentsScreen.tsx` _(177)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -112,7 +112,7 @@ Curated: [[Booking Flow]] · **302 files**
 - `src/services/databaseService.ts` _(965)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
-- `src/screens/client/CartScreen.tsx` _(646)_
+- `src/screens/client/CartScreen.tsx` _(647)_
 - `src/services/becca/capabilities/client.ts` _(574)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(552)_
 - `src/screens/client/BookingDetailScreen.tsx` _(454)_
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **302 files**
 - … +272 more
 
 ## Notifications
-Curated: [[Notifications]] · **173 files**
+Curated: [[Notifications]] · **174 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(339)_
 - `src/services/databaseService.ts` _(191)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **173 files**
 - `src/services/becca/capabilities/provider.ts` _(26)_
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
-- … +143 more
+- … +144 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **82 files**
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **184 files**
 
 ## Auth
 Curated: [[Contexts]] · **191 files**
-- `src/services/databaseService.ts` _(293)_
+- `src/services/databaseService.ts` _(296)_
 - `src/contexts/AuthContext.tsx` _(164)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/screens/auth/LoginScreen.tsx` _(140)_
@@ -347,8 +347,8 @@ Curated: [[Services]] · **49 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **75 files**
-- `src/screens/client/CartScreen.tsx` _(408)_
-- `src/services/databaseService.ts` _(97)_
+- `src/screens/client/CartScreen.tsx` _(413)_
+- `src/services/databaseService.ts` _(98)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/components/BookingSheet.tsx` _(34)_

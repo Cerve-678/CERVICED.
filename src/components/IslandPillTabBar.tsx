@@ -13,7 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { SETTINGS_TAB, settingsStackHidesTabBar } from '../navigation/settingsTabBar';
 import { useExploreFocusStore } from '../stores/useExploreFocusStore';
 import { explorePillVisible } from '../utils/exploreTabBarScroll';
 import {
@@ -103,7 +105,13 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
     return () => { show.remove(); hide.remove(); };
   }, []);
   const keyboardHidden = !!focusedRouteOptions?.tabBarHideOnKeyboard && keyboardVisible;
-  const forceHidden = keyboardHidden || (focusedRouteOptions?.tabBarStyle as { display?: string } | undefined)?.display === 'none';
+  const focusedTab = state.routes[state.index];
+  // Both hats' Settings tab: only the screens listed in settingsTabBar.ts keep the bar.
+  const settingsStackHidden = focusedTab?.name === SETTINGS_TAB
+    && settingsStackHidesTabBar(getFocusedRouteNameFromRoute(focusedTab));
+  const forceHidden = keyboardHidden
+    || settingsStackHidden
+    || (focusedRouteOptions?.tabBarStyle as { display?: string } | undefined)?.display === 'none';
   const forceHideProgress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(forceHideProgress, {

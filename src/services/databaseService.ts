@@ -154,6 +154,7 @@ export async function signOutCurrentSession(): Promise<void> {
   const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw error;
   invalidateOwnProviderIds();
+  forgetSavedCards();
 }
 
 export async function clearUserStorageFolder(
@@ -10764,9 +10765,54 @@ export async function createCheckoutPaymentIntent(
   };
 }
 
+// The last saved-card list, for the one signed-in account. The function behind
+// it takes 1–10s, so the cart starts the read and the payment sheet shows the
+// answer the moment it opens instead of waiting with the client watching.
+// Brand, last 4 and expiry only, in memory; cleared on sign-out and removal.
+let savedCardsCache: { userId: string; cards: SavedCard[]; fetchedAt: number } | null = null;
+let savedCardsRequest: { userId: string; promise: Promise<SavedCard[]> } | null = null;
+// Bumped on every forget, so a read begun before it can't store its answer.
+let savedCardsGeneration = 0;
+
+/** The cards last read for this account, or undefined if none have been. */
+export function getCachedSavedCards(userId: string): SavedCard[] | undefined {
+  return savedCardsCache?.userId === userId ? savedCardsCache.cards : undefined;
+}
+
+/** Drop the remembered list, so the next read goes to Stripe. */
+export function forgetSavedCards(): void {
+  savedCardsCache = null;
+  savedCardsRequest = null;
+  savedCardsGeneration += 1;
+}
+
 /** The signed-in client's saved cards, read live from Stripe (CERVICED stores
- *  no card details). Empty until they save one. */
-export async function listSavedCards(): Promise<SavedCard[]> {
+ *  no card details). Empty until they save one. A list read within
+ *  `maxAgeMs` is returned as is, and callers arriving while a read is in
+ *  flight share it rather than starting another. */
+export async function listSavedCards({ maxAgeMs = 0 }: { maxAgeMs?: number } = {}): Promise<SavedCard[]> {
+  const generation = savedCardsGeneration;
+  const { data: { user } } = await getSessionUser();
+  if (!user) throw new Error('Could not load your saved cards. Please try again.');
+  const userId = user.id;
+  if (savedCardsCache?.userId === userId && Date.now() - savedCardsCache.fetchedAt < maxAgeMs) {
+    return savedCardsCache.cards;
+  }
+  if (savedCardsRequest?.userId === userId) return savedCardsRequest.promise;
+
+  const request = { userId, promise: fetchSavedCards() };
+  savedCardsRequest = request;
+  try {
+    const cards = await request.promise;
+    // Not if a removal or sign-out forgot the list while this was in flight.
+    if (generation === savedCardsGeneration) savedCardsCache = { userId, cards, fetchedAt: Date.now() };
+    return cards;
+  } finally {
+    if (savedCardsRequest === request) savedCardsRequest = null;
+  }
+}
+
+async function fetchSavedCards(): Promise<SavedCard[]> {
   const { data, error } = await supabase.functions.invoke('client-saved-cards', {
     body: { action: 'list' },
   });
@@ -10819,6 +10865,7 @@ export async function removeSavedCard(paymentMethodId: string): Promise<void> {
     body: { action: 'remove', paymentMethodId },
   });
   if (error || data?.error) throw await getPaymentRequestError(error, data, 'Could not remove that card. Please try again.');
+  forgetSavedCards();
 }
 
 /** A provider's late-arrival and no-show fees for one checkout, frozen on the
