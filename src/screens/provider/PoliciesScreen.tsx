@@ -234,9 +234,10 @@ export default function PoliciesScreen({ navigation }: any) {
       Alert.alert('Permission Required', 'Please allow access to your photo library.');
       return;
     }
+    // No allowsEditing: iOS's editor only crops to a square, which cuts the
+    // top and bottom off a full-length policy sheet.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
       quality: 0.85,
     });
     const asset = result.assets?.[0];
@@ -471,7 +472,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 {policies.policyImageUrl ? (
                   <View style={imgSt.thumbWrap}>
                     <TouchableOpacity onPress={handlePickPolicyImage} disabled={policyImageUploading} activeOpacity={0.7}>
-                      <Image source={{ uri: policies.policyImageUrl }} style={imgSt.thumb} fadeDuration={0} />
+                      <Image source={{ uri: policies.policyImageUrl }} style={[imgSt.thumb, { backgroundColor: C.border }]} resizeMode="contain" fadeDuration={0} />
                       {policyImageUploading && (
                         <View style={imgSt.uploading}>
                           <ActivityIndicator size="small" color="#fff" />
@@ -551,8 +552,8 @@ const termsSt = StyleSheet.create({
 
 const imgSt = StyleSheet.create({
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  thumbWrap: { position: 'relative', width: 84, height: 84 },
-  thumb:     { width: 84, height: 84, borderRadius: 14 },
+  thumbWrap: { position: 'relative', width: 120, height: 180 },
+  thumb:     { width: 120, height: 180, borderRadius: 14 },
   uploading: { ...StyleSheet.absoluteFill, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   removeBtn: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' },
   removeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
