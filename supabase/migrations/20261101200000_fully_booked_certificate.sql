@@ -5,13 +5,16 @@
 -- no free slot for any active service on any date they've opened, and at least
 -- one booking in that time. Checked every hour by the existing cron job, now
 -- hourly instead of daily at 08:00, looking 14 days ahead first and the full 180
--- only when those are taken. A fill is recorded on the change from space to
--- full, and when a provider is first seen already full, during the day
--- (08:00-20:59 UK time, re-checked hourly). It counts again only after a full
--- day with space, and at most once a week, so a rolling window gaining a day at
--- midnight doesn't keep re-awarding it. Each fill sends one "You're Fully
--- Booked!" notification, which pushes under the provider's Fully Booked switch,
--- and the app shows the certificate once, the next time they open My Profile.
+-- only when those are taken. Two kinds of fill, both said only during the day
+-- (08:00-20:59 UK time, re-checked hourly), both pushing under the provider's
+-- Fully Booked switch:
+--   • A whole month: no space from today to a month end at least 4 weeks away.
+--     Once per calendar month. A notification, the certificate (shown once on
+--     My Profile) and the Fully Booked achievements.
+--   • A shorter run (7+ days): a notification only. Recorded on the change
+--     from space to full, or when first seen already full; again only after a
+--     full day with space, and at most once a week, so a rolling window
+--     gaining a day at midnight doesn't keep repeating it.
 --
 -- Not counted, and their state left as it was:
 --   • a schedule closed by hand (nothing can be booked, so nothing filled);
@@ -67,14 +70,21 @@ CREATE TABLE IF NOT EXISTS public.provider_fully_booked_state (
 ALTER TABLE public.provider_fully_booked_state ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.provider_fully_booked_state FROM PUBLIC, anon, authenticated;
 
--- Each time a schedule filled. seen_at is when the provider saw the certificate.
+-- Each time a schedule filled. certificate_month is set for a whole month
+-- (the 1st of it), which is what earns a certificate and the achievements;
+-- NULL is a shorter run, which only gets a notification. seen_at is when the
+-- provider saw the certificate.
 CREATE TABLE IF NOT EXISTS public.provider_fully_booked_fills (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  provider_id  uuid NOT NULL REFERENCES public.providers(id) ON DELETE CASCADE,
-  filled_at    timestamptz NOT NULL DEFAULT now(),
-  through_date date NOT NULL,
-  seen_at      timestamptz
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_id       uuid NOT NULL REFERENCES public.providers(id) ON DELETE CASCADE,
+  filled_at         timestamptz NOT NULL DEFAULT now(),
+  through_date      date NOT NULL,
+  certificate_month date,
+  seen_at           timestamptz
 );
+CREATE UNIQUE INDEX IF NOT EXISTS provider_fully_booked_fills_one_certificate_a_month
+  ON public.provider_fully_booked_fills (provider_id, certificate_month)
+  WHERE certificate_month IS NOT NULL;
 CREATE INDEX IF NOT EXISTS provider_fully_booked_fills_provider_idx
   ON public.provider_fully_booked_fills (provider_id, filled_at DESC);
 ALTER TABLE public.provider_fully_booked_fills ENABLE ROW LEVEL SECURITY;
@@ -94,6 +104,8 @@ DECLARE
   v_was_full  boolean;
   v_open_since timestamptz;
   v_through   date;
+  v_month_end date;
+  v_new_fill  boolean;
   v_last      date;
   v_horizon   integer;
   v_services  uuid[];
@@ -178,32 +190,67 @@ BEGIN
       CONTINUE;
     END IF;
 
+    -- Full. Nothing is said at night; it's re-checked every hour.
+    v_new_fill := FALSE;
     IF v_has_state AND v_was_full THEN
       UPDATE public.provider_fully_booked_state SET checked_at = now() WHERE provider_id = r.provider_id;
+    ELSE
+      CONTINUE WHEN NOT v_daytime;
+      INSERT INTO public.provider_fully_booked_state (provider_id, is_full, open_since, checked_at)
+      VALUES (r.provider_id, TRUE, NULL, now())
+      ON CONFLICT (provider_id) DO UPDATE SET is_full = TRUE, checked_at = now();
+      -- Just filled. One cancellation filled again the same day is the same
+      -- fill, and it's said at most once a week.
+      v_new_fill := NOT (
+        (v_has_state
+         AND v_open_since IS NOT NULL
+         AND v_open_since > now() - INTERVAL '24 hours'
+         AND EXISTS (SELECT 1 FROM public.provider_fully_booked_fills f WHERE f.provider_id = r.provider_id))
+        OR EXISTS (SELECT 1 FROM public.provider_fully_booked_fills f
+                    WHERE f.provider_id = r.provider_id AND f.filled_at > now() - INTERVAL '7 days')
+      );
+    END IF;
+    CONTINUE WHEN NOT v_daytime;
+
+    -- The last date the check looked at, and the last month end within it.
+    v_through := v_today + v_horizon - 1;
+    v_month_end := CASE
+      WHEN v_through = (date_trunc('month', v_through) + INTERVAL '1 month - 1 day')::date THEN v_through
+      ELSE (date_trunc('month', v_through) - INTERVAL '1 day')::date
+    END;
+
+    -- A whole month: no space from today to a month end at least 4 weeks off.
+    -- Checked on every full run, not only when they first fill, because a
+    -- rolling window or a release brings the next month end into range while
+    -- they stay full. Once per calendar month.
+    IF v_month_end - v_today + 1 >= 28
+       AND NOT EXISTS (
+         SELECT 1 FROM public.provider_fully_booked_fills f
+          WHERE f.provider_id = r.provider_id
+            AND f.certificate_month = date_trunc('month', v_month_end)::date
+       ) THEN
+      INSERT INTO public.provider_fully_booked_fills (provider_id, through_date, certificate_month)
+      VALUES (r.provider_id, v_month_end, date_trunc('month', v_month_end)::date)
+      RETURNING id INTO v_fill_id;
+
+      INSERT INTO public.notifications
+        (user_id, type, title, message, priority, is_actionable, provider_id, recipient_role, metadata)
+      VALUES (
+        r.user_id,
+        'schedule_fully_booked',
+        'You''re Fully Booked!',
+        to_char(v_month_end, 'FMMonth') || ' is fully booked. Open My Profile to see your certificate.',
+        'medium',
+        TRUE,
+        r.provider_id,
+        'provider',
+        jsonb_build_object('kind', 'fully_booked_certificate', 'fill_id', v_fill_id)
+      );
       CONTINUE;
     END IF;
 
-    -- Newly full. Wait for daytime to say so; it's re-checked every hour.
-    CONTINUE WHEN NOT v_daytime;
-
-    INSERT INTO public.provider_fully_booked_state (provider_id, is_full, open_since, checked_at)
-    VALUES (r.provider_id, TRUE, NULL, now())
-    ON CONFLICT (provider_id) DO UPDATE SET is_full = TRUE, checked_at = now();
-
-    -- One cancellation filled again the same day is the same fill, not a new
-    -- one: it counts again only after a full day with space.
-    CONTINUE WHEN v_has_state
-      AND v_open_since IS NOT NULL
-      AND v_open_since > now() - INTERVAL '24 hours'
-      AND EXISTS (SELECT 1 FROM public.provider_fully_booked_fills f WHERE f.provider_id = r.provider_id);
-    -- And at most once a week.
-    CONTINUE WHEN EXISTS (
-      SELECT 1 FROM public.provider_fully_booked_fills f
-       WHERE f.provider_id = r.provider_id AND f.filled_at > now() - INTERVAL '7 days'
-    );
-
-    -- The last date the check looked at.
-    v_through := v_today + v_horizon - 1;
+    -- A shorter run: a notification, no certificate, no achievement.
+    CONTINUE WHEN NOT v_new_fill;
 
     INSERT INTO public.provider_fully_booked_fills (provider_id, through_date)
     VALUES (r.provider_id, v_through)
@@ -215,13 +262,12 @@ BEGIN
       r.user_id,
       'schedule_fully_booked',
       'You''re Fully Booked!',
-      'Every slot you opened, up to ' || to_char(v_through, 'FMDD FMMonth') ||
-        ', is booked. Open My Profile to see your certificate.',
+      'Every slot you''ve opened, up to ' || to_char(v_through, 'FMDD FMMonth') || ', is booked.',
       'medium',
       TRUE,
       r.provider_id,
       'provider',
-      jsonb_build_object('kind', 'fully_booked_certificate', 'fill_id', v_fill_id)
+      jsonb_build_object('kind', 'fully_booked', 'fill_id', v_fill_id)
     );
    EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'fully booked check failed for provider %: % (%)', r.provider_id, SQLERRM, SQLSTATE;
@@ -238,7 +284,7 @@ SELECT cron.alter_job(
 ALTER TABLE public.providers DROP COLUMN IF EXISTS fully_booked_alert_last_sent_at;
 
 -- ── 3. what the app calls ───────────────────────────────────────────────────
--- The newest fill the provider hasn't seen the certificate for, if any.
+-- The newest whole-month fill the provider hasn't seen the certificate for.
 CREATE OR REPLACE FUNCTION public.get_my_unseen_fully_booked()
 RETURNS TABLE (fill_id uuid, filled_at timestamptz, through_date date)
 LANGUAGE sql
@@ -249,6 +295,7 @@ AS $function$
     FROM public.provider_fully_booked_fills f
     JOIN public.providers p ON p.id = f.provider_id
    WHERE p.user_id = auth.uid()
+     AND f.certificate_month IS NOT NULL
      AND f.seen_at IS NULL
    ORDER BY f.filled_at DESC
    LIMIT 1;
@@ -268,6 +315,7 @@ AS $function$
      AND p.user_id = auth.uid()
      AND mine.id = p_fill_id
      AND mine.provider_id = f.provider_id
+     AND f.certificate_month IS NOT NULL
      AND f.seen_at IS NULL
      AND f.filled_at <= mine.filled_at;
 $function$;
@@ -302,9 +350,11 @@ DECLARE
   v_busy_best      integer;
   v_busy_day_on    date;
 
-  -- Each time the schedule filled (provider_fully_booked_fills), and the run
-  -- of calendar months with one, for providers with a release day.
+  -- Each whole month that filled (provider_fully_booked_fills with a
+  -- certificate_month), and the run of those months, for providers with a
+  -- release day. Shorter runs earn nothing.
   v_fills          date[];
+  v_fill_months    date[];
   v_release_day    boolean;
   v_fill_run_start date;
   v_fill_run_now   integer;
@@ -401,10 +451,11 @@ BEGIN
     GROUP BY b.booking_date
   ) d;
 
-  SELECT COALESCE(array_agg((f.filled_at AT TIME ZONE 'Europe/London')::date ORDER BY f.filled_at), '{}')
-    INTO v_fills
+  SELECT COALESCE(array_agg((f.filled_at AT TIME ZONE 'Europe/London')::date ORDER BY f.filled_at), '{}'),
+         COALESCE(array_agg(f.certificate_month ORDER BY f.certificate_month), '{}')
+    INTO v_fills, v_fill_months
   FROM provider_fully_booked_fills f
-  WHERE f.provider_id = v_provider_id;
+  WHERE f.provider_id = v_provider_id AND f.certificate_month IS NOT NULL;
 
   -- CASE, so the cast only runs on one or two digits; 1-31 as everywhere else.
   SELECT COALESCE(CASE WHEN (p.automation_settings->>'scheduleReleaseDay') ~ '^[0-9]{1,2}$'
@@ -414,7 +465,7 @@ BEGIN
   WHERE p.id = v_provider_id;
 
   WITH months AS (
-    SELECT DISTINCT date_trunc('month', day)::date AS month FROM unnest(v_fills) AS day
+    SELECT DISTINCT month FROM unnest(v_fill_months) AS month
   ), runs AS (
     SELECT min(m.month) AS first_month, max(m.month) AS last_month, COUNT(*)::integer AS length
     FROM (
@@ -523,7 +574,8 @@ BEGIN
     (28, 'fully_booked', 'fully_booked_first', false, cardinality(v_fills), 1, cardinality(v_fills) >= 1, v_fills[1]),
     (29, 'fully_booked', 'fully_booked_3',     false, cardinality(v_fills), 3, cardinality(v_fills) >= 3, v_fills[3]),
     (30, 'fully_booked', 'fully_booked_months_3', false, v_fill_run_now, 3, v_fill_run_start IS NOT NULL,
-      (SELECT min(day) FROM unnest(v_fills) AS day WHERE day >= (v_fill_run_start + interval '2 months')::date))
+      (SELECT min((f.filled_at AT TIME ZONE 'Europe/London')::date) FROM provider_fully_booked_fills f
+        WHERE f.provider_id = v_provider_id AND f.certificate_month >= (v_fill_run_start + interval '2 months')::date))
   ) AS d(ord, group_key, achievement_key, for_link_only, current_value, target, met, met_on)
   WHERE (d.for_link_only OR NOT v_is_link_only)
     -- Months in a row only means something with a monthly release. Once

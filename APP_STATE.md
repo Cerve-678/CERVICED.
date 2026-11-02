@@ -349,16 +349,20 @@ closed by hand.
 `get_services_open_within`, behind the client profile's Fully Booked and "has
 space again". The provider side (migration
 `20261101200000_fully_booked_certificate.sql`): an hourly job,
-`process_provider_fully_booked_alerts`, records a fill on the change from space
-to full, only during the day (08:00 to 20:59 UK time). Full also needs at least
-one booking (a blocked-out diary isn't full) and at least 7 days left to book (a
-release-day provider just before next month opens isn't full). A fill counts
-again only after a day with space, and at most once a week. Each fill sends one "You're Fully
-Booked!" notification under the provider's Fully Booked switch, and tapping it
-opens My Profile. There, the certificate (`src/components/FullyBookedCertificate.tsx`)
-pops up once, with confetti. Fills also drive the Fully Booked achievements: the
-first, 3 times, and 3 months in a row (that one only for providers with a
-release day). A closed schedule, a link-only provider and one with nothing set
+`process_provider_fully_booked_alerts`, notices two kinds of fill, only during the
+day (08:00 to 20:59 UK time). Full needs at least one booking (a blocked-out
+diary isn't full) and at least 7 days left to book (a release-day provider just
+before next month opens isn't full).
+- A whole month: no space from today to a month end at least 4 weeks away. Once
+  per calendar month. It sends "You're Fully Booked! November is fully booked",
+  pops the certificate (`src/components/FullyBookedCertificate.tsx`) up once
+  with confetti the next time they open My Profile, and counts towards the
+  Fully Booked achievements: the first, 3 times, and 3 months in a row (that one
+  only for providers with a release day).
+- A shorter run: a notification only. Again only after a day with space, and at
+  most once a week.
+Both go under the provider's Fully Booked switch, and tapping opens My Profile.
+A closed schedule, a link-only provider and one with nothing set
 up never count. There is no closed state and no setting for it:
 when a slot frees up, the waitlist gets it first if the provider has the waitlist
 on (15-minute holds, next person, then anyone), otherwise anyone can book it

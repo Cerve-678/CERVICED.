@@ -42,17 +42,13 @@ const CONFETTI_LIGHT = ['#5C4033', '#AF9197', '#D9C3A5', '#7E6667', '#E9D5D8', '
 const CONFETTI_DARK = ['#AF9197', '#D9C3A5', '#F0ECE7', '#7E6667', '#E9D5D8', '#C9A9AF'];
 const PIECES = 44;
 
-/** "Every slot you opened for November has been booked." when the schedule
- *  ran to the end of the month it filled in, otherwise up to the last date. */
-export function fullyBookedLine(throughDate: string, filledAt: string): string {
+/** "Every slot you opened for November has been booked." A certificate is
+ *  always for a whole month, so the date is that month's last day; anything
+ *  else falls back to the date. */
+export function fullyBookedLine(throughDate: string): string {
   const through = toLocalDate(throughDate);
-  const filled = new Date(filledAt);
   const monthEnd = new Date(through.getFullYear(), through.getMonth() + 1, 0).getDate();
-  if (
-    through.getDate() === monthEnd
-    && through.getMonth() === filled.getMonth()
-    && through.getFullYear() === filled.getFullYear()
-  ) {
+  if (through.getDate() === monthEnd) {
     return `Every slot you opened for ${MONTH_NAMES_FULL[through.getMonth()]} has been booked.`;
   }
   return `Every slot you opened, up to ${formatLongDateNoYear(through)}, has been booked.`;
@@ -236,7 +232,7 @@ export default function FullyBookedCertificate({
               <View style={[st.rule, { backgroundColor: P.accent }]} />
               <Text style={[st.congrats, { color: P.text }]}>Congratulations</Text>
               <Text style={[st.name, { color: P.text }]}>{providerName}</Text>
-              <Text style={[st.line, { color: P.sub }]}>{fullyBookedLine(throughDate, filledAt)}</Text>
+              <Text style={[st.line, { color: P.sub }]}>{fullyBookedLine(throughDate)}</Text>
               <Svg width={84} height={84} viewBox="0 0 84 84" style={st.seal} accessibilityLabel="CERVICED seal">
                 <Circle cx={42} cy={42} r={38} fill="none" stroke={P.accent} strokeWidth={5} strokeDasharray="1 7.95" strokeLinecap="round" />
                 <Circle cx={42} cy={42} r={31} fill={P.accent} />

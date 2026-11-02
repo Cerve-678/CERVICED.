@@ -3,18 +3,14 @@ import { join } from 'path';
 import { fullyBookedLine } from '../components/FullyBookedCertificate';
 
 describe('the Fully Booked certificate line', () => {
-  it('names the month when the schedule ran to the end of the month it filled in', () => {
-    expect(fullyBookedLine('2026-11-30', '2026-11-12T10:40:00Z')).toBe('Every slot you opened for November has been booked.');
+  it('names the month it was for', () => {
+    expect(fullyBookedLine('2026-11-30')).toBe('Every slot you opened for November has been booked.');
+    // Filled mid-November with everything to the end of December booked.
+    expect(fullyBookedLine('2026-12-31')).toBe('Every slot you opened for December has been booked.');
   });
 
-  it('gives the last date otherwise', () => {
-    expect(fullyBookedLine('2026-12-01', '2026-11-12T10:40:00Z')).toBe(
-      'Every slot you opened, up to Tuesday 1st December, has been booked.',
-    );
-    // A release that has opened next month runs past the month it filled in.
-    expect(fullyBookedLine('2026-12-31', '2026-11-12T10:40:00Z')).toBe(
-      'Every slot you opened, up to Thursday 31st December, has been booked.',
-    );
+  it('falls back to the date for anything that is not a month end', () => {
+    expect(fullyBookedLine('2026-12-01')).toBe('Every slot you opened, up to Tuesday 1st December, has been booked.');
   });
 });
 
@@ -39,7 +35,7 @@ describe('noticing a schedule has filled', () => {
     expect(check).toContain('s.is_active = TRUE AND s.duration_minutes > 0');
   });
 
-  it('records a fill once, on the change to full, and not for a same-day refill', () => {
+  it('notices a shorter run once, on the change to full, and not for a same-day refill', () => {
     expect(check).toContain('IF v_has_state AND v_was_full THEN');
     expect(check).toContain("v_open_since > now() - INTERVAL '24 hours'");
   });
@@ -61,8 +57,27 @@ describe('noticing a schedule has filled', () => {
     expect(check).toContain("RAISE WARNING 'fully booked check failed for provider %");
   });
 
+  it('gives a certificate only for a whole month, at most once a month', () => {
+    expect(check).toContain('IF v_month_end - v_today + 1 >= 28');
+    expect(check).toContain('f.certificate_month = date_trunc');
+    expect(MIGRATION).toContain('provider_fully_booked_fills_one_certificate_a_month');
+    const unseen = MIGRATION.slice(MIGRATION.indexOf('FUNCTION public.get_my_unseen_fully_booked'));
+    expect(unseen.slice(0, 600)).toContain('f.certificate_month IS NOT NULL');
+  });
+
+  it('only sends a notification for a shorter run', () => {
+    const short = check.slice(check.indexOf('CONTINUE WHEN NOT v_new_fill;'));
+    expect(short).toContain("jsonb_build_object('kind', 'fully_booked'");
+    expect(short).not.toContain('certificate_month');
+  });
+
+  it('earns achievements only from whole months', () => {
+    const ach = MIGRATION.slice(MIGRATION.indexOf('FUNCTION public.get_my_provider_achievements'));
+    expect(ach).toContain('WHERE f.provider_id = v_provider_id AND f.certificate_month IS NOT NULL');
+  });
+
   it('only tells them during the day', () => {
-    expect(check.indexOf('CONTINUE WHEN NOT v_daytime')).toBeLessThan(check.indexOf('INSERT INTO public.provider_fully_booked_fills'));
+    expect(check.lastIndexOf('CONTINUE WHEN NOT v_daytime')).toBeLessThan(check.indexOf('INSERT INTO public.provider_fully_booked_fills'));
   });
 
   it('keeps what was recorded private, and checks every hour', () => {
