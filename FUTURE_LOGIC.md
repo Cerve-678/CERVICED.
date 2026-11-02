@@ -1269,8 +1269,8 @@ capabilities all read it. Explore's own filter tabs do not yet.
   of the feed (just above Book Again) instead of its normal early slot
   between Near You and Book Again.
 - **SearchScreen** has a "Who It's For" filter (Women/Men/Kids) in
-  `FilterOptions.audience`, resolved via a new batched
-  `getProviderAudienceMatches(providerIds, audience)` scoped to the
+  `FilterOptions.audience`, resolved via the batched
+  `getProviderServiceFacets(providerIds)` audience sets, scoped to the
   already-searched candidate set — same shape as the existing `hairType`
   filter, same "qualifies via any matching service" rule as Home.
 - **Becca** — `src/services/becca/entityResolver.ts`'s `AUDIENCE_OVERRIDES`
@@ -1279,7 +1279,7 @@ capabilities all read it. Explore's own filter tabs do not yet.
   "for my daughter"), independent of whether that phrase also overrode the
   resolved category to MALE/KIDS. Two capabilities in
   `capabilities/client.ts` use it: the main "find a provider" capability
-  narrows `dbProviders` via `getProviderAudienceMatches` before replying, and
+  narrows `dbProviders` via `getProviderServiceFacets`' audience sets before replying, and
   the inspiration/gallery capability passes `audience` through to
   `getDiscoverServices()`. **Not yet wired**: the price-lookup capability
   ("how much are nails") and the availability capability ("who's free this

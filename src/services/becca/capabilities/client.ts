@@ -45,11 +45,11 @@ import {
   getProviderBySlug,
   getProviderCancellationPolicy,
   getProviderIdByDisplayName,
-  getProviderAudienceMatches,
   getProviderLocationsByDisplayNames,
   getMobileProviderDisplayNames,
   getProviderDepositPoliciesByDisplayNames,
   getProviderPriceRanges,
+  getProviderServiceFacets,
   getProviderSchedulingConstraints,
   getProviders,
   getProviderReviews,
@@ -57,15 +57,19 @@ import {
   getUserWaitlistEntries,
 } from "../../databaseService";
 import { AvailabilityService } from "../../AvailabilityService";
-import { hasUsefulHistory, type Capability, type CapabilityResult } from "../types";
-import { CATEGORY_LABELS } from "../serviceCatalogue";
+import { hasUsefulHistory, type Capability, type CapabilityResult, type ThinkingTurn } from "../types";
+import { CATEGORY_LABELS, SERVICE_CATALOGUE } from "../serviceCatalogue";
+import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
 import {
   chip,
   navChip,
   askChip,
   money,
+  possessive,
   providerFromDb,
+  providerWords,
   resolveProviderDbId,
+  serviceWords,
   sortByProximity,
   NEAR_ME_RE,
 } from "./shared";
@@ -87,6 +91,7 @@ const currentTime: Capability = {
   id: "meta.current_time",
   hat: "client",
   describe: "What time it is right now",
+  thinking: ["Checking the time…"],
   phrases: ["what time is it", "whats the time", "what's the time", "current time", "time right now"],
   async run({ now }): Promise<CapabilityResult> {
     const hours = now.getHours();
@@ -101,6 +106,7 @@ const nextBooking: Capability = {
   id: "booking.next",
   hat: "client",
   describe: "When is my next appointment",
+  thinking: ["Checking your bookings…", "Finding your next appointment…"],
   phrases: [
     "next appointment", "next booking", "when is my", "when's my", "whens my",
     "what's next", "whats next", "upcoming appointment", "upcoming booking",
@@ -158,6 +164,7 @@ const listBookings: Capability = {
   id: "booking.list",
   hat: "client",
   describe: "What have I got booked",
+  thinking: ["Checking your bookings…", "Gathering what you’ve got coming up…"],
   phrases: [
     "my bookings", "all my bookings", "my appointments", "show my bookings",
     "what have i got", "what do i have", "my schedule", "booked in",
@@ -223,6 +230,7 @@ const bookingDetails: Capability = {
   id: "booking.details",
   hat: "client",
   describe: "Break down an appointment and its policies",
+  thinking: ["Finding that appointment…", "Reading its details and policies…"],
   phrases: [
     "tell me about my appointment", "tell me about my booking",
     "tell me more about my appointment", "tell me more about my booking",
@@ -283,6 +291,7 @@ const bookingInfoPacks: Capability = {
   id: "booking.info_packs",
   hat: "client",
   describe: "Prep, aftercare and information packs attached to an appointment",
+  thinking: ["Finding that appointment…", "Checking its prep and aftercare packs…"],
   phrases: [
     "what did they send me", "my prep notes", "my aftercare", "aftercare notes",
     "my information pack", "my info pack", "booking notes", "appointment notes",
@@ -329,6 +338,7 @@ const upcomingBookingSummary: Capability = {
   id: "booking.upcoming_total",
   hat: "client",
   describe: "Total cost and payment status across upcoming appointments",
+  thinking: ["Checking your upcoming bookings…", "Adding up the totals…", "Checking what’s already been paid…"],
   phrases: [
     "what am i spending", "what am i spending on bookings", "my upcoming total",
     "total upcoming cost", "total cost of my bookings", "how much are my bookings",
@@ -369,6 +379,7 @@ const bookingCost: Capability = {
   id: "booking.cost",
   hat: "client",
   describe: "How much is my appointment costing",
+  thinking: ["Finding that appointment…", "Reading the price breakdown…"],
   phrases: [
     "how much do i owe", "how much is it", "what am i paying", "what do i owe",
     "cost of my booking", "how much have i paid", "how much did i pay",
@@ -422,6 +433,7 @@ const cancelBooking: Capability = {
   id: "booking.cancel",
   hat: "client",
   describe: "Cancel a booking",
+  thinking: ({ entities }) => ["Finding that appointment…", `Reading ${possessive(providerWords(entities, "the provider"))} cancellation policy…`],
   phrases: [
     "cancel my", "cancel booking", "cancel appointment", "cancel it",
     "call off", "can't make it", "cant make it", "can't come", "cant come",
@@ -479,6 +491,7 @@ const rescheduleBooking: Capability = {
   id: "booking.reschedule",
   hat: "client",
   describe: "Reschedule or move a booking",
+  thinking: ["Finding that appointment…", "Checking how it can be moved…"],
   phrases: [
     "reschedule", "move my", "move it", "change my booking", "change the time",
     "change the date", "different day", "another day", "different time",
@@ -517,6 +530,7 @@ const bookingPrep: Capability = {
   id: "booking.prep",
   hat: "client",
   describe: "Do I need to do anything before my appointment",
+  thinking: ["Finding that appointment…", "Checking forms and prep notes…"],
   phrases: [
     "do i need to", "anything to fill", "forms", "intake form", "patch test",
     "before my appointment", "anything i need", "prepare", "aftercare",
@@ -626,6 +640,7 @@ const rebook: Capability = {
   id: "booking.rebook",
   hat: "client",
   describe: "Book the same thing again",
+  thinking: ["Looking at what you’ve booked before…", "Finding that service again…"],
   phrases: [
     "book again", "rebook", "re-book", "same again", "book that again",
     "usual again", "last time", "book the same", "same as last time",
@@ -691,6 +706,7 @@ const bookingRoutine: Capability = {
   id: "booking.routine",
   hat: "client",
   describe: "What I normally book and how often I book it",
+  thinking: ["Looking through your booking history…", "Working out what you usually book…"],
   phrases: [
     "what do i normally get", "what do i usually get", "my usual appointment",
     "my booking routine", "how often do i book", "when did i last get",
@@ -748,6 +764,7 @@ const bookingHistory: Capability = {
   id: "booking.history",
   hat: "client",
   describe: "My older appointments, further back than the last few months",
+  thinking: ["Looking further back through your bookings…"],
   phrases: [
     "my history", "booking history", "my past appointments", "past bookings",
     "older bookings", "previous appointments", "appointments last year",
@@ -822,6 +839,20 @@ const bookingHistory: Capability = {
 
 // ==================== DISCOVERY ====================
 
+/** "lashes", "men's grooming" — a category as it reads in a sentence. */
+function categoryWords(category: string): string {
+  return CATEGORY_LABELS[category] ?? category.toLowerCase();
+}
+
+/** Shared by discover.available and discover.followup_day, which run the same search. */
+function availabilityThinking({ entities }: ThinkingTurn): string[] {
+  return [
+    entities.service ? `Searching providers for ${serviceWords(entities, "beauty")}…` : "Searching providers…",
+    entities.date ? `Checking who’s free ${entities.date.label}…` : "Checking who’s free soon…",
+    "Finding the earliest slots…",
+  ];
+}
+
 const findProviders: Capability = {
   id: "discover.find",
   hat: "client",
@@ -871,12 +902,28 @@ const findProviders: Capability = {
   // request for images even without the word "looks" in it.
   excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b/i,
   needs: [{ kind: "service", required: true }],
+  thinking: ({ entities, message }) => {
+    const service = entities.service?.value;
+    const steps = [`Searching providers for ${service ? categoryWords(service.category) : "beauty"}…`];
+    if (service?.specific) steps.push(`Checking whose menus include ${service.specific}…`);
+    if (service?.audience) steps.push(`Narrowing to services for ${service.audience}…`);
+    if (entities.money) steps.push(`Comparing prices ${entities.money.label}…`);
+    if (NEAR_ME_RE.test(message)) steps.push("Sorting them by distance…");
+    if (steps.length < 3) steps.push("Putting the list together…");
+    return steps;
+  },
   async run({ entities, rawMessage }): Promise<CapabilityResult> {
     const service = entities.service!.value;
     const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
     const priceFilter = entities.money?.value;
 
     let dbProviders = await getProviders(service.category);
+
+    // Audience, budget and the named service all read the providers' active
+    // services, so they share one batched read rather than one each.
+    const facets = dbProviders.length > 0 && (service.audience || service.specific || priceFilter)
+      ? await getProviderServiceFacets(dbProviders.map((p) => p.id))
+      : null;
 
     // "men's haircut" / "for my daughter" — narrow to providers with at
     // least one active service tagged services.audience for that audience,
@@ -885,9 +932,26 @@ const findProviders: Capability = {
     // category override above (MALE/KIDS as a whole-business category,
     // which almost no provider registers as) — this catches a HAIR
     // provider's individual "Men's Cut" service instead.
-    if (service.audience && dbProviders.length > 0) {
-      const audienceMatches = await getProviderAudienceMatches(dbProviders.map((p) => p.id), service.audience);
-      dbProviders = dbProviders.filter((p) => audienceMatches.has(p.id));
+    if (service.audience && facets) {
+      dbProviders = dbProviders.filter((p) => facets.audiences.get(p.id)?.has(service.audience!));
+    }
+
+    // "someone who does volume lashes" asks for a person who offers THAT, not
+    // anyone in lashes. Matched the way Search's Speciality filter matches —
+    // service names, service tags and business specialities, spelling-
+    // tolerant. When nobody names it, the whole category is still shown, and
+    // the reply says so rather than calling them volume-lash providers.
+    let namesSpecific: boolean | undefined;
+    if (service.specific && facets) {
+      const needles = [
+        service.specific,
+        ...(SERVICE_CATALOGUE[service.category]?.find((e) => e.specific === service.specific)?.keywords ?? []),
+      ];
+      const offering = dbProviders.filter((p) =>
+        matchesAnySpeciality([...(facets.specialityText.get(p.id) ?? [])], needles),
+      );
+      namesSpecific = offering.length > 0;
+      if (namesSpecific) dbProviders = offering;
     }
 
     // Simple keyword → provider-column matching, same ad-hoc shape as the
@@ -917,11 +981,11 @@ const findProviders: Capability = {
 
     let providers = dbProviders.map(providerFromDb);
 
-    if (priceFilter && dbProviders.length > 0) {
-      // getProviderPriceRanges is keyed by the real provider UUID, NOT the
-      // slug that Provider.id carries — map slug→UUID rather than looking the
-      // slug up in a UUID-keyed map (which would silently always miss).
-      const ranges = await getProviderPriceRanges(dbProviders.map((p) => p.id));
+    if (priceFilter && facets && dbProviders.length > 0) {
+      // Facets are keyed by the real provider UUID, NOT the slug that
+      // Provider.id carries — map slug→UUID rather than looking the slug up
+      // in a UUID-keyed map (which would silently always miss).
+      const ranges = facets.priceRanges;
       const slugToId = new Map(dbProviders.map((p) => [p.slug, p.id]));
       providers = providers
         .map((p) => {
@@ -956,12 +1020,23 @@ const findProviders: Capability = {
       };
     }
 
+    const count = providers.length;
+    const plural = count !== 1 ? "s" : "";
+    const categoryLabel = categoryWords(service.category);
+    const text =
+      namesSpecific === true
+        ? `I found **${count} provider${plural} who list${count === 1 ? "s" : ""} ${label}**${priceSuffix}${practiceSuffix}.`
+        : namesSpecific === false
+          ? `Nobody names ${label} on their menu yet, so here ${count === 1 ? "is" : "are"} **${count} ${categoryLabel} provider${plural}**${priceSuffix}${practiceSuffix} — worth checking their menus.`
+          : `I found **${count} ${label} provider${plural}**${priceSuffix}${practiceSuffix}.`;
+
     return {
-      text: `I found **${providers.length} ${label} provider${providers.length !== 1 ? "s" : ""}**${priceSuffix}${practiceSuffix}.${proximityNote}`,
+      text: `${text}${proximityNote}`,
       providers: providers.slice(0, 12),
       suggestions: [
         askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),
         askChip("top", "See top-rated", `Who are the best rated ${label} providers?`),
+        ...(namesSpecific ? [askChip("all", `All ${categoryLabel} providers`, `Find ${categoryLabel}`)] : []),
         ...(wantsNearby ? [] : [askChip("near", "Who's nearest?", `Find ${label} near me`)]),
       ],
     };
@@ -972,6 +1047,7 @@ const pickFromList: Capability = {
   id: "discover.pick",
   hat: "client",
   describe: "Tell me about the one you just showed me",
+  thinking: ["Finding the one you mean…"],
   // A named provider or a result Becca just displayed. This always requires
   // a provider resolved from the live database (or carried shown-results
   // context), so a generic "looking for nails" cannot fire it cold.
@@ -1033,6 +1109,7 @@ const followUpDay: Capability = {
     { kind: "date", required: true },
     { kind: "service", required: true },
   ],
+  thinking: availabilityThinking,
   async run(ctx): Promise<CapabilityResult> {
     // Same answer as an availability search — the only difference is that the
     // service came from context rather than from this message.
@@ -1044,6 +1121,9 @@ const followUpPrice: Capability = {
   id: "discover.followup_price",
   hat: "client",
   describe: "How much are they / what do they charge",
+  thinking: ({ entities }) => entities.provider
+    ? [`Checking ${possessive(providerWords(entities, "the provider"))} prices…`]
+    : [`Checking ${serviceWords(entities, "service")} prices…`],
   // Every phrase here used to assume a pronoun ("how much are THEY"), so a
   // direct category question — "how much are nails", the most natural way to
   // ask this — matched nothing at all and fell to the generic fallback. The
@@ -1113,6 +1193,7 @@ const findAvailable: Capability = {
   // availability search in its own right. Treating it as missing data sent
   // users into a generic fallback that offered their bookings instead.
   needs: [{ kind: "service", required: false }],
+  thinking: availabilityThinking,
   async run({ entities }): Promise<CapabilityResult> {
     const service = entities.service?.value;
     const label = service
@@ -1200,6 +1281,7 @@ const appointmentPlan: Capability = {
   id: "discover.booking_plan",
   hat: "client",
   describe: "Plan a booking around a service, date and budget",
+  thinking: ({ entities }) => [`Planning your ${serviceWords(entities, "beauty")} booking…`],
   phrases: [
     "plan my appointment", "plan my", "plan a booking", "help me plan", "help me book",
     "plan my beauty appointment", "book me something", "help me find someone",
@@ -1247,6 +1329,7 @@ const reviews: Capability = {
   id: "discover.reviews",
   hat: "client",
   describe: "What do people say about a provider",
+  thinking: ({ entities }) => [`Reading ${possessive(providerWords(entities, "the provider"))} reviews…`, "Working out their rating…"],
   phrases: [
     "reviews", "what do people say", "are they any good", "rating", "ratings",
     "feedback", "recommended", "are they good", "what are they like",
@@ -1280,6 +1363,10 @@ const providerServices: Capability = {
   id: "discover.provider_services",
   hat: "client",
   describe: "What a specific provider offers, and what it costs",
+  thinking: ({ entities }) => [
+    `Opening ${possessive(providerWords(entities, "the provider"))} menu…`,
+    entities.service ? `Looking for ${serviceWords(entities, "that service")}…` : "Reading their services and prices…",
+  ],
   // Carries the provider-scoped PRICE phrasings as well as the service-list
   // ones. discover.followup_price owns the same vocabulary but requires a
   // service entity, so with a provider resolved and no service named it takes
@@ -1394,6 +1481,7 @@ const treatmentSafety: Capability = {
   id: "provider.safety",
   hat: "client",
   describe: "Safety requirements for a provider's treatments",
+  thinking: ({ entities }) => [`Reading ${possessive(providerWords(entities, "the provider"))} treatment safety notes…`],
   // Deliberately avoids words caught by MEDICAL_OR_DERMATOLOGY_RE (allergy,
   // skin condition, reaction, treatment-as-verb...) — those are intercepted
   // before routing and can never reach any capability.
@@ -1534,6 +1622,7 @@ const providerLocation: Capability = {
   id: "provider.location",
   hat: "client",
   describe: "Where a provider is based or whether they travel",
+  thinking: ({ entities }) => [`Checking where ${providerWords(entities, "the provider")} works…`],
   phrases: [
     "where are they", "where is the provider", "where is their salon", "their location",
     "their address", "where are you based", "where are they based", "do they travel",
@@ -1599,6 +1688,7 @@ const bookingLocation: Capability = {
   id: "booking.location",
   hat: "client",
   describe: "Where an upcoming appointment is",
+  thinking: ["Finding that appointment…", "Checking where it is…"],
   phrases: [
     "where is my appointment", "where's my appointment", "where is my booking",
     "where's my booking", "where am i going", "how do i get there", "directions",
@@ -1636,6 +1726,7 @@ const providerDeposit: Capability = {
   id: "provider.deposit",
   hat: "client",
   describe: "Whether a provider takes a deposit",
+  thinking: ({ entities }) => [`Reading ${possessive(providerWords(entities, "the provider"))} deposit policy…`],
   phrases: [
     "deposit", "do they take a deposit", "deposit required", "pay a deposit",
     "how much is the deposit", "booking deposit", "pay upfront", "pay up front",
@@ -1683,6 +1774,7 @@ const providerBookingTiming: Capability = {
   id: "provider.booking_timing",
   hat: "client",
   describe: "How far ahead or how late a provider accepts bookings",
+  thinking: ({ entities }) => [`Reading ${possessive(providerWords(entities, "the provider"))} booking rules…`, "Checking their notice and booking window…"],
   phrases: [
     "how late can i book", "how far ahead can i book", "booking window",
     "minimum notice", "last minute booking", "same day booking", "book ahead",
@@ -1746,6 +1838,7 @@ const providerAvailability: Capability = {
   id: "provider.next_available",
   hat: "client",
   describe: "When a specific provider is next available",
+  thinking: ({ entities }) => [`Checking ${possessive(providerWords(entities, "the provider"))} diary…`, "Finding their next free slot…"],
   phrases: [
     "when are they free", "when is she free", "when is he free", "when are you free",
     "when is the next slot", "their next slot", "next available", "when can i see them",
@@ -1800,6 +1893,7 @@ const myProviders: Capability = {
   id: "discover.saved",
   hat: "client",
   describe: "Who are my saved providers",
+  thinking: ["Opening your saved providers…"],
   phrases: ["my providers", "saved providers", "bookmarked", "my usual", "my regulars", "favourites", "favorites"],
   async run(): Promise<CapabilityResult> {
     const rows = await getBookmarkedProviders();
@@ -1828,6 +1922,7 @@ const waitlist: Capability = {
   id: "discover.waitlist",
   hat: "client",
   describe: "Am I on any waitlists",
+  thinking: ["Checking your waitlists…"],
   // Phrased as a QUESTION about existing entries, never a bare "waitlist" —
   // that generic form also matches "put me on the waitlist", which is a
   // request to act (see action.waitlist) rather than a status check.
@@ -1862,6 +1957,7 @@ const browse: Capability = {
   id: "discover.browse",
   hat: "client",
   describe: "What services are available",
+  thinking: ["Gathering the service categories…"],
   phrases: [
     "all services", "what services", "browse", "explore", "what can i book",
     "what do you offer", "show me all services", "everything", "categories",
@@ -1888,6 +1984,7 @@ const notifications: Capability = {
   id: "inbox.notifications",
   hat: "client",
   describe: "Have I missed anything / any updates",
+  thinking: ["Checking your notifications…", "Sorting the latest updates…"],
   phrases: [
     "notifications", "any updates", "have i missed", "anything new",
     "anything i've missed", "anything ive missed",
@@ -1932,6 +2029,7 @@ const messages: Capability = {
   id: "inbox.messages",
   hat: "client",
   describe: "Any messages from my providers",
+  thinking: ["Checking your messages…"],
   phrases: [
     "my messages", "messages", "any replies", "has anyone replied", "my inbox",
     "any messages", "unread messages", "did they reply", "have they replied",
@@ -1978,6 +2076,7 @@ const inspiration: Capability = {
   id: "discover.inspiration",
   hat: "client",
   describe: "Show me looks / inspiration / examples of work",
+  thinking: ({ entities }) => [`Searching ${serviceWords(entities, "beauty")} looks…`, "Picking out examples of work…"],
   // Longer, more specific phrases than discover.find's generic "show me" —
   // the matcher scores by matched-phrase length, so "show me nail ideas"
   // has to be beatable only by an equally specific inspiration phrase.
@@ -2199,6 +2298,9 @@ const offers: Capability = {
   id: "discover.offers",
   hat: "client",
   describe: "What offers or deals are on right now",
+  thinking: ({ entities }) => entities.service
+    ? ["Checking what offers are on…", `Narrowing to ${serviceWords(entities, "services")}…`]
+    : ["Checking what offers are on…"],
   // Note the bare "deals"/"offers"/"discounts" entries alongside the "any X"
   // forms: phrase matching is contiguous, so "any nail deals" does NOT match
   // "any deals" — the service word sits between them. The single-word entries
@@ -2294,6 +2396,7 @@ const topRated: Capability = {
   id: "discover.top",
   hat: "client",
   describe: "Who's best rated, newest or trending",
+  thinking: ({ entities }) => [`Comparing ${serviceWords(entities, "provider")} ratings…`, "Ranking the providers…"],
   phrases: [
     "best rated", "top rated", "highest rated", "best providers", "who's the best",
     "whos the best", "the best", "any good", "new providers", "newest",
@@ -2394,6 +2497,7 @@ const nearbyProviders: Capability = {
   id: "discover.nearby",
   hat: "client",
   describe: "Which providers are closest to me",
+  thinking: ["Finding where you are…", "Sorting providers by distance…"],
   phrases: [
     "near me", "nearby", "closest", "close to me", "close by", "around me",
     "in my area", "my area", "local to me", "who's near", "whos near",
@@ -2452,6 +2556,7 @@ const rescheduleStatus: Capability = {
   id: "booking.reschedule_status",
   hat: "client",
   describe: "Has my reschedule been accepted",
+  thinking: ["Finding your reschedule request…", "Checking whether it’s been answered…"],
   phrases: [
     "has my reschedule", "reschedule accepted", "reschedule approved",
     "heard back about", "any word on my reschedule", "reschedule status",
@@ -2523,6 +2628,7 @@ const providerContact: Capability = {
   id: "provider.contact",
   hat: "client",
   describe: "How do I contact a provider",
+  thinking: ({ entities }) => [`Finding how to reach ${providerWords(entities, "the provider")}…`],
   phrases: [
     "how do i contact", "contact them", "their number", "phone number",
     "their email", "get in touch", "how do i reach", "whatsapp",
@@ -2604,6 +2710,7 @@ const consultationCheck: Capability = {
   id: "provider.consultation",
   hat: "client",
   describe: "Do I need a consultation first",
+  thinking: ({ entities }) => [`Checking whether ${providerWords(entities, "the provider")} needs a consultation first…`],
   // Widened deliberately: this is the health-adjacent path (patch tests,
   // allergy testing, skin tests), so a near-miss that drops into the generic
   // "didn't catch that" fallback is the worst place to leave a user guessing.
@@ -2681,6 +2788,7 @@ const reschedulePolicy: Capability = {
   id: "provider.reschedule_policy",
   hat: "client",
   describe: "How many times can I move a booking, and how much notice",
+  thinking: ({ entities }) => [`Reading ${possessive(providerWords(entities, "the provider"))} rescheduling policy…`, "Checking the notice and how many moves are allowed…"],
   // POLICY questions only. Deliberately excludes phrasings that mean "do it"
   // ("change the time", "push it back", "rearrange") — those belong to
   // booking.reschedule, which starts the actual reschedule, and someone
@@ -2728,6 +2836,7 @@ const promoCode: Capability = {
   id: "discover.promocode",
   hat: "client",
   describe: "Is this promo code valid",
+  thinking: ["Checking that code…"],
   phrases: [
     "promo code", "promotion code", "discount code", "voucher code",
     "is this code valid", "does this code work", "coupon", "coupon code",
@@ -2781,6 +2890,7 @@ const eventPlans: Capability = {
   id: "account.events",
   hat: "client",
   describe: "My event plans / group bookings",
+  thinking: ["Checking your event plans…"],
   phrases: [
     "my event", "event plan", "my wedding", "group booking",
     "my party", "event bookings", "my big day",
@@ -2807,6 +2917,7 @@ const savedLooks: Capability = {
   id: "account.saved_looks",
   hat: "client",
   describe: "My saved photos and looks",
+  thinking: ["Opening your saved looks…"],
   phrases: [
     "my saved photos", "saved looks", "my saved looks", "my inspiration",
     "photos i saved", "my collection", "saved images", "my saves",
@@ -2833,6 +2944,7 @@ const notificationSettings: Capability = {
   id: "account.notif_prefs",
   hat: "client",
   describe: "What notifications am I getting",
+  thinking: ["Checking your notification settings…"],
   phrases: [
     "notification settings", "my notification preferences", "turn off notifications",
     "stop notifications", "what notifications", "email preferences", "reminders on",
@@ -2864,6 +2976,7 @@ const beautyProfile: Capability = {
   id: "account.beauty_profile",
   hat: "client",
   describe: "What's on my beauty profile",
+  thinking: ["Opening your beauty profile…"],
   phrases: [
     "my beauty profile", "my profile", "my hair type", "my skin type",
     "what do you know about me", "my preferences", "my details",
@@ -2916,6 +3029,7 @@ const myStats: Capability = {
   id: "account.stats",
   hat: "client",
   describe: "How many providers have I saved / am I following",
+  thinking: ["Counting your saved and followed providers…"],
   phrases: [
     "how many providers have i saved", "how many do i follow",
     "how many bookmarks", "my stats", "how many providers",
@@ -2971,6 +3085,7 @@ const saveProvider: Capability = {
   id: "action.bookmark",
   hat: "client",
   describe: "Save or bookmark a provider",
+  thinking: ({ entities }) => [`Checking whether ${providerWords(entities, "the provider")} is already saved…`],
   // Includes a bare "save"/"bookmark": on their own these are ambiguous, but
   // this capability REQUIRES a resolved provider, so "save Lola's Studio"
   // matches while a bare "save" with no provider can never run (the engine
@@ -3019,6 +3134,7 @@ const joinWaitlistAction: Capability = {
   id: "action.waitlist",
   hat: "client",
   describe: "Join a provider's waitlist for a cancellation",
+  thinking: ({ entities }) => [`Checking ${possessive(providerWords(entities, "the provider"))} waitlist…`],
   // Action phrasings only. Deliberately longer/more specific than
   // discover.waitlist's status-check phrasings, since the matcher scores by
   // matched-phrase length and both share the word "waitlist".
@@ -3076,6 +3192,7 @@ const leaveReview: Capability = {
   id: "action.review",
   hat: "client",
   describe: "Leave a review for a past appointment",
+  thinking: ["Finding that appointment…", "Checking whether you’ve reviewed it yet…"],
   phrases: [
     "leave a review", "write a review", "review my", "rate my",
     "give feedback", "rate them", "leave feedback",
@@ -3120,6 +3237,7 @@ const forMe: Capability = {
   id: "discover.forme",
   hat: "client",
   describe: "Recommend something based on what I like",
+  thinking: ["Reading what you usually like…", "Matching providers to your taste…"],
   phrases: [
     "recommend something", "what should i book", "something for me",
     "surprise me", "what do you suggest", "suggest something",
@@ -3173,6 +3291,7 @@ const help: Capability = {
   id: "meta.help",
   hat: "client",
   describe: "What can Becca do",
+  thinking: ["Getting my options ready…"],
   phrases: [
     "what can you do", "help", "how do you work", "what are you", "who are you",
     "what can you help with", "how can you help", "what do you do",
@@ -3212,6 +3331,7 @@ const appNavigation: Capability = {
   id: "meta.app_navigation",
   hat: "client",
   describe: "Open an account, support, or settings area",
+  thinking: ["Finding the right screen…"],
   phrases: [
     "change password", "change my password", "reset password", "my password",
     "notification settings", "turn off notifications", "manage notifications",

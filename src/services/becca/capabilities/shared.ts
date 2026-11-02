@@ -5,15 +5,37 @@
 // the previous implementation hardcoded `$` in a £ app.
 
 import type { ChatSuggestion } from "../types";
+import type { EntityBag } from "../types";
 import type { Provider } from "../../ProviderDataService";
 import type { DbProvider } from "../../../types/database";
 import { getProviderIdByDisplayName } from "../../databaseService";
 import { resolveClientLocation } from "../../clientLocationService";
 import { getDistanceKm } from "../../../utils/distance";
+import { CATEGORY_LABELS } from "../serviceCatalogue";
 
 /** GBP. This app is £ — never format money any other way. */
 export function money(amount: number): string {
   return `£${amount.toFixed(2).replace(/\.00$/, "")}`;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Loading-step wording (Capability.thinking)
+
+/** The service the turn is about, as words: "volume lashes", "nails". */
+export function serviceWords(entities: EntityBag, fallback: string): string {
+  const service = entities.service?.value;
+  if (!service) return fallback;
+  return service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
+}
+
+/** The provider the turn is about — named outright, or behind the booking. */
+export function providerWords(entities: EntityBag, fallback: string): string {
+  return entities.provider?.value.displayName ?? entities.booking?.value.providerName ?? fallback;
+}
+
+/** "Lola’s", "James’". */
+export function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}’` : `${name}’s`;
 }
 
 // ──────────────────────────────────────────────────────────────────────────

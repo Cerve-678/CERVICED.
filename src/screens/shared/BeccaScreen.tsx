@@ -67,33 +67,10 @@ function formatHeroDate(date: Date): string {
   return `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())}`;
 }
 
-/**
- * The progress copy describes the work this particular request needs. It is
- * intentionally not a fake model chain-of-thought: these are short, truthful
- * status updates for the app's lookup and routing work.
- */
-function thinkingStepsFor(message: string, isProviderMode: boolean): string[] {
-  const text = message.toLowerCase();
-  const steps = (...labels: string[]) => labels;
-
-  if (isProviderMode) {
-    if (/\b(?:today|schedule|booking|appointment|diary|week)\b/.test(text)) return steps("Checking your schedule…", "Reading the appointment details…", "Preparing the right next step…");
-    if (/\b(?:client|waitlist|form)\b/.test(text)) return steps("Finding the client record…", "Checking their booking history…", "Preparing a clear summary…");
-    if (/\b(?:message|inbox|notification)\b/.test(text)) return steps("Checking your inbox…", "Sorting the latest updates…", "Getting the relevant action ready…");
-    if (/\b(?:review|promotion|analytics|service)\b/.test(text)) return steps("Looking up your business details…", "Pulling together the relevant information…", "Preparing a clear answer…");
-    return steps("Looking into that…", "Checking the relevant business details…", "Preparing the best next step…");
-  }
-  if (/\b(?:reschedule|move|change|cancel)\b/.test(text)) return steps("Finding that appointment…", "Checking the available actions…", "Getting the right screen ready…");
-  if (/\b(?:cost|price|pay|payment|deposit|refund)\b/.test(text)) return steps("Checking booking totals…", "Reading the payment details…", "Putting the costs together…");
-  if (/\b(?:form|prep|prepare|policy|policies|what.*need|what.*bring)\b/.test(text)) return steps("Reading your booking notes…", "Checking forms and policies…", "Preparing what you need to know…");
-  if (/\b(?:booking|appointment|next appointment|when)\b/.test(text)) return steps("Checking your bookings…", "Reading the appointment details…", "Preparing a clear breakdown…");
-  if (/\b(?:free|available|availability|slot)\b/.test(text)) return steps("Searching open slots…", "Checking provider availability…", "Narrowing down the best options…");
-  if (/\b(?:find|search|provider|nails|hair|lashes|brows|makeup|aesthetics)\b/.test(text)) return steps("Searching providers…", "Matching your request…", "Preparing the best options…");
-  if (/\b(?:review|rating|portfolio|photo|look)\b/.test(text)) return steps("Looking up provider details…", "Reading services and reviews…", "Preparing a clear summary…");
-  if (/\b(?:message|notification|waitlist)\b/.test(text)) return steps("Checking your updates…", "Finding the relevant details…", "Preparing the next action…");
-  if (/\b(?:time|date|day)\b/.test(text)) return steps("Checking the current time…", "Making sure it is up to date…");
-  return steps("Looking into that…", "Checking the relevant details…", "Preparing a helpful answer…");
-}
+/** Shown until the engine has understood the message and says what it's doing. */
+const READING_LABEL = "Reading your message…";
+/** How long each of a capability's loading steps stays on screen. */
+const THINKING_STEP_MS = 700;
 
 // ==================== MAIN SCREEN ====================
 
@@ -493,10 +470,24 @@ export default function BeccaScreen({
     setUsedSuggestionId(null);
     setInputText("");
     setSelectedImage(null);
-    const thinkingSteps = thinkingStepsFor(textToSend, requestIsProvider);
-    setThinkingLabel(thinkingSteps[0] ?? "Looking into that…");
+    setThinkingLabel(READING_LABEL);
     setIsTyping(true);
     const thinkingStartedAt = Date.now();
+    // The steps come from the capability Becca chose (see Capability.thinking),
+    // so they describe this request's real lookups. Each gets a full beat
+    // before the answer replaces it.
+    let progressTimers: ReturnType<typeof setTimeout>[] = [];
+    let stepsFinishAt = 0;
+    const showSteps = (steps: string[]) => {
+      if (!isActiveTurn() || steps.length === 0) return;
+      setThinkingLabel(steps[0]!);
+      progressTimers = steps.slice(1).map((label, index) =>
+        setTimeout(() => {
+          if (isActiveTurn()) setThinkingLabel(label);
+        }, THINKING_STEP_MS * (index + 1)),
+      );
+      stepsFinishAt = Date.now() + THINKING_STEP_MS * steps.length;
+    };
 
     // Create session on first user message
     let sessionId = currentSessionId;
@@ -536,12 +527,6 @@ export default function BeccaScreen({
       beccaStorageService.saveMessage(sessionId, userMessage).catch((err) => logger.error('[Becca] save user message failed:', err));
     }
 
-    const progressTimers = thinkingSteps.slice(1).map((label, index) =>
-      setTimeout(() => {
-        if (isActiveTurn()) setThinkingLabel(label);
-      }, 720 + index * 780),
-    );
-
     setTimeout(async () => {
       const aiInterpreter = getBeccaAIInterpreter();
       const { message: response, context } = await beccaConverse({
@@ -565,6 +550,7 @@ export default function BeccaScreen({
         ...(aiInterpreter
           ? { interpreter: aiInterpreter }
           : {}),
+        onProgress: showSteps,
       });
       let responsePersisted = false;
       const persistResponse = (refreshCurrentHat = false) => {
@@ -593,7 +579,11 @@ export default function BeccaScreen({
       conversationRef.current = context;
       // A fast local match should still feel intentional rather than making
       // the processing state flash by before a person can read it.
-      const remainingThinkingMs = Math.max(0, 2_200 - (Date.now() - thinkingStartedAt));
+      const remainingThinkingMs = Math.max(
+        0,
+        2_200 - (Date.now() - thinkingStartedAt),
+        stepsFinishAt - Date.now(),
+      );
       if (remainingThinkingMs > 0) {
         await new Promise<void>((resolve) => setTimeout(resolve, remainingThinkingMs));
       }
