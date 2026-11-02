@@ -38,11 +38,10 @@ import {
 import {
   DAY_NAMES_FULL,
   dateToYMD,
-  formatShortDate,
   formatTime12,
 } from "../../../utils/dateUtils";
 import type { Capability, CapabilityResult } from "../types";
-import { navChip, askChip, money } from "./shared";
+import { navChip, askChip, dayLabel, money, oneOf } from "./shared";
 
 // Link-only providers (booking_mode 'external') take bookings on their own
 // booking site, so they only get capabilities marked `fitsLinkOnly`. Those
@@ -94,15 +93,26 @@ const todaySchedule: Capability = {
       };
     }
 
-    const lines = rows
-      .slice(0, 8)
-      .map((b) => `- **${formatTime12(b.booking_time)}** · **${b.service_name_snapshot}**\n  ${b.customer_name ?? "Client"}`)
-      .join("\n");
-
     // Deliberately counts bookings, not revenue: takings depend on how each
     // booking was actually paid, which isn't Becca's to assert.
+    const n = rows.length;
     return {
-      text: `## ${rows.length} booking${rows.length !== 1 ? "s" : ""} ${label}\nHere’s your schedule:\n\n${lines}`,
+      text: oneOf(
+        `${n} booking${n !== 1 ? "s" : ""} ${label}. Here’s your schedule:`,
+        `You’ve got **${n}** ${label}.`,
+        `${label[0]!.toUpperCase()}${label.slice(1)} you’re seeing **${n}** client${n !== 1 ? "s" : ""}.`,
+      ),
+      card: {
+        title: label.toUpperCase(),
+        meta: `${n} booking${n !== 1 ? "s" : ""}`,
+        rows: rows.slice(0, 8).map((b) => ({
+          title: b.service_name_snapshot ?? "Booking",
+          detail: b.customer_name ?? "Client",
+          tag: formatTime12(b.booking_time),
+        })),
+        ...(n > 8 ? { footer: `${n - 8} more in your diary` } : {}),
+      },
+      work: [`Checked your diary for ${label}`],
       suggestions: [
         // Each booking Becca lists opens directly, labelled by who it's for —
         // the service is already in the answer above, the client is what a
@@ -171,13 +181,26 @@ const weekAhead: Capability = {
     }
 
     const busiest = [...counts].sort((a, b) => b.count - a.count)[0]!;
-    const lines = counts
-      .filter((c) => c.count > 0)
-      .map((c) => `- **${formatShortDate(c.ymd)}** · ${c.count} booking${c.count !== 1 ? "s" : ""}`)
-      .join("\n");
-
     return {
-      text: `## Your next 7 days\n**${total} booking${total !== 1 ? "s" : ""}** in total · busiest on **${formatShortDate(busiest.ymd)}**.\n\n${lines}`,
+      text: oneOf(
+        `**${total} booking${total !== 1 ? "s" : ""}** in total · busiest on **${dayLabel(busiest.ymd)}**.`,
+        `Your busiest day is **${dayLabel(busiest.ymd)}**, out of ${total} booking${total !== 1 ? "s" : ""} this week.`,
+        `${total} booking${total !== 1 ? "s" : ""} over the next 7 days, with **${dayLabel(busiest.ymd)}** the fullest.`,
+      ),
+      headline: { value: String(total), label: `booking${total !== 1 ? "s" : ""} in the next 7 days` },
+      // One bar per day on a shared scale, so the shape of the week shows.
+      card: {
+        title: "NEXT 7 DAYS",
+        meta: `Busiest ${dayLabel(busiest.ymd)}`,
+        rows: counts.map((c) => ({
+          title: dayLabel(c.ymd),
+          tag: `${c.count}`,
+          range: { min: 0, max: c.count },
+          ...(c.ymd === busiest.ymd ? { highlight: true } : {}),
+        })),
+        scale: { min: 0, max: Math.max(1, busiest.count), labels: ["0", String(Math.max(1, busiest.count))] },
+      },
+      work: ["Checked your diary for the next 7 days"],
       suggestions: [
         navChip("home", "Open bookings", "home"),
         askChip("today", "Just today?", "What's on today?"),
@@ -229,13 +252,21 @@ const scheduleGaps: Capability = {
       };
     }
 
-    const lines = quiet
-      .map((day) => `- **${formatShortDate(day.ymd)}** — ${day.count === 0 ? "no bookings yet" : "1 booking"}`)
-      .join("\n");
     return {
       text:
-        `## Quieter days ahead\nThese days have the most room in your next 7 days:\n\n${lines}\n\n` +
-        "Open your schedule to confirm the actual slots before offering one.",
+        oneOf(
+          `These ${quiet.length === 1 ? "day has" : "days have"} the most room in your next 7 days.`,
+          `You’ve got ${quiet.length} quieter day${quiet.length !== 1 ? "s" : ""} coming up.`,
+        ) + " Open your schedule to confirm the actual slots before offering one.",
+      card: {
+        title: "QUIETER DAYS",
+        meta: "Next 7 days",
+        rows: quiet.map((day) => ({
+          title: dayLabel(day.ymd),
+          detail: day.count === 0 ? "No bookings yet" : "1 booking",
+        })),
+      },
+      work: ["Counted your bookings for the next 7 days", `Found ${quiet.length} with 1 or none`],
       suggestions: [
         navChip("schedule", "Open schedule", "schedule"),
         askChip("waitlist", "Who’s on my waitlist?", "Who's on my waitlist?"),
@@ -272,22 +303,22 @@ const waitlist: Capability = {
     // Name who's waiting and for what — "3 people are waiting" isn't
     // actionable, but "Sarah for a gel manicure" tells you whether the gap
     // you have is worth offering to anyone.
-    const lines = waiting
-      .slice(0, 5)
-      .map((e) => {
-        const name = e.user_name_snapshot ?? "A client";
-        return `- **${name}** — ${e.service_name_snapshot}`;
-      })
-      .join("\n");
-
     return {
       text:
-        `${waiting.length} client${waiting.length !== 1 ? "s are" : " is"} waiting for a slot:\n\n${lines}` +
-        `${waiting.length > 5 ? `\n\n…and ${waiting.length - 5} more.` : ""}` +
-        // Inviting requires naming a specific date and time, which is a
-        // picker job — Becca surfaces the opportunity and hands off rather
-        // than trying to read a slot out of chat.
-        `\n\nTo offer one of them a slot, open your booking history and pick a time.`,
+        oneOf(
+          `${waiting.length} client${waiting.length !== 1 ? "s are" : " is"} waiting for a slot.`,
+          `There’s ${waiting.length} on your waitlist.`,
+        ) + " To offer one of them a slot, open your booking history and pick a time.",
+      headline: { value: String(waiting.length), label: "waiting for a cancellation" },
+      card: {
+        title: "WAITLIST",
+        rows: waiting.slice(0, 5).map((e) => ({
+          title: e.user_name_snapshot ?? "A client",
+          detail: e.service_name_snapshot ?? "",
+        })),
+        ...(waiting.length > 5 ? { footer: `${waiting.length - 5} more` } : {}),
+      },
+      work: ["Checked your waitlist"],
       suggestions: [
         navChip("history", "Invite from waitlist", "history"),
         askChip("gaps", "Where are my gaps?", "Where are my gaps this week?"),
@@ -319,7 +350,12 @@ const clientele: Capability = {
       };
     }
     return {
-      text: `You've got ${members.length} client${members.length !== 1 ? "s" : ""} on record.`,
+      text: oneOf(
+        `You've got ${members.length} client${members.length !== 1 ? "s" : ""} on record.`,
+        `${members.length} client${members.length !== 1 ? "s have" : " has"} booked with you so far.`,
+      ),
+      headline: { value: String(members.length), label: `client${members.length !== 1 ? "s" : ""} on record` },
+      work: ["Opened your client list"],
       suggestions: [
         askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
         askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
@@ -357,7 +393,17 @@ const inbox: Capability = {
       };
     }
     return {
-      text: `You've got ${unread.length} unread conversation${unread.length !== 1 ? "s" : ""}.`,
+      text: oneOf(
+        `You've got ${unread.length} unread conversation${unread.length !== 1 ? "s" : ""}.`,
+        `${unread.length} client${unread.length !== 1 ? "s are" : " is"} waiting on a reply.`,
+      ),
+      headline: { value: String(unread.length), label: `unread conversation${unread.length !== 1 ? "s" : ""}` },
+      card: {
+        title: "WAITING ON YOU",
+        rows: unread.slice(0, 5).flatMap((c) =>
+          c.client ? [{ title: c.client.name, tag: `${c.unread_count_provider} new` }] : []),
+      },
+      work: [`Checked your ${convos.length} conversation${convos.length !== 1 ? "s" : ""}`],
       suggestions: [
         ...unread.slice(0, 5).flatMap((conversation) => {
           const client = conversation.client;
@@ -397,7 +443,9 @@ const outstandingForms: Capability = {
     const pending = forms.filter((f) => f.status === "pending");
     if (pending.length === 0) {
       return {
-        text: "Every form you've sent has been filled in.",
+        text: forms.length === 0
+          ? "You haven't sent any forms to clients yet."
+          : "Every form you've sent has been filled in.",
         suggestions: [
           askChip("today", "What's on today?", "What's on today?"),
           navChip("infopacks", "Manage Info Packs", "infopacks"),
@@ -405,7 +453,12 @@ const outstandingForms: Capability = {
       };
     }
     return {
-      text: `${pending.length} form${pending.length !== 1 ? "s haven't" : " hasn't"} been filled in yet.`,
+      text: oneOf(
+        `${pending.length} form${pending.length !== 1 ? "s haven't" : " hasn't"} been filled in yet.`,
+        `Still waiting on ${pending.length} form${pending.length !== 1 ? "s" : ""} from clients.`,
+      ),
+      headline: { value: String(pending.length), label: `form${pending.length !== 1 ? "s" : ""} not filled in yet` },
+      work: [`Checked the ${forms.length} form${forms.length !== 1 ? "s" : ""} you’ve sent`],
       suggestions: [
         navChip("home", "Open bookings", "home"),
         askChip("inbox", "Any unread messages?", "Any unread messages?"),
@@ -456,15 +509,22 @@ const lapsedClients: Capability = {
       };
     }
 
-    const lines = lapsed
-      .slice(0, 6)
-      .map((m) => `- **${m.customer_name}** — last in **${formatShortDate(m.last_booking_date)}**`)
-      .join("\n");
-
     return {
-      text:
-        `${lapsed.length} client${lapsed.length !== 1 ? "s haven't" : " hasn't"} been back in over 8 weeks:\n\n${lines}` +
-        `${lapsed.length > 6 ? `\n\n…and ${lapsed.length - 6} more.` : ""}`,
+      text: oneOf(
+        `${lapsed.length} client${lapsed.length !== 1 ? "s haven't" : " hasn't"} been back in over 8 weeks.`,
+        `${lapsed.length} regular${lapsed.length !== 1 ? "s" : ""} could do with a nudge: nothing booked in over 8 weeks.`,
+      ),
+      headline: { value: String(lapsed.length), label: "not back in over 8 weeks" },
+      card: {
+        title: "NOT BACK YET",
+        meta: "Longest first",
+        rows: lapsed.slice(0, 6).map((m) => ({
+          title: m.customer_name,
+          detail: `Last in ${dayLabel(m.last_booking_date)}`,
+        })),
+        ...(lapsed.length > 6 ? { footer: `${lapsed.length - 6} more` } : {}),
+      },
+      work: [`Checked when each of your ${members.length} client${members.length !== 1 ? "s" : ""} last came in`],
       suggestions: [
         navChip("clients", "Open Clientele", "clients"),
         askChip("reach", "How's my reach?", "How many followers have I got?"),
@@ -502,21 +562,23 @@ const myServices: Capability = {
       };
     }
 
-    const lines = active
-      .slice(0, 8)
-      .map((s) => {
-        const price =
-          s.price_max && s.price_max > s.price
-            ? `${money(s.price)}–${money(s.price_max)}`
-            : money(s.price);
-        return `- **${s.name}** — **${price}** · ${s.duration_minutes} min`;
-      })
-      .join("\n");
-
     return {
-      text:
-        `You've got ${active.length} active service${active.length !== 1 ? "s" : ""}:\n\n${lines}` +
-        `${active.length > 8 ? `\n\n…and ${active.length - 8} more.` : ""}`,
+      text: oneOf(
+        `You've got ${active.length} active service${active.length !== 1 ? "s" : ""}.`,
+        `${active.length} service${active.length !== 1 ? "s are" : " is"} live on your menu.`,
+        `Here’s your menu: ${active.length} active service${active.length !== 1 ? "s" : ""}.`,
+      ),
+      card: {
+        title: "YOUR MENU",
+        meta: `${active.length} active`,
+        rows: active.slice(0, 8).map((s) => ({
+          title: s.name,
+          detail: `${s.duration_minutes} min`,
+          tag: s.price_max && s.price_max > s.price ? `${money(s.price)}–${money(s.price_max)}` : money(s.price),
+        })),
+        ...(active.length > 8 ? { footer: `${active.length - 8} more` } : {}),
+      },
+      work: ["Opened your services"],
       suggestions: [
         navChip("services", "Edit My Services", "services"),
         askChip("reviews", "How are my reviews?", "How are my reviews?"),
@@ -552,12 +614,18 @@ const providerNotifications: Capability = {
           ],
       };
     }
-    const lines = unread
-      .slice(0, 5)
-      .map((n) => `- **${n.title}**\n  ${n.message}`)
-      .join("\n\n");
     return {
-      text: `${unread.length} unread update${unread.length !== 1 ? "s" : ""}:\n\n${lines}`,
+      text: oneOf(
+        `${unread.length} unread update${unread.length !== 1 ? "s" : ""}.`,
+        `Here’s what you’ve missed: ${unread.length} update${unread.length !== 1 ? "s" : ""}.`,
+      ),
+      card: {
+        title: "UNREAD",
+        meta: `${unread.length} new`,
+        rows: unread.slice(0, 5).map((n) => ({ title: n.title, detail: n.message })),
+        ...(unread.length > 5 ? { footer: `${unread.length - 5} more in Notifications` } : {}),
+      },
+      work: ["Checked your notifications"],
       suggestions: linkOnly
         // No booking chips: a link-only pro's bookings aren't held by
         // CERVICED, so there's no booking screen for them to open.
@@ -612,13 +680,21 @@ const timeOff: Capability = {
       };
     }
 
-    const lines = upcoming
-      .slice(0, 6)
-      .map((b) => `- **${formatShortDate(b.blocked_date)}**${b.reason ? ` — ${b.reason}` : ""}`)
-      .join("\n");
-
     return {
-      text: `You've got ${upcoming.length} day${upcoming.length !== 1 ? "s" : ""} blocked out:\n\n${lines}`,
+      text: oneOf(
+        `You've got ${upcoming.length} day${upcoming.length !== 1 ? "s" : ""} blocked out.`,
+        `${upcoming.length} day${upcoming.length !== 1 ? "s" : ""} off coming up.`,
+      ),
+      card: {
+        title: "DAYS OFF",
+        meta: `${upcoming.length} coming up`,
+        rows: upcoming.slice(0, 6).map((b) => ({
+          title: dayLabel(b.blocked_date),
+          ...(b.reason ? { detail: b.reason } : {}),
+        })),
+        ...(upcoming.length > 6 ? { footer: `${upcoming.length - 6} more` } : {}),
+      },
+      work: ["Checked your blocked-out days"],
       suggestions: [
         navChip("schedule", "Open Schedule", "schedule"),
         askChip("hours", "What are my hours?", "What are my working hours?"),
@@ -649,16 +725,26 @@ const myReviews: Capability = {
       };
     }
     const avg = rows.reduce((sum, r) => sum + (r.rating ?? 0), 0) / rows.length;
-    const recent = rows
-      .slice(0, 3)
-      .filter((r) => r.comment)
-      .map((r) => `${"★".repeat(Math.round(r.rating ?? 0))} "${r.comment}"`)
-      .join("\n\n");
-
+    const recent = rows.slice(0, 3).filter((r) => r.comment);
     return {
-      text:
-        `You're rated **${avg.toFixed(1)}★** from ${rows.length} review${rows.length !== 1 ? "s" : ""}.` +
-        (recent ? `\n\nMost recent:\n\n${recent}` : ""),
+      text: oneOf(
+        `You're rated **${avg.toFixed(1)}★** from ${rows.length} review${rows.length !== 1 ? "s" : ""}.`,
+        `Clients give you ${avg.toFixed(1)} out of 5, across ${rows.length} review${rows.length !== 1 ? "s" : ""}.`,
+        `${avg.toFixed(1)}★ on average, from ${rows.length} review${rows.length !== 1 ? "s" : ""}.`,
+      ),
+      headline: { value: `${avg.toFixed(1)}★`, label: `from ${rows.length} review${rows.length !== 1 ? "s" : ""}` },
+      ...(recent.length > 0
+        ? {
+          card: {
+            title: "MOST RECENT",
+            rows: recent.map((r) => ({
+              title: "★".repeat(Math.max(1, Math.min(5, Math.round(r.rating ?? 0)))),
+              detail: r.comment!,
+            })),
+          },
+        }
+        : {}),
+      work: [`Read your ${rows.length} review${rows.length !== 1 ? "s" : ""}`],
       suggestions: [
         navChip("analytics", "Open Analytics", "analytics"),
         askChip("clients", "How many clients?", "How many clients have I got?"),
@@ -702,13 +788,21 @@ const myHours: Capability = {
       };
     }
 
-    const lines = open
-      .sort((a, b) => a.day_of_week - b.day_of_week)
-      .map((r) => `- **${DAY_NAMES_FULL[r.day_of_week]}:** ${formatTime12(r.open_time)} – ${formatTime12(r.close_time)}`)
-      .join("\n");
-
+    const days = open.sort((a, b) => a.day_of_week - b.day_of_week);
     return {
-      text: `You're open ${open.length} day${open.length !== 1 ? "s" : ""} a week:\n\n${lines}`,
+      text: oneOf(
+        `You're open ${open.length} day${open.length !== 1 ? "s" : ""} a week.`,
+        `You work ${open.length} day${open.length !== 1 ? "s" : ""} a week. Here are your hours:`,
+      ),
+      card: {
+        title: "YOUR HOURS",
+        meta: `${open.length} day${open.length !== 1 ? "s" : ""} a week`,
+        rows: days.map((r) => ({
+          title: DAY_NAMES_FULL[r.day_of_week] ?? "",
+          tag: `${formatTime12(r.open_time)} – ${formatTime12(r.close_time)}`,
+        })),
+      },
+      work: ["Checked your working hours"],
       suggestions: linkOnly
         ? [navChip("schedule", "Change my hours", "schedule"), linkOnlyInboxChip, linkOnlyUpdatesChip]
         : [
@@ -759,6 +853,17 @@ const myCapacity: Capability = {
 
     const left = Math.max(0, cap - todayCount);
     return {
+      headline: left === 0
+        ? { value: "Full", label: `${todayCount} of ${cap} booked today` }
+        : { value: `${left} left`, label: `of your ${cap} a day, today` },
+      card: {
+        title: "TODAY",
+        stats: [
+          { value: String(todayCount), label: "booked" },
+          { value: String(cap), label: "daily limit" },
+        ],
+      },
+      work: ["Checked your daily limit", "Counted today’s bookings"],
       text:
         `Your limit is **${cap} a day**. You've got ${todayCount} today — ` +
         (left === 0 ? "you're full." : `room for ${left} more.`) +
@@ -802,9 +907,12 @@ const myReach: Capability = {
     ]);
 
     return {
-      text:
-        `**${followers}** client${followers !== 1 ? "s" : ""} follow you, and you're offering ` +
-        `**${serviceCount}** service${serviceCount !== 1 ? "s" : ""}.`,
+      text: oneOf(
+        `**${followers}** client${followers !== 1 ? "s" : ""} follow you, and you're offering **${serviceCount}** service${serviceCount !== 1 ? "s" : ""}.`,
+        `You've got **${followers}** follower${followers !== 1 ? "s" : ""} and **${serviceCount}** service${serviceCount !== 1 ? "s" : ""} on your menu.`,
+      ),
+      headline: { value: String(followers), label: `follower${followers !== 1 ? "s" : ""}` },
+      work: ["Counted your followers", "Counted your services"],
       suggestions: [
         askChip("reviews", "What are they saying?", "What are my reviews?"),
         navChip("services", "My services", "services"),
@@ -919,14 +1027,6 @@ const services: Capability = {
     const active = rows.filter((s) => s.is_active);
     const inactive = rows.length - active.length;
 
-    const lines = [
-      `- **${active.length}** active service${active.length !== 1 ? "s" : ""}` +
-        (inactive > 0 ? ` (**${inactive}** hidden)` : ""),
-      `- **${portfolio.length}** portfolio photo${portfolio.length !== 1 ? "s" : ""}`,
-      ...(specialties.length > 0
-        ? [`- **${specialties.length}** specialit${specialties.length !== 1 ? "ies" : "y"} — ${specialties.slice(0, 4).join(", ")}`]
-        : []),
-    ].join("\n");
 
     // The gaps are what a provider actually wants flagged: an empty portfolio
     // or no services is why a listing underperforms, and neither is obvious
@@ -937,9 +1037,23 @@ const services: Capability = {
     if (specialties.length === 0) gaps.push("No specialities set, so you won't surface in those searches.");
 
     return {
-      text:
-        `## Your listing\n${lines}` +
-        (gaps.length > 0 ? `\n\n${gaps.map((g) => `- ${g}`).join("\n")}` : ""),
+      text: gaps.length > 0
+        ? `${oneOf("A few things would help your listing:", "Your listing has some gaps worth filling:")}\n\n${gaps.map((g) => `- ${g}`).join("\n")}`
+        : oneOf(
+          `Your listing looks complete.${specialties.length > 0 ? ` You’re listed for ${specialties.slice(0, 4).join(", ")}.` : ""}`,
+          `Nothing missing from your listing.${specialties.length > 0 ? ` Specialities: ${specialties.slice(0, 4).join(", ")}.` : ""}`,
+        ),
+      card: {
+        title: "YOUR LISTING",
+        ...(inactive > 0 ? { meta: `${inactive} service${inactive !== 1 ? "s" : ""} hidden` } : {}),
+        stats: [
+          { value: String(active.length), label: `active service${active.length !== 1 ? "s" : ""}` },
+          { value: String(portfolio.length), label: `photo${portfolio.length !== 1 ? "s" : ""}` },
+          { value: String(specialties.length), label: `specialit${specialties.length !== 1 ? "ies" : "y"}` },
+        ],
+      },
+      work: ["Counted your services", "Counted your portfolio photos", "Checked your specialities"],
+      layout: "cardFirst",
       suggestions: [
         navChip("services", "Edit My Services", "services"),
         ...(active.length > 0
@@ -1021,22 +1135,28 @@ const analytics: Capability = {
             ? `down from **${previous}** the month before`
             : `level with the month before`;
 
-    const lines = [
-      `- **${recent}** booking${recent !== 1 ? "s" : ""} in the last 30 days` +
-        (trend ? ` — ${trend}` : ""),
-      `- **${rows.length}** in the last 90 days, from **${distinctClients}** client${distinctClients !== 1 ? "s" : ""}`,
-      `- **${completed}** completed` +
-        (cancelled > 0 ? `, **${cancelled}** cancelled` : "") +
-        (noShows > 0 ? `, **${noShows}** no-show${noShows !== 1 ? "s" : ""}` : ""),
-      ...(busiest
-        ? [`- Busiest day: **${DAY_NAMES_FULL[busiest[0]]}** (**${busiest[1]}** bookings)`]
-        : []),
-    ].join("\n");
-
     return {
       text:
-        `## Your last 90 days\n${lines}\n\n` +
-        "Earnings and payment breakdowns are in Analytics — I only count bookings here.",
+        oneOf(
+          `**${recent}** booking${recent !== 1 ? "s" : ""} in the last 30 days${trend ? `, ${trend}` : ""}.`,
+          `You’ve had ${recent} booking${recent !== 1 ? "s" : ""} this past month${trend ? `, ${trend}` : ""}.`,
+        ) +
+        "\n\nEarnings and payment breakdowns are in Analytics — I only count bookings here.",
+      headline: { value: String(recent), label: `booking${recent !== 1 ? "s" : ""} in the last 30 days` },
+      card: {
+        title: "LAST 90 DAYS",
+        stats: [
+          { value: String(rows.length), label: `booking${rows.length !== 1 ? "s" : ""}` },
+          { value: String(distinctClients), label: `client${distinctClients !== 1 ? "s" : ""}` },
+          { value: String(completed), label: "completed" },
+        ],
+        rows: [
+          ...(cancelled > 0 ? [{ title: "Cancelled", tag: String(cancelled) }] : []),
+          ...(noShows > 0 ? [{ title: "No-shows", tag: String(noShows) }] : []),
+          ...(busiest ? [{ title: "Busiest day", detail: DAY_NAMES_FULL[busiest[0]] ?? "", tag: `${busiest[1]} booking${busiest[1] !== 1 ? "s" : ""}` }] : []),
+        ],
+      },
+      work: ["Looked through 90 days of bookings"],
       suggestions: [
         navChip("analytics", "Open Analytics", "analytics"),
         navChip("history", "Booking History", "history"),
@@ -1106,37 +1226,31 @@ const automations: Capability = {
     const maxReschedules = num("maxReschedules");
     const noShowGrace = num("noShowGraceMinutes");
 
-    const lines: string[] = [];
-    if (depositRequired && depositAmount != null) {
-      // depositType distinguishes a flat fee from a percentage of the service
-      // price — quoting "£20" when it's actually 20% would misstate the
-      // provider's own terms back at them.
-      const shown = depositType === "percentage" ? `${depositAmount}%` : money(depositAmount);
-      lines.push(`- **Deposit** — **${shown}** to book`);
-    } else {
-      lines.push("- **Deposit** — not required");
-    }
-    lines.push(
+    const rows: { title: string; detail?: string; tag?: string }[] = [
+      depositRequired && depositAmount != null
+        ? { title: "Deposit", tag: depositType === "percentage" ? `${depositAmount}%` : money(depositAmount), detail: "to book" }
+        : { title: "Deposit", detail: "Not required" },
       cancelNotice != null
-        ? `- **Cancellations** — **${cancelNotice}h** notice`
-        : "- **Cancellations** — no notice period set",
-    );
-    lines.push(
+        ? { title: "Cancellations", tag: `${cancelNotice}h`, detail: "notice" }
+        : { title: "Cancellations", detail: "No notice period set" },
       rescheduleNotice != null
-        ? `- **Reschedules** — **${rescheduleNotice}h** notice` +
-            (maxReschedules != null ? `, up to **${maxReschedules}** per booking` : "")
-        : "- **Reschedules** — no notice period set",
-    );
-    if (noShowGrace != null) {
-      lines.push(`- **No-shows** — marked after **${noShowGrace} min**`);
-    }
+        ? {
+          title: "Reschedules",
+          tag: `${rescheduleNotice}h`,
+          detail: maxReschedules != null ? `notice, up to ${maxReschedules} per booking` : "notice",
+        }
+        : { title: "Reschedules", detail: "No notice period set" },
+      ...(noShowGrace != null ? [{ title: "No-shows", tag: `${noShowGrace} min`, detail: "marked after" }] : []),
+    ];
 
     const note = str("depositNote") ?? str("cancelNote");
 
     return {
       text:
-        `## Your booking policies\n${lines.join("\n")}` +
+        oneOf("Here are your booking policies.", "These are the rules clients book under.") +
         (note ? `\n\nYou tell clients: "${note}"` : ""),
+      card: { title: "BOOKING POLICIES", rows },
+      work: ["Read your booking policies"],
       suggestions: [
         navChip("automations", "Edit my policies", "automations"),
         navChip("infopacks", "Info Packs", "infopacks"),

@@ -13,8 +13,9 @@
 // thing, and it's the exact seam a model later improves.
 
 import { BookingStatus, type ConfirmedBooking } from "../../types/booking";
-import { formatShortDate } from "../../utils/dateUtils";
 import type {
+  AnswerLayout,
+  BeccaAnswer,
   BeccaHat,
   Capability,
   CapabilityContext,
@@ -34,7 +35,7 @@ import { understand } from "./matcher";
 import { normalizeAsk } from "./askNormaliser";
 import { capabilitiesFor, fitsSetup, getCapability, thinkingFor, toToolSchema } from "./registry";
 import { smallTalkReply } from "./smallTalk";
-import { askChip, chip, navChip } from "./capabilities/shared";
+import { askChip, chip, dayLabel, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
 
@@ -746,10 +747,37 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       suggestions,
       ...(result.providers ? { providerRecommendations: result.providers } : {}),
       ...(result.inspiration ? { inspiration: result.inspiration } : {}),
+      ...answerFrom(result),
     },
     hat,
     undefined,
   );
+}
+
+/**
+ * The reply's shape, from what the capability returned. A single fact leads
+ * big; a run of two or more steps was a real search, so the steps lead and
+ * fold away; anything else with a card is a quick look-up, card first.
+ */
+export function chooseLayout(result: CapabilityResult): AnswerLayout | null {
+  if (!result.headline && !result.card) return null;
+  if (result.layout) return result.layout;
+  if (result.headline) return "headline";
+  if (!result.card) return null;
+  return (result.work?.length ?? 0) >= 2 ? "stepsThenCard" : "cardFirst";
+}
+
+function answerFrom(result: CapabilityResult): { answer?: BeccaAnswer } {
+  const layout = chooseLayout(result);
+  if (!layout) return {};
+  return {
+    answer: {
+      layout,
+      ...(result.headline ? { headline: result.headline } : {}),
+      ...(result.card ? { card: result.card } : {}),
+      ...(result.work?.length ? { work: result.work } : {}),
+    },
+  };
 }
 
 /**
@@ -1294,7 +1322,7 @@ function buildMissingEntityReply(
     return message_({
       content: "Which appointment do you mean?",
       suggestions: upcoming.map((b) =>
-        askChip(`pick-${b.id}`, `${b.serviceName} · ${formatShortDate(b.bookingDate)}`, message, { bookingId: b.id }),
+        askChip(`pick-${b.id}`, `${b.serviceName} · ${dayLabel(b.bookingDate)}`, message, { bookingId: b.id }),
       ),
     }, hat, { title: "Choose an appointment" });
   }
@@ -1427,7 +1455,17 @@ function message_(
   // cannot make another provider's card or portfolio appear in this hat.
   const { providerRecommendations, inspiration, ...rest } = parts;
   const safeParts = hat === "provider"
-    ? rest
+    ? {
+      ...rest,
+      ...(rest.answer?.card?.rows
+        ? {
+          answer: {
+            ...rest.answer,
+            card: { ...rest.answer.card, rows: rest.answer.card.rows.map(({ provider: _p, ...row }) => row) },
+          },
+        }
+        : {}),
+    }
     : {
       ...rest,
       ...(providerRecommendations ? { providerRecommendations } : {}),

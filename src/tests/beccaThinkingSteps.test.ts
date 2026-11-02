@@ -81,7 +81,11 @@ describe("Finding someone who does a specific service", () => {
     mockedFacets.mockResolvedValue(facets({ a: ["Russian Volume Full Set"], b: ["Classic Lash Set"] }));
     const result = await run();
     expect(result.providers?.map((p) => p.name)).toEqual(["Lash Lab"]);
-    expect(result.text).toContain("1 provider who lists volume lashes");
+    // The wording varies between replies; the facts in it don't.
+    expect(result.text).toMatch(/\*\*1\b.*volume lashes|volume lashes.*\*\*1\b|1 provider who lists volume lashes/);
+    expect(result.card?.meta).toBe("1 match");
+    expect(result.card?.rows?.map((r) => r.title)).toEqual(["Lash Lab"]);
+    expect(result.work).toEqual(["Searched 2 providers for lashes", "Checked whose menus include volume lashes: 1 does"]);
     expect(result.suggestions?.some((s) => s.data?.message === "Find lashes")).toBe(true);
   });
 
