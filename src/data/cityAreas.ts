@@ -17,23 +17,23 @@ export const CITY_AREAS: CityAreaData[] = [
     regions: [
       {
         region: 'North London',
-        areas: ['Camden', 'Islington', 'Hackney', 'Haringey', 'Enfield', 'Barnet'],
+        areas: ['Archway', 'Barnet', 'Barnsbury', 'Bounds Green', 'Camden', 'Camden Town', 'Canonbury', 'Crouch End', 'Dalston', 'De Beauvoir', 'East Finchley', 'Edmonton', 'Enfield', 'Finchley', 'Finsbury Park', 'Golders Green', 'Hackney', 'Hampstead', 'Haringey', 'Harringay', 'Highbury', 'Highgate', 'Holloway', 'Hornsey', 'Islington', 'Kentish Town', 'Muswell Hill', 'Palmers Green', 'Southgate', 'Stamford Hill', 'Stoke Newington', 'Tottenham', 'Turnpike Lane', 'Wood Green'],
       },
       {
         region: 'South London',
-        areas: ['Croydon', 'Lambeth', 'Southwark', 'Wandsworth', 'Lewisham', 'Bromley', 'Greenwich', 'Bexley', 'Merton', 'Sutton', 'Kingston upon Thames'],
+        areas: ['Balham', 'Battersea', 'Beckenham', 'Bermondsey', 'Bexley', 'Bexleyheath', 'Blackheath', 'Brixton', 'Bromley', 'Camberwell', 'Catford', 'Clapham', 'Croydon', 'Crystal Palace', 'Deptford', 'Dulwich', 'Elephant and Castle', 'Eltham', 'Forest Hill', 'Greenwich', 'Herne Hill', 'Kennington', 'Kingston upon Thames', 'Lambeth', 'Lewisham', 'Merton', 'Mitcham', 'Morden', 'New Cross', 'Norbury', 'Nunhead', 'Orpington', 'Peckham', 'Penge', 'Purley', 'Putney', 'Sidcup', 'Southwark', 'Streatham', 'Surbiton', 'Sutton', 'Sydenham', 'Thamesmead', 'Thornton Heath', 'Tooting', 'Vauxhall', 'Walworth', 'Wandsworth', 'Wimbledon', 'Woolwich'],
       },
       {
         region: 'East London',
-        areas: ['Tower Hamlets', 'Newham', 'Waltham Forest', 'Redbridge', 'Barking and Dagenham', 'Havering'],
+        areas: ['Barking', 'Barking and Dagenham', 'Bethnal Green', 'Bow', 'Canary Wharf', 'Canning Town', 'Chingford', 'Clapton', 'Dagenham', 'East Ham', 'Forest Gate', 'Hackney Wick', 'Havering', 'Homerton', 'Hornchurch', 'Ilford', 'Leyton', 'Leytonstone', 'Mile End', 'Newham', 'Plaistow', 'Poplar', 'Redbridge', 'Romford', 'Shoreditch', 'Stepney', 'Stratford', 'Tower Hamlets', 'Upton Park', 'Waltham Forest', 'Walthamstow', 'Wanstead', 'Whitechapel', 'Woodford'],
       },
       {
         region: 'West London',
-        areas: ['Hammersmith and Fulham', 'Ealing', 'Hounslow', 'Hillingdon', 'Brent', 'Harrow', 'Richmond upon Thames'],
+        areas: ['Acton', 'Brent', 'Brentford', 'Chiswick', 'Ealing', 'Ealing Broadway', 'Feltham', 'Fulham', 'Greenford', 'Hammersmith', 'Hammersmith and Fulham', 'Hanwell', 'Harlesden', 'Harrow', 'Hayes', 'Hillingdon', 'Hounslow', 'Isleworth', 'Kilburn', 'Northolt', 'Notting Hill', "Queen's Park", 'Richmond upon Thames', 'Ruislip', "Shepherd's Bush", 'Southall', 'Stanmore', 'Twickenham', 'Uxbridge', 'Wembley', 'Willesden'],
       },
       {
         region: 'Central London',
-        areas: ['Westminster', 'City of London', 'Kensington and Chelsea', 'Soho', 'Covent Garden'],
+        areas: ['Barbican', 'Bloomsbury', 'Chelsea', 'City of London', 'Clerkenwell', 'Covent Garden', 'Fitzrovia', 'Holborn', 'Kensington', 'Kensington and Chelsea', "King's Cross", 'Knightsbridge', 'Marylebone', 'Mayfair', 'Paddington', 'Pimlico', 'Soho', "St John's Wood", 'Victoria', 'Waterloo', 'Westminster'],
       },
     ],
   },
@@ -1419,6 +1419,280 @@ export const CITY_AREAS: CityAreaData[] = [
       },
     ],
   },
+  // Around London and other large towns the original list left out.
+  {
+    city: 'Brentwood',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Brentwood Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Shenfield', 'Hutton', 'Pilgrims Hatch', 'Ingatestone'],
+      },
+    ],
+  },
+  {
+    city: 'Harlow',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Harlow Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Old Harlow', 'Church Langley', 'Potter Street', 'Epping'],
+      },
+    ],
+  },
+  {
+    city: 'Grays',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Grays Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Chafford Hundred', 'Tilbury', 'Stanford-le-Hope', 'South Ockendon'],
+      },
+    ],
+  },
+  {
+    city: 'Guildford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Guildford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Burpham', 'Merrow', 'Stoughton', 'Godalming'],
+      },
+    ],
+  },
+  {
+    city: 'Epsom',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Epsom Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Ewell', 'Stoneleigh', 'Ashtead', 'Leatherhead'],
+      },
+    ],
+  },
+  {
+    city: 'Redhill',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Redhill Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Reigate', 'Merstham', 'Horley', 'Earlswood'],
+      },
+    ],
+  },
+  {
+    city: 'Hemel Hempstead',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hemel Hempstead Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Apsley', 'Boxmoor', 'Leverstock Green', 'Berkhamsted'],
+      },
+    ],
+  },
+  {
+    city: 'Stevenage',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Stevenage Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Old Town', 'Shephall', 'Chells', 'Hitchin'],
+      },
+    ],
+  },
+  {
+    city: 'Hatfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hatfield Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Welwyn Garden City', 'Welham Green', 'Hertford'],
+      },
+    ],
+  },
+  {
+    city: 'Eastbourne',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Eastbourne Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Meads', 'Old Town', 'Hampden Park', 'Polegate'],
+      },
+    ],
+  },
+  {
+    city: 'Hastings',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hastings Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['St Leonards-on-Sea', 'Bexhill-on-Sea', 'Ore', 'Silverhill'],
+      },
+    ],
+  },
+  {
+    city: 'Hull',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Hull Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Hessle', 'Cottingham', 'Anlaby', 'Newland'],
+      },
+    ],
+  },
+  {
+    city: 'Bournemouth',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bournemouth Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Boscombe', 'Winton', 'Southbourne', 'Poole', 'Christchurch'],
+      },
+    ],
+  },
+  {
+    city: 'Swindon',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Swindon Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Old Town', 'Stratton', 'Wroughton', 'Haydon Wick'],
+      },
+    ],
+  },
+  {
+    city: 'Huddersfield',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Huddersfield Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Almondbury', 'Lindley', 'Marsh', 'Birkby'],
+      },
+    ],
+  },
+  {
+    city: 'Bedford',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Bedford Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Kempston', 'Biddenham', 'Goldington', 'Brickhill'],
+      },
+    ],
+  },
+  {
+    city: 'Walsall',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Walsall Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Bloxwich', 'Aldridge', 'Willenhall', 'Darlaston'],
+      },
+    ],
+  },
+  {
+    city: 'Dudley',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Dudley Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Brierley Hill', 'Stourbridge', 'Halesowen', 'Sedgley'],
+      },
+    ],
+  },
+  {
+    city: 'Oldham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Oldham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Chadderton', 'Royton', 'Shaw', 'Failsworth'],
+      },
+    ],
+  },
+  {
+    city: 'Warrington',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Warrington Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Stockton Heath', 'Birchwood', 'Great Sankey', 'Lymm'],
+      },
+    ],
+  },
+  {
+    city: 'Cheltenham',
+    regions: [
+      {
+        region: 'Town Centre',
+        areas: ['Cheltenham Town Centre'],
+      },
+      {
+        region: 'Surrounding Areas',
+        areas: ['Montpellier', 'Leckhampton', 'Charlton Kings', 'Prestbury'],
+      },
+    ],
+  },
 ];
 
 export const CITY_AREA_NAMES = CITY_AREAS.map(c => c.city);
@@ -1428,7 +1702,44 @@ export const CITY_AREA_NAMES = CITY_AREAS.map(c => c.city);
  *  appears in one; search widens the county to these towns instead. */
 export const COUNTY_TOWNS: Record<string, string[]> = {
   Kent: ['Maidstone', 'Gillingham', 'Canterbury', 'Dartford', 'Gravesend', 'Chatham', 'Rochester', 'Ashford', 'Tunbridge Wells', 'Tonbridge', 'Sevenoaks', 'Swanley', 'Sittingbourne', 'Faversham', 'Whitstable', 'Herne Bay', 'Margate', 'Ramsgate', 'Broadstairs', 'Folkestone', 'Dover', 'Deal'],
+  Essex: ['Chelmsford', 'Basildon', 'Colchester', 'Southend-on-Sea', 'Brentwood', 'Harlow', 'Grays'],
+  Surrey: ['Woking', 'Guildford', 'Epsom', 'Redhill'],
+  Hertfordshire: ['Watford', 'St Albans', 'Hemel Hempstead', 'Stevenage', 'Hatfield'],
+  Sussex: ['Brighton', 'Worthing', 'Crawley', 'Eastbourne', 'Hastings'],
 };
+
+export type PlaceMatch =
+  | { kind: 'county'; name: string }
+  | { kind: 'town'; name: string }
+  | { kind: 'area'; name: string; town: string };
+
+const normalizePlace = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Every place the pickers know that matches what was typed, at any level, so
+ * nobody has to know that Stoke Newington sits under North London or that Kent
+ * is a list of towns. Names starting with the text come before ones containing
+ * it, and bigger places before smaller. Capped so the list stays readable.
+ */
+export function searchPlaces(query: string, limit = 40): PlaceMatch[] {
+  const q = normalizePlace(query);
+  if (!q) return [];
+  const starts: PlaceMatch[] = [];
+  const contains: PlaceMatch[] = [];
+  const consider = (name: string, match: PlaceMatch) => {
+    const key = normalizePlace(name);
+    if (key.startsWith(q)) starts.push(match);
+    else if (q.length >= 2 && key.includes(q)) contains.push(match);
+  };
+  for (const name of Object.keys(COUNTY_TOWNS)) consider(name, { kind: 'county', name });
+  for (const { city } of CITY_AREAS) consider(city, { kind: 'town', name: city });
+  for (const { city, regions } of CITY_AREAS) {
+    for (const { areas } of regions) {
+      for (const name of areas) consider(name, { kind: 'area', name, town: city });
+    }
+  }
+  return [...starts, ...contains].slice(0, limit);
+}
 
 export const getCityAreaData = (city: string): CityAreaData | undefined =>
   CITY_AREAS.find(c => c.city.toLowerCase() === city.trim().toLowerCase());
