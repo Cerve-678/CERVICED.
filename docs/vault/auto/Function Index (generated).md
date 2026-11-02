@@ -5,7 +5,7 @@
 
 #generated
 
-**2960 functions** across **404 files**.
+**2962 functions** across **404 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -298,7 +298,7 @@
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · specialtyOptions · styles
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
-- `PoliciesScreen.tsx` — flash · handlePickPolicyImage · handleRemovePolicyImage · handleSave · isFeeAmount · Pills · PoliciesScreen · setPolicy
+- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · Pills · PoliciesScreen · setPolicy
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view

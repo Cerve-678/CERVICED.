@@ -350,7 +350,9 @@ Pay or PayPal.
 | Client cancels **inside** the window; the provider's policy is "no charge" | Client | Everything | Nothing | Refunded |
 | Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit or half the price | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
 | Client cancels inside the window, **paid in full**; the policy is **keep the deposit** | Client | Everything except the kept amount and the fee | The deposit's amount, at most half the service price | Kept |
-| Client cancels inside the window, **paid in full**; the policy is **half the price** | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **half the price** (no longer offered; policies and bookings saved before 2 Nov can still say it) | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **custom** | Client | Everything except the kept amount and the fee | The £ amount the provider set, at most half the service price | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is **custom** | Client | Whatever is left of the deposit | The £ amount the provider set, at most the deposit and at most half the service price | Kept |
 | Provider gives a **full** refund (any reason) | Provider | Everything not yet refunded | Nothing | Refunded |
 | Provider gives a **partial** refund | Provider | The amount they choose, from their share | The rest | Kept |
 | CERVICED approves a refund request | Admin | Same as the provider's full/partial rules | — | As above |
@@ -459,6 +461,11 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
 A provider can set two fixed £ fees in their policy: **late arrival** (after
 their grace period) and **no-show**. Each is capped at **50% of the service
 price**.
+
+On the Policies screen, the late fee and grace period sit in the Late section.
+The no-show fee appears when the provider picks **Custom** as the no-show
+action, and picking any other action clears it. The one grace period still
+stops a no-show being marked until it has passed.
 
 | Rule | Detail |
 |---|---|
@@ -954,6 +961,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. On branch `feat/custom-late-cancel-charge` until merged, and `apply-cancellation-refund` must be deployed before the app ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | 2 Nov | Link-only pros can become full members themselves. The app shows £25.99 a month with 2 months free, counted from the day they go live again, but charges nothing until pricing is final | Lets demand from client nudges turn into full providers now, without building billing first |
