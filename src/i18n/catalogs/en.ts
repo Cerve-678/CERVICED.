@@ -225,6 +225,8 @@ export const en = {
   'providerAccount.forClients.switch.sub': 'Browse Cerviced as a client',
   'providerAccount.forClients.create.title': 'Create Client Account',
   'providerAccount.forClients.create.sub': 'Set up your client profile to browse',
+  'providerAccount.forClients.checking.title': 'Client Mode',
+  'providerAccount.forClients.checking.sub': 'Checking your account…',
 
   'providerAccount.section.appInfo': 'APP INFO & LEGAL',
   'providerAccount.appInfo.about.title': 'About Cerviced',
