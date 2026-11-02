@@ -20,6 +20,7 @@ import BusinessInfoScreen from '../../../screens/provider/BusinessInfoScreen';
 import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
 import LinkOnlyHomeScreen from '../../../screens/provider/LinkOnlyHomeScreen';
 import LinkOnlyAnalyticsScreen from '../../../screens/provider/LinkOnlyAnalyticsScreen';
+import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFeaturesScreen';
 import ProviderBeccaNavigator from './ProviderBeccaNavigator';
 import { ProviderHomeStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -46,6 +47,11 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
       <ProviderHomeStack.Screen
         name="LinkOnlyAnalytics"
         component={LinkOnlyAnalyticsScreen}
+        options={{ headerShown: false }}
+      />
+      <ProviderHomeStack.Screen
+        name="FullCervicedFeatures"
+        component={FullCervicedFeaturesScreen}
         options={{ headerShown: false }}
       />
       {/* Link-only providers have no Becca tab, so Becca is pushed from

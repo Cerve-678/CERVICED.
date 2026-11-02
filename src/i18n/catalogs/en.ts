@@ -187,6 +187,8 @@ export const en = {
   'providerAccount.linkOnly.hours.sub': 'Shown on your About tab',
   'providerAccount.linkOnly.policies.title': 'Policies',
   'providerAccount.linkOnly.policies.sub': 'Optional — shown on your profile if added',
+  'providerAccount.linkOnly.fullCerviced.title': 'What full CERVICED adds',
+  'providerAccount.linkOnly.fullCerviced.sub': 'Client profiles, announcements, automations and more',
   'providerAccount.linkOnly.notifications.sub': 'Messages and saves',
 
   'providerAccount.businessProfile.title': 'Business Profile',

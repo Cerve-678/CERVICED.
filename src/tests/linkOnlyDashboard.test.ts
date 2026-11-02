@@ -4,6 +4,7 @@ import {
   compactTime,
   compareWeeks,
   greetingFor,
+  joinNudgeBarCount,
   remainingStepsLine,
   todayHoursLabel,
   trendLabel,
@@ -40,13 +41,13 @@ describe('greetingFor', () => {
   });
 });
 
-const stat = (day: string, book_taps: number, profile_views = 0) => ({
+const stat = (day: string, book_taps: number, profile_views = 0, join_nudges = 0) => ({
   day,
   book_taps,
   profile_views,
   search_appearances: 0,
   instagram_taps: 0,
-  join_nudges: 0,
+  join_nudges,
 });
 
 describe('compareWeeks', () => {
@@ -59,6 +60,25 @@ describe('compareWeeks', () => {
     expect(thisWeek.profileViews).toBe(10);
     expect(lastWeek.bookTaps).toBe(6);
     expect(lastWeek.profileViews).toBe(4);
+  });
+
+  it('ignores anything older than the fortnight', () => {
+    const { lastWeek } = compareWeeks([stat('2026-10-12', 5), stat('2026-10-05', 40)], monday);
+    expect(lastWeek.bookTaps).toBe(5);
+  });
+});
+
+describe('joinNudgeBarCount', () => {
+  const nudges = [stat('2026-08-01', 0, 0, 2), stat('2026-10-01', 0, 0, 2), stat('2026-10-18', 0, 0, 1)];
+
+  it('shows once enough clients have nudged', () => {
+    expect(joinNudgeBarCount(nudges, null)).toBe(5);
+    expect(joinNudgeBarCount(nudges.slice(1), null)).toBeNull();
+  });
+
+  it('after the bar is closed, only counts nudges from later days', () => {
+    expect(joinNudgeBarCount(nudges, '2026-10-01')).toBeNull();
+    expect(joinNudgeBarCount([...nudges, stat('2026-10-19', 0, 0, 4)], '2026-10-01')).toBe(5);
   });
 });
 
