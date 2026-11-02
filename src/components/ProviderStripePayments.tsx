@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
 import type { StripeConnectReturn } from '../utils/stripeConnectReturn';
 import { PaymentRequestError } from '../utils/paymentRequestError';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Card, useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import { useAppDialog } from './AppDialog';
@@ -12,6 +12,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
 import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getProviderTipEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
+import { groupTipsByBooking } from '../features/payments/tipsByBooking';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
@@ -37,6 +38,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [payouts, setPayouts] = useState<ProviderPayout[]>([]);
   const [feeEarnings, setFeeEarnings] = useState<ProviderFeeEarning[]>([]);
   const [tipEarnings, setTipEarnings] = useState<ProviderTipEarning[]>([]);
+  // A tip shows inside its booking's payment card, so the two read as one.
+  const tipGroups = useMemo(() => groupTipsByBooking(payouts.map(row => row.booking_id), tipEarnings), [payouts, tipEarnings]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -293,7 +296,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       <Text style={[styles.sectionNote, { color: C.sub }]}>Latest 50 online payments. Open a booking payment to see your share and release status.</Text>
       {!!payoutError && <Notice text={payoutError} />}
       {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
-      {payouts.map(row => <BookingPayment key={row.id} row={row} busy={busy} onRefund={() => setRefundRow(row)} />)}
+      {payouts.map(row => <BookingPayment key={row.id} row={row} tips={tipGroups.byBooking.get(row.booking_id)} busy={busy} onRefund={() => setRefundRow(row)} />)}
       {feeEarnings.length > 0 && <>
         <Text style={[styles.sectionTitle, { color: C.text }]}>Late & no-show fees</Text>
         <Text style={[styles.sectionNote, { color: C.sub }]}>Your share after Stripe's card fee. Refund or answer a dispute from the booking itself.</Text>
@@ -309,10 +312,11 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <StatusBadge label={feeStatusLabel(fee)} attention={fee.openDispute || fee.payoutStatus === 'failed'} />
         </View>)}
       </>}
-      {tipEarnings.length > 0 && <>
-        <Text style={[styles.sectionTitle, { color: C.text }]}>Tips</Text>
+      {/* Only tips whose booking payment isn't in the list above; the rest sit inside their booking's card. */}
+      {tipGroups.unmatched.length > 0 && <>
+        <Text style={[styles.sectionTitle, { color: C.text }]}>{tipGroups.byBooking.size > 0 ? 'Earlier tips' : 'Tips'}</Text>
         <Text style={[styles.sectionNote, { color: C.sub }]}>What clients tipped you after their appointment. It's all yours: CERVICED covers the card fee. Tips can't be refunded.</Text>
-        {tipEarnings.map(tip => <View key={tip.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
+        {tipGroups.unmatched.map(tip => <View key={tip.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
           <View style={styles.bookingHead}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.label, { color: C.text }]}>Tip{tip.serviceName ? ` · ${tip.serviceName}` : ''}</Text>
@@ -411,7 +415,7 @@ const money = (amount: number, currency: string) => new Intl.NumberFormat('en-GB
 const balances = (rows: { amount: number; currency: string }[]) => rows.length ? rows.map(row => money(row.amount, row.currency)).join('\n') : '£0.00';
 const date = (value: number) => new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: boolean; onRefund: () => void }) {
+function BookingPayment({ row, tips, busy, onRefund }: { row: ProviderPayout; tips?: ProviderTipEarning[] | undefined; busy: boolean; onRefund: () => void }) {
   const C = useBusinessPalette();
   const [expanded, setExpanded] = useState(false);
   return <View style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
@@ -424,6 +428,19 @@ function BookingPayment({ row, busy, onRefund }: { row: ProviderPayout; busy: bo
       <View style={{ alignItems: 'flex-end', gap: 8 }}><Text style={[styles.amountSmall, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text><Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={C.accentText} /></View>
     </TouchableOpacity>
     <StatusBadge label={payoutLabel(row)} attention={row.status === 'failed' || onRefundHold(row)} />
+    {/* The tip has its own amount and status: it's paid out on its own clock
+        and can't be refunded, so it isn't folded into the booking's figure. */}
+    {tips?.map(tip => <View key={tip.id} style={[styles.tipLine, { borderColor: C.border }]}>
+      <View style={styles.bookingHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.label, { color: C.text }]}>Tip</Text>
+          {!!tip.paidAt && <Text style={[styles.caption, { color: C.sub }]}>Tipped {date(new Date(tip.paidAt).getTime())}</Text>}
+          <Text style={[styles.caption, { color: C.sub }]}>It's all yours: CERVICED covers the card fee. Tips can't be refunded.</Text>
+        </View>
+        <Text style={[styles.amountSmall, { color: C.text }]}>{tip.payoutPence != null ? money(tip.payoutPence, 'gbp') : money(tip.amountPence, 'gbp')}</Text>
+      </View>
+      <StatusBadge label={tipStatusLabel(tip)} attention={tip.payoutStatus === 'failed'} />
+    </View>)}
     {expanded && <View style={[styles.breakdown, { borderColor: C.border }]}>
       {[['Your share before refunds', row.payout_amount]].map(([label, amount]) => <View key={label} style={styles.row}>
         <Text style={[styles.description, { color: C.text }]}>{label}</Text><Text style={[styles.label, { color: C.text }]}>{money(Number(amount), row.currency)}</Text>
@@ -513,6 +530,7 @@ const styles = StyleSheet.create({
   booking: { borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 18, marginBottom: 12 },
   bookingHead: { flexDirection: 'row', gap: 12, paddingBottom: 12 },
   breakdown: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 16, paddingTop: 12, gap: 6 },
+  tipLine: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 12, gap: 8 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   notice: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 14, marginBottom: 14 },
   empty: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 10, gap: 12 },

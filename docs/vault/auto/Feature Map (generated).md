@@ -74,13 +74,13 @@ Curated: [[Availability & Slots]] · **184 files**
 - … +154 more
 
 ## Payments
-Curated: [[Payments]] · **148 files**
+Curated: [[Payments]] · **149 files**
 - `src/screens/client/CartScreen.tsx` _(515)_
 - `src/services/databaseService.ts` _(223)_
 - `src/screens/provider/PaymentsScreen.tsx` _(177)_
+- `src/components/ProviderStripePayments.tsx` _(112)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
-- `src/components/ProviderStripePayments.tsx` _(109)_
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/services/bookingService.ts` _(101)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
@@ -105,10 +105,10 @@ Curated: [[Payments]] · **148 files**
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(26)_
-- … +118 more
+- … +119 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **298 files**
+Curated: [[Booking Flow]] · **299 files**
 - `src/services/databaseService.ts` _(954)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **298 files**
 - `src/services/becca/capabilities/provider.ts` _(97)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- … +268 more
+- … +269 more
 
 ## Notifications
 Curated: [[Notifications]] · **170 files**
