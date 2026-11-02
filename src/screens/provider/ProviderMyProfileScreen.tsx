@@ -1772,7 +1772,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
-                  <Text style={styles.avatarInitials}>
+                  <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
                     {providerData.providerName
                       .split(' ')
                       .map(w => w[0])
@@ -2291,7 +2291,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           onPress={handleEditProfile}
                           activeOpacity={0.85}
                         >
-                          <Text style={styles.primaryButtonText}>Set up services</Text>
+                          <Text style={[styles.primaryButtonText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Set up services</Text>
                         </TouchableOpacity>
                       </BlurView>
                     </View>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { isDarkColor } from '../../constants/providerThemes';
 
 interface BufferOption {
   /** Minutes as a string, or '' for the nullable "no override" state. */
@@ -54,7 +55,7 @@ export function BufferPicker({ value, onChange, options, accentColor = '#AF9197'
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
-            <Text style={[styles.durationChipText, active && styles.durationChipTextActive]}>{option.label}</Text>
+            <Text style={[styles.durationChipText, active && styles.durationChipTextActive, active && { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{option.label}</Text>
           </TouchableOpacity>
         );
       })}

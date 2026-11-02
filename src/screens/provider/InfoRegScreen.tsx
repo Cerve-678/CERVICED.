@@ -1471,7 +1471,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                     const active = serviceType === value;
                     return (
                       <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setServiceType(active ? '' : value); }}>
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                        <Text style={[styles.chipText, active && styles.chipTextActive, active && { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{label}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -1495,7 +1495,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                     const active = audience === value;
                     return (
                       <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setAudienceTouched(true); setAudience(active ? '' : value); }}>
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                        <Text style={[styles.chipText, active && styles.chipTextActive, active && { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{label}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -1547,7 +1547,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
                       <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames(trendNames.filter(x => x !== t)); }}>
-                        <Text style={styles.chipTextActive}>{t} ×</Text>
+                        <Text style={[styles.chipTextActive, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{t} ×</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -1711,7 +1711,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 onPress={() => { tapMedium(); handleSave(); }}
                 activeOpacity={0.85}
               >
-                <Text style={styles.serviceSheetSaveText}>
+                <Text style={[styles.serviceSheetSaveText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
                   {isEditing ? 'Save changes' : 'Add service'}
                 </Text>
               </TouchableOpacity>
@@ -4071,7 +4071,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
             ]}
           >
-            {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
+            {termsAccepted && <Ionicons name="checkmark" size={13} color={isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740'} />}
           </View>
           <Text style={styles.termsRowText}>
             I agree to the{' '}
@@ -4945,7 +4945,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
                     onPress={() => { tapLight(); setShowCategoryModal(true); }}
                   >
-                    <Text style={styles.addCategoryText}>+ Add Category</Text>
+                    <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -5332,8 +5332,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     which has not been true since require_provider_address.sql. */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
                   <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                    <Ionicons name="lock-closed" size={11} color="#fff" />
-                    <Text style={[styles.policyPillText, { color: '#fff' }]}>
+                    <Ionicons name="lock-closed" size={11} color={isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740'} />
+                    <Text style={[styles.policyPillText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>
                       {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
                     </Text>
                   </View>
@@ -5451,7 +5451,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           addressReleasePolicy: v === '' ? null : (v as AddressReleasePolicy),
                         })); }}
                       >
-                        <Text style={[styles.policyPillText, (providerData.addressReleasePolicy ?? '') === v && { color: '#fff' }]}>{l}</Text>
+                        <Text style={[styles.policyPillText, (providerData.addressReleasePolicy ?? '') === v && { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>{l}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -7392,7 +7392,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   transferButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#fff',
+    color: '#1A1815',
   },
   skipButton: {
     paddingVertical: 14,
@@ -7452,7 +7452,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   saveButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#fff',
+    color: '#1A1815',
   },
 
   // Carousel
@@ -8221,7 +8221,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   addAddOnButtonText: {
     fontSize: 24,
-    color: '#fff',
+    color: '#1A1815',
     fontWeight: 'bold',
   },
 

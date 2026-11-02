@@ -215,7 +215,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
                 : [styles.bubbleProvider, { backgroundColor: OP.surface, borderColor: OP.border }],
             ]}
           >
-            <Text style={[styles.bubbleText, { color: isMine ? '#fff' : OP.text }]}>
+            <Text style={[styles.bubbleText, { color: isMine ? OP.onAccent : OP.text }]}>
               {item.content}
             </Text>
           </View>
@@ -324,9 +324,9 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             activeOpacity={0.75}
           >
             {sending ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={OP.onAccent} />
             ) : (
-              <Ionicons name="arrow-up" size={20} color="#fff" />
+              <Ionicons name="arrow-up" size={20} color={OP.onAccent} />
             )}
           </TouchableOpacity>
         </View>

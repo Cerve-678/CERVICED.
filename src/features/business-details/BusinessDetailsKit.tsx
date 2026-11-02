@@ -32,7 +32,7 @@ export const CP_DARK = {
   // label) against near-black cards, even though it's fine as an icon,
   // fill, or border color.
   accentText: '#D9AEB6',
-  ice: '#FFFFFF', text: '#F0ECE7',
+  ice: '#FFFFFF', onAccent: '#1A1815', text: '#F0ECE7',
   // Was #7E6667 — under 3:1 against the near-black card/surface, which is
   // why field notes, toggle/radio descriptions, and card subtitles (all
   // small Jura body text) read as too faint to use for real info text.
@@ -40,7 +40,7 @@ export const CP_DARK = {
 };
 export const CP_LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#5C4033', accentText: '#5C4033', ice: '#FFFFFF', text: '#1C1A18',
+  accent: '#5C4033', accentText: '#5C4033', ice: '#FFFFFF', onAccent: '#FFFFFF', text: '#1C1A18',
   sub: '#8A8680', border: 'rgba(0,0,0,0.08)', danger: '#FF6868',
 };
 const CP = CP_DARK; // static fallback for StyleSheet.create
@@ -198,7 +198,7 @@ export function ChipGroup({ options, selected, onToggle }: { options: string[]; 
             onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggle(opt); }}
             activeOpacity={0.75}
           >
-            <Text style={[chSt.label, { color: active ? C.ice : C.sub }]}>{opt}</Text>
+            <Text style={[chSt.label, { color: active ? C.onAccent : C.sub }]}>{opt}</Text>
           </TouchableOpacity>
         );
       })}
@@ -248,8 +248,8 @@ export function SaveButton({ saving, onPress }: { saving: boolean; onPress: () =
       activeOpacity={0.8}
     >
       {saving
-        ? <ActivityIndicator color={C.ice} size="small" />
-        : <Text style={[s.saveTxt, { color: C.ice }]}>Save Changes</Text>
+        ? <ActivityIndicator color={C.onAccent} size="small" />
+        : <Text style={[s.saveTxt, { color: C.onAccent }]}>Save Changes</Text>
       }
     </TouchableOpacity>
   );

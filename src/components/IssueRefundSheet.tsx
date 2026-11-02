@@ -15,6 +15,7 @@ import { describeSettlementTiming } from '../features/bookings/paymentPresentati
 import { newRequestId } from '../utils/requestId';
 import { logger } from '../utils/logger';
 import { toUserMessage } from '../utils/userFacingError';
+import { isDarkColor } from '../constants/providerThemes';
 
 // ── Issue Refund sheet ──────────────────────────────────────────────────────
 // The provider's one refund surface, opened from a booking's detail screen and
@@ -411,7 +412,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
             <View style={[styles.foot, { borderTopColor: P.border }]}>
               {summaryOnly ? (
                 <TouchableOpacity style={[styles.cta, { backgroundColor: P.accent }]} activeOpacity={0.8} onPress={onClose}>
-                  <Text style={styles.ctaText}>Done</Text>
+                  <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>Done</Text>
                 </TouchableOpacity>
               ) : (
                 <>
@@ -423,8 +424,8 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                     onPress={() => void submit()}
                   >
                     {busy
-                      ? <ActivityIndicator size="small" color="#FFFFFF" />
-                      : <Text style={styles.ctaText}>{state && state.heldPence > 0 && !reason ? 'Choose a reason' : ctaLabel}</Text>}
+                      ? <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
+                      : <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>{state && state.heldPence > 0 && !reason ? 'Choose a reason' : ctaLabel}</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity style={{ alignItems: 'center', padding: 8 }} disabled={busy} onPress={onClose} activeOpacity={0.7}>
                     <Text style={{ color: P.sub, fontSize: 14 }}>Cancel</Text>

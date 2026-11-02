@@ -48,7 +48,7 @@ const LIGHT = {
   bg:         '#F5F1EC',
   card:       '#FFFFFF',
   tile:       '#EDE8E2',
-  accent:     '#5C4033',
+  accent:     '#5C4033', onAccent: '#FFFFFF',
   accentSoft: 'rgba(92,64,51,0.12)',
   text:       '#1C1A18',
   sub:        '#8A8680',
@@ -60,7 +60,7 @@ const DARK = {
   bg:         '#1A1815',
   card:       '#252220',
   tile:       '#2E2B27',
-  accent:     '#C7AAB0',
+  accent:     '#C7AAB0', onAccent: '#1A1815',
   accentSoft: 'rgba(199,170,176,0.16)',
   text:       '#F0ECE7',
   sub:        '#9A938C',
@@ -286,7 +286,7 @@ function PendingPill({ group, dark, P, busy, onPress, onComplete }: {
         onPress={onComplete}
         style={[pp.completeBtn, { backgroundColor: P.accent, opacity: busy ? 0.6 : 1 }]}
       >
-        {busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={pp.completeBtnText}>Confirm</Text>}
+        {busy ? <ActivityIndicator size="small" color={P.onAccent} /> : <Text style={[pp.completeBtnText, { color: P.onAccent }]}>Confirm</Text>}
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -805,7 +805,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                           {entry.status === 'waiting' && (
                             <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent }]} activeOpacity={0.8}
                               onPress={() => setInviteModal({ visible: true, entry })}>
-                              <Text style={wl.inviteBtnText}>Schedule & Invite</Text>
+                              <Text style={[wl.inviteBtnText, { color: P.onAccent }]}>Schedule & Invite</Text>
                             </TouchableOpacity>
                           )}
                           <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8}
@@ -968,7 +968,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   disabled={!inviteDate || !inviteTime || inviting}
                   activeOpacity={0.8}
                 >
-                  <Text style={wl.confirmText}>{inviting ? 'Sending…' : 'Confirm & Invite'}</Text>
+                  <Text style={[wl.confirmText, { color: P.onAccent }]}>{inviting ? 'Sending…' : 'Confirm & Invite'}</Text>
                 </TouchableOpacity>
               </View>
             </View>

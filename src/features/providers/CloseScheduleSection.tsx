@@ -30,6 +30,7 @@ import {
 } from '../../services/databaseService';
 import type { MyScheduleClosure } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
+import { isDarkColor } from '../../constants/providerThemes';
 import {
   dateToYMD,
   formatLongDateNoYear,
@@ -227,9 +228,9 @@ export default function CloseScheduleSection({
           accessibilityRole="button"
         >
           {busy && isClosed ? (
-            <ActivityIndicator size="small" color={P.ice} />
+            <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
           ) : (
-            <Text style={[st.bannerBtnText, { color: isClosed ? P.ice : P.text }]}>
+            <Text style={[st.bannerBtnText, { color: isClosed ? (isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740') : P.text }]}>
               {isClosed ? 'Reopen' : 'Close'}
             </Text>
           )}
@@ -362,9 +363,9 @@ export default function CloseScheduleSection({
               accessibilityRole="button"
             >
               {busy ? (
-                <ActivityIndicator size="small" color={P.ice} />
+                <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
               ) : (
-                <Text style={[st.closeBtnText, { color: P.ice }]}>Close my schedule</Text>
+                <Text style={[st.closeBtnText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>Close my schedule</Text>
               )}
             </TouchableOpacity>
           </View>

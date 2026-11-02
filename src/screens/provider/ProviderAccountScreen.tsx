@@ -41,7 +41,7 @@ const LIGHT = {
   bg:        '#F5F1EC',
   surface:   '#EDE8E2',
   card:      '#FFFFFF',
-  accent:    '#5C4033',
+  accent:    '#5C4033', onAccent: '#FFFFFF',
   accentText:'#5C4033',
   ice:       '#FFFFFF',
   text:      '#000000',
@@ -55,7 +55,7 @@ const DARK = {
   bg:        '#1A1815',
   surface:   '#201D1A',
   card:      '#252220',
-  accent:    '#AF9197',
+  accent:    '#AF9197', onAccent: '#1A1815',
   // Lighter than `accent` — that muted dusty rose reads as faint/hard to read
   // when it's the color of small TEXT (rowTitle, ring-badge initials) against
   // the near-black dark cards, even though it's fine as an icon/fill color.
@@ -309,7 +309,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('EditProfile'); }}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.previewStatNum, { color: '#FFFFFF' }]}>{t('providerAccount.linkOnly.hero.edit')}</Text>
+                <Text style={[styles.previewStatNum, { color: P.onAccent }]}>{t('providerAccount.linkOnly.hero.edit')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
@@ -497,13 +497,13 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 activeOpacity={0.85}
               >
                 <View style={styles.providerCardIcon}>
-                  <Icon name="swap-horiz" size={18} color="#FFFFFF" />
+                  <Icon name="swap-horiz" size={18} color={P.onAccent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.providerCardTitle}>
+                  <Text style={[styles.providerCardTitle, { color: P.onAccent }]}>
                     {clientCardCopy.title}
                   </Text>
-                  <Text style={styles.providerCardSub}>
+                  <Text style={[styles.providerCardSub, { color: P.onAccent, opacity: 0.72 }]}>
                     {clientCardCopy.sub}
                   </Text>
                 </View>
@@ -573,7 +573,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>{t('providerAccount.clientModal.cta')}</Text>
+              <Text style={[styles.modalBtnText, { color: P.onAccent }]}>{t('providerAccount.clientModal.cta')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowClientModal(false)} activeOpacity={0.6}>
