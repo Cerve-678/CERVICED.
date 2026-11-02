@@ -220,6 +220,7 @@ both code paths exist simultaneously on purpose.**
 | Booking confirmation email | ✅ DB-owned | Trigger `queue_booking_confirmation_email` on `bookings` → edge function `send-booking-confirmation`. The app is no longer involved |
 | Welcome emails | ✅ | `invokeSendAccountEmail('client_welcome' \| 'provider_welcome')` → `send-account-email`. The caller names only which welcome; template, recipient and name resolve server-side |
 | Email templates | ✅ | `supabase/functions/_shared/emailTemplates.ts`. `src/services/emailService.ts` was **deleted** — nothing renders email on the device any more |
+| Signup and password-reset code emails | ⚠️ sent by Supabase Auth | Written in `emailTemplates.ts`, rendered to `supabase/templates/*.html` by `scripts/build-auth-email-templates.ts`, then pasted into the dashboard (Authentication → Emails) by hand. Deploying edge functions does not update them |
 | Reporter acknowledgment email | ❌ | The ticket number exists but is only shown in-app; nothing emails the reporter a receipt |
 | Screenshot / log attachment | ❌ | `logger.ts` already keeps a ring buffer for Developer Settings; it is not attached to reports |
 | Helpdesk tooling | ❌ | Tickets are read by SQL or the Zoho inbox. No assignment, SLA, or search |
