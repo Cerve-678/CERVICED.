@@ -5,12 +5,14 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 let mockListener: (event: AuthChangeEvent, session: Session | null) => Promise<void>;
 const mockProfile = jest.fn();
+const mockCreateRow = jest.fn();
 jest.mock('../services/databaseService', () => ({
   subscribeToAuthStateChanges: (listener: typeof mockListener) => {
     mockListener = listener;
     return jest.fn();
   },
   getUserProfileById: (...args: unknown[]) => mockProfile(...args),
+  createSocialProfileIfMissing: (...args: unknown[]) => mockCreateRow(...args),
   getProviderOwnershipForUserId: jest.fn().mockResolvedValue({ providerId: null, bookingMode: null }),
 }));
 jest.mock('../services/pushNotificationService', () => ({
@@ -69,6 +71,28 @@ test('the latest session wins when profile requests finish out of order', async 
   expect(result.current.user?.id).toBe('second');
   await act(async () => { finishFirst?.(profile('first')); await first; });
   expect(result.current.user?.id).toBe('second');
+  expect(result.current.isLoggedIn).toBe(true);
+});
+
+const appleSession = (id: string) => ({ user: {
+  ...session(id).user, app_metadata: { provider: 'apple' },
+} }) as Session;
+
+test('a first Apple sign-in creates the users row and reads it back', async () => {
+  mockProfile.mockResolvedValueOnce(null).mockResolvedValueOnce({ ...profile('apple'), name: 'Ana', dob: null });
+  mockCreateRow.mockResolvedValue(undefined);
+  const { result } = renderHook(useAuth, { wrapper });
+  await act(async () => { await mockListener('SIGNED_IN', appleSession('apple')); });
+  expect(mockCreateRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'apple', loginMethod: 'apple' }));
+  expect(result.current.user).toMatchObject({ name: 'Ana', dob: '', hasClientProfile: true });
+  expect(result.current.isLoggedIn).toBe(true);
+});
+
+test('an email account with no row yet is left to its own signup', async () => {
+  mockProfile.mockResolvedValue(null);
+  const { result } = renderHook(useAuth, { wrapper });
+  await act(async () => { await mockListener('SIGNED_IN', session('emailed')); });
+  expect(mockCreateRow).not.toHaveBeenCalled();
   expect(result.current.isLoggedIn).toBe(true);
 });
 

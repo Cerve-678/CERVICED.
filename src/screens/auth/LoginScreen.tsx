@@ -200,7 +200,7 @@ export default function LoginScreen({ navigation }: Props) {
         return;
       }
       setIsLoading(true);
-      const session = await signInWithAppleIdToken(credential.identityToken);
+      const session = await signInWithAppleIdToken(credential.identityToken, credential.fullName);
       setIsLoading(false);
       maybePromptEnableBiometric(session.refreshToken ?? undefined);
       // On success, AuthContext.onAuthStateChange handles navigation

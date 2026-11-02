@@ -86,6 +86,7 @@ import { toUserMessage } from "../../utils/userFacingError";
 import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
+import { useBeforeYouBook } from "../../features/bookings/BeforeYouBookSheet";
 import { MultiBookingSheet, type MultiBookingSheetResult } from "../../components/MultiBookingSheet";
 import { AddOnPickerModal } from "../../components/AddOnPickerModal";
 import type { ClientPromotion } from "../../types/database";
@@ -2005,6 +2006,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // coordinates with native-stack to prevent that. showConfirm is the
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
 
   const refuseBookingAsProvider = useCallback((): boolean => {
     if (!viewingOtherAsProvider) return false;
@@ -2942,14 +2944,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     if (tryOpenExternalBooking()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      setSelectedService(service);
-      setShowBookingSheet(true);
-    } catch (error) {
-      logger.error("Error opening booking sheet:", error);
-      Alert.alert("Error", "Failed to open booking options. Please try again.");
-    }
-  }, [tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider, takingBookings]);
+    const openBookingSheet = () => {
+      try {
+        setSelectedService(service);
+        setShowBookingSheet(true);
+      } catch (error) {
+        logger.error("Error opening booking sheet:", error);
+        Alert.alert("Error", "Failed to open booking options. Please try again.");
+      }
+    };
+    if (holdForDetails(openBookingSheet)) return;
+    openBookingSheet();
+  }, [tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider, takingBookings, holdForDetails]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -3098,18 +3104,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (tryOpenExternalBooking()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setShowAllServicesModal(false);
-    if (selectedServicesFlat.length === 1) {
-      // BookingSheet reads addOnsBySelectedService via `initial` above before
-      // this clears it, so the single popup pick still carries through.
-      setSelectedService(selectedServicesFlat[0]!);
-      setShowBookingSheet(true);
-      setSelectedServiceIds(new Set());
-      setSelectMode(false);
-      return;
-    }
-    setMultiBookingServices(selectedServicesFlat);
-    setShowMultiBookingSheet(true);
-  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider]);
+    const openSheets = () => {
+      if (selectedServicesFlat.length === 1) {
+        // BookingSheet reads addOnsBySelectedService via `initial` above before
+        // this clears it, so the single popup pick still carries through.
+        setSelectedService(selectedServicesFlat[0]!);
+        setShowBookingSheet(true);
+        setSelectedServiceIds(new Set());
+        setSelectMode(false);
+        return;
+      }
+      setMultiBookingServices(selectedServicesFlat);
+      setShowMultiBookingSheet(true);
+    };
+    // This bar can sit inside the "All Services" sheet just closed above.
+    if (holdForDetails(openSheets, { afterModalCloses: true })) return;
+    openSheets();
+  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider, holdForDetails]);
 
   // Floating "N selected • £total — Book" bar. Rendered from two places (the
   // main screen and the fullscreen "All Services" sheet, which is a separate
@@ -4248,6 +4259,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* App-styled confirm dialog (leave-with-selection prompt, etc.) —
             not the OS Alert. */}
         <DialogHost />
+        {beforeYouBookSheet}
 
         {/* Communication options — what "Get In Touch" opens on your own
             profile, where in-app chat isn't possible. Themed with this

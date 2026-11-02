@@ -266,7 +266,16 @@ export async function signInWithEmailPassword(
   return summarizeAuthSession(data.session);
 }
 
-export async function signInWithAppleIdToken(token: string): Promise<AuthSessionSummary> {
+// Apple hands over the person's name on their first authorisation only, and it
+// isn't in the identity token, so it's kept here until AuthContext creates the
+// users row that sign-in leads to (createSocialProfileIfMissing).
+let appleNameFromSignIn = "";
+
+export async function signInWithAppleIdToken(
+  token: string,
+  fullName?: { givenName?: string | null; familyName?: string | null } | null,
+): Promise<AuthSessionSummary> {
+  appleNameFromSignIn = [fullName?.givenName, fullName?.familyName].filter(Boolean).join(" ").trim();
   const { data, error } = await supabase.auth.signInWithIdToken({ provider: "apple", token });
   if (error) throw error;
   if (!data.session) throw new Error("Authentication succeeded without a session");
@@ -386,6 +395,32 @@ export async function upsertVerifiedUserProfile(
     .from("users")
     .upsert(profile, { onConflict: "id" });
   if (error) throw error;
+}
+
+/** Creates the users row for an account that signed in through Apple, which
+ * has no verification step to create one. Starts as a client with whatever
+ * Apple shared; anything missing is asked for by the Before You Can Book
+ * checklist. Never overwrites: an account that already has a row, including a
+ * provider's, is left exactly as it is. */
+export async function createSocialProfileIfMissing(account: {
+  id: string;
+  email: string;
+  loginMethod: string;
+  nameFromSession?: string | undefined;
+}): Promise<void> {
+  const { error } = await supabase.from("users").upsert(
+    {
+      id: account.id,
+      email: account.email,
+      name: appleNameFromSignIn || account.nameFromSession || "",
+      role: "user",
+      has_client_profile: true,
+      login_method: account.loginMethod,
+    },
+    { onConflict: "id", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+  appleNameFromSignIn = "";
 }
 
 /** Persists client-profile fields for the signed-in account. */
@@ -8787,6 +8822,7 @@ export async function updateUserContactDetails(
   details: {
     name?: string;
     phone?: string;
+    dob?: string | null;
     clientAddress?: string | null;
     clientArea?: string | null;
   },
@@ -8794,18 +8830,30 @@ export async function updateUserContactDetails(
   const patch: {
     name?: string;
     phone?: string;
+    dob?: string | null;
     client_address?: string | null;
     client_area?: string | null;
   } = {};
   if (details.name !== undefined) patch.name = details.name;
   if (details.phone !== undefined) patch.phone = details.phone;
+  if (details.dob !== undefined) patch.dob = details.dob;
   if (details.clientAddress !== undefined)
     patch.client_address = details.clientAddress;
   if (details.clientArea !== undefined) patch.client_area = details.clientArea;
   if (Object.keys(patch).length === 0) return;
 
-  const { error } = await supabase.from("users").update(patch).eq("id", userId);
+  // An UPDATE matching zero rows isn't an error, and the booking checklist lets
+  // someone through on this call succeeding, so a write that landed nowhere has
+  // to fail here.
+  const { data, error } = await supabase
+    .from("users")
+    .update(patch)
+    .eq("id", userId)
+    .select("id");
   if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(`updateUserContactDetails matched no row for user ${userId}`);
+  }
 }
 
 /** Update the date-of-birth field for a user */

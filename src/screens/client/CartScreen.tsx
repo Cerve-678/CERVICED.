@@ -57,6 +57,7 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBeforeYouBook } from '../../features/bookings/BeforeYouBookSheet';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
@@ -1894,6 +1895,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
   const { user, updateUser } = useAuth();
+  const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
+  // Checkout carries on after the checklist saves, by which time this render's
+  // handleCheckout would still see the details as missing.
+  const handleCheckoutRef = useRef<() => Promise<void>>(async () => {});
 
   // State management
   const [providerDepositPolicies, setProviderDepositPolicies] = useState<Record<string, ProviderDepositPolicy>>({});
@@ -3200,6 +3205,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
   // Enhanced checkout with payment modal integration - USE EFFECTIVE TOTAL
   const handleCheckout = useCallback(async () => {
+  // The profile checks this as well, but a rebook or an offer can fill the cart
+  // without passing through there. Checkout is where every booking ends up.
+  if (holdForDetails(() => { void handleCheckoutRef.current(); })) return;
   try {
     setIsLoading(true);
     setError(null);
@@ -3450,7 +3458,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, mobileProviderNames, identifyCartConflicts, localItemIssues, itemsByProvider, checkoutMetadataError, providerDepositPolicies, resolvedProviderNames]);
+}, [items, getServiceBooking, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, mobileProviderNames, identifyCartConflicts, localItemIssues, itemsByProvider, checkoutMetadataError, providerDepositPolicies, resolvedProviderNames, holdForDetails]);
+handleCheckoutRef.current = handleCheckout;
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -4958,6 +4967,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
         </SafeAreaView>
       </ThemedBackground>
       <DialogHost />
+      {beforeYouBookSheet}
     </ErrorBoundary>
   );
 };
