@@ -16,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { useInProviderSettingsTab } from '../../navigation/settingsTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useAppDialog } from '../../components/AppDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,6 +54,9 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   const { palette: OP } = useTheme();
   const { user } = useAuth();
   const { showToast, DialogHost } = useAppDialog();
+  const insets = useSafeAreaInsets();
+  // Opened from Settings → Inbox there is no tab bar to clear, only the home indicator.
+  const tabBarHidden = useInProviderSettingsTab();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -305,7 +310,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         <View style={[styles.inputRow, {
           backgroundColor: OP.bg,
           borderTopColor: OP.border,
-          paddingBottom: keyboardVisible ? 10 : FLOATING_TAB_BAR_CLEARANCE,
+          paddingBottom: keyboardVisible ? 10 : tabBarHidden ? Math.max(insets.bottom, 10) : FLOATING_TAB_BAR_CLEARANCE,
         }]}>
           <TextInput
             style={[styles.input, { backgroundColor: OP.surface, color: OP.text, borderColor: OP.border }]}
