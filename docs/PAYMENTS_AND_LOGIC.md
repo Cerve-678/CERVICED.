@@ -886,6 +886,7 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
+| 12 | **Full membership shows a price nobody is charged.** Link-only pros who become full members see "£25.99 a month, 2 months free" (`src/constants/fullMembership.ts`); no billing exists, and `providers.full_member_since` is the only record | Providers could expect the free months to be honoured from a date nobody has decided | Decide when the free months start, then build billing with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
 
 ---
 
@@ -916,6 +917,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
+| 2 Nov | Link-only pros can become full members themselves. The app shows £25.99 a month with 2 months free, but charges nothing until pricing is final | Lets demand from client nudges turn into full providers now, without building billing first |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 

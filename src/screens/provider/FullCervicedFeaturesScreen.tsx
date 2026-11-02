@@ -3,12 +3,13 @@
  * bookings through CERVICED instead of their own booking page. Opened from the
  * card on their Home and the row in their Profile tab.
  *
- * Information only, by product decision (2026-10-21): no switch button and no
- * prices, because nothing paid is built yet and switching isn't available in
- * the app. Every item here must be something full providers actually have
- * today — check the code before adding one, and remove one that goes away.
+ * Ends with the "Become a full member" button (product decision 2026-11-02,
+ * replacing the 2026-10-21 "information only" rule), which opens the same
+ * confirm sheet as Home. Every item here must be something full providers
+ * actually have today — check the code before adding one, and remove one that
+ * goes away.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -16,6 +17,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
+import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
+import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_PRICE_LINE } from '../../constants/fullMembership';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -67,6 +70,7 @@ export default function FullCervicedFeaturesScreen() {
   const insets = useSafeAreaInsets();
   const { theme, palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
+  const [showSheet, setShowSheet] = useState(false);
 
   return (
     <ThemedBackground style={styles.flex}>
@@ -109,10 +113,17 @@ export default function FullCervicedFeaturesScreen() {
           </View>
         ))}
 
-        <Text style={styles.footnote}>
-          Switching to bookings through CERVICED isn't available in the app yet. Everything you have now stays as it is.
-        </Text>
+        <TouchableOpacity
+          style={styles.primary}
+          onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowSheet(true); }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Text style={styles.primaryText}>Become a full member</Text>
+        </TouchableOpacity>
+        <Text style={styles.footnote}>{FULL_MEMBER_FREE_LINE}. {FULL_MEMBER_PRICE_LINE}.</Text>
       </ScrollView>
+      <BecomeFullMemberSheet visible={showSheet} onClose={() => setShowSheet(false)} />
     </ThemedBackground>
   );
 }
@@ -135,5 +146,7 @@ const createStyles = (P: Palette) =>
     icon: { width: 34, height: 34, borderRadius: 17, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
     rowTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700', color: P.text },
     rowBody: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, color: P.sub, marginTop: 2 },
-    footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17, color: P.sub, textAlign: 'center', marginTop: 4, paddingHorizontal: 12 },
+    primary: { height: 52, borderRadius: 100, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+    primaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 16, color: P.onAccent },
+    footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17, color: P.sub, textAlign: 'center', marginTop: 10, paddingHorizontal: 12 },
   });
