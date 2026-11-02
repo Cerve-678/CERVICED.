@@ -471,6 +471,7 @@ a penalty (LEGAL-COMPLIANCE-NOTES §17).
 | CERVICED | Takes nothing, and **pays Stripe's card fee** on the tip (about 1.5% + 20p on a UK card). The fee is recorded in `booking_tips.stripe_fee_pence` for CERVICED's books |
 | Refunds | **Non-refundable.** The client Terms and the tip sheet say so, and no refund path touches `booking_tips` |
 | Tip notice | The database writes a `tip_received` notification (trigger `on_booking_tip_succeeded`, live). Merged in PR #163; the app shows it from the next build |
+| Where the provider sees it | Payments → Booking payments, inside that booking's card, with its own amount and status, because it's paid out separately and can't be refunded. It isn't added into the booking's figure. A tip whose booking is outside the latest 50 payments stays in its own list below. Display only: no money moves differently |
 
 - **Changing the amount** before paying updates or replaces the open payment,
   so an old payment sheet can never charge the old amount.

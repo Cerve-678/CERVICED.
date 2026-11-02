@@ -58,8 +58,7 @@ describe("Finding someone who does a specific service", () => {
   });
   const facets = (menus: Record<string, string[]>) => ({
     priceRanges: new Map(),
-    audiences: new Map(),
-    skinTones: new Map(),
+    services: new Map(),
     specialityText: new Map(Object.entries(menus).map(([id, names]) => [id, new Set(names)])),
     specialityLabels: new Map(),
   });
