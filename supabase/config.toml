@@ -36,6 +36,11 @@ verify_jwt = true
 [functions.money-daily-summary]
 verify_jwt = true
 
+# Woken only by pg_cron (process_stale_checkouts) with the service_role key,
+# like release-payouts; it confirms the bearer is a real service key too.
+[functions.reconcile-checkouts]
+verify_jwt = true
+
 # A client starts or confirms only their own completed-booking tip. The
 # function verifies the JWT again and owns every Stripe/database write.
 [functions.booking-tip]

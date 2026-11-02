@@ -125,11 +125,19 @@ BEGIN
       ' is on its way back to you. It can take 5–10 working days to show on your statement.';
   ELSIF v_full THEN
     v_title := 'Refunded in full';
-    v_message := v_provider_name || ' refunded ' || v_amount || ' for ' || v_service_name ||
+    v_message := CASE WHEN NEW.kind = 'provider'
+        THEN v_provider_name || ' refunded '
+        ELSE 'You''ve been refunded '
+      END || v_amount || ' for ' || v_service_name ||
       ', so everything you paid is coming back. It can take 5–10 working days to show on your statement.';
   ELSE
     v_title := 'Partial refund';
-    v_message := v_provider_name || ' refunded ' || v_amount || ' for ' || v_service_name ||
+    -- Only a refund the provider made is put down to them: 'admin' and
+    -- 'external' ones (a Stripe dashboard refund) weren't theirs.
+    v_message := CASE WHEN NEW.kind = 'provider'
+        THEN v_provider_name || ' refunded '
+        ELSE 'You''ve been refunded '
+      END || v_amount || ' for ' || v_service_name ||
       '. It can take 5–10 working days to show on your statement.';
   END IF;
 

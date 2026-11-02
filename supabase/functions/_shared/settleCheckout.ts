@@ -1,5 +1,6 @@
 import type Stripe from 'npm:stripe@17.4.0';
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
+import { chargeWasApproved } from './checkoutCharge.ts';
 
 // What the client paid with, in the app's own vocabulary
 // (paymentPresentation.ts PAYMENT_METHOD_LABELS), so receipts and booking
@@ -26,9 +27,31 @@ async function recordPaymentMethod(admin: SupabaseClient, stripe: Stripe, intent
   }
 }
 
-// Both the authenticated endpoint and signed webhooks converge here. Capture
-// precedes booking confirmation; a paid checkout which loses its reservation
-// is refunded. Transient database failures are retried by Stripe's webhook.
+// How a checkout that never became bookings ended, recorded once on the batch
+// (checkout_batches.outcome) by record_checkout_outcome, which also tells the
+// client unless nothing was ever taken. Best-effort: the money has already
+// moved correctly, and a checkout left 'prepared' is picked up again by the
+// reconcile-checkouts job, which records it then.
+export type CheckoutOutcome = 'not_charged' | 'refunded' | 'abandoned';
+
+async function recordOutcome(admin: SupabaseClient, batchId: string, outcome: CheckoutOutcome) {
+  const { error } = await admin.rpc('record_checkout_outcome', {
+    p_checkout_batch_id: batchId, p_outcome: outcome,
+  });
+  if (error) console.error(`[settleCheckout] could not record ${outcome} for ${batchId}: ${String(error.message ?? error)}`);
+}
+
+// A cancelled payment says something to the client only if the card had been
+// approved: their bank may show it as pending. A declined or never-paid one
+// was already explained on the payment sheet, or never started.
+export async function outcomeOfCancelledIntent(stripe: Stripe, intentId: string): Promise<CheckoutOutcome> {
+  const intent = await stripe.paymentIntents.retrieve(intentId, { expand: ['latest_charge'] });
+  return chargeWasApproved(intent.latest_charge) ? 'not_charged' : 'abandoned';
+}
+
+// Both the authenticated endpoint, signed webhooks and the reconcile-checkouts
+// job converge here. Capture precedes booking confirmation; a paid checkout
+// which loses its reservation is refunded.
 export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, intentId: string) {
   let intent = await stripe.paymentIntents.retrieve(intentId);
   const batchId = intent.metadata.checkout_batch_id;
@@ -43,7 +66,14 @@ export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, inte
     return data;
   };
   let batch = await readBatch();
-  if (intent.status === 'canceled') return 'canceled';
+  if (intent.status === 'canceled') {
+    // Cancelled before it could be settled (by an earlier run, or by Stripe
+    // after an approval sat uncaptured).
+    if (batch.status === 'prepared' || batch.status === 'expired') {
+      await recordOutcome(admin, batchId, await outcomeOfCancelledIntent(stripe, intent.id));
+    }
+    return 'canceled';
+  }
   if (batch.status === 'finalised' && intent.status === 'succeeded') return 'succeeded';
   const available = () => batch.status === 'prepared' && Date.parse(batch.expires_at) > Date.now();
   if (intent.status === 'requires_capture') {
@@ -51,6 +81,7 @@ export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, inte
       // Older deployments finalised before capture: finish those too.
       if (batch.status !== 'finalised') {
         await stripe.paymentIntents.cancel(intent.id, {}, { idempotencyKey: `checkout_cancel_${batchId}` });
+        await recordOutcome(admin, batchId, 'not_charged');
         return 'canceled';
       }
     }
@@ -75,5 +106,6 @@ export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, inte
   await stripe.refunds.create({ payment_intent: intent.id,
     metadata: { checkout_batch_id: batchId, reason: 'reservation_unavailable' },
   }, { idempotencyKey: `checkout_refund_${batchId}` });
+  await recordOutcome(admin, batchId, 'refunded');
   return 'refunded';
 }

@@ -26,17 +26,18 @@ async function finalizePaymentIntent(
   checkoutBatchId: string,
   paymentIntentId: string,
   action: 'capture' | 'cancel',
-): Promise<void> {
+): Promise<string> {
   return finalizeCheckoutPaymentIntent(checkoutBatchId, paymentIntentId, action);
 }
 
-/** Captures the canonical total and finalises the reserved bookings. */
-export async function capturePaymentIntent(checkoutBatchId: string, paymentIntentId: string): Promise<void> {
+/** Captures the canonical total and finalises the reserved bookings. Returns
+ *  the server's answer (succeeded / refunded / canceled). */
+export async function capturePaymentIntent(checkoutBatchId: string, paymentIntentId: string): Promise<string> {
   return finalizePaymentIntent(checkoutBatchId, paymentIntentId, 'capture');
 }
 
 /** Cancels an unconfirmed intent. Once authorised, server reconciliation owns
  * completion so a network timeout cannot accidentally cancel a paid booking. */
 export async function cancelPaymentIntent(checkoutBatchId: string, paymentIntentId: string): Promise<void> {
-  return finalizePaymentIntent(checkoutBatchId, paymentIntentId, 'cancel');
+  await finalizePaymentIntent(checkoutBatchId, paymentIntentId, 'cancel');
 }

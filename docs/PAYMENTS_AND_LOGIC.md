@@ -248,6 +248,28 @@ If the card is declined, the client stays on the payment sheet and can try
 again. Closing the sheet cancels the unfinished payment, and the slot holds
 expire.
 
+**How the client finds out how it ended:**
+
+| What happened | On screen | Notification |
+|---|---|---|
+| Declined, or the bank check failed | An error on the payment sheet | None: they're looking at it |
+| Paid and booked | The success screen | `payment_success`, "Payment received" |
+| Card approved, but the time had gone before it was captured | "Payment didn't go through" | `payment_not_completed`: cancelled, not charged |
+| Taken, but the time had gone | "Booking not completed" | `payment_not_completed`: refunded in full |
+| The app can't get an answer (timeout, busy database, app closed) | "Confirming your payment…" for about 30 seconds, then "Still confirming your payment" | Whichever of the above it turns out to be |
+
+Three things can finish a checkout once the card is approved, all through
+`settleCheckout`: the app, the signed Stripe webhook, and the
+`reconcile-checkouts` job every 5 minutes, which picks up any checkout started
+3 or more minutes ago with a payment on it and still open. A checkout that was
+never paid is marked `abandoned` once its hold is over, and nothing is sent. The
+notices come from the database, so they reach the client whichever of the three
+finished it.
+
+*Not live yet: migration `20261102210000` is written, not applied, and
+`reconcile-checkouts`, `finalize-payment-intent` and `stripe-webhook` need
+deploying.*
+
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
 and CERVICED never records, collects or confirms it** (section 2.9).
@@ -345,7 +367,8 @@ Pay or PayPal.
   this, `previewProviderRefund`; older builds still send it as partial.)
 - **The client is told about every refund** (`payment_refunded`, trigger
   `after_refund_notify_client` on `booking_refunds`), unless a late-cancel
-  notice or a refund-request update already gave them the amount.
+  notice or a refund-request update already gave them the amount. *Not live
+  yet: migration `20261102200000` is written, not applied.*
 - A client is never charged more than they originally paid.
 - **The most a provider can keep on a late cancellation** depends on what was
   paid in the app: the whole deposit if the client paid a deposit, half the
@@ -759,6 +782,7 @@ Keep the list short and review it monthly.
 | `create-payment-intent` | App (checkout) | Re-prices the batch, checks providers are payout-ready, enforces fee consent, creates the PaymentIntent |
 | `finalize-payment-intent` | App | Captures; moves bookings `on_hold` → `pending`/`confirmed`; records the payment method |
 | `stripe-webhook` | Stripe (signature-checked, no JWT) | Payment success, refunds, account status, transfers and reversals, disputes, bank payout failures |
+| `reconcile-checkouts` | Cron, via `process_stale_checkouts()` (service role only) | Finishes checkouts a payment was started for but nobody settled; cancels payments never completed once the hold is over |
 | `release-payouts` | Cron, via `process_due_payouts()` (service role only) | Releases booking, fee and tip payouts; retries; fee pay-request retries and lapses; support alerts |
 | `refund-payment` | Provider, admin, or the server (`refund_booking_async`) | Full and partial refunds; reconciles the payout |
 | `apply-cancellation-refund` | App, after a client cancels | Applies the frozen cancellation policy and settles the provider directly |
@@ -776,6 +800,7 @@ Keep the list short and review it monthly.
 |---|---|---|
 | `release-due-payouts` | Every 15 min | `process_due_payouts()` → `release-payouts`, only when something is due |
 | `expire-cart-holds` | Every 5 min | Frees unpaid 10-minute slot holds |
+| `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
 | `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 48h, or once past the start time) and fully refunds them |
 | `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
 | `money-daily-summary` | 08:00 daily | Triggers the summary email when anything needs attention |
@@ -786,6 +811,8 @@ Keep the list short and review it monthly.
 | Name | Kind | What it does |
 |---|---|---|
 | `prepare_checkout` | RPC | Validates the basket and places 10-minute holds |
+| `record_checkout_outcome` | RPC (service role) | Records how a checkout ended without bookings, once (a real outcome can replace `abandoned`), and tells the client unless nothing was taken |
+| `notify_client_payment_received` | Trigger on `checkout_batches` | "Payment received" when a checkout is finalised |
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |
 | `create_held_payout_on_finalize` | Trigger on `bookings` | Creates the held payout: `amount_paid − service_charge`, released at appointment end + hold days |
 | `after_booking_move_held_payout` → `move_held_payout_with_booking` | Trigger on `bookings` | Shifts a held, unclaimed payout when the date or time changes |
@@ -817,7 +844,7 @@ so Stripe retries.
 
 | Table | Holds | Statuses |
 |---|---|---|
-| `checkout_batches` | One checkout: amount due, platform fee | Starts `prepared` |
+| `checkout_batches` | One checkout: amount due, platform fee, `outcome` (`not_charged`, `refunded` or `abandoned` when it ended without bookings) | `prepared` → `finalised` / `expired` / `cancelled` |
 | `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id`, `late_reschedule_from` (moved inside the cancellation window; cleared by a later provider-proposed move) | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` |
 | `provider_payouts` | One per paid booking: `gross_amount`, `platform_fee`, `payout_amount`, `deducted_pence`, `release_after`, `release_claimed_at`, `attempt_count`, `failure_cause` | `held` → `transferred` / `cancelled` / `reversed` / `failed` |
 | `booking_refunds` | A ledger of every refund (pence, and whether it has been applied to the payout) | — |
@@ -834,9 +861,10 @@ so Stripe retries.
 
 | Type | To | When |
 |---|---|---|
-| `payment_success` | Client | Payment taken |
+| `payment_success` | Client | Payment taken. On Stripe checkouts, from the trigger on `checkout_batches` |
+| `payment_not_completed` | Client | The card was approved but the checkout didn't book: cancelled before it was taken, or refunded |
 | `cancellation_settled` | Both | A late cancellation kept money |
-| `payment_refunded` | Client | Any refund on a booking, whoever made it, unless `cancellation_settled` or `refund_request_updated` already gave the amount (live since 2 November, migration `20261102200000`) |
+| `payment_refunded` | Client | Any refund on a booking, whoever made it, unless `cancellation_settled` or `refund_request_updated` already gave the amount. **Not live yet:** migration `20261102200000` is written, not applied |
 | `refund_requested` / `refund_request_updated` | Provider / both | A refund request was opened, or has a day left (provider) / moved on, including to CERVICED after 3 days with no reply (both) |
 | `fee_charged`, `fee_disputed`, `fee_dispute_resolved` | Client / provider | The late/no-show fee lifecycle |
 | `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed` | Client / provider | The card couldn't pay a fee |

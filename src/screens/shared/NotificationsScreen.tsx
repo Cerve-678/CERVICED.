@@ -72,7 +72,7 @@ interface Notification {
       | 'payout_debt_recorded' | 'payout_debt_recovered'
       | 'refund_requested' | 'refund_request_updated' | 'payment_refunded' | 'payout_failed'
       | 'terms_updated'
-      | 'payment_success'     | 'new_provider'
+      | 'payment_success'     | 'payment_not_completed' | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
       | 'cancel_window_closing'
@@ -398,7 +398,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered.filter(n =>
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_declined',
-           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'tip_received', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_refunded', 'payment_success',
+           'booking_in_progress', 'no_show', 'provider_no_show', 'no_show_disputed', 'cancellation_settled', 'fee_charged', 'fee_disputed', 'fee_dispute_resolved', 'fee_payment_requested', 'fee_paid_by_client', 'fee_payment_lapsed', 'tip_received', 'payout_debt_recorded', 'payout_debt_recovered', 'refund_requested', 'refund_request_updated', 'payment_refunded', 'payment_success', 'payment_not_completed',
            'reschedule_request', 'reschedule_provider_response',
            'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'cancel_window_closing',
@@ -891,6 +891,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     if (type === 'refund_request_updated') return P.accentText;
     // Money coming back to the client: good news, same green as a payment.
     if (type === 'payment_refunded') return '#4CAF50';
+    // A checkout that didn't book: nothing was taken, or it was all refunded.
+    if (type === 'payment_not_completed') return '#FF9500';
     // Money that didn't reach the provider: they need to act.
     if (type === 'payout_failed') return '#FF9500';
     if (type === 'terms_updated') return P.accentText;
