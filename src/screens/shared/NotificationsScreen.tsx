@@ -978,8 +978,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     shadowColor: isDarkMode ? '#000000' : isProvider ? '#26201E' : '#3F1E36',
     shadowOpacity: isDarkMode ? 0.4 : 0.14,
   };
-  // Dark mode's sub fails contrast on small caps, so those use accentText there.
-  const kickerColor = isDarkMode ? P.accentText : P.sub;
+  // The provider dark sub fails contrast on small text, so it uses accentText there.
+  const quietText = isDarkMode && isProvider ? P.accentText : P.sub;
 
   // ✅ Render swipe-to-delete action — Apple Mail-style: a round red "bubble"
   // pinned to the trailing edge (Swipeable already positions this container
@@ -998,7 +998,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       <>
         {!!heading && (
           <View style={styles.dayHeading}>
-            <Text style={[styles.dayHeadingText, { color: kickerColor }]}>{heading}</Text>
+            <Text style={[styles.dayHeadingText, { color: quietText }]}>{heading}</Text>
             <View style={[styles.dayHeadingRule, { backgroundColor: P.sep }]} />
           </View>
         )}
@@ -1060,7 +1060,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                       textStyles.button,
                       styles.notificationTitle,
                       styles.notificationTitleBold,
-                      { color: item.read ? P.sub : P.text },
+                      { color: item.read ? quietText : P.text },
                       !item.read && styles.unreadTitle
                     ]} numberOfLines={1}>
                       {item.title}
@@ -1069,12 +1069,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   {!item.read && <View style={[styles.unreadDot, { backgroundColor: P.accent }]} />}
                 </View>
 
-                <Text style={[textStyles.body, styles.notificationMessage, { color: P.sub }]} numberOfLines={2}>
+                <Text style={[textStyles.body, styles.notificationMessage, { color: quietText }]} numberOfLines={2}>
                   {item.message}
                 </Text>
 
                 <View style={styles.notificationFooter}>
-                  <Text style={[textStyles.caption, styles.notificationTime, { color: P.sub }]}>
+                  <Text style={[textStyles.caption, styles.notificationTime, { color: quietText }]}>
                     {formatTimestamp(item.timestamp)}
                   </Text>
 
@@ -1263,12 +1263,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                         <View style={[styles.sealInner, { borderColor: P.accentText }]} />
                         <Ionicons name="star-outline" size={24} color={P.accentText} />
                       </View>
-                      <Text style={[styles.popupKicker, { color: kickerColor }]}>
+                      <Text style={[styles.popupKicker, { color: quietText }]}>
                         {notificationKindLabel(selectedNotification.type)}
                       </Text>
                       <Text style={[styles.certificatePopupTitle, { color: P.text }]}>{selectedNotification.title}</Text>
                       <View style={[styles.certificateRule, { backgroundColor: P.accent }]} />
-                      <Text style={[textStyles.body, styles.certificateMessage, { color: P.sub }]}>
+                      <Text style={[textStyles.body, styles.certificateMessage, { color: quietText }]}>
                         {selectedNotification.message}
                       </Text>
                       {selectedNotification.actionable && (
@@ -1302,7 +1302,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                               <View style={[styles.popupIconContainer, { backgroundColor: P.accentDim }]}>
                                 <BellIcon size={22} color={P.accentText} />
                               </View>
-                              <Text style={[styles.popupKicker, { color: kickerColor }]} numberOfLines={1}>
+                              <Text style={[styles.popupKicker, { color: quietText }]} numberOfLines={1}>
                                 {notificationKindLabel(selectedNotification.type)}
                               </Text>
                             </View>
@@ -1325,13 +1325,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                           </Text>
 
                           <ScrollView style={styles.popupMessageScroll}>
-                            <Text style={[textStyles.body, styles.popupMessage, { color: P.sub }]}>
+                            <Text style={[textStyles.body, styles.popupMessage, { color: quietText }]}>
                               {selectedNotification.message}
                             </Text>
                           </ScrollView>
 
                           <View style={styles.popupFooter}>
-                            <Text style={[textStyles.caption, styles.popupTime, { color: P.sub }]}>
+                            <Text style={[textStyles.caption, styles.popupTime, { color: quietText }]}>
                               {formatTimestamp(selectedNotification.timestamp)}
                             </Text>
 
@@ -1445,7 +1445,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: spacing.lg + 6,
     paddingTop: 6,
-    paddingBottom: 10,
+    paddingBottom: 6,
   },
   dayHeadingText: {
     fontFamily: 'BakbakOne-Regular',
@@ -1454,7 +1454,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   dayHeadingRule: { flex: 1, height: StyleSheet.hairlineWidth },
-  notificationItem: { paddingHorizontal: spacing.lg, paddingBottom: 12 },
+  notificationItem: { paddingHorizontal: spacing.lg, paddingTop: 4, paddingBottom: 12 },
   notificationCard: {
     flexDirection: 'row',
     gap: 12,
@@ -1463,8 +1463,8 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   notificationLifted: {
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
     elevation: 2,
   },
   iconContainer: {
@@ -1668,6 +1668,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: 74,
+    marginTop: 4,
     marginBottom: 12,
   },
   deleteBubble: {
