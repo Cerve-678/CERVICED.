@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-02 (search understands more)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261102130000 | `service_search_understands_more` | **APPLIED 2026-11-02** by session cerviced-98 with the user's OK (`supabase db query --linked -f`), version recorded by the file. Frontier before apply: `20261102100000`; no open branch had a higher number; busy peer cerviced-75 confirmed it had nothing pending. md5 guard checked all seven `search_*` bodies against live first. Verified live: version present, new `search_rewrite_query` and `search_services_ranked` bodies, `search_services_ranked` still one overload and executable by anon + authenticated, eval 125/126 against live (the miss, "threading", predates it). Replaces only `search_*` function bodies; no tables, no data, signatures unchanged. |
+
 ### Applied 2026-11-02 (Fully Booked certificate)
 
 | Authored version | Name | Status |
