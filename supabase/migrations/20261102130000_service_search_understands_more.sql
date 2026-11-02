@@ -30,6 +30,34 @@
 
 BEGIN;
 
+-- Redefine only what was live when this was written: every search_* body
+-- below starts from 20261025130000, which matched live on 2026-11-02. If any
+-- of them has changed since, stop rather than silently overwrite it.
+DO $guard$
+DECLARE
+  v_bad text;
+BEGIN
+  SELECT string_agg(e.name || ' (' || coalesce(md5(p.prosrc), 'missing') || ')', ', ')
+    INTO v_bad
+  FROM (VALUES
+    ('search_audience_words',  '9ca6e2a4aad0b5e7d808387d24ac6988'),
+    ('search_category_words',  '488a055ca25607246826e43eb78526d7'),
+    ('search_clean_query',     'a745f97537227d1e78554ba3e436fc0e'),
+    ('search_edit_distance',   '2c0c8683c389b29cb36c8bddfc2f7280'),
+    ('search_rewrite_query',   '65b4b90ece461191098971d421392699'),
+    ('search_services_ranked', '1b4c30123a40683d30a4b78ffbb98882'),
+    ('search_synonym_map',     '950061790e0807fa71307ff243580802')
+  ) AS e(name, md5)
+  LEFT JOIN pg_proc p
+    ON p.proname = e.name
+   AND p.pronamespace = 'public'::regnamespace
+  WHERE p.prosrc IS NULL OR md5(p.prosrc) <> e.md5;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'search functions changed since this migration was written: %; rebuild from live', v_bad;
+  END IF;
+END;
+$guard$;
+
 CREATE OR REPLACE FUNCTION public.search_edit_distance(a text, b text)
 RETURNS integer
 LANGUAGE plpgsql

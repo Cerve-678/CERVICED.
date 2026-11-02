@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session cerviced-98, branch feat/search-understands-more, 2026-11-02 — 20261102130000_service_search_understands_more (applying)
 ```
 
 ### Written 2026-11-02, NOT applied ("has space again" after a short or blocked-out diary)
