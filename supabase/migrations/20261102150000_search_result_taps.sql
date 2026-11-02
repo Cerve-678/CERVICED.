@@ -14,15 +14,24 @@
 --    the day, and the account — the account only so one person counts once
 --    and can't flood it. Nothing here is ever readable by the app: rows are
 --    reachable only through record_search_tap (write) and
---    search_learned_boosts (counts of 2+ different people, no ids).
+--    private.search_learned_boosts (counts of 3+ different people, no ids,
+--    and not callable through the API).
 --  * deleted with the account, the provider or the service, and after 180
---    days.
+--    days by a daily job.
 --
--- Abuse: a provider tapping their own listing is ignored; a person counts
--- once per search, result and day; 60 taps a day per person at most; nothing
--- is read back until 2+ different people agree, and recall needs 3+.
+-- Abuse: the RPC can't prove the search ran or the result was shown, so
+-- writing a row is cheap and reading one back is what's guarded. A provider
+-- tapping their own listing is ignored; a person counts once per search,
+-- result and day; 60 taps a day per person at most; and only accounts with a
+-- confirmed email, at least 7 days old, count towards the 3+ at all.
 
 BEGIN;
+
+-- Not exposed by the Data API (only public and graphql_public are), so what's
+-- in here can be used by search_services_ranked but not queried directly.
+CREATE SCHEMA IF NOT EXISTS private;
+REVOKE ALL ON SCHEMA private FROM PUBLIC;
+GRANT USAGE ON SCHEMA private TO anon, authenticated;
 
 CREATE TABLE public.search_result_taps (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -99,17 +108,18 @@ BEGIN
     VALUES (v_earlier_key, p_provider_id, p_service_id, v_uid, true)
     ON CONFLICT DO NOTHING;
   END LOOP;
-
-  -- Keep the table to 180 days without a cron job: each tap clears a few.
-  DELETE FROM public.search_result_taps
-   WHERE id IN (SELECT id FROM public.search_result_taps
-                 WHERE created_at < now() - interval '180 days'
-                 ORDER BY created_at LIMIT 100);
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.record_search_tap(text, uuid, uuid, text[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_search_tap(text, uuid, uuid, text[]) TO authenticated;
+
+-- The Privacy Policy says 180 days, so it has to hold when nobody is tapping.
+SELECT cron.schedule(
+  'purge-search-result-taps',
+  '23 4 * * *',
+  $$ DELETE FROM public.search_result_taps WHERE created_at < now() - interval '180 days' $$
+);
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
 VALUES ('20261102150000', 'search_result_taps')

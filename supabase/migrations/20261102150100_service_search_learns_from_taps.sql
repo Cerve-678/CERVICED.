@@ -6,16 +6,19 @@
 -- function so scripts/search-eval.sh can grade this file on its own.
 --
 -- Changes from 20261102130000:
---  * search_learned_boosts(key): for one search, how many DIFFERENT people
---    tapped each service (or provider) — only results 2+ people chose, and
---    only counts, never who. SECURITY DEFINER because the taps table isn't
---    readable by anyone; it degrades to nothing if that table is absent.
+--  * private.search_learned_boosts(key): for one search, how many DIFFERENT
+--    established accounts (confirmed email, 7+ days old) tapped each live
+--    service or provider — only where 3+ agree, and only counts, never who.
+--    SECURITY DEFINER because the taps table isn't readable by anyone; in the
+--    private schema so it can't be queried through the API with guessed
+--    searches; degrades to nothing if the table is absent.
 --  * search_services_ranked lifts what people chose for the same search:
 --    +0.05 per person, capped at +0.2 for a service and +0.1 across a
 --    provider's services when only the provider was tapped. Text relevance
---    still decides (a full match scores ~1). Once 3+ different people have
---    tapped a service for a search it doesn't match ("infills", reworded to
---    "acrylic"), it is listed for that search at a modest score.
+--    still decides (a full match scores ~1). A service people chose for a
+--    search it doesn't match ("infills", reworded to "acrylic") is listed for
+--    that search at a modest score, beside whatever else the search finds
+--    rather than instead of it.
 --  * Place filter: up to 25 place terms instead of 5, so a county search
 --    ("kent" → its towns) reaches every town.
 --
@@ -50,7 +53,7 @@ BEGIN
   IF v_bad IS NOT NULL THEN
     RAISE EXCEPTION 'search functions changed since this migration was written: %; rebuild from live', v_bad;
   END IF;
-  IF to_regclass('public.search_result_taps') IS NULL THEN
+  IF to_regclass('public.search_result_taps') IS NULL OR to_regnamespace('private') IS NULL THEN
     RAISE EXCEPTION 'apply 20261102150000_search_result_taps first';
   END IF;
 END;
@@ -402,7 +405,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.search_learned_boosts(p_key text)
+CREATE OR REPLACE FUNCTION private.search_learned_boosts(p_key text)
 RETURNS TABLE(service_id uuid, provider_id uuid, people integer)
 LANGUAGE plpgsql
 STABLE
@@ -415,16 +418,23 @@ BEGIN
   IF to_regclass('public.search_result_taps') IS NULL OR coalesce(p_key, '') = '' THEN
     RETURN;
   END IF;
-  -- Counts only, and only where 2+ different people agree: one person
-  -- can't move a result, and nothing here names anyone.
-  RETURN QUERY EXECUTE $q$
+  -- Counts only, and only where 3+ different established accounts agree: a
+  -- confirmed email and at least 7 days old, so a handful of throwaway sign-ups
+  -- can't list a service for a search. Live providers and services only.
+  RETURN QUERY
     SELECT t.service_id, t.provider_id, count(DISTINCT t.user_id)::integer
       FROM public.search_result_taps t
-     WHERE t.query_key = $1
+      JOIN auth.users u ON u.id = t.user_id
+      JOIN public.providers p ON p.id = t.provider_id
+      LEFT JOIN public.services s ON s.id = t.service_id
+     WHERE t.query_key = left(p_key, 200)
        AND t.created_at > now() - interval '180 days'
+       AND u.email_confirmed_at IS NOT NULL
+       AND u.created_at < now() - interval '7 days'
+       AND p.has_gone_live AND p.is_active
+       AND (t.service_id IS NULL OR s.is_active)
      GROUP BY t.service_id, t.provider_id
-    HAVING count(DISTINCT t.user_id) >= 2
-  $q$ USING left(p_key, 200);
+    HAVING count(DISTINCT t.user_id) >= 3;
 END;
 $$;
 
@@ -530,8 +540,8 @@ AS $$
       )
   ),
   learned AS (
-    -- What different people tapped after this same search (2+ each).
-    SELECT * FROM public.search_learned_boosts(array_to_string((SELECT w FROM rewritten), ' '))
+    -- What different people tapped after this same search (3+ each).
+    SELECT * FROM private.search_learned_boosts(array_to_string((SELECT w FROM rewritten), ' '))
   ),
   compact AS (
     -- The query with its spaces taken out, for a provider name typed apart
@@ -641,22 +651,25 @@ AS $$
   candidates AS (
     -- Naming the provider is as strong as naming the service. What people
     -- chose for this search lifts a result a little (capped well below a
-    -- match), and 3+ people choosing a service lists it even without one.
+    -- match), and lists a service that doesn't match at all. That's "recalled",
+    -- not "strict": it must not hide the fallback results the way a real match
+    -- does, or a few accounts could become the only answer to a search.
     SELECT
       ms.*,
       CASE WHEN ms.names_provider THEN greatest(coalesce(ms.base_score, 0), 0.95)
-           WHEN ms.base_score IS NULL AND ms.learned_service >= 3 THEN 0.45
+           WHEN ms.base_score IS NULL AND ms.learned_service > 0 THEN 0.45
            ELSE ms.base_score END
         + least(0.2, 0.05 * ms.learned_service)
         + least(0.1, 0.025 * ms.learned_provider) AS score,
-      ms.base_strict OR ms.names_provider OR ms.learned_service >= 3 AS strict
+      ms.base_strict OR ms.names_provider AS strict,
+      ms.base_score IS NULL AND NOT ms.names_provider AND ms.learned_service > 0 AS recalled
     FROM matched_scores ms
   ),
   ranked AS (
     SELECT c.*,
            row_number() OVER (PARTITION BY c.provider_id ORDER BY c.score DESC, c.sort_order NULLS LAST) AS per_provider,
            bool_or(c.strict) OVER () AS any_strict,
-           max(c.score) OVER () AS best
+           max(c.score) FILTER (WHERE NOT c.recalled) OVER () AS best
     FROM candidates c
     WHERE c.score IS NOT NULL
   )
@@ -670,10 +683,10 @@ AS $$
   FROM ranked r
   WHERE r.per_provider <= 3
     -- the fallback only when nothing matched properly
-    AND (r.strict OR NOT r.any_strict)
+    AND (r.strict OR r.recalled OR NOT r.any_strict)
     -- A weak side-match ("volume" in a lip filler's description, for
     -- "volume lashes") shouldn't sit in the list beside real answers.
-    AND r.score >= 0.4 * r.best
+    AND (r.recalled OR r.score >= 0.4 * r.best)
   ORDER BY r.score DESC, r.is_featured DESC NULLS LAST, r.rating DESC NULLS LAST, r.sort_order NULLS LAST
   LIMIT least(greatest(p_limit, 1), 200);
 $$;
@@ -685,8 +698,10 @@ GRANT EXECUTE ON FUNCTION public.search_clean_query(text) TO anon, authenticated
 GRANT EXECUTE ON FUNCTION public.search_synonym_map() TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.search_rewrite_query(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.search_services_ranked(text, text, text[], integer, numeric) TO anon, authenticated;
-REVOKE ALL ON FUNCTION public.search_learned_boosts(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.search_learned_boosts(text) TO anon, authenticated;
+-- anon and authenticated run search_services_ranked as themselves, so they need
+-- this; the schema isn't exposed by the API, so they can't call it directly.
+REVOKE ALL ON FUNCTION private.search_learned_boosts(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION private.search_learned_boosts(text) TO anon, authenticated;
 
 -- Record this file's own version, so a CLI `db query -f` apply matches the
 -- file name instead of being stamped with the wall clock.

@@ -278,7 +278,7 @@ export default function TermsScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={[styles.title, { color: P.text }]}>Terms & Conditions</Text>
-        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 1 November 2026</Text>
+        <Text style={[styles.updated, { color: P.sub }]}>Last updated: 2 November 2026</Text>
 
         {SECTIONS.map(s => (
           <View key={s.heading} style={styles.section}>
