@@ -22,13 +22,35 @@ function scorePhrases(message: string, phrases: string[]): number {
   const lower = message.toLowerCase();
   let best = 0;
   for (const phrase of phrases) {
-    if (!containsPhrase(lower, phrase)) continue;
+    const gapped = phrase.includes("*");
+    if (gapped ? !containsGappedPhrase(lower, phrase) : !containsPhrase(lower, phrase)) continue;
     // Normalise by phrase length: a 20-char match is a much stronger signal
     // than a 4-char one, but cap so one long phrase can't dominate outright.
-    const strength = Math.min(0.6, 0.25 + phrase.length / 40);
+    // A gap counts for nothing — only the words actually matched do.
+    const length = gapped ? phrase.replace(/\s*\*\s*/g, " ").trim().length : phrase.length;
+    const strength = Math.min(0.6, 0.25 + length / 40);
     if (strength > best) best = strength;
   }
   return best;
+}
+
+/**
+ * "tell me about my * appointment": the words either side of each `*`, in
+ * order, with up to five words between them. Matching is otherwise
+ * contiguous, and the words people put in the middle are exactly the ones
+ * that matter — "my GEL MANICURE appointment", "when is LOLA STUDIO free" —
+ * so without a gap a phrase misses the very asks that name what they mean.
+ */
+function containsGappedPhrase(lower: string, phrase: string): boolean {
+  const parts = phrase.split("*").map((part) => part.trim()).filter(Boolean);
+  const escape = (s: string) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = parts.map(escape).join("(?:\\s+\\S+){1,5}\\s+");
+  return new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(lower);
+}
+
+/** Lower case, curly quotes straightened, trailing punctuation dropped. */
+function plainAsk(message: string): string {
+  return message.toLowerCase().replace(/[’‘]/g, "'").replace(/[\s.?!]+$/g, "").trim();
 }
 
 /**
@@ -57,6 +79,22 @@ export function understand(
   entities: EntityBag,
   hat: BeccaHat,
 ): Understanding {
+  // Becca's own words for a capability are its "did you mean" cards (see the
+  // engine's fallback): tapping one sends its description, and that must come
+  // back to the capability it names however its phrases happen to score.
+  const asked = plainAsk(message);
+  const named = capabilitiesFor(hat).find((c) => plainAsk(c.describe) === asked);
+  if (named) {
+    return {
+      capabilityId: named.id,
+      entities,
+      confidence: "high",
+      score: 1,
+      alternatives: [],
+      rawMessage: message,
+    };
+  }
+
   const ranked = capabilitiesFor(hat)
     // A capability's veto removes it from contention outright — it's for
     // modifiers that flip the intent ("edit my services" is not a request to
