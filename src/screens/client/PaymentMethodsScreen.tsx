@@ -18,7 +18,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { Ionicons } from '@expo/vector-icons';
 import Icon from '../../components/IconLibrary';
 import { useAppDialog } from '../../components/AppDialog';
-import { createSavedCardSetup, listSavedCards, removeSavedCard } from '../../services/databaseService';
+import { createSavedCardSetup, forgetSavedCards, listSavedCards, removeSavedCard } from '../../services/databaseService';
 import {
   SavedCard,
   savedCardBadge,
@@ -171,6 +171,8 @@ function SavedCardsSection() {
         throw new Error(presentError.message || 'Could not save that card.');
       }
       showToast('Card saved', 'success');
+      // A read already in flight predates this card.
+      forgetSavedCards();
       await load();
     } catch (error) {
       logger.error('[PaymentMethods] could not add a card', error);
