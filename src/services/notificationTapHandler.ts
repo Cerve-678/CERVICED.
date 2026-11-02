@@ -188,6 +188,18 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Fully booked (provider) ──────────────────────────────────────────────────
+  // The certificate shows on the provider's own profile, the root of the
+  // MyServices tab, the next time it opens.
+  if (type === 'schedule_fully_booked') {
+    if (isProvider) {
+      navigateTab('MyServices');
+    } else {
+      openNotifications();
+    }
+    return;
+  }
+
   // ── Review received (provider) ───────────────────────────────────────────────
   // Lands on the provider's own profile, where the Reviews card lives — not on
   // the booking the review came from, which shows no review at all. That
@@ -295,7 +307,7 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   }
 
   // ── Everything else → Notifications screen ───────────────────────────────────
-  // (promotion, daily_recap, schedule_fully_booked, etc.) Either they have no
+  // (promotion, daily_recap, etc.) Either they have no
   // specific destination, or the in-app handler covers them.
   openNotifications();
 }

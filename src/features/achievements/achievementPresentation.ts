@@ -18,6 +18,7 @@ const ICON_PATHS = {
   list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
   award: 'M12 3a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM8.5 14L7 21l5-3 5 3-1.5-7',
   spark: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
+  full: 'M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 13h2M11 13h2M14 13h2M8 16.5h2M11 16.5h2M14 16.5h2',
 } as const;
 
 type Progress = 'once' | 'count' | 'money' | 'rating' | 'busyDay' | 'months' | 'slots';
@@ -30,6 +31,9 @@ interface Display {
 }
 
 const DISPLAY: Record<string, Display> = {
+  fully_booked_first: { name: 'achievements.name.fullyBookedFirst', how: 'achievements.how.fullyBooked', icon: 'full', progress: 'once' },
+  fully_booked_3: { name: 'achievements.name.fullyBooked3', how: 'achievements.how.fullyBooked', icon: 'full', progress: 'count' },
+  fully_booked_months_3: { name: 'achievements.name.fullyBookedMonths3', how: 'achievements.how.fullyBookedMonths', icon: 'full', progress: 'count' },
   booking_first: { name: 'achievements.name.bookingFirst', how: 'achievements.how.bookings', icon: 'booked', progress: 'once' },
   bookings_10: { name: 'achievements.name.bookings10', how: 'achievements.how.bookings', icon: 'booked', progress: 'count' },
   bookings_50: { name: 'achievements.name.bookings50', how: 'achievements.how.bookings', icon: 'booked', progress: 'count' },
@@ -60,6 +64,7 @@ const DISPLAY: Record<string, Display> = {
 };
 
 const GROUPS: readonly { key: string; title: TranslationKey }[] = [
+  { key: 'fully_booked', title: 'achievements.group.fullyBooked' },
   { key: 'bookings', title: 'achievements.group.bookings' },
   { key: 'client_love', title: 'achievements.group.clientLove' },
   { key: 'busy', title: 'achievements.group.busy' },

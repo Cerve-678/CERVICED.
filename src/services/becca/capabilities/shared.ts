@@ -5,15 +5,58 @@
 // the previous implementation hardcoded `$` in a £ app.
 
 import type { ChatSuggestion } from "../types";
+import type { EntityBag } from "../types";
 import type { Provider } from "../../ProviderDataService";
 import type { DbProvider } from "../../../types/database";
 import { getProviderIdByDisplayName } from "../../databaseService";
 import { resolveClientLocation } from "../../clientLocationService";
 import { getDistanceKm } from "../../../utils/distance";
+import { CATEGORY_LABELS } from "../serviceCatalogue";
+import { DAY_NAMES_ABBREV, MONTH_NAMES_ABBREV, toLocalDate } from "../../../utils/dateUtils";
 
 /** GBP. This app is £ — never format money any other way. */
 export function money(amount: number): string {
   return `£${amount.toFixed(2).replace(/\.00$/, "")}`;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Loading-step wording (Capability.thinking)
+
+/** The service the turn is about, as words: "volume lashes", "nails". */
+export function serviceWords(entities: EntityBag, fallback: string): string {
+  const service = entities.service?.value;
+  if (!service) return fallback;
+  return service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
+}
+
+/** The provider the turn is about — named outright, or behind the booking. */
+export function providerWords(entities: EntityBag, fallback: string): string {
+  return entities.provider?.value.displayName ?? entities.booking?.value.providerName ?? fallback;
+}
+
+/**
+ * One of several wordings of the same answer, so Becca doesn't say a thing
+ * the same way every time. Every wording must carry the same facts; only the
+ * phrasing around them may differ.
+ */
+export function oneOf(...wordings: string[]): string {
+  return wordings[Math.floor(Math.random() * wordings.length)] ?? wordings[0] ?? "";
+}
+
+/**
+ * A date the way Becca says it: "Mon 10 Nov". Words, not "10/11/2026" — a
+ * numeric date reads as a form field, and is ambiguous across regions. Never
+ * "Today"/"Tomorrow", so "on ${dayLabel(x)}" always reads right; pair it with
+ * relativeDayLabel where a relative day is wanted.
+ */
+export function dayLabel(ymd: string): string {
+  const date = toLocalDate(ymd);
+  return `${DAY_NAMES_ABBREV[date.getDay()] ?? ""} ${date.getDate()} ${MONTH_NAMES_ABBREV[date.getMonth()] ?? ""}`.trim();
+}
+
+/** "Lola’s", "James’". */
+export function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}’` : `${name}’s`;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
