@@ -79,7 +79,11 @@ import {
   setMyServiceActive,
   updateMyService,
   type MyServiceDraft,
+  getMyUnseenFullyBooked,
+  markFullyBookedSeen,
+  type UnseenFullyBooked,
 } from '../../services/databaseService';
+import FullyBookedCertificate from '../../components/FullyBookedCertificate';
 import type { DbPortfolioItem, DbService } from '../../types/database';
 import type { ProviderServicesStackParamList } from '../../navigation/types';
 import { resolveProviderTheme, withAlpha, isDarkColor, blend } from '../../constants/providerThemes';
@@ -719,7 +723,7 @@ interface Props {
 }
 
 export default function ProviderMyProfileScreen({ navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
   // Measured per render, not captured at module load: the paired tiles and the
   // quick-action row both divide the screen width between them.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -772,6 +776,33 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [profileQrVisible, setProfileQrVisible] = useState(false);
+  // Shown once per fill: marked seen as it closes, so a refocus doesn't bring it back.
+  const [certificate, setCertificate] = useState<UnseenFullyBooked | null>(null);
+  // Closed on this device. Covers the mark-seen call failing or still being in
+  // flight when the screen refocuses, so it can't pop up a second time.
+  const closedCertificates = useRef(new Set<string>());
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getMyUnseenFullyBooked()
+        .then((row) => {
+          if (active && row && !closedCertificates.current.has(row.fillId)) setCertificate(row);
+        })
+        .catch((err) => logger.warn('[MyProfile] fully booked certificate check failed:', err));
+      return () => { active = false; };
+    }, []),
+  );
+
+  const closeCertificate = useCallback((then?: () => void) => {
+    const shown = certificate;
+    setCertificate(null);
+    if (shown) {
+      closedCertificates.current.add(shown.fillId);
+      markFullyBookedSeen(shown.fillId).catch((err) => logger.error('[MyProfile] marking certificate seen failed:', err));
+    }
+    then?.();
+  }, [certificate]);
 
   // Which half of the sheet is showing. Not navigation state: both halves read
   // the same already-loaded data, so switching must not refetch or reset the
@@ -2305,6 +2336,17 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             subtextColor={PP.sub}
             borderColor={PP.border}
             onClose={() => setProfileQrVisible(false)}
+          />
+        ) : null}
+        {certificate ? (
+          <FullyBookedCertificate
+            visible
+            providerName={providerData.providerName || 'Your business'}
+            throughDate={certificate.throughDate}
+            filledAt={certificate.filledAt}
+            isDarkMode={isDarkMode}
+            onDone={() => closeCertificate()}
+            onManageSchedule={() => closeCertificate(() => navigation.navigate('ProviderSchedule'))}
           />
         ) : null}
       </SafeAreaView>
