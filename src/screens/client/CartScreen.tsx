@@ -72,7 +72,7 @@ import { env } from '../../utils/env';
 import { toArgbHex } from '../../utils/color';
 import { formatLongDateNoYear, formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
 import { newestAddedItem } from '../../utils/newestAddedItem';
-import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
+import { CART_ISSUE, describeReserveFailure, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee, PAYPAL_MAX_CHECKOUT_TOTAL } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
@@ -4375,22 +4375,13 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       } catch (err) {
                         logger.error('[CartScreen] holdCartCheckoutSlots FAILED:', err);
                         // prepareCheckout() throws the raw Supabase PostgrestError
-                        // (which DOES extend Error) rather than a BookingError, so a
-                        // deliberate DB guard message — the safety-ack gate's plain
-                        // RAISE EXCEPTION, which Postgres defaults to SQLSTATE P0001 —
-                        // needs unwrapping too, not just BookingError, or the client
-                        // never learns WHY. But PostgrestError carries the SAME shape
-                        // for a genuine technical failure (RLS, a constraint
-                        // violation, anything else with a real Postgres code), so
-                        // unwrapping has to stop at P0001 — anything else falls back
-                        // to the generic line instead of showing raw Postgres text.
-                        const isTechnical = (err as any)?.code && (err as any).code !== 'P0001';
-                        const message = err instanceof BookingError
-                          ? err.message
-                          : err instanceof Error && !isTechnical
-                            ? err.message.replace(/^Error:\s*/, '')
-                            : "We couldn't reserve that time. Please try again.";
-                        const title = err instanceof BookingError ? 'Scheduling Conflict' : 'Booking Not Completed';
+                        // rather than a BookingError. describeReserveFailure shows a
+                        // DB guard's own words (P0001) and never raw Postgres text,
+                        // naming the known causes (slot just taken, server busy,
+                        // no connection) instead of the catch-all.
+                        const { title, message } = err instanceof BookingError
+                          ? { title: 'Scheduling Conflict', message: err.message }
+                          : describeReserveFailure(err);
                         // Close the summary sheet FIRST. CartScreen's
                         // DialogHost is a sibling of this <Modal>, not a
                         // child, so an alert raised while the sheet is

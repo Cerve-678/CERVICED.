@@ -101,6 +101,46 @@ export const CART_ISSUE = {
   bookingFailed: "This service couldn't be booked — try again",
 } as const;
 
+/** What the client reads when reserving the cart's slots fails. */
+export const RESERVE_FAILURE = {
+  slotJustTaken: 'Someone has just booked one of these times. Pick another time and try again.',
+  noConnection: "We couldn't connect just now. Check your connection and try again.",
+  serverBusy: "We're having trouble connecting right now. Please try again in a moment.",
+  generic: "We couldn't reserve that time. Please try again.",
+} as const;
+
+/** Turns a failed slot reservation into the alert the client sees.
+ *
+ *  A deliberate DB guard (a plain RAISE EXCEPTION, SQLSTATE P0001) is written
+ *  for the client, so its own words are shown. Any other Postgres code is a
+ *  technical failure and never shown raw — but the ones with a known cause get
+ *  a sentence that says what happened instead of the catch-all:
+ *  - 23505 / 23P01: the exact slot or the overlap rule was beaten by another
+ *    booking landing at the same moment, which the availability check missed.
+ *  - 57014: the statement ran past its time limit because the database was
+ *    overloaded. Nothing about the cart is wrong; trying again works.
+ *  - An empty code is the client library's own fetch failure ("TypeError:
+ *    Network request failed"), which used to be shown word for word. */
+export function describeReserveFailure(err: unknown): { title: string; message: string } {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === '23505' || code === '23P01') {
+    return { title: 'Scheduling Conflict', message: RESERVE_FAILURE.slotJustTaken };
+  }
+  if (code === '57014') {
+    return { title: 'Booking Not Completed', message: RESERVE_FAILURE.serverBusy };
+  }
+  if (code === '') {
+    return { title: 'Booking Not Completed', message: RESERVE_FAILURE.noConnection };
+  }
+  if (typeof code === 'string' && code !== 'P0001') {
+    return { title: 'Booking Not Completed', message: RESERVE_FAILURE.generic };
+  }
+  if (err instanceof Error && err.message) {
+    return { title: 'Booking Not Completed', message: err.message.replace(/^Error:\s*/, '') };
+  }
+  return { title: 'Booking Not Completed', message: RESERVE_FAILURE.generic };
+}
+
 /** Everything wrong with a cart that can be found WITHOUT a network call, as
  *  itemId → reason. Runs on every render, so a cart that cannot possibly check
  *  out says so before the client taps anything.
