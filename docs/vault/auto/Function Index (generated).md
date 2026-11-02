@@ -5,7 +5,7 @@
 
 #generated
 
-**2900 functions** across **393 files**.
+**2910 functions** across **395 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -44,7 +44,7 @@
 - `ProviderFontPicker.tsx` — ProviderFontPicker
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
-- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipStatusLabel
+- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
@@ -153,9 +153,13 @@
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
 - `useMaintenanceDueCount.ts` — **useMaintenanceDueCount**
 
-### `src/features/payments/` (2)
+### `src/features/notifications/` (1)
+- `notificationPresentation.ts` — **isCertificateNotification** · **notificationAmount** · **notificationDayHeadings** · **notificationDayLabel** · **notificationKindLabel** · startOfDay
+
+### `src/features/payments/` (3)
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
+- `tipsByBooking.ts` — **groupTipsByBooking**
 
 ### `src/features/provider-bookings/` (1)
 - `tipPresentation.ts` — **formatTipAmount** · pounds · **providerTipNote**
@@ -318,7 +322,7 @@
 - `HelpCentreScreen.tsx` — buildMoreActions · FAQItem · handleContactSupport · HelpCentreScreen · openMore · runAction
 - `InfoScreen.tsx` — ScreenNameHere
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow
-- `NotificationsScreen.tsx` — closeMessagePopup · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
+- `NotificationsScreen.tsx` — actionLabelFor · closeMessagePopup · dayHeadings · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TermsScreen.tsx` — TermsScreen
 - `TextSizingScreen.tsx` — TextSizingScreen

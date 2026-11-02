@@ -11,7 +11,6 @@ import {
   StatusBar,
   Animated,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from '../../components/SafeArea';
 import { useFont } from '../../contexts/FontContext';
@@ -55,6 +54,12 @@ import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { logger, reportError } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
 import { dateToYMD } from '../../utils/dateUtils';
+import {
+  isCertificateNotification,
+  notificationAmount,
+  notificationDayHeadings,
+  notificationKindLabel,
+} from '../../features/notifications/notificationPresentation';
 
 interface Notification {
   id: string;
@@ -86,14 +91,13 @@ interface Notification {
   read: boolean;
   priority: 'high' | 'medium' | 'low';
   actionable: boolean;
-  provider: string;
-  service: string;
-  providerImage?: any;
   bookingId?: string | undefined;
   status?: string | undefined;
   providerId?: string | undefined; // For new_provider notifications
   /** Beauty Maintenance: which item a maintenance_due row is about. */
   maintenanceItemId?: string | undefined;
+  /** A whole month fully booked, the only kind that earns a certificate. */
+  certificate: boolean;
 }
 
 // ── Skeleton Notification Row ───────────────────────────────────
@@ -188,7 +192,7 @@ function DeleteSwipeAction({
 // changes here: just set recipient_role correctly where the row is inserted.
 
 // Types whose whole point is "go and look at this booking" — the row shows the
-// action itself. Everything else keeps Read More, which opens the full message.
+// action itself. Every row opens the full message when tapped.
 const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'booking_pending']);
 // Providers need a direct route to act on an incoming booking and to inspect a
 // cancellation. Clients keep their existing notification treatment, because a
@@ -319,10 +323,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     read: db.is_read,
     priority: db.priority as Notification['priority'],
     actionable: db.is_actionable,
-    provider: '',
-    service: '',
     bookingId: db.booking_id ?? undefined,
     maintenanceItemId: maintenanceItemIdOf(db.metadata),
+    certificate: isCertificateNotification(db.type, db.metadata),
     providerId: db.provider_id ?? undefined,
   });
 
@@ -413,6 +416,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return modeFiltered;
     }
   }, [notifications, selectedFilter]);
+
+  const dayHeadings = useMemo(() => notificationDayHeadings(filteredNotifications), [filteredNotifications]);
 
   // ✅ Mark single notification as read — optimistic, rolled back on failure
   const markAsRead = useCallback(async (notificationId: string) => {
@@ -995,132 +1000,149 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     }
   };
 
+  // A shorter fully booked run has no certificate to view, only the profile.
+  const actionLabelFor = (item: Notification) =>
+    item.type === 'schedule_fully_booked' && !item.certificate
+      ? 'Open My Profile'
+      : getActionButtonText(item.type);
+
+  // Warm shadow on an unread row; read rows have none.
+  const liftedShadow = {
+    shadowColor: isDarkMode ? '#000000' : isProvider ? '#26201E' : '#3F1E36',
+    shadowOpacity: isDarkMode ? 0.4 : 0.14,
+  };
+  // The provider dark sub fails contrast on small text, so it uses accentText there.
+  const quietText = isDarkMode && isProvider ? P.accentText : P.sub;
+
   // ✅ Render swipe-to-delete action — Apple Mail-style: a round red "bubble"
   // pinned to the trailing edge (Swipeable already positions this container
   // as the row is dragged, so no extra translateX here) that pops in with a
   // spring overshoot as it crosses the reveal threshold, rather than a flat
   // rectangular bar.
   // ✅ Render individual notification card
-  const renderNotification = ({ item }: { item: Notification }) => (
-    <Swipeable
-      ref={(ref) => {
-        if (ref) rowSwipeablesRef.current.set(item.id, ref);
-        else rowSwipeablesRef.current.delete(item.id);
-      }}
-      renderRightActions={(progress) => (
-        <DeleteSwipeAction
-          progress={progress}
-          notificationId={item.id}
-          onDelete={deleteNotification}
-        />
-      )}
-      overshootRight={false}
-      onSwipeableWillOpen={() => {
-        if (openRowIdRef.current && openRowIdRef.current !== item.id) {
-          rowSwipeablesRef.current.get(openRowIdRef.current)?.close();
-        }
-        openRowIdRef.current = item.id;
-      }}
-      onSwipeableClose={() => {
-        if (openRowIdRef.current === item.id) openRowIdRef.current = null;
-      }}
-    >
-      <GestureTouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => { hapticLight(); showFullMessage(item); }}
-        style={styles.notificationItem}
-      >
-        <View
-          style={[
-            styles.notificationBlur,
-            item.read
-              ? { backgroundColor: P.card, borderColor: P.border }
-              : {
-                  backgroundColor: P.accentDim,
-                  borderColor: P.accent,
-                  borderLeftWidth: 3,
-                  borderLeftColor: P.accent,
-                },
-          ]}
-        >
-          <View style={styles.notificationHeader}>
-            <View style={styles.notificationLeft}>
-              <View style={[
-                styles.iconContainer,
-                { backgroundColor: `${getBellColor(item.type)}${item.read ? '0D' : '15'}` },
-                item.read && { opacity: 0.6 },
-              ]}>
-                <BellIcon
-                  size={24}
-                  color={getBellColor(item.type)}
-                />
-              </View>
-              {item.providerImage && (
-                <Image
-                  source={item.providerImage}
-                  style={styles.providerImage}
-                  contentFit="cover"
-                />
-              )}
-            </View>
-
-            <View style={styles.notificationContent}>
-              <View style={styles.notificationTitleRow}>
-                <Text style={[
-                  textStyles.button,
-                  styles.notificationTitle,
-                  styles.notificationTitleBold,
-                  { color: item.read ? P.sub : P.text },
-                  !item.read && styles.unreadTitle
-                ]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                {!item.read && <View style={[styles.unreadDot, { backgroundColor: P.accent }]} />}
-              </View>
-
-              <Text style={[textStyles.body, styles.notificationMessage, { color: P.sub }]} numberOfLines={2}>
-                {item.message}
-              </Text>
-
-              <View style={styles.notificationFooter}>
-                <Text style={[textStyles.caption, styles.notificationTime, { color: P.sub }]}>
-                  {formatTimestamp(item.timestamp)}
-                </Text>
-
-                {/* Provider booking requests and cancellations have a direct
-                    destination, so surface the action in the row. The client
-                    keeps its existing reminder/request treatment. */}
-                {item.actionable && (
-                  INLINE_ACTION_TYPES.has(item.type)
-                  || (isProvider && PROVIDER_INLINE_BOOKING_ACTION_TYPES.has(item.type))
-                ) ? (
-                  <TouchableOpacity
-                    style={[styles.readMoreButton, { backgroundColor: P.accent, borderColor: P.accent }]}
-                    onPress={() => {
-                      hapticMedium();
-                      markAsRead(item.id);
-                      handleNotificationAction(item);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.readMoreText, { color: P.onAccent }]}>{getActionButtonText(item.type)}</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.readMoreButton, { backgroundColor: P.accentDim, borderColor: P.border }]}
-                    onPress={() => { hapticLight(); showFullMessage(item); }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.readMoreText, { color: P.accentText }]}>Read More</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+  const renderNotification = ({ item }: { item: Notification }) => {
+    const heading = dayHeadings.get(item.id);
+    const amount = notificationAmount(item.type, item.title, item.message);
+    const showInlineAction = item.actionable && (
+      INLINE_ACTION_TYPES.has(item.type)
+      || (isProvider && PROVIDER_INLINE_BOOKING_ACTION_TYPES.has(item.type))
+    );
+    return (
+      <>
+        {!!heading && (
+          <View style={styles.dayHeading}>
+            <Text style={[styles.dayHeadingText, { color: quietText }]}>{heading}</Text>
+            <View style={[styles.dayHeadingRule, { backgroundColor: P.sep }]} />
           </View>
-        </View>
-      </GestureTouchableOpacity>
-    </Swipeable>
-  );
+        )}
+        <Swipeable
+          ref={(ref) => {
+            if (ref) rowSwipeablesRef.current.set(item.id, ref);
+            else rowSwipeablesRef.current.delete(item.id);
+          }}
+          renderRightActions={(progress) => (
+            <DeleteSwipeAction
+              progress={progress}
+              notificationId={item.id}
+              onDelete={deleteNotification}
+            />
+          )}
+          overshootRight={false}
+          onSwipeableWillOpen={() => {
+            if (openRowIdRef.current && openRowIdRef.current !== item.id) {
+              rowSwipeablesRef.current.get(openRowIdRef.current)?.close();
+            }
+            openRowIdRef.current = item.id;
+          }}
+          onSwipeableClose={() => {
+            if (openRowIdRef.current === item.id) openRowIdRef.current = null;
+          }}
+        >
+          {/* The side and bottom padding sit inside Swipeable because it clips
+              to its own bounds, which would cut off the unread row's shadow. */}
+          <GestureTouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => { hapticLight(); showFullMessage(item); }}
+            style={styles.notificationItem}
+          >
+            <View
+              style={[
+                styles.notificationCard,
+                item.read
+                  ? { backgroundColor: P.surface, borderColor: 'transparent' }
+                  : [styles.notificationLifted, liftedShadow, { backgroundColor: P.card, borderColor: P.border }],
+              ]}
+            >
+              {item.certificate ? (
+                <View style={[styles.seal, { borderColor: P.accentText }]}>
+                  <View style={[styles.sealInner, { borderColor: P.accentText }]} />
+                  <Ionicons name="star-outline" size={22} color={P.accentText} />
+                </View>
+              ) : (
+                <View style={[
+                  styles.iconContainer,
+                  { backgroundColor: `${getBellColor(item.type)}${item.read ? '0D' : '15'}` },
+                  item.read && styles.iconSettled,
+                ]}>
+                  <BellIcon size={20} color={getBellColor(item.type)} />
+                </View>
+              )}
+
+              <View style={styles.notificationContent}>
+                <View style={styles.notificationTitleRow}>
+                  {item.certificate ? (
+                    <Text style={[styles.certificateTitle, { color: P.text }]}>{item.title}</Text>
+                  ) : (
+                    <Text style={[
+                      textStyles.button,
+                      styles.notificationTitle,
+                      styles.notificationTitleBold,
+                      { color: item.read ? quietText : P.text },
+                      !item.read && styles.unreadTitle
+                    ]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                  )}
+                  {!item.read && <View style={[styles.unreadDot, { backgroundColor: P.accent }]} />}
+                </View>
+
+                <Text style={[textStyles.body, styles.notificationMessage, { color: quietText }]} numberOfLines={2}>
+                  {item.message}
+                </Text>
+
+                <View style={styles.notificationFooter}>
+                  <Text style={[textStyles.caption, styles.notificationTime, { color: quietText }]}>
+                    {formatTimestamp(item.timestamp)}
+                  </Text>
+
+                  {/* Provider booking requests and cancellations have a direct
+                      destination, so surface the action in the row. The client
+                      keeps its existing reminder/request treatment. */}
+                  {showInlineAction ? (
+                    <TouchableOpacity
+                      style={[styles.inlineActionButton, { backgroundColor: P.accent, borderColor: P.accent }]}
+                      onPress={() => {
+                        hapticMedium();
+                        markAsRead(item.id);
+                        handleNotificationAction(item);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.inlineActionText, { color: P.onAccent }]}>{actionLabelFor(item)}</Text>
+                    </TouchableOpacity>
+                  ) : amount ? (
+                    <Text style={[styles.rowAmount, { color: P.accentText }]}>{amount}</Text>
+                  ) : item.type === 'tip_received' ? (
+                    <Text style={[styles.viewTip, { color: P.accentText }]}>View tip</Text>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </GestureTouchableOpacity>
+        </Swipeable>
+      </>
+    );
+  };
 
   return (
     <ThemedBackground>
@@ -1144,8 +1166,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               {isProvider ? 'Business Notifications' : 'Notifications'}
             </Text>
             {unreadCount > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+              <View style={[styles.unreadBadge, { backgroundColor: P.accent }]}>
+                <Text style={[styles.unreadBadgeText, { color: P.onAccent }]}>{unreadCount}</Text>
               </View>
             )}
           </View>
@@ -1270,90 +1292,112 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           >
             <View style={styles.modalContainer}>
               <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-                <View style={[styles.messagePopup, { backgroundColor: P.card, borderColor: P.border }]}>
-                  {selectedNotification && (
-                    <>
-                      {/* Accent Rail — the one saturated colour on the card,
-                          keyed to the notification type (green/amber/gold/…). */}
-                      <View
-                        style={[
-                          styles.popupAccentRail,
-                          { backgroundColor: getBellColor(selectedNotification.type) },
-                        ]}
-                      />
-
-                      <View style={styles.popupHeader}>
-                        <View style={styles.popupHeaderLeft}>
-                          {/* Bell keeps its type colour (green/amber/gold/…),
-                              alongside the type-coloured accent rail. */}
-                          <View style={[
-                            styles.popupIconContainer,
-                            { backgroundColor: `${getBellColor(selectedNotification.type)}20`, borderColor: P.border }
-                          ]}>
-                            <BellIcon
-                              size={40}
-                              color={getBellColor(selectedNotification.type)}
-                            />
-                          </View>
-                          {selectedNotification.providerImage && (
-                            <Image
-                              source={selectedNotification.providerImage}
-                              style={styles.popupProviderImage}
-                              contentFit="cover"
-                            />
-                          )}
-                        </View>
-
-                        <TouchableOpacity
-                          style={[styles.closeButton, { backgroundColor: P.surface }]}
-                          onPress={() => { hapticLight(); closeMessagePopup(); }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.closeButtonText, { color: P.text }]}>×</Text>
-                        </TouchableOpacity>
+                {selectedNotification?.certificate ? (
+                  // A whole month fully booked: the certificate's framed look.
+                  <View style={[styles.certificatePopup, { backgroundColor: P.card, borderColor: P.border }]}>
+                    <View style={[styles.certificateFrame, { borderColor: P.accent }]}>
+                      <View style={[styles.seal, styles.certificateSeal, { borderColor: P.accentText }]}>
+                        <View style={[styles.sealInner, { borderColor: P.accentText }]} />
+                        <Ionicons name="star-outline" size={24} color={P.accentText} />
                       </View>
-
-                      <Text style={[textStyles.h3, styles.popupTitle, { color: P.text }]}>
-                        {selectedNotification.title}
+                      <Text style={[styles.popupKicker, { color: quietText }]}>
+                        {notificationKindLabel(selectedNotification.type)}
                       </Text>
-
-                      {!!selectedNotification.provider && (
-                        <Text style={[textStyles.caption, styles.popupByline, { color: P.sub }]}>
-                          with {selectedNotification.provider}
-                        </Text>
+                      <Text style={[styles.certificatePopupTitle, { color: P.text }]}>{selectedNotification.title}</Text>
+                      <View style={[styles.certificateRule, { backgroundColor: P.accent }]} />
+                      <Text style={[textStyles.body, styles.certificateMessage, { color: quietText }]}>
+                        {selectedNotification.message}
+                      </Text>
+                      {selectedNotification.actionable && (
+                        <TouchableOpacity
+                          style={[styles.popupActionButton, { backgroundColor: P.accent }]}
+                          onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[textStyles.button, styles.popupActionText, { color: P.onAccent }]}>
+                            {actionLabelFor(selectedNotification)}
+                          </Text>
+                        </TouchableOpacity>
                       )}
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.closeButton, styles.certificateClose, { backgroundColor: P.surface }]}
+                      onPress={() => { hapticLight(); closeMessagePopup(); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.closeButtonText, { color: P.text }]}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={[styles.messagePopup, { backgroundColor: P.card, borderColor: P.border }]}>
+                    {selectedNotification && (() => {
+                      const amount = notificationAmount(selectedNotification.type, selectedNotification.title, selectedNotification.message);
+                      return (
+                        <>
+                          {/* Accent Rail — the one saturated colour on the card,
+                              keyed to the notification type (green/amber/gold/…). */}
+                          <View style={[styles.popupAccentRail, { backgroundColor: getBellColor(selectedNotification.type) }]} />
 
-                      <ScrollView style={styles.popupMessageScroll}>
-                        <Text style={[textStyles.body, styles.popupMessage, { color: P.sub }]}>
-                          {selectedNotification.message}
-                        </Text>
-                      </ScrollView>
+                          <View style={styles.popupHeader}>
+                            <View style={styles.popupHeaderLeft}>
+                              <View style={[styles.popupIconContainer, { backgroundColor: `${getBellColor(selectedNotification.type)}20` }]}>
+                                <BellIcon size={22} color={getBellColor(selectedNotification.type)} />
+                              </View>
+                              <Text style={[styles.popupKicker, { color: quietText }]} numberOfLines={1}>
+                                {notificationKindLabel(selectedNotification.type)}
+                              </Text>
+                            </View>
 
-                      <View style={[styles.popupFooter, { borderTopColor: P.sep }]}>
-                        <Text style={[textStyles.caption, styles.popupTime, { color: P.sub }]}>
-                          {formatTimestamp(selectedNotification.timestamp)}
-                        </Text>
+                            <TouchableOpacity
+                              style={[styles.closeButton, { backgroundColor: P.surface }]}
+                              onPress={() => { hapticLight(); closeMessagePopup(); }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.closeButtonText, { color: P.text }]}>×</Text>
+                            </TouchableOpacity>
+                          </View>
 
-                        {selectedNotification.actionable && (
-                          <TouchableOpacity
-                            style={[
-                              styles.popupActionButton,
-                              // Colour-outlined rather than solid-filled — quieter,
-                              // so the rail stays the loudest use of the type colour.
-                              { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: getBellColor(selectedNotification.type) }
-                            ]}
-                            onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={[textStyles.button, styles.popupActionText, { color: getBellColor(selectedNotification.type) }]}>
-                              {getActionButtonText(selectedNotification.type)}
+                          {!!amount && (
+                            <Text style={[styles.popupAmount, { color: P.accentText }]}>{amount}</Text>
+                          )}
+
+                          <Text style={[textStyles.h3, styles.popupTitle, { color: P.text }]}>
+                            {selectedNotification.title}
+                          </Text>
+
+                          <ScrollView style={styles.popupMessageScroll}>
+                            <Text style={[textStyles.body, styles.popupMessage, { color: quietText }]}>
+                              {selectedNotification.message}
                             </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </>
-                  )}
-                </View>
+                          </ScrollView>
+
+                          <View style={styles.popupFooter}>
+                            <Text style={[textStyles.caption, styles.popupTime, { color: quietText }]}>
+                              {formatTimestamp(selectedNotification.timestamp)}
+                            </Text>
+
+                            {selectedNotification.actionable && (
+                              <TouchableOpacity
+                                style={[
+                                  styles.popupActionButton,
+                                  // Colour-outlined rather than solid-filled — quieter,
+                                  // so the rail stays the loudest use of the type colour.
+                                  { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: getBellColor(selectedNotification.type) },
+                                ]}
+                                onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={[textStyles.button, styles.popupActionText, { color: getBellColor(selectedNotification.type) }]}>
+                                  {actionLabelFor(selectedNotification)}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </>
+                      );
+                    })()}
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -1407,7 +1451,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   unreadBadge: {
-    backgroundColor: '#FF1744',
     // More rounded badge (pill shape)
     borderRadius: 12,
     minWidth: 24,
@@ -1418,7 +1461,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   unreadBadgeText: {
-    color: '#fff',
     fontSize: fonts.body.small,
     fontWeight: 'bold',
     fontFamily: 'BakbakOne-Regular',
@@ -1442,37 +1484,71 @@ const styles = StyleSheet.create({
   filterContainer: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
 
   // Notifications List
-  notificationsContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  notificationItem: { marginBottom: spacing.lg },
-  notificationBlur: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing.lg,
+  notificationsContent: { paddingBottom: spacing.xxl },
+  dayHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: spacing.lg + 6,
+    paddingTop: 6,
+    paddingBottom: 6,
   },
-  notificationHeader: { flexDirection: 'row', gap: spacing.gap.md },
-  notificationLeft: { alignItems: 'center', gap: spacing.gap.sm },
+  dayHeadingText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10.5,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  dayHeadingRule: { flex: 1, height: StyleSheet.hairlineWidth },
+  notificationItem: { paddingHorizontal: spacing.lg, paddingTop: 4, paddingBottom: 12 },
+  notificationCard: {
+    flexDirection: 'row',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+  },
+  notificationLifted: {
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
   iconContainer: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
   },
-  providerImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: dimensions.card.gap,
-    borderColor: 'rgba(255,255,255,0.6)',
+  iconSettled: { opacity: 0.7 },
+  seal: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  notificationContent: { flex: 1 },
+  sealInner: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 18,
+    borderWidth: 1,
+    opacity: 0.45,
+  },
+  notificationContent: { flex: 1, minWidth: 0 },
   notificationTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 4,
   },
   notificationTitle: { flex: 1 },
+  certificateTitle: { flex: 1, fontFamily: 'Prata-Regular', fontSize: 17, lineHeight: 22 },
   unreadTitle: { fontWeight: 'bold' },
   unreadDot: {
     width: 8,
@@ -1486,21 +1562,24 @@ const styles = StyleSheet.create({
   notificationFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    minHeight: 26,
   },
   notificationTime: {},
-  readMoreButton: {
+  inlineActionButton: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  readMoreText: {
+  inlineActionText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     fontWeight: 'bold',
     letterSpacing: 0.3,
   },
+  rowAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 16, letterSpacing: 0.3 },
+  viewTip: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 0.4 },
 
   // Popup Modal
   modalOverlay: { 
@@ -1511,9 +1590,10 @@ const styles = StyleSheet.create({
   },
   modalContainer: { width: '94%', maxWidth: 460, maxHeight: '80%' },
   messagePopup: {
-    borderRadius: 25,
-    padding: 24,
+    borderRadius: 24,
     paddingLeft: 28, // clear the accent rail on the left edge
+    paddingRight: 22,
+    paddingVertical: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
@@ -1533,23 +1613,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16
   },
-  popupHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  popupHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, marginRight: 12 },
   popupIconContainer: {
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 30,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 20,
   },
-  popupProviderImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(74,35,64,0.3)',
+  popupKicker: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10.5,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    flexShrink: 1,
   },
   closeButton: {
     width: 36,
@@ -1559,22 +1637,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeButtonText: { fontSize: 24, fontWeight: 'bold' },
+  popupAmount: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 38,
+    lineHeight: 42,
+    letterSpacing: 0.5,
+    marginTop: 18,
+  },
   popupTitle: {
-    marginBottom: 4,
+    marginTop: 10,
+    marginBottom: 6,
     textAlign: 'left',
     fontFamily: 'BakbakOne-Regular',
     // A touch smaller than the shared h3 (24) — local to this popup.
-    fontSize: 20,
-    lineHeight: 26,
-  },
-  // "with {provider}" byline under the title in the left-aligned reading layout.
-  popupByline: {
-    textAlign: 'left',
-    marginBottom: 16,
+    fontSize: 18,
+    lineHeight: 24,
   },
   popupMessageScroll: {
     maxHeight: 200,
-    marginBottom: 16,
+    marginBottom: 18,
   },
   popupMessage: {
     lineHeight: 22,
@@ -1584,24 +1665,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 12,
   },
-  popupTime: {},
+  popupTime: { flexShrink: 1 },
   popupActionButton: {
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 16,
+    paddingVertical: 11,
+    borderRadius: 100,
   },
   popupActionText: { 
-    color: '#fff', 
     letterSpacing: 0.5,
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
   },
+  certificatePopup: {
+    borderRadius: 24,
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  certificateFrame: {
+    borderWidth: 3,
+    borderRadius: 14,
+    paddingTop: 30,
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+    alignItems: 'center',
+  },
+  certificateSeal: { width: 50, height: 50, borderRadius: 25, marginBottom: 12 },
+  certificatePopupTitle: {
+    fontFamily: 'Prata-Regular',
+    fontSize: 28,
+    lineHeight: 34,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  certificateRule: { width: 36, height: 2, borderRadius: 2, marginBottom: 12 },
+  certificateMessage: { lineHeight: 21, textAlign: 'center', marginBottom: 16 },
+  certificateClose: { position: 'absolute', top: 24, right: 24 },
 
   // Empty State
-  emptyState: { marginTop: 100, paddingHorizontal: 20 },
+  emptyState: { marginTop: 100, paddingHorizontal: spacing.lg + 20 },
   emptyStateBlur: {
     padding: 40,
     borderRadius: 25,
@@ -1623,7 +1727,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: 74,
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 12,
   },
   deleteBubble: {
     width: 52,
