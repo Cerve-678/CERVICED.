@@ -5,7 +5,7 @@
 
 #generated
 
-**2949 functions** across **402 files**.
+**2950 functions** across **402 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -37,7 +37,7 @@
 - `MasonryGrid.tsx` — and · columns · component · **masonryColumnsForWidth** · MasonryGridInner · type
 - `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handlePanelPickTime · handleRequestDateChange · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · releaseNote · renderGroup · requestPanel · requestTimesForDate · selectDateFromTap
 - `MultiBookingSheet.tsx` — cancelSeparateEmergency · confirmSeparateEmergency · depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSeparateDate · handleSeparateTime · handleSubmit · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
-- `NotificationPreferencesView.tsx` — load · NotificationPreferencesView · persist · retrySave · toggle · ToggleRow
+- `NotificationPreferencesView.tsx` — load · NotificationPreferencesView · persist · retrySave · StaticRow · toggle · ToggleRow
 - `PasswordRequirements.tsx` — **PasswordRequirements**
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
