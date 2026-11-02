@@ -56,11 +56,17 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Written 2026-11-02, NOT applied ("has space again" after a short or blocked-out diary)
+### Applied 2026-11-02 (Fully Booked certificate)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261102100000 | `openings_alert_short_horizon` | **UNAPPLIED, awaiting the user's OK.** Frontier at authoring: live `20261101190000`; `20261101200000` (Fully Booked certificate, #219) is unapplied and does not touch this function. **Apply that one first** so the numbers stay in order. Redefines `process_follow_openings_alerts` from live (md5 guard): skips providers with under 7 days left to book, and blocked-out diaries with nothing booked, leaving their state alone. No tables, no data changes. The file records its own version. No app change, so it can be applied any time. |
+| 20261101200000 | `fully_booked_certificate` | **APPLIED 2026-11-02** by the user (SQL editor), version recorded by the file. Verified live: both tables (RLS on, 0 policies, not readable by authenticated, 0 rows), the one-certificate-a-month index, cron `provider-fully-booked-alerts` at `40 * * * *`, the old column gone, all four functions carry `certificate_month`, `get_my_unseen_fully_booked`/`mark_fully_booked_seen` authenticated only, the job not callable by authenticated. Before this: Frontier at authoring: live `20261101190000`. Re-check it and open branches before applying. New private tables `provider_fully_booked_state` and `provider_fully_booked_fills` (RLS on, no policies, no grants). Rewrites `process_provider_fully_booked_alerts` (dead until now: nothing could switch it on, 0 ever sent) and moves its cron `provider-fully-booked-alerts` from `0 8 * * *` to `40 * * * *`. Drops the dead column `providers.fully_booked_alert_last_sent_at`. Adds RPCs `get_my_unseen_fully_booked`, `mark_fully_booked_seen` (authenticated). Redefines `get_my_provider_achievements` from live, adding the Fully Booked group. md5 guards on both redefined functions. Full also needs a booking in range and 7+ days left to book. A whole month (no space to a month end 4+ weeks away) gets the certificate and achievements, once a month; a shorter run only a notification, at most weekly. At authoring, all 9 live booking providers had free slots, so applying it sends nothing. The file records its own version. Apply **before** `feat/fully-booked-certificate` merges, or My Profile logs a warning on every open and Achievements shows no Fully Booked group. |
+
+### Applied 2026-11-02 ("has space again" after a short or blocked-out diary)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261102100000 | `openings_alert_short_horizon` | **APPLIED 2026-11-02** by the user (SQL editor), straight after `20261101200000`, version recorded. Verified live: both skips present, the closed-schedule check kept, cron unchanged at `20 * * * *`. Before this: Frontier at authoring: live `20261101190000`; `20261101200000` (Fully Booked certificate, #219) is unapplied and does not touch this function. **Apply that one first** so the numbers stay in order. Redefines `process_follow_openings_alerts` from live (md5 guard): skips providers with under 7 days left to book, and blocked-out diaries with nothing booked, leaving their state alone. No tables, no data changes. The file records its own version. No app change, so it can be applied any time. |
 
 ### Applied 2026-11-01 (close a schedule by hand)
 
