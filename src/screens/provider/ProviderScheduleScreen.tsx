@@ -40,6 +40,7 @@ import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import CloseScheduleSection from '../../features/providers/CloseScheduleSection';
+import { navigateAfterDismiss, openProviderBookingOnCalendar } from '../../navigation/rootNavigate';
 import { toReleaseDay } from '../../utils/bookingHorizon';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
@@ -465,11 +466,10 @@ export default function ProviderScheduleScreen() {
             palette={P}
             isDarkMode={isDarkMode}
             showToast={showToast}
-            onOpenBooking={(bookingId, openReschedule) => {
-              (navigation as unknown as { navigate: (name: string, params: object) => void }).navigate(
-                'BookingDetail',
-                { bookingId, ...(openReschedule ? { openReschedule: true } : {}) },
-              );
+            onOpenBooking={(bookingId, date, openReschedule) => {
+              // After the sheet has slid away: iOS won't present the booking's
+              // reschedule sheet while this one is still dismissing.
+              navigateAfterDismiss(() => openProviderBookingOnCalendar(bookingId, date, openReschedule));
             }}
           />
         )}
