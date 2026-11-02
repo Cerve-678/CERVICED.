@@ -1,15 +1,17 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
-/** The provider's Settings tab (ProviderAccountNavigator), in both tab sets. */
-export const PROVIDER_SETTINGS_TAB = 'Profile';
+/** The Settings tab in both hats: ProfileNavigator (client), ProviderAccountNavigator (provider). */
+export const SETTINGS_TAB = 'Profile';
 
 /**
- * The only Settings-tab screens that keep the bottom nav. Everything pushed on
- * top of them (Achievements, Notifications, Business Profile's own sub-screens,
- * and so on) hides it, so a new screen added to that stack hides it too
- * without having to opt in.
+ * The only Settings-tab screens that keep the bottom nav: the client's Profile,
+ * the provider's Settings, and the provider's Business Profile. The two stacks
+ * share no route names, so one list serves both hats. Everything pushed on top
+ * (Achievements, Notifications, Business Profile's own sub-screens, Points, and
+ * so on) hides it, so a new screen added to either stack hides it too without
+ * having to opt in.
  */
-const SETTINGS_ROUTES_WITH_TAB_BAR: readonly string[] = ['ProviderAccountMain', 'BusinessProfile'];
+const SETTINGS_ROUTES_WITH_TAB_BAR: readonly string[] = ['ProfileMain', 'ProviderAccountMain', 'BusinessProfile'];
 
 /**
  * `focusedRoute` is the stack's focused route name, or undefined before the
@@ -20,13 +22,14 @@ export function settingsStackHidesTabBar(focusedRoute: string | undefined): bool
 }
 
 /**
- * True when the calling screen sits in the provider's Settings tab, where any
- * pushed screen has no bottom nav to leave room for. Only meaningful in the
- * provider hat; the client's Profile tab has the same name but keeps the bar.
+ * True when the calling screen is one the Settings tab shows without the
+ * bottom nav, so a footer has only the home indicator to clear.
  */
-export function useInProviderSettingsTab(): boolean {
+export function useSettingsStackHidesTabBar(): boolean {
   const navigation = useNavigation();
+  const route = useRoute();
   const stackKey = navigation.getState()?.key;
   const tabs = navigation.getParent()?.getState();
-  return tabs?.routes.some(r => r.name === PROVIDER_SETTINGS_TAB && r.state?.key === stackKey) ?? false;
+  const inSettingsTab = tabs?.routes.some(r => r.name === SETTINGS_TAB && r.state?.key === stackKey) ?? false;
+  return inSettingsTab && settingsStackHidesTabBar(route.name);
 }

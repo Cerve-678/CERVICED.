@@ -17,7 +17,9 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { HomeStackParamList } from "../../navigation/types";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
+import { useSettingsStackHidesTabBar } from "../../navigation/settingsTabBar";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAuth } from "../../contexts/AuthContext";
@@ -54,6 +56,9 @@ interface Message {
 export default function ProviderChatScreen({ navigation, route }: Props) {
   const { providerDbId, providerName, promptMode = "conversation" } = route.params;
   const { palette: OP } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Opened from the Profile tab there is no tab bar to clear, only the home indicator.
+  const tabBarHidden = useSettingsStackHidesTabBar();
   const { user } = useAuth();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -538,7 +543,9 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
               borderTopColor: OP.border,
               paddingBottom: keyboardVisible
                 ? 12
-                : FLOATING_TAB_BAR_CLEARANCE,
+                : tabBarHidden
+                  ? Math.max(insets.bottom, 12)
+                  : FLOATING_TAB_BAR_CLEARANCE,
             },
           ]}
         >

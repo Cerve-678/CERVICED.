@@ -12,19 +12,23 @@ import {
 } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {
-  PROVIDER_SETTINGS_TAB,
+  SETTINGS_TAB,
   settingsStackHidesTabBar,
 } from "../navigation/settingsTabBar";
 
 describe("settingsStackHidesTabBar", () => {
-  it("keeps the bar on Settings itself and on Business Profile", () => {
+  it("keeps the bar on client Profile, provider Settings and Business Profile", () => {
     expect(settingsStackHidesTabBar(undefined)).toBe(false);
+    expect(settingsStackHidesTabBar("ProfileMain")).toBe(false);
     expect(settingsStackHidesTabBar("ProviderAccountMain")).toBe(false);
     expect(settingsStackHidesTabBar("BusinessProfile")).toBe(false);
   });
 
-  it("hides it on every screen pushed on top", () => {
-    for (const route of ["Achievements", "NotificationSettings", "BusinessDetails", "Branding", "ProviderConversation"]) {
+  it("hides it on every screen pushed on top, in both hats", () => {
+    for (const route of [
+      "Achievements", "NotificationSettings", "BusinessDetails", "Branding", "ProviderConversation",
+      "NotificationsSettings", "Points", "BeautyProfile", "Bookings", "ProviderChat", "ClientIntakeForm",
+    ]) {
       expect(settingsStackHidesTabBar(route)).toBe(true);
     }
   });
@@ -42,7 +46,7 @@ it("follows the Settings stack as it is pushed and popped", () => {
   const TabBar = ({ state }: BottomTabBarProps) => {
     const tab = state.routes[state.index]!;
     hidden.current =
-      tab.name === PROVIDER_SETTINGS_TAB &&
+      tab.name === SETTINGS_TAB &&
       settingsStackHidesTabBar(getFocusedRouteNameFromRoute(tab));
     return null;
   };
@@ -59,7 +63,7 @@ it("follows the Settings stack as it is pushed and popped", () => {
   render(
     <NavigationContainer ref={ref}>
       <Tab.Navigator tabBar={(props) => <TabBar {...props} />}>
-        <Tab.Screen name={PROVIDER_SETTINGS_TAB} component={Settings} />
+        <Tab.Screen name={SETTINGS_TAB} component={Settings} />
       </Tab.Navigator>
     </NavigationContainer>,
   );

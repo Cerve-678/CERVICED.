@@ -57,7 +57,7 @@ export default function ProviderTabNavigation() {
       // See TabNavigator: the default 'firstRoute' would send a bubbled back
       // press to Becca (the first declared tab) instead of ProviderHome.
       backBehavior="initialRoute"
-      tabBar={(props) => <IslandPillTabBar {...props} hideOnSettingsStack />}
+      tabBar={(props) => <IslandPillTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#007AFF",
@@ -157,7 +157,7 @@ function LinkOnlyProviderTabs() {
     <Tab.Navigator
       initialRouteName="ProviderHome"
       backBehavior="initialRoute"
-      tabBar={(props) => <IslandPillTabBar {...props} hideOnSettingsStack />}
+      tabBar={(props) => <IslandPillTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#007AFF",

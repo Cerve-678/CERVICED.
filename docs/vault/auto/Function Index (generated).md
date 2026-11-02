@@ -216,7 +216,7 @@
 - `openProviderProfileLink.ts` — **openProviderProfileLink**
 - `rootNavigate.ts` — **navigateAfterDismiss** · **navigateNested** · **navigateTab** · **openProviderBookingOnCalendar**
 - `RootNavigation.tsx` — receive · RootNavigation
-- `settingsTabBar.ts` — **settingsStackHidesTabBar** · **useInProviderSettingsTab**
+- `settingsTabBar.ts` — **settingsStackHidesTabBar** · **useSettingsStackHidesTabBar**
 - `useHideTabBar.ts` — **useHideTabBar**
 
 ### `src/navigation/client/` (1)
