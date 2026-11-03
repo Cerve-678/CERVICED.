@@ -863,6 +863,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
    * from the provider name, and if even that fails we say so instead of
    * pretending the message went through.
    */
+  // A request the provider hasn't accepted yet isn't a booking with them, so
+  // it opens the same general enquiries chat as Get In Touch on their profile.
   const openProviderChat = useCallback(async (b: ConfirmedBooking) => {
     let providerDbId = b.providerId;
     if (!providerDbId) {
@@ -879,6 +881,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       providerId: providerDbId,
       providerDbId,
       providerName: b.providerName,
+      promptMode: b.status === BookingStatus.PENDING ? 'enquiry' : 'conversation',
     });
   }, [navigation]);
 
@@ -1344,7 +1347,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>Contact Provider</Text>
-                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openContactSheet(booking); }} style={[st.actionChip, { backgroundColor: C.accent, flexDirection: 'row', alignItems: 'center', gap: 5 }]} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); (booking.status === BookingStatus.PENDING ? void openProviderChat(booking) : void openContactSheet(booking)); }} style={[st.actionChip, { backgroundColor: C.accent, flexDirection: 'row', alignItems: 'center', gap: 5 }]} activeOpacity={0.7}>
                     <Ionicons name="chatbubble-ellipses-outline" size={14} color={C.onAccent} />
                     <Text style={{ color: C.onAccent, fontSize: 12, fontWeight: '600' }}>Contact</Text>
                   </TouchableOpacity>
@@ -1883,7 +1886,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                         setSupportKind(null);
                         // Let this sheet's fade finish before the contact sheet mounts.
-                        setTimeout(() => openContactSheet(booking), 260);
+                        setTimeout(() => (booking.status === BookingStatus.PENDING ? void openProviderChat(booking) : void openContactSheet(booking)), 260);
                       }}
                       activeOpacity={0.7}
                     >
