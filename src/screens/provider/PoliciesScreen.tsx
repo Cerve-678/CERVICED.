@@ -383,6 +383,9 @@ export default function PoliciesScreen({ navigation }: any) {
                 value={policies.cancelNotice}
                 onChange={v => setPolicy('cancelNotice', v)}
               />
+              {!isLinkOnly && (
+                <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>A change applies to new bookings. Bookings already made keep the notice they were booked with.</Text>
+              )}
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
                 <Pills

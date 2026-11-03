@@ -51,6 +51,7 @@ jest.mock("../services/databaseService", () => {
     ),
     getProviderIdByDisplayName: jest.fn(async () => "p1"),
     getRebookableService: on({ id: "s1", providerSlug: "lola-studio" }, null),
+    getBookingCancelNoticeHours: on(24, null),
     getProviderCancellationPolicy: on(24, 0),
     getProviderReschedulePolicyByDisplayName: on({ maxReschedules: 2, rescheduleNoticeHours: 48 }, { maxReschedules: null, rescheduleNoticeHours: 0 }),
     getInfoPacksByBooking: on([{ id: "i1", title: "Aftercare", content: "Keep them dry for 24 hours.", viewedAt: null }], []),

@@ -381,9 +381,12 @@ Pay or PayPal.
   hours before the appointment), from Policies or Automations; both now set
   the same window (`providers.cancellation_notice_hours`, from the next
   build). Before that, Policies only changed the written policy and the
-  column's default of 24 hours applied. The penalty is frozen onto each
-  booking, but the window isn't: it's read when the client cancels, so a
-  change also applies to bookings already made.
+  column's default of 24 hours applied. Each booking keeps the window in
+  force when it was made (`bookings.cancel_notice_hours`, set by a database
+  trigger and never changed after, a reschedule included), so a change
+  applies to new bookings only. Bookings older than that column were filled
+  with the window in force when it was added; a row without one falls back to
+  the provider's current window. Migration `20261103040000`.
 - **Rescheduling doesn't reset the window.** If the client *asks* to
   reschedule once the window has already started, and the move goes ahead,
   the booking is marked (`bookings.late_reschedule_from`). Cancelling it

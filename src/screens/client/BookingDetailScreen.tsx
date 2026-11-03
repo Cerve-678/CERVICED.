@@ -314,6 +314,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     const request = getProviderBookingDetailMetadata({
       ...(pid ? { providerId: pid } : {}),
       displayName: booking.providerName,
+      bookingId: booking.id,
     });
     // Resolves to null rather than rejecting, so awaiting it in the reschedule
     // handler can never throw out of the tap.

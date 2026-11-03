@@ -501,7 +501,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           C={C}
         />
         <Text style={[st.chipHint, { color: C.sub }]}>
-          Clients who cancel within this window will be shown your cancellation policy.
+          Clients who cancel within this window will be shown your cancellation policy. A change applies to new bookings; bookings already made keep their window.
         </Text>
 
         {/* Info note */}
