@@ -76,8 +76,8 @@ Curated: [[Availability & Slots]] · **188 files**
 ## Payments
 Curated: [[Payments]] · **154 files**
 - `src/screens/client/CartScreen.tsx` _(525)_
-- `src/services/databaseService.ts` _(228)_
-- `src/screens/provider/PaymentsScreen.tsx` _(177)_
+- `src/services/databaseService.ts` _(227)_
+- `src/screens/provider/PaymentsScreen.tsx` _(173)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
@@ -95,15 +95,15 @@ Curated: [[Payments]] · **154 files**
 - `src/features/bookings/bookingSupportRequest.ts` _(40)_
 - `src/screens/client/PaymentMethodsScreen.tsx` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
-- `src/utils/depositPolicy.ts` _(37)_
+- `src/utils/depositPolicy.ts` _(38)_
 - `src/screens/shared/TermsScreen.tsx` _(36)_
+- `src/utils/policyDisplay.ts` _(35)_
 - `supabase/provider_reminder_jobs.sql` _(34)_
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/booking.ts` _(32)_
 - `src/features/bookings/BookingFeeCard.tsx` _(30)_
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `src/screens/provider/PoliciesScreen.tsx` _(28)_
-- `src/utils/policyDisplay.ts` _(28)_
 - `supabase/phase1_schema.sql` _(28)_
 - … +124 more
 
@@ -178,7 +178,7 @@ Curated: [[Notifications]] · **176 files**
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **82 files**
 - `src/services/databaseService.ts` _(82)_
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(61)_
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(37)_

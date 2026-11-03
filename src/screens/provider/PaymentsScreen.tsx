@@ -20,10 +20,8 @@
  * by side, but no provider control could ever produce that state deliberately:
  * the old single "Require deposit" toggle wrote depositRequired and
  * depositOnly in lockstep, so a provider could only ever pick full-only or
- * deposit-only. Both buttons appeared solely for providers who had never
- * opened Policies at all, falling through to the fabricated 20% default in
- * getProviderDepositPoliciesByDisplayNames. The three modes below make each of
- * the three client-facing states something a provider actually chose.
+ * deposit-only. The three modes below make each of the three client-facing
+ * states something a provider actually chose.
  *
  * SCOPE BOUNDARY — read before adding anything here. These are *preferences
  * shown to clients*, not money movement. Cerviced deliberately never collects,
@@ -154,13 +152,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
           setDepositMode(mode);
           setDepositType(savedType === 'fixed' ? 'fixed' : 'percent');
           const amount = typeof savedAmount === 'string' ? savedAmount : savedAmount == null ? '' : String(savedAmount);
-          // A provider who never set a deposit still has 20% quoted to their
-          // clients — that's the fallback in
-          // getProviderDepositPoliciesByDisplayNames. Prefilling it makes the
-          // number visible and editable instead of invisible, and stops the
-          // save validation below trapping someone who only came here to tick
-          // a payment type.
-          setDepositAmount(amount || (mode === 'full_only' ? '' : '20'));
+          setDepositAmount(amount);
           setDepositNote(typeof savedNote === 'string' ? savedNote : '');
           const refund = restPolicies['refundPolicyNote'];
           setRefundPolicyNote(typeof refund === 'string' ? refund : '');

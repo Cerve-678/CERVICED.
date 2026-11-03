@@ -8404,10 +8404,7 @@ export async function getProviderDepositPoliciesByDisplayNames(
         depositOnly: mode === "deposit_required",
       };
     } else {
-      // No deposit policy saved at all. Left as the historical 20%-both-options
-      // default rather than silently switching live profiles to full-only —
-      // note that 20% is a figure the provider never set, so a provider who
-      // has never opened Payments is quoting a deposit they didn't choose.
+      // No deposit policy saved at all: no deposit offered.
       result[p.display_name] = { ...defaultPolicy };
     }
   }

@@ -187,27 +187,12 @@ const PROFILE_TABS: { key: ProfileTab; label: string; icon: keyof typeof Ionicon
   { key: 'services', label: 'SERVICES', icon: 'pricetags-outline' },
 ];
 
-const MAX_POLICY_ROWS = 4;
 const MAX_REVIEW_PREVIEWS = 2;
 const MAX_PORTFOLIO_TILES = 9;
 // Enough to fill the rail's first view; the rest load with the lower cards.
 const PORTFOLIO_FIRST_TILES = 3;
 // The longest the lower cards wait on the first wave before loading anyway.
 const LOWER_SECTIONS_MAX_WAIT_MS = 1500;
-
-/** True when there's anything worth showing about the booking policy — either
- *  descriptive booking_policies or the enforced cancellation window. */
-function hasPolicyInfo(providerData: ProviderRegistrationData): boolean {
-  const bp = providerData.bookingPolicies;
-  return (
-    providerData.cancellationNoticeHours > 0 ||
-    (!!bp &&
-      ((!!bp.depositRequired && !!bp.depositAmount) ||
-        (!!bp.cancelNotice && bp.cancelNotice !== 'none') ||
-        !!(bp.rescheduleNotice || bp.maxReschedules) ||
-        (!!bp.noShowAction && bp.noShowAction !== 'none')))
-  );
-}
 
 interface DashPalette {
   text: string;
@@ -1088,7 +1073,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     return buildPolicyDisplayRows(
       providerData.bookingPolicies,
       providerData.cancellationNoticeHours,
-      { linkOnly: myBookingMode === 'external' },
+      { linkOnly: myBookingMode === 'external', showNoDeposit: true },
     );
   }, [providerData, myBookingMode]);
 
@@ -2026,7 +2011,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       </View>
 
                       <Text style={[styles.tintTitle, { color: PP.text }]} numberOfLines={1}>
-                        {hasPolicyInfo(providerData) ? 'DEPOSITS & RULES' : 'NOTHING SET YET'}
+                        {policyRows.length > 0 ? 'DEPOSITS & RULES' : 'NOTHING SET YET'}
                       </Text>
 
                       {policyRows.length === 0 ? (
@@ -2035,7 +2020,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         </Text>
                       ) : (
                         <View style={styles.policyList}>
-                          {policyRows.slice(0, MAX_POLICY_ROWS - 1).map(row => (
+                          {policyRows.map(row => (
                             <View key={row.label} style={styles.policyItem}>
                               <Ionicons name={row.icon} size={13} color={accentColor} />
                               <View style={styles.policyItemText}>
@@ -3178,8 +3163,9 @@ const styles = StyleSheet.create({
 
   // Paired tinted tiles. Fixed height so the two agree on a baseline even when
   // one carries swatches and the other doesn't.
+  // Grows with the rules so none get cut off; the tiles beside it stretch to match.
   tintCard: {
-    height: 214,
+    minHeight: 214,
     padding: 16,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
@@ -3234,7 +3220,8 @@ const styles = StyleSheet.create({
     gap: HALF_GAP,
   },
   tintCardShort: {
-    height: (214 - HALF_GAP) / 2,
+    flex: 1,
+    minHeight: (214 - HALF_GAP) / 2,
     padding: 14,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
