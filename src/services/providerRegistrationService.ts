@@ -162,6 +162,7 @@ export interface ProviderRegistrationData {
   // (SearchScreen/HomeScreen) already reads this column, this form is its
   // first writer.
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
+  priceBands: string[];
   // Service-coverage cities — drives providers.service_locations, read by
   // the client Search "City" filter. See src/constants/ukCities.ts.
   serviceLocations: string[];
@@ -636,6 +637,7 @@ export async function saveProviderToSupabase(
         accessibility_notes: data.accessibilityNotes?.trim() || null,
         languages_spoken: data.languagesSpoken,
         price_tier: data.priceRange || null,
+        price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
         preferred_payment_methods: data.preferredPaymentMethods,
@@ -696,6 +698,7 @@ export async function saveProviderToSupabase(
         accessibility_notes: data.accessibilityNotes?.trim() || null,
         languages_spoken: data.languagesSpoken,
         price_tier: data.priceRange || null,
+        price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
         preferred_payment_methods: data.preferredPaymentMethods,
@@ -944,6 +947,7 @@ export function providerRowToRegistrationData(
     termsAcceptedAt: provider.terms_accepted_at ?? null,
     languagesSpoken: provider.languages_spoken || [],
     priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
+    priceBands: provider.price_bands ?? [],
     serviceLocations: provider.service_locations || [],
     preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress: catalogue.fullAddress,

@@ -1,3 +1,4 @@
+import { PROVIDER_REQUEST_NOTE } from '../../features/bookings/requestWindow';
 import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -2109,7 +2110,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 This request's appointment time has passed — it can no longer be confirmed.
               </Text>
             ) : (
-              <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
+              <>
+                <Text style={{ textAlign: 'center', fontSize: 13, lineHeight: 18, color: P.sub, marginBottom: 10 }}>
+                  {PROVIDER_REQUEST_NOTE}
+                </Text>
+                <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
+              </>
             )}
             <ActionButton color="#FF3B30" label="Decline Booking" onPress={handleDecline} ghost />
           </View>

@@ -5,9 +5,9 @@
 
 #generated
 
-**2989 functions** across **409 files**.
+**3005 functions** across **413 files**.
 
-### `src/components/` (53)
+### `src/components/` (54)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -28,6 +28,7 @@
 - `FullyBookedCertificate.tsx` — ConfettiPiece · FullyBookedCertificate · **fullyBookedLine** · makePieces · pieces
 - `HairTypeSelector.tsx` — **HairTypeSelector**
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
+- `ImageCropModal.tsx` — handleBox · handleMark · handleUsePhoto · **ImageCropModal** · make · photo · responders
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · runPendingNavigation · selectImageIndex · trackCarouselOffset
 - `IslandPillTabBar.tsx` — goToTab · IslandPillTabBar · **tabBarSpotlightRect**
 - `IssueRefundSheet.tsx` — close · formatPence · formatRefundDate · IssueRefundSheet · loadState · preview · re · requestSteps · submit
@@ -68,10 +69,11 @@
 ### `src/components/signup/` (1)
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
 
-### `src/constants/` (8)
+### `src/constants/` (9)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
 - `payoutTiming.ts` — **isPayoutHoldDays** · **payoutHoldLabel** · **payoutHoldSentence**
 - `PlatformDimensions.ts` — for
+- `priceBands.ts` — **rangeForBands** · **tierForBands**
 - `providerFonts.ts` — **resolveProviderFontFamily**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
 - `skinTones.ts` — **matchesSkinTone**
@@ -106,7 +108,7 @@
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 
-### `src/features/bookings/` (19)
+### `src/features/bookings/` (20)
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
@@ -123,6 +125,7 @@
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
 - `receipt.ts` — appointmentWhen · **buildClientReceiptHTML** · **buildProviderInvoiceHTML** · escapeHtml · methodLabel · money · renderDocument
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen** · **refundReplyDeadline**
+- `requestWindow.ts` — **clientRequestNote**
 - `reviewState.ts` — **mergeBookingReviewStates**
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · minutesOfDay · **tipWindowClosesAt**
@@ -262,7 +265,7 @@
 - `SignUpStep1Screen.tsx` — handleContinue · pick · SignUpStep1Screen · tile
 - `SignUpStep2Screen.tsx` — fieldError · handleContinue · markTouched · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — fieldError · handleContinue · handleRow · markTouched · SignUpStep3Screen · validate
-- `SignUpStep4Screen.tsx` — handleContinue · onLayoutFor · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · plain · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
+- `SignUpStep4Screen.tsx` — handleContinue · onLayoutFor · pickBusinessType · pickHair · pickSkin · pickStyleVibe · plain · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · togglePriceBand · toggleService · toggleTreatment
 - `SignUpStep5Screen.tsx` — curatedSpecialtyOptions · finishHatSwitch · handleComplete · onLayoutFor · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage
 - `WelcomeScreen.tsx` — handleAppleLogin · handleGoogleLogin · rise · rowStyle · WelcomeScreen
 
@@ -303,7 +306,7 @@
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · curatedSpecialtyOptions · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · styles
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
-- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · Pills · PoliciesScreen · setPolicy
+- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · Pills · PoliciesScreen · setPolicy
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view
@@ -383,7 +386,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (53)
+### `src/utils/` (54)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -393,6 +396,7 @@
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **toArgbHex**
+- `cropRect.ts` — clamp · **fitContain** · **moveCrop** · **moveHandle** · **toImageCrop**
 - `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `dayTimelineRange.ts` — **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
