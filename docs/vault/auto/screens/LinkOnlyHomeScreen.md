@@ -16,8 +16,8 @@ tags: [screen, provider]
 - `LinkOnlyMessages` _(navigator / dynamic)_
 - [[NotificationsScreen\|Notifications]]
 - [[LinkOnlyAnalyticsScreen\|LinkOnlyAnalytics]]
-- [[BrandingScreen\|Branding]]
 - [[FullCervicedFeaturesScreen\|FullCervicedFeatures]]
+- [[BrandingScreen\|Branding]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
