@@ -87,6 +87,16 @@ export const THEME_COLLECTIONS: { key: ThemeCollectionKey; name: string; descrip
   { key: 'classics',  name: 'Classics',   description: 'The original CERVICED sets' },
 ];
 
+/**
+ * What a link-only provider (booking_mode 'external') can pick in Branding:
+ * the Classics sets and the Blend finish. The other collections, Make your own
+ * and the other finishes show locked, as part of the full CERVICED experience
+ * (owner's call, 2026-11-03). The content area isn't limited. Only the picker
+ * enforces this, so a set saved before the limit keeps showing on the profile.
+ */
+export const LINK_ONLY_THEME_COLLECTIONS: readonly ThemeCollectionKey[] = ['classics'];
+export const LINK_ONLY_HERO_FINISHES: readonly HeroFinish[] = ['blend'];
+
 export interface ProviderThemeTokens {
   bg: string;      // content sheet — always SHEET_BG
   hero: string;    // backdrop colour behind the profile top (gradient start)

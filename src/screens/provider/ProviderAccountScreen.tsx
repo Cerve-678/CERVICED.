@@ -459,8 +459,12 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <SettingsOption icon="badge" title={t('providerAccount.account.info.title')} subtitle={t('providerAccount.account.info.sub')} onPress={() => navigation.navigate('AccountInfo')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.notifications.sub' : 'providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
-              <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="star" title={t('providerAccount.account.achievements.title')} subtitle={t('providerAccount.account.achievements.sub')} onPress={() => navigation.navigate('Achievements')} P={P} />
+              {/* Achievements are earned from CERVICED bookings, so link-only
+                  pros don't have them (owner's call, 2026-11-03). */}
+              {!isLinkOnly && (<>
+                <View style={[styles.sep, { backgroundColor: P.sep }]} />
+                <SettingsOption icon="star" title={t('providerAccount.account.achievements.title')} subtitle={t('providerAccount.account.achievements.sub')} onPress={() => navigation.navigate('Achievements')} P={P} />
+              </>)}
             </View>
 
             {/* ── Accessibility & Support ─────────────────────────────────── */}

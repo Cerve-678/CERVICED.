@@ -14,6 +14,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -27,12 +28,14 @@ import {
   parseThemeKey,
   DEFAULT_HERO_FINISH,
   HERO_FINISHES,
+  LINK_ONLY_HERO_FINISHES,
+  LINK_ONLY_THEME_COLLECTIONS,
   type HeroFinish,
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
-import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
+import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONT_COLLECTIONS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -73,8 +76,11 @@ async function uploadBackgroundImage(
 
 export default function BrandingScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
-  const { user } = useAuth();
+  const { user, myBookingMode } = useAuth();
   const P = isDarkMode ? DARK : LIGHT;
+  // Link-only pros get a smaller set; the rest shows locked (see
+  // LINK_ONLY_THEME_COLLECTIONS).
+  const limited = myBookingMode === 'external';
 
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
@@ -242,6 +248,19 @@ export default function BrandingScreen({ navigation }: any) {
     }
   }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, brandFont, navigation]);
 
+  // Both stacks that open Branding for a link-only pro (Home, Settings) have
+  // the Full CERVICED experience page.
+  const showLocked = useCallback(() => {
+    Alert.alert(
+      'Part of the full CERVICED experience',
+      'Full members get every colour set, font and hero finish, and can make their own colours. You can use the Classics colours and fonts and the Blend finish now.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'See what full members get', onPress: () => navigation.navigate('FullCervicedFeatures') },
+      ],
+    );
+  }, [navigation]);
+
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {
     setThemeChoice(next.themeChoice);
@@ -329,6 +348,8 @@ export default function BrandingScreen({ navigation }: any) {
               subColor={P.sub}
               borderColor={P.border}
               sepColor={P.sep}
+              unlockedCollections={limited ? LINK_ONLY_THEME_COLLECTIONS : undefined}
+              onLockedPress={showLocked}
             />
           </View>
 
@@ -343,18 +364,28 @@ export default function BrandingScreen({ navigation }: any) {
             <View style={styles.finishRow}>
               {HERO_FINISHES.map(f => {
                 const selected = heroFinish === f.key;
+                const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
                 return (
                   <TouchableOpacity
                     key={f.key}
-                    style={styles.finishOption}
-                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setHeroFinish(f.key); }}
+                    style={[styles.finishOption, locked && styles.finishLocked]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      if (locked) showLocked();
+                      else setHeroFinish(f.key);
+                    }}
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
-                    accessibilityLabel={`${f.name}: ${f.description}`}
+                    accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
                   >
                     <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
                       <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
+                      {locked && (
+                        <View style={styles.finishLock}>
+                          <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                        </View>
+                      )}
                     </View>
                     <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
                   </TouchableOpacity>
@@ -374,6 +405,8 @@ export default function BrandingScreen({ navigation }: any) {
               subColor={P.sub}
               borderColor={P.border}
               cardColor={P.surface}
+              unlockedCollections={limited ? LINK_ONLY_FONT_COLLECTIONS : undefined}
+              onLockedPress={showLocked}
             />
           </View>
 
@@ -525,6 +558,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   finishSwatchOn: { borderWidth: 2.5 },
+  finishLocked: { opacity: 0.55 },
+  finishLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
   finishName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
 
   imageRow:    { flexDirection: 'row', alignItems: 'center', gap: 14 },

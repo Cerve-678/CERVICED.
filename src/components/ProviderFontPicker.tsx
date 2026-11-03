@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { FONT_COLLECTIONS, PROVIDER_FONTS } from '../constants/providerFonts';
+import { Ionicons } from '@expo/vector-icons';
+import { FONT_COLLECTIONS, PROVIDER_FONTS, type FontCollectionKey } from '../constants/providerFonts';
 
 interface ProviderFontPickerProps {
   value: string;
@@ -11,6 +12,10 @@ interface ProviderFontPickerProps {
   subColor: string;
   borderColor: string;
   cardColor: string;
+  /** Only these collections can be picked; the rest show locked and call
+   *  onLockedPress instead. Leave out for every font. */
+  unlockedCollections?: readonly FontCollectionKey[] | undefined;
+  onLockedPress?: () => void;
 }
 
 const PREVIEW_SIZE = 18;
@@ -25,57 +30,69 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
   subColor,
   borderColor,
   cardColor,
-}) => (
-  <View>
-    {FONT_COLLECTIONS.map(collection => {
-      const fonts = PROVIDER_FONTS.filter(f => f.collection === collection.key);
-      if (fonts.length === 0) return null;
-      return (
-        <View key={collection.key} style={styles.collection}>
-          <View style={styles.collectionHead}>
-            <Text style={[styles.collectionName, { color: textColor }]}>{collection.name.toUpperCase()}</Text>
-            <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>{collection.description}</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-            {fonts.map(font => {
-              const isSelected = value === font.key;
-              return (
-                <TouchableOpacity
-                  key={font.key}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    onChange(font.key);
-                  }}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.option,
-                    { backgroundColor: cardColor, borderColor: isSelected ? accentColor : borderColor },
-                  ]}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: isSelected }}
-                  accessibilityLabel={font.name}
-                >
-                  <Text
+  unlockedCollections,
+  onLockedPress,
+}) => {
+  const isUnlocked = (key: FontCollectionKey) => !unlockedCollections || unlockedCollections.includes(key);
+  // What they can pick comes first, so it isn't below every locked rail.
+  const collections = [...FONT_COLLECTIONS].sort((a, b) => Number(isUnlocked(b.key)) - Number(isUnlocked(a.key)));
+  return (
+    <View>
+      {collections.map(collection => {
+        const fonts = PROVIDER_FONTS.filter(f => f.collection === collection.key);
+        if (fonts.length === 0) return null;
+        const locked = !isUnlocked(collection.key);
+        return (
+          <View key={collection.key} style={styles.collection}>
+            <View style={styles.collectionHead}>
+              {locked && <Ionicons name="lock-closed" size={10} color={subColor} />}
+              <Text style={[styles.collectionName, { color: textColor }]}>{collection.name.toUpperCase()}</Text>
+              <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>{collection.description}</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+              {fonts.map(font => {
+                const isSelected = value === font.key;
+                return (
+                  <TouchableOpacity
+                    key={font.key}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      if (locked) onLockedPress?.();
+                      else onChange(font.key);
+                    }}
+                    activeOpacity={0.8}
                     style={[
-                      styles.preview,
-                      { fontFamily: font.fontFamily, fontSize: PREVIEW_SIZE * (font.sizeScale ?? 1), color: textColor },
+                      styles.option,
+                      { backgroundColor: cardColor, borderColor: isSelected ? accentColor : borderColor },
+                      locked && styles.lockedOption,
                     ]}
-                    numberOfLines={1}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    accessibilityLabel={locked ? `${font.name}, locked` : font.name}
                   >
-                    Your Business
-                  </Text>
-                  <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={1}>
-                    {font.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      );
-    })}
-  </View>
-);
+                    {locked && <Ionicons name="lock-closed" size={11} color={subColor} style={styles.lockIcon} />}
+                    <Text
+                      style={[
+                        styles.preview,
+                        { fontFamily: font.fontFamily, fontSize: PREVIEW_SIZE * (font.sizeScale ?? 1), color: textColor },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Your Business
+                    </Text>
+                    <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={1}>
+                      {font.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        );
+      })}
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   collection: { marginBottom: 14 },
@@ -94,6 +111,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
+  lockedOption: { opacity: 0.55 },
+  lockIcon: { position: 'absolute', top: 6, right: 6 },
   preview: { textAlign: 'center' },
   optionName: {
     fontFamily: 'Jura-VariableFont_wght',

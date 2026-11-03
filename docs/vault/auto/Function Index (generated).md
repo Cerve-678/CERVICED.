@@ -5,7 +5,7 @@
 
 #generated
 
-**3036 functions** across **417 files**.
+**3040 functions** across **417 files**.
 
 ### `src/components/` (55)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -43,11 +43,11 @@
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
-- `ProviderFontPicker.tsx` — ProviderFontPicker
+- `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
-- `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
+- `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
@@ -300,7 +300,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
