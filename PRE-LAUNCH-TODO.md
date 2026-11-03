@@ -1334,3 +1334,63 @@ launch?
   to clients and it's a small amount.
 
 Found by the security review of PRs #251 and #254.
+
+---
+
+## 31. Booking settings the server doesn't fully enforce (2026-11-03)
+
+Audited against the live database. Window, monthly release, minimum notice,
+working hours, blocked dates, Close Schedule, buffers, deposits, the
+cancellation window and auto-accept are all enforced server-side. These
+aren't, or only partly:
+
+### 31a. Maximum bookings per day is skipped on four paths
+
+`max_bookings_per_day` is checked only in `prepare_checkout` (the live Stripe
+checkout) and `provider_create_manual_booking` (Add Booking). It is not checked
+in:
+
+- `place_reschedule_hold` and a date-changing UPDATE on `bookings`, so a client
+  rescheduling onto a day that's already at the limit goes over it.
+- `invite_next_waitlist_entry`. That's usually fine, since an invite fills a
+  slot a cancellation just freed, but nothing guarantees it.
+- `hold_cart_booking_slots`, the non-Stripe checkout path. It isn't used while
+  Stripe checkout is on.
+
+**To fix:** move the count into `enforce_booking_bookability` so every insert,
+and every date change, is checked once. Exempt `bypass_scheduling_policy` (the
+provider's own override) and a time-only change on the same day. The
+reschedule picker and the cart already hide full days app-side
+(`countProviderBookingsOnDates`), so this is the server backstop.
+
+### 31b. A service's minimum age is shown but never checked
+
+`services.min_age` shows on the profile as "Minimum age 16" and nothing stops a
+younger client booking it. Enforcing it means checking the client's date of
+birth (`users.date_of_birth`) at checkout.
+
+**Decide first (product/legal, not engineering):** whether to use DOB for this,
+what to show a client who's too young, and what the Terms say about age. See
+`LEGAL-COMPLIANCE-NOTES.md` on age verification. A DOB check only proves what
+the client typed in.
+
+### 31c. Consultation required for new clients
+
+Already item 16: built client-side but no screen can turn it on. It needs the
+same "has this client booked with this provider before" check that "Accepting
+new clients" uses (being built separately, 2026-11-03), so reuse that rather
+than writing a second one.
+
+### 31d. Slot interval isn't a server rule
+
+`slot_interval_mins` only decides which start times the picker offers. The
+server accepts any start time inside working hours. That's harmless while all
+bookings come through the picker. Low priority.
+
+### 31e. Information only, by design
+
+Who you take (`clientele`), travel radius and service areas, patch test policy
+wording, walk-ins and group bookings are shown to clients, not enforced. Travel
+radius is the one that may matter: a mobile provider can be booked to an
+address outside their radius. Decide whether that should be checked against
+the client's address at checkout.
