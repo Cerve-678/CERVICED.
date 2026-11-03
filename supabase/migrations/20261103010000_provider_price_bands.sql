@@ -28,7 +28,7 @@ UPDATE public.users SET price_bands = CASE price_range
  WHERE price_range IN ('budget','mid','premium','luxury');
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261102210000', 'provider_price_bands')
+VALUES ('20261103010000', 'provider_price_bands')
 ON CONFLICT DO NOTHING;
 
 COMMIT;
