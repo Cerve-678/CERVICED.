@@ -104,7 +104,7 @@ Curated: [[Payments]] · **154 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `src/utils/policyDisplay.ts` _(28)_
 - `supabase/phase1_schema.sql` _(28)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
+- `src/screens/provider/PoliciesScreen.tsx` _(27)_
 - … +124 more
 
 ## Booking flow
@@ -256,16 +256,16 @@ Curated: [[Booking Flow]] · **185 files**
 - `src/screens/client/CartScreen.tsx` _(126)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
+- `src/screens/provider/PoliciesScreen.tsx` _(71)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
+- `src/utils/policyDisplay.ts` _(63)_
 - `src/screens/provider/InfoRegScreen.tsx` _(61)_
 - `src/services/bookingService.ts` _(58)_
-- `src/utils/policyDisplay.ts` _(57)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/screens/client/BookingsScreen.tsx` _(53)_
-- `src/screens/provider/PoliciesScreen.tsx` _(51)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
@@ -274,7 +274,7 @@ Curated: [[Booking Flow]] · **185 files**
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
-- `src/types/database.ts` _(35)_
+- `src/types/database.ts` _(36)_
 - … +155 more
 
 ## Auth
@@ -369,12 +369,12 @@ Curated: [[Payments]] · **77 files**
 - `src/types/booking.ts` _(7)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(5)_
+- `src/screens/provider/PoliciesScreen.tsx` _(5)_
 - `src/services/bookingService.ts` _(5)_
 - `src/types/database.ts` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/constants/feeTerms.ts` _(4)_
 - `src/features/bookings/paymentPresentation.ts` _(4)_
-- `src/screens/provider/PoliciesScreen.tsx` _(4)_
 - `src/utils/policyDisplay.ts` _(4)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
 - … +47 more

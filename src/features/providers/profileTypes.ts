@@ -109,6 +109,7 @@ export interface ProviderProfileData {
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
