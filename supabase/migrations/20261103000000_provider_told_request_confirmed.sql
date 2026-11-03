@@ -73,4 +73,10 @@ CREATE TRIGGER on_booking_request_confirmed_tell_provider
   WHEN (OLD.status = 'pending' AND NEW.status = 'confirmed')
   EXECUTE FUNCTION public.notify_provider_request_confirmed();
 
+REVOKE ALL ON FUNCTION public.notify_provider_request_confirmed() FROM PUBLIC, anon, authenticated;
+
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261103000000', 'provider_told_request_confirmed')
+ON CONFLICT DO NOTHING;
+
 COMMIT;
