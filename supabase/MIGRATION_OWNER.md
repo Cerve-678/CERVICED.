@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-03 (admin dashboard, developer tools admin-only)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103110000 | `admin_dashboard_and_dev_tools_admin_only` | **APPLIED 2026-11-03** by the user in the SQL editor; version recorded by the file. Numbered above live max `20261103050000` and above the highest unapplied migration on an open PR (`20261103100000`, #282). Adds `admin_dashboard_overview(integer)` and `admin_dev_reset(text)`, both SECURITY DEFINER, admin-checked, authenticated only. Revokes execute on `dev_reset_client/provider/provider_bookings_only` from PUBLIC, anon and authenticated. Any signed-in account could run them before. No table, row or existing function body touched. The dashboard query was trial-run on live data first in a session-temporary copy. Verified live via the CLI: version present; both new functions executable by authenticated, not by anon; the three resets executable by neither; both new functions refuse a caller without an admin login. Written by the admin-dashboard session on `feat/admin-dashboard`. |
+
 ### Applied 2026-11-03 (bookings keep their cancellation window)
 
 | Authored version | Name | Status |
