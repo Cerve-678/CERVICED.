@@ -9,13 +9,13 @@ import {
   Switch,
   Keyboard,
   Animated,
-  StatusBar,
   ActivityIndicator,
   Platform,
   Modal,
   Image,
   useWindowDimensions,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -1565,7 +1565,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={scSt.safe} edges={['top']}>
 
         {/* Header */}

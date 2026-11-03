@@ -10,7 +10,6 @@ import {
   Pressable,
   FlatList,
   Modal,
-  StatusBar,
   RefreshControl,
   Animated,
   ListRenderItem,
@@ -20,6 +19,7 @@ import {
   useWindowDimensions,
   ViewStyle,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
@@ -1591,7 +1591,7 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* ── Search bar — filled card style, matching ExploreScreen's search bar. ── */}
       <View style={[styles.searchWrap, { backgroundColor: P.bg }]}>

@@ -6,11 +6,11 @@ import {
   FlatList,
   type ListRenderItem,
   TouchableOpacity,
-  StatusBar,
   Platform,
   Animated,
   Easing,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -260,7 +260,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
   if (loading) {
     return (
       <ThemedBackground>
-        <StatusBar barStyle={theme.statusBar} />
+        <FocusAwareStatusBar barStyle={theme.statusBar} />
         <SafeAreaView style={styles.container}>
           <View style={[styles.gridRow, { paddingTop: insets.top + 48, paddingHorizontal: 16 }]}>
             {[1, 2, 3, 4, 5, 6].map(k => (
@@ -274,7 +274,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <SafeAreaView style={styles.container} edges={['bottom']}>
 
         {/* ── Header (tabs only — title now lives in the nav bar) ── */}
