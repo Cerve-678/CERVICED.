@@ -27,6 +27,8 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS, ALL_SPECIALTIES, SPECIALTIES_MAP } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
+import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
+import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
@@ -37,7 +39,6 @@ import {
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep5'>;
 
 const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
-const LOCATIONS = ['Birmingham', 'Manchester', 'London'];
 const FREQUENCIES = ['Every week', 'Bi-weekly', 'Monthly', '3 months', 'Occasionally'];
 const REFERRAL_SOURCES = ['Instagram', 'TikTok', 'Snapchat', 'X', 'Referral', 'Google', 'YouTube', 'Friend', 'Other'];
 
@@ -139,10 +140,11 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   // provider picks here is exactly what clients filter on. Picked in the same
   // searchable sheet as the filter; a term typed that isn't listed can still
   // be added, which replaces the old "Other" box.
-  const specialtyOptions = React.useMemo(() => {
+  const curatedSpecialtyOptions = React.useMemo(() => {
     const combined = data.serviceInterests.flatMap(cat => SPECIALTIES_MAP[cat] ?? []);
     return combined.length ? [...new Set(combined)] : ALL_SPECIALTIES;
   }, [data.serviceInterests]);
+  const specialtyOptions = useSpecialityOptionsWithLearned(curatedSpecialtyOptions, data.serviceInterests);
   // Personalisation — optional, affects home feed section gating
   const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
   const [hasKids,           setHasKids]           = useState<boolean>(data.has_kids ?? false);
@@ -160,14 +162,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       : [...selectedInterests, category];
     setSelectedInterests(next);
     if (!selectedInterests.length && next.length === 1) setTimeout(() => scrollTo(locationY), 150);
-  };
-
-  const toggleLocation = (location: string) => {
-    const next = selectedLocations.includes(location)
-      ? selectedLocations.filter(l => l !== location)
-      : [...selectedLocations, location];
-    setSelectedLocations(next);
-    if (!selectedLocations.length && next.length === 1) setTimeout(() => scrollTo(frequencyY), 150);
   };
 
   const selectFrequency = (freq: string) => {
@@ -427,6 +421,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                 options={specialtyOptions}
                 palette={t}
                 placeholder="Search specialities"
+                showSelectedChips
               />
             </QuestionCard>
 
@@ -435,7 +430,19 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         ) : (
           <>
             {renderSection(servicesY, 'SERVICES', "Select all services you're interested in.", SERVICE_CATEGORIES, item => selectedInterests.includes(item), toggleInterest)}
-            {renderSection(locationY, 'LOCATION', 'Where are you willing to get services from?', LOCATIONS, item => selectedLocations.includes(item), toggleLocation)}
+            <QuestionCard
+              title="LOCATION"
+              prompt="Where are you willing to get services from?"
+              error={showErrors && !selectedLocations.length}
+              onLayout={onLayoutFor(locationY)}
+            >
+              <CityMultiSelect
+                selected={selectedLocations}
+                onChange={setSelectedLocations}
+                palette={t}
+                placeholder="Search a town, county or area"
+              />
+            </QuestionCard>
             {renderSection(frequencyY, 'FREQUENCY', 'How often do you get your maintenance done?', FREQUENCIES, item => selectedFrequency === item, selectFrequency)}
             {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral)}
 

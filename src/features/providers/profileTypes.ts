@@ -109,6 +109,7 @@ export interface ProviderProfileData {
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
@@ -119,9 +120,10 @@ export interface ProviderProfileData {
     depositAmount?: string;
     noShowAction?: string;
     policyImageUrl?: string;
-    // Read by EmergencyBookingPrompt (via BookingSheet/MultiBookingSheet) while
-    // EMERGENCY_BOOKINGS_ENABLED is on. Authored on PoliciesScreen.
+    // Authored on PoliciesScreen, shown in the Policy tab. EmergencyBookingPrompt
+    // also reads it while EMERGENCY_BOOKINGS_ENABLED is on.
     emergencyBookingPolicy?: string;
+    travelPolicy?: string;
   } | null;
   cancellationNoticeHours: number;
   waitlistEnabled: boolean;
