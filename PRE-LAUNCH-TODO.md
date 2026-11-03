@@ -1334,3 +1334,88 @@ launch?
   to clients and it's a small amount.
 
 Found by the security review of PRs #251 and #254.
+
+---
+
+## 31. Booking settings the server doesn't fully enforce (2026-11-03)
+
+Audited against the live database. Window, monthly release, minimum notice,
+working hours, blocked dates, Close Schedule, buffers, deposits, the
+cancellation window and auto-accept are all enforced server-side. These
+aren't, or only partly:
+
+### 31a. Maximum bookings per day is skipped on four paths
+
+`max_bookings_per_day` is checked only in `prepare_checkout` (the live Stripe
+checkout) and `provider_create_manual_booking` (Add Booking). It is not checked
+in:
+
+- `place_reschedule_hold` and a date-changing UPDATE on `bookings`, so a client
+  rescheduling onto a day that's already at the limit goes over it.
+- `invite_next_waitlist_entry`. That's usually fine, since an invite fills a
+  slot a cancellation just freed, but nothing guarantees it.
+- `hold_cart_booking_slots`, the non-Stripe checkout path. It isn't used while
+  Stripe checkout is on.
+
+**To fix:** move the count into `enforce_booking_bookability` so every insert,
+and every date change, is checked once. Exempt `bypass_scheduling_policy` (the
+provider's own override) and a time-only change on the same day. The
+reschedule picker and the cart already hide full days app-side
+(`countProviderBookingsOnDates`), so this is the server backstop.
+
+### 31b. A service's minimum age is shown but never checked
+
+`services.min_age` shows on the profile as "Minimum age 16" and nothing stops a
+younger client booking it. Enforcing it means checking the client's date of
+birth (`users.date_of_birth`) at checkout.
+
+**Decide first (product/legal, not engineering):** whether to use DOB for this,
+what to show a client who's too young, and what the Terms say about age. See
+`LEGAL-COMPLIANCE-NOTES.md` on age verification. A DOB check only proves what
+the client typed in.
+
+### 31c. "Accepting new clients: No / Waitlist only" does nothing
+
+Providers set this on the Scheduling screen (`providers.accepts_new_clients`:
+yes / waitlist / no), but nothing reads it: a provider on "No" can be booked by
+anyone. Live on 2026-11-03: 2 providers say yes and 10 have never set it, so
+enforcing it changes no one's bookings on day one.
+
+**Plan (agreed with the owner 2026-11-03, parked here rather than built):**
+
+1. **One "existing client" check** in the database, used by both the app and
+   the server. Decided: **a no-show alone does not make someone an existing
+   client.** Still to decide: which bookings count. The suggestion is any
+   booking the provider accepted (completed, upcoming confirmed, in progress),
+   but not cancelled, declined or never-accepted requests. The alternative is
+   completed appointments only.
+2. **The server enforces it** in `enforce_booking_bookability`: on "No" or
+   "Waitlist only", a client who isn't an existing client is refused with
+   "This provider isn't taking new clients right now". These still go through:
+   the provider's own Add Booking, moving an existing booking, and a waitlist
+   invite (how a new client gets in under "Waitlist only").
+3. **The client sees:** an existing client books as normal. A new client gets a
+   note and no Book buttons under "No", and "Join the waitlist" in place of
+   Book under "Waitlist only" (the existing `provider_waitlist`). Search keeps
+   these providers in results with an "Existing clients only" label.
+4. **Checks:** tests for the existing-client rule and each mode, the trigger
+   rejections, and the security/booking reviews.
+
+### 31d. Consultation required for new clients
+
+Already item 16: built client-side but no screen can turn it on. It needs the
+same existing-client check as 31c, so build that once and reuse it.
+
+### 31e. Slot interval isn't a server rule
+
+`slot_interval_mins` only decides which start times the picker offers. The
+server accepts any start time inside working hours. That's harmless while all
+bookings come through the picker. Low priority.
+
+### 31f. Information only, by design
+
+Who you take (`clientele`), travel radius and service areas, patch test policy
+wording, walk-ins and group bookings are shown to clients, not enforced. Travel
+radius is the one that may matter: a mobile provider can be booked to an
+address outside their radius. Decide whether that should be checked against
+the client's address at checkout.
