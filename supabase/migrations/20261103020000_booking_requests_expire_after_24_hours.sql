@@ -44,7 +44,7 @@ END;
 $function$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261102220000', 'booking_requests_expire_after_24_hours')
+VALUES ('20261103020000', 'booking_requests_expire_after_24_hours')
 ON CONFLICT DO NOTHING;
 
 COMMIT;
