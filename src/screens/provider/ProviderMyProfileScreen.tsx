@@ -2539,7 +2539,7 @@ const styles = StyleSheet.create({
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   identityText: {
     flex: 1,
@@ -2571,12 +2571,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginTop: 4,
   },
-  // Demoted to a top-right chip, the size of the reference's bell/avatar
-  // pair, so the name owns the width instead of splitting it.
+  // Keep the business logo prominent without crowding the name on small screens.
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     borderWidth: 2,
     borderColor: 'rgba(255, 253, 251, 0.9)',
   },
@@ -2587,7 +2586,7 @@ const styles = StyleSheet.create({
   avatarInitials: {
     color: '#FFFFFF',
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
+    fontSize: 26,
   },
   statRow: {
     flexDirection: 'row',
