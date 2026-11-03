@@ -225,6 +225,10 @@ const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows
 const KM_TO_MILES = 0.621371;
 /** How many of a provider's specialities a result card underlines. */
 const SEARCH_CARD_MAX_SPECIALITIES = 4;
+// Rows are revealed in batches as the client nears the end, with a spinner
+// underneath while more are still to come.
+const SEARCH_INITIAL_ROWS = 10;
+const SEARCH_ROW_BATCH = 10;
 
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
 // tapping one opens just that filter's popover (Airbnb/Skyscanner style)
@@ -1382,6 +1386,21 @@ export default function SearchScreen({ navigation, route }: Props) {
     [providersLoading, filteredProviders, visibleServices, gridColumns],
   );
 
+  // A new search or refresh starts back at the first batch.
+  const [visibleRowCount, setVisibleRowCount] = useState(SEARCH_INITIAL_ROWS);
+  useEffect(() => {
+    if (providersLoading) setVisibleRowCount(SEARCH_INITIAL_ROWS);
+  }, [providersLoading]);
+  const visibleRows = useMemo(
+    () => resultRows.slice(0, visibleRowCount),
+    [resultRows, visibleRowCount],
+  );
+  const hasMoreRows = visibleRowCount < resultRows.length;
+  const handleEndReached = useCallback(() => {
+    if (!hasMoreRows) return;
+    setVisibleRowCount(count => count + SEARCH_ROW_BATCH);
+  }, [hasMoreRows]);
+
   const renderRow: ListRenderItem<SearchResultRow<ProviderCardData, ServiceSearchResult>> = useCallback(({ item }) => {
     if (item.kind === 'service') {
       return (
@@ -1976,10 +1995,19 @@ export default function SearchScreen({ navigation, route }: Props) {
           the bookmarked-providers grid, with full-width service cards
           scattered between the rows ── */}
       <FlatList
-        data={resultRows}
+        data={visibleRows}
         renderItem={renderRow}
         keyExtractor={item => item.key}
         ListHeaderComponent={renderHeader}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={
+          hasMoreRows ? (
+            <View style={styles.loadMoreFooter}>
+              <ActivityIndicator color={P.accent} />
+            </View>
+          ) : undefined
+        }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         bounces={true}
@@ -2039,6 +2067,7 @@ export default function SearchScreen({ navigation, route }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  loadMoreFooter: { paddingVertical: 16, alignItems: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { fontSize: 14, fontFamily: 'Jura-VariableFont_wght' },
 
