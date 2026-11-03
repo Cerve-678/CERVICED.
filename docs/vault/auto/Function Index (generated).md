@@ -5,7 +5,7 @@
 
 #generated
 
-**3031 functions** across **417 files**.
+**3034 functions** across **417 files**.
 
 ### `src/components/` (55)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -36,7 +36,7 @@
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — LocationModal
 - `MasonryGrid.tsx` — and · columns · component · **masonryColumnsForWidth** · MasonryGridInner · type
-- `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handlePanelPickTime · handleRequestDateChange · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · releaseNote · renderGroup · requestPanel · requestTimesForDate · selectDateFromTap
+- `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handlePanelPickTime · handleRequestDateChange · handleTimeClick · maxDate · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · releaseNote · renderGroup · requestPanel · requestTimesForDate · selectDateFromTap · tooFarAheadNote
 - `MultiBookingSheet.tsx` — cancelSeparateEmergency · confirmSeparateEmergency · depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSeparateDate · handleSeparateTime · handleSubmit · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
 - `NotificationPreferencesView.tsx` — load · NotificationPreferencesView · persist · retrySave · StaticRow · toggle · ToggleRow
 - `PasswordRequirements.tsx` — **PasswordRequirements**
@@ -395,7 +395,7 @@
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
-- `bookingHorizon.ts` — **bookableDayCount** · **isBeyondHorizon** · **isMonthlyRelease** · **lastBookableDate** · **nextReleaseMoment** · **releaseMomentInMonth** · **toReleaseDay**
+- `bookingHorizon.ts` — **bookableDayCount** · **isBeyondHorizon** · **isMonthlyRelease** · **lastBookableDate** · **nextReleaseMoment** · **releaseMomentInMonth** · **toReleaseDay** · **whenDateOpens**
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
