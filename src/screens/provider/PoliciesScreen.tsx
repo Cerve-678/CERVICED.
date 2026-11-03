@@ -46,6 +46,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { ImageCropModal } from '../../components/ImageCropModal';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -194,6 +195,7 @@ export default function PoliciesScreen({ navigation }: any) {
   // full REPLACE: a key that isn't carried through is a key that's deleted.
   const [carriedPolicies, setCarriedPolicies] = useState<Record<string, unknown>>({});
   const [policyImageUploading, setPolicyImageUploading] = useState(false);
+  const [policyImageToCrop, setPolicyImageToCrop] = useState<string | null>(null);
 
   // Re-affirmation only — first-publish acceptance is InfoRegScreen's
   // checkbox and is what actually gates being able to publish at all. This
@@ -257,19 +259,24 @@ export default function PoliciesScreen({ navigation }: any) {
       return;
     }
     // No allowsEditing: iOS's editor only crops to a square, which cuts the
-    // top and bottom off a full-length policy sheet.
+    // top and bottom off a full-length policy sheet. ImageCropModal does it.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.85,
     });
     const asset = result.assets?.[0];
     if (result.canceled || !asset) return;
+    setPolicyImageToCrop(asset.uri);
+  }, [userId]);
 
+  const handlePolicyImageCropped = useCallback(async (uri: string) => {
+    setPolicyImageToCrop(null);
+    if (!userId) return;
     setPolicyImageUploading(true);
     try {
-      const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
       const path = `${userId}/policy-${Date.now()}.${ext}`;
-      const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
+      const publicUrl = await uploadToStorage('portfolio', path, uri);
       setPolicy('policyImageUrl', publicUrl);
     } catch (e: any) {
       Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
@@ -333,6 +340,13 @@ export default function PoliciesScreen({ navigation }: any) {
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <ImageCropModal
+        uri={policyImageToCrop}
+        accent={C.accent}
+        onAccent={C.onAccent}
+        onCancel={() => setPolicyImageToCrop(null)}
+        onDone={handlePolicyImageCropped}
+      />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>

@@ -1310,3 +1310,27 @@ another, and the offer they were promised isn't honoured.
 - Update `docs/PAYMENTS_AND_LOGIC.md` in the same change.
 - Test a promo on a full payment, on a deposit, and in a cart with several
   providers, checking review screen, payment sheet, receipt and payout agree.
+
+---
+
+## 30. Providers can work out the platform fee from their own booking data (2026-11-03)
+
+**Decide before launch: is this worth fixing?**
+
+The app never shows a provider the platform fee, and the handbook says they
+never see it. But the refund sheet reads `bookings.service_charge` and
+`booking_refunds.amount_pence` / `payout_adjust_pence` directly, and a provider
+is allowed to read those rows. Someone inspecting the app's network traffic
+could see the fee or work it out. Nothing on screen shows it.
+
+This isn't new. Fixing it means changing how the refund sheet loads its data
+(`getProviderRefundState` in `databaseService.ts`), so is that worth doing before
+launch?
+
+- **To fix:** give the sheet a provider-safe database function that returns only
+  the provider's own figures, and stop providers reading those columns directly.
+  Check nothing else provider-side reads them first.
+- **Claude's suggestion, 2026-11-02:** leave it for now. The fee is already shown
+  to clients and it's a small amount.
+
+Found by the security review of PRs #251 and #254.
