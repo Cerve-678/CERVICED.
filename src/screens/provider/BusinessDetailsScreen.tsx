@@ -24,7 +24,8 @@
  * Shared form primitives live in src/features/business-details/.
  */
 import React from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -63,7 +64,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
 
   return (
     <View style={[st.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={[st.header, { borderBottomColor: C.border }]}>
           <Text style={[st.headerTitle, { color: C.text }]}>Business Details</Text>

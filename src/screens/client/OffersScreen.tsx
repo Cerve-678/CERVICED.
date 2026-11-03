@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   FlatList,
   Modal,
-  StatusBar,
   Animated,
   ListRenderItem,
   Platform,
   RefreshControl,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
@@ -235,7 +235,7 @@ export default function OffersScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={styles.root}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Category tabs — same sliding-capsule tab bar as booking history,
           coloured with the app accent (brown in light mode, unchanged in

@@ -8,9 +8,9 @@ import {
   RefreshControl,
   Modal,
   ScrollView,
-  StatusBar,
   Animated,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from '../../components/SafeArea';
 import { useFont } from '../../contexts/FontContext';
@@ -1161,7 +1161,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle={theme.statusBar} />
+        <FocusAwareStatusBar barStyle={theme.statusBar} />
 
         {/* Pull-down indicator bar */}
         <View style={styles.pullBarContainer}>

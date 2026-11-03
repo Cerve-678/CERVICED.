@@ -52,7 +52,19 @@ Notifications.setNotificationHandler({
  * Request permission, get the Expo push token, and save it to users.push_token.
  * Safe to call multiple times — bails silently on simulators or permission denial.
  */
-export async function registerForPushNotifications(): Promise<string | null> {
+let registrationInFlight: Promise<string | null> | null = null;
+
+export function registerForPushNotifications(): Promise<string | null> {
+  if (registrationInFlight) return registrationInFlight;
+  const registration = registerPushToken();
+  registrationInFlight = registration;
+  void registration.finally(() => {
+    if (registrationInFlight === registration) registrationInFlight = null;
+  }).catch(() => {});
+  return registration;
+}
+
+async function registerPushToken(): Promise<string | null> {
   // Push tokens only work on real devices
   if (!Device.isDevice) {
     logger.log('[Push] Skipping — not a real device');

@@ -406,7 +406,10 @@ export default function MyScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      {/* FocusAwareStatusBar, never react-native's StatusBar directly: the plain
+          one keeps applying from screens that aren't showing (tabs, screens
+          lower in a stack), which puts white icons on pale screens. */}
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}

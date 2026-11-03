@@ -129,6 +129,7 @@ function ConversationRow({
   sub,
   accent,
   onAccent,
+  card,
   border,
   onPress,
   onReply,
@@ -140,6 +141,7 @@ function ConversationRow({
   sub: string;
   accent: string;
   onAccent: string;
+  card: string;
   border: string;
   onPress: () => void;
   onReply: () => void;
@@ -182,7 +184,14 @@ function ConversationRow({
 
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+      {/* Swipeable draws Mark read and Reply behind the row, so the row needs
+          its own background or they show through it before any swipe. */}
+      <Swipeable
+        ref={swipeRef}
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+        childrenContainerStyle={{ backgroundColor: card }}
+      >
         <TouchableOpacity
           activeOpacity={0.72}
           onPress={onPress}
@@ -504,6 +513,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                 sub={P.sub}
                 accent={P.accent}
                 onAccent={P.onAccent}
+                card={P.card}
                 border={P.border}
                 onPress={() => navigation.navigate('ProviderConversation', {
                   conversationId: item.id,

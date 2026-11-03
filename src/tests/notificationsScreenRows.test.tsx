@@ -47,7 +47,10 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn().mockResolvedValue(undefined),
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
 }));
-jest.mock('@react-navigation/native', () => ({ CommonActions: { goBack: jest.fn() } }));
+jest.mock('@react-navigation/native', () => ({
+  CommonActions: { goBack: jest.fn() },
+  NavigationContext: jest.requireActual('react').createContext(undefined),
+}));
 jest.mock('../navigation/rootNavigate', () => ({
   navigateNested: jest.fn(),
   navigateTab: jest.fn(),

@@ -25,7 +25,10 @@ jest.mock('../utils/storage', () => ({
   STORAGE_KEYS: { BOOKMARKED_VIDEOS: 'bookmarks', SETTINGS: 'settings' },
 }));
 jest.mock('../contexts/AuthContext', () => ({ AuthProvider: ({ children }: any) => children }));
-jest.mock('../contexts/ThemeContext', () => ({ ThemeProvider: ({ children }: any) => children }));
+jest.mock('../contexts/ThemeContext', () => ({
+  ThemeProvider: ({ children }: any) => children,
+  useTheme: () => ({ isDarkMode: false }),
+}));
 jest.mock('../contexts/DisplaySettingsContext', () => ({ DisplaySettingsProvider: ({ children }: any) => children }));
 jest.mock('../contexts/RegistrationContext', () => ({ RegistrationProvider: ({ children }: any) => children }));
 jest.mock('../contexts/FontContext', () => ({ FontProvider: ({ children }: any) => children }));

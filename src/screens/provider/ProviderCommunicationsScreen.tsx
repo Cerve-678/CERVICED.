@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Switch,
   Text,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -221,7 +221,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView>
           {/* Header */}
@@ -240,29 +240,6 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             keyboardDismissMode="interactive"
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
-
-            {/* Info banner */}
-            <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Ionicons name="information-circle-outline" size={18} color={C.accent} />
-              <Text style={[s.infoText, { color: C.sub }]}>
-                For clients who already have a booking with you. They see a
-                Contact button on their booking with the channels you switch on
-                here, using the details you type below.
-              </Text>
-            </View>
-
-            {/* The other audience. Without this, "contact methods" reads like one
-                global setting and providers assume unticking a channel here also
-                hides it from their public profile — it doesn't, and hasn't since
-                the two surfaces were split. */}
-            <View style={[s.infoBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <Ionicons name="globe-outline" size={18} color={C.accent} />
-              <Text style={[s.infoText, { color: C.sub }]}>
-                Only booked clients see these. Your public contact details (Get In
-                Touch on your profile) are set in Business Profile → Contact. Leave
-                a field blank here to give booked clients your public one.
-              </Text>
-            </View>
 
             {/* Contact method toggles */}
             <View style={[s.card, { backgroundColor: C.surface, borderColor: C.border }]}>
@@ -301,9 +278,10 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                         thumbColor={C.ice}
                       />
                     </View>
-                    {/* Editable only while the channel is on — a value for a
-                        switched-off channel never reaches a client anyway. */}
-                    {method !== 'in_app' && isOn && (() => {
+                    {/* Always shown, so the details can be filled in before
+                        the channel is switched on. A value for a switched-off
+                        channel never reaches a client. */}
+                    {method !== 'in_app' && (() => {
                       const publicValue = publicValues[method].trim();
                       return (
                         <View style={s.inputWrap}>
@@ -320,7 +298,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                           {!booked[method].trim() && (
                             publicValue
                               ? <Text style={[s.inputHint, { color: C.sub }]}>Using your public {method === 'email' ? 'email' : 'number'}. Type here to give booked clients a different one.</Text>
-                              : <Text style={s.rowWarn}>Not added yet</Text>
+                              : isOn && <Text style={s.rowWarn}>Not added yet</Text>
                           )}
                         </View>
                       );
@@ -358,10 +336,7 @@ const s = StyleSheet.create({
   closeBtn:    { width: 34, height: 34, borderRadius: 17, backgroundColor: CP.surface, alignItems: 'center', justifyContent: 'center' },
 
   scroll:        { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE },
-
-  infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: CP.surface, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
-  infoText:   { flex: 1, fontSize: 13, color: CP.sub, lineHeight: 18 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE },
 
   card:      { backgroundColor: CP.surface, borderRadius: 16, padding: 16, marginBottom: 14 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: CP.text, marginBottom: 16 },
