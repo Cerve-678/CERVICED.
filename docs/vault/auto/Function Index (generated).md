@@ -5,7 +5,7 @@
 
 #generated
 
-**2999 functions** across **411 files**.
+**3000 functions** across **412 files**.
 
 ### `src/components/` (54)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -108,7 +108,7 @@
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 
-### `src/features/bookings/` (19)
+### `src/features/bookings/` (20)
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
@@ -125,6 +125,7 @@
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
 - `receipt.ts` — appointmentWhen · **buildClientReceiptHTML** · **buildProviderInvoiceHTML** · escapeHtml · methodLabel · money · renderDocument
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen** · **refundReplyDeadline**
+- `requestWindow.ts` — **clientRequestNote**
 - `reviewState.ts` — **mergeBookingReviewStates**
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · minutesOfDay · **tipWindowClosesAt**
