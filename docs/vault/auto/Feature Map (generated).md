@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **176 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **82 files**
-- `src/services/databaseService.ts` _(85)_
+- `src/services/databaseService.ts` _(88)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(61)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **186 files**
 - … +156 more
 
 ## Auth
-Curated: [[Contexts]] · **194 files**
+Curated: [[Contexts]] · **196 files**
 - `src/services/databaseService.ts` _(307)_
 - `src/contexts/AuthContext.tsx` _(176)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **194 files**
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- … +164 more
+- … +166 more
 
 ## Becca / AI
 Curated: [[Services]] · **49 files**
