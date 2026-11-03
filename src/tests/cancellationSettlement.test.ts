@@ -1,5 +1,6 @@
 import {
   computeCancellationSettlement,
+  readCancelCustomFeePence,
   readCancelPenalty,
   type CancellationSettlementInput,
 } from '../../supabase/functions/_shared/cancellationSettlement';
@@ -95,6 +96,63 @@ describe('computeCancellationSettlement', () => {
     expect(readCancelPenalty('deposit')).toBe('deposit');
     expect(readCancelPenalty('')).toBe('none');
     expect(readCancelPenalty(undefined)).toBe('none');
+  });
+
+  describe("a 'custom' amount", () => {
+    const custom = { ...base, penalty: 'custom' as const, isLateCancel: true };
+
+    it('keeps the amount the provider set and refunds the rest', () => {
+      const s = computeCancellationSettlement({ ...custom, customFeePence: 1000 });
+      expect(s).toEqual({ clientRefundPence: 4000, providerKeepPence: 1000, reverseFromPayoutPence: 4000 });
+    });
+
+    it('never keeps more than half of a booking paid in full', () => {
+      const s = computeCancellationSettlement({ ...custom, customFeePence: 999999 });
+      expect(s.providerKeepPence).toBe(2500);
+      expect(s.clientRefundPence).toBe(2500);
+    });
+
+    it('never keeps more than the deposit when only a deposit was paid', () => {
+      const s = computeCancellationSettlement({
+        ...custom, paidDepositOnly: true, customFeePence: 2000, servicePricePence: 10000,
+        amountPaidPence: 1500, depositPence: 1000, platformFeePence: 500, payoutAmountPence: 1000,
+      });
+      expect(s.providerKeepPence).toBe(1000);
+      expect(s.clientRefundPence).toBe(0);
+    });
+
+    it('keeps less than the deposit when that is what the provider set, and refunds the difference', () => {
+      const s = computeCancellationSettlement({
+        ...custom, paidDepositOnly: true, customFeePence: 400, servicePricePence: 10000,
+        amountPaidPence: 1500, depositPence: 1000, platformFeePence: 500, payoutAmountPence: 1000,
+      });
+      expect(s.providerKeepPence).toBe(400);
+      expect(s.clientRefundPence).toBe(600);
+    });
+
+    it('holds half the price even when a deposit is worth more than half', () => {
+      const s = computeCancellationSettlement({
+        ...custom, paidDepositOnly: true, customFeePence: 9000, servicePricePence: 10000,
+        amountPaidPence: 8500, depositPence: 8000, platformFeePence: 500, payoutAmountPence: 8000,
+      });
+      expect(s.providerKeepPence).toBe(5000);
+      expect(s.clientRefundPence).toBe(3000);
+    });
+
+    it('refunds everything, fee included, on an early cancel or a missing amount', () => {
+      expect(computeCancellationSettlement({ ...custom, isLateCancel: false, customFeePence: 1000 }).clientRefundPence).toBe(5500);
+      expect(computeCancellationSettlement({ ...custom, customFeePence: 0 }).clientRefundPence).toBe(5500);
+      expect(computeCancellationSettlement(custom).clientRefundPence).toBe(5500);
+    });
+
+    it('reads the saved policy value, treating anything unreadable as no amount', () => {
+      expect(readCancelPenalty('custom')).toBe('custom');
+      expect(readCancelCustomFeePence('12.50')).toBe(1250);
+      expect(readCancelCustomFeePence(20)).toBe(2000);
+      for (const bad of ['', 'abc', '-5', '10.555', null, undefined]) {
+        expect(readCancelCustomFeePence(bad)).toBe(0);
+      }
+    });
   });
 
   it('is a no-op when nothing was captured (Stripe off / free booking)', () => {

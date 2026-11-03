@@ -24,6 +24,10 @@ export const UK_CITIES = [
   'Canterbury', 'Dartford', 'Gravesend', 'Chatham', 'Rochester', 'Ashford', 'Tunbridge Wells',
   'Tonbridge', 'Sevenoaks', 'Swanley', 'Sittingbourne', 'Faversham', 'Whitstable', 'Herne Bay',
   'Margate', 'Ramsgate', 'Broadstairs', 'Folkestone', 'Dover', 'Deal',
+  // Around London and other large towns
+  'Brentwood', 'Harlow', 'Grays', 'Guildford', 'Epsom', 'Redhill', 'Hemel Hempstead', 'Stevenage',
+  'Hatfield', 'Eastbourne', 'Hastings', 'Hull', 'Bournemouth', 'Swindon', 'Huddersfield', 'Bedford',
+  'Walsall', 'Dudley', 'Oldham', 'Warrington', 'Cheltenham',
 ] as const;
 
 export type UkCity = (typeof UK_CITIES)[number];

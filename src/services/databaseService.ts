@@ -1,3 +1,4 @@
+import type { SpecialityUse } from "../utils/learnedSpecialities";
 import { getPaymentRequestError } from '../utils/paymentRequestError';
 import type {
   MaintenanceBookingContext,
@@ -697,6 +698,7 @@ export async function getTrendingProviders(limit = 10): Promise<PublicProviderSu
 // so it changes nothing today, but keeps these queries from scanning/
 // returning the entire table unbounded as the provider base grows.
 const DEFAULT_PROVIDER_QUERY_LIMIT = 200;
+const SPECIALITY_USES_QUERY_LIMIT = 2000;
 
 // Same rationale, applied to a single provider's review list — no realistic
 // profile needs to render more than this at once.
@@ -8107,6 +8109,31 @@ export async function getMyServiceBookingRows(
   return ((data ?? []) as { service_name_snapshot: string | null; booking_date: string }[])
     .filter((row) => !!row.service_name_snapshot)
     .map((row) => ({ name: row.service_name_snapshot as string, date: row.booking_date }));
+}
+
+/** What live providers list as their specialities, for learning new terms.
+ *  has_gone_live: only what's already public on a profile counts. */
+export async function getSpecialityUses(): Promise<SpecialityUse[]> {
+  const { data, error } = await supabase
+    .from("provider_specialties")
+    .select("specialty, provider_id, providers!inner(service_categories, has_gone_live, is_active)")
+    .eq("providers.has_gone_live", true)
+    .eq("providers.is_active", true)
+    .limit(SPECIALITY_USES_QUERY_LIMIT);
+  if (error) throw error;
+  type Row = {
+    specialty: string;
+    provider_id: string;
+    providers: { service_categories: string[] | null } | { service_categories: string[] | null }[];
+  };
+  return ((data ?? []) as unknown as Row[]).map((row) => {
+    const provider = Array.isArray(row.providers) ? row.providers[0] : row.providers;
+    return {
+      specialty: row.specialty,
+      providerId: row.provider_id,
+      categories: provider?.service_categories ?? [],
+    };
+  });
 }
 
 /** Update the maximum number of confirmed bookings a provider accepts per day (0 = unlimited) */

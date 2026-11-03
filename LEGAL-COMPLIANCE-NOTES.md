@@ -217,6 +217,18 @@ Until then, the app reads the provider's policy only to *display* it and to
 *warn* the client they're inside the notice window — it does not act on it
 financially.
 
+**Updated 2026-11-02 — late-cancel charge is now a provider-set amount (PR #266, not yet live).**
+"Half the price" became a £ amount the provider types, capped by the server at
+half the service price, and at the deposit if that's all the client paid.
+Questions to raise, not resolved:
+- The Terms and legal site still say the most a provider can keep is the deposit
+  or half the price. That stays true, but neither mentions a provider-set amount.
+- The client sees "£20 kept, at most half the price" on the profile and booking,
+  not the exact figure for their own booking before they tick to agree.
+- `bookings.policy_snapshot` comes from the client's checkout payload, and
+  `apply-cancellation-refund` reads the penalty from it. A tampered snapshot could
+  lower or remove a late-cancel charge. This predates the custom amount.
+
 ## 7. Reviews and user-generated content
 
 T&Cs already prohibit "false reviews" and fraudulent activity (good). Worth

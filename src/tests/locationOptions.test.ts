@@ -1,5 +1,5 @@
 import { UK_CITIES } from '../constants/ukCities';
-import { CITY_AREAS, COUNTY_TOWNS, getCityAreaData } from '../data/cityAreas';
+import { CITY_AREAS, COUNTY_TOWNS, getCityAreaData, searchPlaces } from '../data/cityAreas';
 
 // Provider signup offers UK_CITIES for "where you work" and CITY_AREAS for
 // "where you're based"; a town in one and not the other can be covered but
@@ -32,4 +32,22 @@ it('never lists an area twice in one town', () => {
     const areas = regions.flatMap(r => r.areas);
     expect({ city, dupes: areas.filter((a, i) => areas.indexOf(a) !== i) }).toEqual({ city, dupes: [] });
   }
+});
+
+it('finds a neighbourhood by name without knowing its region', () => {
+  expect(searchPlaces('stoke newington')).toEqual([{ kind: 'area', name: 'Stoke Newington', town: 'London' }]);
+});
+
+it('offers a county as a place of its own', () => {
+  expect(searchPlaces('kent')[0]).toEqual({ kind: 'county', name: 'Kent' });
+});
+
+it('puts names starting with the text before names containing it', () => {
+  const names = searchPlaces('ham').map(m => m.name);
+  const firstContaining = names.findIndex(n => !n.toLowerCase().startsWith('ham'));
+  expect(names.slice(firstContaining).every(n => !n.toLowerCase().startsWith('ham'))).toBe(true);
+});
+
+it('finds nothing for an empty search', () => {
+  expect(searchPlaces('   ')).toEqual([]);
 });
