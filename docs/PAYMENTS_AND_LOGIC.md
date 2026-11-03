@@ -378,11 +378,8 @@ Pay or PayPal.
   charge" now count as half, including bookings already made. Client Terms §13
   and the provider Terms say so.
 - **Cancellation window:** set by the provider (none, or 24, 48 or 72 hours
-  before the appointment). The penalty at the time of booking is frozen onto
-  the booking, but the window isn't: `apply-cancellation-refund` reads
-  `providers.cancellation_notice_hours` when the client cancels. That column
-  defaults to 24 and only Automations sets it, so a notice picked in Policies
-  applies only when the column is 0 (see Part 6).
+  before the appointment). The policy at the time of booking is frozen onto
+  the booking.
 - **Rescheduling doesn't reset the window.** If the client *asks* to
   reschedule once the window has already started, and the move goes ahead,
   the booking is marked (`bookings.late_reschedule_from`). Cancelling it
@@ -936,7 +933,6 @@ Ranked, most important first.
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
 | 12 | **Full membership shows a price nobody is charged.** Link-only pros who become full members see "£25.99 a month, 2 months free" (`src/constants/fullMembership.ts`); no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
-| 13 | **The cancellation window has two settings and isn't frozen.** Policies changes only the written notice; the enforced column stays at its default of 24 hours, and changing that column changes the window on bookings already made | A provider who picked 48 hours gets 24; a client can be charged under a window longer than the one they agreed to | Decide whether the window freezes at booking, then connect Policies to it |
 
 ---
 
