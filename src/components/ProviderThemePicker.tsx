@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import {
   PROVIDER_THEMES,
   SHEET_OPTIONS,
@@ -47,13 +48,17 @@ interface ProviderThemePickerProps {
   subColor: string;
   borderColor: string;
   sepColor: string;
+  /** Only these sets (by key) can be picked; the rest, and Custom, show locked
+   *  and call onLockedPress instead. Leave out for every option. */
+  unlockedThemes?: readonly string[] | undefined;
+  onLockedPress?: () => void;
 }
 
 /** One theme option's swatch: a small gradient chip (the real backdrop blend)
  *  plus the accent as a dot overlaid on it, so the picker shows what the
  *  profile will actually look like instead of three disconnected dots. */
-const ThemeSwatch: React.FC<{ accent: string; gradient: [string, string]; borderColor: string }> = (
-  { accent, gradient, borderColor }
+const ThemeSwatch: React.FC<{ accent: string; gradient: [string, string]; borderColor: string; locked?: boolean }> = (
+  { accent, gradient, borderColor, locked }
 ) => (
   <View style={[styles.swatchChip, { borderColor }]}>
     <LinearGradient
@@ -62,14 +67,37 @@ const ThemeSwatch: React.FC<{ accent: string; gradient: [string, string]; border
       end={{ x: 1, y: 1 }}
       style={StyleSheet.absoluteFill}
     />
-    <View style={[styles.accentDot, { backgroundColor: accent, borderColor }]} />
+    {locked ? (
+      <View style={styles.lockBadge}>
+        <Ionicons name="lock-closed" size={10} color="#FFFFFF" />
+      </View>
+    ) : (
+      <View style={[styles.accentDot, { backgroundColor: accent, borderColor }]} />
+    )}
   </View>
 );
 
 const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
-  value, onChange, onColorsResolved, textColor, subColor, borderColor, sepColor,
+  value, onChange, onColorsResolved, textColor, subColor, borderColor, sepColor, unlockedThemes, onLockedPress,
 }) => {
   const { themeChoice, customBackdrop, customCard, customAccent, sheetColor } = value;
+  const isUnlocked = (key: string) => !unlockedThemes || unlockedThemes.includes(key);
+  const customLocked = !!unlockedThemes;
+  // What they can pick comes first, both the rail and its place in the rail,
+  // so it isn't behind every locked set.
+  const unlockedFirst = (a: string, b: string) => Number(isUnlocked(b)) - Number(isUnlocked(a));
+  const collections = THEME_COLLECTIONS
+    .map(collection => ({
+      ...collection,
+      themes: PROVIDER_THEMES.filter(t => t.collection === collection.key).sort((a, b) => unlockedFirst(a.key, b.key)),
+    }))
+    .filter(collection => collection.themes.length > 0)
+    .sort((a, b) => unlockedFirst(a.themes[0]!.key, b.themes[0]!.key));
+
+  const pressLocked = () => {
+    Haptics.selectionAsync().catch(() => {});
+    onLockedPress?.();
+  };
 
   const select = (patch: Partial<ThemeSelection>, resolved: { accent: string; backdrop: string }) => {
     Haptics.selectionAsync().catch(() => {});
@@ -80,22 +108,25 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
   return (
     <View>
       {/* Preset sets, one swipeable rail per collection */}
-      {THEME_COLLECTIONS.map(collection => {
-        const themes = PROVIDER_THEMES.filter(t => t.collection === collection.key);
-        if (themes.length === 0) return null;
+      {collections.map(collection => {
+        const { themes } = collection;
+        const allLocked = !themes.some(t => isUnlocked(t.key));
         return (
           <View key={collection.key} style={styles.collection}>
             <View style={styles.collectionHead}>
+              {allLocked && <Ionicons name="lock-closed" size={10} color={subColor} />}
               <Text style={[styles.collectionName, { color: textColor }]}>{collection.name.toUpperCase()}</Text>
               <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>{collection.description}</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
               {themes.map(t => {
                 const isSelected = themeChoice === t.key;
+                const locked = !isUnlocked(t.key);
                 return (
                   <TouchableOpacity
                     key={t.key}
                     onPress={() => {
+                      if (locked) { pressLocked(); return; }
                       // Switching theme also defaults the content-area colour to
                       // whichever one best complements this palette — still
                       // overridable afterwards via the CONTENT AREA row below.
@@ -108,14 +139,15 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${t.name}: ${t.description}`}
+                    accessibilityLabel={`${t.name}: ${t.description}${locked ? ', locked' : ''}`}
                     style={[
                       styles.option,
                       { borderColor: 'transparent' },
                       isSelected && { borderColor: t.tokens.accent },
+                      locked && styles.lockedOption,
                     ]}
                   >
-                    <ThemeSwatch accent={t.tokens.accent} gradient={t.tokens.gradient} borderColor={borderColor} />
+                    <ThemeSwatch accent={t.tokens.accent} gradient={t.tokens.gradient} borderColor={borderColor} locked={locked} />
                     <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={2}>
                       {t.name}
                     </Text>
@@ -129,25 +161,30 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
 
       <View style={styles.collection}>
         <View style={styles.collectionHead}>
+          {customLocked && <Ionicons name="lock-closed" size={10} color={subColor} />}
           <Text style={[styles.collectionName, { color: textColor }]}>MAKE YOUR OWN</Text>
           <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>Pick each colour yourself</Text>
         </View>
         <View style={styles.rail}>
           <TouchableOpacity
-            onPress={() => select(
-              { themeChoice: 'custom' },
-              { accent: customAccent, backdrop: customBackdrop }
-            )}
+            onPress={() => customLocked
+              ? pressLocked()
+              : select(
+                { themeChoice: 'custom' },
+                { accent: customAccent, backdrop: customBackdrop }
+              )}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityState={{ selected: themeChoice === 'custom' }}
+            accessibilityLabel={customLocked ? 'Custom, locked' : 'Custom'}
             style={[
               styles.option,
               { borderColor: 'transparent' },
               themeChoice === 'custom' && { borderColor: customAccent },
+              customLocked && styles.lockedOption,
             ]}
           >
-            <ThemeSwatch accent={customAccent} gradient={[customBackdrop, customCard]} borderColor={borderColor} />
+            <ThemeSwatch accent={customAccent} gradient={[customBackdrop, customCard]} borderColor={borderColor} locked={customLocked} />
             <Text style={[styles.optionName, { color: themeChoice === 'custom' ? textColor : subColor }]} numberOfLines={1}>
               Custom
             </Text>
@@ -156,7 +193,7 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
       </View>
 
       {/* Custom builder */}
-      {themeChoice === 'custom' && (
+      {themeChoice === 'custom' && !customLocked && (
         <View style={[styles.customPanel, { borderTopColor: sepColor }]}>
           <Text style={[styles.rowLabel, { color: subColor }]}>ACCENT</Text>
           <View style={styles.swatchRow}>
@@ -279,6 +316,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
     padding: 3,
+  },
+  lockedOption: {
+    opacity: 0.55,
+  },
+  lockBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   accentDot: {
     width: 16,
