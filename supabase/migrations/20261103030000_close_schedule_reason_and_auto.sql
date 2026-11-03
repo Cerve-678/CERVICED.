@@ -307,7 +307,7 @@ END;
 $function$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261102230000', 'close_schedule_reason_and_auto')
+VALUES ('20261103030000', 'close_schedule_reason_and_auto')
 ON CONFLICT DO NOTHING;
 
 COMMIT;
