@@ -4,7 +4,7 @@ import { logger } from '../../utils/logger';
 
 /**
  * Whether the signed-in account is a CERVICED admin, for showing the hidden
- * Money (admin) settings row. False until the server says otherwise, and on
+ * Admin settings row. False until the server says otherwise, and on
  * any error: the row is a convenience, and the server refuses non-admins
  * everything on that screen regardless.
  */

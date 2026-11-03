@@ -16,7 +16,6 @@ import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { ProviderServicesStackParamList } from '../../types';
 
 const ProviderServicesStack = createNativeStackNavigator<ProviderServicesStackParamList>();
@@ -152,14 +151,6 @@ export default function ProviderServicesNavigator() {
         options={{ headerShown: false, presentation: 'modal' }}
       />
 
-      <ProviderServicesStack.Screen
-        name="DevSettings"
-        component={DevSettingsScreen}
-        options={{
-          headerShown: false,
-          presentation: 'modal',
-        }}
-      />
     </ProviderServicesStack.Navigator>
   );
 }

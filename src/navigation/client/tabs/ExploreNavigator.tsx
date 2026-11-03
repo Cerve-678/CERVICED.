@@ -6,7 +6,6 @@ import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import SearchScreen from '../../../screens/client/SearchScreen';
 import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvidersScreen';
 import CartScreen from '../../../screens/client/CartScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { ExploreStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 
@@ -110,25 +109,6 @@ export default function ExploreNavigator() {
           headerTintColor: theme.text,
         }}
       />
-
-      {/* FULL-SCREEN MODALS */}
-      <ExploreStack.Group screenOptions={{
-        presentation: 'fullScreenModal',
-        headerBackTitle: 'Close',
-        headerStyle: {
-          backgroundColor: theme.background,
-        },
-        headerTintColor: theme.text,
-      }}>
-        <ExploreStack.Screen
-          name="DevSettings"
-          component={DevSettingsScreen}
-          options={{
-            title: 'Developer Settings',
-            headerShown: false,
-          }}
-        />
-      </ExploreStack.Group>
     </ExploreStack.Navigator>
   );
 }

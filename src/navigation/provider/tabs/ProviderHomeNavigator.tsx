@@ -9,7 +9,6 @@ import ProviderConversationScreen from '../../../screens/provider/ProviderConver
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
@@ -165,14 +164,6 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
           name="Notifications"
           component={NotificationsScreen}
           options={{ headerShown: false }}
-        />
-        <ProviderHomeStack.Screen
-          name="DevSettings"
-          component={DevSettingsScreen}
-          options={{
-            headerShown: false,
-            presentation: 'modal',
-          }}
         />
         <ProviderHomeStack.Screen
           name="ProviderSchedule"

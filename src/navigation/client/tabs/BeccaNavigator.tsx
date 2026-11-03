@@ -10,7 +10,6 @@ import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import CartScreen from '../../../screens/client/CartScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { BeccaStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 
@@ -114,15 +113,6 @@ export default function BeccaNavigator() {
         name="Reschedule"
         component={RescheduleScreen}
         options={{ headerShown: true, presentation: 'card' }}
-      />
-      <BeccaStack.Screen
-        name="DevSettings"
-        component={DevSettingsScreen}
-        options={{
-          title: 'Developer Settings',
-          presentation: 'fullScreenModal',
-          headerShown: false,
-        }}
       />
     </BeccaStack.Navigator>
   );

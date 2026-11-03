@@ -529,7 +529,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
               {isAdmin && (
                 <>
                   <View style={[styles.sep, { backgroundColor: P.sep }]} />
-                  <SettingsOption icon="receipt" title="Money (admin)" subtitle="Failed payments, money owed, refund requests" onPress={() => navigation.navigate('AdminMoney')} P={P} />
+                  <SettingsOption icon="bar-chart" title="Admin" subtitle="Growth, problems, money and developer tools" onPress={() => navigation.navigate('AdminDashboard')} P={P} />
                 </>
               )}
             </View>

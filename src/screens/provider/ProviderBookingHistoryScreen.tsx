@@ -641,18 +641,6 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
             </Text>
           </View>
 
-          {/* Debug-only entry point. The client-side equivalent (BookingsScreen)
-              has always been __DEV__-gated; this one was not, so release builds
-              showed real providers a DEV button opening destructive reset tools. */}
-          {__DEV__ && (
-            <TouchableOpacity
-              style={s.devBtn}
-              onPress={() => navigation.navigate('DevSettings')}
-              activeOpacity={0.8}
-            >
-              <Text style={s.devBtnText}>DEV</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* ── Tabs — plain underline indicator (not SlidingTabs' filled
@@ -992,8 +980,6 @@ const s = StyleSheet.create({
   headerBody:  { flex: 1 },
   headerTitle: { fontSize: 26, fontWeight: '800', letterSpacing: -0.7 },
   headerSub:   { fontSize: 12, marginTop: 1 },
-  devBtn:      { backgroundColor: '#FF3B30', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8 },
-  devBtnText:  { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
 
   // Primary History/To Do tabs — plain underline, not SlidingTabs' filled
   // capsule. paddingTop sits it further down from the header than the old

@@ -81,48 +81,6 @@ const IN_PROGRESS_PURPLE = '#7B2FBE';
 
 // ==================== COMPONENTS ====================
 
-// Development-only access to Dev Settings via a triple-tap header action.
-const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: Theme }) => {
-  const tapCountRef = React.useRef(0);
-  const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  if (!__DEV__) return null;
-
-  const handleTap = () => {
-    tapCountRef.current += 1;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      tapCountRef.current = 0;
-    }, 2000);
-
-    if (tapCountRef.current === 3) {
-      logger.log('Opening Dev Settings...');
-      navigation.navigate('DevSettings');
-      tapCountRef.current = 0;
-      if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-  };
-
-  return (
-    <TouchableOpacity
-      onPress={handleTap}
-      style={{
-        width: 34,
-        height: 34,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 4,
-      }}
-      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      activeOpacity={0.6}
-    >
-      <Ionicons name="construct-outline" size={18} color={theme.text} />
-    </TouchableOpacity>
-  );
-};
-
 /**
  * The one line of address text on a booking card.
  *
@@ -887,10 +845,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         color: P.text,
       },
       headerTintColor: P.text,
-      // This component renders no production UI.
-      headerRight: () => <HiddenDevMenuTrigger navigation={navigation} theme={theme} />,
     });
-  }, [navigation, isFilterView, theme, isDarkMode, P]);
+  }, [navigation, isFilterView, isDarkMode, P]);
 
   // ==================== EFFECTS ====================
 
