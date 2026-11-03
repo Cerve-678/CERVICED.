@@ -56,6 +56,16 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-03 (price bands, 24-hour requests, close schedule reason and auto close)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103010000 | `provider_price_bands` | **APPLIED 2026-11-03** by the user (`supabase db query --linked -f`), written by session cerviced-bf (PR #258). Renumbered from 20261102210000, which `payment_outcomes_reach_the_client` took live first. Dry-run in a rolled-back transaction first. Verified live: `price_bands text[]` on `providers` and `users` with CHECKs, 7 providers backfilled from `price_tier`. Adds only. |
+| 20261103020000 | `booking_requests_expire_after_24_hours` | **APPLIED 2026-11-03**, same way (PR #259). md5 guard on `process_expire_stale_pending_bookings`. Verified live: the function now expires a request after 24 hours, not 48. No pending request was old enough to be cancelled by it. |
+| 20261103030000 | `close_schedule_reason_and_auto` | **APPLIED 2026-11-03**, same way (PR #262). md5 guards on `close_my_schedule`, `get_my_schedule_closure`, `process_provider_fully_booked_alerts`. Verified live: `reason`, `show_reason`, `auto_closed` on `provider_schedule_closures`; `close_my_schedule(date, text, boolean)` authenticated only; `get_provider_closure_reason` callable by anon; the fully-booked job not callable by authenticated and carries the auto close. 0 closures at apply time. |
+
+Frontier before applying: `20261103000000` (#268, applied by its own session). `20261103040000` (#274, cerviced-e1) is still unapplied and touches none of these.
+
 ### Written 2026-11-03, NOT applied (request-confirmed notice reads like New Booking)
 
 | Authored version | Name | Status |
