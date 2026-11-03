@@ -55,6 +55,7 @@ export interface RegistrationData {
   // InfoRegScreen's first-save prefill — same route as team_size/price_range.
   yearsExperience: string;
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
+  priceBands: string[];
   preferredContactMethods: string[];
   preferredPaymentMethods: string[];
   // Provider "Tell me more" (Step 5) — accessibility/language/specialty
@@ -116,6 +117,7 @@ const initialData: RegistrationData = {
   location: '',
   yearsExperience: '',
   priceRange: '',
+  priceBands: [],
   preferredContactMethods: [],
   preferredPaymentMethods: [],
   // Provider "Tell me more"

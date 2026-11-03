@@ -222,6 +222,7 @@ export interface DbUser {
   languages_spoken: string[] | null;
   specialties: string[] | null;
   price_range: "budget" | "mid" | "premium" | "luxury" | null;
+  price_bands: string[];
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
   is_verified: boolean;
@@ -314,6 +315,7 @@ export interface DbProvider {
   booking_policies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
@@ -340,6 +342,9 @@ export interface DbProvider {
     noShowGraceMinutes?: string;
     /** Stamped onto every new booking, shown to clients in booking details. */
     bookingInstructions?: string;
+    /** Written policies shown on the profile; neither affects booking or payment. */
+    travelPolicy?: string;
+    emergencyBookingPolicy?: string;
     /** Optional photo of a fuller policy document, shown to clients via a
      *  pop-up on their profile view (see ProviderProfileScreen). */
     policyImageUrl?: string;
@@ -372,6 +377,7 @@ export interface DbProvider {
   technique_tags: string[] | null;
   inclusive_flags: string[] | null;
   price_tier: "budget" | "mid" | "premium" | "luxury" | null;
+  price_bands: string[];
   team_size: "solo" | "small_team" | "large_team" | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
@@ -1019,6 +1025,7 @@ export type PublicProviderSummary = Pick<
   | 'rating'
   | 'review_count'
   | 'price_tier'
+  | 'price_bands'
   | 'business_type'
   | 'walk_ins_welcome'
   | 'group_bookings_available'
