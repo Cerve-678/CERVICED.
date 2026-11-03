@@ -5,7 +5,7 @@
 
 #generated
 
-**2983 functions** across **408 files**.
+**2984 functions** across **408 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -412,7 +412,7 @@
 - `newestAddedItem.ts` — **newestAddedItem**
 - `paymentRequestError.ts` — **getPaymentRequestError** · response
 - `performance.ts` — for
-- `policyDisplay.ts` — buildLinkOnlyPolicyRows · **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · feeLabel · pushRow · **readProviderTermsSnapshot** · rescheduleSummary · sectionRow
+- `policyDisplay.ts` — buildLinkOnlyPolicyRows · **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · feeLabel · pushRow · pushWrittenPolicies · **readProviderTermsSnapshot** · rescheduleSummary · sectionRow
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
 - `providerProfileDeepLink.ts` — **isProviderProfileUuid** · **parseProviderProfileDeepLink** · **providerProfileDeepLink**
 - `readCache.ts` — cachedFetch · clear · **createReadCache** · **isCacheableRead** · **isWriteRequest** · pathOf · **readRequestKey** · requestMethod · requestUrl · that · tooLargeToKeep

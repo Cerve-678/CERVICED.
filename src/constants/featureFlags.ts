@@ -14,9 +14,10 @@ export const MULTI_SERVICE_BOOKING_ENABLED = false;
 // provider's own rules exclude (outside their hours, a blocked date, inside
 // their notice period, beyond their booking window) and asking anyway. Off
 // pulls the whole request path from the client UI (the by-request slots in
-// ModernBeautyCalendar, RequestTimePanel, EmergencyBookingPrompt), the provider
+// ModernBeautyCalendar, RequestTimePanel, EmergencyBookingPrompt) and the provider
 // opt-in controls (SchedulingScreen's "Requests Outside Your Availability"
-// card), and the Emergency Booking Policy editor on PoliciesScreen. Server-side
+// card). The written Emergency Appointments policy on PoliciesScreen stays on:
+// it only tells clients how to ask, and doesn't depend on this path. Server-side
 // pieces are untouched (prepare_checkout's emergency_ack, providers.allow_*_
 // requests, the provider inbox accept/decline of an existing request), so
 // re-enabling is a one-line flip. See FUTURE_LOGIC.md.
