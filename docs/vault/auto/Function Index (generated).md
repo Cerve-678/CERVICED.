@@ -5,7 +5,7 @@
 
 #generated
 
-**3036 functions** across **417 files**.
+**3040 functions** across **417 files**.
 
 ### `src/components/` (55)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -82,7 +82,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (8)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · becomeFullMember · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · becomeFullMember · beginSignupVerification · cancelSignupVerification · clearStorageFolder · completeVerifiedSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getItemQuantity · getProviderTotal · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `DisplaySettingsContext.tsx` — apply · **DisplaySettingsProvider** · loadAccountDisplaySettings · persist · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
@@ -362,7 +362,7 @@
 - `notificationTapHandler.ts` — **handleNotificationTap** · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
 - `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **patchCachedProviderBranding** · **providerRowToRegistrationData** · readLocalFileBytes · **saveProviderPolicies** · **saveProviderToSupabase** · shrinkImageForUpload · sniffImageType · **uploadToStorage** · used
-- `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · **startExpoGoNotificationBridge** · **unregisterPushToken**
+- `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · registerPushToken · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
 

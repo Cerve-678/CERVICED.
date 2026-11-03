@@ -308,11 +308,11 @@ export async function verifyRecoveryOtp(email: string, token: string): Promise<v
 export async function verifySignupOtp(
   email: string,
   token: string,
-): Promise<AuthSessionSummary> {
+): Promise<AuthSessionSummary & { authSession: Session }> {
   const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
   if (error) throw error;
   if (!data.session) throw new Error("Verification succeeded without a session");
-  return summarizeAuthSession(data.session);
+  return { ...summarizeAuthSession(data.session), authSession: data.session };
 }
 
 export async function resendSignupOtp(email: string): Promise<void> {
@@ -403,11 +403,14 @@ function sanitizeIlikeTerm(term: string): string {
  * stay behind this shared service boundary. */
 export async function upsertVerifiedUserProfile(
   profile: { id: string } & Record<string, unknown>,
-): Promise<void> {
-  const { error } = await supabase
+): Promise<{ hasClientProfile: boolean }> {
+  const { data, error } = await supabase
     .from("users")
-    .upsert(profile, { onConflict: "id" });
+    .upsert(profile, { onConflict: "id" })
+    .select("has_client_profile")
+    .single();
   if (error) throw error;
+  return { hasClientProfile: data.has_client_profile === true };
 }
 
 /** Creates the users row for an account that signed in through Apple, which
