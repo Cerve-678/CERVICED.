@@ -3330,17 +3330,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!providerData.logo) setLogoPage(0);
   }, [providerData.logo]);
 
-  // Picking and adjusting are the same thing: iOS only offers its crop (with
-  // pinch-to-zoom) while a photo is being picked, so every tap on the logo
-  // opens the library with the square crop on.
+  // No crop step (user, 2026-11-03). With allowsEditing, expo-image-picker
+  // falls back to iOS's older UIImagePickerController, which was slow to
+  // appear; without it the system photo picker opens straight away. The circle
+  // fills with the photo (resizeMode cover) and the Home cards are framed below.
   const handleSelectLogo = async () => {
     // No permission request first: picking from the library needs none on
     // iOS or Android, and asking added a round trip before every picker.
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.8,
     });
 
@@ -3352,7 +3351,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   };
 
   // The two Home cards are framed separately, in their own shape, by pinch
-  // and drag (iOS's crop only does squares). Only a zoom and an offset are
+  // and drag. Only a zoom and an offset are
   // stored per card; the logo image itself stays as picked.
   const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
   const [logoImageRatio, setLogoImageRatio] = useState(1);
@@ -3367,8 +3366,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         setFramingSlot(slot);
       },
       () => {
-        // Unmeasurable: frame it as square, which every logo is after the
-        // iOS crop anyway.
+        // Unmeasurable: frame it as square, the most common logo shape.
         setLogoImageRatio(1);
         setFramingSlot(slot);
       },
@@ -4622,6 +4620,34 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
+              {/* The release day's ONLY editor. One stored value
+                  (automation_settings.scheduleReleaseDay, merged in on save)
+                  drives the booking limit (utils/bookingHorizon,
+                  provider_last_bookable_date), the profile pill and the
+                  release message. Scheduling shows it read-only. The row IS
+                  the picker: tap, choose a day, or "No release day" there. */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('scheduleReleaseDay')}
+              >
+                <View style={styles.toggleInfo}>
+                  <Text style={styles.toggleLabel}>Monthly Release Day</Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.releaseDayBtn}
+                  onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.releaseDayBtnText}>
+                    {providerData.scheduleReleaseDay != null
+                      ? `Day ${providerData.scheduleReleaseDay} of every month`
+                      : 'Choose a day'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
+                </TouchableOpacity>
+              </View>
+
             {/* Portfolio — client work gallery shown on your public profile */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Portfolio</Text>
@@ -4669,34 +4695,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {!providerDbId && !portfolioLoading && (
                   <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
                 )}
-              </View>
-
-              {/* The release day's ONLY editor. One stored value
-                  (automation_settings.scheduleReleaseDay, merged in on save)
-                  drives the booking limit (utils/bookingHorizon,
-                  provider_last_bookable_date), the profile pill and the
-                  release message. Scheduling shows it read-only. The row IS
-                  the picker: tap, choose a day, or "No release day" there. */}
-              <View
-                style={styles.inputGroup}
-                ref={registerField('scheduleReleaseDay')}
-              >
-                <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Monthly Release Day</Text>
-                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.releaseDayBtn}
-                  onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.releaseDayBtnText}>
-                    {providerData.scheduleReleaseDay != null
-                      ? `Day ${providerData.scheduleReleaseDay} of every month`
-                      : 'Choose a day'}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
-                </TouchableOpacity>
               </View>
 
               <TouchableOpacity
