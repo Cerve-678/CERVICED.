@@ -1374,20 +1374,45 @@ what to show a client who's too young, and what the Terms say about age. See
 `LEGAL-COMPLIANCE-NOTES.md` on age verification. A DOB check only proves what
 the client typed in.
 
-### 31c. Consultation required for new clients
+### 31c. "Accepting new clients: No / Waitlist only" does nothing
+
+Providers set this on the Scheduling screen (`providers.accepts_new_clients`:
+yes / waitlist / no), but nothing reads it: a provider on "No" can be booked by
+anyone. Live on 2026-11-03: 2 providers say yes and 10 have never set it, so
+enforcing it changes no one's bookings on day one.
+
+**Plan (agreed with the owner 2026-11-03, parked here rather than built):**
+
+1. **One "existing client" check** in the database, used by both the app and
+   the server. Decided: **a no-show alone does not make someone an existing
+   client.** Still to decide: which bookings count. The suggestion is any
+   booking the provider accepted (completed, upcoming confirmed, in progress),
+   but not cancelled, declined or never-accepted requests. The alternative is
+   completed appointments only.
+2. **The server enforces it** in `enforce_booking_bookability`: on "No" or
+   "Waitlist only", a client who isn't an existing client is refused with
+   "This provider isn't taking new clients right now". These still go through:
+   the provider's own Add Booking, moving an existing booking, and a waitlist
+   invite (how a new client gets in under "Waitlist only").
+3. **The client sees:** an existing client books as normal. A new client gets a
+   note and no Book buttons under "No", and "Join the waitlist" in place of
+   Book under "Waitlist only" (the existing `provider_waitlist`). Search keeps
+   these providers in results with an "Existing clients only" label.
+4. **Checks:** tests for the existing-client rule and each mode, the trigger
+   rejections, and the security/booking reviews.
+
+### 31d. Consultation required for new clients
 
 Already item 16: built client-side but no screen can turn it on. It needs the
-same "has this client booked with this provider before" check that "Accepting
-new clients" uses (being built separately, 2026-11-03), so reuse that rather
-than writing a second one.
+same existing-client check as 31c, so build that once and reuse it.
 
-### 31d. Slot interval isn't a server rule
+### 31e. Slot interval isn't a server rule
 
 `slot_interval_mins` only decides which start times the picker offers. The
 server accepts any start time inside working hours. That's harmless while all
 bookings come through the picker. Low priority.
 
-### 31e. Information only, by design
+### 31f. Information only, by design
 
 Who you take (`clientele`), travel radius and service areas, patch test policy
 wording, walk-ins and group bookings are shown to clients, not enforced. Travel
