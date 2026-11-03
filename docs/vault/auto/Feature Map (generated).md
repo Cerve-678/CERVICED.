@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **176 files**
 - … +146 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **82 files**
+Curated: [[Provider Onboarding & Go-Live]] · **83 files**
 - `src/services/databaseService.ts` _(85)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(61)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **82 files**
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(3)_
-- … +52 more
+- … +53 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **60 files**
@@ -255,12 +255,12 @@ Curated: [[Booking Flow]] · **185 files**
 - `src/screens/client/RescheduleScreen.tsx` _(144)_
 - `src/screens/client/CartScreen.tsx` _(126)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
+- `src/screens/provider/PoliciesScreen.tsx` _(79)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
-- `src/screens/provider/PoliciesScreen.tsx` _(71)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
+- `src/utils/policyDisplay.ts` _(65)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
-- `src/utils/policyDisplay.ts` _(63)_
 - `src/screens/provider/InfoRegScreen.tsx` _(61)_
 - `src/services/bookingService.ts` _(58)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_

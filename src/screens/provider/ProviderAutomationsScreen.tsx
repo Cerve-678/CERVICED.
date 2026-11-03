@@ -18,6 +18,8 @@ import {
   getMyProviderProfileContext,
   updateCurrentUserMetadata,
 } from '../../services/databaseService';
+import { loadProviderPolicies, saveProviderPolicies } from '../../services/providerRegistrationService';
+import { cancellationNoticeHours, noticeChoiceForHours } from '../../utils/policyDisplay';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 
@@ -162,6 +164,19 @@ function Toast({ msg, ok, C }: { msg: string; ok: boolean; C: typeof C_DARK }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
+/** Apply a cancellation window and write the matching choice into the
+ *  provider's written policy, so Policies and their profile say the same.
+ *  Policies are saved whole, so they're read again right before the write
+ *  rather than from a copy loaded when this screen opened. */
+async function saveCancellationNotice(providerId: string, userId: string | null, hours: number): Promise<void> {
+  await updateProviderCancellationPolicy(providerId, hours);
+  const choice = noticeChoiceForHours(hours, { zeroIsNone: true });
+  if (!userId || !choice) return;
+  const policies = await loadProviderPolicies(userId);
+  if (!policies || policies['cancelNotice'] === choice) return;
+  await saveProviderPolicies(userId, { ...policies, cancelNotice: choice });
+}
+
 export default function ProviderAutomationsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? C_DARK : C_LIGHT;
@@ -171,6 +186,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   const [toast, setToast]       = useState<{ msg: string; ok: boolean } | null>(null);
   const [d, setD]               = useState<ProviderAutomations>(DEFAULTS);
   const [providerId, setProviderId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  // The window as loaded, so a save only rewrites it when it was changed here.
+  const [loadedNoticeHours, setLoadedNoticeHours] = useState<string | null>(null);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -183,6 +201,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         const context = await getMyProviderProfileContext();
         const profile = context?.profile ?? null;
         if (profile) setProviderId(profile.id);
+        if (context?.userId) setUserId(context.userId);
         const m = (context?.userMetadata ?? {}) as {
           pa_client_reminder_timing?: string[];
           pa_rebooking_nudge_weeks?: string;
@@ -198,6 +217,10 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
         const a = (profile as any)?.automation_settings ?? {};
+        const noticeHours = profile
+          ? String(cancellationNoticeHours(profile.cancellation_notice_hours, profile.booking_policies as { cancelNotice?: unknown } | null))
+          : String(m['pa_cancellation_notice_hours'] ?? DEFAULTS.cancellationNoticeHours);
+        setLoadedNoticeHours(noticeHours);
         setD({
           clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
@@ -209,7 +232,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           // and the booking flow read them from there, not user_metadata) —
           // the row is the real answer, not just a fallback.
           autoConfirmBookings:     profile?.auto_accept_bookings ?? m['pa_auto_confirm_bookings'] ?? DEFAULTS.autoConfirmBookings,
-          cancellationNoticeHours: String(profile?.cancellation_notice_hours ?? m['pa_cancellation_notice_hours'] ?? DEFAULTS.cancellationNoticeHours),
+          // The window actually applied, the same answer Policies shows.
+          cancellationNoticeHours: noticeHours,
           waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
         });
@@ -247,8 +271,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         saves.push(updateProviderAutoAccept(providerId, d.autoConfirmBookings));
         // updateProviderScheduleSettings / updateProviderMaxBookingsPerDay are
         // SchedulingScreen's to call — same clobbering reason as above.
-        const cancelHrs = parseInt(d.cancellationNoticeHours, 10) || 0;
-        saves.push(updateProviderCancellationPolicy(providerId, cancelHrs));
+        if (d.cancellationNoticeHours !== loadedNoticeHours) {
+          saves.push(saveCancellationNotice(providerId, userId, parseInt(d.cancellationNoticeHours, 10) || 0));
+        }
         // Mirror the client-facing automations onto the providers row —
         // user_metadata is invisible to client screens and pg_cron jobs,
         // so anything that must act on these settings reads them from here.
@@ -277,7 +302,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [d, providerId, navigation]);
+  }, [d, providerId, userId, loadedNoticeHours, navigation]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
     setD(prev => ({ ...prev, [key]: val }));
