@@ -34,13 +34,14 @@ import { useBooking, AppointmentData , BookingError } from '../../contexts/Booki
 import { BookingService, DepositPolicy } from '../../services/bookingService';
 import { AvailabilityService, type BackToBackSlot } from '../../services/AvailabilityService';
 import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../../services/stripeService';
+import { settledFromCaptureStatus, waitForCheckoutOutcome, type CheckoutWaitResult } from '../../features/cart/checkoutOutcome';
 import {
   getProviderCheckoutMetadata,
   ProviderDepositPolicy,
   validatePromoCode,
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
-  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards, getCachedSavedCards } from '../../services/databaseService';
+  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards, getCachedSavedCards, getCheckoutOutcome } from '../../services/databaseService';
 import {
   savedCardBrandName, savedCardExpiryLabel, savedCardExpiryState, type SavedCard,
 } from '../../features/payments/savedCards';
@@ -314,7 +315,9 @@ interface PaymentModalProps {
   // on the booking stays null, same as before either modal existed.
   onPaymentSuccess: (paymentMethod: string, paymentIntentId?: string) => Promise<void>;
   onPaymentComplete: () => void;
-  onPaymentPending?: () => void;
+  /** The card was approved but the checkout didn't simply book: refunded or
+   *  not charged (the time had gone), or still unsettled after waiting. */
+  onPaymentPending?: (outcome: Exclude<CheckoutWaitResult, 'succeeded'>) => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -644,6 +647,8 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     const bottomInset = useSystemBottomInset();
     const { confirmPayment, confirmPlatformPayPayment, isPlatformPaySupported, retrievePaymentIntent } = useStripe();
     const [isProcessing, setIsProcessing] = useState(false);
+    // The card is approved and the app is waiting for the server to settle it.
+    const [confirming, setConfirming] = useState(false);
     const processingRef = useRef(false);
     const [cardComplete, setCardComplete] = useState(false);
     const [walletSupported, setWalletSupported] = useState(false);
@@ -845,7 +850,30 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
 
         if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Finalising server checkout...`);
         paymentStarted = true;
-        await capturePaymentIntent(checkoutBatchId, paymentIntentId);
+        // The card is approved, so this checkout is never cancelled from here:
+        // the server settles it. If its answer doesn't come back, ask again
+        // for a short while instead of guessing (the database may just be
+        // busy); after that the server finishes it on its own and notifies.
+        let outcome: CheckoutWaitResult | null = null;
+        try {
+          outcome = settledFromCaptureStatus(await capturePaymentIntent(checkoutBatchId, paymentIntentId));
+        } catch (captureError) {
+          logger.error(`[${timestamp()}] payment confirmation didn't answer`, captureError);
+        }
+        if (!outcome) {
+          setConfirming(true);
+          const batchId = checkoutBatchId;
+          outcome = await waitForCheckoutOutcome({
+            capture: () => capturePaymentIntent(batchId, paymentIntentId),
+            readBatch: () => getCheckoutOutcome(batchId),
+            sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
+            onError: err => logger.error('[checkout] still confirming the payment', err),
+          });
+        }
+        if (outcome !== 'succeeded') {
+          onPaymentPending?.(outcome);
+          return;
+        }
         await onPaymentSuccess(method === 'paypal' ? 'paypal' : 'card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -853,19 +881,20 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       } catch (error) {
         logger.error(`❌ [${timestamp()}] PAYMENT ERROR:`, error);
         if (paymentStarted) {
-          // Do not cancel a reservation after an ambiguous capture response.
-          // The signed webhook finishes it, including after the app closes.
-          onPaymentPending?.();
+          // Never cancel a checkout once the card is approved; the server
+          // settles it and tells the client (reconcile-checkouts).
+          onPaymentPending?.('unknown');
           return;
         }
         if (createdIntentId && checkoutBatchId) {
           try { await cancelPaymentIntent(checkoutBatchId, createdIntentId); }
-          catch { onPaymentPending?.(); return; }
+          catch { onPaymentPending?.('unknown'); return; }
         }
         onClose();
         onBookingFailed(error instanceof PaymentRequestError ? error.message : 'Payment could not be completed. Please review your booking and try again.');
       } finally {
         setIsProcessing(false);
+        setConfirming(false);
         processingRef.current = false;
       }
     }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
@@ -884,7 +913,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         try { await cancelPaymentIntent(checkoutBatchId, intentId); }
         catch (err) {
           logger.error('[checkout] could not cancel the open payment on close', err);
-          onPaymentPending?.();
+          onPaymentPending?.('unknown');
           return;
         } finally {
           processingRef.current = false;
@@ -1109,7 +1138,12 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 }}
                 disabled={isProcessing || !canPay || !(payingWithSavedCard || cardComplete)}
               >
-                {isProcessing ? (
+                {confirming ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator color={P.onAccent} size="small" />
+                    <Text style={[styles.payButtonText, { color: P.onAccent }]}>Confirming your payment…</Text>
+                  </View>
+                ) : isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
                 ) : (
                   <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
@@ -4584,10 +4618,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 totalAmount={paymentTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
-                onPaymentPending={() => {
+                onPaymentPending={outcome => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);
-                  showAlert('Checking your payment', 'Your payment may have completed. Check your bookings before paying again. If the reservation expired, the payment will be refunded.');
+                  // The cart is kept in every case (only a booked checkout
+                  // clears it). The server also sends a notification with the
+                  // same news, so "we'll let you know" below is true.
+                  if (outcome === 'refunded') {
+                    showAlert('Booking not completed', "Your time was no longer available by the time your payment went through, so we've refunded it in full. It can take 5–10 working days to show on your statement. Your cart is still here if you'd like to pick another time.");
+                  } else if (outcome === 'not_charged') {
+                    showAlert("Payment didn't go through", "We couldn't confirm your booking in time, so the payment was cancelled and you haven't been charged. Your cart is still here if you'd like to try again.");
+                  } else {
+                    showAlert('Still confirming your payment', "We'll send you a notification as soon as it's settled. Please don't pay again in the meantime.");
+                  }
                 }}
                 onPaymentComplete={() => {
                   clearCart(); // Clear cart immediately after payment simulation
