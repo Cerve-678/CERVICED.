@@ -54,6 +54,7 @@ import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { logger, reportError } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
 import { dateToYMD } from '../../utils/dateUtils';
+import { openLegalPage } from '../../utils/legalPage';
 import {
   isCertificateNotification,
   isScheduleAutoClosedNotification,
@@ -798,10 +799,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         );
       }, 300);
     } else if (notification.type === 'terms_updated') {
-      // Both hats keep a Terms screen in their Profile tab's stack.
-      defer(() => {
-        dismissThenNavigate(() => navigateNested('Profile', 'Terms'));
-      }, 300);
+      // The Terms live on cerviced.co/legal, opened over this screen.
+      defer(() => openLegalPage('terms'), 300);
     } else if (notification.type === 'payout_failed') {
       // Provider-only. The fix (Stripe account or bank details) lives on
       // Payments, not on the booking the payout was for.

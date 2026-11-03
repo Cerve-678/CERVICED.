@@ -40,7 +40,6 @@ import * as Haptics from 'expo-haptics';
 import { BellIcon } from '../../components/IconLibrary';
 import CategoryTabPill from '../../components/CategoryTabPill';
 import AddressPicker from '../../components/AddressPicker';
-import TermsScreen from '../shared/TermsScreen';
 import { Ionicons } from '@expo/vector-icons';
 
 // Theme import — this screen never follows the APP's dark/light mode (see
@@ -82,6 +81,7 @@ import {
 // Navigation types
 import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
+import { openLegalPage } from '../../utils/legalPage';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
@@ -3267,7 +3267,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // accepted once (providers.terms_accepted_at), so re-showing this on every
   // edit-save would be re-consent theatre, not a real gate.
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
   // The provider's OWN client-facing Terms & Conditions — separate from the
   // CERVICED platform terms `termsAccepted` above. Typed here as prose; it is
   // stored as the policy body of their is_terms provider_form_library row,
@@ -4092,7 +4091,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 instead of toggling the box underneath. */}
             <Text
               style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-              onPress={() => { tapSelect(); setShowTermsModal(true); }}
+              onPress={() => { tapSelect(); openLegalPage('provider-terms'); }}
             >
               CERVICED Terms &amp; Conditions
             </Text>
@@ -5754,12 +5753,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
             onClose={() => setReleaseDayPickerVisible(false)}
           />
-
-          {/* Reuses the same read-only Terms content shown from account
-              settings — no separate copy to keep in sync. */}
-          <Modal visible={showTermsModal} animationType="slide" transparent={false} onRequestClose={() => setShowTermsModal(false)}>
-            <TermsScreen navigation={{ goBack: () => setShowTermsModal(false) }} />
-          </Modal>
 
           <DialogHost />
         </SafeAreaView>

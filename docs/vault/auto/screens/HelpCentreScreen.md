@@ -8,7 +8,6 @@ tags: [screen, client]
 
 ## → Navigates to
 - [[ReportProblemScreen\|ReportProblem]]
-- [[TermsScreen\|Terms]]
 - [[AboutScreen\|About]]
 
 ## Map

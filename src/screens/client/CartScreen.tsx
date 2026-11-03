@@ -78,6 +78,7 @@ import { CART_ISSUE, describeReserveFailure, durationToMinutes, findCartItemIssu
 import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDepositPolicyArg } from '../../features/cart/pricing';
 import { calculatePlatformFee, PAYPAL_MAX_CHECKOUT_TOTAL } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { openLegalPage } from '../../utils/legalPage';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
 // includes the SDK-compatible Stripe module, so it can show the card form;
@@ -4594,7 +4595,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       </View>
                       {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
                       <Text style={[styles.reviewCheckboxLabel, { color: P.text, flex: 1 }]}>
-                        I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and each provider's cancellation policy
+                        I agree to the{' '}
+                        {/* Its own onPress so tapping the words opens the
+                            Terms instead of ticking the box. */}
+                        <Text style={{ color: P.accent, textDecorationLine: 'underline' }} onPress={() => openLegalPage('terms')}>Terms & Conditions</Text>
+                        <Text style={styles.requiredAsterisk}> *</Text> and each provider's cancellation policy
                         {needsSafetyAck ? ', and confirm I have seen the safety information above' : ''}
                       </Text>
                     </TouchableOpacity>

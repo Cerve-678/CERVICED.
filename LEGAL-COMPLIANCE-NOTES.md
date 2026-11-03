@@ -11,6 +11,14 @@ Business context as understood from the code: **Cerviced Ltd**, UK-based
 (£ pricing), a two-sided marketplace app connecting clients with independent
 beauty/wellness providers. Some data collected is health-adjacent.
 
+**2026-11-03: the in-app Terms screen is gone.** Every Terms link in the app
+(sign-in, settings, Help Centre, checkout, a provider agreeing at publish or in
+Policies, the Terms-changed notice) now opens `cerviced.co/legal`, built from
+`waitlist/legal/index.html`. That page is the only copy of the Terms. The
+mentions of `TermsScreen` below describe the old in-app text and are kept as
+history. The in-app Privacy Policy in About (`AboutScreen.tsx`) is still
+separate from the website's and still says privacy@cerviced.app.
+
 ---
 
 ## 1. Missing Privacy Policy

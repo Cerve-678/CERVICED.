@@ -5,7 +5,7 @@
 
 #generated
 
-**3076 functions** across **425 files**.
+**3075 functions** across **424 files**.
 
 ### `src/components/` (57)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -337,7 +337,7 @@
 - `SchedulingScreen.tsx` — flash · handleSave · releaseStatus · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
 
-### `src/screens/shared/` (14)
+### `src/screens/shared/` (13)
 - `AboutScreen.tsx` — AboutScreen · ExpandableSection
 - `AdminDashboardScreen.tsx` — AdminDashboardScreen · deltaColor · go · load · onRefresh · problems · Row · StatTile · statusColors · ToolRow · WeeklyChart
 - `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · decline · failed · load · now · onRefresh · owed · RefundReview · refunds · retry
@@ -350,7 +350,6 @@
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow
 - `NotificationsScreen.tsx` — actionLabelFor · closeMessagePopup · dayHeadings · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
-- `TermsScreen.tsx` — TermsScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
 
 ### `src/services/` (17)

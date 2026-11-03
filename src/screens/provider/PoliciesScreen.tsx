@@ -50,10 +50,10 @@ import { ImageCropModal } from '../../components/ImageCropModal';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import TermsScreen from '../shared/TermsScreen';
 import { getMyProviderProfile, updateProviderCancellationPolicy } from '../../services/databaseService';
 import { noticeChoiceForHours, noticeHoursToSave, type NoticeChoice } from '../../utils/policyDisplay';
 import { toUserMessage } from '../../utils/userFacingError';
+import { openLegalPage } from '../../utils/legalPage';
 import {
   saveProviderPolicies,
   loadProviderPolicies,
@@ -213,7 +213,6 @@ export default function PoliciesScreen({ navigation }: any) {
   // long after first publish without ever revisiting InfoRegScreen, so it's
   // shown here too, but doesn't block Save.
   const [termsAcknowledged, setTermsAcknowledged] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -653,7 +652,7 @@ export default function PoliciesScreen({ navigation }: any) {
               </View>
               <Text style={[termsSt.text, { color: C.text }]}>
                 I agree to the{' '}
-                <Text style={[termsSt.link, { color: C.accent }]} onPress={() => setShowTermsModal(true)}>
+                <Text style={[termsSt.link, { color: C.accent }]} onPress={() => openLegalPage('provider-terms')}>
                   Terms &amp; Conditions
                 </Text>
               </Text>
@@ -664,9 +663,6 @@ export default function PoliciesScreen({ navigation }: any) {
         </KeyboardDismissView>
       </SafeAreaView>
 
-      <Modal visible={showTermsModal} animationType="slide" transparent={false} onRequestClose={() => setShowTermsModal(false)}>
-        <TermsScreen navigation={{ goBack: () => setShowTermsModal(false) }} />
-      </Modal>
     </View>
   );
 }

@@ -11,6 +11,7 @@ import { requestMode } from '../navigation/modeController';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { markNotificationRead, getProviderBasicById } from './databaseService';
 import { logger } from '../utils/logger';
+import { openLegalPage } from '../utils/legalPage';
 
 export interface NotificationTapData {
   type?: string;
@@ -166,9 +167,9 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   }
 
   // ── Terms changed (both hats) ────────────────────────────────────────────────
-  // Each hat's Profile tab stack has its own Terms screen.
+  // The Terms live on cerviced.co/legal, the one copy both hats agree to.
   if (type === 'terms_updated') {
-    navigateNested('Profile', 'Terms');
+    openLegalPage('terms');
     return;
   }
 

@@ -183,7 +183,6 @@ export type ProfileStackParamList = {
   TextSizing: undefined;
   LanguageRegion: undefined;
   About: undefined;
-  Terms: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;
@@ -387,7 +386,6 @@ export type ProviderAccountStackParamList = {
   TextSizing: undefined;
   LanguageRegion: undefined;
   About: undefined;
-  Terms: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;
