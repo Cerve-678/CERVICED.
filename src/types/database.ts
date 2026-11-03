@@ -344,6 +344,8 @@ export interface DbProvider {
     bookingInstructions?: string;
     /** Written policies shown on the profile; neither affects booking or payment. */
     travelPolicy?: string;
+    /** Kept whenever the client cancels, even in good time. Frozen per booking. */
+    depositNonRefundable?: boolean;
     emergencyBookingPolicy?: string;
     /** Optional photo of a fuller policy document, shown to clients via a
      *  pop-up on their profile view (see ProviderProfileScreen). */
@@ -449,6 +451,8 @@ export interface DbProvider {
     postApptCheckIn?: boolean;
     birthdayGreeting?: boolean;
     waitlistEnabled?: boolean;
+    /** Close the schedule when it fills. Only acted on with waitlistEnabled false. */
+    autoCloseWhenFull?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;
     /** Daily 07:00 provider recap push. Read by
