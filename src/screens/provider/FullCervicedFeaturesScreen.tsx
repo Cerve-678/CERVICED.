@@ -3,6 +3,14 @@
  * bookings through CERVICED instead of their own booking page. Opened from the
  * card on their Home and the row in their Profile tab.
  *
+ * Concept A, "You keep every penny" (product owner, 2026-11-03,
+ * https://claude.ai/artifact/CGxJoPPhJ66jNjUvSRkjPm): it leads with money,
+ * because full providers pay CERVICED nothing on bookings. The client pays the
+ * platform fee on top, and CERVICED pays Stripe's card costs
+ * (docs/PAYMENTS_AND_LOGIC.md §1.2). If that ever changes, this page changes
+ * in the same PR. The example receipt uses the real fee function, so it can't
+ * drift from checkout.
+ *
  * Ends with the "Become a full member" button (product decision 2026-11-02,
  * replacing the 2026-10-21 "information only" rule), which opens the same
  * confirm sheet as Home. Every item here must be something full providers
@@ -19,68 +27,62 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
 import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
 import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_PRICE_LINE } from '../../constants/fullMembership';
+import { calculatePlatformFeePence } from '../../features/cart/platformFee';
+import { PAYOUT_HOLD_DAY_OPTIONS } from '../../constants/payoutTiming';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Feature = { icon: IconName; title: string; body: string };
 
-// Leads with what a booking site can't do (product owner, 2026-11-03: "remove
-// basic things other apps offer"). Everything here only works because the
-// booking happens in CERVICED: the beauty profile is shared at booking, a
-// completed booking starts the client's Beauty Maintenance reminder, the
-// waitlist and Available this week read the real diary. In-app chat and
-// Becca are NOT listed: link-only pros already have both.
+// The receipt's example booking. Only the price is made up; the fee comes
+// from the same function checkout uses.
+const EXAMPLE_PRICE_PENCE = 6000;
+const EXAMPLE_FEE_PENCE = calculatePlatformFeePence(EXAMPLE_PRICE_PENCE);
+const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
+// The shortest payout hold a provider can pick, in hours.
+const FASTEST_PAYOUT_HOURS = PAYOUT_HOLD_DAY_OPTIONS[0] * 24;
+
+// In-app chat and Becca are NOT listed: link-only pros already have both.
 const SECTIONS: { title: string; features: Feature[] }[] = [
   {
-    title: 'Know them before they sit down',
+    title: 'Your diary fills itself',
     features: [
-      { icon: 'sparkles-outline', title: 'Client beauty profiles', body: 'Before every appointment, see the client\'s hair, skin and what they like for that treatment, with allergies and medical notes flagged.' },
+      { icon: 'notifications-outline', title: 'Followers hear when you\'re free', body: 'When you\'ve been fully booked and space opens up, everyone who rang your bell gets told.' },
+      { icon: 'refresh-outline', title: 'Clients reminded to rebook you', body: 'After each visit we remind them when they\'re due, with a Rebook button straight back to you.' },
+      { icon: 'people-outline', title: 'Cancellations refill', body: 'Turn your waitlist on and a cancelled slot goes to it first.' },
+      { icon: 'megaphone-outline', title: 'Announcements', body: 'Message all your clients, or just repeat, new or lapsed ones, straight away or scheduled for later.' },
     ],
   },
   {
-    title: 'Clients come back on their own',
+    title: 'More clients find you',
     features: [
-      { icon: 'refresh-outline', title: 'Beauty Maintenance', body: 'After each appointment with you, CERVICED keeps track of when the client is due again and reminds them, with a Rebook button that comes straight back to you.' },
-      { icon: 'people-outline', title: 'A waitlist that fills your gaps', body: 'Turn your waitlist on and when someone cancels, the slot goes to it first, without you lifting a finger.' },
-      { icon: 'calendar-number-outline', title: 'Release-day alerts', body: 'Pick a day each month and everyone who follows you gets a reminder to book.' },
+      { icon: 'search-outline', title: 'Every Search filter', body: 'Price, availability, rating and hair type, not just category, speciality and area.' },
+      { icon: 'flash-outline', title: 'Available this week', body: 'Show up on clients\' Home when you have space.' },
     ],
   },
   {
-    title: 'Get found by more clients',
+    title: 'Know your clients and your numbers',
     features: [
-      { icon: 'search-outline', title: 'Every Search filter', body: 'Show up when clients filter by price, availability, rating or hair type. Right now you only appear by category, speciality, area and accessibility.' },
-      { icon: 'flash-outline', title: 'Available this week', body: 'When you have space, you can appear on clients\' Home in Available this week.' },
-      { icon: 'layers-outline', title: 'Booked alongside other pros', body: 'Clients can book you and another pro, like hair then nails, in one checkout.' },
-    ],
-  },
-  {
-    title: 'Celebrate the wins',
-    features: [
-      { icon: 'ribbon-outline', title: 'Your Fully Booked certificate', body: 'Fill a whole month and CERVICED celebrates it with you, plus milestones for bookings, five-star reviews, tips and returning clients.' },
+      { icon: 'sparkles-outline', title: 'Know them before they arrive', body: 'Their hair, skin and preferences for that treatment, with allergies and medical notes flagged.' },
+      { icon: 'stats-chart-outline', title: 'Full analytics', body: 'Earnings over time, your top services, completions and no-shows, and ratings by service.' },
     ],
   },
 ];
 
 // The basics every booking app has. Still true for full members, but not
-// why anyone switches, so they sit in one quiet line at the end.
+// why anyone switches, so they sit in one quiet row at the end.
 const OF_COURSE = [
-  'Bookings in the app',
-  'Your diary',
   'Card, Apple Pay, Google Pay and PayPal',
-  'Payouts through Stripe',
   'Deposits',
   'Late and no-show fees',
-  'Tips',
-  'Reminders',
-  'Price list',
   'Reviews',
+  'Price list',
+  'Reminders',
   'Promo codes',
-  'Announcements',
   'Consultation forms',
   'Info packs',
   'Client list',
   'Auto-confirm',
-  'Full analytics',
 ];
 
 export default function FullCervicedFeaturesScreen() {
@@ -107,10 +109,41 @@ export default function FullCervicedFeaturesScreen() {
           <Text style={styles.backArrow}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>What your booking site can't do</Text>
-        <Text style={styles.subtitle}>
-          Take your bookings through CERVICED and you get all of this, on top of everything you have now.
-        </Text>
+        <Text style={styles.kicker}>FULL CERVICED</Text>
+        <Text style={styles.title}>You keep every penny</Text>
+
+        <View style={styles.hero}>
+          <View style={styles.heroHalo} pointerEvents="none" />
+          <Text style={[styles.kicker, styles.onAccentSoft]}>OF EVERY BOOKING, YOU KEEP</Text>
+          <Text style={styles.heroNum}>100%</Text>
+          <Text style={styles.heroSub}>No commission. We pay the card fees. Tips reach you whole.</Text>
+          <View style={styles.receipt} accessibilityLabel={`For example, the client pays ${pounds(EXAMPLE_PRICE_PENCE + EXAMPLE_FEE_PENCE)}, including our ${pounds(EXAMPLE_FEE_PENCE)} fee, and you get ${pounds(EXAMPLE_PRICE_PENCE)}`}>
+            <Text style={styles.receiptEg}>EXAMPLE</Text>
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptText}>Client pays</Text>
+              <Text style={styles.receiptText}>{pounds(EXAMPLE_PRICE_PENCE + EXAMPLE_FEE_PENCE)}</Text>
+            </View>
+            <View style={styles.receiptRow}>
+              <Text style={[styles.receiptText, styles.flex]}>CERVICED fee, paid by the client</Text>
+              <Text style={styles.receiptText}>{pounds(EXAMPLE_FEE_PENCE)}</Text>
+            </View>
+            <View style={[styles.receiptRow, styles.receiptTotal]}>
+              <Text style={[styles.receiptText, styles.bold]}>You get</Text>
+              <Text style={[styles.receiptText, styles.bold]}>{pounds(EXAMPLE_PRICE_PENCE)}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.stubs}>
+          <View style={styles.stub}>
+            <Text style={styles.stubNum}>£0</Text>
+            <Text style={styles.stubLabel}>card fees on bookings</Text>
+          </View>
+          <View style={styles.stub}>
+            <Text style={styles.stubNum}>{FASTEST_PAYOUT_HOURS}h</Text>
+            <Text style={styles.stubLabel}>fastest payout, you pick</Text>
+          </View>
+        </View>
 
         {SECTIONS.map(section => (
           <View key={section.title} style={styles.section}>
@@ -162,23 +195,41 @@ type Palette = ReturnType<typeof useTheme>['palette'];
 const createStyles = (P: Palette) =>
   StyleSheet.create({
     flex: { flex: 1 },
+    bold: { fontWeight: '700' },
     scroll: { paddingHorizontal: 16 },
     backBtn: { alignSelf: 'flex-start', paddingVertical: 4, paddingRight: 12, marginBottom: 20 },
     backArrow: { fontSize: 22, fontWeight: '900', color: P.text },
-    title: { fontFamily: 'BakbakOne-Regular', fontSize: 26, lineHeight: 31, color: P.text },
-    subtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20, color: P.sub, marginTop: 6, marginBottom: 20 },
+    kicker: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.6, color: P.sub },
+    title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, lineHeight: 33, color: P.text, marginTop: 2, marginBottom: 16 },
+    hero: {
+      backgroundColor: P.accent, borderRadius: 26, padding: 20, overflow: 'hidden', marginBottom: 10,
+      shadowColor: '#26201E', shadowOpacity: 0.2, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 6,
+    },
+    heroHalo: { position: 'absolute', width: 170, height: 170, borderRadius: 85, borderWidth: 18, borderColor: 'rgba(255,255,255,0.10)', top: -70, right: -60 },
+    onAccentSoft: { color: P.onAccent, opacity: 0.8 },
+    heroNum: { fontFamily: 'BakbakOne-Regular', fontSize: 64, lineHeight: 70, color: P.onAccent, marginTop: 4 },
+    heroSub: { fontSize: 14, lineHeight: 20, color: P.onAccent, opacity: 0.92 },
+    receipt: { marginTop: 14, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, gap: 6 },
+    receiptEg: { fontSize: 10, letterSpacing: 1, color: P.onAccent, opacity: 0.75 },
+    receiptRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+    receiptTotal: { borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: P.onAccent, paddingTop: 6 },
+    receiptText: { fontSize: 13, color: P.onAccent, fontVariant: ['tabular-nums'] },
+    stubs: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+    stub: { flex: 1, backgroundColor: P.card, borderRadius: 16, borderWidth: 1, borderColor: P.border, paddingVertical: 10, paddingHorizontal: 12 },
+    stubNum: { fontFamily: 'BakbakOne-Regular', fontSize: 22, color: P.text },
+    stubLabel: { fontSize: 11, color: P.sub, marginTop: 1 },
     section: { marginBottom: 18 },
     sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2, color: P.sub, marginBottom: 8, marginLeft: 4 },
     card: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, paddingHorizontal: 16 },
     row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 14 },
     rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border },
     icon: { width: 34, height: 34, borderRadius: 17, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
-    rowTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700', color: P.text },
-    rowBody: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, color: P.sub, marginTop: 2 },
+    rowTitle: { fontSize: 15, fontWeight: '700', color: P.text },
+    rowBody: { fontSize: 13, lineHeight: 18, color: P.sub, marginTop: 2 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     chip: { borderRadius: 100, borderWidth: 1, borderColor: P.border, backgroundColor: P.card, paddingHorizontal: 12, paddingVertical: 6 },
-    chipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub },
+    chipText: { fontSize: 12, color: P.sub },
     primary: { height: 52, borderRadius: 100, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     primaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 16, color: P.onAccent },
-    footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17, color: P.sub, textAlign: 'center', marginTop: 10, paddingHorizontal: 12 },
+    footnote: { fontSize: 12, lineHeight: 17, color: P.sub, textAlign: 'center', marginTop: 10, paddingHorizontal: 12 },
   });
