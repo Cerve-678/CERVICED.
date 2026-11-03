@@ -66,11 +66,11 @@ OWNER:  (none)
 
 Frontier before applying: `20261103000000` (#268, applied by its own session). `20261103040000` (#274, cerviced-e1) is still unapplied and touches none of these.
 
-### Written 2026-11-03, NOT applied (request-confirmed notice reads like New Booking)
+### Applied 2026-11-03 (request-confirmed notice reads like New Booking)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261103050000 | `provider_request_confirmed_reads_like_new_booking` | **NOT APPLIED.** Redefines `notify_provider_request_confirmed()` so the provider's notice matches the instant-booking one ("New Booking", high, one per booking). md5 guard on the live function as left by 20261103000000 (`3b5426975cf93433a0be7b25a7a9a47c`). A rolled-back trial on live passed 2026-11-03. The apply was blocked for Claude; paste the file into the SQL editor. |
+| 20261103050000 | `provider_request_confirmed_reads_like_new_booking` | **APPLIED 2026-11-03** by the user in the SQL editor; version recorded by the file. Verified live: version present, function has the New Booking wording, trigger enabled, not executable by anon or authenticated. Redefines `notify_provider_request_confirmed()` so the provider's notice matches the instant-booking one ("New Booking", high, one per booking). md5 guard on the live function as left by 20261103000000 (`3b5426975cf93433a0be7b25a7a9a47c`). A rolled-back trial on live passed 2026-11-03. |
 
 ### Applied 2026-11-03 (provider told when a request is confirmed)
 
