@@ -13,7 +13,7 @@ import {
   parseThemeKey,
   resolveProviderTheme,
 } from '../constants/providerThemes';
-import { sheenColors } from '../components/ProfileHeroBackdrop';
+import { finishHeightShare, sheenColors } from '../components/ProfileHeroBackdrop';
 
 const lum = (hex: string) => {
   const [r, g, b] = [1, 3, 5]
@@ -132,5 +132,27 @@ describe('Sheen', () => {
     const pale = sheenColors('#F2E6CC', '#2A2418')[2];
     const dark = sheenColors('#0D0C0A', '#2A2418')[2];
     expect(lum(dark)).toBeLessThan(lum(pale));
+  });
+});
+
+describe('Split and Sheen placement', () => {
+  it('lays them over the top of a full-screen backdrop, where the hero shows', () => {
+    // iPhone 15: 393 x 852. The hero is the top ~490pt, not the whole screen.
+    expect(finishHeightShare(393, 852)).toBeCloseTo((393 * 1.25) / 852);
+    expect(finishHeightShare(393, 852)).toBeLessThan(0.6);
+  });
+
+  it('leaves the Branding swatches and preview drawn over their whole height', () => {
+    expect(finishHeightShare(64, 80)).toBe(1); // swatch, aspect 0.8
+    expect(finishHeightShare(350, 180)).toBe(1); // live preview
+    expect(finishHeightShare(0, 0)).toBe(1);
+  });
+});
+
+describe('content areas', () => {
+  it('keeps even the darkest grey readable for the grey text on it', () => {
+    const smoke = SHEET_OPTIONS.find(o => o.key === 'smoke')!.color;
+    expect(contrast('#655A57', smoke)).toBeGreaterThanOrEqual(4);
+    expect(lum(smoke)).toBeLessThan(lum(SHEET_OPTIONS.find(o => o.key === 'dove')!.color));
   });
 });

@@ -5,7 +5,7 @@
 
 #generated
 
-**3029 functions** across **417 files**.
+**3031 functions** across **417 files**.
 
 ### `src/components/` (55)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -41,7 +41,7 @@
 - `NotificationPreferencesView.tsx` — load · NotificationPreferencesView · persist · retrySave · StaticRow · toggle · ToggleRow
 - `PasswordRequirements.tsx` — **PasswordRequirements**
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
-- `ProfileHeroBackdrop.tsx` — ProfileHeroBackdrop · **sheenColors**
+- `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — ProviderFontPicker
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
