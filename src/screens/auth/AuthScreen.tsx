@@ -2,13 +2,13 @@ import { useState, useCallback } from 'react';
 import {
   Platform,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, AccountType } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -199,7 +199,7 @@ export default function AuthScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
 
       <KeyboardDismissView style={styles.flex}>
         <ScrollView
