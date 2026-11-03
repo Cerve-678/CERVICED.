@@ -24,6 +24,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import AreaPicker from '../../components/AreaPicker';
 import { HAIR_TYPES } from '../../constants/hairTypes';
+import { PRICE_BANDS, tierForBands } from '../../constants/priceBands';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Chip, ChipWrap, FieldRow, FormCard, PrimaryButton, QuestionCard, ScreenTitle, SectionLabel, SwitchRow, useFieldInputStyle,
@@ -48,12 +49,7 @@ const TREATMENT_HISTORY = ['Facials', 'Lash extensions', 'Brow tinting', 'Hair c
 const BUSINESS_TYPES: { v: BusinessType; l: string }[] =
   BUSINESS_TYPE_OPTS.map(o => ({ v: o.value, l: o.label }));
 const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
-const PRICE_RANGES: { v: 'budget' | 'mid' | 'premium' | 'luxury'; l: string }[] = [
-  { v: 'budget',  l: '£15–£35' },
-  { v: 'mid',     l: '£35–£65' },
-  { v: 'premium', l: '£65–£100' },
-  { v: 'luxury',  l: '£100+' },
-];
+const PRICE_RANGES: { v: string; l: string }[] = PRICE_BANDS.map(band => ({ v: band.value, l: band.label }));
 const CONTACT_METHODS: { v: string; l: string }[] = [
   { v: 'in_app',   l: 'In-app messages' },
   { v: 'phone',    l: 'Phone' },
@@ -102,7 +98,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const [selectedBusinessType, setSelectedBusinessType] = useState<typeof data.businessType>(data.businessType);
   const [selectedServices, setSelectedServices] = useState<string[]>(data.serviceInterests);
   const [selectedLocation, setSelectedLocation] = useState<string>(data.location);
-  const [selectedPriceRange, setSelectedPriceRange] = useState<typeof data.priceRange>(data.priceRange);
+  const [selectedPriceBands, setSelectedPriceBands] = useState<string[]>(data.priceBands);
   const [yearsExperience, setYearsExperience] = useState<string>(data.yearsExperience);
   const [selectedContactMethods, setSelectedContactMethods] = useState<string[]>(
     data.preferredContactMethods.length ? data.preferredContactMethods : ['in_app']
@@ -183,8 +179,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     setSelectedServices(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
   };
 
-  const pickPriceRange = (range: NonNullable<typeof data.priceRange> | '') => {
-    setSelectedPriceRange(prev => prev === range ? '' : range);
+  const togglePriceBand = (band: string) => {
+    setSelectedPriceBands(prev => prev.includes(band) ? prev.filter(b => b !== band) : [...prev, band]);
   };
 
   const toggleContactMethod = (method: string) => {
@@ -202,7 +198,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
         serviceInterests: selectedServices,
         location: selectedLocation,
         yearsExperience: yearsExperience.trim(),
-        priceRange: selectedPriceRange,
+        priceBands: selectedPriceBands,
+        priceRange: tierForBands(selectedPriceBands),
         preferredContactMethods: selectedContactMethods,
         preferredPaymentMethods: usesOwnLink ? [] : selectedPaymentMethods,
       });
@@ -228,7 +225,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
         !selectedServices.length      ? servicesY :
         !selectedBusinessType          ? businessTypeY :
         !selectedLocation.trim()      ? locationY :
-        !selectedPriceRange           ? priceRangeY :
+        !selectedPriceBands.length    ? priceRangeY :
         !selectedContactMethods.length ? contactMethodsY :
         !usesOwnLink && !selectedPaymentMethods.length ? paymentMethodsY :
         null;
@@ -359,8 +356,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               />
             </QuestionCard>
 
-            <QuestionCard title="PRICE RANGE" prompt="Where do most of your services sit?" error={showErrors && !selectedPriceRange} onLayout={onLayoutFor(priceRangeY)}>
-              {chips(PRICE_RANGES, v => selectedPriceRange === v, pickPriceRange)}
+            <QuestionCard title="PRICE RANGE" prompt="Where do your services sit? Pick all that apply." error={showErrors && !selectedPriceBands.length} onLayout={onLayoutFor(priceRangeY)}>
+              {chips(PRICE_RANGES, v => selectedPriceBands.includes(v), togglePriceBand)}
             </QuestionCard>
 
             <FormCard style={styles.question}>

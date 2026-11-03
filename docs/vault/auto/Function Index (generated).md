@@ -5,7 +5,7 @@
 
 #generated
 
-**2997 functions** across **410 files**.
+**2999 functions** across **411 files**.
 
 ### `src/components/` (54)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -69,10 +69,11 @@
 ### `src/components/signup/` (1)
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
 
-### `src/constants/` (8)
+### `src/constants/` (9)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
 - `payoutTiming.ts` — **isPayoutHoldDays** · **payoutHoldLabel** · **payoutHoldSentence**
 - `PlatformDimensions.ts` — for
+- `priceBands.ts` — **rangeForBands** · **tierForBands**
 - `providerFonts.ts` — **resolveProviderFontFamily**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
 - `skinTones.ts` — **matchesSkinTone**
@@ -262,7 +263,7 @@
 - `SignUpStep1Screen.tsx` — handleContinue · pick · SignUpStep1Screen · tile
 - `SignUpStep2Screen.tsx` — fieldError · handleContinue · markTouched · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — fieldError · handleContinue · handleRow · markTouched · SignUpStep3Screen · validate
-- `SignUpStep4Screen.tsx` — handleContinue · onLayoutFor · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · plain · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
+- `SignUpStep4Screen.tsx` — handleContinue · onLayoutFor · pickBusinessType · pickHair · pickSkin · pickStyleVibe · plain · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · togglePriceBand · toggleService · toggleTreatment
 - `SignUpStep5Screen.tsx` — curatedSpecialtyOptions · finishHatSwitch · handleComplete · onLayoutFor · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage
 - `WelcomeScreen.tsx` — handleAppleLogin · handleGoogleLogin · rise · rowStyle · WelcomeScreen
 
