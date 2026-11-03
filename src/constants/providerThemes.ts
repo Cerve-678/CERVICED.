@@ -36,6 +36,10 @@ export const SHEET_OPTIONS: { key: string; name: string; color: string }[] = [
   { key: 'oat',      name: 'Oat',       color: '#F3ECE2' },
   { key: 'shell',    name: 'Shell',     color: '#F9EEEA' },
   { key: 'butter',   name: 'Butter',    color: '#FBF6E7' },
+  { key: 'milk',      name: 'Milk',      color: '#FFFFFF' },
+  { key: 'champagne', name: 'Champagne', color: '#F7EFE0' },
+  // A true neutral grey (Mist leans blue) for the black and ink sets.
+  { key: 'dove',      name: 'Dove',      color: '#EBEBEA' },
 ];
 
 // ── Hero finish ───────────────────────────────────────────────────────────────
@@ -43,7 +47,7 @@ export const SHEET_OPTIONS: { key: string; name: string; color: string }[] = [
 // matters without a background photo. Picked in Branding & Style (owner's
 // call, 2026-11-03). Drawn by components/ProfileHeroBackdrop.
 
-export type HeroFinish = 'blend' | 'solid' | 'glow' | 'split';
+export type HeroFinish = 'blend' | 'solid' | 'glow' | 'split' | 'sheen';
 
 export const DEFAULT_HERO_FINISH: HeroFinish = 'blend';
 
@@ -52,6 +56,7 @@ export const HERO_FINISHES: { key: HeroFinish; name: string; description: string
   { key: 'solid', name: 'Solid', description: 'Just the first colour' },
   { key: 'glow',  name: 'Glow',  description: 'The second colour glowing from the top corner' },
   { key: 'split', name: 'Split', description: 'Both colours, side by side on a diagonal' },
+  { key: 'sheen', name: 'Sheen', description: 'A soft band of light across both colours, like metal' },
 ];
 
 function isHeroFinish(value: string | undefined): value is HeroFinish {
@@ -61,10 +66,12 @@ function isHeroFinish(value: string | undefined): value is HeroFinish {
 // ── Collections ───────────────────────────────────────────────────────────────
 // The picker shows the sets in these groups, in this order. The five named
 // collections came from the owner's picks on 2026-11-03
-// (https://claude.ai/artifact/FDEnSYwWeAyUhw7v9dvcT2); Classics holds the
+// (https://claude.ai/artifact/FDEnSYwWeAyUhw7v9dvcT2); Clean Girl and Gilded
+// came from a second round the same day
+// (https://claude.ai/artifact/KJsBTxUenQgKsYeS9pa9Fw). Classics holds the
 // sets that were here before them.
 
-export type ThemeCollectionKey = 'atelier' | 'sorbet' | 'terra' | 'afterdark' | 'statement' | 'classics';
+export type ThemeCollectionKey = 'atelier' | 'sorbet' | 'terra' | 'afterdark' | 'statement' | 'clean' | 'gilded' | 'classics';
 
 export const THEME_COLLECTIONS: { key: ThemeCollectionKey; name: string; description: string }[] = [
   { key: 'atelier',   name: 'Atelier',    description: 'Quiet, tailored neutrals' },
@@ -72,6 +79,8 @@ export const THEME_COLLECTIONS: { key: ThemeCollectionKey; name: string; descrip
   { key: 'terra',     name: 'Terra',      description: 'Warm, sun-baked earth tones' },
   { key: 'afterdark', name: 'After Dark', description: 'Deep jewel tones with a light accent' },
   { key: 'statement', name: 'Statement',  description: 'Bold colour clashes' },
+  { key: 'clean',     name: 'Clean Girl', description: 'Milky whites and soft neutrals' },
+  { key: 'gilded',    name: 'Gilded',     description: 'Golds, from white and gold to black and gold' },
   { key: 'classics',  name: 'Classics',   description: 'The original CERVICED sets' },
 ];
 
@@ -270,6 +279,14 @@ const COLLECTION_DEFS: { key: string; name: string; description: string; from: s
   { key: 'cherrycocoa',   name: 'Cherry & Cocoa',    description: 'Glossy cherry with a dark cocoa accent',                   from: '#A92536', to: '#D95A66', accent: '#3A211C', suggestedSheet: 'shell',    collection: 'statement' },
   { key: 'matchaink',     name: 'Matcha & Ink',      description: 'Whisked matcha with a deep ink-green accent',              from: '#7F9A6E', to: '#C3D0AE', accent: '#2C3527', suggestedSheet: 'sagemist', collection: 'statement' },
   { key: 'tangerinenavy', name: 'Tangerine & Navy',  description: 'Juicy tangerine with a crisp navy accent',                 from: '#D9703A', to: '#EFA772', accent: '#1E2A4A', suggestedSheet: 'butter',   collection: 'statement' },
+  { key: 'milkglaze',     name: 'Milk Glaze',        description: 'Barely-there oat into pure white, with a soft taupe accent', from: '#F3EFEA', to: '#FFFFFF', accent: '#8A7766', suggestedSheet: 'milk',      collection: 'clean' },
+  { key: 'glazedrose',    name: 'Glazed Rose',       description: 'A sheer pink glaze over white, with a dusty-rose accent',    from: '#F1E4DE', to: '#FFFFFF', accent: '#9E6A66', suggestedSheet: 'shell',     collection: 'clean' },
+  { key: 'coconutink',    name: 'Coconut & Ink',     description: 'All white with a near-black accent',                         from: '#FFFFFF', to: '#F1EEEA', accent: '#22201E', suggestedSheet: 'milk',      collection: 'clean' },
+  { key: 'almondsilk',    name: 'Almond Silk',       description: 'Almond into silk, with a toasted-almond accent',             from: '#E6D8C6', to: '#F5EEE4', accent: '#7A664C', suggestedSheet: 'beige',     collection: 'clean' },
+  { key: 'cloud',         name: 'Cloud',             description: 'Soft cloud grey into white, with a slate accent',            from: '#E8E9EB', to: '#FFFFFF', accent: '#3E4859', suggestedSheet: 'milk',      collection: 'clean' },
+  { key: 'whitegold',     name: 'White & Gold',      description: 'Clean white warming into gold, with a polished-gold accent', from: '#FFFFFF', to: '#F2E7D2', accent: '#9C7633', suggestedSheet: 'milk',      collection: 'gilded' },
+  { key: 'blackgold',     name: 'Black & Gold',      description: 'Near-black with an antique-gold accent',                     from: '#0D0C0A', to: '#2A2418', accent: '#98742D', suggestedSheet: 'dove',      collection: 'gilded' },
+  { key: 'antiquebronze', name: 'Antique Bronze',    description: 'Dark bronze into burnished gold, with a bronze accent',      from: '#5E4424', to: '#8E6C3E', accent: '#7A5A2B', suggestedSheet: 'champagne', collection: 'gilded' },
 ];
 
 export const PROVIDER_THEMES: ProviderThemePreset[] = [
