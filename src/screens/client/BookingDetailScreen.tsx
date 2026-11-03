@@ -69,6 +69,7 @@ import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
+import { buildRebookCartItem } from '../../features/bookings/rebook';
 
 const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -700,7 +701,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         ? await getRebookableService(providerDbId, b.serviceName).catch(() => null)
         : null;
 
-      if (!live) {
+      if (!live || !providerDbId) {
         setSuccessMessage(
           `${b.providerName} no longer offers ${b.serviceName}. Check their profile for their current services.`,
         );
@@ -709,57 +710,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         return;
       }
 
-      const h = Math.floor(live.durationMinutes / 60);
-      const m = live.durationMinutes % 60;
-      const duration = `${h > 0 ? `${h}h ` : ''}${m > 0 ? `${m}m` : ''}`.trim() || b.duration;
-      const priceChanged = Math.abs(live.price - b.price) > 0.005;
+      const { item, notes } = buildRebookCartItem(b, live, providerDbId, includeAddOns);
+      addToCart(item);
 
-      // Re-resolve the booking's add-ons against the live list by name, so a
-      // rebook carries today's add-on prices and real add-on ids. Any add-on the
-      // provider has since removed or deactivated is dropped rather than
-      // re-booked from a stale snapshot.
-      const previousAddOnNames = new Set((b.addOns ?? []).map(a => a.name));
-      const liveAddOns = includeAddOns
-        ? live.addOns.filter(a => previousAddOnNames.has(a.name))
-        : [];
-      const droppedAddOns = includeAddOns
-        ? (b.addOns ?? []).filter(a => !live.addOns.some(l => l.name === a.name))
-        : [];
-
-      addToCart({
-        providerName: b.providerName,
-        providerDisplayName: live.providerDisplayName,
-        // Without providerSlug the cart's provider logo can't open the profile
-        // and shows a "couldn't open that provider's profile" alert instead.
-        providerSlug: live.providerSlug,
-        providerId: providerDbId,
-        // b.providerImage can be a plain string or an {uri} object depending
-        // on where the snapshot came from — Image requires {uri}, so a raw
-        // string here silently renders nothing in the cart.
-        providerImage: typeof b.providerImage === 'string' ? { uri: b.providerImage } : b.providerImage,
-        providerService: b.providerService,
-        service: {
-          id: live.id,
-          name: live.name,
-          price: live.price,
-          duration,
-          description: b.providerService,
-          addOns: liveAddOns,
-        },
-        quantity: 1,
-        // Rebooking the same provider/service that's already in the cart
-        // must create a second, independently-schedulable appointment, not
-        // silently bump the existing item's quantity onto one shared slot.
-        forceNewInstance: true,
-      });
-
-      const notes: string[] = [];
-      if (priceChanged) notes.push(`The price is now £${live.price.toFixed(2)} (was £${b.price.toFixed(2)}).`);
-      if (droppedAddOns.length > 0) {
-        notes.push(
-          `${droppedAddOns.map(a => a.name).join(', ')} ${droppedAddOns.length === 1 ? 'is' : 'are'} no longer offered and ${droppedAddOns.length === 1 ? 'was' : 'were'} not added.`,
-        );
-      }
       setSuccessMessage(
         notes.length > 0
           ? `${live.name} added to your cart. ${notes.join(' ')}`

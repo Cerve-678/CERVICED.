@@ -1330,6 +1330,7 @@ const help: Capability = {
       return {
         text:
           "## Your business assistant\n" +
+          "I’m not perfect yet, but I can help with:\n" +
           "- **Messages** — unread messages from clients\n" +
           "- **Updates** — notifications you've missed\n" +
           "- **Opening hours** — what clients see on your About tab\n" +
@@ -1341,6 +1342,7 @@ const help: Capability = {
     return {
       text:
         "## Your business assistant\n" +
+        "I’m not perfect yet, but I can help with:\n" +
         "- **Diary & capacity** — today’s bookings, quieter days, working hours, days off and daily limits\n" +
         "- **Clients** — client list, lapsed clients, waitlist and outstanding forms\n" +
         "- **Communication** — unread messages and notifications\n" +

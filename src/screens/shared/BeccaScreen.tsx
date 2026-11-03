@@ -59,6 +59,7 @@ import { Provider } from "../../services/ProviderDataService";
 import { formatTime12, DAY_NAMES_FULL, ordinalSuffix, relativeDayLabel, formatSectionTitle } from "../../utils/dateUtils";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useBooking } from "../../contexts/BookingContext";
+import { useCart } from "../../contexts/CartContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAppDialog } from "../../components/AppDialog";
@@ -88,6 +89,7 @@ export default function BeccaScreen({
   // activeMode is 'client' and the provider (brown/rose) palette otherwise.
   const { isDarkMode, palette: P } = useTheme();
   const { bookings } = useBooking();
+  const { addToCart } = useCart();
   const { user, hatState, myBookingMode } = useAuth();
   const activeMode = hatState.active;
   const isProviderMode = activeMode === "provider";
@@ -286,6 +288,7 @@ export default function BeccaScreen({
         ...base,
         content:
           "## Your business assistant\n" +
+          "I’m not perfect yet, but I can help with:\n" +
           "- **Messages** — unread messages from clients\n" +
           "- **Updates** — notifications you've missed\n" +
           "- **Your profile** — opening hours and reach\n\n" +
@@ -303,6 +306,7 @@ export default function BeccaScreen({
         ...base,
         content:
           "## Your business assistant\n" +
+          "I’m not perfect yet, but I can help with:\n" +
           "- **Your day** — bookings, schedule and capacity\n" +
           "- **Your clients** — messages, forms and waitlist\n" +
           "- **Your business** — services, reviews and analytics\n\n" +
@@ -343,8 +347,11 @@ export default function BeccaScreen({
     if (upcomingCount > 0) {
       welcomeText += `**${upcomingCount} upcoming appointment${upcomingCount > 1 ? "s" : ""}.**\n`;
     }
+    const hasPastBooking = bookings.some((b) => b.status === "completed");
     welcomeText +=
+      "I’m not perfect yet, but I can help with:\n" +
       "- **Bookings** — check, move or manage an appointment\n" +
+      (hasPastBooking ? "- **Book again** — put your last appointment back in your cart\n" : "") +
       "- **Find someone** — search services, prices and availability\n" +
       "- **Get ready** — see forms and appointment details\n\n" +
       "What are you looking for today?";
@@ -365,6 +372,14 @@ export default function BeccaScreen({
           action: "message",
           data: { message: "When's my next appointment?" },
         },
+        ...(hasPastBooking
+          ? [{
+            id: "book-again",
+            text: "Book My Last Appointment Again",
+            action: "message" as const,
+            data: { message: "Rebook my last appointment" },
+          }]
+          : []),
         {
           id: "browse",
           text: "Browse All Services",
@@ -550,6 +565,9 @@ export default function BeccaScreen({
         // still an unguarded client→provider handoff that a future capability
         // could start reading. Withhold it outside the client hat.
         bookings: requestIsProvider ? [] : bookings,
+        // Client hat only, for the same reason: a confirmed "book again"
+        // puts the service straight into the cart.
+        ...(requestIsProvider ? {} : { addToCart }),
         ...(user?.id ? { userId: user.id } : {}),
         // What the last turn established. Without this every follow-up
         // ("what about Saturday?", "the first one", "are they any good?")

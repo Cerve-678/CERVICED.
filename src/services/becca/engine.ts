@@ -13,6 +13,7 @@
 // thing, and it's the exact seam a model later improves.
 
 import { BookingStatus, type ConfirmedBooking } from "../../types/booking";
+import type { AddToCartParams } from "../../contexts/CartContext";
 import type {
   AnswerLayout,
   BeccaAnswer,
@@ -43,6 +44,8 @@ export interface EngineInput {
   message: string;
   hat: BeccaHat;
   bookings: ConfirmedBooking[];
+  /** Client hat: CartContext's addToCart. See CapabilityContext.addToCart. */
+  addToCart?: (item: AddToCartParams) => void;
   userId?: string;
   /** Injected so date logic is deterministic and testable. */
   now?: Date;
@@ -145,12 +148,14 @@ function setPendingAction(
   userId?: string,
 ): void {
   pendingActions.clear();
-  pendingActions.set(action.id, {
-    action,
-    at: Date.now(),
-    hat,
-    ...(userId ? { userId } : {}),
-  });
+  const entry = { at: Date.now(), hat, ...(userId ? { userId } : {}) };
+  pendingActions.set(action.id, { ...entry, action });
+  // The alternative is registered as its own action under its own id, so its
+  // button round-trips exactly like the main one.
+  if (action.alternative) {
+    const { id, confirmLabel, run } = action.alternative;
+    pendingActions.set(id, { ...entry, action: { id, describe: action.describe, confirmLabel, run } });
+  }
 }
 
 /** Prefix that marks a message as a confirmation, not natural language. */
@@ -592,6 +597,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     verbatimMessage: message,
     bookings,
     now,
+    ...(hat === "client" && input.addToCart ? { addToCart: input.addToCart } : {}),
     ...(userId ? { userId } : {}),
     ...(personal ? { personal } : {}),
   };
@@ -628,6 +634,15 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
           data: { message: confirmToken(action.id) },
           display: "action",
         },
+        ...(action.alternative
+          ? [{
+            id: `confirm-${action.alternative.id}`,
+            text: action.alternative.confirmLabel,
+            action: "message" as const,
+            data: { message: confirmToken(action.alternative.id) },
+            display: "action" as const,
+          }]
+          : []),
         {
           id: `cancel-${action.id}`,
           text: "Not now",
@@ -1157,9 +1172,12 @@ async function runPendingAction(
   userId?: string,
 ): Promise<ChatMessage> {
   const entry = pendingActions.get(id);
-  // Deleted before the expiry check as well as before running: an expired
+  // Cleared before the expiry check as well as before running: an expired
   // entry is dead either way, and leaving it would let a second tap retry it.
-  pendingActions.delete(id);
+  // Everything goes, not just this id — only one write is ever pending (see
+  // setPendingAction), so the rest is this one's alternative, which must not
+  // run as well.
+  pendingActions.clear();
 
   if (!entry) {
     return message_({
@@ -1184,8 +1202,10 @@ async function runPendingAction(
   }
 
   try {
-    const confirmation = await entry.action.run();
-    return message_({ content: confirmation });
+    const done = await entry.action.run();
+    return typeof done === "string"
+      ? message_({ content: done }, hat)
+      : message_({ content: done.text, suggestions: done.suggestions }, hat);
   } catch {
     return message_({
       content: "That didn't go through — something went wrong on my end. Try again?",
@@ -1283,9 +1303,14 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
     .slice(0, 3);
 
   if (options.length === 0) {
+    const strengths = linkOnly
+      ? "your messages, your updates and your profile"
+      : hat === "provider"
+        ? "your day, your clients and how the business is doing"
+        : "your bookings, finding someone, and booking your last appointment again";
     return message_({
       content:
-        "I’m not sure what you mean yet — could you tell me a little more?",
+        `I’m not perfect yet, so I didn’t catch that one. I can help with ${strengths} — could you try asking another way?`,
       suggestions: defaultStarters(hat),
     }, hat, { title: "Let’s find the right thing" });
   }

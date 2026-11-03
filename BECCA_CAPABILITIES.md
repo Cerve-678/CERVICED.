@@ -137,7 +137,7 @@ already reachable.
 | "Do I need to fill anything in?" | `getPendingIntakeFormsForMe`, `getMyBookingActionItems` | **genuinely useful, entirely unreachable today** |
 | "What did they send me to read?" | `getInfoPacksByBooking` | aftercare/prep packs |
 | "Remind me what I booked last time" | `getRebookableService` | |
-| "Book that again" | `getRebookableService` → deep-link | one-tap rebook |
+| "Book that again" | `getRebookableService` → `pendingAction` → cart | ✅ built 2026-11-03: one tap puts the last completed booking in the cart at today's price (`features/bookings/rebook.ts`, shared with Bookings and Booking Detail); two buttons when it had add-ons still offered (with / without). Cart via `EngineInput.addToCart`, client hat only |
 
 #### Discovery & booking
 | Capability | Backing function |
@@ -384,8 +384,10 @@ list over adding a capability whenever the underlying answer is the same.
 
 Becca now performs a small set of writes herself, but **never as a side effect
 of understanding a message**. A capability returns a `pendingAction`; the
-engine renders exactly two chips (confirm / "Not now") and holds the action in
-memory; only an explicit tap runs it. A misread intent therefore costs a tap,
+engine renders the confirm chip and "Not now" (plus a second confirm chip when
+the action carries an `alternative`, e.g. rebook with / without add-ons) and
+holds the action in memory; only an explicit tap runs it. Running either
+confirm chip retires the other. A misread intent therefore costs a tap,
 not a mutation — which matters most precisely where the parser is weakest.
 
 Properties verified end-to-end against a stubbed DB:
