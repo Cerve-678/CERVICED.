@@ -124,6 +124,7 @@ export interface ProviderProfileData {
     // also reads it while EMERGENCY_BOOKINGS_ENABLED is on.
     emergencyBookingPolicy?: string;
     travelPolicy?: string;
+    depositNonRefundable?: boolean;
   } | null;
   cancellationNoticeHours: number;
   waitlistEnabled: boolean;
