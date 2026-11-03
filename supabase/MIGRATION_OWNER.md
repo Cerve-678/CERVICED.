@@ -56,6 +56,18 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-03, NOT applied (request-confirmed notice reads like New Booking)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103050000 | `provider_request_confirmed_reads_like_new_booking` | **NOT APPLIED.** Redefines `notify_provider_request_confirmed()` so the provider's notice matches the instant-booking one ("New Booking", high, one per booking). md5 guard on the live function as left by 20261103000000 (`3b5426975cf93433a0be7b25a7a9a47c`). A rolled-back trial on live passed 2026-11-03. The apply was blocked for Claude; paste the file into the SQL editor. |
+
+### Applied 2026-11-03 (provider told when a request is confirmed)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103000000 | `provider_told_request_confirmed` | **APPLIED 2026-11-03** by the user in the SQL editor, the file from PR #268; version recorded by the file. A rolled-back trial on live passed first. Verified live: version present; trigger `on_booking_request_confirmed_tell_provider` enabled on `bookings`; `notify_provider_request_confirmed` is SECURITY DEFINER and not executable by anon or authenticated. No constraint change: it reuses `booking_confirmed`. |
+
 ### Applied 2026-11-03 (payment outcomes reach the client)
 
 | Authored version | Name | Status |
