@@ -4,6 +4,8 @@ import {
   lastBookableDate,
   nextReleaseMoment,
   whenDateOpens,
+  rollingWindowExplainer,
+  parseBookingWindowDays,
 } from '../utils/bookingHorizon';
 
 // Must agree with public.provider_last_bookable_date(), which the booking
@@ -88,5 +90,23 @@ describe('whenDateOpens', () => {
 
   it('has no date when there is no limit', () => {
     expect(whenDateOpens({ booking_window_days: 0 }, '2030-01-01', now)).toBeNull();
+  });
+});
+
+describe('Scheduling screen: how far ahead clients can book', () => {
+  const now = new Date(2026, 10, 3, 12, 0); // Tue 3 Nov 2026, local
+
+  it('explains a rolling window with the date clients can book up to today', () => {
+    expect(rollingWindowExplainer(30, now)).toMatch(/^Today clients can book up to Thu,? 3 Dec\. This moves forward one day every day\./);
+  });
+
+  it('explains "Any time" as no limit', () => {
+    expect(rollingWindowExplainer(0, now)).toBe('Clients can book any date in the future.');
+  });
+
+  it('saves "Any time" as 0, not as the 60-day default', () => {
+    expect(parseBookingWindowDays('0')).toBe(0);
+    expect(parseBookingWindowDays('90')).toBe(90);
+    expect(parseBookingWindowDays('')).toBe(60);
   });
 });

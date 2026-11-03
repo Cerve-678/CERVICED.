@@ -39,7 +39,7 @@ import {
   updateProviderMaxBookingsPerDay,
   updateProviderRequestSettings,
 } from '../../services/databaseService';
-import { lastBookableDate, nextReleaseMoment, toReleaseDay } from '../../utils/bookingHorizon';
+import { lastBookableDate, nextReleaseMoment, parseBookingWindowDays, rollingWindowExplainer, toReleaseDay } from '../../utils/bookingHorizon';
 import { formatShortDayDate, formatTime12, ordinalSuffix } from '../../utils/dateUtils';
 import {
   Card, ChipGroup, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
@@ -176,7 +176,8 @@ export default function SchedulingScreen({ navigation }: any) {
         }),
 
         updateProviderScheduleSettings(providerId, {
-          booking_window_days:    parseInt(bookingWindowDays, 10)   || 60,
+          // Not `|| 60`: 0 is "Any time", and that used to save as 60 days.
+          booking_window_days:    parseBookingWindowDays(bookingWindowDays),
           slot_interval_mins:     parseInt(slotIntervalMins, 10)    || 60,
           buffer_mins:            parseInt(bufferMins, 10)          || 0,
           min_booking_notice_hrs: parseInt(minBookingNoticeHrs, 10) || 0,
@@ -325,11 +326,22 @@ export default function SchedulingScreen({ navigation }: any) {
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={[st.releaseDayText, { color: C.text }]}>Monthly release on the {ordinalSuffix(releaseDay)}</Text>
                   {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
+                  <Text style={[st.releaseDayHint, { color: C.sub }]}>
+                    Days after that are greyed out for clients, and tapping one tells them the date it opens.
+                  </Text>
                   <Text style={[st.releaseDayHint, { color: C.sub }]}>Change or remove it in Edit Profile.</Text>
                 </View>
               </View>
             ) : (
-              <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
+              <>
+                <Text style={[st.windowExplainer, { color: C.sub }]}>
+                  {rollingWindowExplainer(parseBookingWindowDays(bookingWindowDays))}
+                </Text>
+                <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
+                <Text style={[st.windowExplainer, { color: C.sub, marginTop: 8 }]}>
+                  Rather open a whole month at once? Set a monthly release day in Edit Profile.
+                </Text>
+              </>
             )}
 
             <View style={{ height: 18 }} />
@@ -417,4 +429,5 @@ const st = StyleSheet.create({
   },
   releaseDayText: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 13 },
   releaseDayHint: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17 },
+  windowExplainer: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17, marginBottom: 8 },
 });

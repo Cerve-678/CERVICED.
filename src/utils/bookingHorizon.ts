@@ -1,3 +1,5 @@
+import { formatShortDayDate } from './dateUtils';
+
 /**
  * How far ahead a client may book a provider — the app's copy of the server's
  * public.provider_last_bookable_date(), which enforce_booking_bookability
@@ -111,4 +113,23 @@ export function whenDateOpens(settings: BookingHorizonSettings | null | undefine
   const opens = new Date(target);
   opens.setDate(opens.getDate() - windowDays);
   return opens.getTime() > now.getTime() ? opens : null;
+}
+
+/**
+ * The plain-English line under "How far ahead clients can book" on the
+ * Scheduling screen, for a rolling window: what clients can book today and
+ * what they see past it. 0 = no limit.
+ */
+export function rollingWindowExplainer(windowDays: number, now: Date = new Date()): string {
+  const last = lastBookableDate({ booking_window_days: windowDays }, now);
+  if (!last) return 'Clients can book any date in the future.';
+  return `Today clients can book up to ${formatShortDayDate(last)}. This moves forward one day every day. `
+    + 'Days after it are greyed out for clients, and tapping one tells them the date it opens.';
+}
+
+/** Parses the Scheduling screen's window choice for saving. '0' is "Any
+ *  time" and must stay 0; only something unreadable falls back to 60. */
+export function parseBookingWindowDays(value: string): number {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 60;
 }
