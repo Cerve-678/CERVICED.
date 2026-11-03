@@ -27,7 +27,6 @@ tags: [screen, provider]
 - [[LanguageRegionScreen\|LanguageRegion]]
 - [[HelpCentreScreen\|HelpCentre]]
 - [[AboutScreen\|About]]
-- [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
 - [[AdminDashboardScreen\|AdminDashboard]]
 - `SignUpStep3` _(navigator / dynamic)_

@@ -18,6 +18,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { openLegalPage } from '../../utils/legalPage';
 import Icon from '../../components/IconLibrary';
 import { supportMailtoUrl } from '../../constants/support';
 import { useTranslation } from '../../i18n';
@@ -82,7 +83,7 @@ function buildMoreActions(
     { label: t('helpCentre.action.contact'), run: handleContactSupport },
     { label: t('helpCentre.action.report'), run: () => navigation.navigate('ReportProblem') },
     // Held in English (legal reference) by the i18n do-not-translate guard.
-    { label: t('helpCentre.action.terms'), run: () => navigation.navigate('Terms') },
+    { label: t('helpCentre.action.terms'), run: () => openLegalPage('terms') },
     { label: t('helpCentre.action.about'), run: () => navigation.navigate('About') },
   ];
 }

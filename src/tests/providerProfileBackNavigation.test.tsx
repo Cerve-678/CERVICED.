@@ -103,7 +103,6 @@ jest.mock('../screens/shared/HelpCentreScreen', () => mockStub('HelpCentreScreen
 jest.mock('../screens/shared/TextSizingScreen', () => mockStub('TextSizingScreen'));
 jest.mock('../screens/shared/LanguageRegionScreen', () => mockStub('LanguageRegionScreen'));
 jest.mock('../screens/shared/AboutScreen', () => mockStub('AboutScreen'));
-jest.mock('../screens/shared/TermsScreen', () => mockStub('TermsScreen'));
 jest.mock('../screens/shared/ReportProblemScreen', () => mockStub('ReportProblemScreen'));
 jest.mock('../screens/shared/AdminMoneyScreen', () => mockStub('AdminMoneyScreen'));
 jest.mock('../screens/provider/BusinessDetailsScreen', () => mockStub('BusinessDetailsScreen'));

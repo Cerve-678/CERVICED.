@@ -57,7 +57,6 @@ Curated overview: [[Screens & Navigation]].
 - `TextSizing`
 - `LanguageRegion`
 - `About`
-- `Terms`
 - `ReportProblem`
 - `AdminDashboard`
 - `AdminMoney`

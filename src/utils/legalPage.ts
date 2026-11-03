@@ -2,11 +2,12 @@ import * as WebBrowser from 'expo-web-browser';
 import { logger } from './logger';
 
 // The public Terms & Policies page (waitlist/legal/index.html, served by
-// Vercel from main). The sign-in screens link to its sections so the words
-// "Terms of Service" and "Privacy Policy" open the real text.
+// Vercel from main). It is the only copy of the Terms: every "Terms" link in
+// the app (sign-in, settings, checkout, a provider agreeing at publish, the
+// Terms-changed notice) opens a section of it.
 export const LEGAL_PAGE_URL = 'https://www.cerviced.co/legal';
 
-export type LegalSection = 'terms' | 'privacy';
+export type LegalSection = 'terms' | 'provider-terms' | 'privacy';
 
 export function legalPageUrl(section: LegalSection): string {
   return `${LEGAL_PAGE_URL}#${section}`;
