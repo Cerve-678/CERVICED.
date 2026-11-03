@@ -3,14 +3,30 @@
 // drawn in the hero finish they picked in Branding & Style. One component so
 // the client profile, My Profile, the InfoReg preview and Branding's own
 // preview can never draw the same finish differently.
-import React from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, useWindowDimensions, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { blend, isDarkColor, type HeroFinish } from '../constants/providerThemes';
 
 /** Where Split's hard edge falls along the diagonal. */
 const SPLIT_AT = 0.58;
+
+/** How tall the part of the backdrop that shows as the hero is, against its
+ *  width. On the profiles the backdrop fills the whole screen but only the
+ *  top shows above the content cards, so Split and Sheen are laid out over
+ *  that top part. Drawn over the full height, their edge and band landed
+ *  behind the cards. Branding's swatches and preview are no taller than this,
+ *  so they are drawn over their whole height as before. */
+const HERO_HEIGHT_PER_WIDTH = 1.25;
+
+/** The share of the backdrop's height that Split and Sheen are laid out
+ *  over. Past it the gradient holds its last colour, which is the colour
+ *  each finish ends on, so there is no seam. */
+export function finishHeightShare(width: number, height: number): number {
+  if (width <= 0 || height <= 0) return 1;
+  return Math.min(1, (width * HERO_HEIGHT_PER_WIDTH) / height);
+}
 
 /** How far Sheen lifts the second colour toward white for its band of light.
  *  Less on a dark hero, where a strong white band reads as a glare. */
@@ -37,6 +53,16 @@ export default function ProfileHeroBackdrop({
   const from = colors[0] ?? '#000000';
   const to = colors[1] ?? from;
 
+  // Until it has been measured, assume the full screen, which is how the
+  // profiles draw it, so they get it right from the first frame.
+  const window = useWindowDimensions();
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width !== size?.width || height !== size?.height) setSize({ width, height });
+  };
+  const share = finishHeightShare(size?.width ?? window.width, size?.height ?? window.height);
+
   if (finish === 'solid') {
     return <View style={[style, { backgroundColor: from }]} />;
   }
@@ -62,9 +88,10 @@ export default function ProfileHeroBackdrop({
       <LinearGradient
         colors={sheenColors(from, to)}
         locations={[0, 0.36, 0.5, 0.64, 1]}
-        start={{ x: 0, y: 0.15 }}
-        end={{ x: 1, y: 0.85 }}
+        start={{ x: 0, y: 0.15 * share }}
+        end={{ x: 1, y: 0.85 * share }}
         style={style}
+        onLayout={onLayout}
       />
     );
   }
@@ -75,8 +102,9 @@ export default function ProfileHeroBackdrop({
         colors={[from, from, to, to]}
         locations={[0, SPLIT_AT, SPLIT_AT, 1]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        end={{ x: 1, y: share }}
         style={style}
+        onLayout={onLayout}
       />
     );
   }

@@ -40,6 +40,9 @@ export const SHEET_OPTIONS: { key: string; name: string; color: string }[] = [
   { key: 'champagne', name: 'Champagne', color: '#F7EFE0' },
   // A true neutral grey (Mist leans blue) for the black and ink sets.
   { key: 'dove',      name: 'Dove',      color: '#EBEBEA' },
+  // A deeper grey beside Dove, the darkest content area: the cards' grey
+  // text still reads at about 4.3:1 on it.
+  { key: 'smoke',     name: 'Smoke',     color: '#CFCFCE' },
 ];
 
 // ── Hero finish ───────────────────────────────────────────────────────────────
