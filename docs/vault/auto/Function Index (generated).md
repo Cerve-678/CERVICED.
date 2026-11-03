@@ -5,7 +5,7 @@
 
 #generated
 
-**3034 functions** across **417 files**.
+**3036 functions** across **417 files**.
 
 ### `src/components/` (55)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -395,7 +395,7 @@
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
-- `bookingHorizon.ts` — **bookableDayCount** · **isBeyondHorizon** · **isMonthlyRelease** · **lastBookableDate** · **nextReleaseMoment** · **releaseMomentInMonth** · **toReleaseDay** · **whenDateOpens**
+- `bookingHorizon.ts` — **bookableDayCount** · **isBeyondHorizon** · **isMonthlyRelease** · **lastBookableDate** · **nextReleaseMoment** · **parseBookingWindowDays** · **releaseMomentInMonth** · **rollingWindowExplainer** · **toReleaseDay** · **whenDateOpens**
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
