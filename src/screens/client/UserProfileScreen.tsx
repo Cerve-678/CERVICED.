@@ -8,8 +8,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  StatusBar,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -146,7 +146,7 @@ export default function UserProfileScreen({ navigation }: any) {
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={appTheme.statusBar} />
+        <FocusAwareStatusBar barStyle={appTheme.statusBar} />
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
