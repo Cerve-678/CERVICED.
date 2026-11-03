@@ -3767,11 +3767,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           section: 'about',
           title: 'About & portfolio',
           rows: [
+            { label: 'Introduction', value: filled(providerData.aboutText) ? 'Written' : '' },
             {
               label: 'Portfolio',
               value: workPhotos.length > 0 ? `${workPhotos.length} photo${workPhotos.length === 1 ? '' : 's'}` : '',
             },
-            { label: 'Introduction', value: filled(providerData.aboutText) ? 'Written' : '' },
           ],
         },
         {
@@ -4452,8 +4452,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </View>
                     <Text style={styles.inputHint}>
                       {serviceTypes.length > 1
-                        ? 'Set at sign-up — contact support to change your service types.'
-                        : 'Set at sign-up — contact support to change your service type.'}
+                        ? 'Change your service types in Business Profile → Business Details → Business Info.'
+                        : 'Change your service type in Business Profile → Business Details → Business Info.'}
                     </Text>
                   </>
                 ) : (
@@ -4573,7 +4573,54 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>02</Text>
               <Text style={styles.docHeading}>About & Portfolio</Text>
-              <Text style={styles.docSub}>The work clients see and your introduction</Text>
+              <Text style={styles.docSub}>Your introduction and the work clients see</Text>
+
+              {/* The only editor of years of experience once a profile exists.
+                  Sign-up asks too and stages its answer on the user row, which
+                  prefills this. */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('yearsExperience')}
+              >
+                <Text style={styles.inputLabel}>Years of Experience</Text>
+                <View style={[styles.inputBlur, styles.profileInputBox]}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.yearsExperience}
+                    onChangeText={(text) =>
+                      setProviderData(prev => ({ ...prev, yearsExperience: text.replace(/[^0-9]/g, '') }))
+                    }
+                    placeholder="e.g. 5"
+                    placeholderTextColor={chrome.fg(0.4)}
+                    keyboardType="number-pad"
+                    onFocus={() => handleInputFocus('yearsExperience', 'about')}
+                  />
+                </View>
+                <Text style={styles.inputHint}>Shown on your public profile (optional).</Text>
+              </View>
+
+            {/* About Section */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('about')}
+              >
+                <Text style={styles.inputLabel}>Description</Text>
+                <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
+                  <TextInput
+                    style={[styles.textInput, styles.textInputMultiline]}
+                    value={providerData.aboutText}
+                    onChangeText={(text) =>
+                      setProviderData({ ...providerData, aboutText: text })
+                    }
+                    placeholder="Tell clients about your services, policies, deposit requirements..."
+                    placeholderTextColor={chrome.fg(0.4)}
+                    multiline
+                    numberOfLines={6}
+                    textAlignVertical="top"
+                    onFocus={() => handleInputFocus('about', 'about')}
+                  />
+                </View>
+              </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
               <View style={styles.inputGroup}>
@@ -4622,53 +4669,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {!providerDbId && !portfolioLoading && (
                   <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
                 )}
-              </View>
-
-            {/* About Section */}
-              <View
-                style={styles.inputGroup}
-                ref={registerField('about')}
-              >
-                <Text style={styles.inputLabel}>Description</Text>
-                <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
-                  <TextInput
-                    style={[styles.textInput, styles.textInputMultiline]}
-                    value={providerData.aboutText}
-                    onChangeText={(text) =>
-                      setProviderData({ ...providerData, aboutText: text })
-                    }
-                    placeholder="Tell clients about your services, policies, deposit requirements..."
-                    placeholderTextColor={chrome.fg(0.4)}
-                    multiline
-                    numberOfLines={6}
-                    textAlignVertical="top"
-                    onFocus={() => handleInputFocus('about', 'about')}
-                  />
-                </View>
-              </View>
-
-              {/* The only editor of years of experience once a profile exists.
-                  Sign-up asks too and stages its answer on the user row, which
-                  prefills this. */}
-              <View
-                style={styles.inputGroup}
-                ref={registerField('yearsExperience')}
-              >
-                <Text style={styles.inputLabel}>Years of Experience</Text>
-                <View style={[styles.inputBlur, styles.profileInputBox]}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={providerData.yearsExperience}
-                    onChangeText={(text) =>
-                      setProviderData(prev => ({ ...prev, yearsExperience: text.replace(/[^0-9]/g, '') }))
-                    }
-                    placeholder="e.g. 5"
-                    placeholderTextColor={chrome.fg(0.4)}
-                    keyboardType="number-pad"
-                    onFocus={() => handleInputFocus('yearsExperience', 'about')}
-                  />
-                </View>
-                <Text style={styles.inputHint}>Shown on your public profile (optional).</Text>
               </View>
 
               {/* The release day's ONLY editor. One stored value
