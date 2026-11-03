@@ -21,3 +21,20 @@ describe('provider notice when a request is confirmed', () => {
     expect(sql).toContain("v_provider_user_id, 'booking_confirmed'");
   });
 });
+
+describe('the provider notice reads like an instant booking', () => {
+  const follow = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'supabase', 'migrations', '20261103050000_provider_request_confirmed_reads_like_new_booking.sql'),
+    'utf8',
+  );
+
+  it('uses the same title, priority and sentence as claim_cart_booking_slots', () => {
+    expect(follow).toContain("'booking_confirmed', 'New Booking'");
+    expect(follow).toContain("'. Check their client profile for anything important.'");
+    expect(follow).toContain("'high', FALSE, NEW.id, NEW.provider_id, 'provider'");
+  });
+
+  it('refuses to apply over a changed live function', () => {
+    expect(follow).toContain("<> '3b5426975cf93433a0be7b25a7a9a47c'");
+  });
+});
