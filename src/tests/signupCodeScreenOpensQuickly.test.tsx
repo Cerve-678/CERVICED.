@@ -82,12 +82,27 @@ afterEach(() => {
 });
 
 it('opens the app straight from the saved sign-up when the save is quick', async () => {
-  mockUpsert.mockResolvedValue({ hasClientProfile: true });
+  mockUpsert.mockResolvedValue({ role: 'user', hasClientProfile: true, deletionRequested: false });
   enterCodeAndVerify();
   await act(flush);
   expect(mockComplete).toHaveBeenCalledTimes(1);
   expect(mockComplete.mock.calls[0][0]).toMatchObject({ id: 'new-user', name: 'New User', hasClientProfile: true });
   expect(mockCancel).not.toHaveBeenCalled();
+});
+
+it('opens a provider account as a provider from the saved row', async () => {
+  mockUpsert.mockResolvedValue({ role: 'provider', hasClientProfile: false, deletionRequested: false });
+  enterCodeAndVerify();
+  await act(flush);
+  expect(mockComplete.mock.calls[0][0]).toMatchObject({ accountType: 'provider', hasClientProfile: false });
+});
+
+it('sends an account pending deletion the usual way, so it gets the reactivation prompt', async () => {
+  mockUpsert.mockResolvedValue({ role: 'user', hasClientProfile: true, deletionRequested: true });
+  enterCodeAndVerify();
+  await act(flush);
+  expect(mockComplete).not.toHaveBeenCalled();
+  expect(mockCancel).toHaveBeenCalledTimes(1);
 });
 
 it('opens the app after the wait when the save hangs, and keeps saving in the background', async () => {

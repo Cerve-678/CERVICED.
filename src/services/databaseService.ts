@@ -403,14 +403,20 @@ function sanitizeIlikeTerm(term: string): string {
  * stay behind this shared service boundary. */
 export async function upsertVerifiedUserProfile(
   profile: { id: string } & Record<string, unknown>,
-): Promise<{ hasClientProfile: boolean }> {
+): Promise<{ role: string | null; hasClientProfile: boolean; deletionRequested: boolean }> {
+  // Read back what the row actually holds, so the app opens from the server's
+  // answer rather than the sign-up details it sent.
   const { data, error } = await supabase
     .from("users")
     .upsert(profile, { onConflict: "id" })
-    .select("has_client_profile")
+    .select("role, has_client_profile, deletion_requested_at")
     .single();
   if (error) throw error;
-  return { hasClientProfile: data.has_client_profile === true };
+  return {
+    role: data.role ?? null,
+    hasClientProfile: data.has_client_profile === true,
+    deletionRequested: data.deletion_requested_at != null,
+  };
 }
 
 /** Creates the users row for an account that signed in through Apple, which

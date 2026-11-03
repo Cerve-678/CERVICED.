@@ -169,23 +169,22 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         external_booking_url:      meta['external_booking_url']      ?? null,
       };
 
-      let profileSaved = false;
-      let hasClientProfile = false;
+      let saved: Awaited<ReturnType<typeof upsertVerifiedUserProfile>> | null = null;
       try {
-        ({ hasClientProfile } = await withTimeout(
+        saved = await withTimeout(
           upsertVerifiedUserProfile(profilePayload),
           SIGNUP_SAVE_WAIT_MS,
           'Sign-up profile save',
-        ));
-        profileSaved = true;
+        );
       } catch (upsertError) {
         // This is the account's only chance to save its signup answers — the
         // auth user already exists at this point regardless of outcome, and
         // nothing later retries it. Silently swallowing this (as before,
         // logger.warn only) left the user signed in with a blank profile and
         // no indication anything went wrong. Retry once, in the background so
-        // the app opens now (from the sign-up details, re-read once the row
-        // lands); only tell the user if the retry also fails.
+        // the app opens now. It opens the usual way, and AuthContext keeps
+        // re-reading the row until it lands (PROFILE_RETRY_DELAYS_MS); only
+        // tell the user if the retry also fails.
         logger.error('Profile save slow or failed — opening the app and retrying in the background:', upsertError);
         withTimeout(upsertVerifiedUserProfile(profilePayload), SIGNUP_SAVE_RETRY_LIMIT_MS, 'Sign-up profile save retry')
           .catch((retryError) => {
@@ -198,16 +197,18 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
           });
       }
 
-      if (profileSaved) {
+      // An account pending deletion goes the usual way, which holds it at the
+      // reactivation prompt; so does a save that didn't land in time.
+      if (saved && !saved.deletionRequested) {
         completeVerifiedSignup({
           id: session.userId,
           name: profilePayload.name,
           email: profilePayload.email,
           phone: profilePayload.phone,
           dob: dob || '',
-          accountType: profilePayload.role === 'provider' ? 'provider' : 'user',
+          accountType: saved.role === 'provider' ? 'provider' : 'user',
           loginMethod: 'email',
-          hasClientProfile,
+          hasClientProfile: saved.hasClientProfile,
           businessName: profilePayload.business_name ?? undefined,
           businessEmail: profilePayload.business_email ?? undefined,
           gender: profilePayload.gender,
@@ -215,8 +216,8 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
           service_interests: profilePayload.service_interests,
         }, session.authSession);
       } else {
-        // The session is valid, but the row is not confirmed. Preserve the
-        // existing metadata fallback and background retry for this rare path.
+        // The session is valid, but the row isn't confirmed (or needs the
+        // reactivation prompt). The usual sign-in path handles both.
         cancelSignupVerification();
       }
 

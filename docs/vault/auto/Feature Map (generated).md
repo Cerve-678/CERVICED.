@@ -293,11 +293,11 @@ Curated: [[Contexts]] · **197 files**
 - `src/screens/auth/SignUpStep2Screen.tsx` _(39)_
 - `src/navigation/RootNavigation.tsx` _(36)_
 - `supabase/phase1_schema.sql` _(32)_
+- `src/screens/auth/EmailVerificationScreen.tsx` _(30)_
 - `src/services/beccaStorageService.ts` _(30)_
 - `src/screens/auth/WelcomeScreen.tsx` _(29)_
 - `src/screens/shared/ChangePasswordScreen.tsx` _(29)_
 - `src/services/biometricService.ts` _(29)_
-- `src/screens/auth/EmailVerificationScreen.tsx` _(28)_
 - `supabase/becca_chat_tables.sql` _(21)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(17)_
