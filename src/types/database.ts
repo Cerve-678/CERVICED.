@@ -341,6 +341,9 @@ export interface DbProvider {
     noShowGraceMinutes?: string;
     /** Stamped onto every new booking, shown to clients in booking details. */
     bookingInstructions?: string;
+    /** Written policies shown on the profile; neither affects booking or payment. */
+    travelPolicy?: string;
+    emergencyBookingPolicy?: string;
     /** Optional photo of a fuller policy document, shown to clients via a
      *  pop-up on their profile view (see ProviderProfileScreen). */
     policyImageUrl?: string;
