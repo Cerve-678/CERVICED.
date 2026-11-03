@@ -616,7 +616,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             >
               <View style={{ flex: 1 }}>
                 <Text style={[s.cardTitle, { color: C.text }]}>Contact Preferences</Text>
-                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>How clients can best reach you — manage in Communications</Text>
+                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>Contact details for booked clients — set them in Communications</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.sub} />
             </TouchableOpacity>
