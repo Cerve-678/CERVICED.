@@ -515,21 +515,21 @@ export default function LinkOnlyHomeScreen() {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={`${week ? joinNudgeTotal : 0} nudges to join CERVICED in the last ${JOIN_NUDGE_WINDOW_DAYS} days. See what full CERVICED adds`}
+                accessibilityLabel={`Clients are asking you to take bookings on CERVICED: ${week ? joinNudgeTotal : 0} in the last ${JOIN_NUDGE_WINDOW_DAYS} days. See the full CERVICED experience`}
               >
                 <View style={styles.tileIcon}><Ionicons name="megaphone-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
-                  <Text style={styles.eyebrow}>Nudges to join</Text>
+                  <Text style={styles.nudgeTitle}>Clients are asking you to take bookings on CERVICED</Text>
                   {weekFailed ? (
                     <Text style={styles.tileSub}>Couldn't load your nudges.</Text>
                   ) : week && joinNudgeTotal > 0 ? (
-                    <Text style={joinNudgesThisWeek > 0 ? styles.trend : styles.tileSub} numberOfLines={2}>
+                    <Text style={joinNudgesThisWeek > 0 ? styles.trend : styles.tileSub} numberOfLines={1}>
                       {joinNudgesThisWeek > 0
-                        ? `+${joinNudgesThisWeek} this week · clients asking you to take bookings here`
-                        : `Clients asking you to take bookings here · last ${JOIN_NUDGE_WINDOW_DAYS} days`}
+                        ? `+${joinNudgesThisWeek} this week`
+                        : `In the last ${JOIN_NUDGE_WINDOW_DAYS} days`}
                     </Text>
                   ) : (
-                    <Text style={styles.tileSub} numberOfLines={2}>Clients can tap Nudge on your profile to ask you to take bookings here.</Text>
+                    <Text style={styles.tileSub} numberOfLines={2}>They can tap Nudge on your profile to ask.</Text>
                   )}
                 </View>
                 <Text style={[styles.tileNum, styles.nudgeNum]}>{week ? joinNudgeTotal : '–'}</Text>
@@ -659,7 +659,7 @@ export default function LinkOnlyHomeScreen() {
                 activeOpacity={0.7}
                 accessibilityRole="button"
               >
-                <Text style={styles.seeAll}>See everything you'd get</Text>
+                <Text style={styles.seeAll}>See the full CERVICED experience</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -840,6 +840,7 @@ const createStyles = (P: HomePalette) =>
     wideTile: { flexDirection: 'row', alignItems: 'flex-end', gap: 16, paddingHorizontal: 16 },
     nudgeTile: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     nudgeNum: { marginTop: 0 },
+    nudgeTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 18, fontWeight: '700', color: P.text },
     wideRight: { flex: 1, alignItems: 'flex-end', gap: 8 },
     wideNum: { fontFamily: 'BakbakOne-Regular', fontSize: 44, lineHeight: 50, color: P.text, marginTop: 2 },
     tileLoader: { marginVertical: 16, alignSelf: 'flex-start' },

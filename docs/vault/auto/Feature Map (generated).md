@@ -346,7 +346,7 @@ Curated: [[Services]] · **50 files**
 - … +20 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **77 files**
+Curated: [[Payments]] · **76 files**
 - `src/screens/client/CartScreen.tsx` _(441)_
 - `src/services/databaseService.ts` _(106)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **77 files**
 - `src/features/bookings/paymentPresentation.ts` _(4)_
 - `src/utils/policyDisplay.ts` _(4)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
-- … +47 more
+- … +46 more
