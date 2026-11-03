@@ -207,6 +207,7 @@ both code paths exist simultaneously on purpose.**
 | Bookings/notifications DELETE | ❌ by design | No RLS DELETE policy — client-side delete is a silent no-op; use a SECURITY DEFINER RPC |
 | Double-booking prevention | ✅ live | `bookings_no_overlap` constraint, future-only scope; 7 historical conflicts grandfathered (memory `booking-overlap-constraint-undeployed`) |
 | Edge functions | ✅ | `becca-ai`, `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `find-address-by-postcode`, `request-claim-verification`, `send-account-email`, `send-booking-confirmation`, `send-push-notification`, `send-support-request`. All `verify_jwt = true` except `confirm-email`, which is a public link handler by design. The general-purpose `send-email` was **deleted** 2026-08-26 — see "Email & support" below. |
+| Admin dashboard | ✅ admins only | Account settings → **Admin** (`admin_users` only) → `AdminDashboardScreen`: sign-ups, clients, providers and sign-ins against the previous period, a 12-week sign-up chart, providers live/link-only/unclaimed listings, bookings, money through the app, and a Problems list (failed background jobs, failed payouts, unsent confirmation emails, refund requests, open support requests). One read, `admin_dashboard_overview(p_days)`, counts only. Money and Developer tools open from it. App crashes are in Sentry, not here. Developer tools have no other entry point, and their reset functions are admin-only on the server (`admin_dev_reset`, migration `20261103110000`) |
 | SQL migration tracking | ⚠️ known gap | Most of `supabase/*.sql` has no run/not-run record; a file's existence or absence from `RUN_ALL_MIGRATIONS.sql` is a signal, not proof — see `cerviced-migration-drift` agent before trusting any one file |
 
 ### Email & support (rebuilt 2026-08-24)
@@ -222,7 +223,7 @@ both code paths exist simultaneously on purpose.**
 | Email templates | ✅ | `supabase/functions/_shared/emailTemplates.ts`. `src/services/emailService.ts` was **deleted** — nothing renders email on the device any more |
 | Signup and password-reset code emails | ⚠️ sent by Supabase Auth | Written in `emailTemplates.ts`, rendered to `supabase/templates/*.html` by `scripts/build-auth-email-templates.ts`, then pasted into the dashboard (Authentication → Emails) by hand. Deploying edge functions does not update them |
 | Reporter acknowledgment email | ❌ | The ticket number exists but is only shown in-app; nothing emails the reporter a receipt |
-| Screenshot / log attachment | ❌ | `logger.ts` already keeps a ring buffer for Developer Settings; it is not attached to reports |
+| Screenshot / log attachment | ❌ | `logger.ts` already keeps a ring buffer for Developer tools (Admin → Developer tools); it is not attached to reports |
 | Helpdesk tooling | ❌ | Tickets are read by SQL or the Zoho inbox. No assignment, SLA, or search |
 
 **The row is the record; the email is a notification of it.**

@@ -63,4 +63,7 @@ $$;
 
 -- Only logged-in users may call it; it self-scopes to their own rows.
 REVOKE ALL ON FUNCTION public.dev_reset_client() FROM public;
-GRANT EXECUTE ON FUNCTION public.dev_reset_client() TO authenticated;
+-- Not granted to authenticated: since 20261103110000 the app calls
+-- admin_dev_reset(), which checks admin_users and then calls this. Granting
+-- it here would let any signed-in account run it directly again.
+REVOKE EXECUTE ON FUNCTION public.dev_reset_client() FROM anon, authenticated;

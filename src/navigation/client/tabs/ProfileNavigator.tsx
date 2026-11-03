@@ -16,6 +16,7 @@ import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
 import AboutScreen from '../../../screens/shared/AboutScreen';
 import TermsScreen from '../../../screens/shared/TermsScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
+import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
 import PointsScreen from '../../../screens/client/PointsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
@@ -101,6 +102,11 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="ReportProblem"
         component={ReportProblemScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen

@@ -23,7 +23,7 @@ tags: [screen, client]
 - [[AboutScreen\|About]]
 - [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
-- [[AdminMoneyScreen\|AdminMoney]]
+- [[AdminDashboardScreen\|AdminDashboard]]
 - `SignUpStep3` _(navigator / dynamic)_
 
 ## Map

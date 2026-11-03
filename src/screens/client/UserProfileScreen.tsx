@@ -321,7 +321,7 @@ export default function UserProfileScreen({ navigation }: any) {
             <SettingsOption icon="bug-report" title={t('profile.appInfo.report.title')} subtitle={t('profile.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} palette={P} />
             {/* Admin accounts only, so English only like the screen it opens. */}
             {isAdmin && (
-              <SettingsOption icon="receipt" title="Money (admin)" subtitle="Failed payments, money owed, refund requests" onPress={() => navigation.navigate('AdminMoney')} palette={P} />
+              <SettingsOption icon="bar-chart" title="Admin" subtitle="Growth, problems, money and developer tools" onPress={() => navigation.navigate('AdminDashboard')} palette={P} />
             )}
           </View>
 

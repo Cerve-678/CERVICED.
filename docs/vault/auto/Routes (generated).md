@@ -32,7 +32,6 @@ Curated overview: [[Screens & Navigation]].
 - `Notifications`
 - `CartMain`
 - `ClientIntakeForm`
-- `DevSettings`
 - `Offers`
 - `ExploreMain`
 - `BeccaMain`
@@ -60,9 +59,11 @@ Curated overview: [[Screens & Navigation]].
 - `About`
 - `Terms`
 - `ReportProblem`
+- `AdminDashboard`
 - `AdminMoney`
 - `Points`
 - `Messages`
+- `DevSettings`
 - `InfoReg`
 - `ProviderHomeMain`
 - `LinkOnlyHomeMain`

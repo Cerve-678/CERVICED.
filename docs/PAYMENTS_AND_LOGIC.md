@@ -624,9 +624,11 @@ one broken, it's a top-severity bug: stop and escalate.
    UTC (08:00 UK time in winter, 09:00 in summer). It's only sent when
    something needs attention: payouts that failed or are being retried,
    unpaid provider debts, and open refund requests.
-2. **Check the admin Money screen** in the app: the **Money (admin)** row in
-   account settings, visible to admins only. It has three lists: failed
-   payouts, money owed and refund requests.
+2. **Check the admin Money screen** in the app: the **Admin** row in account
+   settings (admins only) opens the admin dashboard, and **Money** under
+   Tools opens three lists: failed payouts, money owed and refund requests.
+   The dashboard's Problems list counts failed payouts and refund requests
+   passed to CERVICED, and the Money row carries a badge with both.
 3. **Check support@ for live alerts.** Every failed payout sends one
    immediately.
 

@@ -7,7 +7,6 @@ tags: [screen, provider]
 **Registered route(s):** `BookingHistory`
 
 ## → Navigates to
-- [[DevSettingsScreen\|DevSettings]]
 - [[ProviderInboxScreen\|ProviderInbox]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 

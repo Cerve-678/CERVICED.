@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import BeccaScreen from "../../../screens/shared/BeccaScreen";
 import NotificationsScreen from "../../../screens/shared/NotificationsScreen";
 import ProviderBookingDetailScreen from "../../../screens/provider/ProviderBookingDetailScreen";
-import DevSettingsScreen from "../../../screens/shared/DevSettingsScreen";
 import ProviderScheduleScreen from "../../../screens/provider/ProviderScheduleScreen";
 import SchedulingScreen from "../../../screens/provider/SchedulingScreen";
 import AddBookingScreen from "../../../screens/provider/AddBookingScreen";
@@ -58,12 +57,6 @@ export default function ProviderBeccaNavigator() {
         name="Notifications"
         component={NotificationsScreen}
         options={{ headerShown: false, presentation: "formSheet" }}
-      />
-
-      <ProviderBeccaStack.Screen
-        name="DevSettings"
-        component={DevSettingsScreen}
-        options={{ headerShown: false, presentation: "fullScreenModal" }}
       />
 
       {/* ── Becca's own copies of her chip destinations ──────────────────── */}

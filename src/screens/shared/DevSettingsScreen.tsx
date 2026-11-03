@@ -12,6 +12,7 @@ import {
   StatusBar,
   Modal,
   DevSettings,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -23,8 +24,10 @@ import { useBooking } from '../../contexts/BookingContext';
 import { STORAGE_KEYS, TOUR_SEEN_PREFIXES } from '../../utils/storageKeys';
 import { clearSeenTours } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { TypedConfirmDialog, type TypedConfirmRequest } from '../../components/TypedConfirmDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCervicedAdminStatus } from '../../features/admin/useIsCervicedAdmin';
 import {
   getCurrentUserStoredPushToken,
   runDevReset,
@@ -61,7 +64,36 @@ const EMAIL_KIND_ROWS = Object.entries(EMAIL_KINDS) as [
   { label: string; note: string },
 ][];
 
+// Admin accounts only. The only way in is the admin dashboard, but the screen
+// checks again itself, so nothing that navigates here directly can open it
+// for anyone else. The server resets are refused for non-admins as well
+// (admin_dev_reset); the other tools here (test pushes and emails, local data,
+// logs) have no server gate of their own, which is why this one matters.
 export default function DevSettingsScreen({ navigation }: any) {
+  const { user } = useAuth();
+  const { palette: P } = useTheme();
+  const adminStatus = useCervicedAdminStatus(user?.id);
+
+  if (adminStatus === 'admin') return <DevTools navigation={navigation} />;
+  return (
+    <ThemedBackground style={{ flex: 1 }}>
+      <View style={styles.gate}>
+        {adminStatus === 'checking' ? (
+          <ActivityIndicator color={P.accent} />
+        ) : (
+          <>
+            <Text style={[styles.gateText, { color: P.text }]}>This screen is for admin accounts only.</Text>
+            <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.gateBack}>
+              <Text style={[styles.gateText, { color: P.accentText, fontWeight: '600' }]}>Go back</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    </ThemedBackground>
+  );
+}
+
+function DevTools({ navigation }: { navigation: any }) {
   const [bookingCount, setBookingCount] = useState<number>(0);
   const [storageSize, setStorageSize] = useState<string>('0 KB');
   const { reloadBookings } = useBooking();
@@ -71,6 +103,22 @@ export default function DevSettingsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const danger = isDarkMode ? '#E05050' : '#C0392B';
   const warnColor = isDarkMode ? '#E0A030' : '#B8860B';
+
+  // The server resets delete real rows, and this screen is reachable from the
+  // admin dashboard in release builds, so each one waits for a typed word
+  // rather than a single tap.
+  const [typedConfirm, setTypedConfirm] = useState<TypedConfirmRequest | null>(null);
+  const askTyped = ({ title, message, confirmLabel, run }: {
+    title: string; message: string; confirmLabel: string; run: () => Promise<void>;
+  }) => {
+    setTypedConfirm({
+      title,
+      message,
+      word: 'DELETE',
+      confirmLabel,
+      onConfirm: () => { setTypedConfirm(null); void run(); },
+    });
+  };
 
   // --- Debug log viewer state ---
   const [showLogs, setShowLogs] = useState(false);
@@ -486,39 +534,33 @@ export default function DevSettingsScreen({ navigation }: any) {
   // their provider hat, if any). RLS forbids client deletes, so this calls a
   // self-scoped SECURITY DEFINER RPC (supabase/dev_reset_client.sql).
   const fullClientReset = async () => {
-    Alert.alert(
-      'Full Client Reset',
-      "DELETE all bookings you've made as a client (with any provider), your reviews, and your notifications. Transactions are kept (see transactions_survive_account_deletion.sql). This cannot be undone. Continue?",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset everything',
-          style: 'destructive',
-          onPress: async () => {
-            setPushBusy(true);
-            try {
-              const res = await runDevReset('client');
-              if (res?.ok === false) {
-                Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
-                return;
-              }
-              const d = res?.deleted ?? {};
-              await reloadBookings();
-              setBookingCount(0);
-              Alert.alert(
-                'Client reset ✓',
-                `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nNotifications: ${d.notifications ?? 0}`
-              );
-            } catch (err) {
-              logger.error('[DevSettings] fullClientReset failed:', err);
-              Alert.alert('Error', String(err));
-            } finally {
-              setPushBusy(false);
-            }
-          },
-        },
-      ]
-    );
+    askTyped({
+      title: 'Full Client Reset',
+      message: "DELETE all bookings you've made as a client (with any provider), your reviews, and your notifications. Transactions are kept (see transactions_survive_account_deletion.sql). This cannot be undone. Continue?",
+      confirmLabel: 'Reset everything',
+      run: async () => {
+        setPushBusy(true);
+        try {
+          const res = await runDevReset('client');
+          if (res?.ok === false) {
+            Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
+            return;
+          }
+          const d = res?.deleted ?? {};
+          await reloadBookings();
+          setBookingCount(0);
+          Alert.alert(
+            'Client reset ✓',
+            `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nNotifications: ${d.notifications ?? 0}`
+          );
+        } catch (err) {
+          logger.error('[DevSettings] fullClientReset failed:', err);
+          Alert.alert('Error', String(err));
+        } finally {
+          setPushBusy(false);
+        }
+      },
+    });
   };
 
   // Bookings-only reset for the logged-in provider — clears bookings other
@@ -529,75 +571,63 @@ export default function DevSettingsScreen({ navigation }: any) {
   // calls a self-scoped SECURITY DEFINER RPC
   // (supabase/dev_reset_provider_bookings_only.sql).
   const providerBookingsOnlyReset = async () => {
-    Alert.alert(
-      'Clear Provider Bookings Only',
-      "DELETE bookings other users made against your provider profile, and their reviews. Does NOT touch transactions, schedule, services, or has_gone_live. This cannot be undone. Continue?",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear bookings',
-          style: 'destructive',
-          onPress: async () => {
-            setPushBusy(true);
-            try {
-              const res = await runDevReset('provider_bookings');
-              if (res?.ok === false) {
-                Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
-                return;
-              }
-              const d = res?.deleted ?? {};
-              await reloadBookings();
-              Alert.alert(
-                'Provider bookings cleared ✓',
-                `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}`
-              );
-            } catch (err) {
-              logger.error('[DevSettings] providerBookingsOnlyReset failed:', err);
-              Alert.alert('Error', String(err));
-            } finally {
-              setPushBusy(false);
-            }
-          },
-        },
-      ]
-    );
+    askTyped({
+      title: 'Clear Provider Bookings Only',
+      message: "DELETE bookings other users made against your provider profile, and their reviews. Does NOT touch transactions, schedule, services, or has_gone_live. This cannot be undone. Continue?",
+      confirmLabel: 'Clear bookings',
+      run: async () => {
+        setPushBusy(true);
+        try {
+          const res = await runDevReset('provider_bookings');
+          if (res?.ok === false) {
+            Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
+            return;
+          }
+          const d = res?.deleted ?? {};
+          await reloadBookings();
+          Alert.alert(
+            'Provider bookings cleared ✓',
+            `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}`
+          );
+        } catch (err) {
+          logger.error('[DevSettings] providerBookingsOnlyReset failed:', err);
+          Alert.alert('Error', String(err));
+        } finally {
+          setPushBusy(false);
+        }
+      },
+    });
   };
 
   // Full server-side reset for the logged-in provider. RLS forbids client deletes,
   // so this calls a self-scoped SECURITY DEFINER RPC (supabase/dev_reset_provider.sql).
   const fullProviderReset = async () => {
-    Alert.alert(
-      'Full Provider Reset',
-      "DELETE all of this provider's bookings (and the clients' linked copies), reviews, transactions, and your notifications, and clear your schedule — then reset has_gone_live so you go back through the go-live flow. Your services are kept. This cannot be undone. Continue?",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset everything',
-          style: 'destructive',
-          onPress: async () => {
-            setPushBusy(true);
-            try {
-              const res = await runDevReset('provider');
-              if (res?.ok === false) {
-                Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
-                return;
-              }
-              const d = res?.deleted ?? {};
-              await loadPushInfo();
-              Alert.alert(
-                'Provider reset ✓',
-                `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nTransactions: ${d.transactions ?? 0}\nNotifications: ${d.notifications ?? 0}\nSchedule cleared: ${d.schedule_windows ?? 0} windows, ${d.availability_days ?? 0} days\nhas_gone_live → false (back through go-live)`
-              );
-            } catch (err) {
-              logger.error('[DevSettings] fullProviderReset failed:', err);
-              Alert.alert('Error', String(err));
-            } finally {
-              setPushBusy(false);
-            }
-          },
-        },
-      ]
-    );
+    askTyped({
+      title: 'Full Provider Reset',
+      message: "DELETE all of this provider's bookings (and the clients' linked copies), reviews, transactions, and your notifications, and clear your schedule — then reset has_gone_live so you go back through the go-live flow. Your services are kept. This cannot be undone. Continue?",
+      confirmLabel: 'Reset everything',
+      run: async () => {
+        setPushBusy(true);
+        try {
+          const res = await runDevReset('provider');
+          if (res?.ok === false) {
+            Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
+            return;
+          }
+          const d = res?.deleted ?? {};
+          await loadPushInfo();
+          Alert.alert(
+            'Provider reset ✓',
+            `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nTransactions: ${d.transactions ?? 0}\nNotifications: ${d.notifications ?? 0}\nSchedule cleared: ${d.schedule_windows ?? 0} windows, ${d.availability_days ?? 0} days\nhas_gone_live → false (back through go-live)`
+          );
+        } catch (err) {
+          logger.error('[DevSettings] fullProviderReset failed:', err);
+          Alert.alert('Error', String(err));
+        } finally {
+          setPushBusy(false);
+        }
+      },
+    });
   };
 
   return (
@@ -1043,7 +1073,7 @@ export default function DevSettingsScreen({ navigation }: any) {
                 • Inspect session, build + storage{'\n'}
                 • Clear test data{'\n'}
                 • View buffered app logs, including swallowed error details{'\n\n'}
-                Access: Tap top-right corner 5 times rapidly
+                Access: Admin (in account settings) → Developer tools. Admin accounts only.
               </Text>
             </View>
           </ScrollView>
@@ -1053,10 +1083,11 @@ export default function DevSettingsScreen({ navigation }: any) {
             style={[styles.backButton, { backgroundColor: P.surface, borderColor: P.border }]}
             onPress={() => navigation.goBack()}
           >
-            <Text style={[styles.backButtonText, { color: P.text }]}>← Back to Bookings</Text>
+            <Text style={[styles.backButtonText, { color: P.text }]}>← Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+      <TypedConfirmDialog request={typedConfirm} onCancel={() => setTypedConfirm(null)} />
 
       {/* Debug Log Viewer */}
       <Modal
@@ -1125,6 +1156,9 @@ export default function DevSettingsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  gate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
+  gateText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, textAlign: 'center' },
+  gateBack: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
   safeArea: { flex: 1 },
   container: { flex: 1 },
   header: {

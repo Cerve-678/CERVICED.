@@ -56,7 +56,6 @@ export type HomeStackParamList = {
   Notifications: undefined;
   CartMain: undefined;
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
-  DevSettings: undefined;
   Offers: undefined;
 };
 
@@ -73,7 +72,6 @@ export type ExploreStackParamList = {
   Search: { initialQuery?: string; category?: string; morph?: boolean };
   BookmarkedProviders: undefined;
   CartMain: undefined;
-  DevSettings: undefined;
 };
 
 // Becca Stack
@@ -102,7 +100,6 @@ export type BeccaStackParamList = {
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   CartMain: undefined;
-  DevSettings: undefined;
 };
 
 // Provider Becca Stack — the isolated Becca tab used in PROVIDER mode. It
@@ -113,7 +110,6 @@ export type ProviderBeccaStackParamList = {
   BeccaMain: { conversationId?: string };
   Notifications: undefined;
   BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
-  DevSettings: undefined;
   // Becca's OWN copies of the provider screens her chips route to.
   //
   // Deliberately duplicated from ProviderHome/Profile/MyServices rather than
@@ -166,7 +162,6 @@ export type CartStackParamList = {
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   Notifications: undefined;
-  DevSettings: undefined;
 };
 
 // Profile Stack
@@ -191,6 +186,8 @@ export type ProfileStackParamList = {
   Terms: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminDashboard: undefined;
+  /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
   Points: undefined;
   ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
@@ -282,7 +279,6 @@ export type ProviderHomeStackParamList = {
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
-  DevSettings: undefined;
 };
 
 // Provider Services Stack (profile preview + edit via InfoRegScreen)
@@ -328,7 +324,6 @@ export type ProviderServicesStackParamList = {
   // Pushed from the dashboard's saved-by-clients tile, same reasoning.
   Analytics: undefined;
   AddBooking: undefined;
-  DevSettings: undefined;
 };
 
 // Provider Account Stack (settings for provider users)
@@ -395,6 +390,8 @@ export type ProviderAccountStackParamList = {
   Terms: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
+  AdminDashboard: undefined;
+  /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
   DevSettings: undefined;
 };

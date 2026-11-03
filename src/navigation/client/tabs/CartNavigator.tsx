@@ -9,7 +9,6 @@ import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { CartStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 
@@ -108,15 +107,6 @@ export default function CartNavigator() {
         }}
       />
 
-      <CartStack.Screen
-        name="DevSettings"
-        component={DevSettingsScreen}
-        options={{
-          title: 'Developer Settings',
-          presentation: 'fullScreenModal',
-          headerShown: false,
-        }}
-      />
     </CartStack.Navigator>
   );
 }

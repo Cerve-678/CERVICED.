@@ -12,7 +12,6 @@ import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvide
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import CartScreen from '../../../screens/client/CartScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
-import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import OffersScreen from '../../../screens/client/OffersScreen';
 import { HomeStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -167,16 +166,6 @@ export default function HomeNavigator() {
           component={NotificationsScreen}
           options={{
             headerShown: false,
-          }}
-        />
-
-        {/* Developer Settings - Modal presentation */}
-        <HomeStack.Screen
-          name="DevSettings"
-          component={DevSettingsScreen}
-          options={{
-            headerShown: false,
-            presentation: 'modal',
           }}
         />
       </HomeStack.Group>

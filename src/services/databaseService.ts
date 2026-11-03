@@ -66,6 +66,7 @@ import { resolveDepositMode } from "../utils/depositPolicy";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
+import type { AdminDashboardOverview, AdminDashboardPeriod } from "../types/adminDashboard";
 import type { ProviderAchievements } from "../types/achievements";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
@@ -380,12 +381,10 @@ export interface DevResetResult {
 export async function runDevReset(
   kind: "client" | "provider_bookings" | "provider",
 ): Promise<DevResetResult> {
-  const functionName = kind === "client"
-    ? "dev_reset_client"
-    : kind === "provider_bookings"
-      ? "dev_reset_provider_bookings_only"
-      : "dev_reset_provider";
-  const { data, error } = await supabase.rpc(functionName);
+  // Admins only: admin_dev_reset refuses anyone else, then runs the
+  // self-scoped dev_reset_* function, which signed-in accounts can no longer
+  // call directly (migration 20261103110000).
+  const { data, error } = await supabase.rpc("admin_dev_reset", { p_kind: kind });
   if (error) throw error;
   return (data ?? {}) as DevResetResult;
 }
@@ -11851,6 +11850,17 @@ export async function getAdminMoneyOverview(): Promise<AdminMoneyOverview> {
     throw new Error('The money lists came back in an unexpected shape.');
   }
   return overview as AdminMoneyOverview;
+}
+
+/** Growth, marketplace, money and problem counts for the admin dashboard. Throws for a non-admin. */
+export async function getAdminDashboardOverview(days: AdminDashboardPeriod): Promise<AdminDashboardOverview> {
+  const { data, error } = await supabase.rpc('admin_dashboard_overview', { p_days: days });
+  if (error) throw error;
+  const overview = data as Partial<AdminDashboardOverview> | null;
+  if (!overview || !overview.accounts || !overview.problems || !Array.isArray(overview.weekly)) {
+    throw new Error('The dashboard came back in an unexpected shape.');
+  }
+  return overview as AdminDashboardOverview;
 }
 
 /** Puts a failed or waiting payout back as due now; the next release run sends it. */
