@@ -32,7 +32,7 @@ import {
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
-import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily } from '../../constants/providerFonts';
+import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -310,7 +310,7 @@ export default function BrandingScreen({ navigation }: any) {
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
                 <Text style={[styles.previewAccentLabel, { color: accentInk }]}>ACCENT</Text>
               </View>
-              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont), color: previewInk }, !previewOnLight && styles.previewShadow]}>Your Profile</Text>
+              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont), fontSize: 20 * resolveProviderFontScale(brandFont), color: previewInk }, !previewOnLight && styles.previewShadow]}>Your Profile</Text>
               <Text style={[styles.previewSub, { color: previewInk, opacity: 0.75 }]}>Background preview</Text>
             </View>
           </View>

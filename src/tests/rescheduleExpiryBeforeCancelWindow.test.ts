@@ -52,14 +52,14 @@ describe('a pending reschedule request expires before the cancellation window cl
     // cancellation-notice policy at all (no notice period -> no window to
     // race against).
     expect(body).toMatch(
-      /WHEN public\.cancel_notice_hours\(p\.cancellation_notice_hours, p\.booking_policies\) > 0/,
+      /WHEN COALESCE\(b\.cancel_notice_hours, public\.cancel_notice_hours\(p\.cancellation_notice_hours, p\.booking_policies\)\) > 0/,
     );
 
     // It has to be anchored on the appointment minus the cancel-notice
     // hours, not some independent constant — otherwise it could drift from
     // what cancel_own_booking() itself enforces.
     expect(body).toMatch(
-      /booking_date::TIMESTAMP \+ b\.booking_time\)\s*-\s*\(public\.cancel_notice_hours\(p\.cancellation_notice_hours, p\.booking_policies\) \|\| ' hours'\)::INTERVAL\s*-\s*INTERVAL '6 hours'/,
+      /booking_date::TIMESTAMP \+ b\.booking_time\)\s*-\s*\(COALESCE\(b\.cancel_notice_hours, public\.cancel_notice_hours\(p\.cancellation_notice_hours, p\.booking_policies\)\) \|\| ' hours'\)::INTERVAL\s*-\s*INTERVAL '6 hours'/,
     );
 
     // Floored at the same 4-hour "real chance to answer" minimum the

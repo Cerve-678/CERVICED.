@@ -3,8 +3,11 @@
 // the last client is done. The cards always show the next five bookings.
 import {
   buildTodaySchedule,
+  clientName,
   minutesOfDay,
-  shortClientName,
+  paymentLine,
+  pounds,
+  serviceTotal,
   type ScheduleBooking,
 } from '../features/providers/todaySchedule';
 
@@ -168,12 +171,30 @@ describe('minutesOfDay', () => {
   });
 });
 
-describe('shortClientName', () => {
-  it('shortens to first name and last initial', () => {
-    expect(shortClientName('Amira Khan')).toBe('Amira K.');
-    expect(shortClientName('Mary Jane van Dyke')).toBe('Mary D.');
-    expect(shortClientName('Jade')).toBe('Jade');
-    expect(shortClientName('  ')).toBe('Client');
-    expect(shortClientName(null)).toBe('Client');
+describe('clientName', () => {
+  it('keeps the whole name, as every other booking card shows it', () => {
+    expect(clientName('Amira Khan')).toBe('Amira Khan');
+    expect(clientName('  Mary Jane   van Dyke ')).toBe('Mary Jane van Dyke');
+    expect(clientName('Jade')).toBe('Jade');
+    expect(clientName('  ')).toBe('Client');
+    expect(clientName(null)).toBe('Client');
+  });
+});
+
+describe('booking money', () => {
+  it('totals the service and its add-ons, without the platform fee', () => {
+    expect(serviceTotal({ base_price: 40, add_ons_total: 5.5 })).toBe(45.5);
+    expect(pounds(45)).toBe('£45');
+    expect(pounds(45.5)).toBe('£45.50');
+  });
+
+  it('only speaks for money taken through the app', () => {
+    expect(paymentLine({ payment_status: 'fully_paid', deposit_amount: 0, remaining_balance: 0 })).toBe('Paid in full');
+    expect(paymentLine({ payment_status: 'deposit_paid', deposit_amount: 10, remaining_balance: 35 })).toBe(
+      '£10 deposit paid · £35 balance due',
+    );
+    expect(paymentLine({ payment_status: 'deposit_paid', deposit_amount: 10, remaining_balance: 0 })).toBe('£10 deposit paid');
+    expect(paymentLine({ payment_status: 'refunded', deposit_amount: 0, remaining_balance: 0 })).toBe('Refunded');
+    expect(paymentLine({ payment_status: 'pending', deposit_amount: 10, remaining_balance: 35 })).toBeNull();
   });
 });

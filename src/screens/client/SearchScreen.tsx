@@ -223,6 +223,12 @@ const SEARCH_CATEGORY_TABS = ['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows
 // filter tested providers.price_tier, which is NULL for every provider in
 // production, so every price bucket matched nobody.
 const KM_TO_MILES = 0.621371;
+/** How many of a provider's specialities a result card underlines. */
+const SEARCH_CARD_MAX_SPECIALITIES = 4;
+// Rows are revealed in batches as the client nears the end, with a spinner
+// underneath while more are still to come.
+const SEARCH_INITIAL_ROWS = 10;
+const SEARCH_ROW_BATCH = 10;
 
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
 // tapping one opens just that filter's popover (Airbnb/Skyscanner style)
@@ -879,6 +885,8 @@ export default function SearchScreen({ navigation, route }: Props) {
   const [specialityTextByProviderId, setSpecialityTextByProviderId] = useState<Map<string, Set<string>>>(new Map());
   // specialityText minus service names — what the filter may offer as options.
   const [specialityLabelsByProviderId, setSpecialityLabelsByProviderId] = useState<Map<string, Set<string>>>(new Map());
+  // Business specialities only — what each card underlines.
+  const [specialitiesByProviderId, setSpecialitiesByProviderId] = useState<Map<string, string[]>>(new Map());
   // Whether the facets query has answered for the CURRENT result set. Keeps
   // the audience filter's "don't claim a match until the lookup has answered"
   // rule meaningful now that the match set is derived rather than fetched —
@@ -898,6 +906,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       setServicesByProviderId(new Map());
       setSpecialityTextByProviderId(new Map());
       setSpecialityLabelsByProviderId(new Map());
+      setSpecialitiesByProviderId(new Map());
       setFacetsLoaded(true);
       setPriceRangeLoading(false);
       return;
@@ -912,6 +921,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setServicesByProviderId(facets.services ?? new Map());
         setSpecialityTextByProviderId(facets.specialityText ?? new Map());
         setSpecialityLabelsByProviderId(facets.specialityLabels ?? new Map());
+        setSpecialitiesByProviderId(facets.specialities ?? new Map());
       })
       .catch(() => {
         if (cancelled) return;
@@ -919,6 +929,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         setServicesByProviderId(new Map());
         setSpecialityTextByProviderId(new Map());
         setSpecialityLabelsByProviderId(new Map());
+        setSpecialitiesByProviderId(new Map());
       })
       .finally(() => {
         if (cancelled) return;
@@ -936,16 +947,16 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
 
-  // Provider-defined specialities and service tags are already in the facets
-  // request used by the filter. Reuse that response rather than making every
-  // card fetch its own profile data. A small cap keeps the two-column cards
-  // readable while still showing the provider's actual specialties.
+  // The provider's chosen specialities are already in the facets request used
+  // by the filter. Reuse that response rather than making every card fetch its
+  // own profile data. Only their business specialities are underlined, never
+  // service tags (product owner, 2026-11-03), and at most four of them.
   const providersWithSpecialties = useMemo(() => (
     providersWithPriceRange.map(provider => ({
       ...provider,
-      specialties: [...(specialityLabelsByProviderId.get(provider.providerId) ?? [])].slice(0, 4),
+      specialties: (specialitiesByProviderId.get(provider.providerId) ?? []).slice(0, SEARCH_CARD_MAX_SPECIALITIES),
     }))
-  ), [providersWithPriceRange, specialityLabelsByProviderId]);
+  ), [providersWithPriceRange, specialitiesByProviderId]);
 
   // Price, audience and skin tone, judged together on ONE service at a time
   // (src/utils/serviceFilterMatch.ts). Each used to be answered per provider
@@ -1374,6 +1385,21 @@ export default function SearchScreen({ navigation, route }: Props) {
     })),
     [providersLoading, filteredProviders, visibleServices, gridColumns],
   );
+
+  // A new search or refresh starts back at the first batch.
+  const [visibleRowCount, setVisibleRowCount] = useState(SEARCH_INITIAL_ROWS);
+  useEffect(() => {
+    if (providersLoading) setVisibleRowCount(SEARCH_INITIAL_ROWS);
+  }, [providersLoading]);
+  const visibleRows = useMemo(
+    () => resultRows.slice(0, visibleRowCount),
+    [resultRows, visibleRowCount],
+  );
+  const hasMoreRows = visibleRowCount < resultRows.length;
+  const handleEndReached = useCallback(() => {
+    if (!hasMoreRows) return;
+    setVisibleRowCount(count => count + SEARCH_ROW_BATCH);
+  }, [hasMoreRows]);
 
   const renderRow: ListRenderItem<SearchResultRow<ProviderCardData, ServiceSearchResult>> = useCallback(({ item }) => {
     if (item.kind === 'service') {
@@ -1969,10 +1995,19 @@ export default function SearchScreen({ navigation, route }: Props) {
           the bookmarked-providers grid, with full-width service cards
           scattered between the rows ── */}
       <FlatList
-        data={resultRows}
+        data={visibleRows}
         renderItem={renderRow}
         keyExtractor={item => item.key}
         ListHeaderComponent={renderHeader}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={
+          hasMoreRows ? (
+            <View style={styles.loadMoreFooter}>
+              <ActivityIndicator color={P.accent} />
+            </View>
+          ) : undefined
+        }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         bounces={true}
@@ -2032,6 +2067,7 @@ export default function SearchScreen({ navigation, route }: Props) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  loadMoreFooter: { paddingVertical: 16, alignItems: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { fontSize: 14, fontFamily: 'Jura-VariableFont_wght' },
 

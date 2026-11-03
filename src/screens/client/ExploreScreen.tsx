@@ -9,14 +9,18 @@ import {
   Animated,
   Easing,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { ViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useFocusEffect, useIsFocused, NavigationProp } from '@react-navigation/native';
 import { useExploreFocusStore } from '../../stores/useExploreFocusStore';
-import { exploreScrollHandler, resetExplorePillTracking, settleExplorePillTracking } from '../../utils/exploreTabBarScroll';
+import { exploreScrollHandler, exploreScrollY, explorePillVisible, resetExplorePillTracking, settleExplorePillTracking } from '../../utils/exploreTabBarScroll';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
 import { shuffle } from '../../utils/shuffle';
@@ -94,6 +98,9 @@ const LOAD_MORE_COOLDOWN_MS = 300;
 // are fetched as the client reaches the end of this initial window.
 const DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20;
 const DISCOVER_INITIAL_SERVICE_LIMIT = 10;
+// The back-to-top arrow appears once the grid is scrolled this many screen
+// heights down, fading in over the next fifth of a screen.
+const BACK_TO_TOP_AFTER_SCREENS = 1;
 
 type DiscoverPageCursor = {
   portfolioOffset: number;
@@ -253,7 +260,8 @@ const ExploreScreen = memo(() => {
   const { isDarkMode, palette: P } = useTheme();
   // Measured per render, not captured at module load: the masonry column
   // width is half the screen, so a stale width mis-sizes every card.
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const setExploreFocused = useExploreFocusStore(s => s.setExploreFocused);
 
   // Tell the floating tab bar it should apply its scroll-hide/opacity
@@ -287,9 +295,43 @@ const ExploreScreen = memo(() => {
   // leaves the grid wherever the previous filter happened to be scrolled to
   // instead of jumping back to the top.
   const discoverGridRef = useRef<MasonryGridHandle>(null);
+  const favouritesGridRef = useRef<MasonryGridHandle>(null);
   useEffect(() => {
     discoverGridRef.current?.scrollToTop();
   }, [selectedFilter]);
+
+  // Back-to-top arrow. Its fade runs on the native thread off the same
+  // scroll value the tab bar uses, so it costs no JS per frame; whether it
+  // takes taps is decided when a scroll settles, which is JS anyway.
+  const [backToTopActive, setBackToTopActive] = useState(false);
+  const backToTopFrom = screenHeight * BACK_TO_TOP_AFTER_SCREENS;
+  const backToTopOpacity = useMemo(
+    () => exploreScrollY.interpolate({
+      inputRange: [backToTopFrom, backToTopFrom + screenHeight * 0.2],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    }),
+    [backToTopFrom, screenHeight],
+  );
+  // Sits just above the tab bar, and drops to the bottom of the screen when
+  // the bar hides on a downward scroll so it doesn't float in empty space.
+  const backToTopDrop = Math.max(0, FLOATING_TAB_BAR_CLEARANCE - (insets.bottom + 24));
+  const backToTopTranslateY = useMemo(
+    () => explorePillVisible.interpolate({
+      inputRange: [0, 1],
+      outputRange: [backToTopDrop, 0],
+    }),
+    [backToTopDrop],
+  );
+  const updateBackToTop = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      setBackToTopActive(event.nativeEvent.contentOffset.y > backToTopFrom);
+    },
+    [backToTopFrom],
+  );
+  useEffect(() => {
+    setBackToTopActive(false);
+  }, [activeTab, selectedFilter]);
 
   // Stores
   const { loadSavedPortfolio, savedPortfolioIds } = useBookmarkStore();
@@ -351,10 +393,14 @@ const ExploreScreen = memo(() => {
   const [discoverVisibleCount, setDiscoverVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
   const discoverLoadMoreAtRef = useRef(0);
   const discoverPageLoadingRef = useRef(false);
+  // A next-page fetch failed. Hides the bottom spinner so it doesn't spin
+  // forever offline; the next scroll to the end tries again.
+  const [discoverMoreFailed, setDiscoverMoreFailed] = useState(false);
   const favouritesLoadMoreAtRef = useRef(0);
 
   useEffect(() => {
     setDiscoverVisibleCount(INITIAL_EXPLORE_ITEMS);
+    setDiscoverMoreFailed(false);
     discoverLoadMoreAtRef.current = 0;
   }, [selectedFilter]);
 
@@ -528,6 +574,7 @@ const ExploreScreen = memo(() => {
 
     const category = filter !== 'All' ? filterMap[filter] : undefined;
     discoverPageLoadingRef.current = true;
+    setDiscoverMoreFailed(false);
     try {
       const [portfolioData, serviceData] = await withTimeout(
         Promise.all([
@@ -581,6 +628,7 @@ const ExploreScreen = memo(() => {
       setDiscoverVisibleCount(current => current + EXPLORE_BATCH_SIZE);
     } catch (error) {
       logger.warn('Failed to load more Explore results:', error);
+      setDiscoverMoreFailed(true);
     } finally {
       discoverPageLoadingRef.current = false;
     }
@@ -732,6 +780,12 @@ const ExploreScreen = memo(() => {
     () => portfolioItems.slice(0, discoverVisibleCount),
     [portfolioItems, discoverVisibleCount],
   );
+  // More looks exist below the last card: either already fetched and not yet
+  // mounted, or another page on the server. Read off the cursor ref, which is
+  // always written just before the setPortfolioItems that re-renders here.
+  const discoverHasMore =
+    discoverVisibleCount < portfolioItems.length ||
+    (discoverPageCursors.current.get(selectedFilter)?.hasMore ?? false);
   const visibleFavouriteItems = useMemo(
     () => favouriteItems.slice(0, favouritesVisibleCount),
     [favouriteItems, favouritesVisibleCount],
@@ -813,6 +867,7 @@ const ExploreScreen = memo(() => {
   const handleDiscoverScrollSettled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
+      updateBackToTop(event);
       if (!isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - discoverLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
@@ -825,12 +880,13 @@ const ExploreScreen = memo(() => {
         Math.min(portfolioItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [discoverVisibleCount, portfolioItems.length, loadNextDiscoverPage, selectedFilter],
+    [discoverVisibleCount, portfolioItems.length, loadNextDiscoverPage, selectedFilter, updateBackToTop],
   );
 
   const handleFavouritesScrollSettled = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
+      updateBackToTop(event);
       if (favouritesVisibleCount >= favouriteItems.length || !isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - favouritesLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
@@ -839,8 +895,15 @@ const ExploreScreen = memo(() => {
         Math.min(favouriteItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [favouriteItems.length, favouritesVisibleCount],
+    [favouriteItems.length, favouritesVisibleCount, updateBackToTop],
   );
+
+  const handleBackToTop = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const grid = activeTab === 'discover' ? discoverGridRef : favouritesGridRef;
+    grid.current?.scrollToTop(true);
+    setBackToTopActive(false);
+  }, [activeTab]);
 
   const handleViewProfile = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any) => {
@@ -1039,6 +1102,13 @@ const ExploreScreen = memo(() => {
                 onMomentumScrollEnd={handleDiscoverScrollSettled}
                 refreshing={portfolioRefreshing}
                 onRefresh={handleRefreshDiscover}
+                ListFooterComponent={
+                  discoverHasMore && !discoverMoreFailed ? (
+                    <View style={styles.loadMoreFooter}>
+                      <ActivityIndicator color={P.accent} />
+                    </View>
+                  ) : null
+                }
                 ListHeaderComponent={
                   <View style={styles.gridHeader}>
                     {/* Total only — never the pages loaded so far. A blank line
@@ -1091,6 +1161,7 @@ const ExploreScreen = memo(() => {
             <SkeletonMasonryGrid />
           ) : (
             <MasonryGrid
+              ref={favouritesGridRef}
               data={visibleFavouriteItems}
               renderItem={renderPortfolioCard}
               getItemHeight={getItemHeight}
@@ -1118,6 +1189,30 @@ const ExploreScreen = memo(() => {
           )
         )}
       </SafeAreaView>
+
+      {/* Back to top */}
+      <Animated.View
+        pointerEvents={backToTopActive ? 'box-none' : 'none'}
+        style={[
+          styles.backToTopWrap,
+          {
+            bottom: FLOATING_TAB_BAR_CLEARANCE,
+            opacity: backToTopOpacity,
+            transform: [{ translateY: backToTopTranslateY }],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Back to top"
+          style={[styles.backToTopButton, { backgroundColor: P.card, borderColor: P.sep }]}
+          onPress={handleBackToTop}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <Ionicons name="arrow-up" size={18} color={P.text} />
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Modals */}
       <ImageDetailModal
@@ -1224,6 +1319,27 @@ const styles = StyleSheet.create({
   },
 
   // Empty state
+  loadMoreFooter: {
+    paddingTop: spacing.md,
+    alignItems: 'center',
+  },
+  backToTopWrap: {
+    position: 'absolute',
+    right: spacing.lg,
+  },
+  backToTopButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',

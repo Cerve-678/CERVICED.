@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-03 (bookings keep their cancellation window)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103040000 | `bookings_keep_their_cancel_window` | **APPLIED 2026-11-03** by the user (`supabase db query --linked -f`), version recorded by the file. Verified live: all 167 bookings filled (24h each, none null), the three disabled triggers back to `O`, both new triggers present, all four functions read the booking's window, and no booking's `updated_at` moved. `apply-cancellation-refund` redeployed after it (v13). Written by session cerviced-e1 on `fix/policies-notice-sets-cancel-window` (#274) Frontier re-checked 2026-11-03 via the CLI: live max `20261103030000`. All four guarded function bodies matched live then (the expiry function rebuilt from live text). Adds `bookings.cancel_notice_hours` plus insert/keep triggers, and fills existing rows with the three any-update booking triggers disabled for the fill only. Records its own version. **Order:** apply, then deploy `apply-cancellation-refund`, then merge the app. |
+
 ### Applied 2026-11-03 (price bands, 24-hour requests, close schedule reason and auto close)
 
 | Authored version | Name | Status |

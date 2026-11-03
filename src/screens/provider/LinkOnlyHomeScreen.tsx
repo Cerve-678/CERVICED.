@@ -9,7 +9,9 @@
  *    publishes them on (logo, About, opening hours, a portfolio photo)
  *  - once live, tiles: Book taps this week (→ Analytics), new enquiries
  *    (→ Messages), saves (+ new this week), profile views and "Said they
- *    booked" (clients who answered Yes to "Did you book?"); and one fact
+ *    booked" (clients who answered Yes to "Did you book?"); join nudges
+ *    (clients who tapped Nudge on their profile) over the last 90 days,
+ *    always shown, even at 0, so they know clients can ask; and one fact
  *    from their own numbers from Becca
  *  - their whole week, one line per day, from the phone's calendar (DiaryCard)
  *  - once live, Profile strength: the next missing thing, the rest on a tap
@@ -51,7 +53,7 @@ import {
   type LinkOnlyDashboardExtras,
   type ProviderEnquirySummary,
 } from '../../services/databaseService';
-import { lastSevenDaysOfBookTaps, type DayBar } from '../../features/providers/linkOnlyAnalytics';
+import { lastSevenDaysOfBookTaps, sumLinkOnlyStats, type DayBar } from '../../features/providers/linkOnlyAnalytics';
 import {
   buildProfileStrength,
   busiestBookTapLine,
@@ -292,6 +294,10 @@ export default function LinkOnlyHomeScreen() {
     }
   }, [profile?.external_booking_url, showToast]);
 
+  // statRows covers JOIN_NUDGE_WINDOW_DAYS, so this is the 90-day total.
+  const joinNudgeTotal = useMemo(() => sumLinkOnlyStats(statRows).joinNudges, [statRows]);
+  const joinNudgesThisWeek = week?.comparison.thisWeek.joinNudges ?? 0;
+
   const nudgeBarCount = useMemo(
     () => (nudgeBarDismissedYmd === undefined ? null : joinNudgeBarCount(statRows, nudgeBarDismissedYmd)),
     [statRows, nudgeBarDismissedYmd],
@@ -503,6 +509,32 @@ export default function LinkOnlyHomeScreen() {
                   sub="Clients who tapped Book"
                 />
               </View>
+
+              <TouchableOpacity
+                style={[styles.tile, styles.nudgeTile]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('FullCervicedFeatures'); }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`${week ? joinNudgeTotal : 0} nudges to join CERVICED in the last ${JOIN_NUDGE_WINDOW_DAYS} days. See what full CERVICED adds`}
+              >
+                <View style={styles.tileIcon}><Ionicons name="megaphone-outline" size={20} color={P.accent} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.eyebrow}>Nudges to join</Text>
+                  {weekFailed ? (
+                    <Text style={styles.tileSub}>Couldn't load your nudges.</Text>
+                  ) : week && joinNudgeTotal > 0 ? (
+                    <Text style={joinNudgesThisWeek > 0 ? styles.trend : styles.tileSub} numberOfLines={2}>
+                      {joinNudgesThisWeek > 0
+                        ? `+${joinNudgesThisWeek} this week · clients asking you to take bookings here`
+                        : `Clients asking you to take bookings here · last ${JOIN_NUDGE_WINDOW_DAYS} days`}
+                    </Text>
+                  ) : (
+                    <Text style={styles.tileSub} numberOfLines={2}>Clients can tap Nudge on your profile to ask you to take bookings here.</Text>
+                  )}
+                </View>
+                <Text style={[styles.tileNum, styles.nudgeNum]}>{week ? joinNudgeTotal : '–'}</Text>
+                <Ionicons name="chevron-forward" size={16} color={P.sub} />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -612,7 +644,7 @@ export default function LinkOnlyHomeScreen() {
                 <View style={styles.tileIcon}><Ionicons name="calendar-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
                   <Text style={styles.cardTitle}>Become a full member</Text>
-                  <Text style={styles.stepHint}>Take bookings and payments right here instead of on your own link.</Text>
+                  <Text style={styles.stepHint}>Keep the full price of every booking, and let CERVICED fill your diary.</Text>
                 </View>
               </View>
               <View style={styles.offerLine}>
@@ -806,6 +838,8 @@ const createStyles = (P: HomePalette) =>
     tileRow: { flexDirection: 'row', gap: 8 },
     tile: { flex: 1, backgroundColor: P.card, borderRadius: 20, borderWidth: 1, borderColor: P.border, padding: 14, gap: 3 },
     wideTile: { flexDirection: 'row', alignItems: 'flex-end', gap: 16, paddingHorizontal: 16 },
+    nudgeTile: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    nudgeNum: { marginTop: 0 },
     wideRight: { flex: 1, alignItems: 'flex-end', gap: 8 },
     wideNum: { fontFamily: 'BakbakOne-Regular', fontSize: 44, lineHeight: 50, color: P.text, marginTop: 2 },
     tileLoader: { marginVertical: 16, alignSelf: 'flex-start' },

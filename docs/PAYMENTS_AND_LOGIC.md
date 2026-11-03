@@ -381,9 +381,16 @@ Pay or PayPal.
   service price if they paid in full. Policies and bookings saved as "Full
   charge" now count as half, including bookings already made. Client Terms §13
   and the provider Terms say so.
-- **Cancellation window:** set by the provider (none, or 24, 48 or 72 hours
-  before the appointment). The policy at the time of booking is frozen onto
-  the booking.
+- **Cancellation window:** set by the provider (none, or 12, 24, 48 or 72
+  hours before the appointment), from Policies or Automations; both now set
+  the same window (`providers.cancellation_notice_hours`, from the next
+  build). Before that, Policies only changed the written policy and the
+  column's default of 24 hours applied. Each booking keeps the window in
+  force when it was made (`bookings.cancel_notice_hours`, set by a database
+  trigger and never changed after, a reschedule included), so a change
+  applies to new bookings only. Bookings older than that column were filled
+  with the window in force when it was added; a row without one falls back to
+  the provider's current window. Migration `20261103040000`, applied 3 November; `apply-cancellation-refund` v13 reads it.
 - **Rescheduling doesn't reset the window.** If the client *asks* to
   reschedule once the window has already started, and the move goes ahead,
   the booking is marked (`bookings.late_reschedule_from`). Cancelling it
