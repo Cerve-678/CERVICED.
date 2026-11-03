@@ -24,45 +24,63 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Feature = { icon: IconName; title: string; body: string };
 
-// Ordered by what other booking apps are least likely to have (user,
-// 2026-10-21): the client-knowledge and growth tools lead, the booking and
-// payment basics come last. In-app chat is NOT listed: link-only pros
-// already have Messages.
+// Leads with what a booking site can't do (product owner, 2026-11-03: "remove
+// basic things other apps offer"). Everything here only works because the
+// booking happens in CERVICED: the beauty profile is shared at booking, a
+// completed booking starts the client's Beauty Maintenance reminder, the
+// waitlist and Available this week read the real diary. In-app chat and
+// Becca are NOT listed: link-only pros already have both.
 const SECTIONS: { title: string; features: Feature[] }[] = [
   {
-    title: 'Know every client',
+    title: 'Know them before they sit down',
     features: [
-      { icon: 'sparkles-outline', title: 'Client beauty profiles', body: 'Before each appointment, see the client\'s hair, skin and preferences for that treatment, with allergies and medical notes flagged.' },
-      { icon: 'document-text-outline', title: 'Info packs and consultation forms', body: 'Send prep and aftercare info with each booking, and get consultation answers back before the client arrives.' },
-      { icon: 'albums-outline', title: 'Your client list', body: 'Every client\'s bookings, history and notes in one place.' },
+      { icon: 'sparkles-outline', title: 'Client beauty profiles', body: 'Before every appointment, see the client\'s hair, skin and what they like for that treatment, with allergies and medical notes flagged.' },
     ],
   },
   {
-    title: 'Grow your business',
+    title: 'Clients come back on their own',
     features: [
-      { icon: 'megaphone-outline', title: 'Announcements', body: 'Message all your clients, or just the ones you pick, straight away or scheduled for later.' },
-      { icon: 'gift-outline', title: 'Promotions and promo codes', body: 'Run offers and give clients codes to use at checkout.' },
-      { icon: 'calendar-number-outline', title: 'Release-day alerts', body: 'Pick a day each month and clients who follow you get a reminder to book.' },
-      { icon: 'stats-chart-outline', title: 'Full analytics', body: 'Your bookings and earnings over time, not just profile views and Book taps.' },
+      { icon: 'refresh-outline', title: 'Beauty Maintenance', body: 'After each appointment with you, CERVICED keeps track of when the client is due again and reminds them, with a Rebook button that comes straight back to you.' },
+      { icon: 'people-outline', title: 'A waitlist that fills your gaps', body: 'Turn your waitlist on and when someone cancels, the slot goes to it first, without you lifting a finger.' },
+      { icon: 'calendar-number-outline', title: 'Release-day alerts', body: 'Pick a day each month and everyone who follows you gets a reminder to book.' },
     ],
   },
   {
-    title: 'Runs itself',
+    title: 'Get found by more clients',
     features: [
-      { icon: 'notifications-outline', title: 'Reminders and check-ins', body: 'Appointment reminders, review requests, aftercare check-ins and birthday greetings go out for you.' },
-      { icon: 'sunny-outline', title: 'Daily booking recap', body: 'Start each morning with a summary of your day.' },
-      { icon: 'checkmark-done-outline', title: 'Auto-confirm and waitlist', body: 'Confirm bookings automatically, and when you\'re full, offer freed-up slots to your waitlist without lifting a finger.' },
+      { icon: 'search-outline', title: 'Every Search filter', body: 'Show up when clients filter by price, availability, rating or hair type. Right now you only appear by category, speciality, area and accessibility.' },
+      { icon: 'flash-outline', title: 'Available this week', body: 'When you have space, you can appear on clients\' Home in Available this week.' },
+      { icon: 'layers-outline', title: 'Booked alongside other pros', body: 'Clients can book you and another pro, like hair then nails, in one checkout.' },
     ],
   },
   {
-    title: 'Bookings and payments',
+    title: 'Celebrate the wins',
     features: [
-      { icon: 'calendar-outline', title: 'Clients book in the app', body: 'Your diary, requests and confirmations in one place, with reschedules and cancellations handled under your own policy.' },
-      { icon: 'card-outline', title: 'Card, Apple Pay, Google Pay and PayPal', body: 'Paid out to your bank through Stripe, on the timing you choose. Take deposits, late and no-show fees, and tips.' },
-      { icon: 'star-outline', title: 'Price list, ratings and reviews', body: 'Clients see your prices and reviews before they book.' },
-      { icon: 'search-outline', title: 'More of Search', body: 'Show up when clients filter by price, availability, rating or hair type. Right now you only appear by category, speciality, area and accessibility.' },
+      { icon: 'ribbon-outline', title: 'Your Fully Booked certificate', body: 'Fill a whole month and CERVICED celebrates it with you, plus milestones for bookings, five-star reviews, tips and returning clients.' },
     ],
   },
+];
+
+// The basics every booking app has. Still true for full members, but not
+// why anyone switches, so they sit in one quiet line at the end.
+const OF_COURSE = [
+  'Bookings in the app',
+  'Your diary',
+  'Card, Apple Pay, Google Pay and PayPal',
+  'Payouts through Stripe',
+  'Deposits',
+  'Late and no-show fees',
+  'Tips',
+  'Reminders',
+  'Price list',
+  'Reviews',
+  'Promo codes',
+  'Announcements',
+  'Consultation forms',
+  'Info packs',
+  'Client list',
+  'Auto-confirm',
+  'Full analytics',
 ];
 
 export default function FullCervicedFeaturesScreen() {
@@ -89,9 +107,9 @@ export default function FullCervicedFeaturesScreen() {
           <Text style={styles.backArrow}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>What full CERVICED adds</Text>
+        <Text style={styles.title}>What your booking site can't do</Text>
         <Text style={styles.subtitle}>
-          Right now clients find you here and book on your own page. Providers who take bookings through CERVICED also get all of this.
+          Take your bookings through CERVICED and you get all of this, on top of everything you have now.
         </Text>
 
         {SECTIONS.map(section => (
@@ -112,6 +130,17 @@ export default function FullCervicedFeaturesScreen() {
             </View>
           </View>
         ))}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>AND OF COURSE</Text>
+          <View style={styles.chips}>
+            {OF_COURSE.map(item => (
+              <View key={item} style={styles.chip}>
+                <Text style={styles.chipText}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         <TouchableOpacity
           style={styles.primary}
@@ -146,6 +175,9 @@ const createStyles = (P: Palette) =>
     icon: { width: 34, height: 34, borderRadius: 17, backgroundColor: P.accentDim, alignItems: 'center', justifyContent: 'center' },
     rowTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700', color: P.text },
     rowBody: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, color: P.sub, marginTop: 2 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    chip: { borderRadius: 100, borderWidth: 1, borderColor: P.border, backgroundColor: P.card, paddingHorizontal: 12, paddingVertical: 6 },
+    chipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub },
     primary: { height: 52, borderRadius: 100, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     primaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 16, color: P.onAccent },
     footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17, color: P.sub, textAlign: 'center', marginTop: 10, paddingHorizontal: 12 },
