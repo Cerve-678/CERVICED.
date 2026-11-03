@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { FONT_COLLECTIONS, PROVIDER_FONTS, type FontCollectionKey } from '../constants/providerFonts';
+import { FONT_COLLECTIONS, PROVIDER_FONTS } from '../constants/providerFonts';
 
 interface ProviderFontPickerProps {
   value: string;
@@ -12,9 +12,9 @@ interface ProviderFontPickerProps {
   subColor: string;
   borderColor: string;
   cardColor: string;
-  /** Only these collections can be picked; the rest show locked and call
+  /** Only these fonts (by key) can be picked; the rest show locked and call
    *  onLockedPress instead. Leave out for every font. */
-  unlockedCollections?: readonly FontCollectionKey[] | undefined;
+  unlockedFonts?: readonly string[] | undefined;
   onLockedPress?: () => void;
 }
 
@@ -30,28 +30,36 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
   subColor,
   borderColor,
   cardColor,
-  unlockedCollections,
+  unlockedFonts,
   onLockedPress,
 }) => {
-  const isUnlocked = (key: FontCollectionKey) => !unlockedCollections || unlockedCollections.includes(key);
-  // What they can pick comes first, so it isn't below every locked rail.
-  const collections = [...FONT_COLLECTIONS].sort((a, b) => Number(isUnlocked(b.key)) - Number(isUnlocked(a.key)));
+  const isUnlocked = (key: string) => !unlockedFonts || unlockedFonts.includes(key);
+  // What they can pick comes first, both the rail and its place in the rail,
+  // so it isn't behind every locked font.
+  const unlockedFirst = (a: string, b: string) => Number(isUnlocked(b)) - Number(isUnlocked(a));
+  const collections = FONT_COLLECTIONS
+    .map(collection => ({
+      ...collection,
+      fonts: PROVIDER_FONTS.filter(f => f.collection === collection.key).sort((a, b) => unlockedFirst(a.key, b.key)),
+    }))
+    .filter(collection => collection.fonts.length > 0)
+    .sort((a, b) => unlockedFirst(a.fonts[0]!.key, b.fonts[0]!.key));
   return (
     <View>
       {collections.map(collection => {
-        const fonts = PROVIDER_FONTS.filter(f => f.collection === collection.key);
-        if (fonts.length === 0) return null;
-        const locked = !isUnlocked(collection.key);
+        const { fonts } = collection;
+        const allLocked = !fonts.some(f => isUnlocked(f.key));
         return (
           <View key={collection.key} style={styles.collection}>
             <View style={styles.collectionHead}>
-              {locked && <Ionicons name="lock-closed" size={10} color={subColor} />}
+              {allLocked && <Ionicons name="lock-closed" size={10} color={subColor} />}
               <Text style={[styles.collectionName, { color: textColor }]}>{collection.name.toUpperCase()}</Text>
               <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>{collection.description}</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
               {fonts.map(font => {
                 const isSelected = value === font.key;
+                const locked = !isUnlocked(font.key);
                 return (
                   <TouchableOpacity
                     key={font.key}

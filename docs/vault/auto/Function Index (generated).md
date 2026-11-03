@@ -5,7 +5,7 @@
 
 #generated
 
-**3042 functions** across **417 files**.
+**3043 functions** across **417 files**.
 
 ### `src/components/` (55)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -43,7 +43,7 @@
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
-- `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker
+- `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel

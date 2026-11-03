@@ -35,7 +35,7 @@ import {
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
-import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONT_COLLECTIONS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
+import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -253,7 +253,7 @@ export default function BrandingScreen({ navigation }: any) {
   const showLocked = useCallback(() => {
     Alert.alert(
       'Part of the full CERVICED experience',
-      'Full members get every colour set, font and hero finish, and can make their own colours. You can use App, Blush, Grey and Charcoal, the Classics fonts and the Blend finish now.',
+      'Full members get every colour set, font and hero finish, and can make their own colours. You can use the App, Blush, Grey and Charcoal colours, the Classic, Chunky & Rounded, Smooth & Rounded and Bakbak fonts, and the Blend finish now.',
       [
         { text: 'Not now', style: 'cancel' },
         { text: 'See what full members get', onPress: () => navigation.navigate('FullCervicedFeatures') },
@@ -405,7 +405,7 @@ export default function BrandingScreen({ navigation }: any) {
               subColor={P.sub}
               borderColor={P.border}
               cardColor={P.surface}
-              unlockedCollections={limited ? LINK_ONLY_FONT_COLLECTIONS : undefined}
+              unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
               onLockedPress={showLocked}
             />
           </View>

@@ -20,9 +20,10 @@ export const FONT_COLLECTIONS: { key: FontCollectionKey; name: string; descripti
   { key: 'classics',  name: 'Classics',  description: 'The original CERVICED fonts' },
 ];
 
-/** The font collections a link-only provider can pick; the rest show locked.
- *  See LINK_ONLY_THEMES in providerThemes.ts. */
-export const LINK_ONLY_FONT_COLLECTIONS: readonly FontCollectionKey[] = ['classics'];
+/** The fonts a link-only provider can pick: Classic, Chunky & Rounded,
+ *  Smooth & Rounded and Bakbak (owner's call, 2026-11-03). The rest show
+ *  locked. See LINK_ONLY_THEMES in providerThemes.ts. */
+export const LINK_ONLY_FONTS: readonly string[] = ['default', 'baloo-2', 'varela-round', 'bakbak'];
 
 export interface ProviderFontOption {
   key: string;
