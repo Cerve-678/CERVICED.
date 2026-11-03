@@ -35,6 +35,7 @@ import { getCurrentRefreshToken, getProviderDisplayNameByUserId, getUnreadNotifi
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 import { dobToParts } from '../../utils/dateUtils';
+import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
 
 // ─── Brand palette (unchanged — provider hat's real theme.ts values) ─────────
 const LIGHT = {
@@ -147,16 +148,8 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { isDarkMode, toggleTheme } = useTheme();
   const { t } = useTranslation();
 
-  const showAchievementsLocked = useCallback(() => {
-    Alert.alert(
-      t('providerAccount.linkOnly.achievements.lockedTitle'),
-      t('providerAccount.linkOnly.achievements.lockedBody'),
-      [
-        { text: t('providerAccount.linkOnly.achievements.notNow'), style: 'cancel' },
-        { text: t('providerAccount.linkOnly.achievements.seeMore'), onPress: () => navigation.navigate('FullCervicedFeatures') },
-      ],
-    );
-  }, [t, navigation]);
+  const [achievementsLockedOpen, setAchievementsLockedOpen] = useState(false);
+  const showAchievementsLocked = useCallback(() => setAchievementsLockedOpen(true), []);
 
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
@@ -635,6 +628,13 @@ export default function ProviderAccountScreen({ navigation }: any) {
         </BlurView>
       </Modal>
 
+      <FullCervicedLockedSheet
+        visible={achievementsLockedOpen}
+        title={t('providerAccount.linkOnly.achievements.lockedTitle')}
+        note={t('providerAccount.linkOnly.achievements.lockedBody')}
+        onClose={() => setAchievementsLockedOpen(false)}
+        onSeeMore={() => navigation.navigate('FullCervicedFeatures')}
+      />
     </View>
   );
 }
