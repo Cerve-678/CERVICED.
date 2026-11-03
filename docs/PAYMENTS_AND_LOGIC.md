@@ -266,9 +266,11 @@ never paid is marked `abandoned` once its hold is over, and nothing is sent. The
 notices come from the database, so they reach the client whichever of the three
 finished it.
 
-*Not live yet: migration `20261102210000` is written, not applied, and
-`reconcile-checkouts`, `finalize-payment-intent` and `stripe-webhook` need
-deploying.*
+*Partly live: migration `20261102210000` was applied on 3 November, so "Payment
+received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
+`stripe-webhook` still need deploying, and until then the "didn't go through" and
+"refunded" notices don't send and the 5-minute job has nothing to call. The
+"Confirming your payment…" screen needs a new app build.*
 
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
@@ -369,8 +371,8 @@ Pay or PayPal.
   this, `previewProviderRefund`; older builds still send it as partial.)
 - **The client is told about every refund** (`payment_refunded`, trigger
   `after_refund_notify_client` on `booking_refunds`), unless a late-cancel
-  notice or a refund-request update already gave them the amount. *Not live
-  yet: migration `20261102200000` is written, not applied.*
+  notice or a refund-request update already gave them the amount. *Live since
+  3 November (migration `20261102200000`).*
 - A client is never charged more than they originally paid.
 - **The most a provider can keep on a late cancellation** depends on what was
   paid in the app: the whole deposit if the client paid a deposit, half the
@@ -871,7 +873,7 @@ so Stripe retries.
 | `payment_success` | Client | Payment taken. On Stripe checkouts, from the trigger on `checkout_batches` |
 | `payment_not_completed` | Client | The card was approved but the checkout didn't book: cancelled before it was taken, or refunded |
 | `cancellation_settled` | Both | A late cancellation kept money |
-| `payment_refunded` | Client | Any refund on a booking, whoever made it, unless `cancellation_settled` or `refund_request_updated` already gave the amount. **Not live yet:** migration `20261102200000` is written, not applied |
+| `payment_refunded` | Client | Any refund on a booking, whoever made it, unless `cancellation_settled` or `refund_request_updated` already gave the amount (live since 3 November, migration `20261102200000`) |
 | `refund_requested` / `refund_request_updated` | Provider / both | A refund request was opened, or has a day left (provider) / moved on, including to CERVICED after 3 days with no reply (both) |
 | `fee_charged`, `fee_disputed`, `fee_dispute_resolved` | Client / provider | The late/no-show fee lifecycle |
 | `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed` | Client / provider | The card couldn't pay a fee |
