@@ -42,7 +42,7 @@ test('every profile surface passes the link-only flag', () => {
   expect(read('screens', 'client', 'ProviderProfileScreen.tsx')).toContain('{ linkOnly: isLinkOnly }');
   expect(read('features', 'providers', 'profilePresentation.ts')).toContain('{ linkOnly: provider.isLinkOnly }');
   expect(read('screens', 'provider', 'LinkOnlyHomeScreen.tsx')).toContain('{ linkOnly: true }');
-  expect(read('screens', 'provider', 'ProviderMyProfileScreen.tsx')).toContain("{ linkOnly: myBookingMode === 'external' }");
+  expect(read('screens', 'provider', 'ProviderMyProfileScreen.tsx')).toContain("{ linkOnly: myBookingMode === 'external', showNoDeposit: true }");
 });
 
 test('a link-only save clears what CERVICED would apply or charge', () => {

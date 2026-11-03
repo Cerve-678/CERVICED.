@@ -55,7 +55,6 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
       minAge: service.min_age,
       contraindications: service.contraindications ?? [],
       aftercareNotes: service.aftercare_notes ?? '',
-      skinTonesSuitable: service.skin_tones_suitable ?? [],
       serviceType: service.service_type ?? null,
     };
 

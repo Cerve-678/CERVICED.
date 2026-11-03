@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
     // the frozen policy snapshot and the stored money figures.
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, base_price, booking_date, booking_time, late_reschedule_from, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
+      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, base_price, booking_date, booking_time, late_reschedule_from, cancel_notice_hours, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -134,7 +134,11 @@ Deno.serve(async (req: Request) => {
     const livePolicies = (provider?.booking_policies ?? null) as Record<string, unknown> | null;
     const policy = snapshot?.['cancelPenalty'] != null ? snapshot : livePolicies;
     const penalty = readCancelPenalty(policy?.['cancelPenalty']);
-    const hours = noticeHours(provider?.cancellation_notice_hours, livePolicies);
+    // The window the booking was made under; bookings from before it was
+    // stored fall back to the provider's current one.
+    const hours = booking.cancel_notice_hours != null
+      ? Number(booking.cancel_notice_hours)
+      : noticeHours(provider?.cancellation_notice_hours, livePolicies);
 
     // booking_date/time are UK wall-clock; read as UTC they'd be an hour late
     // in summer, handing a late canceller an extra hour of notice.

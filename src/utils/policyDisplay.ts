@@ -144,11 +144,15 @@ function pushRow(rows: PolicyDisplayRow[], row: PolicyDisplayRow | null): void {
  * penalty, no-show or fee rows, and their own notice rather than the
  * enforced column (which defaults to 24 for every provider). Rows for values
  * stored before they switched to link-only stay hidden too.
+ *
+ * `showNoDeposit`: for the provider reading their own policy. A client's view
+ * leaves the row out when there's no deposit, but the provider's own summary
+ * has to say so, or "no deposit" and "not shown" look the same.
  */
 export function buildPolicyDisplayRows(
   policy: PolicyDisplayData | null | undefined,
   enforcedCancellationNoticeHours?: number,
-  options?: { linkOnly?: boolean },
+  options?: { linkOnly?: boolean; showNoDeposit?: boolean },
 ): PolicyDisplayRow[] {
   const rows: PolicyDisplayRow[] = [];
   if (!policy) return rows;
@@ -167,6 +171,8 @@ export function buildPolicyDisplayRows(
       label: 'Deposit',
       value: `${depositMode === 'deposit_required' ? `${amount} required` : `${amount} (optional)`}${policy.depositNonRefundable ? ', non-refundable' : ''}`,
     });
+  } else if (options?.showNoDeposit) {
+    rows.push({ icon: 'card-outline', label: 'Deposit', value: 'No deposit' });
   }
 
   const customCancelFee = feeLabel(policy.cancelCustomFee);
@@ -248,6 +254,32 @@ function feeLabel(value: string | undefined): string | null {
   if (!value || !/^\d+(\.\d{1,2})?$/.test(value) || Number(value) <= 0) return null;
   const n = Number(value);
   return `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
+}
+
+export type NoticeChoice = 'none' | '12h' | '24h' | '48h' | '72h';
+
+const NOTICE_CHOICE_HOURS: Record<NoticeChoice, number> = { none: 0, '12h': 12, '24h': 24, '48h': 48, '72h': 72 };
+
+/** The cancellation notice choice for an enforced window, shared by Policies
+ *  and Automations so the two screens offer the same five options. 0 maps to
+ *  'none' only when asked: a 0 column otherwise defers to the saved choice. */
+export function noticeChoiceForHours(
+  columnHours: number | null | undefined,
+  options?: { zeroIsNone?: boolean },
+): NoticeChoice | null {
+  if (columnHours === 0 && options?.zeroIsNone) return 'none';
+  const match = (Object.keys(NOTICE_CHOICE_HOURS) as NoticeChoice[])
+    .find(choice => choice !== 'none' && NOTICE_CHOICE_HOURS[choice] === columnHours);
+  return match ?? null;
+}
+
+/** What a save writes to providers.cancellation_notice_hours, or null to leave
+ *  it alone. That column is the window actually applied: it outranks the
+ *  written choice everywhere and defaults to 24. Only an actual change writes,
+ *  so saving some other field never overwrites the other screen's pick. */
+export function noticeHoursToSave(picked: string, loaded: string): number | null {
+  if (picked === loaded) return null;
+  return picked in NOTICE_CHOICE_HOURS ? NOTICE_CHOICE_HOURS[picked as NoticeChoice] : null;
 }
 
 /**

@@ -51,7 +51,8 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import TermsScreen from '../shared/TermsScreen';
-import { getMyProviderProfile } from '../../services/databaseService';
+import { getMyProviderProfile, updateProviderCancellationPolicy } from '../../services/databaseService';
+import { noticeChoiceForHours, noticeHoursToSave, type NoticeChoice } from '../../utils/policyDisplay';
 import { toUserMessage } from '../../utils/userFacingError';
 import {
   saveProviderPolicies,
@@ -69,7 +70,7 @@ import {
   toggleBookingInstruction,
 } from '../../features/business-details/bookingInstructions';
 
-type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
+type CancelNotice     = '' | NoticeChoice;
 // 'half' is no longer offered, but policies saved before 'custom' still say it.
 type CancelPenalty    = '' | 'none' | 'deposit' | 'half' | 'custom';
 type RescheduleNotice = '' | 'same_day' | '24h' | '48h' | '72h';
@@ -222,6 +223,8 @@ export default function PoliciesScreen({ navigation }: any) {
   // DEFAULT_POLICIES and an empty carriedPolicies — saving that would wipe the
   // deposit keys PaymentsScreen owns along with this screen's own settings.
   const [loadFailed, setLoadFailed] = useState(false);
+  const [providerId, setProviderId] = useState<string | null>(null);
+  const [loadedNotice, setLoadedNotice] = useState('');
 
   function flash(message: string, type: 'success' | 'error') {
     setToast({ message, type });
@@ -234,6 +237,7 @@ export default function PoliciesScreen({ navigation }: any) {
         const profile = await getMyProviderProfile();
         if (!profile?.user_id) { setLoadFailed(true); setLoading(false); return; }
         setUserId(profile.user_id);
+        setProviderId(profile.id);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
         // Saved before 'Full charge' became 'Half the price' (2026-11-01).
@@ -242,6 +246,12 @@ export default function PoliciesScreen({ navigation }: any) {
         // Saved before the fee became the 'custom' action. It's cleared on save
         // under any other action, so this keeps a fee from vanishing unasked.
         if (isCustomAmount(merged.noShowFee)) merged.noShowAction = 'custom';
+        // Start on the window actually applied, which Automations can also
+        // set. A link-only provider's notice is only their own text.
+        if (profile.booking_mode !== 'external') {
+          merged.cancelNotice = noticeChoiceForHours(profile.cancellation_notice_hours) ?? merged.cancelNotice;
+        }
+        setLoadedNotice(merged.cancelNotice);
         setPolicies(merged);
         const carried = Object.fromEntries(
           Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES)),
@@ -329,6 +339,12 @@ export default function PoliciesScreen({ navigation }: any) {
         noShowFee: policies.noShowAction === 'custom' ? policies.noShowFee : '',
         ...(isLinkOnly ? LINK_ONLY_CLEARED : {}),
       } as unknown as Record<string, unknown>);
+      // The window cancellations are actually judged by. After the text, so a
+      // failed save never applies a notice the written policy doesn't state.
+      const noticeHours = isLinkOnly ? null : noticeHoursToSave(policies.cancelNotice, loadedNotice);
+      if (providerId && noticeHours !== null) {
+        await updateProviderCancellationPolicy(providerId, noticeHours);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
@@ -337,7 +353,7 @@ export default function PoliciesScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [userId, policies, carriedPolicies, loadFailed, navigation, isLinkOnly]);
+  }, [userId, providerId, policies, loadedNotice, carriedPolicies, loadFailed, navigation, isLinkOnly]);
 
   if (loading) {
     return (
@@ -389,10 +405,13 @@ export default function PoliciesScreen({ navigation }: any) {
             <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : 'How much notice a client must give to cancel, and what happens if they cancel later than that.'}>
               <SectionLabel text="Notice required" />
               <Pills
-                options={[{ v: 'none', l: 'None' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
+                options={[{ v: 'none', l: 'None' }, { v: '12h', l: '12h' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
                 value={policies.cancelNotice}
                 onChange={v => setPolicy('cancelNotice', v)}
               />
+              {!isLinkOnly && (
+                <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>A change applies to new bookings. Bookings already made keep the notice they were booked with.</Text>
+              )}
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
                 <Pills

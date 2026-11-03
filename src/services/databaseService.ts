@@ -825,6 +825,10 @@ export interface ProviderServiceFacets {
    *  extra options. A service name ("Knotless braids — medium") is fine to
    *  match against but reads as noise as a filter option. */
   specialityLabels: Map<string, Set<string>>;
+  /** Just the business specialities the provider chose
+   *  (`provider_specialties`), no service tags or names, in the order read.
+   *  What the Search card underlines under the provider's name. */
+  specialities: Map<string, string[]>;
 }
 
 /**
@@ -850,8 +854,9 @@ export async function getProviderServiceFacets(
   const services = new Map<string, FacetService[]>();
   const specialityText = new Map<string, Set<string>>();
   const specialityLabels = new Map<string, Set<string>>();
+  const specialities = new Map<string, string[]>();
   if (providerIds.length === 0) {
-    return { priceRanges, services, specialityText, specialityLabels };
+    return { priceRanges, services, specialityText, specialityLabels, specialities };
   }
 
   const addTo = (map: Map<string, Set<string>>, providerId: string, value: string) => {
@@ -939,10 +944,16 @@ export async function getProviderServiceFacets(
   }
 
   for (const row of specialtiesRes.data ?? []) {
-    addSpecialityLabel(row.provider_id as string, row.specialty as string | null);
+    const providerId = row.provider_id as string;
+    const specialty = (row.specialty as string | null)?.trim();
+    addSpecialityLabel(providerId, specialty);
+    if (!specialty) continue;
+    const own = specialities.get(providerId) ?? [];
+    if (!own.some(existing => existing.toLowerCase() === specialty.toLowerCase())) own.push(specialty);
+    specialities.set(providerId, own);
   }
 
-  return { priceRanges, services, specialityText, specialityLabels };
+  return { priceRanges, services, specialityText, specialityLabels, specialities };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -6912,10 +6923,28 @@ export interface ProviderBookingDetailMetadata {
   addressPolicy: ProviderAddressPolicy | null;
 }
 
-/** All provider policy fields needed by BookingDetailScreen in one row read. */
+/** The cancellation window a booking was made under
+ *  (bookings.cancel_notice_hours), or null for a booking from before it was
+ *  stored, which follows the provider's current window instead. */
+export async function getBookingCancelNoticeHours(bookingId: string): Promise<number | null> {
+  // A local, not-yet-saved booking has no row to read.
+  if (!isUuid(bookingId)) return null;
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("cancel_notice_hours")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error) throw error;
+  const hours = (data as { cancel_notice_hours: number | null } | null)?.cancel_notice_hours;
+  return typeof hours === "number" ? hours : null;
+}
+
+/** All provider policy fields needed by BookingDetailScreen in one row read.
+ *  With a bookingId, the cancellation window is that booking's own. */
 export async function getProviderBookingDetailMetadata(params: {
   providerId?: string;
   displayName: string;
+  bookingId?: string;
 }): Promise<ProviderBookingDetailMetadata> {
   let query = supabase
     .from("providers")
@@ -6926,11 +6955,14 @@ export async function getProviderBookingDetailMetadata(params: {
     ? query.eq("id", params.providerId)
     : query.eq("display_name", params.displayName);
 
-  const { data, error } = await query.maybeSingle();
+  const [{ data, error }, bookingNoticeHours] = await Promise.all([
+    query.maybeSingle(),
+    params.bookingId ? getBookingCancelNoticeHours(params.bookingId) : Promise.resolve(null),
+  ]);
   if (error) throw error;
   return {
     reschedulePolicy: mapReschedulePolicyRow(data),
-    cancellationNoticeHours: mapCancellationPolicyRow(data),
+    cancellationNoticeHours: bookingNoticeHours ?? mapCancellationPolicyRow(data),
     bookingPolicies:
       (data?.booking_policies as Record<string, unknown> | null) ?? null,
     addressPolicy: data
@@ -8474,10 +8506,7 @@ export async function getProviderDepositPoliciesByDisplayNames(
         depositOnly: mode === "deposit_required",
       };
     } else {
-      // No deposit policy saved at all. Left as the historical 20%-both-options
-      // default rather than silently switching live profiles to full-only —
-      // note that 20% is a figure the provider never set, so a provider who
-      // has never opened Payments is quoting a deposit they didn't choose.
+      // No deposit policy saved at all: no deposit offered.
       result[p.display_name] = { ...defaultPolicy };
     }
   }
@@ -11876,7 +11905,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     // for the notice window the settlement summary quotes.
     supabase
       .from('bookings')
-      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, late_reschedule_from, providers ( cancellation_notice_hours, booking_policies )')
+      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, late_reschedule_from, cancel_notice_hours, providers ( cancellation_notice_hours, booking_policies )')
       .eq('id', bookingId)
       .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
@@ -11932,7 +11961,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
           refundedToClientPence: settlementRow ? Number(settlementRow.amount_pence) : 0,
           providerKeptPence: retained ?? Number(settlementRow?.provider_kept_pence ?? 0),
           hoursBefore,
-          noticeHours: cancellationNoticeHours(providerRow?.cancellation_notice_hours, providerRow?.booking_policies),
+          noticeHours: b.cancel_notice_hours ?? cancellationNoticeHours(providerRow?.cancellation_notice_hours, providerRow?.booking_policies),
           keptIsDeposit: b.payment_type === 'deposit',
           movedLate: !!b.late_reschedule_from,
         }

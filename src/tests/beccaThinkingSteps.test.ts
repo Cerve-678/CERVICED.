@@ -61,6 +61,7 @@ describe("Finding someone who does a specific service", () => {
     services: new Map(),
     specialityText: new Map(Object.entries(menus).map(([id, names]) => [id, new Set(names)])),
     specialityLabels: new Map(),
+    specialities: new Map(),
   });
   const run = () =>
     getCapability("discover.find", "client")!.run({

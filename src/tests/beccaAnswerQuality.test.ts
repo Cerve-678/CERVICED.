@@ -37,6 +37,7 @@ jest.mock("../services/databaseService", () => {
       services: new Map(),
       specialityText: new Map(mockData.full ? [["p1", new Set(["Volume Lashes Full Set"])], ["p2", new Set(["Classic Set"])]] : []),
       specialityLabels: new Map(),
+      specialities: new Map(),
     })),
     getProviderPriceRanges: jest.fn(async () => (mockData.full ? ranges() : new Map())),
     getProviderBySlug: jest.fn(async () => (mockData.full
@@ -51,6 +52,7 @@ jest.mock("../services/databaseService", () => {
     ),
     getProviderIdByDisplayName: jest.fn(async () => "p1"),
     getRebookableService: on({ id: "s1", providerSlug: "lola-studio" }, null),
+    getBookingCancelNoticeHours: on(24, null),
     getProviderCancellationPolicy: on(24, 0),
     getProviderReschedulePolicyByDisplayName: on({ maxReschedules: 2, rescheduleNoticeHours: 48 }, { maxReschedules: null, rescheduleNoticeHours: 0 }),
     getInfoPacksByBooking: on([{ id: "i1", title: "Aftercare", content: "Keep them dry for 24 hours.", viewedAt: null }], []),
