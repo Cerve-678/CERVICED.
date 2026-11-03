@@ -16,6 +16,12 @@ describe('detailed policy image', () => {
     expect(picker).not.toContain('allowsEditing');
   });
 
+  it('offers a crop after picking, and uploads what comes back from it', () => {
+    expect(source).toContain('setPolicyImageToCrop(asset.uri)');
+    expect(source).toContain('onDone={handlePolicyImageCropped}');
+    expect(source).toContain("uploadToStorage('portfolio', path, uri)");
+  });
+
   it('previews the whole photo instead of cutting it to the tile', () => {
     expect(source).toMatch(/uri: policies\.policyImageUrl \}\}[^\n]*resizeMode="contain"/);
   });

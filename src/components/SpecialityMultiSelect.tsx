@@ -27,6 +27,9 @@ interface SpecialityMultiSelectProps {
   options: string[];
   palette: Palette;
   placeholder?: string;
+  /** Lists what's picked under the field, each with a remove button. On forms
+   *  the field's one truncated line isn't enough to see or undo a choice. */
+  showSelectedChips?: boolean;
 }
 
 /**
@@ -41,16 +44,19 @@ interface SpecialityMultiSelectProps {
  * providers, so a not-yet-curated speciality the client knows the name of
  * isn't a dead end. Selected options float to the top of the list.
  */
-export function SpecialityMultiSelect({ selected, onChange, options, palette: t, placeholder }: SpecialityMultiSelectProps) {
+export function SpecialityMultiSelect({ selected, onChange, options, palette: t, placeholder, showSelectedChips }: SpecialityMultiSelectProps) {
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
     const q = normalizeTerm(query);
+    // A typed term isn't in options, but has to stay here to be un-ticked.
+    const typedTerms = selected.filter(s => !options.includes(s));
+    const pool = [...typedTerms, ...options];
     const base = q
-      ? options.filter(o => normalizeTerm(o).includes(q) || matchesSpeciality([o], query))
-      : options;
+      ? pool.filter(o => normalizeTerm(o).includes(q) || matchesSpeciality([o], query))
+      : pool;
     // Selected first, otherwise keep the caller's order (curated before extras).
     return [...base].sort((a, b) => (selected.includes(b) ? 1 : 0) - (selected.includes(a) ? 1 : 0));
   }, [query, options, selected]);
@@ -112,6 +118,24 @@ export function SpecialityMultiSelect({ selected, onChange, options, palette: t,
         )}
         <Ionicons name="chevron-down" size={16} color={t.sub} />
       </TouchableOpacity>
+
+      {showSelectedChips && selected.length > 0 && (
+        <View style={styles.chips}>
+          {selected.map(entry => (
+            <TouchableOpacity
+              key={entry}
+              style={[styles.chip, { borderColor: t.accent }]}
+              onPress={() => toggle(entry)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${entry}`}
+            >
+              <Text style={[styles.chipText, { color: t.text }]} numberOfLines={1}>{entry}</Text>
+              <Ionicons name="close" size={14} color={t.sub} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
@@ -196,6 +220,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13, flex: 1,
   },
   fieldText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%',
+    borderWidth: 1, borderRadius: 100, paddingLeft: 12, paddingRight: 9, paddingVertical: 7,
+  },
+  chipText: { flexShrink: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600' },
   countPill: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
   countPillText: { fontFamily: 'BakbakOne-Regular', fontSize: 11 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
