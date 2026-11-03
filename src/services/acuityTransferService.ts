@@ -111,6 +111,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     termsAcceptedAt: null,
     languagesSpoken: [],
     priceRange: '',
+    priceBands: [],
     serviceLocations: [],
     preferredPaymentMethods: [],
     fullAddress: '',
