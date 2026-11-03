@@ -5,7 +5,7 @@
 
 #generated
 
-**3033 functions** across **417 files**.
+**3029 functions** across **417 files**.
 
 ### `src/components/` (55)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -211,8 +211,8 @@
 - `serviceBookingSummary.ts` — busiestFirst · **chartTicks** · **summariseServiceBookings**
 - `ServiceEditorSheet.tsx` — descriptionHint · findabilityProblem · handleSave · push · ServiceEditorSheet · suggestion · tagLabel · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
 - `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · optionsFor · readWords · sameWord · **suggestServiceDetails** · words
-- `todaySchedule.ts` — **buildTodaySchedule** · **clientName** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **paymentLine** · **pounds** · **serviceTotal** · todosFrom
-- `TodayScheduleCards.tsx` — addOnsLine · handleScrollEnd · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText · untilLine
+- `todaySchedule.ts` — **buildTodaySchedule** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **shortClientName** · todosFrom
+- `TodayScheduleCards.tsx` — handleScrollEnd · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
 - `useDescriptionTopics.ts` — **useDescriptionTopics**
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**

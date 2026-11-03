@@ -9,7 +9,7 @@
 // The other card sits under Your work. The booking cards always show the next
 // few bookings still to come, on any date (owner's call, 2026-11-01).
 // Designs: https://claude.ai/artifact/GAhSKrF5aDFEiNJsThtmMy
-import type { BookingStatus, BookingWithAddOns } from '../../types/database';
+import type { BookingStatus } from '../../types/database';
 
 /** From this hour the booking cards lead instead of the summary. */
 export const CARDS_LEAD_FROM_HOUR = 14;
@@ -106,46 +106,13 @@ export function minutesOfDay(time: string | null | undefined): number | null {
   return parseInt(match[1]!, 10) * 60 + parseInt(match[2]!, 10);
 }
 
-/** The client's name as it was booked, in full, as every other booking card
- *  shows it; no name at all reads as "Client". The cards used to cut it to
- *  "Amira K.", which left the provider guessing who was coming (owner,
- *  2026-11-03). */
-export function clientName(name: string | null | undefined): string {
-  return (name ?? '').trim().replace(/\s+/g, ' ') || 'Client';
-}
-
-/** "£45" or "£45.50". */
-export function pounds(value: number): string {
-  return Number.isInteger(value) ? `£${value}` : `£${value.toFixed(2)}`;
-}
-
-/** Service price plus add-ons: what the client booked, without CERVICED's
- *  platform fee, which is never the provider's. */
-export function serviceTotal(booking: Pick<ScheduleBooking, 'base_price' | 'add_ons_total'>): number {
-  return (Number(booking.base_price) || 0) + (Number(booking.add_ons_total) || 0);
-}
-
-/** What has been paid through the app, in the same terms as the booking card
- *  on Home. Null when nothing has been taken through the app: the app only
- *  speaks for its own payments, never for money handed over in person. */
-export function paymentLine(
-  booking: Pick<BookingWithAddOns, 'payment_status' | 'deposit_amount' | 'remaining_balance'>,
-): string | null {
-  switch (booking.payment_status) {
-    case 'fully_paid':
-      return 'Paid in full';
-    case 'deposit_paid': {
-      const deposit = `${pounds(Number(booking.deposit_amount) || 0)} deposit paid`;
-      const balance = Number(booking.remaining_balance) || 0;
-      return balance > 0 ? `${deposit} · ${pounds(balance)} balance due` : deposit;
-    }
-    case 'refunded':
-      return 'Refunded';
-    case 'partially_refunded':
-      return 'Partly refunded';
-    default:
-      return null;
-  }
+/** "Amira Khan" → "Amira K.", so a name fits on a small card. A single name
+ *  stays as it is; no name at all reads as "Client". */
+export function shortClientName(name: string | null | undefined): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'Client';
+  if (parts.length === 1) return parts[0]!;
+  return `${parts[0]} ${parts[parts.length - 1]!.charAt(0).toUpperCase()}.`;
 }
 
 function dayRows<B extends ScheduleBooking>(bookings: B[], ymd: string): B[] {
@@ -248,7 +215,10 @@ export function buildTodaySchedule<B extends ScheduleBooking>(input: {
     upcoming,
     leadIndex,
     doneCount,
-    bookedValue: today.reduce((sum, s) => sum + serviceTotal(s.booking), 0),
+    bookedValue: today.reduce(
+      (sum, s) => sum + (Number(s.booking.base_price) || 0) + (Number(s.booking.add_ons_total) || 0),
+      0,
+    ),
     todos: phase === 'dayDone' ? todosFrom(tomorrow) : todosFrom(today),
   };
 }
