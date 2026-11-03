@@ -1176,6 +1176,53 @@ const unclaimedStyles = StyleSheet.create({
 // The provider's theme isn't known yet, so it stays on the pale 'app' preset
 // even in dark mode: the page never follows the viewer's dark mode, and the
 // back button's tint already assumes this background.
+/** A service description clamped to two lines, with See more only when the
+ *  clamp actually cuts something off. A character count can't tell: the card
+ *  is narrow, and a line break ends a line however few letters are on it. */
+function ServiceDescription({
+  text,
+  expanded,
+  onToggle,
+  textColor,
+  linkColor,
+}: {
+  text: string;
+  expanded: boolean;
+  onToggle: () => void;
+  textColor: string;
+  linkColor: string;
+}) {
+  const [overflows, setOverflows] = useState(false);
+  return (
+    <View>
+      <Text
+        style={[styles.serviceDescription, { color: textColor }]}
+        numberOfLines={expanded ? undefined : 2}
+      >
+        {text}
+      </Text>
+      {/* Invisible, unclamped copy at the same width, only to count the
+          lines the whole description takes. */}
+      <Text
+        style={[styles.serviceDescription, styles.serviceDescriptionMeasure]}
+        onTextLayout={(e) => setOverflows(e.nativeEvent.lines.length > 2)}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+      >
+        {text}
+      </Text>
+      {(overflows || expanded) && (
+        <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
+          <Text style={[styles.seeMoreText, { color: linkColor }]}>
+            {expanded ? "See less" : "See more"}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 function ProviderProfileSkeleton() {
   const { height: screenHeight } = useWindowDimensions();
   const shimmer = useRef(new Animated.Value(0)).current;
@@ -3721,36 +3768,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         Available virtually
                       </Text>
                     )}
-                  <Text
-                    style={[styles.serviceDescription, { color: OP.sub }]}
-                    numberOfLines={
-                      expandedServices.has(service.id) ? undefined : 2
+                  <ServiceDescription
+                    text={service.description ?? ""}
+                    expanded={expandedServices.has(service.id)}
+                    onToggle={() =>
+                      setExpandedServices((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(service.id)) {
+                          next.delete(service.id);
+                        } else {
+                          next.add(service.id);
+                        }
+                        return next;
+                      })
                     }
-                  >
-                    {service.description}
-                  </Text>
-                  {(service.description?.length ?? 0) > 80 && (
-                    <TouchableOpacity
-                      onPress={() =>
-                        setExpandedServices((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(service.id)) {
-                            next.delete(service.id);
-                          } else {
-                            next.add(service.id);
-                          }
-                          return next;
-                        })
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.seeMoreText, { color: OP.text }]}>
-                        {expandedServices.has(service.id)
-                          ? "See less"
-                          : "See more"}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                    textColor={OP.sub}
+                    linkColor={OP.text}
+                  />
 
                   {/* Treatment Safety — plain text, no box/border — only shown
                     when the provider actually filled this in (real
@@ -3794,20 +3828,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           {service.contraindications!.join(", ")}
                         </Text>
                       )}
-                    </View>
-                  )}
-                  {(service.skinTonesSuitable?.length ?? 0) > 0 && (
-                    <View style={styles.serviceSafetyInline}>
-                      <Text
-                        style={[styles.serviceSafetyTitle, { color: OP.text }]}
-                      >
-                        Suitable Skin Tones
-                      </Text>
-                      <Text
-                        style={[styles.serviceSafetyLine, { color: OP.sub }]}
-                      >
-                        • {service.skinTonesSuitable!.join(", ")}
-                      </Text>
                     </View>
                   )}
                   <View style={styles.serviceDetails}>
@@ -6356,6 +6376,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 12,
     marginBottom: 4,
+  },
+  serviceDescriptionMeasure: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    opacity: 0,
   },
   seeMoreText: {
     fontFamily: "Jura-VariableFont_wght",

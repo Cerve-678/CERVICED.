@@ -22,8 +22,6 @@ export interface ProviderProfileService {
   minAge?: number | null;
   contraindications?: string[];
   aftercareNotes?: string;
-  /** Explicit provider selection. Empty or absent means not stated. */
-  skinTonesSuitable?: string[];
   serviceType?: string | null;
 }
 
