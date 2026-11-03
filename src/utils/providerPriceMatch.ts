@@ -18,6 +18,8 @@
 // Real service prices win. The tier is a fallback for a provider whose
 // services aren't priced yet, not the primary answer.
 
+import { rangeForBands } from '../constants/priceBands';
+
 export type PriceTier = 'budget' | 'mid' | 'premium' | 'luxury';
 export type PriceRange = { min: number; max: number };
 
@@ -43,8 +45,11 @@ const isPriceTier = (value: string): value is PriceTier =>
 export function resolveProviderPriceRange(
   priceRange: PriceRange | null | undefined,
   priceTier: string | null | undefined,
+  priceBands?: readonly string[] | null,
 ): PriceRange | null {
   if (priceRange) return priceRange;
+  const fromBands = rangeForBands(priceBands);
+  if (fromBands) return fromBands;
   if (priceTier && isPriceTier(priceTier)) return PRICE_TIER_RANGES[priceTier];
   return null;
 }

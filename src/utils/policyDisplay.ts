@@ -34,6 +34,8 @@ export interface PolicyDisplayData {
    *  enforce refunds automatically. Same free-text pattern as cancelNote. */
   refundPolicyNote?: string;
   /** Free text, like refundPolicyNote. Neither changes what can be booked or paid. */
+  /** Kept whenever the client cancels, even in good time (cancellationSettlement.ts). */
+  depositNonRefundable?: boolean;
   travelPolicy?: string;
   emergencyBookingPolicy?: string;
 }
@@ -163,7 +165,7 @@ export function buildPolicyDisplayRows(
     rows.push({
       icon: 'card-outline',
       label: 'Deposit',
-      value: depositMode === 'deposit_required' ? `${amount} required` : `${amount} (optional)`,
+      value: `${depositMode === 'deposit_required' ? `${amount} required` : `${amount} (optional)`}${policy.depositNonRefundable ? ', non-refundable' : ''}`,
     });
   }
 
@@ -228,6 +230,9 @@ function pushWrittenPolicies(rows: PolicyDisplayRow[], policy: PolicyDisplayData
 
 function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] {
   const rows: PolicyDisplayRow[] = [];
+  if (policy.depositNonRefundable) {
+    rows.push({ icon: 'card-outline', label: 'Deposit', value: 'Non-refundable deposit needed to secure a booking' });
+  }
   const cancelRule = policy.cancelNotice && policy.cancelNotice !== 'none' ? `${policy.cancelNotice} notice` : null;
   pushRow(rows, sectionRow('time-outline', 'Cancellation', [cancelRule, policy.cancelNote]));
   pushRow(rows, sectionRow('calendar-outline', 'Reschedule', [rescheduleSummary(policy), policy.rescheduleNote]));

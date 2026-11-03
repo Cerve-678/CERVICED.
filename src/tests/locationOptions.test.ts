@@ -51,3 +51,26 @@ it('puts names starting with the text before names containing it', () => {
 it('finds nothing for an empty search', () => {
   expect(searchPlaces('   ')).toEqual([]);
 });
+
+it('finds the newer Essex towns and counties around London', () => {
+  for (const town of ['Loughton', 'Billericay', 'Clacton-on-Sea', 'Epping', 'Chigwell']) {
+    expect(searchPlaces(town)[0]).toEqual({ kind: 'town', name: town });
+  }
+  for (const county of ['Berkshire', 'Buckinghamshire', 'Hampshire', 'Greater Manchester']) {
+    expect(searchPlaces(county)[0]).toEqual({ kind: 'county', name: county });
+  }
+});
+
+it('keeps two different places with the same name apart', () => {
+  // Loughton in Essex is a town; Loughton in Milton Keynes is one of its areas.
+  const loughtons = searchPlaces('Loughton');
+  expect(loughtons).toContainEqual({ kind: 'town', name: 'Loughton' });
+  expect(loughtons).toContainEqual({ kind: 'area', name: 'Loughton', town: 'Milton Keynes' });
+});
+
+it('never leaves a stray backslash in a place name', () => {
+  for (const { city, regions } of CITY_AREAS) {
+    expect(city).not.toContain('\\');
+    for (const { areas } of regions) for (const area of areas) expect(area).not.toContain('\\');
+  }
+});

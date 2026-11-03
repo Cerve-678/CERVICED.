@@ -50,6 +50,7 @@ import {
   getRefundRequestsForBooking,
 } from '../../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
+import { clientRequestNote } from '../../features/bookings/requestWindow';
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
@@ -488,6 +489,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const cancelPolicyStillApplies =
     isPastCancellationWindow || (!!booking?.lateRescheduleFrom && cancellationNoticeHrs > 0);
 
+  // From the frozen policy, the same field the refund itself reads.
+  const depositIsNonRefundable = booking?.policySnapshot?.['depositNonRefundable'] === true
+    && (booking?.paymentStatus === PaymentStatus.DEPOSIT_PAID || Number(booking?.depositAmount ?? 0) > 0);
+
   const handleCancelBooking = useCallback(async () => {
     if (!booking) return;
     setIsLoading(true);
@@ -859,6 +864,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
    * from the provider name, and if even that fails we say so instead of
    * pretending the message went through.
    */
+  // A request the provider hasn't accepted yet isn't a booking with them, so
+  // it opens the same general enquiries chat as Get In Touch on their profile.
   const openProviderChat = useCallback(async (b: ConfirmedBooking) => {
     let providerDbId = b.providerId;
     if (!providerDbId) {
@@ -875,6 +882,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       providerId: providerDbId,
       providerDbId,
       providerName: b.providerName,
+      promptMode: b.status === BookingStatus.PENDING ? 'enquiry' : 'conversation',
     });
   }, [navigation]);
 
@@ -989,8 +997,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <Ionicons name="time-outline" size={18} color="#FF9500" />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#FF9500' }}>Awaiting Confirmation</Text>
-                  <Text style={{ fontSize: 12, color: '#FF950099', marginTop: 2 }}>
-                    Your provider hasn't confirmed this booking yet. You'll be notified once it's confirmed.
+                  <Text style={{ fontSize: 12, color: C.sub, marginTop: 2, lineHeight: 17 }}>
+                    {clientRequestNote(booking.providerName)}
                   </Text>
                 </View>
               </View>
@@ -1340,7 +1348,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>Contact Provider</Text>
-                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openContactSheet(booking); }} style={[st.actionChip, { backgroundColor: C.accent, flexDirection: 'row', alignItems: 'center', gap: 5 }]} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); (booking.status === BookingStatus.PENDING ? void openProviderChat(booking) : void openContactSheet(booking)); }} style={[st.actionChip, { backgroundColor: C.accent, flexDirection: 'row', alignItems: 'center', gap: 5 }]} activeOpacity={0.7}>
                     <Ionicons name="chatbubble-ellipses-outline" size={14} color={C.onAccent} />
                     <Text style={{ color: C.onAccent, fontSize: 12, fontWeight: '600' }}>Contact</Text>
                   </TouchableOpacity>
@@ -1563,6 +1571,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       {isPastCancellationWindow
                         ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
                         : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
+                      {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it.` : ''}
                     </Text>
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
@@ -1578,6 +1587,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={[st.sheetTitle, { color: C.text }]}>Cancel Booking</Text>
                     <Text style={[st.sheetSub, { color: C.sub }]}>
                       Cancel "{booking.serviceName}"? This can't be undone.
+                      {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it. The rest, including the platform fee, comes back to you.` : ''}
                     </Text>
                     <View style={st.sheetBtns}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
@@ -1877,7 +1887,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                         setSupportKind(null);
                         // Let this sheet's fade finish before the contact sheet mounts.
-                        setTimeout(() => openContactSheet(booking), 260);
+                        setTimeout(() => (booking.status === BookingStatus.PENDING ? void openProviderChat(booking) : void openContactSheet(booking)), 260);
                       }}
                       activeOpacity={0.7}
                     >

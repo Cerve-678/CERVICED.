@@ -557,6 +557,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       providerId: providerDbId,
       providerDbId,
       providerName: booking.providerName,
+      // Not accepted yet: the same general enquiries chat as Get In Touch.
+      promptMode: booking.status === BookingStatus.PENDING ? 'enquiry' : 'conversation',
     });
   }, [navigation]);
 
@@ -1874,7 +1876,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             {isMessagingAvailable(booking.bookingDate) && (
                                               <TouchableOpacity
                                                 style={styles.messageButton}
-                                                onPress={() => openContactSheet(booking)}
+                                                onPress={() => (booking.status === BookingStatus.PENDING ? void openProviderChat(booking) : void openContactSheet(booking))}
                                               >
                                                 <Text style={styles.buttonText}>Contact</Text>
                                               </TouchableOpacity>
