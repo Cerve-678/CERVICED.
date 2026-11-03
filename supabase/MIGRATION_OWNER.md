@@ -56,6 +56,28 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-03 (price bands, 24-hour requests, close schedule reason and auto close)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103010000 | `provider_price_bands` | **APPLIED 2026-11-03** by the user (`supabase db query --linked -f`), written by session cerviced-bf (PR #258). Renumbered from 20261102210000, which `payment_outcomes_reach_the_client` took live first. Dry-run in a rolled-back transaction first. Verified live: `price_bands text[]` on `providers` and `users` with CHECKs, 7 providers backfilled from `price_tier`. Adds only. |
+| 20261103020000 | `booking_requests_expire_after_24_hours` | **APPLIED 2026-11-03**, same way (PR #259). md5 guard on `process_expire_stale_pending_bookings`. Verified live: the function now expires a request after 24 hours, not 48. No pending request was old enough to be cancelled by it. |
+| 20261103030000 | `close_schedule_reason_and_auto` | **APPLIED 2026-11-03**, same way (PR #262). md5 guards on `close_my_schedule`, `get_my_schedule_closure`, `process_provider_fully_booked_alerts`. Verified live: `reason`, `show_reason`, `auto_closed` on `provider_schedule_closures`; `close_my_schedule(date, text, boolean)` authenticated only; `get_provider_closure_reason` callable by anon; the fully-booked job not callable by authenticated and carries the auto close. 0 closures at apply time. |
+
+Frontier before applying: `20261103000000` (#268, applied by its own session). `20261103040000` (#274, cerviced-e1) is still unapplied and touches none of these.
+
+### Applied 2026-11-03 (request-confirmed notice reads like New Booking)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103050000 | `provider_request_confirmed_reads_like_new_booking` | **APPLIED 2026-11-03** by the user in the SQL editor; version recorded by the file. Verified live: version present, function has the New Booking wording, trigger enabled, not executable by anon or authenticated. Redefines `notify_provider_request_confirmed()` so the provider's notice matches the instant-booking one ("New Booking", high, one per booking). md5 guard on the live function as left by 20261103000000 (`3b5426975cf93433a0be7b25a7a9a47c`). A rolled-back trial on live passed 2026-11-03. |
+
+### Applied 2026-11-03 (provider told when a request is confirmed)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103000000 | `provider_told_request_confirmed` | **APPLIED 2026-11-03** by the user in the SQL editor, the file from PR #268; version recorded by the file. A rolled-back trial on live passed first. Verified live: version present; trigger `on_booking_request_confirmed_tell_provider` enabled on `bookings`; `notify_provider_request_confirmed` is SECURITY DEFINER and not executable by anon or authenticated. No constraint change: it reuses `booking_confirmed`. |
+
 ### Applied 2026-11-03 (payment outcomes reach the client)
 
 | Authored version | Name | Status |

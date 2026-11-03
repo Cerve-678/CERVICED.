@@ -17,6 +17,7 @@
  * Themed from the provider's own palette (passed in), like every other card on
  * that screen, rather than the app's light/dark tokens.
  */
+import { useDescriptionTopics } from './useDescriptionTopics';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -259,6 +260,8 @@ export default function ServiceEditorSheet({
     });
   }, [tags]);
 
+  const descriptionTopics = useDescriptionTopics(value.name, value.description);
+
   const descriptionHint = useMemo(() => {
     if (!value.description.trim()) return null;
     const problem = descriptionProblem(value.description, value.name);
@@ -386,23 +389,29 @@ export default function ServiceEditorSheet({
                 { color: palette.text, backgroundColor: palette.card, borderColor: palette.border },
               ]}
             />
-            {/* A template's wording, offered, never written in for them. */}
-            {!value.description.trim() && suggestion.description ? (
+            {/* Wording offered, never written in for them. */}
+            {!value.description.trim() && suggestion.descriptionIdeas.map(idea => (
               <TouchableOpacity
+                key={idea}
                 style={[styles.suggestRow, { borderColor: palette.border }]}
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
-                  setValue(v => ({ ...v, description: suggestion.description ?? '' }));
+                  setValue(v => ({ ...v, description: idea }));
                 }}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Use suggested description: ${suggestion.description}`}
+                accessibilityLabel={`Use suggested description: ${idea}`}
               >
                 <Ionicons name="sparkles-outline" size={14} color={palette.accent} />
                 <Text style={[styles.suggestText, { color: palette.text }]} numberOfLines={2}>
-                  Use: “{suggestion.description}”
+                  Use: “{idea}”
                 </Text>
               </TouchableOpacity>
+            ))}
+            {descriptionTopics.length > 0 ? (
+              <Text style={[styles.hint, { color: palette.sub }]}>
+                Others offering this often mention {descriptionTopics.join(', ')}.
+              </Text>
             ) : null}
             {descriptionHint ? (
               <Text style={[styles.hint, { color: palette.sub }]}>{descriptionHint}</Text>

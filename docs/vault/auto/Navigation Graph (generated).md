@@ -5,7 +5,7 @@
 
 #generated
 
-**161 edges** across **46 screens**. Node-graph version: [[Screen Flow (generated)]].
+**162 edges** across **47 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -84,6 +84,7 @@ graph LR
   NewPasswordScreen --> Login
   OffersScreen --> ProviderProfileScreen
   PaymentsScreen --> PoliciesScreen
+  PoliciesScreen --> PaymentsScreen
   ProviderAccountScreen --> AboutScreen
   ProviderAccountScreen --> AdminMoneyScreen
   ProviderAccountScreen --> BrandingScreen
@@ -209,6 +210,7 @@ graph LR
 - `provider/LinkOnlyHomeScreen` → `BeccaStack`, `LinkOnlyMessages`, `LinkOnlyPortfolio`, `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/FullCervicedFeaturesScreen`, `provider/InfoRegScreen`, `provider/LinkOnlyAnalyticsScreen`, `provider/PoliciesScreen`, `provider/ProviderScheduleScreen`, `shared/NotificationsScreen`
 - `provider/LinkOnlyPortfolioScreen` → `client/ProviderProfileScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
+- `provider/PoliciesScreen` → `provider/PaymentsScreen`
 - `provider/ProviderAccountScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/BusinessProfileScreen`, `provider/FullCervicedFeaturesScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAchievementsScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderNotificationSettingsScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/AdminMoneyScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/LanguageRegionScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `shared/TextSizingScreen`, `SignUpStep3`
 - `provider/ProviderAnalyticsScreen` → `provider/PaymentsScreen`, `provider/ProviderBookingDetailScreen`
 - `provider/ProviderBookingDetailScreen` → `provider/ProviderConversationScreen`, `provider/ProviderIntakeFormScreen`

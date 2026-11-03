@@ -14,6 +14,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -24,13 +25,16 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useFocusEffect } from '@react-navigation/native';
 import {
   closeMySchedule,
+  getMyProviderProfile,
   getMyScheduleClosure,
   getProviderBookings,
+  mergeProviderAutomationSettings,
   reopenMySchedule,
 } from '../../services/databaseService';
 import type { MyScheduleClosure } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
 import { isDarkColor } from '../../constants/providerThemes';
+import { canAutoCloseWhenFull, closureReasonForClient, CLOSURE_REASONS, type ClosureReason } from './scheduleClosure';
 import {
   dateToYMD,
   formatLongDateNoYear,
@@ -72,6 +76,10 @@ type Props = {
 // Bookings can only be booked this far ahead anyway; the widest window is 180.
 const UPCOMING_DAYS_AHEAD = 365;
 
+// What the banner last knew, so coming back to this screen shows it at once
+// while the check runs again behind it.
+const lastClosure = new Map<string, MyScheduleClosure | null>();
+
 function tomorrow(): Date {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -94,8 +102,12 @@ export default function CloseScheduleSection({
   onOpenBooking,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [closure, setClosure] = useState<MyScheduleClosure | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [closure, setClosure] = useState<MyScheduleClosure | null>(lastClosure.get(providerId) ?? null);
+  const [loaded, setLoaded] = useState(lastClosure.has(providerId));
+  const [reason, setReason] = useState<ClosureReason | null>(null);
+  const [tellClients, setTellClients] = useState(false);
+  const [autoClose, setAutoClose] = useState(false);
+  const [waitlistEnabled, setWaitlistEnabled] = useState<boolean | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -143,7 +155,10 @@ export default function CloseScheduleSection({
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     getMyScheduleClosure()
-      .then((row) => { if (!cancelled) setClosure(row); })
+      .then((row) => {
+        lastClosure.set(providerId, row);
+        if (!cancelled) setClosure(row);
+      })
       .catch((err) => logger.error('[Schedule] closure load failed:', err))
       .finally(() => { if (!cancelled) setLoaded(true); });
     if (returnToSheet.current) {
@@ -152,20 +167,39 @@ export default function CloseScheduleSection({
       loadUpcoming();
     }
     return () => { cancelled = true; };
-  }, [loadUpcoming]));
+  }, [loadUpcoming, providerId]));
 
   const openSheet = useCallback(() => {
     setKeptIds(new Set());
     setReopenDate(null);
+    setReason(null);
+    setTellClients(false);
     setSheetVisible(true);
     loadUpcoming();
+    getMyProviderProfile()
+      .then((profile) => {
+        setAutoClose(profile?.automation_settings?.autoCloseWhenFull === true);
+        setWaitlistEnabled(profile?.automation_settings?.waitlistEnabled);
+      })
+      .catch((err) => logger.error('[Schedule] close settings load failed:', err));
   }, [loadUpcoming]);
+
+  const toggleAutoClose = useCallback((next: boolean) => {
+    setAutoClose(next);
+    mergeProviderAutomationSettings(providerId, { autoCloseWhenFull: next }).catch((err) => {
+      logger.error('[Schedule] auto close save failed:', err);
+      setAutoClose(!next);
+      showToast("Couldn't save that. Please try again.", 'error');
+    });
+  }, [providerId, showToast]);
 
   const handleClose = useCallback(async () => {
     setBusy(true);
     try {
-      await closeMySchedule(reopenDate ? dateToYMD(reopenDate) : null);
-      setClosure(await getMyScheduleClosure());
+      await closeMySchedule(reopenDate ? dateToYMD(reopenDate) : null, reason, tellClients);
+      const row = await getMyScheduleClosure();
+      lastClosure.set(providerId, row);
+      setClosure(row);
       setSheetVisible(false);
       showToast('Your schedule is closed.', 'success');
     } catch (err) {
@@ -174,12 +208,13 @@ export default function CloseScheduleSection({
     } finally {
       setBusy(false);
     }
-  }, [reopenDate, showToast]);
+  }, [reopenDate, reason, tellClients, providerId, showToast]);
 
   const handleReopen = useCallback(async () => {
     setBusy(true);
     try {
       await reopenMySchedule();
+      lastClosure.set(providerId, null);
       setClosure(null);
       showToast('Your schedule is open again.', 'success');
     } catch (err) {
@@ -188,7 +223,7 @@ export default function CloseScheduleSection({
     } finally {
       setBusy(false);
     }
-  }, [showToast]);
+  }, [providerId, showToast]);
 
   const openBooking = useCallback((bookingId: string, date: string, openReschedule: boolean) => {
     returnToSheet.current = true;
@@ -205,7 +240,20 @@ export default function CloseScheduleSection({
     if (date) setReopenDate(date);
   }, []);
 
-  if (!loaded) return null;
+  const toldClients = closure?.showReason ? closureReasonForClient(closure.reason) : null;
+
+  // Same size as the banner, so the screen doesn't jump when the check returns.
+  if (!loaded) {
+    return (
+      <View style={[st.banner, { backgroundColor: P.card, borderColor: P.border }]} accessibilityLabel="Checking your schedule">
+        <View style={st.bannerText}>
+          <View style={[st.skeletonTitle, { backgroundColor: P.border }]} />
+          <View style={[st.skeletonLine, { backgroundColor: P.border }]} />
+        </View>
+        <View style={[st.skeletonButton, { backgroundColor: P.surface }]} />
+      </View>
+    );
+  }
 
   return (
     <>
@@ -216,7 +264,7 @@ export default function CloseScheduleSection({
           </Text>
           <Text style={[st.bannerSub, { color: P.sub }]}>
             {isClosed
-              ? `Clients see "Not taking bookings". ${reopensLabel(closure)}`
+              ? `${closure?.autoClosed ? 'You filled up, so it closed by itself. ' : ''}Clients see "Not taking bookings${toldClients ? `: ${toldClients.toLowerCase()}` : ''}". ${reopensLabel(closure)}`
               : 'Close your schedule to stop new bookings. Clients just see "Not taking bookings".'}
           </Text>
         </View>
@@ -261,7 +309,42 @@ export default function CloseScheduleSection({
             </View>
 
             <ScrollView style={st.sheetBody} showsVerticalScrollIndicator={false}>
-              <Text style={[st.sectionLabel, { color: P.sub }]}>WHEN IT REOPENS</Text>
+              <Text style={[st.sectionLabel, { color: P.sub }]}>WHY (OPTIONAL)</Text>
+              <View style={st.reasonRow}>
+                {CLOSURE_REASONS.map((r) => {
+                  const selected = reason === r.value;
+                  return (
+                    <TouchableOpacity
+                      key={r.value}
+                      style={[st.reasonChip, { backgroundColor: P.card, borderColor: selected ? P.accent : P.border }]}
+                      onPress={() => {
+                        setReason(selected ? null : r.value);
+                        if (selected) setTellClients(false);
+                      }}
+                      activeOpacity={0.8}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                    >
+                      <Text style={[st.optionText, { color: P.text }]}>{r.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {reason ? (
+                <View style={[st.switchRow, { backgroundColor: P.card, borderColor: P.border }]}>
+                  <View style={st.switchText}>
+                    <Text style={[st.optionText, { color: P.text }]}>Tell clients why</Text>
+                    <Text style={[st.hint, { color: P.sub }]}>
+                      {tellClients
+                        ? `Clients see "Not taking bookings: ${closureReasonForClient(reason)?.toLowerCase()}".`
+                        : 'Clients just see "Not taking bookings".'}
+                    </Text>
+                  </View>
+                  <Switch value={tellClients} onValueChange={setTellClients} trackColor={{ true: P.accent }} />
+                </View>
+              ) : null}
+
+              <Text style={[st.sectionLabel, st.sectionGap, { color: P.sub }]}>WHEN IT REOPENS</Text>
               <TouchableOpacity
                 style={[st.option, { backgroundColor: P.card, borderColor: reopenDate ? P.border : P.accent }]}
                 onPress={() => { setReopenDate(null); setDatePickerVisible(false); }}
@@ -298,6 +381,24 @@ export default function CloseScheduleSection({
                 />
               )}
               <Text style={[st.hint, { color: P.sub }]}>You can reopen any time.</Text>
+
+              <Text style={[st.sectionLabel, st.sectionGap, { color: P.sub }]}>WHEN YOU FILL UP</Text>
+              <View style={[st.switchRow, { backgroundColor: P.card, borderColor: P.border }]}>
+                <View style={st.switchText}>
+                  <Text style={[st.optionText, { color: P.text }]}>Close by itself when I'm fully booked</Text>
+                  <Text style={[st.hint, { color: P.sub }]}>
+                    {canAutoCloseWhenFull(waitlistEnabled)
+                      ? "A slot that frees up won't be bookable until you reopen, or until your next release day if you have one."
+                      : 'For when you don\'t use a waitlist. Turn your waitlist off in Automations to use this.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={autoClose && canAutoCloseWhenFull(waitlistEnabled)}
+                  onValueChange={toggleAutoClose}
+                  disabled={!canAutoCloseWhenFull(waitlistEnabled)}
+                  trackColor={{ true: P.accent }}
+                />
+              </View>
 
               <Text style={[st.sectionLabel, st.sectionGap, { color: P.sub }]}>YOUR UPCOMING BOOKINGS</Text>
               {upcoming === null ? (
@@ -398,6 +499,13 @@ const st = StyleSheet.create({
     justifyContent: 'center',
   },
   bannerBtnText: { fontSize: 14, fontWeight: '700' },
+  skeletonTitle: { width: 130, height: 16, borderRadius: 6, opacity: 0.6 },
+  skeletonLine: { width: '90%', height: 12, borderRadius: 6, marginTop: 8, opacity: 0.45 },
+  skeletonButton: { width: 72, height: 44, borderRadius: 12 },
+  reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  reasonChip: { borderWidth: 1, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 10 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 10 },
+  switchText: { flex: 1, gap: 3 },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: { maxHeight: '90%', borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 18, paddingHorizontal: 16 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
