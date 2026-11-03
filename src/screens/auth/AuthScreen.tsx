@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, AccountType } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { openLegalPage } from '../../utils/legalPage';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // ── Validation ──────────────────────────────────────────────────────
@@ -457,9 +458,9 @@ export default function AuthScreen({ navigation }: any) {
             {/* Terms */}
             <Text style={[styles.termsText, { color: theme.secondaryText }]}>
               By signing up, you agree to our{' '}
-              <Text style={[styles.termsLink, { color: theme.accent }]}>Terms of Service</Text>
+              <Text style={[styles.termsLink, { color: theme.accent }]} onPress={() => openLegalPage('terms')} accessibilityRole="link">Terms of Service</Text>
               {' '}and{' '}
-              <Text style={[styles.termsLink, { color: theme.accent }]}>Privacy Policy</Text>
+              <Text style={[styles.termsLink, { color: theme.accent }]} onPress={() => openLegalPage('privacy')} accessibilityRole="link">Privacy Policy</Text>
             </Text>
           </View>
         </ScrollView>

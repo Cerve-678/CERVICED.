@@ -98,12 +98,9 @@ markup if JS never runs.
 
 ## Outstanding — read before pointing anyone at this
 
-**1. The privacy notice is a placeholder, and it is rendering live right now.**
-A dashed box reading *"Privacy notice — placeholder, do not deploy"* is on the
-public page. `LEGAL-COMPLIANCE-NOTES.md` §1 records that this project has no
-Privacy Policy at all. A UK-facing form collecting email addresses needs a real
-one under UK GDPR/PECR. **Do not draft this unilaterally** — per `CLAUDE.md`,
-flag it and implement whatever wording the user directs.
+**1. The privacy notice is the legal page.** The consent line and the footer
+link to `/legal#privacy` (and the footer to `/legal`). The old placeholder box
+was removed on 2026-11-03. That page is still a draft — see item 5.
 
 **2. The form stores nothing.** `WAITLIST` at the top of the page script has
 `supabaseUrl` and `anonKey` blank, so submitting says *"Preview mode — nothing
@@ -130,10 +127,12 @@ repo would decouple them. Not urgent; worth doing before this sees real traffic.
 Cerviced's policies on one page (served at `/legal` once on `main`): Client
 Terms, Provider Terms of Business, Privacy, Cookies, Fees & Refunds, Provider
 Standards, Community, Reviews, Health & Safety, Complaints. It was drafted on
-2026-10-19 at the user's direction, and nothing links to it yet. Before linking
-it from the waitlist page (or replacing item 1's placeholder with it):
-- fill the highlighted placeholders: company number, registered office, ICO
-  registration number and the provider liability cap;
+2026-10-19 at the user's direction. Since 2026-11-03 the waitlist page and the
+app's Welcome and sign-up screens link to it. Still to do:
+- company number, registered office and ICO registration number were taken
+  out for now at the user's request (not left as blanks). Put them back once
+  known: UK companies must show the number and registered office on their
+  website. The provider liability cap is still a highlighted blank;
 - have a solicitor review it, then remove the `noindex` meta tag;
 - keep the Client Terms in step with the app's `TermsScreen.tsx`. They're the
   in-app Terms rewrite (PR #115) minus its §31 "For Providers", which moved into

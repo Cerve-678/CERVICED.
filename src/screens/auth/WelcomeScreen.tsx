@@ -21,6 +21,7 @@ import { env } from '../../utils/env';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { openLegalPage } from '../../utils/legalPage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useReducedMotion } from 'react-native-reanimated';
 import WelcomeIntro, { WELCOME_INTRO_TOP_MARGIN } from '../../components/WelcomeIntro';
@@ -274,9 +275,9 @@ export default function WelcomeScreen({ navigation }: Props) {
 
           <Text style={[styles.termsText, { color: t.sub }]}>
             By continuing, you agree to our{' '}
-            <Text style={[styles.termsLink, { color: t.accent }]}>Terms of Service</Text>
+            <Text style={[styles.termsLink, { color: t.accent }]} onPress={() => openLegalPage('terms')} accessibilityRole="link">Terms of Service</Text>
             {' '}and{' '}
-            <Text style={[styles.termsLink, { color: t.accent }]}>Privacy Policy</Text>.
+            <Text style={[styles.termsLink, { color: t.accent }]} onPress={() => openLegalPage('privacy')} accessibilityRole="link">Privacy Policy</Text>.
           </Text>
         </View>
       </View>
