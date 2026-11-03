@@ -100,7 +100,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [instagram, setInstagram]         = useState('');
   const [website, setWebsite]             = useState('');
   const [externalBookingUrl, setExternalBookingUrl] = useState('');
-  const [yearsExperience, setYearsExperience] = useState('');
   // Link-only only. A link-only pro has no About You or Payments screen, so
   // Business Info is where these two live for them. Same storage as those
   // screens: accessibility_notes is '|'-joined ACCESSIBILITY_OPTS values,
@@ -156,7 +155,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
           setInstagram(providerData.instagram ?? '');
           setWebsite(providerData.website ?? '');
           setExternalBookingUrl(providerData.external_booking_url ?? '');
-          setYearsExperience(providerData.years_experience != null ? String(providerData.years_experience) : '');
           setAccessibility(providerData.accessibility_notes?.split('|').filter(Boolean) ?? []);
           setPaymentMethods(providerData.preferred_payment_methods ?? []);
         } else {
@@ -175,7 +173,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
             setInstagram(signup.instagram ?? '');
             setWebsite(signup.website ?? '');
             setExternalBookingUrl(signup.external_booking_url ?? '');
-            setYearsExperience(signup.years_experience != null ? String(signup.years_experience) : '');
             setAccessibility(signup.accessibility_notes?.split('|').filter(Boolean) ?? []);
             setPaymentMethods(signup.preferred_payment_methods ?? []);
             setBusinessType((signup.business_type as BusinessType | null) ?? null);
@@ -330,13 +327,11 @@ export default function BusinessInfoScreen({ navigation }: any) {
           instagram: instagram.trim() || null,
           website: website.trim() || null,
           ...(isLinkOnly ? linkOnlyFields : {}),
-          years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
         }));
       } else if (userId) {
         // No profile yet: stage the answers where the first Edit Profile save
         // picks them up, rather than closing as if they'd been saved.
         ops.push(updateMyStagedProviderAnswers(userId, {
-          years_experience: yearsExperience ? parseInt(yearsExperience, 10) : null,
           instagram: instagram.trim() || null,
           website: website.trim() || null,
           ...(isLinkOnly ? linkOnlyFields : {}),
@@ -400,9 +395,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
 
             {/* Identity — who the business is, not how to reach it. Kept in its
                 own card, split out from the contact fields below, so the name
-                and experience read as the headline facts rather than one more
-                row in a list of handles and emails. */}
-            <Card title="Name & Experience" sub="Your business name and experience, shown on your public profile.">
+                reads as the headline fact rather than one more row in a list of
+                handles and emails. */}
+            <Card title="Name" sub="Your business name, shown on your public profile.">
               {/* The one place a provider's public business name can be
                   changed. Locked for 14 days after each change — the note
                   says when it reopens rather than just refusing. */}
@@ -416,7 +411,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   ? `Shown on your profile. You changed it recently — you can change it again on ${formatLongDate(nameUnlocksAt)}.`
                   : 'Shown on your profile. Once you change it, you can’t change it again for 14 days.'}
               />
-              <Field label="Years of Experience" value={yearsExperience} onChange={v => setYearsExperience(v.replace(/[^0-9]/g, ''))} placeholder="e.g. 5" keyboardType="phone-pad" />
             </Card>
 
             {/* Contact & links — the handles and addresses clients and Cerviced

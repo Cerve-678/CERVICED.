@@ -5,7 +5,7 @@
 
 #generated
 
-**3010 functions** across **415 files**.
+**3012 functions** across **416 files**.
 
 ### `src/components/` (54)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -130,7 +130,8 @@
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · minutesOfDay · **tipWindowClosesAt**
 
-### `src/features/business-details/` (3)
+### `src/features/business-details/` (4)
+- `bookingInstructions.ts` — **selectedBookingInstructions** · **toggleBookingInstruction**
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
 - `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **productsPlaceholder** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
 - `useLearnedSpecialities.ts` — **useSpecialityOptionsWithLearned**

@@ -8977,7 +8977,6 @@ export async function updateUserBusinessInfo(
 export async function updateMyStagedProviderAnswers(
   userId: string,
   answers: {
-    years_experience: number | null;
     external_booking_url?: string | null;
     instagram: string | null;
     website: string | null;
