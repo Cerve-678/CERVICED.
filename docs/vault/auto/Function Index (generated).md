@@ -5,7 +5,7 @@
 
 #generated
 
-**2962 functions** across **404 files**.
+**2969 functions** across **404 files**.
 
 ### `src/components/` (53)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -14,13 +14,13 @@
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showAlert · showConfirm · showToast · Toast · **useAppDialog**
 - `AppLoadingScreen.tsx` — AppLoadingScreen
-- `AreaPicker.tsx` — AreaPicker · back · cities · close · confirmFreeText · open · pickArea · pickCity · pickOtherCity · pickRegion · regionData · startAreaOther
+- `AreaPicker.tsx` — AreaPicker · back · close · confirmFreeText · matches · open · pickArea · pickCity · pickCounty · pickOtherCity · pickRegion · pickSearchedArea · regionData · startAreaOther · useTypedPlace
 - `AvailabilityCard.tsx` — animatedStyle · handlePress · handlePressIn · handlePressOut · highlightColors
 - `BookingSheet.tsx` — **BookingSheet** · cancelEmergency · confirmEmergency · depositPolicyArg · goToStep · handleBack · handleLocalApplyPromo · handleLocalRemovePromo · handleNext · handleSelectDate · handleSelectTime · handleSubmit · localPromoDiscount · onAccentColor · stepBlocker · summaryRemaining · toggleAddOn · tokens · totalAddOnsPrice
 - `CartTabBadge.tsx` — **useCartBadge**
 - `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
 - `ChatComponents.tsx` — ActionCard · along · **AmbientMark** · animatedStyle · **AnswerAfter** · **AnswerBefore** · **answerListsProviders** · **answerRevealStart** · Appear · CardView · **ChatBubble** · **ChatInput** · content · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · HeadlineView · **InspirationGallery** · **Mark** · PillChip · press · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator** · toggle · WorkFold · WorkSteps
-- `CityMultiSelect.tsx` — add · addArea · addOther · **CityMultiSelect** · close · filtered · remove · toggleExpand · toggleWholeCity
+- `CityMultiSelect.tsx` — add · addArea · addCounty · addOther · **CityMultiSelect** · close · filtered · placeMatches · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
@@ -88,7 +88,8 @@
 - `StatusBarTintContext.tsx` — claimDarkTopArea · releaseDarkTopArea · **StatusBarTintProvider** · **useDarkTopArea** · **useStatusBarTint** · value
 - `ThemeContext.tsx` — contextValue · createEnterpriseTheme · enterpriseTheme · legacyTheme · loadThemePreference · saveThemePreference · setDarkMode · setThemePreference · **ThemeProvider** · toggleTheme · **useEnterpriseTheme** · **useLegacyTheme** · **useTheme**
 
-### `src/data/` (2)
+### `src/data/` (3)
+- `cityAreas.ts` — consider · normalizePlace · **searchPlaces**
 - `languages.ts` — **recognizeLanguage**
 - `portfolioFeed.ts` — **getAllPortfolioItems** · **getPortfolioByCategory** · **getPortfolioByProvider** · **getPortfolioItemById** · **getProviderForItem** · **searchPortfolio**
 
@@ -258,7 +259,7 @@
 - `SignUpStep2Screen.tsx` — fieldError · handleContinue · markTouched · SignUpStep2Screen · validate
 - `SignUpStep3Screen.tsx` — fieldError · handleContinue · handleRow · markTouched · SignUpStep3Screen · validate
 - `SignUpStep4Screen.tsx` — handleContinue · onLayoutFor · pickBusinessType · pickHair · pickPriceRange · pickSkin · pickStyleVibe · plain · saveAndProceed · scrollTo · SignUpStep4Screen · toggleAllergen · toggleConcern · toggleContactMethod · togglePaymentMethod · toggleService · toggleTreatment
-- `SignUpStep5Screen.tsx` — finishHatSwitch · handleComplete · onLayoutFor · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage · toggleLocation
+- `SignUpStep5Screen.tsx` — finishHatSwitch · handleComplete · onLayoutFor · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · specialtyOptions · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage
 - `WelcomeScreen.tsx` — handleAppleLogin · handleGoogleLogin · rise · rowStyle · WelcomeScreen
 
 ### `src/screens/client/` (22)
