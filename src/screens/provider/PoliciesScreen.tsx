@@ -61,19 +61,22 @@ import {
   Card, Field, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
-import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
 type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
-type CancelPenalty    = '' | 'none' | 'deposit' | 'half';
+// 'half' is no longer offered, but policies saved before 'custom' still say it.
+type CancelPenalty    = '' | 'none' | 'deposit' | 'half' | 'custom';
 type RescheduleNotice = '' | 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '' | '1' | '2' | 'unlimited';
 // 'charge_full' was offered once and enforced by nothing; it's read back as
 // 'charge_deposit' and the real charge is now the no-show fee below.
-type NoShowAction     = '' | 'none' | 'warn' | 'charge_deposit';
+type NoShowAction     = '' | 'none' | 'warn' | 'charge_deposit' | 'custom';
 
 interface PolicyState {
   cancelNotice:     CancelNotice;
   cancelPenalty:    CancelPenalty;
+  // £ amount as typed, only under 'custom'. apply-cancellation-refund caps what
+  // the provider keeps at half the price.
+  cancelCustomFee:  string;
   cancelNote:       string;
   rescheduleNotice: RescheduleNotice;
   maxReschedules:   MaxReschedules;
@@ -88,20 +91,20 @@ interface PolicyState {
   refundPolicyNote: string;
   bookingInstructions: string;
   policyImageUrl:   string;
-  // Shown to a client in the "scheduling conflict" prompt before they ask for
-  // a time outside this provider's normal availability. A distinct document
-  // from the provider's Terms & Conditions (the add-to-cart form, edited from
-  // InfoReg). Only surfaced while EMERGENCY_BOOKINGS_ENABLED is on, but it
-  // round-trips through save regardless so a stored value is never lost.
+  // Shown in the profile's Policy tab. Also read by the booking sheet's
+  // "scheduling conflict" prompt if EMERGENCY_BOOKINGS_ENABLED returns. A
+  // distinct document from the provider's Terms & Conditions.
   emergencyBookingPolicy: string;
+  travelPolicy: string;
 }
 
 // What CERVICED itself applies or charges. A link-only provider's bookings
 // happen on their own site, so none of it can apply to them: it's hidden
 // from their editor, cleared when they save, and left out of their profile
 // (buildPolicyDisplayRows' linkOnly option).
-const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'noShowAction' | 'noShowGraceMinutes' | 'lateFee' | 'noShowFee'> = {
+const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'cancelCustomFee' | 'noShowAction' | 'noShowGraceMinutes' | 'lateFee' | 'noShowFee'> = {
   cancelPenalty: '',
+  cancelCustomFee: '',
   noShowAction: '',
   noShowGraceMinutes: '',
   lateFee: '',
@@ -111,6 +114,7 @@ const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'noShowAction' | 'n
 const DEFAULT_POLICIES: PolicyState = {
   cancelNotice:     '',
   cancelPenalty:    '',
+  cancelCustomFee:  '',
   cancelNote:       '',
   rescheduleNotice: '',
   maxReschedules:   '',
@@ -124,6 +128,7 @@ const DEFAULT_POLICIES: PolicyState = {
   bookingInstructions: '',
   policyImageUrl:   '',
   emergencyBookingPolicy: '',
+  travelPolicy: '',
 };
 
 function Pills<T extends string>({ options, value, onChange }: {
@@ -150,8 +155,22 @@ function Pills<T extends string>({ options, value, onChange }: {
 }
 
 /** '' (no fee) or pounds with up to 2 decimals — the same shape the server reads. */
+// How a late or no-show fee is charged. Bookings freeze the fee at checkout, and
+// this describes the fee terms clients agree to there.
+const FEE_CHARGE_NOTE = "Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to the fee at checkout.";
+
+/** The cap on every custom amount, in bold wherever a provider sets one. */
+function HalfPriceCap() {
+  const C = useBusinessPalette();
+  return <Text style={[capSt.note, { color: C.text }]}>You can only charge up to half the service price.</Text>;
+}
+
 function isFeeAmount(v: string): boolean {
   return v === '' || /^\d+(\.\d{1,2})?$/.test(v);
+}
+
+function isCustomAmount(v: string): boolean {
+  return v !== '' && isFeeAmount(v) && Number(v) > 0;
 }
 
 const pSt = StyleSheet.create({
@@ -209,6 +228,9 @@ export default function PoliciesScreen({ navigation }: any) {
         // Saved before 'Full charge' became 'Half the price' (2026-11-01).
         if ((merged.cancelPenalty as string) === 'full') merged.cancelPenalty = 'half';
         if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
+        // Saved before the fee became the 'custom' action. It's cleared on save
+        // under any other action, so this keeps a fee from vanishing unasked.
+        if (isCustomAmount(merged.noShowFee)) merged.noShowAction = 'custom';
         setPolicies(merged);
         const carried = Object.fromEntries(
           Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES)),
@@ -234,9 +256,10 @@ export default function PoliciesScreen({ navigation }: any) {
       Alert.alert('Permission Required', 'Please allow access to your photo library.');
       return;
     }
+    // No allowsEditing: iOS's editor only crops to a square, which cuts the
+    // top and bottom off a full-length policy sheet.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
       quality: 0.85,
     });
     const asset = result.assets?.[0];
@@ -266,6 +289,14 @@ export default function PoliciesScreen({ navigation }: any) {
       flash('Enter fees as pounds, like 10 or 12.50', 'error');
       return;
     }
+    if (policies.cancelPenalty === 'custom' && !isCustomAmount(policies.cancelCustomFee)) {
+      flash('Enter what you keep on a late cancellation, like 10 or 12.50', 'error');
+      return;
+    }
+    if (policies.noShowAction === 'custom' && !isCustomAmount(policies.noShowFee)) {
+      flash('Enter your no-show fee, like 10 or 12.50', 'error');
+      return;
+    }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -275,6 +306,8 @@ export default function PoliciesScreen({ navigation }: any) {
       await saveProviderPolicies(userId, {
         ...carriedPolicies,
         ...policies,
+        cancelCustomFee: policies.cancelPenalty === 'custom' ? policies.cancelCustomFee : '',
+        noShowFee: policies.noShowAction === 'custom' ? policies.noShowFee : '',
         ...(isLinkOnly ? LINK_ONLY_CLEARED : {}),
       } as unknown as Record<string, unknown>);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -327,7 +360,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Every card opens with one plain line saying what it sets up,
                 so a provider never has to guess from the pills alone. */}
-            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : 'How much notice a client must give to cancel, and what happens if they cancel later than that. If they paid a deposit, you keep the deposit. If they paid in full, you can only charge up to half.'}>
+            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : 'How much notice a client must give to cancel, and what happens if they cancel later than that.'}>
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'none', l: 'None' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
@@ -337,10 +370,29 @@ export default function PoliciesScreen({ navigation }: any) {
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
                 <Pills
-                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'half', l: 'Half the price' }]}
-                  value={policies.cancelPenalty}
-                  onChange={v => setPolicy('cancelPenalty', v)}
+                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'custom', l: 'Custom' }]}
+                  value={policies.cancelPenalty === 'half' ? 'custom' : policies.cancelPenalty}
+                  onChange={v => setPolicy('cancelPenalty', v === 'custom' && policies.cancelPenalty === 'half' ? 'half' : v)}
                 />
+                {policies.cancelPenalty === 'deposit' && (
+                  <>
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>If they paid a deposit, you keep the deposit.</Text>
+                    <Text style={[capSt.note, { color: C.text }]}>If they paid in full, you can only charge up to half the service price.</Text>
+                  </>
+                )}
+                {(policies.cancelPenalty === 'custom' || policies.cancelPenalty === 'half') && (
+                  <View style={{ marginTop: 10 }}>
+                    <Field
+                      label="Amount you keep (£)"
+                      value={policies.cancelCustomFee}
+                      onChange={v => setPolicies(prev => ({ ...prev, cancelPenalty: 'custom', cancelCustomFee: v.replace(/[^0-9.]/g, '') }))}
+                      placeholder="e.g. 20"
+                      keyboardType="decimal-pad"
+                      note={policies.cancelPenalty === 'half' ? 'Currently half the price. Enter an amount to change it.' : "If it's more than half the price, you keep half. If they only paid a deposit, you can't keep more than that deposit."}
+                    />
+                    <HalfPriceCap />
+                  </View>
+                )}
               </>)}
               <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
             </Card>
@@ -363,33 +415,18 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {!isLinkOnly && (<>
               {/* Deposits live on Business Profile → Payments now, not here. */}
-              <Card title="No-show" sub="What happens when a client doesn't turn up, and how long you wait before you can mark them as a no-show.">
-                <SectionLabel text="Action" />
-                <Pills
-                  options={[
-                    { v: 'none', l: 'No action' },
-                    { v: 'warn', l: 'Warn client' },
-                    { v: 'charge_deposit', l: 'Keep deposit' },
-                  ]}
-                  value={policies.noShowAction}
-                  onChange={v => setPolicy('noShowAction', v)}
-                />
+              {/* One grace period, kept under noShowGraceMinutes: checkout quotes it
+                  beside the late fee, and provider_update_booking_status() won't
+                  accept a no-show until it has passed. */}
+              <Card title="Late" sub="How long a client can be late, and what you can charge after that. Leave the fee blank for no fee.">
                 <Field
                   label="Grace period (minutes)"
                   value={policies.noShowGraceMinutes}
                   onChange={v => setPolicy('noShowGraceMinutes', v.replace(/[^0-9]/g, ''))}
                   placeholder="e.g. 15"
                   keyboardType="phone-pad"
-                  note="How long after the booked start time before you can mark a client No Show. 0 = no grace period."
+                  note="How long after the booked start time before a client counts as late. You can't mark a No Show until this has passed. 0 = no grace period."
                 />
-                <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
-              </Card>
-
-              {/* The short line says what the card is for; how a fee is
-                  actually charged stays below the fields, word for word as
-                  it was — it's the fee terms clients agree to at checkout,
-                  so it's moved, not reworded. */}
-              <Card title="Late & no-show fees" sub="Optional fees you can charge if a client arrives late or doesn't turn up. Leave blank for no fee.">
                 <Field
                   label="Late arrival fee (£)"
                   value={policies.lateFee}
@@ -398,17 +435,37 @@ export default function PoliciesScreen({ navigation }: any) {
                   keyboardType="decimal-pad"
                   note="For arriving after your grace period above."
                 />
-                <Field
-                  label="No-show fee (£)"
-                  value={policies.noShowFee}
-                  onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
-                  placeholder="e.g. 20"
-                  keyboardType="decimal-pad"
-                  note="For not turning up. You mark the booking as a no-show first."
+                <HalfPriceCap />
+                <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>{FEE_CHARGE_NOTE}</Text>
+              </Card>
+
+              <Card title="No-show" sub="What happens when a client doesn't turn up.">
+                <SectionLabel text="Action" />
+                <Pills
+                  options={[
+                    { v: 'none', l: 'No action' },
+                    { v: 'warn', l: 'Warn client' },
+                    { v: 'charge_deposit', l: 'Keep deposit' },
+                    { v: 'custom', l: 'Custom' },
+                  ]}
+                  value={policies.noShowAction}
+                  onChange={v => setPolicy('noShowAction', v)}
                 />
-                <Text style={[s.cardSub, { color: C.sub, marginTop: 4, marginBottom: 0 }]}>
-                  Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to them at checkout. Each fee can be at most half the service price.
-                </Text>
+                {policies.noShowAction === 'custom' && (
+                  <View style={{ marginTop: 10 }}>
+                    <Field
+                      label="No-show fee (£)"
+                      value={policies.noShowFee}
+                      onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
+                      placeholder="e.g. 20"
+                      keyboardType="decimal-pad"
+                      note="For not turning up. You mark the booking as a no-show first."
+                    />
+                    <HalfPriceCap />
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 12 }]}>{FEE_CHARGE_NOTE}</Text>
+                  </View>
+                )}
+                <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
               </Card>
             </>)}
 
@@ -439,39 +496,37 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             )}
 
-            {/* Emergency / out-of-hours requests are pulled from the client app
-                for now (EMERGENCY_BOOKINGS_ENABLED — see FUTURE_LOGIC.md), so
-                nothing reads this field yet and there's nothing to write it
-                for. The key still round-trips through save, so a value written
-                once the feature returns is safe meanwhile. */}
-            {EMERGENCY_BOOKINGS_ENABLED && (
-              <Card
-                title="Emergency Booking Policy"
-                sub="Shown to a client before they ask for a time outside your normal availability (optional). Separate from your Terms & Conditions."
-              >
-                {/* Placeholder deliberately does NOT exemplify a surcharge or
-                    any off-app payment term — the checkout flow doesn't read
-                    this field, so a money term written here would be an
-                    undisclosed off-app charge (see the deposit/balance
-                    liability boundary in CLAUDE.md and FUTURE_LOGIC.md's
-                    emergency-surcharge note). Keep examples to availability
-                    and process. */}
-                <Field
-                  label="Your emergency booking policy"
-                  value={policies.emergencyBookingPolicy}
-                  onChange={v => setPolicy('emergencyBookingPolicy', v)}
-                  placeholder="e.g. I only take out-of-hours requests from existing clients, and I need at least a day's notice to say yes"
-                  multiline
-                />
-              </Card>
-            )}
+            {/* Written policies only, shown on the profile. Neither one changes
+                what a client can book or pay in the app, so the placeholders
+                stay away from money: a charge written here would be an
+                off-app charge the checkout knows nothing about (see the
+                deposit/balance liability boundary in CLAUDE.md). */}
+            <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
+              <Field
+                label="Your travel policy"
+                value={policies.travelPolicy}
+                onChange={v => setPolicy('travelPolicy', v)}
+                placeholder='e.g. "I travel up to 10 miles and need somewhere to set up with a plug socket"'
+                multiline
+              />
+            </Card>
+
+            <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly.">
+              <Field
+                label="Your emergency appointment policy"
+                value={policies.emergencyBookingPolicy}
+                onChange={v => setPolicy('emergencyBookingPolicy', v)}
+                placeholder="e.g. I only take emergencies from existing clients, message me and I'll let you know if I can fit you in"
+                multiline
+              />
+            </Card>
 
             <Card title="Detailed Policy Image" sub="A picture of your full policy, for anything too detailed for the fields above, like a house-rules sheet or consent form. Clients open it from your profile (optional).">
               <View style={imgSt.grid}>
                 {policies.policyImageUrl ? (
                   <View style={imgSt.thumbWrap}>
                     <TouchableOpacity onPress={handlePickPolicyImage} disabled={policyImageUploading} activeOpacity={0.7}>
-                      <Image source={{ uri: policies.policyImageUrl }} style={imgSt.thumb} fadeDuration={0} />
+                      <Image source={{ uri: policies.policyImageUrl }} style={[imgSt.thumb, { backgroundColor: C.border }]} resizeMode="contain" fadeDuration={0} />
                       {policyImageUploading && (
                         <View style={imgSt.uploading}>
                           <ActivityIndicator size="small" color="#fff" />
@@ -542,6 +597,10 @@ export default function PoliciesScreen({ navigation }: any) {
   );
 }
 
+const capSt = StyleSheet.create({
+  note: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 13, lineHeight: 18, marginTop: 8 },
+});
+
 const termsSt = StyleSheet.create({
   box:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 14 },
   checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
@@ -551,8 +610,8 @@ const termsSt = StyleSheet.create({
 
 const imgSt = StyleSheet.create({
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  thumbWrap: { position: 'relative', width: 84, height: 84 },
-  thumb:     { width: 84, height: 84, borderRadius: 14 },
+  thumbWrap: { position: 'relative', width: 120, height: 180 },
+  thumb:     { width: 120, height: 180, borderRadius: 14 },
   uploading: { ...StyleSheet.absoluteFill, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   removeBtn: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' },
   removeText: { color: '#fff', fontSize: 11, fontWeight: '700' },

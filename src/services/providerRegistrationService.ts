@@ -196,6 +196,7 @@ export interface ProviderRegistrationData {
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
