@@ -5,9 +5,9 @@
 
 #generated
 
-**3057 functions** across **421 files**.
+**3072 functions** across **423 files**.
 
-### `src/components/` (56)
+### `src/components/` (57)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -24,6 +24,7 @@
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
+- `FocusAwareStatusBar.tsx` — **FocusAwareStatusBar**
 - `FramedLogo.tsx` — **FramedLogo**
 - `FullyBookedCertificate.tsx` — ConfettiPiece · FullyBookedCertificate · **fullyBookedLine** · makePieces · pieces
 - `HairTypeSelector.tsx` — **HairTypeSelector**
@@ -43,11 +44,11 @@
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
-- `ProviderFontPicker.tsx` — ProviderFontPicker
+- `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
-- `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
+- `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
@@ -83,7 +84,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (8)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · becomeFullMember · clearStorageFolder · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · becomeFullMember · beginSignupVerification · cancelSignupVerification · clearStorageFolder · completeVerifiedSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getItemQuantity · getProviderTotal · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `DisplaySettingsContext.tsx` — apply · **DisplaySettingsProvider** · loadAccountDisplaySettings · persist · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
@@ -111,7 +112,7 @@
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 
-### `src/features/bookings/` (20)
+### `src/features/bookings/` (21)
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
@@ -126,6 +127,7 @@
 - `noShowDispute.ts` — **fileNoShowDispute**
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **describeRefundOutcome** · **describeSettlementTiming** · money · **previewProviderRefund**
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
+- `rebook.ts` — **buildRebookCartItem** · durationLabel · **rebookAddOns**
 - `receipt.ts` — appointmentWhen · **buildClientReceiptHTML** · **buildProviderInvoiceHTML** · escapeHtml · methodLabel · money · renderDocument
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen** · **refundReplyDeadline**
 - `requestWindow.ts` — **clientRequestNote**
@@ -293,7 +295,7 @@
 - `PointsScreen.tsx` — load · PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · leave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
-- `ProviderProfileScreen.tsx` — additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · formatDate · goodToKnowText · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openBookingSheet · openImageViewer · openLinkOnlyBooking · openOffersPanel · openSheets · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · ServiceDescription · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
+- `ProviderProfileScreen.tsx` — additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · formatDate · goodToKnowText · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openBookingSheet · openImageViewer · openLinkOnlyBooking · openOffersPanel · openSheets · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · ServiceDescription · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · minPickerDate · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen
 - `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
 - `SubscriptionScreen.tsx` — SubscriptionScreen
@@ -302,11 +304,11 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
-- `FullCervicedFeaturesScreen.tsx` — checkout · createStyles · FullCervicedFeaturesScreen · pounds · styles
+- `FullCervicedFeaturesScreen.tsx` — createStyles · FullCervicedFeaturesScreen · styles
 - `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · addOtherTag · allCategoryNames · applyDragPosition · applySuggestions · categoryNames · chrome · chromeTheme · descriptionHint · documentEnd · dotWindow · edgeForTheme · EditCategoryModal · editTheme · fgForTheme · filled · getCategoryDragResponder · goToSection · handleActivePageChange · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteCategory · handleDeleteService · handleFrameLogo · handleInputFocus · handleLogoFramed · handleNameChange · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderImages · handleSave · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · openedTags · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · resolveChromeTheme · retryLoadProvider · sectionSummaries · selectServiceType · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · serviceTypes · styles · submitOther · suggestion · surfForTheme · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · toggleTag · TransferDataModal · typeOfCategory · useChrome · useScreenStyles · withSuggested
 - `LinkOnlyAnalyticsScreen.tsx` — bars · days · LinkOnlyAnalyticsScreen · load · onRefresh · totals
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · joinNudgeTotal · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
@@ -314,7 +316,7 @@
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
 - `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · Pills · PoliciesScreen · setPolicy
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
-- `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
+- `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view
 - `ProviderAnalyticsScreen.tsx` — AnimatedFillBar · AnimatedPath · bookingServiceMap · bucketNoun · buildInsight · chartBars · chartData · CompletionRing · fetchBookingsForRange · fetchSupportingMetrics · fmtGBP · hasCompletedInRange · inRange · insightText · kpi · maxBarIndex · monthKey · monthlyRatings · months · monthsAgo · onRefresh · period · prevPeriod · ProviderAnalyticsScreen · quadChartWidth · quadWidth · ranked · RatingAnalytics · ratingChartWidth · recent · RecentStream · revenueOf · reviewsInRange · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · tipsForBookings · topServices · TopServices · totalForBookings
 - `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · saveCancellationNotice · SectionHeader · set · showToast · Toast · toggleReminder
@@ -365,7 +367,7 @@
 - `notificationTapHandler.ts` — **handleNotificationTap** · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
 - `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **patchCachedProviderBranding** · **providerRowToRegistrationData** · readLocalFileBytes · **saveProviderPolicies** · **saveProviderToSupabase** · shrinkImageForUpload · sniffImageType · **uploadToStorage** · used
-- `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · **startExpoGoNotificationBridge** · **unregisterPushToken**
+- `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · registerPushToken · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
 
@@ -382,7 +384,7 @@
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 
 ### `src/services/becca/capabilities/` (3)
-- `client.ts` — availabilityThinking · bookingChoiceMessage · bookingChoices · bookingTicket · categoryWords · providerRow · soleUpcoming · sortUpcoming · ticketStamp
+- `client.ts` — addToCartAndSay · availabilityThinking · bookingChoiceMessage · bookingChoices · bookingTicket · categoryWords · providerRow · soleUpcoming · sortUpcoming · ticketStamp
 - `provider.ts` — cutoff · inRange
 - `shared.ts` — **askChip** · **chip** · **dayLabel** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
 

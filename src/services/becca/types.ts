@@ -9,6 +9,7 @@
 
 import type { Provider } from "../ProviderDataService";
 import type { ConfirmedBooking } from "../../types/booking";
+import type { AddToCartParams } from "../../contexts/CartContext";
 
 // ==================== CHAT MESSAGE SHAPE ====================
 // These types live here, with Becca, rather than in the service that happens
@@ -316,8 +317,17 @@ export interface PendingAction {
   /** Label for the confirm button. */
   confirmLabel: string;
   /** Performs the write. Only ever called after explicit confirmation. */
-  run: () => Promise<string>;
+  run: () => Promise<PendingActionDone>;
+  /**
+   * A second version of the same write, offered as its own button — "with
+   * the add-ons" vs "without". Tapping either one confirms it, and running
+   * one retires the other, so only one of the two can ever happen.
+   */
+  alternative?: { id: string; confirmLabel: string; run: () => Promise<PendingActionDone> };
 }
+
+/** What Becca says once a confirmed write has run, plus where to go next. */
+export type PendingActionDone = string | { text: string; suggestions: ChatSuggestion[] };
 
 export interface CapabilityResult {
   /** The answer, already written for a human. */
@@ -529,6 +539,11 @@ export interface CapabilityContext {
   verbatimMessage: string;
   /** Bookings from BookingContext — already loaded, no refetch. */
   bookings: ConfirmedBooking[];
+  /**
+   * Client hat only: CartContext's addToCart, for a confirmed pendingAction
+   * to call. Never call it from `run` itself — see PendingAction.
+   */
+  addToCart?: (item: AddToCartParams) => void;
   /** Signed-in user id, when available. */
   userId?: string;
   /**

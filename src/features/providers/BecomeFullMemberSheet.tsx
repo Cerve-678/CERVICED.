@@ -1,6 +1,6 @@
 // src/features/providers/BecomeFullMemberSheet.tsx
 // The one place a link-only provider confirms becoming a full member. Every
-// entry point (the Home card, the nudge bar, the "What full CERVICED adds"
+// entry point (the Home card, the nudge bar, the "Full CERVICED experience"
 // page) opens this rather than switching straight away, because the switch
 // takes them off Search and can't be undone in the app — they have to read
 // that first.

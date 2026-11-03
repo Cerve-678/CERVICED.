@@ -32,7 +32,7 @@ export interface ProviderProfileData {
   providerService: string;
   providerLogo: any;
   location: string;
-  /** Public "How to get there", shown under Location in Contact. */
+  /** Public "How to get there", shown in Additional Information. */
   publicDirections: string;
   businessType: BusinessType | null;
   rating: number;

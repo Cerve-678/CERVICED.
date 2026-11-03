@@ -51,7 +51,7 @@ jest.mock("../services/databaseService", () => {
       [],
     ),
     getProviderIdByDisplayName: jest.fn(async () => "p1"),
-    getRebookableService: on({ id: "s1", providerSlug: "lola-studio" }, null),
+    getRebookableService: on({ id: "s1", name: "Volume Lashes Full Set", price: 55, durationMinutes: 120, categoryName: "LASHES", providerSlug: "lola-studio", providerDisplayName: "Lola Studio", addOns: [] }, null),
     getBookingCancelNoticeHours: on(24, null),
     getProviderCancellationPolicy: on(24, 0),
     getProviderReschedulePolicyByDisplayName: on({ maxReschedules: 2, rescheduleNoticeHours: 48 }, { maxReschedules: null, rescheduleNoticeHours: 0 }),

@@ -309,11 +309,11 @@ export async function verifyRecoveryOtp(email: string, token: string): Promise<v
 export async function verifySignupOtp(
   email: string,
   token: string,
-): Promise<AuthSessionSummary> {
+): Promise<AuthSessionSummary & { authSession: Session }> {
   const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
   if (error) throw error;
   if (!data.session) throw new Error("Verification succeeded without a session");
-  return summarizeAuthSession(data.session);
+  return { ...summarizeAuthSession(data.session), authSession: data.session };
 }
 
 export async function resendSignupOtp(email: string): Promise<void> {
@@ -402,11 +402,20 @@ function sanitizeIlikeTerm(term: string): string {
  * stay behind this shared service boundary. */
 export async function upsertVerifiedUserProfile(
   profile: { id: string } & Record<string, unknown>,
-): Promise<void> {
-  const { error } = await supabase
+): Promise<{ role: string | null; hasClientProfile: boolean; deletionRequested: boolean }> {
+  // Read back what the row actually holds, so the app opens from the server's
+  // answer rather than the sign-up details it sent.
+  const { data, error } = await supabase
     .from("users")
-    .upsert(profile, { onConflict: "id" });
+    .upsert(profile, { onConflict: "id" })
+    .select("role, has_client_profile, deletion_requested_at")
+    .single();
   if (error) throw error;
+  return {
+    role: data.role ?? null,
+    hasClientProfile: data.has_client_profile === true,
+    deletionRequested: data.deletion_requested_at != null,
+  };
 }
 
 /** Creates the users row for an account that signed in through Apple, which

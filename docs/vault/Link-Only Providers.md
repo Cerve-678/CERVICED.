@@ -20,9 +20,9 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 
 > **Default is "yes" (product owner, 2026-10-17).** Link-only providers can use the app like any CERVICED provider. Only the exclusions named on this page are off. Anything not listed here, **ask the product owner** whether they can use it before building — don't assume either way.
 
-**Yes:** searchable (Search + Explore), profile (hero, About + optional Policies, specialities under Additional Information, logo, portfolio, opening hours in About), Book button with socials beside it, portfolio, in-app messages, Becca, Branding, Analytics, calendar sync.
+**Yes:** searchable (Search + Explore), profile (hero, About + optional Policies, specialities under Additional Information, logo, portfolio, opening hours in About), Book button with socials beside it, portfolio, in-app messages, Becca, Branding (limited: four colour sets, App, Blush, Grey and Charcoal; four fonts, Classic, Chunky & Rounded, Smooth & Rounded and Bakbak; and the Blend finish. Every other set, font and finish, and Make your own, show locked, 2026-11-03), Analytics, calendar sync.
 
-**No:** CERVICED's own booking flow (they book via their link), the price list on their profile, star ratings and reviews (no reviews section at all), teams, Offers / promo codes, all client-care tools (info packs, intake / consultation forms, Clientele list, reminders), Automations.
+**No:** CERVICED's own booking flow (they book via their link), the price list on their profile, star ratings and reviews (no reviews section at all), teams, Offers / promo codes, all client-care tools (info packs, intake / consultation forms, Clientele list, reminders), Automations. Achievements show in Settings but locked, linking to the Full CERVICED experience page (2026-11-03).
 
 - **Tabs:** Home, Portfolio, Messages, Profile. Becca is a floating button on Home.
 - **Messages tab:** one list titled General enquiries (questions from Get In Touch). No General enquiries / Messages tabs, since they take no CERVICED bookings (2026-10-19).
@@ -42,7 +42,7 @@ Exactly four things: **logo**, **About**, **opening hours**, **at least one port
 
 Self-serve, from link-only Home (product owner, 2026-11-02; design canvas https://claude.ai/artifact/SorjEEw3DPKAa8y7NSpzjJ, concept C plus B):
 
-- **Where:** a quiet "Become a full member" card at the end of Home, always there; the "What full CERVICED adds" page ends with the same button. Once clients have nudged them enough (`JOIN_NUDGE_BAR_THRESHOLD`, 5 join nudges in the last 90 days), a bar beside Becca says so. Its X hides it until 5 more nudges arrive (per account, on the device).
+- **Where:** a quiet "Become a full member" card at the end of Home, always there; the "Full CERVICED experience" page ends with the same button. Once clients have nudged them enough (`JOIN_NUDGE_BAR_THRESHOLD`, 5 join nudges in the last 90 days), a bar beside Becca says so. Its X hides it until 5 more nudges arrive (per account, on the device).
 - **What happens:** every entry opens `BecomeFullMemberSheet`, which says what changes first. Confirming calls `become_full_member()` (20261102190000): `booking_mode` → `'cerviced'`, the booking link is cleared from `providers` and `users`, and `full_member_since` is stamped. The mode change re-runs `check_and_set_provider_live()` on the full checklist, so they're **off Search until they go live again**. AuthContext flips `myBookingMode` and the app swaps to the full provider tabs, whose Home shows that checklist.
 - **One way.** There's no switch back in the app.
 - **Price shown, nothing charged:** "£25.99 a month, 2 months free on us" (`src/constants/fullMembership.ts`). No billing exists. The free months start **the day they go live again**, not the tap: `full_member_free_from` is stamped by a trigger the first time `has_gone_live` turns true after the switch (or at the switch if they're somehow still live).

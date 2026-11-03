@@ -4,13 +4,13 @@ import * as Haptics from 'expo-haptics';
 import {
   Alert,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
@@ -133,7 +133,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       <KeyboardDismissView style={styles.flex}>
         <ScrollView

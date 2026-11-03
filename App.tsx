@@ -46,7 +46,7 @@ import { CartProvider } from './src/contexts/CartContext';
 import { BookingProvider } from './src/contexts/BookingContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { RegistrationProvider } from './src/contexts/RegistrationContext';
-import { ThemeProvider } from './src/contexts/ThemeContext';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { DisplaySettingsProvider } from './src/contexts/DisplaySettingsContext';
 import {
   StatusBarTintProvider,
@@ -153,7 +153,11 @@ function AppContent() {
 }
 
 // The frosted strip is painted for pale screens, where it keeps the dark status
-// bar icons legible over content scrolling under them.
+// bar icons legible over content scrolling under them. In dark mode it is
+// tinted dark with light icons, for the same reason the other way round.
+//
+// This is only the default. A screen that renders its own
+// <FocusAwareStatusBar> overrides the icon colour while it's the one showing.
 //
 // A screen whose top edge is dark (a provider's Black profile hero) gets no
 // strip at all, only light icons. Tinting the strip dark instead looks right
@@ -163,11 +167,12 @@ function AppContent() {
 // to notice.
 function StatusBarBlur() {
   const isDarkTopArea = useStatusBarTint();
+  const { isDarkMode } = useTheme();
   return (
     <>
-      <StatusBar style={isDarkTopArea ? 'light' : 'dark'} />
+      <StatusBar style={isDarkTopArea || isDarkMode ? 'light' : 'dark'} />
       {!isDarkTopArea && (
-        <BlurView intensity={20} tint="light" style={styles.statusBarBlur} />
+        <BlurView intensity={20} tint={isDarkMode ? 'dark' : 'light'} style={styles.statusBarBlur} />
       )}
     </>
   );

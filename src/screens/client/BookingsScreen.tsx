@@ -42,6 +42,7 @@ import { useTheme, Theme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
+import { buildRebookCartItem } from '../../features/bookings/rebook';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
@@ -578,34 +579,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       }, 300);
     } else {
       // No add-ons, add directly to cart
-      const cartItem = {
-        providerName: booking.providerName,
-        providerDisplayName: live.providerDisplayName,
-        providerSlug: live.providerSlug,
-        providerId: providerDbId,
-        // booking.providerImage can be a plain string or an {uri} object
-        // depending on where the booking snapshot came from — Image requires
-        // {uri}, so a raw string here silently renders nothing in the cart.
-        providerImage: typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage,
-        providerService: booking.providerService,
-        service: {
-          id: live.id,
-          name: live.name,
-          price: live.price,
-          duration: booking.duration,
-          description: booking.providerService,
-          addOns: [],
-        },
-        quantity: 1,
-        // Always a new cart instance — the client may already have this
-        // same provider/service in the cart from an earlier "Book Again" or
-        // from the provider profile, and each rebook is its own appointment.
-        forceNewInstance: true,
-      };
-
-      addToCart(cartItem);
+      const { item, notes } = buildRebookCartItem(booking, live, providerDbId, false);
+      addToCart(item);
       setModalVisible(false);
-      setSuccessMessage(`${booking.serviceName} has been added to your cart.`);
+      setSuccessMessage(
+        notes.length > 0
+          ? `${live.name} added to your cart. ${notes.join(' ')}`
+          : `${live.name} has been added to your cart.`,
+      );
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       // ✅ FIX: Set flag to navigate when modal closes instead of during modal visibility
@@ -627,43 +608,25 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
     }, 100);
 
-    // Re-resolve the booking's add-ons against the live list by name, so a
-    // rebook carries today's add-on prices and real add-on ids — any add-on
-    // the provider has since removed or deactivated is silently dropped
-    // rather than re-booked from a stale snapshot.
-    const live = rebookContext?.live;
-    const previousAddOnNames = new Set((selectedBooking.addOns ?? []).map(a => a.name));
-    const liveAddOns = finalSelection === 'with' && live
-      ? live.addOns.filter(a => previousAddOnNames.has(a.name))
-      : [];
+    // handleRebook only opens the add-ons question once it has resolved the
+    // live service, so a missing context means the question is stale.
+    if (!rebookContext) return;
+    const { item, notes } = buildRebookCartItem(
+      selectedBooking,
+      rebookContext.live,
+      rebookContext.providerDbId,
+      finalSelection === 'with',
+    );
 
-    const cartItem = {
-      providerName: selectedBooking.providerName,
-      providerDisplayName: live?.providerDisplayName,
-      providerSlug: live?.providerSlug,
-      providerId: rebookContext?.providerDbId ?? selectedBooking.providerId,
-      providerImage: typeof selectedBooking.providerImage === 'string' ? { uri: selectedBooking.providerImage } : selectedBooking.providerImage,
-      providerService: selectedBooking.providerService,
-      service: {
-        id: live?.id ?? selectedBooking.serviceId ?? `rebook_${Date.now()}`,
-        name: live?.name ?? selectedBooking.serviceName,
-        price: live?.price ?? selectedBooking.price,
-        duration: selectedBooking.duration,
-        description: selectedBooking.providerService,
-        addOns: liveAddOns,
-      },
-      quantity: 1,
-      // Always a new cart instance — see handleRebook for why rebooking must
-      // never merge into an existing item's quantity instead of creating a
-      // separately-schedulable appointment.
-      forceNewInstance: true,
-    };
-
-    addToCart(cartItem);
+    addToCart(item);
     setRebookSelection(null);
     setRebookContext(null);
     setModalVisible(false);
-    setSuccessMessage(`${selectedBooking.serviceName} has been added to your cart.`);
+    setSuccessMessage(
+      notes.length > 0
+        ? `${rebookContext.live.name} added to your cart. ${notes.join(' ')}`
+        : `${rebookContext.live.name} has been added to your cart.`,
+    );
     setSuccessIcon('✓');
     setShowSuccessModal(true);
     // ✅ FIX: Set flag to navigate when modal closes instead of during modal visibility

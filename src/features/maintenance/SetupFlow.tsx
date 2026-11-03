@@ -10,7 +10,8 @@
 // Beauty Profile, so they never count toward its completeness.
 
 import React, { useMemo, useRef, useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -188,7 +189,7 @@ export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props)
 
   return (
     <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 100 }]}
         keyboardShouldPersistTaps="handled"

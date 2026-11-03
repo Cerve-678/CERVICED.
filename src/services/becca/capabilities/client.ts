@@ -60,7 +60,8 @@ import {
   getUserWaitlistEntries,
 } from "../../databaseService";
 import { AvailabilityService } from "../../AvailabilityService";
-import { hasUsefulHistory, type Capability, type CapabilityResult, type ThinkingTurn } from "../types";
+import { hasUsefulHistory, type Capability, type CapabilityResult, type PendingActionDone, type ThinkingTurn } from "../types";
+import { buildRebookCartItem, rebookAddOns } from "../../../features/bookings/rebook";
 import { CATEGORY_LABELS, SERVICE_CATALOGUE } from "../serviceCatalogue";
 import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
 import {
@@ -727,7 +728,7 @@ const rebook: Capability = {
     "book what i had last", "same thing again", "book that in again",
     "get that booked again", "have that again",
   ],
-  async run({ bookings }): Promise<CapabilityResult> {
+  async run({ bookings, addToCart }): Promise<CapabilityResult> {
     const past = bookings
       .filter((b) => b.status === BookingStatus.COMPLETED)
       .sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
@@ -740,11 +741,12 @@ const rebook: Capability = {
     }
     // Resolve the actual service before offering it. getRebookableService
     // re-checks is_active + has_gone_live, so a provider who has since taken
-    // their profile down is never offered as rebookable — and it returns the
-    // real slug, which navigation needs (a display name would 404 the profile).
+    // their profile down is never offered as rebookable — and it returns
+    // today's price and add-ons, which is what goes in the cart.
     let rebookable = null;
+    let providerId: string | null = null;
     try {
-      const providerId = await getProviderIdByDisplayName(last.providerName);
+      providerId = last.providerId ?? await getProviderIdByDisplayName(last.providerName);
       if (providerId) {
         rebookable = await getRebookableService(providerId, last.serviceName);
       }
@@ -752,7 +754,7 @@ const rebook: Capability = {
       // Fall through to the no-longer-available message below.
     }
 
-    if (!rebookable) {
+    if (!rebookable || !providerId) {
       return {
         text:
           `Last time you had **${last.serviceName}** with ${last.providerName}, ` +
@@ -761,26 +763,78 @@ const rebook: Capability = {
       };
     }
 
+    const live = rebookable;
+    const profileChip = navChip("profile", `Book with ${last.providerName}`, "ProviderProfile", {
+      providerId: live.providerSlug,
+      source: "becca",
+      openServiceId: live.id,
+    });
+    // No cart to put it in (Becca opened somewhere without one): offer the
+    // profile with the service open instead.
+    if (!addToCart) {
+      return {
+        text: `Last time you had **${last.serviceName}** with ${last.providerName} on ${dayLabel(last.bookingDate)}. Want the same again?`,
+        card: {
+          title: "BOOK AGAIN",
+          meta: `Last on ${dayLabel(last.bookingDate)}`,
+          rows: [{ title: last.serviceName, detail: `with ${last.providerName}`, tag: money(live.price) }],
+        },
+        work: ["Found your last appointment", "Checked it’s still bookable"],
+        layout: "cardFirst",
+        suggestions: [profileChip],
+      };
+    }
+
+    const { kept, dropped } = rebookAddOns(last, live);
+    const addToCartAndSay = (includeAddOns: boolean) => async (): Promise<PendingActionDone> => {
+      const { item } = buildRebookCartItem(last, live, providerId, includeAddOns);
+      addToCart(item);
+      return {
+        text: `It’s in your cart, ready to book. Pick a day and time there and you’re done.`,
+        suggestions: [navChip("cart", "Go to cart", "CartMain"), profileChip],
+      };
+    };
+
+    const lines = [
+      `Last time you had **${last.serviceName}** with ${last.providerName} on ${dayLabel(last.bookingDate)}` +
+        (kept.length > 0 ? `, with ${kept.map((a) => a.name).join(" and ")}.` : "."),
+    ];
+    if (Math.abs(live.price - last.price) > 0.005) {
+      lines.push(`It’s ${money(live.price)} now (it was ${money(last.price)}).`);
+    }
+    if (dropped.length > 0) {
+      lines.push(`${dropped.join(" and ")} ${dropped.length === 1 ? "isn’t" : "aren’t"} offered any more, so I’ve left ${dropped.length === 1 ? "it" : "them"} out.`);
+    }
+
+    if (kept.length === 0) {
+      lines.push("Shall I put it in your cart?");
+      return {
+        text: lines.join(" "),
+        pendingAction: {
+          id: `rebook-${live.id}`,
+          describe: `Add ${live.name} to your cart`,
+          confirmLabel: "Add to my cart",
+          run: addToCartAndSay(false),
+        },
+      };
+    }
+
+    const addOnTotal = kept.reduce((sum, a) => sum + a.price, 0);
+    const withLabel = kept.length === 1 ? `Add with ${kept[0]!.name}` : `Add with the ${kept.length} add-ons`;
+    lines.push("Want the add-ons again too?");
     return {
-      text: oneOf(
-        `Last time you had **${last.serviceName}** with ${last.providerName} on ${dayLabel(last.bookingDate)}. Want the same again?`,
-        `Your last visit was **${last.serviceName}** with ${last.providerName}. Shall we book it again?`,
-        `Same again? Last time was **${last.serviceName}** with ${last.providerName}, on ${dayLabel(last.bookingDate)}.`,
-      ),
-      card: {
-        title: "BOOK AGAIN",
-        meta: `Last on ${dayLabel(last.bookingDate)}`,
-        rows: [{ title: last.serviceName, detail: `with ${last.providerName}`, tag: "Still bookable" }],
+      text: lines.join(" "),
+      pendingAction: {
+        id: `rebook-${live.id}-with-addons`,
+        describe: `Add ${live.name} with add-ons to your cart`,
+        confirmLabel: addOnTotal > 0 ? `${withLabel} (+${money(addOnTotal)})` : withLabel,
+        run: addToCartAndSay(true),
+        alternative: {
+          id: `rebook-${live.id}`,
+          confirmLabel: "Add without add-ons",
+          run: addToCartAndSay(false),
+        },
       },
-      work: ["Found your last appointment", "Checked it’s still bookable"],
-      layout: "cardFirst",
-      suggestions: [
-        navChip("profile", `Book with ${last.providerName}`, "ProviderProfile", {
-          providerId: rebookable.providerSlug,
-          source: "becca",
-          openServiceId: rebookable.id,
-        }),
-      ],
     };
   },
 };
@@ -3731,7 +3785,9 @@ const help: Capability = {
     return {
       text:
         "## What I can do for you\n" +
+        "I’m not perfect yet, so I won’t always get it right first time. Here’s where I can help:\n" +
         "- **Bookings** — see what’s next, costs, forms, payment details, or open the exact booking to reschedule or cancel\n" +
+        "- **Book again** — put your last appointment back in your cart, with or without its add-ons\n" +
         "- **Find a provider** — search by service, budget, availability, reviews, prices, or portfolio work\n" +
         "- **Plan a booking** — set the service, timing and budget, then narrow real options down\n" +
         "- **Provider details** — check services, prices, contact details, consultations, promo codes and reschedule policies\n" +
