@@ -5,7 +5,7 @@
 
 #generated
 
-**3038 functions** across **418 files**.
+**3042 functions** across **419 files**.
 
 ### `src/components/` (56)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -110,7 +110,7 @@
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 
-### `src/features/bookings/` (20)
+### `src/features/bookings/` (21)
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
@@ -125,6 +125,7 @@
 - `noShowDispute.ts` — **fileNoShowDispute**
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **describeRefundOutcome** · **describeSettlementTiming** · money · **previewProviderRefund**
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
+- `rebook.ts` — **buildRebookCartItem** · durationLabel · **rebookAddOns**
 - `receipt.ts` — appointmentWhen · **buildClientReceiptHTML** · **buildProviderInvoiceHTML** · escapeHtml · methodLabel · money · renderDocument
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen** · **refundReplyDeadline**
 - `requestWindow.ts` — **clientRequestNote**
@@ -380,7 +381,7 @@
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 
 ### `src/services/becca/capabilities/` (3)
-- `client.ts` — availabilityThinking · bookingChoiceMessage · bookingChoices · bookingTicket · categoryWords · providerRow · soleUpcoming · sortUpcoming · ticketStamp
+- `client.ts` — addToCartAndSay · availabilityThinking · bookingChoiceMessage · bookingChoices · bookingTicket · categoryWords · providerRow · soleUpcoming · sortUpcoming · ticketStamp
 - `provider.ts` — cutoff · inRange
 - `shared.ts` — **askChip** · **chip** · **dayLabel** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
 
