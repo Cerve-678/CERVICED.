@@ -1,9 +1,7 @@
 -- Bookings keep the cancellation window they were made under.
 --
--- Frontier when written (2026-11-03): live max 20261102210000; claimed by open
--- work: 20261103000000 (#268) and 20261103010000-030000 (session cerviced-bf).
--- Check MIGRATION_OWNER.md and re-check max(version) and open branches before
--- applying.
+-- Frontier checked 2026-11-03: live max 20261103030000 (cerviced-bf's three and
+-- #268's 20261103000000 all applied). Re-check max(version) before applying.
 --
 -- Until now every check read the provider's CURRENT window
 -- (providers.cancellation_notice_hours, else booking_policies.cancelNotice), so
@@ -15,12 +13,18 @@
 --     made, set by a BEFORE INSERT trigger from the provider row (whatever the
 --     app sends is overwritten) and never changed after; a reschedule keeps it.
 --   - Existing bookings are filled with the window in force now, so nobody's
---     booking changes when this runs. Bookings triggers are skipped for that
---     fill (session_replication_role), so it sends nothing and moves nothing.
+--     booking changes when this runs. Only three bookings triggers fire on an
+--     update that names none of their columns (updated_at, fee snapshot, the
+--     deferred mobile-address check); they're disabled for the fill and
+--     re-enabled before COMMIT, so the fill touches nothing else. Every other
+--     bookings trigger is limited to columns this doesn't change. (This role
+--     can't set session_replication_role.)
 --
--- Redefines, each from the latest repo definition (body md5 guarded, so a
+-- Redefines, each from its live body on 2026-11-03 (body md5 guarded, so a
 -- function changed live since stops this file instead of being reverted). The
--- only change in each is to prefer the booking's own window:
+-- live expiry function is the repo one with its comments stripped, so it's
+-- rebuilt from live text. The only change in each is to prefer the booking's
+-- own window:
 --   - cancel_own_booking
 --   - request_reschedule_own_booking
 --   - process_cancel_window_closing_warnings
@@ -49,7 +53,7 @@ BEGIN
     RAISE EXCEPTION 'process_cancel_window_closing_warnings changed since this file was written (body md5 %). Re-diff before applying.', v_md5;
   END IF;
   SELECT md5(prosrc) INTO v_md5 FROM pg_proc WHERE oid = 'public.process_expire_stale_reschedule_requests()'::regprocedure;
-  IF v_md5 IS DISTINCT FROM '30a187c7039e70bb628077d6ec1dfdeb' THEN
+  IF v_md5 IS DISTINCT FROM '70075a399044b8ccd6abb7622127ee90' THEN
     RAISE EXCEPTION 'process_expire_stale_reschedule_requests changed since this file was written (body md5 %). Re-diff before applying.', v_md5;
   END IF;
 END
@@ -61,13 +65,18 @@ ALTER TABLE public.bookings
 COMMENT ON COLUMN public.bookings.cancel_notice_hours IS
   'Cancellation window (hours) in force when the booking was made: cancel_notice_hours() of the provider at insert. Set by trigger, never changed after. NULL only on rows the backfill could not match to a provider; readers fall back to the provider''s current window.';
 
-SET LOCAL session_replication_role = replica;
+-- All three are enabled ('O') live, so ENABLE puts them back exactly.
+ALTER TABLE public.bookings DISABLE TRIGGER bookings_updated_at;
+ALTER TABLE public.bookings DISABLE TRIGGER before_booking_snapshot_fees;
+ALTER TABLE public.bookings DISABLE TRIGGER enforce_mobile_booking_has_client_address;
 UPDATE public.bookings b
    SET cancel_notice_hours = public.cancel_notice_hours(p.cancellation_notice_hours, p.booking_policies)
   FROM public.providers p
  WHERE p.id = b.provider_id
    AND b.cancel_notice_hours IS NULL;
-SET LOCAL session_replication_role = origin;
+ALTER TABLE public.bookings ENABLE TRIGGER bookings_updated_at;
+ALTER TABLE public.bookings ENABLE TRIGGER before_booking_snapshot_fees;
+ALTER TABLE public.bookings ENABLE TRIGGER enforce_mobile_booking_has_client_address;
 
 CREATE OR REPLACE FUNCTION public.freeze_booking_cancel_notice_hours()
  RETURNS trigger
@@ -398,12 +407,8 @@ BEGIN
       JOIN public.providers p ON p.id = b.provider_id
      WHERE rr.status IN ('pending', 'provider_responded')
        AND NOW() >= LEAST(
-             -- Never later than the appointment itself.
              b.booking_date::TIMESTAMP + b.booking_time,
              LEAST(
-               -- The provider's own reschedule-notice policy, floored at
-               -- 24h. Mapping kept identical to
-               -- request_reschedule_own_booking().
                rr.updated_at + (GREATEST(
                  CASE p.booking_policies->>'rescheduleNotice'
                    WHEN 'same_day' THEN 0
@@ -411,35 +416,11 @@ BEGIN
                    WHEN '72h'      THEN 72
                    ELSE 24
                  END, 24) || ' hours')::INTERVAL,
-               -- Answer before the appointment DAY starts, so the client
-               -- knows the night before -- but never less than 4 hours from
-               -- the ask, or a same-day request would be dead on arrival.
                GREATEST(
                  b.booking_date::TIMESTAMP,
                  rr.updated_at + INTERVAL '4 hours'
                )
              ),
-             -- NEW: never later than 6 hours before the CLIENT's own
-             -- cancel_notice_hours() deadline on this same booking would
-             -- close. The reschedule-notice bound above is a SEPARATE
-             -- provider policy from cancelNotice and can easily outlast it
-             -- (rescheduleNotice is floored at 24h; cancelNotice can be as
-             -- short as the provider likes) -- without this bound a
-             -- provider's silence can carry the client straight through
-             -- their own cancellation deadline while the request is still
-             -- 'pending', at which point cancel_own_booking() starts
-             -- rejecting them and request_reschedule_own_booking() is still
-             -- refusing a second request on the same booking. See this
-             -- file's header for the confirmed live scenario.
-             --
-             -- Floored at the same 4-hour "real chance to answer" minimum as
-             -- the bound above, for the same reason: a request made five
-             -- minutes before the client's own cancel window shuts should
-             -- not expire on the very next cron tick with no chance for the
-             -- provider to have answered it.
-             --
-             -- Does NOT grant a no-penalty cancellation and does not change
-             -- cancel_own_booking()'s own notice check below -- see header.
              CASE
                WHEN COALESCE(b.cancel_notice_hours, public.cancel_notice_hours(p.cancellation_notice_hours, p.booking_policies)) > 0
                  THEN GREATEST(
@@ -458,16 +439,6 @@ BEGIN
      WHERE id = r.request_id;
 
     IF r.request_status = 'pending' THEN
-      -- Waiting on the PROVIDER, who never offered dates. The client's request
-      -- is dead and they had no part in that, so they are the one told. The
-      -- provider caused it by inaction and has already had up to N nudges from
-      -- process_provider_stale_reschedule_reminders() — another message here
-      -- would be a fourth nag, not news.
-      --
-      -- Copy asserts only what is certainly true. It deliberately does NOT
-      -- offer "ask again or cancel": by this point the provider's own notice
-      -- window may have lapsed, which is exactly what would make both of those
-      -- fail. Promising an action the next tap rejects is worse than silence.
       INSERT INTO public.notifications
         (user_id, type, title, message, priority, is_actionable,
          booking_id, provider_id, recipient_role)
@@ -481,11 +452,6 @@ BEGIN
         'high', TRUE, r.booking_id, r.provider_id, 'client'
       );
     ELSE
-      -- Waiting on the CLIENT, who never picked one of the offered times.
-      -- Both sides are told here, unlike the branch above: the provider's held
-      -- offer is dead (their state changed through no act of their own), and
-      -- the client's app is still showing those offered dates as live, so
-      -- leaving them to tap a slot that no longer exists is the worse failure.
       INSERT INTO public.notifications
         (user_id, type, title, message, priority, is_actionable,
          booking_id, provider_id, recipient_role)
@@ -515,5 +481,9 @@ BEGIN
   END LOOP;
 END;
 $function$;
+
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261103040000', 'bookings_keep_their_cancel_window')
+ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

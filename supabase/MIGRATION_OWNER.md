@@ -60,7 +60,7 @@ OWNER:  (none)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261103040000 | `bookings_keep_their_cancel_window` | **NOT APPLIED.** Written by session cerviced-e1 on `fix/policies-notice-sets-cancel-window` (#274) while the Supabase connector was down, so no live read was possible. Numbered above `20261103000000` (#268) and `20261103010000`–`030000` (cerviced-bf). Body-md5 guards stop it if any of the four redefined functions changed live. Adds `bookings.cancel_notice_hours` plus insert/keep triggers, and fills existing rows with `session_replication_role = replica`. **Order:** apply, then deploy `apply-cancellation-refund`, then merge the app. |
+| 20261103040000 | `bookings_keep_their_cancel_window` | **NOT APPLIED.** Written by session cerviced-e1 on `fix/policies-notice-sets-cancel-window` (#274) Frontier re-checked 2026-11-03 via the CLI: live max `20261103030000`. All four guarded function bodies matched live then (the expiry function rebuilt from live text). Adds `bookings.cancel_notice_hours` plus insert/keep triggers, and fills existing rows with the three any-update booking triggers disabled for the fill only. Records its own version. **Order:** apply, then deploy `apply-cancellation-refund`, then merge the app. |
 
 ### Written 2026-11-02, NOT applied (payment outcomes reach the client)
 

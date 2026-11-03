@@ -20,9 +20,16 @@ describe('a booking keeps the cancellation window it was made under', () => {
     expect(fnBody('freeze_booking_cancel_notice_hours')).toContain('NEW.cancel_notice_hours := OLD.cancel_notice_hours');
   });
 
-  it('fills existing bookings with the window in force now, without firing booking triggers', () => {
-    expect(sql).toMatch(/SET LOCAL session_replication_role = replica;\s*UPDATE public\.bookings/);
-    expect(sql).toContain('SET LOCAL session_replication_role = origin;');
+  it('fills existing bookings with the window in force now, with the any-update triggers off', () => {
+    const fill = sql.indexOf('UPDATE public.bookings b');
+    for (const trigger of ['bookings_updated_at', 'before_booking_snapshot_fees', 'enforce_mobile_booking_has_client_address']) {
+      const off = sql.indexOf(`DISABLE TRIGGER ${trigger};`);
+      const on = sql.indexOf(`ENABLE TRIGGER ${trigger};`);
+      expect(off).toBeGreaterThan(-1);
+      expect(off).toBeLessThan(fill);
+      expect(on).toBeGreaterThan(fill);
+    }
+    expect(sql).toContain("VALUES ('20261103040000', 'bookings_keep_their_cancel_window')");
   });
 
   it.each([
