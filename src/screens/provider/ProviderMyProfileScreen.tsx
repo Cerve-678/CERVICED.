@@ -18,7 +18,8 @@
  * (ProviderScheduleScreen), Policies (PoliciesScreen, in the Business Details
  * hub) and Branding (BrandingScreen).
  *
- * Deliberately NOT analytics. No revenue, no charts, no trends — that's
+ * Two graphs show which services clients book, because that reports back on the
+ * catalogue managed here. Revenue and the full detail are still
  * ProviderAnalyticsScreen's job.
  *
  * Status comes from the shared features/providers/goLiveStatus module, which
@@ -71,7 +72,7 @@ import {
   deletePortfolioItem,
   getMyBookmarkCount,
   getMyProviderProfile,
-  getMyTopServices,
+  getMyServiceBookingRows,
   getMyServiceCatalogue,
   getProviderPortfolio,
   getMyProviderTermsText,
@@ -91,6 +92,7 @@ import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
+import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
 import {
   TodayBookingCards,
@@ -104,6 +106,8 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { useDarkTopArea } from '../../contexts/StatusBarTintContext';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
+import ServiceBookingCharts from '../../features/providers/ServiceBookingCharts';
+import { SERVICE_BOOKING_LOOKBACK_DAYS, summariseServiceBookings, type ServiceBookingSummary } from '../../features/providers/serviceBookingSummary';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
 import { formatDurationMinutes } from '../../utils/dateUtils';
 import ServiceEditorSheet, {
@@ -787,7 +791,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [bookmarkCount, setBookmarkCount] = useState<number | null>(null);
   // What clients actually book, busiest first — the one thing on this screen
   // that reports back on the catalogue rather than describing it.
-  const [topServices, setTopServices] = useState<{ name: string; count: number }[] | null>(null);
+  const [serviceBookings, setServiceBookings] = useState<ServiceBookingSummary | null>(null);
 
   // Editor state. editingId is the row being changed, or null for a new
   // service in editingCategory.
@@ -926,12 +930,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 logger.error('[MyServices] bookmark count load failed:', err);
               }),
 
-            getMyTopServices(90, 1)
-              .then(result => {
-                if (active) setTopServices(result);
+            getMyServiceBookingRows(SERVICE_BOOKING_LOOKBACK_DAYS)
+              .then(rows => {
+                if (active) setServiceBookings(summariseServiceBookings(rows));
               })
               .catch(err => {
-                logger.error('[MyServices] top services load failed:', err);
+                logger.error('[MyServices] service bookings load failed:', err);
               }),
 
             getProviderReviews(profile.id, { limit: 20 })
@@ -1110,7 +1114,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   }, [goLive, goLiveWithHealth]);
 
   const showSteps = stepsOpen ?? !(goLive?.isLive ?? false);
-  const topService = topServices?.[0] ?? null;
+  const topService = serviceBookings?.ranked[0] ?? null;
   const averageRating = providerData?.rating ?? 0;
   // Falls back to the rows in hand only while the count hasn't arrived, so an
   // in-flight load never briefly claims "0 reviews" under a visible one.
@@ -1142,7 +1146,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
   const handleOpenTodayBooking = useCallback(
     (booking: BookingWithAddOns) => {
-      navigation.navigate('BookingDetail', { bookingId: booking.id, booking });
+      // The cards hold raw rows; the detail screen reads a ConfirmedBooking, and
+      // shows no client or service on anything else.
+      navigation.navigate('BookingDetail', { bookingId: booking.id, booking: mapDbBookingToConfirmed(booking) });
     },
     [navigation],
   );
@@ -2078,7 +2084,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                             state here means nobody booked, not that the tile
                             failed to load. */}
                         <Text style={[styles.shortTitle, { color: PP.text }]} numberOfLines={2}>
-                          {topServices === null ? '—' : (topService?.name ?? 'No bookings yet')}
+                          {serviceBookings === null ? '—' : (topService?.name ?? 'No bookings yet')}
                         </Text>
                         {topService ? (
                           <Text style={[styles.shortSub, { color: PP.sub }]} numberOfLines={1}>
@@ -2088,6 +2094,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       </TouchableOpacity>
                     </View>
                   </View>
+
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS BOOK</Text>
+                  <ServiceBookingCharts summary={serviceBookings} palette={dashPalette} />
 
                   {/* ── Portfolio ──────────────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>YOUR WORK</Text>

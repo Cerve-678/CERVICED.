@@ -24,6 +24,14 @@
 // policies saying 'full' now mean 'half' (readCancelPenalty). This is only ever
 // a share of what was paid, never a charge for the unpaid balance.
 //
+// Non-refundable deposit (user decisions 2026-11-02 and 03): where the booking's
+// frozen policy says so, the provider keeps the deposit whenever the client
+// cancels, even in good time. When that rule is the only reason anything is
+// kept, CERVICED refunds its fee. A late penalty worth more than the deposit
+// still applies as above, fee kept. Only a client's own cancel reaches this
+// function, so a provider who cancels, declines or never answers still
+// refunds everything.
+//
 // All amounts are integer pence. The function reads the booking's STORED
 // figures (amount_paid, deposit, platform_fee) and the payout row's STORED
 // payout_amount, rather than re-deriving the fee formula — so it stays correct
@@ -64,6 +72,8 @@ export interface CancellationSettlementInput {
   payoutAmountPence: number;
   /** The client paid only a deposit in the app, not the full price. */
   paidDepositOnly: boolean;
+  /** The booking's frozen policy makes its deposit non-refundable. */
+  depositNonRefundable?: boolean;
 }
 
 export interface CancellationSettlement {
@@ -73,6 +83,8 @@ export interface CancellationSettlement {
   providerKeepPence: number;
   /** Amount to claw back from the provider's payout if it was already transferred, in pence (= payoutAmount − providerKeep). */
   reverseFromPayoutPence: number;
+  /** What was kept is down to the non-refundable deposit alone, so the fee was refunded. */
+  depositRuleOnly: boolean;
 }
 
 /** Clamp to a non-negative integer number of pence. */
@@ -95,7 +107,7 @@ export function computeCancellationSettlement(
   // Nothing was captured (e.g. Stripe not live, or a free booking) — nothing to
   // settle. The cancel still goes through; this just moves no money.
   if (amountPaid <= 0) {
-    return { clientRefundPence: 0, providerKeepPence: 0, reverseFromPayoutPence: 0 };
+    return { clientRefundPence: 0, providerKeepPence: 0, reverseFromPayoutPence: 0, depositRuleOnly: false };
   }
 
   let clientRefund: number;
@@ -132,6 +144,21 @@ export function computeCancellationSettlement(
     clientRefund = Math.max(0, amountPaid - providerKeep - fee);
   }
 
+  // The non-refundable deposit is a floor under whatever the penalty kept.
+  let depositRuleOnly = false;
+  if (input.depositNonRefundable === true && deposit > 0) {
+    const depositKeep = input.paidDepositOnly ? Math.min(deposit, payout) : Math.min(deposit, half);
+    if (providerKeep === 0 && depositKeep > 0) {
+      // Nothing else applied, so only the deposit is kept and the fee goes back.
+      depositRuleOnly = true;
+      providerKeep = depositKeep;
+      clientRefund = Math.max(0, amountPaid - providerKeep);
+    } else if (providerKeep < depositKeep) {
+      providerKeep = depositKeep;
+      clientRefund = Math.max(0, amountPaid - providerKeep - fee);
+    }
+  }
+
   // A refund can never exceed what was paid.
   clientRefund = Math.min(clientRefund, amountPaid);
 
@@ -139,5 +166,6 @@ export function computeCancellationSettlement(
     clientRefundPence: clientRefund,
     providerKeepPence: providerKeep,
     reverseFromPayoutPence: Math.max(0, payout - providerKeep),
+    depositRuleOnly,
   };
 }

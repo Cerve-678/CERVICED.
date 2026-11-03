@@ -36,10 +36,11 @@ import {
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
-  SPECIALTIES_MAP, CLIENTELE_OPTS, PRICE_OPTS, TEAM_SIZE_OPTS,
+  SPECIALTIES_MAP, CLIENTELE_OPTS, TEAM_SIZE_OPTS,
   ALL_SERVICE_TYPE_OPTS, styleAestheticOptions, productsPlaceholder,
 } from '../../features/business-details/options';
 import { HAIR_TYPES } from '../../constants/hairTypes';
+import { PRICE_BANDS, tierForBands } from '../../constants/priceBands';
 import { toUserMessage } from '../../utils/userFacingError';
 
 export default function ServicesPricingScreen({ navigation }: any) {
@@ -52,7 +53,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
 
   const [specialties, setSpecialties]       = useState<string[]>([]);
   const [clientele, setClientele]           = useState<string[]>([]);
-  const [priceTier, setPriceTier]           = useState('');
+  const [priceBands, setPriceBands]         = useState<string[]>([]);
   const [teamSize, setTeamSize]             = useState('');
   const [styleAesthetic, setStyleAesthetic] = useState<string[]>([]);
   const [productsUsed, setProductsUsed]     = useState('');
@@ -74,7 +75,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
         if (providerData) {
           setProviderId(providerData.id ?? null);
           setServiceCategory(providerData.service_category ?? '');
-          setPriceTier(providerData.price_tier ?? '');
+          setPriceBands(providerData.price_bands ?? []);
           setTeamSize(providerData.team_size ?? '');
           setClientele(providerData.clientele ?? []);
           setStyleAesthetic(providerData.style_tags ?? []);
@@ -114,7 +115,8 @@ export default function ServicesPricingScreen({ navigation }: any) {
       await Promise.all([
         updateProviderContactDetails(providerId, {
           // '' would violate the CHECK constraints — clear with null.
-          price_tier: (priceTier as 'budget' | 'mid' | 'premium' | 'luxury') || null,
+          price_bands: priceBands,
+          price_tier: tierForBands(priceBands) || null,
           team_size: (teamSize as 'solo' | 'small_team' | 'large_team') || null,
           clientele,
           // availability_windows / accepts_new_clients / walk_ins_welcome /
@@ -251,7 +253,14 @@ export default function ServicesPricingScreen({ navigation }: any) {
 
               <View style={{ height: 18 }} />
               <SectionLabel text="Price range" />
-              <RadioGroup options={PRICE_OPTS} value={priceTier} onChange={setPriceTier} />
+              <ChipGroup
+                options={PRICE_BANDS.map(band => band.label)}
+                selected={PRICE_BANDS.filter(band => priceBands.includes(band.value)).map(band => band.label)}
+                onToggle={label => {
+                  const band = PRICE_BANDS.find(b => b.label === label);
+                  if (band) toggleChip(priceBands, setPriceBands, band.value);
+                }}
+              />
 
               <View style={{ height: 18 }} />
               <SectionLabel text="Team size" />

@@ -33,6 +33,11 @@ export interface PolicyDisplayData {
    *  this app has no refund-processing infra and doesn't calculate or
    *  enforce refunds automatically. Same free-text pattern as cancelNote. */
   refundPolicyNote?: string;
+  /** Free text, like refundPolicyNote. Neither changes what can be booked or paid. */
+  /** Kept whenever the client cancels, even in good time (cancellationSettlement.ts). */
+  depositNonRefundable?: boolean;
+  travelPolicy?: string;
+  emergencyBookingPolicy?: string;
 }
 
 /** The provider's own written Terms & Conditions, frozen at booking time.
@@ -164,7 +169,7 @@ export function buildPolicyDisplayRows(
     rows.push({
       icon: 'card-outline',
       label: 'Deposit',
-      value: depositMode === 'deposit_required' ? `${amount} required` : `${amount} (optional)`,
+      value: `${depositMode === 'deposit_required' ? `${amount} required` : `${amount} (optional)`}${policy.depositNonRefundable ? ', non-refundable' : ''}`,
     });
   } else if (options?.showNoDeposit) {
     rows.push({ icon: 'card-outline', label: 'Deposit', value: 'No deposit' });
@@ -215,18 +220,32 @@ export function buildPolicyDisplayRows(
   if (policy.refundPolicyNote) {
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
+  pushWrittenPolicies(rows, policy);
 
   return rows;
 }
 
+function pushWrittenPolicies(rows: PolicyDisplayRow[], policy: PolicyDisplayData): void {
+  if (policy.travelPolicy?.trim()) {
+    rows.push({ icon: 'car-outline', label: 'Travel', value: policy.travelPolicy.trim() });
+  }
+  if (policy.emergencyBookingPolicy?.trim()) {
+    rows.push({ icon: 'flash-outline', label: 'Emergency appointments', value: policy.emergencyBookingPolicy.trim() });
+  }
+}
+
 function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] {
   const rows: PolicyDisplayRow[] = [];
+  if (policy.depositNonRefundable) {
+    rows.push({ icon: 'card-outline', label: 'Deposit', value: 'Non-refundable deposit needed to secure a booking' });
+  }
   const cancelRule = policy.cancelNotice && policy.cancelNotice !== 'none' ? `${policy.cancelNotice} notice` : null;
   pushRow(rows, sectionRow('time-outline', 'Cancellation', [cancelRule, policy.cancelNote]));
   pushRow(rows, sectionRow('calendar-outline', 'Reschedule', [rescheduleSummary(policy), policy.rescheduleNote]));
   if (policy.refundPolicyNote) {
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
+  pushWrittenPolicies(rows, policy);
   return rows;
 }
 

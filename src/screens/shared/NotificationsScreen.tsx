@@ -56,6 +56,7 @@ import { toUserMessage } from '../../utils/userFacingError';
 import { dateToYMD } from '../../utils/dateUtils';
 import {
   isCertificateNotification,
+  isScheduleAutoClosedNotification,
   notificationAmount,
   notificationDayHeadings,
   notificationKindLabel,
@@ -98,6 +99,7 @@ interface Notification {
   maintenanceItemId?: string | undefined;
   /** A whole month fully booked, the only kind that earns a certificate. */
   certificate: boolean;
+  scheduleAutoClosed?: boolean;
 }
 
 // ── Skeleton Notification Row ───────────────────────────────────
@@ -326,6 +328,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     bookingId: db.booking_id ?? undefined,
     maintenanceItemId: maintenanceItemIdOf(db.metadata),
     certificate: isCertificateNotification(db.type, db.metadata),
+    scheduleAutoClosed: isScheduleAutoClosedNotification(db.type, db.metadata),
     providerId: db.provider_id ?? undefined,
   });
 
@@ -804,6 +807,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // Payments, not on the booking the payout was for.
       defer(() => {
         navigateProviderHome('Payments');
+      }, 300);
+    } else if (notification.scheduleAutoClosed) {
+      // It closed by itself, so this goes where they can reopen it.
+      defer(() => {
+        dismissThenNavigate(() => navigateProviderHome('ProviderSchedule'));
       }, 300);
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only. The certificate shows on their own profile, the root of

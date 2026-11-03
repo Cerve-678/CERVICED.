@@ -46,6 +46,7 @@ import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { ImageCropModal } from '../../components/ImageCropModal';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -58,10 +59,15 @@ import {
   uploadToStorage,
 } from '../../services/providerRegistrationService';
 import {
-  Card, Field, SectionLabel, Toast, SaveButton,
+  Card, ChipGroup, Field, SectionLabel, Toast, SaveButton, ToggleRow,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
-import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
+import { resolveDepositMode } from '../../utils/depositPolicy';
+import {
+  BOOKING_INSTRUCTION_SUGGESTIONS,
+  selectedBookingInstructions,
+  toggleBookingInstruction,
+} from '../../features/business-details/bookingInstructions';
 
 type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
 // 'half' is no longer offered, but policies saved before 'custom' still say it.
@@ -92,12 +98,13 @@ interface PolicyState {
   refundPolicyNote: string;
   bookingInstructions: string;
   policyImageUrl:   string;
-  // Shown to a client in the "scheduling conflict" prompt before they ask for
-  // a time outside this provider's normal availability. A distinct document
-  // from the provider's Terms & Conditions (the add-to-cart form, edited from
-  // InfoReg). Only surfaced while EMERGENCY_BOOKINGS_ENABLED is on, but it
-  // round-trips through save regardless so a stored value is never lost.
+  // Shown in the profile's Policy tab. Also read by the booking sheet's
+  // "scheduling conflict" prompt if EMERGENCY_BOOKINGS_ENABLED returns. A
+  // distinct document from the provider's Terms & Conditions.
   emergencyBookingPolicy: string;
+  travelPolicy: string;
+  // Enforced by apply-cancellation-refund through each booking's frozen copy.
+  depositNonRefundable: boolean;
 }
 
 // What CERVICED itself applies or charges. A link-only provider's bookings
@@ -130,6 +137,8 @@ const DEFAULT_POLICIES: PolicyState = {
   bookingInstructions: '',
   policyImageUrl:   '',
   emergencyBookingPolicy: '',
+  travelPolicy: '',
+  depositNonRefundable: false,
 };
 
 function Pills<T extends string>({ options, value, onChange }: {
@@ -195,6 +204,7 @@ export default function PoliciesScreen({ navigation }: any) {
   // full REPLACE: a key that isn't carried through is a key that's deleted.
   const [carriedPolicies, setCarriedPolicies] = useState<Record<string, unknown>>({});
   const [policyImageUploading, setPolicyImageUploading] = useState(false);
+  const [policyImageToCrop, setPolicyImageToCrop] = useState<string | null>(null);
 
   // Re-affirmation only — first-publish acceptance is InfoRegScreen's
   // checkbox and is what actually gates being able to publish at all. This
@@ -246,6 +256,9 @@ export default function PoliciesScreen({ navigation }: any) {
     })();
   }, []);
 
+  const hasDeposit = resolveDepositMode(carriedPolicies) !== 'full_only'
+    && Boolean(carriedPolicies['depositAmount']);
+
   const setPolicy = useCallback(<K extends keyof PolicyState>(key: K, value: PolicyState[K]) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
   }, []);
@@ -258,19 +271,24 @@ export default function PoliciesScreen({ navigation }: any) {
       return;
     }
     // No allowsEditing: iOS's editor only crops to a square, which cuts the
-    // top and bottom off a full-length policy sheet.
+    // top and bottom off a full-length policy sheet. ImageCropModal does it.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.85,
     });
     const asset = result.assets?.[0];
     if (result.canceled || !asset) return;
+    setPolicyImageToCrop(asset.uri);
+  }, [userId]);
 
+  const handlePolicyImageCropped = useCallback(async (uri: string) => {
+    setPolicyImageToCrop(null);
+    if (!userId) return;
     setPolicyImageUploading(true);
     try {
-      const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
       const path = `${userId}/policy-${Date.now()}.${ext}`;
-      const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
+      const publicUrl = await uploadToStorage('portfolio', path, uri);
       setPolicy('policyImageUrl', publicUrl);
     } catch (e: any) {
       Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
@@ -334,6 +352,13 @@ export default function PoliciesScreen({ navigation }: any) {
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <ImageCropModal
+        uri={policyImageToCrop}
+        accent={C.accent}
+        onAccent={C.onAccent}
+        onCancel={() => setPolicyImageToCrop(null)}
+        onDone={handlePolicyImageCropped}
+      />
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
@@ -470,6 +495,30 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             </>)}
 
+            <Card
+              title="Non-Refundable Deposit"
+              sub={isLinkOnly
+                ? 'Tell clients if a booking needs a non-refundable deposit. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn\'t apply it or take any money.'
+                : 'If you say yes, you keep the deposit whenever a client cancels, even in good time. It still goes back to them if you cancel, decline or don\'t answer. It only applies to new bookings.'}
+            >
+              <ToggleRow
+                label="Do you require a non-refundable deposit to secure bookings?"
+                value={policies.depositNonRefundable}
+                onChange={v => setPolicy('depositNonRefundable', v)}
+              />
+              {!isLinkOnly && policies.depositNonRefundable && !hasDeposit && (
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Payments'); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={[s.cardSub, { color: C.accentText, marginTop: 10, marginBottom: 0 }]}>
+                    You don't take a deposit yet, so this won't apply. Set one up in Payments.
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </Card>
+
             {/* Refund policy — free-text disclosure only. This app has no
                 refund-processing infra, so there is deliberately no
                 percentage/amount field here that would imply the app
@@ -486,43 +535,46 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Shown on CERVICED bookings, which link-only pros don't have. */}
             {!isLinkOnly && (
-              <Card title="Booking Instructions" sub="Anything clients need to know before they arrive, like parking, what to bring or how to find you. Shown on every booking (optional).">
+              <Card title="Booking Instructions" sub="Anything clients need to know before they arrive, like parking, what to bring or how to find you. Clients see this in their booking details on every new booking (optional). Changing it later won't update bookings already made.">
                 <Field
                   label="Instructions"
                   value={policies.bookingInstructions}
                   onChange={v => setPolicy('bookingInstructions', v)}
-                  placeholder='e.g. "Please arrive 10 minutes early", parking info…'
+                  placeholder="Write your own or tap a suggestion below"
                   multiline
+                />
+                <ChipGroup
+                  options={BOOKING_INSTRUCTION_SUGGESTIONS}
+                  selected={selectedBookingInstructions(policies.bookingInstructions)}
+                  onToggle={line => setPolicy('bookingInstructions', toggleBookingInstruction(policies.bookingInstructions, line))}
                 />
               </Card>
             )}
 
-            {/* Emergency / out-of-hours requests are pulled from the client app
-                for now (EMERGENCY_BOOKINGS_ENABLED — see FUTURE_LOGIC.md), so
-                nothing reads this field yet and there's nothing to write it
-                for. The key still round-trips through save, so a value written
-                once the feature returns is safe meanwhile. */}
-            {EMERGENCY_BOOKINGS_ENABLED && (
-              <Card
-                title="Emergency Booking Policy"
-                sub="Shown to a client before they ask for a time outside your normal availability (optional). Separate from your Terms & Conditions."
-              >
-                {/* Placeholder deliberately does NOT exemplify a surcharge or
-                    any off-app payment term — the checkout flow doesn't read
-                    this field, so a money term written here would be an
-                    undisclosed off-app charge (see the deposit/balance
-                    liability boundary in CLAUDE.md and FUTURE_LOGIC.md's
-                    emergency-surcharge note). Keep examples to availability
-                    and process. */}
-                <Field
-                  label="Your emergency booking policy"
-                  value={policies.emergencyBookingPolicy}
-                  onChange={v => setPolicy('emergencyBookingPolicy', v)}
-                  placeholder="e.g. I only take out-of-hours requests from existing clients, and I need at least a day's notice to say yes"
-                  multiline
-                />
-              </Card>
-            )}
+            {/* Written policies only, shown on the profile. Neither one changes
+                what a client can book or pay in the app, so the placeholders
+                stay away from money: a charge written here would be an
+                off-app charge the checkout knows nothing about (see the
+                deposit/balance liability boundary in CLAUDE.md). */}
+            <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
+              <Field
+                label="Your travel policy"
+                value={policies.travelPolicy}
+                onChange={v => setPolicy('travelPolicy', v)}
+                placeholder='e.g. "I travel up to 10 miles and need somewhere to set up with a plug socket"'
+                multiline
+              />
+            </Card>
+
+            <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly.">
+              <Field
+                label="Your emergency appointment policy"
+                value={policies.emergencyBookingPolicy}
+                onChange={v => setPolicy('emergencyBookingPolicy', v)}
+                placeholder="e.g. I only take emergencies from existing clients, message me and I'll let you know if I can fit you in"
+                multiline
+              />
+            </Card>
 
             <Card title="Detailed Policy Image" sub="A picture of your full policy, for anything too detailed for the fields above, like a house-rules sheet or consent form. Clients open it from your profile (optional).">
               <View style={imgSt.grid}>

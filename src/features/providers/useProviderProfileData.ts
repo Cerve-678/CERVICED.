@@ -1,9 +1,11 @@
+import { closureReasonForClient } from './scheduleClosure';
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AvailabilityService } from "../../services/AvailabilityService";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import {
   getProviderActivePromotions,
+  getProviderClosureReason,
   isProviderTakingBookings,
   getProviderBySlug,
   getProviderProfilePreviewBySlug,
@@ -64,6 +66,8 @@ export interface ProviderProfileDataState {
   openingHoursLoading: boolean;
   /** False only once the server says this provider has closed their schedule. */
   takingBookings: boolean;
+  /** Set only when closed and the provider chose to tell clients why. */
+  closureReason: string | null;
   currentUserId: string | null;
   currentUserName: string;
   isOwnProvider: boolean;
@@ -109,6 +113,7 @@ export function useProviderProfileData(
   >(null);
   const [openingHoursLoading, setOpeningHoursLoading] = useState(true);
   const [takingBookings, setTakingBookings] = useState(true);
+  const [closureReason, setClosureReason] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("");
   const [isOwnProvider, setIsOwnProvider] = useState(false);
@@ -132,6 +137,7 @@ export function useProviderProfileData(
     setOpeningHours(null);
     setOpeningHoursLoading(true);
     setTakingBookings(true);
+    setClosureReason(null);
     setCurrentUserId(null);
     setCurrentUserName("");
     setIsOwnProvider(false);
@@ -242,6 +248,10 @@ export function useProviderProfileData(
         void isProviderTakingBookings(data.id)
           .then((taking) => {
             if (!cancelled) setTakingBookings(taking);
+            return taking ? null : getProviderClosureReason(data.id);
+          })
+          .then((reason) => {
+            if (!cancelled) setClosureReason(closureReasonForClient(reason));
           })
           .catch((error: unknown) => {
             logger.warn("Failed to check whether provider is taking bookings:", error);
@@ -320,6 +330,7 @@ export function useProviderProfileData(
     openingHours,
     openingHoursLoading,
     takingBookings,
+    closureReason,
     currentUserId,
     currentUserName,
     isOwnProvider,
