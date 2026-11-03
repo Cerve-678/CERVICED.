@@ -5,11 +5,11 @@
  *
  * Concept A, "You keep every penny" (product owner, 2026-11-03,
  * https://claude.ai/artifact/CGxJoPPhJ66jNjUvSRkjPm): it leads with money,
- * because full providers pay CERVICED nothing on bookings. The client pays the
- * platform fee on top, and CERVICED pays Stripe's card costs
- * (docs/PAYMENTS_AND_LOGIC.md §1.2). If that ever changes, this page changes
- * in the same PR. The example receipt uses the real fee function, so it can't
- * drift from checkout.
+ * because full providers pay CERVICED nothing on bookings: the client pays the
+ * platform fee on top (docs/PAYMENTS_AND_LOGIC.md §1.2). If that ever changes,
+ * this page changes in the same PR. The example receipt uses the real fee
+ * function, so it can't drift from checkout. Card fees are deliberately not
+ * mentioned (product owner, 2026-11-03).
  *
  * Ends with the "Become a full member" button (product decision 2026-11-02,
  * replacing the 2026-10-21 "information only" rule), which opens the same
@@ -116,7 +116,7 @@ export default function FullCervicedFeaturesScreen() {
           <View style={styles.heroHalo} pointerEvents="none" />
           <Text style={[styles.kicker, styles.onAccentSoft]}>OF EVERY BOOKING, YOU KEEP</Text>
           <Text style={styles.heroNum}>100%</Text>
-          <Text style={styles.heroSub}>No commission. We pay the card fees. Tips reach you whole.</Text>
+          <Text style={styles.heroSub}>No commission. Tips reach you whole.</Text>
           <View style={styles.receipt} accessibilityLabel={`For example, the client pays ${pounds(EXAMPLE_PRICE_PENCE + EXAMPLE_FEE_PENCE)}, including our ${pounds(EXAMPLE_FEE_PENCE)} fee, and you get ${pounds(EXAMPLE_PRICE_PENCE)}`}>
             <Text style={styles.receiptEg}>EXAMPLE</Text>
             <View style={styles.receiptRow}>
@@ -135,10 +135,6 @@ export default function FullCervicedFeaturesScreen() {
         </View>
 
         <View style={styles.stubs}>
-          <View style={styles.stub}>
-            <Text style={styles.stubNum}>£0</Text>
-            <Text style={styles.stubLabel}>card fees on bookings</Text>
-          </View>
           <View style={styles.stub}>
             <Text style={styles.stubNum}>{FASTEST_PAYOUT_HOURS}h</Text>
             <Text style={styles.stubLabel}>fastest payout, you pick</Text>
