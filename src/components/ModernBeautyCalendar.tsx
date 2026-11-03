@@ -9,6 +9,7 @@ import {
   isMonthlyRelease,
   lastBookableDate,
   nextReleaseMoment,
+  whenDateOpens,
   type BookingHorizonSettings,
 } from '../utils/bookingHorizon';
 import { RequestTimePanel } from './RequestTimePanel';
@@ -76,8 +77,6 @@ type ModernBeautyCalendarProps = {
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
   serviceId?: string | undefined; // Real services.id UUID — resolves this service's own buffer override
   style?: ViewStyle;
-  /** Last date clients can book (utils/bookingHorizon's lastBookableDate). Undefined = no limit. */
-  maxDate?: Date;
   /** Selected day/time highlight colour — the caller derives this from its
    *  own backdrop (not the OS/app dark-mode setting, not a fixed brand
    *  colour) so the picker always complements whatever sheet it's in. */
@@ -180,7 +179,6 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   serviceDuration,
   serviceId,
   style = {},
-  maxDate,
   accentColor,
   textColor,
   subColor,
@@ -201,9 +199,13 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
-  // Only used to explain an empty stretch past a monthly-release provider's
-  // horizon ("Dates after … open on …"). The slot lookups already enforce it.
+  // This provider's booking window (rolling, or what a monthly release has
+  // opened so far). It greys out the days past it, here and in the month
+  // view, and explains the gap ("Dates after … open on …"). The slot lookups
+  // and the booking trigger enforce it too; this is what stops the picker
+  // offering those days at all. Until it loads there is no ceiling.
   const [horizon, setHorizon] = useState<BookingHorizonSettings | null>(null);
+  const maxDate = useMemo(() => (horizon ? lastBookableDate(horizon) ?? undefined : undefined), [horizon]);
   // A provider can go live with zero rows in provider_availability — nothing
   // upstream (search, go-live gating) currently prevents it. Without this,
   // that renders as every day showing 'closed', identical to a provider
@@ -689,6 +691,16 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     return `Dates after ${formatShortDayDate(last)} open on ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
   })();
 
+  // What a day past the window says when it's picked: the date it opens, so
+  // the client knows when to come back rather than just that they can't.
+  const tooFarAheadNote = (() => {
+    const opens = horizon && selectedDate ? whenDateOpens(horizon, selectedDate) : null;
+    if (!opens) return `${providerLabel ?? 'This provider'} isn't taking bookings this far ahead yet. Check back soon.`;
+    return isMonthlyRelease(horizon?.schedule_release_day)
+      ? `Bookings for this day open on ${formatShortDayDate(opens)} at ${formatTime12(opens)}.`
+      : `Bookings for this day open on ${formatShortDayDate(opens)}.`;
+  })();
+
   const calendarDays = getCalendarDays();
   const weekDayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -822,7 +834,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     </Text>
                     {/* Availability dot */}
                     <View style={styles.calDotWrap}>
-                      {hasSlots && (
+                      {hasSlots && !isDisabled && (
                         <View style={[styles.calDot, { backgroundColor: accentColor }]} />
                       )}
                     </View>
@@ -1037,7 +1049,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     beyond-window requests never reaches this branch, because
                     it would have had request times of its own. */}
                 {currentSlots?.status === 'unavailable'
-                  ? `${who} isn't taking bookings this far ahead yet.`
+                  ? tooFarAheadNote
                   : canRequest
                     ? `${who} doesn't work this day — but you can request a time.`
                     : `${who} doesn't work this day.`}

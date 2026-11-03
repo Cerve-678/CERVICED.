@@ -91,3 +91,24 @@ export function nextReleaseMoment(releaseDay: number, now: Date = new Date()): D
   const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   return releaseMomentInMonth(releaseDay, nextMonth);
 }
+
+/**
+ * When `date` ('YYYY-MM-DD', local) becomes bookable, for "opens on…" copy on
+ * a day past the window. null when there is no limit.
+ *  • Rolling: the day `booking_window_days` before it (local midnight).
+ *  • Monthly release: the release moment in the month before the date's
+ *    month, so a day in December opens on November's release day at 09:00 UTC.
+ */
+export function whenDateOpens(settings: BookingHorizonSettings | null | undefined, date: string, now: Date = new Date()): Date | null {
+  const releaseDay = settings?.schedule_release_day;
+  const target = new Date(`${date}T00:00:00`);
+  if (isMonthlyRelease(releaseDay)) {
+    const monthBefore = new Date(Date.UTC(target.getFullYear(), target.getMonth() - 1, 1));
+    return releaseMomentInMonth(releaseDay, monthBefore);
+  }
+  const windowDays = settings?.booking_window_days ?? 60;
+  if (windowDays <= 0) return null;
+  const opens = new Date(target);
+  opens.setDate(opens.getDate() - windowDays);
+  return opens.getTime() > now.getTime() ? opens : null;
+}

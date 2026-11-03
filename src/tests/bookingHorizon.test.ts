@@ -3,6 +3,7 @@ import {
   isBeyondHorizon,
   lastBookableDate,
   nextReleaseMoment,
+  whenDateOpens,
 } from '../utils/bookingHorizon';
 
 // Must agree with public.provider_last_bookable_date(), which the booking
@@ -65,5 +66,27 @@ describe('nextReleaseMoment', () => {
     expect(nextReleaseMoment(20, new Date('2026-10-19T12:00:00Z')).toISOString()).toBe('2026-10-20T09:00:00.000Z');
     expect(nextReleaseMoment(20, new Date('2026-10-20T09:00:00Z')).toISOString()).toBe('2026-11-20T09:00:00.000Z');
     expect(nextReleaseMoment(31, new Date('2027-01-31T10:00:00Z')).toISOString()).toBe('2027-02-28T09:00:00.000Z');
+  });
+});
+
+describe('whenDateOpens', () => {
+  const now = new Date('2026-11-03T12:00:00Z');
+
+  it('opens a rolling-window day booking_window_days before it', () => {
+    expect(ymd(whenDateOpens({ booking_window_days: 30 }, '2026-12-10', now))).toBe('2026-11-10');
+  });
+
+  it('opens a monthly-release day on the release day of the month before', () => {
+    const opens = whenDateOpens({ booking_window_days: 30, schedule_release_day: 20 }, '2026-12-10', now);
+    expect(opens?.toISOString()).toBe('2026-11-20T09:00:00.000Z');
+  });
+
+  it('uses the last day of a short month for a late release day', () => {
+    const opens = whenDateOpens({ schedule_release_day: 31 }, '2026-12-10', now);
+    expect(opens?.toISOString()).toBe('2026-11-30T09:00:00.000Z');
+  });
+
+  it('has no date when there is no limit', () => {
+    expect(whenDateOpens({ booking_window_days: 0 }, '2030-01-01', now)).toBeNull();
   });
 });
