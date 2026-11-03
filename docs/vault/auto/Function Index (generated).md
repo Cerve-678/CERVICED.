@@ -5,7 +5,7 @@
 
 #generated
 
-**3072 functions** across **423 files**.
+**3074 functions** across **424 files**.
 
 ### `src/components/` (57)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -395,7 +395,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (54)
+### `src/utils/` (55)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -417,6 +417,7 @@
 - `fuzzyMatch.ts` — **editDistance** · levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar**
 - `hairTypeMatch.ts` — **matchesHairType**
 - `learnedSpecialities.ts` — **learnSpecialities** · looksLikeASpeciality
+- `legalPage.ts` — **legalPageUrl** · **openLegalPage**
 - `logger.ts` — **clearLogBuffer** · formatArgs · **getLogBuffer** · **installAuthErrorFilter** · noop · pushToBuffer · **reportError** · **setErrorReporter** · **subscribeToLogBuffer**
 - `logoFraming.ts` — **clampLogoFrame** · **logoFrameLayout** · **minLogoZoom**
 - `maintenanceSuggestions.ts` — addDays · **buildMaintenanceSuggestions** · offer · **scheduleNewReminder**

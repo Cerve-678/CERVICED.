@@ -210,7 +210,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **83 files**
 - … +53 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **62 files**
+Curated: [[Booking Flow]] · **63 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(207)_
 - `src/screens/client/BookingsScreen.tsx` _(84)_
 - `supabase/waitlist_holds.sql` _(75)_
@@ -241,7 +241,7 @@ Curated: [[Booking Flow]] · **62 files**
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
 - `supabase/fix_handle_booking_status_change_on_hold_notification.sql` _(4)_
 - `supabase/fix_provider_status_transition_guard.sql` _(4)_
-- … +32 more
+- … +33 more
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **191 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **191 files**
 - … +161 more
 
 ## Auth
-Curated: [[Contexts]] · **197 files**
+Curated: [[Contexts]] · **198 files**
 - `src/services/databaseService.ts` _(313)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **197 files**
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- … +167 more
+- … +168 more
 
 ## Becca / AI
 Curated: [[Services]] · **51 files**
