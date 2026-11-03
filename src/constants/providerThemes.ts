@@ -250,6 +250,10 @@ const GRADIENT_DEFS: { key: string; name: string; description: string; from: str
 
 // The collections — two-tone heroes, each with an accent chosen to complement
 // it rather than a deeper shade of the same hue, and a content area to match.
+// Every accent holds at least 3:1 against the pale cards, where it's used for
+// small text as well as buttons. Sapphire & Blush, Plum & Champagne and
+// Cobalt & Blush were darkened to about 5:1 at the owner's request
+// (2026-11-03); their first, lighter accents sat near 2:1.
 const COLLECTION_DEFS: { key: string; name: string; description: string; from: string; to: string; accent: string; suggestedSheet: string; collection: ThemeCollectionKey }[] = [
   { key: 'oatmilk',       name: 'Oat Milk',          description: 'Toasted oat into steamed milk, with a latte-brown accent', from: '#D8C6AF', to: '#EFE3D3', accent: '#7A5A43', suggestedSheet: 'ivory',    collection: 'atelier' },
   { key: 'cashmere',      name: 'Cashmere',          description: 'Warm greige into soft camel, with a cinnamon accent',      from: '#C9B2A3', to: '#E9DCD1', accent: '#8C5647', suggestedSheet: 'shell',    collection: 'atelier' },
@@ -259,10 +263,10 @@ const COLLECTION_DEFS: { key: string; name: string; description: string; from: s
   { key: 'powderapricot', name: 'Powder & Apricot',  description: 'Powder blue into apricot, with a burnt-orange accent',      from: '#B9CFE3', to: '#F4D6BF', accent: '#B9643F', suggestedSheet: 'mist',     collection: 'sorbet' },
   { key: 'desertrose',    name: 'Desert Rose',       description: 'Sandstone pink with a dark rosewood accent',               from: '#B4807A', to: '#DFBDB1', accent: '#6A3D3A', suggestedSheet: 'shell',    collection: 'terra' },
   { key: 'emeraldgold',   name: 'Emerald & Gold',    description: 'Bottle green with an antique-gold accent',                 from: '#1D4A3C', to: '#2E6A54', accent: '#A98235', suggestedSheet: 'ivory',    collection: 'afterdark' },
-  { key: 'sapphireblush', name: 'Sapphire & Blush',  description: 'Midnight sapphire with a blush-pink accent',               from: '#1D2C52', to: '#3A4B78', accent: '#D88A9B', suggestedSheet: 'blush',    collection: 'afterdark' },
-  { key: 'plumchampagne', name: 'Plum & Champagne',  description: 'Velvet plum with a champagne accent',                      from: '#3C1F3E', to: '#683C64', accent: '#C29E76', suggestedSheet: 'ivory',    collection: 'afterdark' },
+  { key: 'sapphireblush', name: 'Sapphire & Blush',  description: 'Midnight sapphire with a deep rose accent',                from: '#1D2C52', to: '#3A4B78', accent: '#B04A68', suggestedSheet: 'blush',    collection: 'afterdark' },
+  { key: 'plumchampagne', name: 'Plum & Champagne',  description: 'Velvet plum with an antique-bronze accent',                from: '#3C1F3E', to: '#683C64', accent: '#8A6438', suggestedSheet: 'ivory',    collection: 'afterdark' },
   { key: 'tealcoral',     name: 'Deep Teal & Coral', description: 'Inky teal with a warm coral accent',                       from: '#113A41', to: '#1E5B62', accent: '#D9714F', suggestedSheet: 'mist',     collection: 'afterdark' },
-  { key: 'cobaltblush',   name: 'Cobalt & Blush',    description: 'Electric cobalt with a sugar-pink accent',                 from: '#2747A0', to: '#4A68BE', accent: '#E99AAE', suggestedSheet: 'blush',    collection: 'statement' },
+  { key: 'cobaltblush',   name: 'Cobalt & Blush',    description: 'Electric cobalt with a raspberry-pink accent',             from: '#2747A0', to: '#4A68BE', accent: '#B8436A', suggestedSheet: 'blush',    collection: 'statement' },
   { key: 'cherrycocoa',   name: 'Cherry & Cocoa',    description: 'Glossy cherry with a dark cocoa accent',                   from: '#A92536', to: '#D95A66', accent: '#3A211C', suggestedSheet: 'shell',    collection: 'statement' },
   { key: 'matchaink',     name: 'Matcha & Ink',      description: 'Whisked matcha with a deep ink-green accent',              from: '#7F9A6E', to: '#C3D0AE', accent: '#2C3527', suggestedSheet: 'sagemist', collection: 'statement' },
   { key: 'tangerinenavy', name: 'Tangerine & Navy',  description: 'Juicy tangerine with a crisp navy accent',                 from: '#D9703A', to: '#EFA772', accent: '#1E2A4A', suggestedSheet: 'butter',   collection: 'statement' },

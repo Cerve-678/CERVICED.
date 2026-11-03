@@ -25,8 +25,8 @@ export const CUSTOM_CARD_OPTIONS = [
 ];
 export const CUSTOM_ACCENT_OPTIONS = [
   '#7A5A43', '#8C5647', '#4A403A', '#23262E', '#6A3D3A',
-  '#3A211C', '#A98235', '#C29E76', '#B9643F', '#D9714F',
-  '#E99AAE', '#D88A9B', '#66805F', '#2C3527', '#2C5AA0',
+  '#3A211C', '#A98235', '#8A6438', '#B9643F', '#D9714F',
+  '#B8436A', '#B04A68', '#66805F', '#2C3527', '#2C5AA0',
   '#1E2A4A',
 ];
 

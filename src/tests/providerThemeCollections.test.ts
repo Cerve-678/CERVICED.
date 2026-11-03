@@ -3,6 +3,7 @@
 // save and reload inside profile_theme, and keys saved before it still read.
 import {
   DEFAULT_PROVIDER_THEME,
+  NEUTRAL_CARD,
   PROVIDER_THEMES,
   SHEET_BG,
   SHEET_OPTIONS,
@@ -32,6 +33,22 @@ describe('theme collections', () => {
     const picked = PROVIDER_THEMES.filter(t => t.collection !== 'classics').map(t => t.name);
     expect(picked).toHaveLength(15);
     expect(picked).toEqual(expect.arrayContaining(['Tangerine & Navy', 'Emerald & Gold', 'Oat Milk', 'Desert Rose']));
+  });
+
+  it('keeps every collection accent readable as small text on the pale cards', () => {
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5]
+        .map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map(c => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi! + 0.05) / (lo! + 0.05);
+    };
+    for (const theme of PROVIDER_THEMES.filter(t => t.collection !== 'classics')) {
+      expect({ theme: theme.key, ok: contrast(theme.tokens.accent, NEUTRAL_CARD) >= 3 }).toEqual({ theme: theme.key, ok: true });
+    }
   });
 
   it('still falls back to the App set for an unknown key, though it is no longer listed first', () => {
