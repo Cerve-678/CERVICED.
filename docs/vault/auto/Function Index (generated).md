@@ -5,7 +5,7 @@
 
 #generated
 
-**3074 functions** across **424 files**.
+**3076 functions** across **425 files**.
 
 ### `src/components/` (57)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -192,7 +192,7 @@
 - `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (28)
+### `src/features/providers/` (29)
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
 - `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · toggleAutoClose · tomorrow
@@ -201,6 +201,7 @@
 - `diaryDays.ts` — **buildDashboardWeek** · **diaryEventMinutes** · **hoursFor** · **startOfDay**
 - `DidYouBookSheet.tsx` — chip · days · defaultTime · **DidYouBookSheet** · handlePickerChange · handleSubmit · hhmm · startOfToday
 - `externalBookingLink.ts` — **displayExternalBookingUrl** · **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
+- `FullCervicedLockedSheet.tsx` — **FullCervicedLockedSheet** · seeMore
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
 - `linkOnlyAnalytics.ts` — **bookTapRatio** · **lastSevenDaysOfBookTaps** · **sumLinkOnlyStats**
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**

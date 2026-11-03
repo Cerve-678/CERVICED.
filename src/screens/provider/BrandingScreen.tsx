@@ -39,6 +39,7 @@ import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, reso
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
+import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -99,6 +100,7 @@ export default function BrandingScreen({ navigation }: any) {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
+  const [lockedOpen, setLockedOpen]           = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -250,16 +252,7 @@ export default function BrandingScreen({ navigation }: any) {
 
   // Both stacks that open Branding for a link-only pro (Home, Settings) have
   // the Full CERVICED experience page.
-  const showLocked = useCallback(() => {
-    Alert.alert(
-      'Part of the full CERVICED experience',
-      'Full members get every colour set, font and hero finish, and can make their own colours. You can use the App, Blush, Grey and Charcoal colours, the Classic, Chunky & Rounded, Smooth & Rounded and Bakbak fonts, and the Blend finish now.',
-      [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'See what full members get', onPress: () => navigation.navigate('FullCervicedFeatures') },
-      ],
-    );
-  }, [navigation]);
+  const showLocked = useCallback(() => setLockedOpen(true), []);
 
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {
@@ -466,6 +459,14 @@ export default function BrandingScreen({ navigation }: any) {
 
         </ScrollView>
       </SafeAreaView>
+
+      <FullCervicedLockedSheet
+        visible={lockedOpen}
+        title="Unlock the rest of your branding"
+        note="You can use the App, Blush, Grey and Charcoal colours, the Classic, Chunky & Rounded, Smooth & Rounded and Bakbak fonts, and the Blend finish now."
+        onClose={() => setLockedOpen(false)}
+        onSeeMore={() => navigation.navigate('FullCervicedFeatures')}
+      />
     </View>
   );
 }
