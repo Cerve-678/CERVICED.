@@ -119,7 +119,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
             <SettingsOption
               icon="chat-dots"
               title="Communications"
-              subtitle="Messaging & notification preferences"
+              subtitle="How booked clients contact you, and your details for them"
               onPress={() => navigation.navigate('Communications')}
               P={P}
             />
