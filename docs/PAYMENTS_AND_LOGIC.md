@@ -386,7 +386,7 @@ Pay or PayPal.
   trigger and never changed after, a reschedule included), so a change
   applies to new bookings only. Bookings older than that column were filled
   with the window in force when it was added; a row without one falls back to
-  the provider's current window. Migration `20261103040000`.
+  the provider's current window. Migration `20261103040000`, applied 3 November; `apply-cancellation-refund` v13 reads it.
 - **Rescheduling doesn't reset the window.** If the client *asks* to
   reschedule once the window has already started, and the move goes ahead,
   the booking is marked (`bookings.late_reschedule_from`). Cancelling it
