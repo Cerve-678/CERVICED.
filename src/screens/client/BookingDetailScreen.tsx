@@ -488,6 +488,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const cancelPolicyStillApplies =
     isPastCancellationWindow || (!!booking?.lateRescheduleFrom && cancellationNoticeHrs > 0);
 
+  // From the frozen policy, the same field the refund itself reads.
+  const depositIsNonRefundable = booking?.policySnapshot?.['depositNonRefundable'] === true
+    && (booking?.paymentStatus === PaymentStatus.DEPOSIT_PAID || Number(booking?.depositAmount ?? 0) > 0);
+
   const handleCancelBooking = useCallback(async () => {
     if (!booking) return;
     setIsLoading(true);
@@ -1563,6 +1567,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       {isPastCancellationWindow
                         ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
                         : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
+                      {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it.` : ''}
                     </Text>
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
@@ -1578,6 +1583,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={[st.sheetTitle, { color: C.text }]}>Cancel Booking</Text>
                     <Text style={[st.sheetSub, { color: C.sub }]}>
                       Cancel "{booking.serviceName}"? This can't be undone.
+                      {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it. The rest, including the platform fee, comes back to you.` : ''}
                     </Text>
                     <View style={st.sheetBtns}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>

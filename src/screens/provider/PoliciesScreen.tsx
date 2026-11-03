@@ -59,9 +59,10 @@ import {
   uploadToStorage,
 } from '../../services/providerRegistrationService';
 import {
-  Card, Field, SectionLabel, Toast, SaveButton,
+  Card, Field, SectionLabel, Toast, SaveButton, ToggleRow,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
+import { resolveDepositMode } from '../../utils/depositPolicy';
 
 type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
 // 'half' is no longer offered, but policies saved before 'custom' still say it.
@@ -97,6 +98,8 @@ interface PolicyState {
   // distinct document from the provider's Terms & Conditions.
   emergencyBookingPolicy: string;
   travelPolicy: string;
+  // Enforced by apply-cancellation-refund through each booking's frozen copy.
+  depositNonRefundable: boolean;
 }
 
 // What CERVICED itself applies or charges. A link-only provider's bookings
@@ -130,6 +133,7 @@ const DEFAULT_POLICIES: PolicyState = {
   policyImageUrl:   '',
   emergencyBookingPolicy: '',
   travelPolicy: '',
+  depositNonRefundable: false,
 };
 
 function Pills<T extends string>({ options, value, onChange }: {
@@ -246,6 +250,9 @@ export default function PoliciesScreen({ navigation }: any) {
       }
     })();
   }, []);
+
+  const hasDeposit = resolveDepositMode(carriedPolicies) !== 'full_only'
+    && Boolean(carriedPolicies['depositAmount']);
 
   const setPolicy = useCallback(<K extends keyof PolicyState>(key: K, value: PolicyState[K]) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
@@ -482,6 +489,30 @@ export default function PoliciesScreen({ navigation }: any) {
                 <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
               </Card>
             </>)}
+
+            <Card
+              title="Non-Refundable Deposit"
+              sub={isLinkOnly
+                ? 'Tell clients if a booking needs a non-refundable deposit. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn\'t apply it or take any money.'
+                : 'If you say yes, you keep the deposit whenever a client cancels, even in good time. It still goes back to them if you cancel, decline or don\'t answer. It only applies to new bookings.'}
+            >
+              <ToggleRow
+                label="Do you require a non-refundable deposit to secure bookings?"
+                value={policies.depositNonRefundable}
+                onChange={v => setPolicy('depositNonRefundable', v)}
+              />
+              {!isLinkOnly && policies.depositNonRefundable && !hasDeposit && (
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Payments'); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={[s.cardSub, { color: C.accentText, marginTop: 10, marginBottom: 0 }]}>
+                    You don't take a deposit yet, so this won't apply. Set one up in Payments.
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </Card>
 
             {/* Refund policy — free-text disclosure only. This app has no
                 refund-processing infra, so there is deliberately no
