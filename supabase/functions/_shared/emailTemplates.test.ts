@@ -30,9 +30,11 @@ import {
   passwordChangedEmail,
   providerHatAddedEmail,
   providerWelcomeEmail,
+  recoveryCodeEmail,
   refundRequestedProviderEmail,
   payoutFailedSupportEmail,
   moneySummaryEmail,
+  signupCodeEmail,
   supportRequestEmail,
 } from './emailTemplates.ts';
 
@@ -308,5 +310,50 @@ describe('refundRequestedProviderEmail', () => {
     expect(refundRequestedProviderEmail({ ...base, heldPence: 4500 }).html).toContain('Your £45.00 for this booking is on hold');
     expect(refundRequestedProviderEmail(base).html).not.toContain('on hold');
     expect(refundRequestedProviderEmail({ ...base, heldPence: 0 }).html).not.toContain('on hold');
+  });
+});
+
+// These two are rendered to static HTML that Supabase fills in itself. What must
+// survive is the literal placeholder: escaped or dropped, every user would get a
+// code email with no code in it.
+describe('Supabase Auth code emails', () => {
+  for (const [name, email] of [
+    ['signup', signupCodeEmail()],
+    ['recovery', recoveryCodeEmail()],
+  ] as const) {
+    it(`${name}: puts the code in the subject and the inbox preview`, () => {
+      expect(email.subject).toContain('{{ .Token }}');
+      expect(email.html).toMatch(/\{\{ \.Token \}\} is your CERVICED/);
+    });
+
+    it(`${name}: draws six boxes, and shows the code whole if it is not six digits`, () => {
+      for (let i = 0; i < 6; i++) {
+        expect(email.html).toContain(`{{ slice .Token ${i} ${i + 1} }}`);
+      }
+      // Slicing a shorter token fails the render, and Supabase then sends nothing.
+      const guard = email.html.indexOf('{{ if eq (len .Token) 6 }}');
+      const fallback = email.html.indexOf('{{ else }}');
+      expect(guard).toBeGreaterThan(-1);
+      expect(email.html.indexOf('{{ slice .Token 0 1 }}')).toBeGreaterThan(guard);
+      expect(email.html.indexOf('{{ slice .Token 5 6 }}')).toBeLessThan(fallback);
+      expect(email.html.indexOf('{{ .Token }}', fallback)).toBeGreaterThan(fallback);
+      expect(email.html.indexOf('{{ end }}')).toBeGreaterThan(fallback);
+    });
+
+    it(`${name}: names the address and has no script`, () => {
+      expect(email.html).toContain('{{ .Email }}');
+      expect(email.html).not.toMatch(/<script/i);
+    });
+  }
+
+  it('makes signup and reset different at a glance', () => {
+    const accentBox = 'bgcolor="#5C4033"';
+    expect(recoveryCodeEmail().html).toContain(accentBox);
+    expect(signupCodeEmail().html).not.toContain(accentBox);
+  });
+
+  it('does not tell someone they have an account when they may not', () => {
+    expect(signupCodeEmail().html).not.toContain('you have a CERVICED account');
+    expect(recoveryCodeEmail().html).not.toContain('you have a CERVICED account');
   });
 });

@@ -248,6 +248,28 @@ If the card is declined, the client stays on the payment sheet and can try
 again. Closing the sheet cancels the unfinished payment, and the slot holds
 expire.
 
+**How the client finds out how it ended:**
+
+| What happened | On screen | Notification |
+|---|---|---|
+| Declined, or the bank check failed | An error on the payment sheet | None: they're looking at it |
+| Paid and booked | The success screen | `payment_success`, "Payment received" |
+| Card approved, but the time had gone before it was captured | "Payment didn't go through" | `payment_not_completed`: cancelled, not charged |
+| Taken, but the time had gone | "Booking not completed" | `payment_not_completed`: refunded in full |
+| The app can't get an answer (timeout, busy database, app closed) | "Confirming your payment…" for about 30 seconds, then "Still confirming your payment" | Whichever of the above it turns out to be |
+
+Three things can finish a checkout once the card is approved, all through
+`settleCheckout`: the app, the signed Stripe webhook, and the
+`reconcile-checkouts` job every 5 minutes, which picks up any checkout started
+3 or more minutes ago with a payment on it and still open. A checkout that was
+never paid is marked `abandoned` once its hold is over, and nothing is sent. The
+notices come from the database, so they reach the client whichever of the three
+finished it.
+
+*Not live yet: migration `20261102210000` is written, not applied, and
+`reconcile-checkouts`, `finalize-payment-intent` and `stripe-webhook` need
+deploying.*
+
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
 and CERVICED never records, collects or confirms it** (section 2.9).
@@ -328,7 +350,9 @@ Pay or PayPal.
 | Client cancels **inside** the window; the provider's policy is "no charge" | Client | Everything | Nothing | Refunded |
 | Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit or half the price | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
 | Client cancels inside the window, **paid in full**; the policy is **keep the deposit** | Client | Everything except the kept amount and the fee | The deposit's amount, at most half the service price | Kept |
-| Client cancels inside the window, **paid in full**; the policy is **half the price** | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **half the price** (no longer offered; policies and bookings saved before 2 Nov can still say it) | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **custom** | Client | Everything except the kept amount and the fee | The £ amount the provider set, at most half the service price | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is **custom** | Client | Whatever is left of the deposit | The £ amount the provider set, at most the deposit and at most half the service price | Kept |
 | Provider gives a **full** refund (any reason) | Provider | Everything not yet refunded | Nothing | Refunded |
 | Provider gives a **partial** refund | Provider | The amount they choose, from their share | The rest | Kept |
 | CERVICED approves a refund request | Admin | Same as the provider's full/partial rules | — | As above |
@@ -345,7 +369,8 @@ Pay or PayPal.
   this, `previewProviderRefund`; older builds still send it as partial.)
 - **The client is told about every refund** (`payment_refunded`, trigger
   `after_refund_notify_client` on `booking_refunds`), unless a late-cancel
-  notice or a refund-request update already gave them the amount.
+  notice or a refund-request update already gave them the amount. *Not live
+  yet: migration `20261102200000` is written, not applied.*
 - A client is never charged more than they originally paid.
 - **The most a provider can keep on a late cancellation** depends on what was
   paid in the app: the whole deposit if the client paid a deposit, half the
@@ -436,6 +461,11 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
 A provider can set two fixed £ fees in their policy: **late arrival** (after
 their grace period) and **no-show**. Each is capped at **50% of the service
 price**.
+
+On the Policies screen, the late fee and grace period sit in the Late section.
+The no-show fee appears when the provider picks **Custom** as the no-show
+action, and picking any other action clears it. The one grace period still
+stops a no-show being marked until it has passed.
 
 | Rule | Detail |
 |---|---|
@@ -759,6 +789,7 @@ Keep the list short and review it monthly.
 | `create-payment-intent` | App (checkout) | Re-prices the batch, checks providers are payout-ready, enforces fee consent, creates the PaymentIntent |
 | `finalize-payment-intent` | App | Captures; moves bookings `on_hold` → `pending`/`confirmed`; records the payment method |
 | `stripe-webhook` | Stripe (signature-checked, no JWT) | Payment success, refunds, account status, transfers and reversals, disputes, bank payout failures |
+| `reconcile-checkouts` | Cron, via `process_stale_checkouts()` (service role only) | Finishes checkouts a payment was started for but nobody settled; cancels payments never completed once the hold is over |
 | `release-payouts` | Cron, via `process_due_payouts()` (service role only) | Releases booking, fee and tip payouts; retries; fee pay-request retries and lapses; support alerts |
 | `refund-payment` | Provider, admin, or the server (`refund_booking_async`) | Full and partial refunds; reconciles the payout |
 | `apply-cancellation-refund` | App, after a client cancels | Applies the frozen cancellation policy and settles the provider directly |
@@ -776,6 +807,7 @@ Keep the list short and review it monthly.
 |---|---|---|
 | `release-due-payouts` | Every 15 min | `process_due_payouts()` → `release-payouts`, only when something is due |
 | `expire-cart-holds` | Every 5 min | Frees unpaid 10-minute slot holds |
+| `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
 | `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 48h, or once past the start time) and fully refunds them |
 | `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
 | `money-daily-summary` | 08:00 daily | Triggers the summary email when anything needs attention |
@@ -786,6 +818,8 @@ Keep the list short and review it monthly.
 | Name | Kind | What it does |
 |---|---|---|
 | `prepare_checkout` | RPC | Validates the basket and places 10-minute holds |
+| `record_checkout_outcome` | RPC (service role) | Records how a checkout ended without bookings, once (a real outcome can replace `abandoned`), and tells the client unless nothing was taken |
+| `notify_client_payment_received` | Trigger on `checkout_batches` | "Payment received" when a checkout is finalised |
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |
 | `create_held_payout_on_finalize` | Trigger on `bookings` | Creates the held payout: `amount_paid − service_charge`, released at appointment end + hold days |
 | `after_booking_move_held_payout` → `move_held_payout_with_booking` | Trigger on `bookings` | Shifts a held, unclaimed payout when the date or time changes |
@@ -817,7 +851,7 @@ so Stripe retries.
 
 | Table | Holds | Statuses |
 |---|---|---|
-| `checkout_batches` | One checkout: amount due, platform fee | Starts `prepared` |
+| `checkout_batches` | One checkout: amount due, platform fee, `outcome` (`not_charged`, `refunded` or `abandoned` when it ended without bookings) | `prepared` → `finalised` / `expired` / `cancelled` |
 | `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id`, `late_reschedule_from` (moved inside the cancellation window; cleared by a later provider-proposed move) | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` |
 | `provider_payouts` | One per paid booking: `gross_amount`, `platform_fee`, `payout_amount`, `deducted_pence`, `release_after`, `release_claimed_at`, `attempt_count`, `failure_cause` | `held` → `transferred` / `cancelled` / `reversed` / `failed` |
 | `booking_refunds` | A ledger of every refund (pence, and whether it has been applied to the payout) | — |
@@ -834,9 +868,10 @@ so Stripe retries.
 
 | Type | To | When |
 |---|---|---|
-| `payment_success` | Client | Payment taken |
+| `payment_success` | Client | Payment taken. On Stripe checkouts, from the trigger on `checkout_batches` |
+| `payment_not_completed` | Client | The card was approved but the checkout didn't book: cancelled before it was taken, or refunded |
 | `cancellation_settled` | Both | A late cancellation kept money |
-| `payment_refunded` | Client | Any refund on a booking, whoever made it, unless `cancellation_settled` or `refund_request_updated` already gave the amount (live since 2 November, migration `20261102200000`) |
+| `payment_refunded` | Client | Any refund on a booking, whoever made it, unless `cancellation_settled` or `refund_request_updated` already gave the amount. **Not live yet:** migration `20261102200000` is written, not applied |
 | `refund_requested` / `refund_request_updated` | Provider / both | A refund request was opened, or has a day left (provider) / moved on, including to CERVICED after 3 days with no reply (both) |
 | `fee_charged`, `fee_disputed`, `fee_dispute_resolved` | Client / provider | The late/no-show fee lifecycle |
 | `fee_payment_requested`, `fee_paid_by_client`, `fee_payment_lapsed` | Client / provider | The card couldn't pay a fee |
@@ -926,6 +961,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. On branch `feat/custom-late-cancel-charge` until merged, and `apply-cancellation-refund` must be deployed before the app ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | 2 Nov | Link-only pros can become full members themselves. The app shows £25.99 a month with 2 months free, counted from the day they go live again, but charges nothing until pricing is final | Lets demand from client nudges turn into full providers now, without building billing first |

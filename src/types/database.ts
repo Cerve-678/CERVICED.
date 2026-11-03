@@ -73,6 +73,9 @@ export type NotificationType =
   | "no_show"
   | "provider_no_show"
   | "payment_success"
+  /** A checkout whose card was approved but which didn't book: cancelled before it
+   *  was taken, or refunded because the time had gone (record_checkout_outcome). */
+  | "payment_not_completed"
   | "cancellation_settled"
   | "fee_charged"
   | "fee_disputed"
@@ -311,6 +314,7 @@ export interface DbProvider {
   booking_policies: {
     cancelNotice?: string;
     cancelPenalty?: string;
+    cancelCustomFee?: string;
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;

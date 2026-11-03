@@ -11,8 +11,12 @@
 //     same rule refund-payment already follows).
 //   • late + 'deposit'                       → keep the deposit (it goes to the
 //     provider) and the platform fee (CERVICED keeps it); refund the rest.
+//   • late + 'custom'                        → the provider keeps the £ amount
+//     they set, never more than half (user decision 2026-11-02), CERVICED keeps
+//     its fee, and the client gets the rest back.
 //   • late + 'half'                          → the provider keeps half their
 //     share, CERVICED keeps its fee, and the client gets the other half back.
+//     No longer offered, but policies and snapshots saved before 'custom' say it.
 //
 // Based on what was paid in the app (user decision 2026-11-01): a client who
 // paid only a deposit can lose that whole deposit under 'deposit' or 'half'; a
@@ -25,17 +29,29 @@
 // payout_amount, rather than re-deriving the fee formula — so it stays correct
 // regardless of how finalize_checkout computed the split.
 
-export type CancelPenalty = 'none' | 'deposit' | 'half';
+export type CancelPenalty = 'none' | 'deposit' | 'half' | 'custom';
 
 /** Policies and booking snapshots saved before 2026-11-01 can still say 'full'. */
 export function readCancelPenalty(value: unknown): CancelPenalty {
-  if (value === 'deposit') return 'deposit';
+  if (value === 'deposit' || value === 'custom') return value;
   return value === 'half' || value === 'full' ? 'half' : 'none';
+}
+
+/** The provider's custom amount in pence; 0 when missing or unreadable, which
+ *  settles as no penalty rather than guessing at what the client agreed to. */
+export function readCancelCustomFeePence(value: unknown): number {
+  const text = typeof value === 'number' ? String(value) : value;
+  if (typeof text !== 'string' || !/^\s*\d+(\.\d{1,2})?\s*$/.test(text)) return 0;
+  return Math.round(Number(text) * 100);
 }
 
 export interface CancellationSettlementInput {
   /** The provider's cancellation penalty for this booking (frozen snapshot preferred). */
   penalty: CancelPenalty;
+  /** Under a 'custom' penalty, the amount the provider set, in pence. */
+  customFeePence?: number;
+  /** The service price, in pence. Caps a 'custom' amount when only a deposit was paid. */
+  servicePricePence?: number;
   /** Whether the cancel fell inside the provider's notice window. Early cancels are always fully refunded. */
   isLateCancel: boolean;
   /** What the client actually paid for this booking, in pence (includes the platform fee). */
@@ -74,6 +90,7 @@ export function computeCancellationSettlement(
   const payout = pence(input.payoutAmountPence);
   // Rounds down, so an odd penny goes back to the client.
   const half = Math.floor(payout / 2);
+  const customFee = pence(input.customFeePence ?? 0);
 
   // Nothing was captured (e.g. Stripe not live, or a free booking) — nothing to
   // settle. The cancel still goes through; this just moves no money.
@@ -84,10 +101,20 @@ export function computeCancellationSettlement(
   let clientRefund: number;
   let providerKeep: number;
 
-  if (!input.isLateCancel || input.penalty === 'none') {
+  if (!input.isLateCancel || input.penalty === 'none' || (input.penalty === 'custom' && customFee === 0)) {
     // Full refund, fee included. Provider keeps nothing.
     clientRefund = amountPaid;
     providerKeep = 0;
+  } else if (input.penalty === 'custom') {
+    // Never above half the price, and never above what was actually paid. When
+    // only a deposit was paid the payout is just that deposit, so half has to
+    // come from the service price.
+    const priceHalf = Math.floor(pence(input.servicePricePence ?? 0) / 2);
+    const cap = input.paidDepositOnly
+      ? Math.min(deposit, payout, priceHalf > 0 ? priceHalf : half)
+      : half;
+    providerKeep = Math.min(customFee, cap);
+    clientRefund = Math.max(0, amountPaid - providerKeep - fee);
   } else if (input.paidDepositOnly) {
     // All the client paid was the deposit: the provider keeps it whole (bounded
     // by their actual payout share); CERVICED keeps the fee.

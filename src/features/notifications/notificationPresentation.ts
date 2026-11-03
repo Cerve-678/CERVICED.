@@ -6,7 +6,7 @@ const POUND_FIGURE = /£\d[\d,]*(?:\.\d{1,2})?/;
 // Notifications store no amount of their own, so it's read from the wording.
 // Only these types, whose text states one clear figure. Tips are left out
 // on purpose: their row says "View tip" and never shows the figure.
-const AMOUNT_TYPES: ReadonlySet<string> = new Set(['payment_success', 'payment_refunded', 'payout_failed']);
+const AMOUNT_TYPES: ReadonlySet<string> = new Set(['payment_success', 'payment_refunded', 'payment_not_completed', 'payout_failed']);
 
 /** The £ figure to show for this row, if it has one. Failed payouts carry it in the title. */
 export function notificationAmount(type: string, title: string, message: string): string | null {
@@ -72,6 +72,7 @@ const KIND_LABELS: Readonly<Record<string, string>> = {
   fee_payment_lapsed: 'Fee',
   tip_received: 'Tip',
   payment_success: 'Payment',
+  payment_not_completed: 'Payment',
   refund_requested: 'Refund',
   refund_request_updated: 'Refund',
   payment_refunded: 'Refund',

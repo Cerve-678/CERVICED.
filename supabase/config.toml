@@ -36,6 +36,11 @@ verify_jwt = true
 [functions.money-daily-summary]
 verify_jwt = true
 
+# Woken only by pg_cron (process_stale_checkouts) with the service_role key,
+# like release-payouts; it confirms the bearer is a real service key too.
+[functions.reconcile-checkouts]
+verify_jwt = true
+
 # A client starts or confirms only their own completed-booking tip. The
 # function verifies the JWT again and owns every Stripe/database write.
 [functions.booking-tip]
@@ -285,6 +290,21 @@ otp_expiry = 3600
 # pass = "env(SENDGRID_API_KEY)"
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
+
+# The two Auth emails the app triggers (signup code, password-reset code). The
+# HTML is GENERATED from supabase/functions/_shared/emailTemplates.ts by
+# scripts/build-auth-email-templates.ts: edit there, not in the .html.
+# The hosted project reads these from the dashboard (Authentication -> Emails),
+# so paste them there. Don't use `supabase config push` for this: it pushes the
+# whole of this file, and values here such as enable_confirmations = false are
+# for local development.
+[auth.email.template.confirmation]
+subject = "Your CERVICED verification code: {{ .Token }}"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Your CERVICED password reset code: {{ .Token }}"
+content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
