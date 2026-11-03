@@ -1,9 +1,10 @@
 /**
  * Ready-made lines for a provider's booking instructions.
  *
- * Both editors of booking_policies.bookingInstructions (Info Reg's "Anything
- * clients should know" and Policies' "Booking Instructions") offer the same
- * lines, so they live here once. Tapping one only edits the text in the box:
+ * Both editors of booking_policies.bookingInstructions (Info Reg's and
+ * Policies' "Your instructions") offer the same lines, so they live here once.
+ * The client sees the text as "<provider>'S INSTRUCTIONS" on their booking.
+ * Directions aren't offered: How to get there and Arrival details own those. Tapping one only edits the text in the box:
  * what's stored stays the provider's own words, free to change afterwards.
  */
 export const BOOKING_INSTRUCTION_SUGGESTIONS = [
@@ -12,7 +13,6 @@ export const BOOKING_INSTRUCTION_SUGGESTIONS = [
   'Please read my policies before your appointment.',
   'Please let me know if you are running late.',
   'Please bring any inspiration photos.',
-  'Please come on your own unless we have agreed otherwise.',
 ];
 
 /** Which suggestions are already somewhere in the text, typed or tapped. */

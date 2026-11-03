@@ -554,7 +554,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Shown on CERVICED bookings, which link-only pros don't have. */}
             {!isLinkOnly && (
-              <Card title="Booking Instructions" sub="Anything clients need to know before they arrive, like parking, what to bring or how to find you. Clients see this in their booking details on every new booking (optional). Changing it later won't update bookings already made.">
+              <Card title="Your Instructions" sub="Shown to clients as your instructions in their booking details, on every new booking (optional), like arriving early or what to bring. Directions and door codes have their own boxes beside your address, so there's no need to repeat them here. Changing it later won't update bookings already made.">
                 <Field
                   label="Instructions"
                   value={policies.bookingInstructions}
