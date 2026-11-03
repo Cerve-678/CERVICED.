@@ -27,6 +27,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS, ALL_SPECIALTIES, SPECIALTIES_MAP } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
+import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -139,10 +140,11 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   // provider picks here is exactly what clients filter on. Picked in the same
   // searchable sheet as the filter; a term typed that isn't listed can still
   // be added, which replaces the old "Other" box.
-  const specialtyOptions = React.useMemo(() => {
+  const curatedSpecialtyOptions = React.useMemo(() => {
     const combined = data.serviceInterests.flatMap(cat => SPECIALTIES_MAP[cat] ?? []);
     return combined.length ? [...new Set(combined)] : ALL_SPECIALTIES;
   }, [data.serviceInterests]);
+  const specialtyOptions = useSpecialityOptionsWithLearned(curatedSpecialtyOptions, data.serviceInterests);
   // Personalisation — optional, affects home feed section gating
   const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
   const [hasKids,           setHasKids]           = useState<boolean>(data.has_kids ?? false);
@@ -419,6 +421,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
                 options={specialtyOptions}
                 palette={t}
                 placeholder="Search specialities"
+                showSelectedChips
               />
             </QuestionCard>
 
