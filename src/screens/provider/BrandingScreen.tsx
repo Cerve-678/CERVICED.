@@ -29,7 +29,7 @@ import {
   DEFAULT_HERO_FINISH,
   HERO_FINISHES,
   LINK_ONLY_HERO_FINISHES,
-  LINK_ONLY_THEME_COLLECTIONS,
+  LINK_ONLY_THEMES,
   type HeroFinish,
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
@@ -79,7 +79,7 @@ export default function BrandingScreen({ navigation }: any) {
   const { user, myBookingMode } = useAuth();
   const P = isDarkMode ? DARK : LIGHT;
   // Link-only pros get a smaller set; the rest shows locked (see
-  // LINK_ONLY_THEME_COLLECTIONS).
+  // LINK_ONLY_THEMES).
   const limited = myBookingMode === 'external';
 
   const [loading, setLoading]       = useState(true);
@@ -253,7 +253,7 @@ export default function BrandingScreen({ navigation }: any) {
   const showLocked = useCallback(() => {
     Alert.alert(
       'Part of the full CERVICED experience',
-      'Full members get every colour set, font and hero finish, and can make their own colours. You can use the Classics colours and fonts and the Blend finish now.',
+      'Full members get every colour set, font and hero finish, and can make their own colours. You can use App, Blush, Grey and Charcoal, the Classics fonts and the Blend finish now.',
       [
         { text: 'Not now', style: 'cancel' },
         { text: 'See what full members get', onPress: () => navigation.navigate('FullCervicedFeatures') },
@@ -348,7 +348,7 @@ export default function BrandingScreen({ navigation }: any) {
               subColor={P.sub}
               borderColor={P.border}
               sepColor={P.sep}
-              unlockedCollections={limited ? LINK_ONLY_THEME_COLLECTIONS : undefined}
+              unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
               onLockedPress={showLocked}
             />
           </View>

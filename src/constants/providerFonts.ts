@@ -21,7 +21,7 @@ export const FONT_COLLECTIONS: { key: FontCollectionKey; name: string; descripti
 ];
 
 /** The font collections a link-only provider can pick; the rest show locked.
- *  See LINK_ONLY_THEME_COLLECTIONS in providerThemes.ts. */
+ *  See LINK_ONLY_THEMES in providerThemes.ts. */
 export const LINK_ONLY_FONT_COLLECTIONS: readonly FontCollectionKey[] = ['classics'];
 
 export interface ProviderFontOption {

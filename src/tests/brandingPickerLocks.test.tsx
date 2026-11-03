@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import ProviderThemePicker, { type ThemeSelection } from '../components/ProviderThemePicker';
 import ProviderFontPicker from '../components/ProviderFontPicker';
-import { LINK_ONLY_THEME_COLLECTIONS, PROVIDER_THEMES } from '../constants/providerThemes';
+import { LINK_ONLY_THEMES, PROVIDER_THEMES } from '../constants/providerThemes';
 import { LINK_ONLY_FONT_COLLECTIONS, PROVIDER_FONTS } from '../constants/providerFonts';
 
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
@@ -18,18 +18,20 @@ const selection: ThemeSelection = {
 };
 const colours = { textColor: '#000', subColor: '#777', borderColor: '#ccc' };
 
-const classicTheme = PROVIDER_THEMES.find(t => t.collection === 'classics')!;
+const freeTheme = PROVIDER_THEMES.find(t => t.key === 'blush')!;
+// In Classics, beside the free four, but still locked.
+const lockedClassic = PROVIDER_THEMES.find(t => t.collection === 'classics' && !LINK_ONLY_THEMES.includes(t.key))!;
 const newTheme = PROVIDER_THEMES.find(t => t.collection !== 'classics')!;
 const classicFont = PROVIDER_FONTS.find(f => f.collection === 'classics')!;
 const newFont = PROVIDER_FONTS.find(f => f.collection !== 'classics')!;
 
 describe('link-only Branding limits', () => {
-  it('only unlocks Classics', () => {
-    expect(LINK_ONLY_THEME_COLLECTIONS).toEqual(['classics']);
+  it('unlocks App, Blush, Grey and Charcoal, and the Classics fonts', () => {
+    expect(PROVIDER_THEMES.filter(t => LINK_ONLY_THEMES.includes(t.key)).map(t => t.name)).toEqual(['App', 'Blush', 'Grey', 'Charcoal']);
     expect(LINK_ONLY_FONT_COLLECTIONS).toEqual(['classics']);
   });
 
-  it('colour sets outside the unlocked collections, and Custom, call onLockedPress instead of changing', () => {
+  it('colour sets outside the four, and Custom, call onLockedPress instead of changing', () => {
     const onChange = jest.fn();
     const onLockedPress = jest.fn();
     render(
@@ -38,18 +40,19 @@ describe('link-only Branding limits', () => {
         onChange={onChange}
         {...colours}
         sepColor="#eee"
-        unlockedCollections={LINK_ONLY_THEME_COLLECTIONS}
+        unlockedThemes={LINK_ONLY_THEMES}
         onLockedPress={onLockedPress}
       />,
     );
 
     fireEvent.press(screen.getByLabelText(`${newTheme.name}: ${newTheme.description}, locked`));
+    fireEvent.press(screen.getByLabelText(`${lockedClassic.name}: ${lockedClassic.description}, locked`));
     fireEvent.press(screen.getByLabelText('Custom, locked'));
     expect(onChange).not.toHaveBeenCalled();
-    expect(onLockedPress).toHaveBeenCalledTimes(2);
+    expect(onLockedPress).toHaveBeenCalledTimes(3);
 
-    fireEvent.press(screen.getByLabelText(`${classicTheme.name}: ${classicTheme.description}`));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ themeChoice: classicTheme.key }));
+    fireEvent.press(screen.getByLabelText(`${freeTheme.name}: ${freeTheme.description}`));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ themeChoice: freeTheme.key }));
   });
 
   it('fonts outside the unlocked collections call onLockedPress instead of changing', () => {

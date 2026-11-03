@@ -7,7 +7,6 @@ import {
   PROVIDER_THEMES,
   SHEET_OPTIONS,
   THEME_COLLECTIONS,
-  type ThemeCollectionKey,
 } from '../constants/providerThemes';
 
 // Swatch options for the Custom colour set builder, drawn from the same
@@ -49,9 +48,9 @@ interface ProviderThemePickerProps {
   subColor: string;
   borderColor: string;
   sepColor: string;
-  /** Only these collections can be picked; the rest, and Custom, show locked
+  /** Only these sets (by key) can be picked; the rest, and Custom, show locked
    *  and call onLockedPress instead. Leave out for every option. */
-  unlockedCollections?: readonly ThemeCollectionKey[] | undefined;
+  unlockedThemes?: readonly string[] | undefined;
   onLockedPress?: () => void;
 }
 
@@ -79,13 +78,21 @@ const ThemeSwatch: React.FC<{ accent: string; gradient: [string, string]; border
 );
 
 const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
-  value, onChange, onColorsResolved, textColor, subColor, borderColor, sepColor, unlockedCollections, onLockedPress,
+  value, onChange, onColorsResolved, textColor, subColor, borderColor, sepColor, unlockedThemes, onLockedPress,
 }) => {
   const { themeChoice, customBackdrop, customCard, customAccent, sheetColor } = value;
-  const isUnlocked = (key: ThemeCollectionKey) => !unlockedCollections || unlockedCollections.includes(key);
-  const customLocked = !!unlockedCollections;
-  // What they can pick comes first, so it isn't below every locked rail.
-  const collections = [...THEME_COLLECTIONS].sort((a, b) => Number(isUnlocked(b.key)) - Number(isUnlocked(a.key)));
+  const isUnlocked = (key: string) => !unlockedThemes || unlockedThemes.includes(key);
+  const customLocked = !!unlockedThemes;
+  // What they can pick comes first, both the rail and its place in the rail,
+  // so it isn't behind every locked set.
+  const unlockedFirst = (a: string, b: string) => Number(isUnlocked(b)) - Number(isUnlocked(a));
+  const collections = THEME_COLLECTIONS
+    .map(collection => ({
+      ...collection,
+      themes: PROVIDER_THEMES.filter(t => t.collection === collection.key).sort((a, b) => unlockedFirst(a.key, b.key)),
+    }))
+    .filter(collection => collection.themes.length > 0)
+    .sort((a, b) => unlockedFirst(a.themes[0]!.key, b.themes[0]!.key));
 
   const pressLocked = () => {
     Haptics.selectionAsync().catch(() => {});
@@ -102,19 +109,19 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
     <View>
       {/* Preset sets, one swipeable rail per collection */}
       {collections.map(collection => {
-        const themes = PROVIDER_THEMES.filter(t => t.collection === collection.key);
-        if (themes.length === 0) return null;
-        const locked = !isUnlocked(collection.key);
+        const { themes } = collection;
+        const allLocked = !themes.some(t => isUnlocked(t.key));
         return (
           <View key={collection.key} style={styles.collection}>
             <View style={styles.collectionHead}>
-              {locked && <Ionicons name="lock-closed" size={10} color={subColor} />}
+              {allLocked && <Ionicons name="lock-closed" size={10} color={subColor} />}
               <Text style={[styles.collectionName, { color: textColor }]}>{collection.name.toUpperCase()}</Text>
               <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>{collection.description}</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
               {themes.map(t => {
                 const isSelected = themeChoice === t.key;
+                const locked = !isUnlocked(t.key);
                 return (
                   <TouchableOpacity
                     key={t.key}
