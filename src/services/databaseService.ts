@@ -5409,20 +5409,45 @@ export type MyScheduleClosure = {
   isClosed: boolean;
   reopensOn: string | null;
   nextReleaseAt: string | null;
+  reason: string | null;
+  showReason: boolean;
+  autoClosed: boolean;
 };
 
 export async function getMyScheduleClosure(): Promise<MyScheduleClosure | null> {
   const { data, error } = await supabase.rpc("get_my_schedule_closure");
   if (error) throw error;
-  const row = (data as Array<{ is_closed: boolean; reopens_on: string | null; next_release_at: string | null }> | null)?.[0];
+  const row = (data as Array<{
+    is_closed: boolean;
+    reopens_on: string | null;
+    next_release_at: string | null;
+    reason: string | null;
+    show_reason: boolean;
+    auto_closed: boolean;
+  }> | null)?.[0];
   if (!row) return null;
-  return { isClosed: row.is_closed, reopensOn: row.reopens_on, nextReleaseAt: row.next_release_at };
+  return {
+    isClosed: row.is_closed,
+    reopensOn: row.reopens_on,
+    nextReleaseAt: row.next_release_at,
+    reason: row.reason,
+    showReason: row.show_reason,
+    autoClosed: row.auto_closed,
+  };
 }
 
 /** Stops new client bookings. With no date, it reopens on the provider's next
  *  release day, or when they reopen it if they don't have one. */
-export async function closeMySchedule(reopensOn: string | null): Promise<void> {
-  const { error } = await supabase.rpc("close_my_schedule", { p_reopens_on: reopensOn });
+export async function closeMySchedule(
+  reopensOn: string | null,
+  reason: string | null,
+  showReason: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc("close_my_schedule", {
+    p_reopens_on: reopensOn,
+    p_reason: reason,
+    p_show_reason: showReason,
+  });
   if (error) throw error;
 }
 
@@ -5431,7 +5456,14 @@ export async function reopenMySchedule(): Promise<void> {
   if (error) throw error;
 }
 
-/** All a client learns about a closure: yes or no, never why or until when. */
+/** Why a provider is closed, only if they chose to tell clients. Never until when. */
+export async function getProviderClosureReason(providerId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc("get_provider_closure_reason", { p_provider_id: providerId });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}
+
+/** Whether a client can book. Why it's closed is getProviderClosureReason. */
 export async function isProviderTakingBookings(providerId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("provider_is_taking_bookings", { p_provider_id: providerId });
   if (error) throw error;
