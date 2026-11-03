@@ -30,6 +30,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import { StackScreenProps } from '@react-navigation/stack';
 import { useHideTabBar } from '../../navigation/useHideTabBar';
 import * as ImagePicker from 'expo-image-picker';
@@ -69,6 +70,7 @@ import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
   DEFAULT_PROVIDER_THEME,
+  parseThemeKey,
   resolveProviderTheme,
   themeBrandingColours,
   withAlpha,
@@ -2188,10 +2190,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             />
           </>
         ) : (
-          <LinearGradient
+          <ProfileHeroBackdrop
             colors={providerData.hasCustomGradient ? providerData.gradient : [PP.hero, PP.bg]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
+            finish={parseThemeKey(providerData.profileTheme).finish}
             style={styles.previewHeroImage}
           />
         )}

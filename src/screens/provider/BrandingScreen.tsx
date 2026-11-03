@@ -25,8 +25,12 @@ import {
   decodeCustomTheme,
   encodeThemeKey,
   parseThemeKey,
+  DEFAULT_HERO_FINISH,
+  HERO_FINISHES,
+  type HeroFinish,
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
+import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
 import { DEFAULT_PROVIDER_FONT, resolveProviderFontFamily } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
@@ -85,6 +89,7 @@ export default function BrandingScreen({ navigation }: any) {
   const [customCard, setCustomCard]           = useState('#F9E9EE');
   const [customAccent, setCustomAccent]       = useState('#D98BA6');
   const [sheetColor, setSheetColor]           = useState(SHEET_BG);
+  const [heroFinish, setHeroFinish]           = useState<HeroFinish>(DEFAULT_HERO_FINISH);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
@@ -102,8 +107,9 @@ export default function BrandingScreen({ navigation }: any) {
         setAccentColor(cached.accentColor);
         setBackgroundImage(cached.backgroundImage);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
-        const { base, sheet } = parseThemeKey(cached.profileTheme);
+        const { base, sheet, finish } = parseThemeKey(cached.profileTheme);
         setSheetColor(sheet);
+        setHeroFinish(finish);
         const custom = decodeCustomTheme(base);
         if (custom) {
           setThemeChoice('custom');
@@ -127,8 +133,9 @@ export default function BrandingScreen({ navigation }: any) {
           if (data.accent_color) setAccentColor(data.accent_color);
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
           if (data.brand_font) setBrandFont(data.brand_font);
-          const { base, sheet } = parseThemeKey(data.profile_theme);
+          const { base, sheet, finish } = parseThemeKey(data.profile_theme);
           setSheetColor(sheet);
+          setHeroFinish(finish);
           const custom = decodeCustomTheme(base);
           if (custom) {
             setThemeChoice('custom');
@@ -204,7 +211,7 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor);
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish);
 
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
@@ -233,7 +240,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, brandFont, navigation]);
 
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {
@@ -251,6 +258,12 @@ export default function BrandingScreen({ navigation }: any) {
     setAccentColor(accent);
     setGradient(resolvedGradient);
   }, []);
+
+  // The preview's words follow the backdrop's lead colour, so pale sets like
+  // Oat Milk read in ink rather than shadowed white.
+  const previewOnLight = !backgroundImage && !isDarkColor(gradient[0]);
+  const previewInk = previewOnLight ? '#26201E' : '#FFFFFF';
+  const accentInk = isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740';
 
   if (loading) {
     return (
@@ -291,19 +304,14 @@ export default function BrandingScreen({ navigation }: any) {
                 />
               </>
             ) : (
-              <LinearGradient
-                colors={gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
+              <ProfileHeroBackdrop colors={gradient} finish={heroFinish} style={StyleSheet.absoluteFill} />
             )}
             <View style={styles.previewContent}>
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
-                <Text style={styles.previewAccentLabel}>ACCENT</Text>
+                <Text style={[styles.previewAccentLabel, { color: accentInk }]}>ACCENT</Text>
               </View>
-              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont) }]}>Your Profile</Text>
-              <Text style={styles.previewSub}>Background preview</Text>
+              <Text style={[styles.previewName, { fontFamily: resolveProviderFontFamily(brandFont), color: previewInk }, !previewOnLight && styles.previewShadow]}>Your Profile</Text>
+              <Text style={[styles.previewSub, { color: previewInk, opacity: 0.75 }]}>Background preview</Text>
             </View>
           </View>
 
@@ -311,8 +319,8 @@ export default function BrandingScreen({ navigation }: any) {
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Each preset is a matched set of accent, card, and backdrop colours.
-              Pick one or tap Custom to build your own.
+              Each set pairs two backdrop colours with an accent that suits them.
+              Swipe through the collections, or tap Custom to build your own.
             </Text>
             <ProviderThemePicker
               value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
@@ -322,6 +330,37 @@ export default function BrandingScreen({ navigation }: any) {
               borderColor={P.border}
               sepColor={P.sep}
             />
+          </View>
+
+          {/* Hero finish — how the two backdrop colours are drawn */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              {backgroundImage
+                ? 'Your background photo is showing instead. Remove it to use a finish.'
+                : 'How your two backdrop colours sit behind the top of your profile.'}
+            </Text>
+            <View style={styles.finishRow}>
+              {HERO_FINISHES.map(f => {
+                const selected = heroFinish === f.key;
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={styles.finishOption}
+                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setHeroFinish(f.key); }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${f.name}: ${f.description}`}
+                  >
+                    <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                      <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
+                    </View>
+                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -438,6 +477,8 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
     color: '#fff',
+  },
+  previewShadow: {
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
@@ -473,6 +514,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     opacity: 0.8,
   },
+
+  finishRow: { flexDirection: 'row', gap: 10 },
+  finishOption: { flex: 1, alignItems: 'center', gap: 6 },
+  finishSwatch: {
+    width: '100%',
+    aspectRatio: 0.8,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  finishSwatchOn: { borderWidth: 2.5 },
+  finishName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
 
   imageRow:    { flexDirection: 'row', alignItems: 'center', gap: 14 },
   imageThumb:  { width: 80, height: 80, borderRadius: 12 },

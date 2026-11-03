@@ -9,6 +9,11 @@
 //
 // Custom sets are stored in the same column, colon-encoded:
 //   custom:#RRGGBB:#RRGGBB:#RRGGBB   (backdrop : card : accent)
+//
+// The whole stored value is  base[|#sheet[|finish]]  — the content-area colour
+// and the hero finish ride along as suffixes (see encodeThemeKey), so neither
+// needs a column of its own. Builds that predate the finish read only the
+// first two parts and show the plain blend.
 
 // Default beige content backdrop — matches the app background.
 export const SHEET_BG = '#F5F1EC';
@@ -28,6 +33,46 @@ export const SHEET_OPTIONS: { key: string; name: string; color: string }[] = [
   { key: 'ivory',    name: 'Ivory',     color: '#FBF6EC' },
   { key: 'mist',     name: 'Mist',      color: '#EEF1F4' },
   { key: 'sagemist', name: 'Sage Mist', color: '#EEF3EC' },
+  { key: 'oat',      name: 'Oat',       color: '#F3ECE2' },
+  { key: 'shell',    name: 'Shell',     color: '#F9EEEA' },
+  { key: 'butter',   name: 'Butter',    color: '#FBF6E7' },
+];
+
+// ── Hero finish ───────────────────────────────────────────────────────────────
+// How the two hero colours are drawn behind the top of the profile. Only
+// matters without a background photo. Picked in Branding & Style (owner's
+// call, 2026-11-03). Drawn by components/ProfileHeroBackdrop.
+
+export type HeroFinish = 'blend' | 'solid' | 'glow' | 'split';
+
+export const DEFAULT_HERO_FINISH: HeroFinish = 'blend';
+
+export const HERO_FINISHES: { key: HeroFinish; name: string; description: string }[] = [
+  { key: 'blend', name: 'Blend', description: 'One colour melting into the other' },
+  { key: 'solid', name: 'Solid', description: 'Just the first colour' },
+  { key: 'glow',  name: 'Glow',  description: 'The second colour glowing from the top corner' },
+  { key: 'split', name: 'Split', description: 'Both colours, side by side on a diagonal' },
+];
+
+function isHeroFinish(value: string | undefined): value is HeroFinish {
+  return HERO_FINISHES.some(f => f.key === value);
+}
+
+// ── Collections ───────────────────────────────────────────────────────────────
+// The picker shows the sets in these groups, in this order. The five named
+// collections came from the owner's picks on 2026-11-03
+// (https://claude.ai/artifact/FDEnSYwWeAyUhw7v9dvcT2); Classics holds the
+// sets that were here before them.
+
+export type ThemeCollectionKey = 'atelier' | 'sorbet' | 'terra' | 'afterdark' | 'statement' | 'classics';
+
+export const THEME_COLLECTIONS: { key: ThemeCollectionKey; name: string; description: string }[] = [
+  { key: 'atelier',   name: 'Atelier',    description: 'Quiet, tailored neutrals' },
+  { key: 'sorbet',    name: 'Sorbet',     description: 'Soft pastels with a contrasting accent' },
+  { key: 'terra',     name: 'Terra',      description: 'Warm, sun-baked earth tones' },
+  { key: 'afterdark', name: 'After Dark', description: 'Deep jewel tones with a light accent' },
+  { key: 'statement', name: 'Statement',  description: 'Bold colour clashes' },
+  { key: 'classics',  name: 'Classics',   description: 'The original CERVICED sets' },
 ];
 
 export interface ProviderThemeTokens {
@@ -56,6 +101,7 @@ export interface ProviderThemePreset {
    *  palette — used to default the sheet picker when a provider selects this
    *  theme, without overriding a sheet colour they already chose manually. */
   suggestedSheet: string;
+  collection: ThemeCollectionKey;
 }
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
@@ -202,13 +248,42 @@ const GRADIENT_DEFS: { key: string; name: string; description: string; from: str
   { key: 'greypink',  name: 'Grey & Pink', description: 'Cool grey fading into soft pink',          from: '#B9B9C0', to: '#F3D3DE', accent: '#9C6B7A', suggestedSheet: 'blush' },
 ];
 
+// The collections — two-tone heroes, each with an accent chosen to complement
+// it rather than a deeper shade of the same hue, and a content area to match.
+const COLLECTION_DEFS: { key: string; name: string; description: string; from: string; to: string; accent: string; suggestedSheet: string; collection: ThemeCollectionKey }[] = [
+  { key: 'oatmilk',       name: 'Oat Milk',          description: 'Toasted oat into steamed milk, with a latte-brown accent', from: '#D8C6AF', to: '#EFE3D3', accent: '#7A5A43', suggestedSheet: 'ivory',    collection: 'atelier' },
+  { key: 'cashmere',      name: 'Cashmere',          description: 'Warm greige into soft camel, with a cinnamon accent',      from: '#C9B2A3', to: '#E9DCD1', accent: '#8C5647', suggestedSheet: 'shell',    collection: 'atelier' },
+  { key: 'linenink',      name: 'Linen & Ink',       description: 'Pale linen with a near-black ink accent',                  from: '#E4DED3', to: '#F3EFE8', accent: '#23262E', suggestedSheet: 'beige',    collection: 'atelier' },
+  { key: 'mushroom',      name: 'Mushroom',          description: 'Earthy taupe into stone, with a deep bark accent',         from: '#9C8F84', to: '#CFC5BA', accent: '#4A403A', suggestedSheet: 'oat',      collection: 'atelier' },
+  { key: 'rosesage',      name: 'Rose & Sage',       description: 'Dusty rose with a soft sage accent',                       from: '#E6B3B9', to: '#F2D9D9', accent: '#66805F', suggestedSheet: 'blush',    collection: 'sorbet' },
+  { key: 'powderapricot', name: 'Powder & Apricot',  description: 'Powder blue into apricot, with a burnt-orange accent',      from: '#B9CFE3', to: '#F4D6BF', accent: '#B9643F', suggestedSheet: 'mist',     collection: 'sorbet' },
+  { key: 'desertrose',    name: 'Desert Rose',       description: 'Sandstone pink with a dark rosewood accent',               from: '#B4807A', to: '#DFBDB1', accent: '#6A3D3A', suggestedSheet: 'shell',    collection: 'terra' },
+  { key: 'emeraldgold',   name: 'Emerald & Gold',    description: 'Bottle green with an antique-gold accent',                 from: '#1D4A3C', to: '#2E6A54', accent: '#A98235', suggestedSheet: 'ivory',    collection: 'afterdark' },
+  { key: 'sapphireblush', name: 'Sapphire & Blush',  description: 'Midnight sapphire with a blush-pink accent',               from: '#1D2C52', to: '#3A4B78', accent: '#D88A9B', suggestedSheet: 'blush',    collection: 'afterdark' },
+  { key: 'plumchampagne', name: 'Plum & Champagne',  description: 'Velvet plum with a champagne accent',                      from: '#3C1F3E', to: '#683C64', accent: '#C29E76', suggestedSheet: 'ivory',    collection: 'afterdark' },
+  { key: 'tealcoral',     name: 'Deep Teal & Coral', description: 'Inky teal with a warm coral accent',                       from: '#113A41', to: '#1E5B62', accent: '#D9714F', suggestedSheet: 'mist',     collection: 'afterdark' },
+  { key: 'cobaltblush',   name: 'Cobalt & Blush',    description: 'Electric cobalt with a sugar-pink accent',                 from: '#2747A0', to: '#4A68BE', accent: '#E99AAE', suggestedSheet: 'blush',    collection: 'statement' },
+  { key: 'cherrycocoa',   name: 'Cherry & Cocoa',    description: 'Glossy cherry with a dark cocoa accent',                   from: '#A92536', to: '#D95A66', accent: '#3A211C', suggestedSheet: 'shell',    collection: 'statement' },
+  { key: 'matchaink',     name: 'Matcha & Ink',      description: 'Whisked matcha with a deep ink-green accent',              from: '#7F9A6E', to: '#C3D0AE', accent: '#2C3527', suggestedSheet: 'sagemist', collection: 'statement' },
+  { key: 'tangerinenavy', name: 'Tangerine & Navy',  description: 'Juicy tangerine with a crisp navy accent',                 from: '#D9703A', to: '#EFA772', accent: '#1E2A4A', suggestedSheet: 'butter',   collection: 'statement' },
+];
+
 export const PROVIDER_THEMES: ProviderThemePreset[] = [
+  ...COLLECTION_DEFS.map(d => ({
+    key: d.key,
+    name: d.name,
+    description: d.description,
+    tokens: buildThemeTokens(d.from, NEUTRAL_CARD, d.accent, SHEET_BG, [d.from, d.to]),
+    suggestedSheet: d.suggestedSheet,
+    collection: d.collection,
+  })),
   ...PRESET_DEFS.map(d => ({
     key: d.key,
     name: d.name,
     description: d.description,
     tokens: buildThemeTokens(d.backdrop, d.card, d.accent, SHEET_BG, d.gradient),
     suggestedSheet: d.suggestedSheet,
+    collection: 'classics' as const,
   })),
   ...MONOCHROME_DEFS.map(d => ({
     key: d.key,
@@ -216,6 +291,7 @@ export const PROVIDER_THEMES: ProviderThemePreset[] = [
     description: d.description,
     tokens: buildMonochromeTheme(d.main),
     suggestedSheet: d.suggestedSheet,
+    collection: 'classics' as const,
   })),
   ...GRADIENT_DEFS.map(d => ({
     key: d.key,
@@ -226,6 +302,7 @@ export const PROVIDER_THEMES: ProviderThemePreset[] = [
     // richer "from" end, deepened slightly for contrast on the pale card.
     tokens: buildThemeTokens(d.from, NEUTRAL_CARD, d.accent ?? blend(d.from, '#000000', 0.12), SHEET_BG, [d.from, d.to]),
     suggestedSheet: d.suggestedSheet,
+    collection: 'classics' as const,
   })),
 ];
 
@@ -249,17 +326,21 @@ export function decodeCustomTheme(key: string | null | undefined): { backdrop: s
 
 // ── Full key encoding (base theme + optional content-area suffix) ────────────
 
-/** Compose the stored profile_theme value from a base key and a sheet colour. */
-export function encodeThemeKey(base: string, sheet?: string): string {
+/** Compose the stored profile_theme value from a base key, a sheet colour and
+ *  a hero finish. The sheet is written out whenever a finish follows it, so
+ *  the parts never shift position. */
+export function encodeThemeKey(base: string, sheet?: string, finish: HeroFinish = DEFAULT_HERO_FINISH): string {
+  if (finish !== DEFAULT_HERO_FINISH) return `${base}|${sheet || SHEET_BG}|${finish}`;
   return sheet && sheet !== SHEET_BG ? `${base}|${sheet}` : base;
 }
 
-/** Split a stored profile_theme value into base key + sheet colour. */
-export function parseThemeKey(key: string | null | undefined): { base: string | null; sheet: string } {
-  if (!key) return { base: null, sheet: SHEET_BG };
-  const [base, sheet] = key.split('|');
+/** Split a stored profile_theme value into base key, sheet colour and hero
+ *  finish. Anything unreadable falls back to the default for that part. */
+export function parseThemeKey(key: string | null | undefined): { base: string | null; sheet: string; finish: HeroFinish } {
+  if (!key) return { base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH };
+  const [base, sheet, finish] = key.split('|');
   const validSheet = /^#[0-9a-fA-F]{6}$/.test(sheet ?? '') ? sheet! : SHEET_BG;
-  return { base: base ?? null, sheet: validSheet };
+  return { base: base ?? null, sheet: validSheet, finish: isHeroFinish(finish) ? finish : DEFAULT_HERO_FINISH };
 }
 
 /** Resolve a stored theme key (preset or custom-encoded, with optional sheet
@@ -268,7 +349,9 @@ export function resolveProviderTheme(key: string | null | undefined): ProviderTh
   const { base, sheet } = parseThemeKey(key);
   const custom = decodeCustomTheme(base);
   if (custom) return buildThemeTokens(custom.backdrop, custom.card, custom.accent, sheet);
-  const preset = PROVIDER_THEMES.find(t => t.key === base) ?? PROVIDER_THEMES[0]!;
+  // By name, not position: the collections are listed ahead of the default.
+  const preset = PROVIDER_THEMES.find(t => t.key === base)
+    ?? PROVIDER_THEMES.find(t => t.key === DEFAULT_PROVIDER_THEME)!;
   const d = preset.tokens;
   return sheet === SHEET_BG ? d : buildThemeTokens(d.hero, d.card, d.accent, sheet, d.gradient);
 }

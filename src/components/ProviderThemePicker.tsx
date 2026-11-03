@@ -1,17 +1,22 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import {
   PROVIDER_THEMES,
   SHEET_OPTIONS,
+  THEME_COLLECTIONS,
 } from '../constants/providerThemes';
 
-// Swatch options for the Custom colour set builder.
+// Swatch options for the Custom colour set builder, drawn from the same
+// families as the collections so a home-made set sits as well as a preset.
+// A colour saved from the older, brighter lists still shows on the profile;
+// it just isn't offered here any more.
 // Backdrop = hero colour behind the profile top (becomes the gradient).
 export const CUSTOM_BACKDROP_OPTIONS = [
-  '#C4A8AE', '#E3C7CF', '#F2D4DE', '#E9D9BE', '#CBDCC2',
-  '#D9CBEC', '#C2DAE8', '#D4AF7A', '#8C6E7A', '#2D2D2D',
+  '#D8C6AF', '#C9B2A3', '#9C8F84', '#E6B3B9', '#B9CFE3',
+  '#B4807A', '#7F9A6E', '#D9703A', '#A92536', '#2747A0',
+  '#1D4A3C', '#1D2C52', '#3C1F3E', '#113A41', '#2D2D2D',
 ];
 // Card tones — includes the beige (#F1EAE2).
 export const CUSTOM_CARD_OPTIONS = [
@@ -19,9 +24,10 @@ export const CUSTOM_CARD_OPTIONS = [
   '#FCF8F0', '#F7FAF3', '#F9F6FD', '#F6FAFC',
 ];
 export const CUSTOM_ACCENT_OPTIONS = [
-  '#E9799F', '#D98BA6', '#C2185B', '#7B1FA2', '#4A148C',
-  '#303F9F', '#1565C0', '#00838F', '#2E7D32', '#E65100',
-  '#4E342E', '#AD1457', '#FF5722', '#FF8F00',
+  '#7A5A43', '#8C5647', '#4A403A', '#23262E', '#6A3D3A',
+  '#3A211C', '#A98235', '#C29E76', '#B9643F', '#D9714F',
+  '#E99AAE', '#D88A9B', '#66805F', '#2C3527', '#2C5AA0',
+  '#1E2A4A',
 ];
 
 export interface ThemeSelection {
@@ -73,55 +79,80 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
 
   return (
     <View>
-      {/* Preset sets + custom — each option is ●●● (accent, card, backdrop) */}
-      <View style={styles.grid}>
-        {PROVIDER_THEMES.map(t => {
-          const isSelected = themeChoice === t.key;
-          return (
-            <TouchableOpacity
-              key={t.key}
-              onPress={() => {
-                // Switching theme also defaults the content-area colour to
-                // whichever one best complements this palette — still
-                // overridable afterwards via the CONTENT AREA row below.
-                const suggested = SHEET_OPTIONS.find(o => o.key === t.suggestedSheet);
-                select(
-                  { themeChoice: t.key, ...(suggested ? { sheetColor: suggested.color } : {}) },
-                  { accent: t.tokens.accent, backdrop: t.tokens.hero }
+      {/* Preset sets, one swipeable rail per collection */}
+      {THEME_COLLECTIONS.map(collection => {
+        const themes = PROVIDER_THEMES.filter(t => t.collection === collection.key);
+        if (themes.length === 0) return null;
+        return (
+          <View key={collection.key} style={styles.collection}>
+            <View style={styles.collectionHead}>
+              <Text style={[styles.collectionName, { color: textColor }]}>{collection.name.toUpperCase()}</Text>
+              <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>{collection.description}</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+              {themes.map(t => {
+                const isSelected = themeChoice === t.key;
+                return (
+                  <TouchableOpacity
+                    key={t.key}
+                    onPress={() => {
+                      // Switching theme also defaults the content-area colour to
+                      // whichever one best complements this palette — still
+                      // overridable afterwards via the CONTENT AREA row below.
+                      const suggested = SHEET_OPTIONS.find(o => o.key === t.suggestedSheet);
+                      select(
+                        { themeChoice: t.key, ...(suggested ? { sheetColor: suggested.color } : {}) },
+                        { accent: t.tokens.accent, backdrop: t.tokens.hero }
+                      );
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${t.name}: ${t.description}`}
+                    style={[
+                      styles.option,
+                      { borderColor: 'transparent' },
+                      isSelected && { borderColor: t.tokens.accent },
+                    ]}
+                  >
+                    <ThemeSwatch accent={t.tokens.accent} gradient={t.tokens.gradient} borderColor={borderColor} />
+                    <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={2}>
+                      {t.name}
+                    </Text>
+                  </TouchableOpacity>
                 );
-              }}
-              activeOpacity={0.8}
-              style={[
-                styles.option,
-                { borderColor: 'transparent' },
-                isSelected && { borderColor: t.tokens.accent },
-              ]}
-            >
-              <ThemeSwatch accent={t.tokens.accent} gradient={t.tokens.gradient} borderColor={borderColor} />
-              <Text style={[styles.optionName, { color: isSelected ? textColor : subColor }]} numberOfLines={1}>
-                {t.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+              })}
+            </ScrollView>
+          </View>
+        );
+      })}
 
-        <TouchableOpacity
-          onPress={() => select(
-            { themeChoice: 'custom' },
-            { accent: customAccent, backdrop: customBackdrop }
-          )}
-          activeOpacity={0.8}
-          style={[
-            styles.option,
-            { borderColor: 'transparent' },
-            themeChoice === 'custom' && { borderColor: customAccent },
-          ]}
-        >
-          <ThemeSwatch accent={customAccent} gradient={[customBackdrop, customCard]} borderColor={borderColor} />
-          <Text style={[styles.optionName, { color: themeChoice === 'custom' ? textColor : subColor }]} numberOfLines={1}>
-            Custom
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.collection}>
+        <View style={styles.collectionHead}>
+          <Text style={[styles.collectionName, { color: textColor }]}>MAKE YOUR OWN</Text>
+          <Text style={[styles.collectionDesc, { color: subColor }]} numberOfLines={1}>Pick each colour yourself</Text>
+        </View>
+        <View style={styles.rail}>
+          <TouchableOpacity
+            onPress={() => select(
+              { themeChoice: 'custom' },
+              { accent: customAccent, backdrop: customBackdrop }
+            )}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: themeChoice === 'custom' }}
+            style={[
+              styles.option,
+              { borderColor: 'transparent' },
+              themeChoice === 'custom' && { borderColor: customAccent },
+            ]}
+          >
+            <ThemeSwatch accent={customAccent} gradient={[customBackdrop, customCard]} borderColor={borderColor} />
+            <Text style={[styles.optionName, { color: themeChoice === 'custom' ? textColor : subColor }]} numberOfLines={1}>
+              Custom
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Custom builder */}
@@ -206,22 +237,42 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
 };
 
 const styles = StyleSheet.create({
-  grid: {
+  collection: {
+    marginBottom: 14,
+  },
+  collectionHead: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 6,
+  },
+  collectionName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+    letterSpacing: 1.2,
+  },
+  collectionDesc: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  rail: {
+    flexDirection: 'row',
+    gap: 8,
   },
   option: {
-    borderRadius: 12,
+    width: 84,
+    borderRadius: 14,
     borderWidth: 2,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
     alignItems: 'center',
     gap: 5,
   },
   swatchChip: {
-    width: 48,
-    height: 32,
+    width: 68,
+    height: 48,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
@@ -230,9 +281,9 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   accentDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
   },
   optionName: {
