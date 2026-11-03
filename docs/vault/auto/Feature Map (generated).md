@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **60 files**
 - … +30 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **185 files**
+Curated: [[Booking Flow]] · **186 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
 - `src/services/databaseService.ts` _(242)_
@@ -255,8 +255,8 @@ Curated: [[Booking Flow]] · **185 files**
 - `src/screens/client/RescheduleScreen.tsx` _(144)_
 - `src/screens/client/CartScreen.tsx` _(126)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
+- `src/screens/provider/PoliciesScreen.tsx` _(72)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
-- `src/screens/provider/PoliciesScreen.tsx` _(71)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **185 files**
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `src/types/database.ts` _(36)_
-- … +155 more
+- … +156 more
 
 ## Auth
 Curated: [[Contexts]] · **194 files**
