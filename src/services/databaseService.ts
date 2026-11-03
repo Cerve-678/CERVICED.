@@ -825,6 +825,10 @@ export interface ProviderServiceFacets {
    *  extra options. A service name ("Knotless braids — medium") is fine to
    *  match against but reads as noise as a filter option. */
   specialityLabels: Map<string, Set<string>>;
+  /** Just the business specialities the provider chose
+   *  (`provider_specialties`), no service tags or names, in the order read.
+   *  What the Search card underlines under the provider's name. */
+  specialities: Map<string, string[]>;
 }
 
 /**
@@ -850,8 +854,9 @@ export async function getProviderServiceFacets(
   const services = new Map<string, FacetService[]>();
   const specialityText = new Map<string, Set<string>>();
   const specialityLabels = new Map<string, Set<string>>();
+  const specialities = new Map<string, string[]>();
   if (providerIds.length === 0) {
-    return { priceRanges, services, specialityText, specialityLabels };
+    return { priceRanges, services, specialityText, specialityLabels, specialities };
   }
 
   const addTo = (map: Map<string, Set<string>>, providerId: string, value: string) => {
@@ -939,10 +944,16 @@ export async function getProviderServiceFacets(
   }
 
   for (const row of specialtiesRes.data ?? []) {
-    addSpecialityLabel(row.provider_id as string, row.specialty as string | null);
+    const providerId = row.provider_id as string;
+    const specialty = (row.specialty as string | null)?.trim();
+    addSpecialityLabel(providerId, specialty);
+    if (!specialty) continue;
+    const own = specialities.get(providerId) ?? [];
+    if (!own.some(existing => existing.toLowerCase() === specialty.toLowerCase())) own.push(specialty);
+    specialities.set(providerId, own);
   }
 
-  return { priceRanges, services, specialityText, specialityLabels };
+  return { priceRanges, services, specialityText, specialityLabels, specialities };
 }
 
 /** Coarse near-term availability status for a provider, as surfaced on
@@ -8495,10 +8506,7 @@ export async function getProviderDepositPoliciesByDisplayNames(
         depositOnly: mode === "deposit_required",
       };
     } else {
-      // No deposit policy saved at all. Left as the historical 20%-both-options
-      // default rather than silently switching live profiles to full-only —
-      // note that 20% is a figure the provider never set, so a provider who
-      // has never opened Payments is quoting a deposit they didn't choose.
+      // No deposit policy saved at all: no deposit offered.
       result[p.display_name] = { ...defaultPolicy };
     }
   }
