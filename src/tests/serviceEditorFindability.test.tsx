@@ -83,13 +83,17 @@ describe('ServiceEditorSheet findability', () => {
     }));
   });
 
-  it('offers a template’s description without writing it in', () => {
+  it('offers a template’s description first, without writing it in', () => {
     open({ categoryName: 'Acrylic' });
     fireEvent.changeText(screen.getByPlaceholderText('e.g. Gel Overlay'), 'Full set acrylic');
-    const offer = screen.getByRole('button', { name: /^Use suggested description/ });
+    const offers = screen.getAllByRole('button', { name: /^Use suggested description/ });
+    expect(offers.length).toBeLessThanOrEqual(3);
+    const offer = offers[0]!;
     expect(screen.getByPlaceholderText("What's included, what to expect").props['value']).toBe('');
     fireEvent.press(offer);
     expect(screen.getByPlaceholderText("What's included, what to expect").props['value']).toMatch(/acrylic extensions/);
+    // Once there's a description, the ideas step aside.
+    expect(screen.queryAllByRole('button', { name: /^Use suggested description/ })).toHaveLength(0);
   });
 
   it('leaves an existing service’s tags to the full editor, and never blocks its edit', () => {
