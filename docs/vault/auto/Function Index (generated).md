@@ -5,9 +5,9 @@
 
 #generated
 
-**3052 functions** across **420 files**.
+**3057 functions** across **421 files**.
 
-### `src/components/` (55)
+### `src/components/` (56)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -62,6 +62,7 @@
 - `ThemedBackground.tsx` — **ThemedBackground**
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**
+- `TypedConfirmDialog.tsx` — **matchesConfirmWord** · **TypedConfirmDialog**
 - `WelcomeIntro.tsx` — DealtCard · DroppingLetter · onWordLayout · WelcomeIntro
 
 ### `src/components/analytics/` (1)
@@ -102,7 +103,7 @@
 ### `src/features/admin/` (3)
 - `dashboardPresentation.ts` — **buildProblemRows** · **describeDelta** · **formatCount** · **pounds** · **updatedLabel** · **weekLabel**
 - `moneyPresentation.ts` — day · **describeFailedPayout** · **describeOwed** · **describeRefundRequest** · **formatPence** · **parsePounds**
-- `useIsCervicedAdmin.ts` — **useIsCervicedAdmin**
+- `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 
 ### `src/features/beauty-profile/` (4)
 - `BeautyLanding.tsx` — **BeautyLanding** · go · groups · maintenanceBody · S · stubs · traits
@@ -340,7 +341,7 @@
 - `BeccaScreen.tsx` — beat · BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · isActiveTurn · persistResponse · refreshSessions · scheduleNextTick · showReveal · showSteps
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave
-- `DevSettingsScreen.tsx` — checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · didn · exportBookings · fullClientReset · fullProviderReset · is · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
+- `DevSettingsScreen.tsx` — askTyped · checkBookings · clearBookings · clearClientData · clearDbToken · clearProviderData · DevSettingsScreen · DevTools · didn · exportBookings · fullClientReset · fullProviderReset · is · loadPushInfo · logTokens · providerBookingsOnlyReset · replayWalkthroughs · reRegister · resetToFirstLogin · resolves · sendTestEmail · sendTestPush · viewAllStorageKeys · viewBookings
 - `HelpCentreScreen.tsx` — buildMoreActions · FAQItem · handleContactSupport · HelpCentreScreen · openMore · runAction
 - `InfoScreen.tsx` — ScreenNameHere
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow

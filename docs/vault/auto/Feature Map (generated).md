@@ -108,7 +108,7 @@ Curated: [[Payments]] · **154 files**
 - … +124 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **313 files**
+Curated: [[Booking Flow]] · **314 files**
 - `src/services/databaseService.ts` _(993)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **313 files**
 - `src/services/becca/capabilities/provider.ts` _(97)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- … +283 more
+- … +284 more
 
 ## Notifications
 Curated: [[Notifications]] · **176 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **62 files**
 - … +32 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **190 files**
+Curated: [[Booking Flow]] · **191 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
 - `src/services/databaseService.ts` _(252)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **190 files**
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `src/types/database.ts` _(37)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
-- … +160 more
+- … +161 more
 
 ## Auth
 Curated: [[Contexts]] · **197 files**
