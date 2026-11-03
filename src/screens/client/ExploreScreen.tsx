@@ -5,12 +5,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  StatusBar,
   Animated,
   Easing,
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { ViewInstance } from 'react-native';
@@ -1033,7 +1033,7 @@ const ExploreScreen = memo(() => {
   return (
     <ThemedBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         {/* Sub-tab bar */}
         <SubTabBar activeTab={activeTab} onTabChange={setActiveTab} favouritesRef={tourFavouritesRef} />

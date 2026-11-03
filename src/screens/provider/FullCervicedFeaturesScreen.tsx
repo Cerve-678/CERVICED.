@@ -7,9 +7,9 @@
  * https://claude.ai/artifact/CGxJoPPhJ66jNjUvSRkjPm): it leads with money,
  * because full providers pay CERVICED nothing on bookings: the client pays the
  * platform fee on top (docs/PAYMENTS_AND_LOGIC.md §1.2). If that ever changes,
- * this page changes in the same PR. The example receipt uses the real fee
- * function, so it can't drift from checkout. Card fees are deliberately not
- * mentioned (product owner, 2026-11-03).
+ * this page changes in the same PR. The CERVICED fee itself and card fees are
+ * deliberately not shown (product owner, 2026-11-03). Opened from Home, so it
+ * hides the bottom nav itself; from Settings the Settings rule already does.
  *
  * Ends with the "Become a full member" button (product decision 2026-11-02,
  * replacing the 2026-10-21 "information only" rule), which opens the same
@@ -18,29 +18,25 @@
  * goes away.
  */
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
 import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_PRICE_LINE } from '../../constants/fullMembership';
-import { calculatePlatformFeePence } from '../../features/cart/platformFee';
-import { PAYOUT_HOLD_DAY_OPTIONS } from '../../constants/payoutTiming';
+import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel } from '../../constants/payoutTiming';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Feature = { icon: IconName; title: string; body: string };
 
-// The receipt's example booking. Only the price is made up; the fee comes
-// from the same function checkout uses.
-const EXAMPLE_PRICE_PENCE = 6000;
-const EXAMPLE_FEE_PENCE = calculatePlatformFeePence(EXAMPLE_PRICE_PENCE);
-const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
-// The shortest payout hold a provider can pick, in hours.
-const FASTEST_PAYOUT_HOURS = PAYOUT_HOLD_DAY_OPTIONS[0] * 24;
+// Every payout hold a full provider can pick in Payments.
+const PAYOUT_CHOICES = PAYOUT_HOLD_DAY_OPTIONS.map(payoutHoldLabel);
 
 // In-app chat and Becca are NOT listed: link-only pros already have both.
 const SECTIONS: { title: string; features: Feature[] }[] = [
@@ -51,6 +47,7 @@ const SECTIONS: { title: string; features: Feature[] }[] = [
       { icon: 'refresh-outline', title: 'Clients reminded to rebook you', body: 'After each visit we remind them when they\'re due, with a Rebook button straight back to you.' },
       { icon: 'people-outline', title: 'Cancellations refill', body: 'Turn your waitlist on and a cancelled slot goes to it first.' },
       { icon: 'megaphone-outline', title: 'Announcements', body: 'Message all your clients, or just repeat, new or lapsed ones, straight away or scheduled for later.' },
+      { icon: 'pricetag-outline', title: 'Promotions', body: 'Run a flash sale, a loyalty reward or a new-client offer, and tell your clients and followers about it.' },
     ],
   },
   {
@@ -61,9 +58,18 @@ const SECTIONS: { title: string; features: Feature[] }[] = [
     ],
   },
   {
-    title: 'Know your clients and your numbers',
+    title: 'Look after every client',
     features: [
       { icon: 'sparkles-outline', title: 'Know them before they arrive', body: 'Their hair, skin and preferences for that treatment, with allergies and medical notes flagged.' },
+      { icon: 'document-text-outline', title: 'Info packs', body: 'Prep and aftercare notes for a service, waiting on the client\'s booking.' },
+      { icon: 'alarm-outline', title: 'Reminders', body: 'Clients get a reminder the day before their appointment.' },
+    ],
+  },
+  {
+    title: 'Your brand and your numbers',
+    features: [
+      { icon: 'color-palette-outline', title: 'All of Branding', body: 'Every colour set, font and hero finish, or build your own colours.' },
+      { icon: 'ribbon-outline', title: 'Achievements', body: 'Seals for milestones like your first booking, five-star reviews and fully booked months.' },
       { icon: 'stats-chart-outline', title: 'Full analytics', body: 'Earnings over time, your top services, completions and no-shows, and ratings by service.' },
     ],
   },
@@ -77,10 +83,7 @@ const OF_COURSE = [
   'Late and no-show fees',
   'Reviews',
   'Price list',
-  'Reminders',
-  'Promo codes',
   'Consultation forms',
-  'Info packs',
   'Client list',
   'Auto-confirm',
 ];
@@ -91,10 +94,11 @@ export default function FullCervicedFeaturesScreen() {
   const { theme, palette: P } = useTheme();
   const styles = useMemo(() => createStyles(P), [P]);
   const [showSheet, setShowSheet] = useState(false);
+  useHideTabBar();
 
   return (
     <ThemedBackground style={styles.flex}>
-      <StatusBar barStyle={theme.statusBar} />
+      <FocusAwareStatusBar barStyle={theme.statusBar} />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
@@ -109,7 +113,7 @@ export default function FullCervicedFeaturesScreen() {
           <Text style={styles.backArrow}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.kicker}>FULL CERVICED</Text>
+        <Text style={styles.kicker}>FULL CERVICED EXPERIENCE</Text>
         <Text style={styles.title}>You keep every penny</Text>
 
         <View style={styles.hero}>
@@ -117,27 +121,17 @@ export default function FullCervicedFeaturesScreen() {
           <Text style={[styles.kicker, styles.onAccentSoft]}>OF EVERY BOOKING, YOU KEEP</Text>
           <Text style={styles.heroNum}>100%</Text>
           <Text style={styles.heroSub}>No commission. Tips reach you whole.</Text>
-          <View style={styles.receipt} accessibilityLabel={`For example, the client pays ${pounds(EXAMPLE_PRICE_PENCE + EXAMPLE_FEE_PENCE)}, including our ${pounds(EXAMPLE_FEE_PENCE)} fee, and you get ${pounds(EXAMPLE_PRICE_PENCE)}`}>
-            <Text style={styles.receiptEg}>EXAMPLE</Text>
-            <View style={styles.receiptRow}>
-              <Text style={styles.receiptText}>Client pays</Text>
-              <Text style={styles.receiptText}>{pounds(EXAMPLE_PRICE_PENCE + EXAMPLE_FEE_PENCE)}</Text>
-            </View>
-            <View style={styles.receiptRow}>
-              <Text style={[styles.receiptText, styles.flex]}>CERVICED fee, paid by the client</Text>
-              <Text style={styles.receiptText}>{pounds(EXAMPLE_FEE_PENCE)}</Text>
-            </View>
-            <View style={[styles.receiptRow, styles.receiptTotal]}>
-              <Text style={[styles.receiptText, styles.bold]}>You get</Text>
-              <Text style={[styles.receiptText, styles.bold]}>{pounds(EXAMPLE_PRICE_PENCE)}</Text>
-            </View>
-          </View>
         </View>
 
-        <View style={styles.stubs}>
-          <View style={styles.stub}>
-            <Text style={styles.stubNum}>{FASTEST_PAYOUT_HOURS}h</Text>
-            <Text style={styles.stubLabel}>fastest payout, you pick</Text>
+        <View style={styles.payout}>
+          <Text style={styles.payoutTitle}>You choose when you're paid</Text>
+          <Text style={styles.payoutSub}>How long after each appointment your money is released. Change it any time in Payments.</Text>
+          <View style={styles.chips}>
+            {PAYOUT_CHOICES.map(label => (
+              <View key={label} style={styles.chip}>
+                <Text style={styles.chipText}>{label}</Text>
+              </View>
+            ))}
           </View>
         </View>
 
@@ -191,7 +185,6 @@ type Palette = ReturnType<typeof useTheme>['palette'];
 const createStyles = (P: Palette) =>
   StyleSheet.create({
     flex: { flex: 1 },
-    bold: { fontWeight: '700' },
     scroll: { paddingHorizontal: 16 },
     backBtn: { alignSelf: 'flex-start', paddingVertical: 4, paddingRight: 12, marginBottom: 20 },
     backArrow: { fontSize: 22, fontWeight: '900', color: P.text },
@@ -205,15 +198,9 @@ const createStyles = (P: Palette) =>
     onAccentSoft: { color: P.onAccent, opacity: 0.8 },
     heroNum: { fontFamily: 'BakbakOne-Regular', fontSize: 64, lineHeight: 70, color: P.onAccent, marginTop: 4 },
     heroSub: { fontSize: 14, lineHeight: 20, color: P.onAccent, opacity: 0.92 },
-    receipt: { marginTop: 14, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, gap: 6 },
-    receiptEg: { fontSize: 10, letterSpacing: 1, color: P.onAccent, opacity: 0.75 },
-    receiptRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-    receiptTotal: { borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: P.onAccent, paddingTop: 6 },
-    receiptText: { fontSize: 13, color: P.onAccent, fontVariant: ['tabular-nums'] },
-    stubs: { flexDirection: 'row', gap: 8, marginBottom: 20 },
-    stub: { flex: 1, backgroundColor: P.card, borderRadius: 16, borderWidth: 1, borderColor: P.border, paddingVertical: 10, paddingHorizontal: 12 },
-    stubNum: { fontFamily: 'BakbakOne-Regular', fontSize: 22, color: P.text },
-    stubLabel: { fontSize: 11, color: P.sub, marginTop: 1 },
+    payout: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, padding: 16, gap: 4, marginBottom: 20 },
+    payoutTitle: { fontSize: 15, fontWeight: '700', color: P.text },
+    payoutSub: { fontSize: 13, lineHeight: 18, color: P.sub, marginBottom: 8 },
     section: { marginBottom: 18 },
     sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2, color: P.sub, marginBottom: 8, marginLeft: 4 },
     card: { backgroundColor: P.card, borderRadius: 22, borderWidth: 1, borderColor: P.border, paddingHorizontal: 16 },

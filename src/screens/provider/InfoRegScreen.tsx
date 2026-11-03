@@ -22,6 +22,7 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import type { ViewInstance } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -2169,7 +2170,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <StatusBar barStyle="light-content" />
+      <FocusAwareStatusBar barStyle="light-content" />
       <View style={[styles.previewContainer, { backgroundColor: PP.bg }]}>
         {/* Hero photo/gradient backdrop — mirror ProviderProfileScreen: a real
             cover photo (with a dark gradient overlay for legible text) when
@@ -4128,7 +4129,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             already provides that; the branding preview lives only in the
             Preview modal. */}
 
-        <StatusBar barStyle={statusBarStyle} />
+        <FocusAwareStatusBar barStyle={statusBarStyle} />
 
         {/* Transfer Data Modal */}
         <TransferDataModal

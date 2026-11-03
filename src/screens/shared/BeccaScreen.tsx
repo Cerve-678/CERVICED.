@@ -8,10 +8,10 @@ import {
   Keyboard,
   TouchableOpacity,
   Image,
-  StatusBar,
   Animated,
   Easing,
 } from "react-native";
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from "../../components/SafeArea";
 import BottomSheet, { BottomSheetBackdrop, BottomSheetFlatList } from "@gorhom/bottom-sheet";
@@ -1039,7 +1039,7 @@ export default function BeccaScreen({
 
   return (
     <ThemedBackground style={styles.background}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
+      <FocusAwareStatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
       <SafeAreaView style={styles.container} edges={["top"]}>
         <KeyboardDismissView style={styles.keyboardView}>
           {showHero ? (

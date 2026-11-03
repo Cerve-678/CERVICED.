@@ -7,7 +7,6 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
-  StatusBar,
   StyleSheet,
   Modal,
   TextInput,
@@ -20,6 +19,7 @@ import {
   Platform,
   Appearance,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -4010,7 +4010,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
   return (
     <ErrorBoundary>
       <ThemedBackground style={{ flex: 1 }}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
         <SafeAreaView style={styles.safeArea}>
           {/* Header */}
           <View style={[styles.header, { backgroundColor: P.bg, borderBottomColor: P.border }]}>

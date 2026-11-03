@@ -33,6 +33,10 @@ export type AccountType = 'user' | 'provider';
 
 /** Gaps between background retries of a profile load that failed. */
 const PROFILE_RETRY_DELAYS_MS = [2_000, 10_000, 30_000];
+// How long a sign-up code check may hold back the normal sign-in. If the
+// screen never finishes (a stalled request, the person backing out), the next
+// sign-in after this is handled as usual rather than ignored.
+export const SIGNUP_VERIFICATION_HOLD_MS = 20_000;
 
 /** Whether the once-per-session "which provider profile do I own?" lookup has
  *  produced an answer. 'failed' is deliberately distinct from a 'resolved'
@@ -128,6 +132,9 @@ interface AuthContextType {
   }) => Promise<void>;
   addClientProfile: (profileData: ClientProfileData) => Promise<void>;
   login: (userData?: UserData) => void;
+  beginSignupVerification: () => void;
+  completeVerifiedSignup: (userData: UserData, verifiedSession: Session) => void;
+  cancelSignupVerification: () => void;
   logout: () => Promise<void>;
   deleteClientProfile: () => Promise<void>;
   deleteProviderProfile: () => Promise<void>;
@@ -270,6 +277,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the restored copy itself: re-saving it would renew its date on every
   // launch and its 30-day limit would never apply.
   const profileConfirmedRef = useRef(false);
+  // When the sign-up code check started, or null when none is in progress.
+  const signupVerificationRef = useRef<number | null>(null);
+  const authSessionRef = useRef<Session | null>(null);
 
   // Keep the saved copy current with every confirmed change to `user`,
   // including edits made in the app after launch.
@@ -345,6 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // so we only use it as the single source of truth — no separate getSession() call.
     const unsubscribeAuth = subscribeToAuthStateChanges(async (event, session) => {
       logger.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
+      authSessionRef.current = session;
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
         profileLoadVersion.current += 1;
@@ -380,6 +391,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // for the latter so the user isn't confused why they're on the login screen.
       if (event === 'SIGNED_OUT') {
         profileLoadVersion.current += 1;
+        signupVerificationRef.current = null;
         if (!intentionalLogoutRef.current) {
           Alert.alert('Signed out', "You've been signed out. Please sign in again.");
         }
@@ -397,6 +409,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setSession(session);
       if (session?.user) {
+        // verifyOtp emits SIGNED_IN before the verification screen has saved
+        // the signup answers. Let that screen finish the write and open the app
+        // from its confirmed data, without racing an extra profile read.
+        const heldSince = signupVerificationRef.current;
+        if (event === 'SIGNED_IN' && heldSince !== null && Date.now() - heldSince < SIGNUP_VERIFICATION_HOLD_MS) {
+          return;
+        }
         await loadUserProfileRef.current(session);
       } else {
         profileLoadVersion.current += 1;
@@ -827,6 +846,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // All real auth goes through onAuthStateChange → loadUserProfile.
   const login = useCallback((_userData?: UserData) => {}, []);
 
+  const beginSignupVerification = useCallback(() => {
+    signupVerificationRef.current = Date.now();
+  }, []);
+
+  const completeVerifiedSignup = useCallback((userData: UserData, verifiedSession: Session) => {
+    signupVerificationRef.current = null;
+    if (verifiedSession.user.id !== userData.id || !verifiedSession.user.email_confirmed_at) {
+      // Shouldn't happen. Sign in the usual way rather than show an error to
+      // someone whose account is fine.
+      logger.error('[AuthContext] verified signup session does not match the saved profile — loading it instead');
+      void loadUserProfileRef.current(verifiedSession);
+      return;
+    }
+    profileLoadVersion.current += 1; // discard a profile read started before the upsert
+    startupRestorePendingRef.current = false;
+    profileConfirmedRef.current = true;
+    authSessionRef.current = verifiedSession;
+    setSession(verifiedSession);
+    const mode = userData.accountType === 'provider' ? 'provider' : 'client';
+    setActiveMode(mode);
+    void AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, mode).catch(() => {});
+    setUser(userData);
+    setIsLoggedIn(true);
+    setIsLoading(false);
+    registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
+  }, []);
+
+  const cancelSignupVerification = useCallback(() => {
+    // Nothing held: the check already finished, or it ran past the hold and
+    // the sign-in went through the usual way. Loading again would only repeat it.
+    if (signupVerificationRef.current === null) return;
+    signupVerificationRef.current = null;
+    const currentSession = authSessionRef.current;
+    if (currentSession?.user?.email_confirmed_at) {
+      void loadUserProfileRef.current(currentSession);
+    }
+  }, []);
+
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
@@ -974,13 +1031,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
     myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember,
-    switchMode, upgradeToProvider, addClientProfile, login, logout,
+    switchMode, upgradeToProvider, addClientProfile, login,
+    beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
     myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember,
-    switchMode, upgradeToProvider, addClientProfile, login, logout,
+    switchMode, upgradeToProvider, addClientProfile, login,
+    beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   ]);

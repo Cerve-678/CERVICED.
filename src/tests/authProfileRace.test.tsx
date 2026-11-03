@@ -29,7 +29,7 @@ jest.mock('../services/authProfileSnapshot', () => ({
   clearAuthProfileSnapshot: jest.fn(async () => {}),
 }));
 
-import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { AuthProvider, SIGNUP_VERIFICATION_HOLD_MS, useAuth } from '../contexts/AuthContext';
 
 const session = (id: string) => ({ user: {
   id, email: `${id}@example.com`, email_confirmed_at: '2026-01-01', user_metadata: {},
@@ -43,6 +43,79 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 afterEach(() => jest.restoreAllMocks());
+
+test('verified signup opens after its profile write without waiting for a second read', async () => {
+  const { result } = renderHook(useAuth, { wrapper });
+  act(() => { result.current.beginSignupVerification(); });
+  await act(async () => { await mockListener('SIGNED_IN', session('new-user')); });
+  expect(mockProfile).not.toHaveBeenCalled();
+  expect(result.current.isLoggedIn).toBe(false);
+
+  act(() => {
+    result.current.completeVerifiedSignup({
+      id: 'new-user', name: 'New User', email: 'new-user@example.com',
+      phone: '', dob: '', accountType: 'user', loginMethod: 'email',
+      hasClientProfile: true,
+    }, session('new-user'));
+  });
+  expect(result.current.isLoggedIn).toBe(true);
+  expect(result.current.isLoading).toBe(false);
+  expect(result.current.user?.name).toBe('New User');
+  expect(mockProfile).not.toHaveBeenCalled();
+});
+
+test('failed signup profile write resumes the normal session fallback', async () => {
+  mockProfile.mockResolvedValue(null);
+  const { result } = renderHook(useAuth, { wrapper });
+  act(() => { result.current.beginSignupVerification(); });
+  await act(async () => { await mockListener('SIGNED_IN', session('new-user')); });
+  await act(async () => { result.current.cancelSignupVerification(); });
+  expect(mockProfile).toHaveBeenCalledWith('new-user');
+  expect(result.current.isLoggedIn).toBe(true);
+});
+
+test('a sign-up code check that never finishes stops holding back the next sign-in', async () => {
+  mockProfile.mockResolvedValue(profile('new-user'));
+  const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  const { result } = renderHook(useAuth, { wrapper });
+  act(() => { result.current.beginSignupVerification(); });
+
+  now.mockReturnValue(1_000_000 + SIGNUP_VERIFICATION_HOLD_MS + 1);
+  await act(async () => { await mockListener('SIGNED_IN', session('new-user')); });
+  expect(mockProfile).toHaveBeenCalledWith('new-user');
+  expect(result.current.isLoggedIn).toBe(true);
+});
+
+test('leaving the code screen after a finished sign-up does not load the profile again', async () => {
+  const { result } = renderHook(useAuth, { wrapper });
+  act(() => { result.current.beginSignupVerification(); });
+  await act(async () => { await mockListener('SIGNED_IN', session('new-user')); });
+  act(() => {
+    result.current.completeVerifiedSignup({
+      id: 'new-user', name: 'New User', email: 'new-user@example.com',
+      phone: '', dob: '', accountType: 'user', loginMethod: 'email', hasClientProfile: true,
+    }, session('new-user'));
+  });
+  await act(async () => { result.current.cancelSignupVerification(); });
+  expect(mockProfile).not.toHaveBeenCalled();
+  expect(result.current.isLoggedIn).toBe(true);
+});
+
+test('a sign-up whose session does not match the saved profile signs in the usual way, without an error', async () => {
+  mockProfile.mockResolvedValue(profile('new-user'));
+  const { result } = renderHook(useAuth, { wrapper });
+  act(() => { result.current.beginSignupVerification(); });
+  await act(async () => { await mockListener('SIGNED_IN', session('new-user')); });
+  await act(async () => {
+    result.current.completeVerifiedSignup({
+      id: 'someone-else', name: 'X', email: 'x@example.com',
+      phone: '', dob: '', accountType: 'user', loginMethod: 'email', hasClientProfile: true,
+    }, session('new-user'));
+  });
+  expect(mockProfile).toHaveBeenCalledWith('new-user');
+  expect(result.current.user?.id).toBe('new-user');
+  expect(Alert.alert).not.toHaveBeenCalled();
+});
 
 test('a profile response arriving after sign-out cannot log the user back in', async () => {
   let finish!: (value: unknown) => void;

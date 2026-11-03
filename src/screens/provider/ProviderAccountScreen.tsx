@@ -7,9 +7,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  StatusBar,
   Modal,
 } from 'react-native';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -271,7 +271,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
       <SafeAreaView style={styles.container} edges={['left', 'right']}>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         <ScrollView
           style={styles.content}

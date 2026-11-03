@@ -12,7 +12,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
   FlatList,
   useWindowDimensions,
   Alert,
@@ -27,6 +26,7 @@ import {
   findNodeHandle,
   UIManager,
 } from "react-native";
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import type { ViewInstance } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 // expo-image instead of RN's Image — adds disk+memory caching so portfolio/
@@ -1259,7 +1259,7 @@ function ProviderProfileSkeleton() {
 
   return (
     <ThemedBackground style={{ backgroundColor: skeletonTheme.bg }}>
-      <StatusBar barStyle="dark-content" />
+      <FocusAwareStatusBar barStyle="dark-content" />
       <View
         style={styles.skeletonShell}
         accessible
@@ -1340,6 +1340,32 @@ function ProviderProfileSkeleton() {
 // visual QA on 2026-08-02 — set back to false (or delete this block and its
 // three call sites below) when they say testing is done. Search
 // DEBUG_FORCE_FULLY_BOOKED to find every use.
+/**
+ * The profile's status bar. At the top of the page the hero sits behind the
+ * clock; once scrolled, the header background does. The scrolled flag is held
+ * here and set through `setScrolledRef` from the scroll handler, so crossing
+ * the threshold re-renders only this, never the whole screen.
+ */
+const ProfileStatusBar = React.memo(function ProfileStatusBar({
+  heroIsDark,
+  headerIsDark,
+  setScrolledRef,
+}: {
+  heroIsDark: boolean;
+  headerIsDark: boolean;
+  setScrolledRef: React.MutableRefObject<((scrolled: boolean) => void) | null>;
+}) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    setScrolledRef.current = setScrolled;
+    return () => {
+      setScrolledRef.current = null;
+    };
+  }, [setScrolledRef]);
+  const dark = scrolled ? headerIsDark : heroIsDark;
+  return <FocusAwareStatusBar barStyle={dark ? "light-content" : "dark-content"} />;
+});
+
 const DEBUG_FORCE_FULLY_BOOKED = false;
 
 // Main Component
@@ -1527,6 +1553,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // re-render on the first scroll hung the UI thread). The header reacts to it
   // imperatively via setOptions in handleScroll.
   const isScrolledRef = useRef(false);
+  const setStatusBarScrolledRef = useRef<((scrolled: boolean) => void) | null>(null);
   const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
   // Ownership and viewer identity come from the hook's authenticated,
@@ -1694,9 +1721,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const contactDetails = useMemo(() => ({
     location: publicAddress?.fullAddress ?? provider?.location ?? "",
     locationMapUrl: publicAddress ? mapsUrlFor(publicAddress) : null,
-    // A mobile provider travels to the client, so there is nowhere to direct
-    // them to — an old value left from before a business-type change stays hidden.
-    locationNote: provider?.businessType === "mobile" ? "" : provider?.publicDirections ?? "",
     phone: provider?.phone ?? "",
     whatsapp: provider?.whatsapp ?? "",
     email: provider?.email ?? "",
@@ -1705,8 +1729,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }), [
     publicAddress,
     provider?.location,
-    provider?.businessType,
-    provider?.publicDirections,
     provider?.phone,
     provider?.whatsapp,
     provider?.email,
@@ -1796,6 +1818,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
   }, [provider]);
+
+  // A mobile provider travels to the client, so there is nowhere to direct
+  // them to — an old value left from before a business-type change stays hidden.
+  const howToGetThere = provider?.businessType === "mobile" ? "" : provider?.publicDirections ?? "";
 
   // Hero info floats over the photo/gradient. Every theme always carries a
   // gradient now (saved as [backdrop, sheetColor]), so "is there a gradient"
@@ -2580,13 +2606,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       const scrolled = event.nativeEvent.contentOffset.y > 100;
       if (scrolled === isScrolledRef.current) return; // only act on threshold cross
       isScrolledRef.current = scrolled;
-      // Scrolled: the pale header background (OP.bg) is what sits behind the
-      // clock, so it has to be dark whatever the hero is. At the top the hero
-      // is back, so it returns to the hero's answer.
-      StatusBar.setBarStyle(
-        scrolled || !heroIsDark ? "dark-content" : "light-content",
-        true,
-      );
+      // Scrolled: the header background (OP.bg) is what sits behind the
+      // clock. At the top the hero is back. ProfileStatusBar picks the colour
+      // for each; only that tiny component re-renders.
+      setStatusBarScrolledRef.current?.(scrolled);
       // Update ONLY the header — no parent state, so scrolling never re-renders
       // this large screen (the fix for the first-scroll freeze).
       navigation.setOptions({
@@ -2602,7 +2625,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           ) : null,
       });
     },
-    [navigation, provider, OP.bg, heroIsDark],
+    [navigation, provider, OP.bg],
   );
 
   // Show success message with animation
@@ -4115,13 +4138,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* Driven by this provider's hero, not theme.statusBar: their profile
             theme never follows the viewer's dark mode, so reading the viewer's
             setting put dark, invisible icons over a black hero in light mode.
-            This is the at-top answer; handleScroll flips it imperatively once
-            the pale header background covers the safe area, because the clock
-            has to be dark against that. Imperative rather than state on
-            purpose -- a boolean in state here re-renders the whole screen,
-            which is the first-scroll freeze this screen already fixed. */}
-        <StatusBar
-          barStyle={heroIsDark ? "light-content" : "dark-content"}
+            handleScroll switches it to the header background's answer once
+            that covers the safe area. The scrolled flag lives in
+            ProfileStatusBar, not here -- a boolean in this screen's state
+            re-renders the whole screen, which is the first-scroll freeze this
+            screen already fixed. It used to be StatusBar.setBarStyle, which
+            bypasses the component stack: React Native then didn't know the
+            colour had changed, so it stuck after going back. */}
+        <ProfileStatusBar
+          heroIsDark={heroIsDark}
+          headerIsDark={isDarkColor(OP.bg)}
+          setScrolledRef={setStatusBarScrolledRef}
         />
 
         {/* Notification Alert */}
@@ -5539,6 +5566,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 groups={additionalInfoGroups}
                 qualifications={provider.qualifications.trim()}
                 goodToKnow={goodToKnowText}
+                howToGetThere={howToGetThere}
                 venueItems={venuePortfolio}
                 palette={sectionPalette}
                 onOpenImage={openImageViewer}
