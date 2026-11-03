@@ -1,3 +1,4 @@
+import type { LiveServiceDescription } from "../features/providers/descriptionTopics";
 import type { SpecialityUse } from "../utils/learnedSpecialities";
 import { getPaymentRequestError } from '../utils/paymentRequestError';
 import type {
@@ -698,6 +699,7 @@ export async function getTrendingProviders(limit = 10): Promise<PublicProviderSu
 // so it changes nothing today, but keeps these queries from scanning/
 // returning the entire table unbounded as the provider base grows.
 const DEFAULT_PROVIDER_QUERY_LIMIT = 200;
+const LIVE_SERVICE_DESCRIPTIONS_QUERY_LIMIT = 2000;
 const SPECIALITY_USES_QUERY_LIMIT = 2000;
 
 // Same rationale, applied to a single provider's review list — no realistic
@@ -8166,6 +8168,23 @@ export async function getSpecialityUses(): Promise<SpecialityUse[]> {
       categories: provider?.service_categories ?? [],
     };
   });
+}
+
+/** Live providers' service names and descriptions, for learning what similar
+ *  services tend to mention. has_gone_live: only what's already public counts. */
+export async function getLiveServiceDescriptions(): Promise<LiveServiceDescription[]> {
+  const { data, error } = await supabase
+    .from("services")
+    .select("name, description, provider_id, providers!inner(has_gone_live, is_active)")
+    .eq("is_active", true)
+    .eq("providers.has_gone_live", true)
+    .eq("providers.is_active", true)
+    .not("description", "is", null)
+    .limit(LIVE_SERVICE_DESCRIPTIONS_QUERY_LIMIT);
+  if (error) throw error;
+  return ((data ?? []) as { name: string | null; description: string | null; provider_id: string }[])
+    .filter((row) => !!row.name && !!row.description?.trim())
+    .map((row) => ({ name: row.name as string, description: row.description as string, providerId: row.provider_id }));
 }
 
 /** Update the maximum number of confirmed bookings a provider accepts per day (0 = unlimited) */

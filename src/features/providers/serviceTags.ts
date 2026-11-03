@@ -291,6 +291,10 @@ export interface ServiceSuggestion extends ServiceTagGroups {
   audience: ServiceAudienceValue;
   /** The nearest template's description, when the name matches one. */
   description: string | null;
+  /** Up to three descriptions to offer, best first: the nearest template's,
+   *  then templates sharing a word with the name, then a general line for the
+   *  category. Empty until the service has a name. */
+  descriptionIdeas: string[];
   templateName: string | null;
 }
 
@@ -350,6 +354,35 @@ function sameWord(a: string, b: string): boolean {
 
 function hasWord(haystack: string[], word: string): boolean {
   return haystack.some(h => sameWord(h, word));
+}
+
+// A general line per category, offered when no template fits the name well.
+// Describes the appointment, never a price or a charge.
+const CATEGORY_DESCRIPTION_LINES: Record<CategoryKind, string> = {
+  HAIR: 'Starts with a quick chat about the look you want, then the full service, finished and styled.',
+  NAILS: 'Includes prep, shaping and cuticle care, finished with the colour or design you choose.',
+  LASHES: 'Lashes matched to your eye shape and the look you want, with aftercare advice to help them last.',
+  BROWS: 'Brows shaped to suit your face, with aftercare advice to keep them looking their best.',
+  MUA: 'Skin prep and a full look matched to your occasion, built to last all day.',
+  AESTHETICS: 'Starts with a consultation to check the treatment is right for you, with aftercare advice afterwards.',
+  OTHER: 'An appointment tailored to what you need, with time to ask any questions first.',
+};
+
+const MAX_DESCRIPTION_IDEAS = 3;
+
+function descriptionIdeasFor(kind: CategoryKind, nameWords: string[], nearest: ServiceTemplate | null): string[] {
+  const ownWords = nameWords.filter(w => !CATEGORY_WORDS.has(w));
+  if (ownWords.length === 0) return [];
+  const ideas: string[] = [];
+  if (nearest?.description) ideas.push(nearest.description);
+  const related = (SERVICE_TEMPLATES_BY_CATEGORY[kind] ?? [])
+    .filter(t => t !== nearest && t.description && !t.generic)
+    .map(t => ({ t, shared: ownWords.filter(w => hasWord(words(t.name), w)).length }))
+    .filter(r => r.shared > 0)
+    .sort((a, b) => b.shared - a.shared);
+  for (const { t } of related) if (!ideas.includes(t.description!)) ideas.push(t.description!);
+  ideas.push(CATEGORY_DESCRIPTION_LINES[kind]);
+  return ideas.slice(0, MAX_DESCRIPTION_IDEAS);
 }
 
 const optionsFor = (kind: CategoryKind) => ({
@@ -453,6 +486,7 @@ export function suggestServiceDetails(input: {
     kind,
     audience,
     description: template?.description ?? null,
+    descriptionIdeas: descriptionIdeasFor(kind, nameWords, template),
     templateName: template?.name ?? null,
   };
 }
