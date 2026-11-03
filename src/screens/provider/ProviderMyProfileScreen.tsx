@@ -52,6 +52,7 @@ import { TouchableOpacity as GestureTouchableOpacity } from 'react-native-gestur
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
+import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
@@ -87,7 +88,7 @@ import {
 import FullyBookedCertificate from '../../components/FullyBookedCertificate';
 import type { DbPortfolioItem, DbService } from '../../types/database';
 import type { ProviderServicesStackParamList } from '../../navigation/types';
-import { resolveProviderTheme, withAlpha, isDarkColor, blend, NEUTRAL_CARD, SHEET_BG } from '../../constants/providerThemes';
+import { parseThemeKey, resolveProviderTheme, withAlpha, isDarkColor, blend, NEUTRAL_CARD, SHEET_BG } from '../../constants/providerThemes';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
@@ -1741,10 +1742,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           />
         </>
       ) : (
-        <LinearGradient
+        <ProfileHeroBackdrop
           colors={providerData.hasCustomGradient ? providerData.gradient : [PP.hero, PP.bg]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+          finish={parseThemeKey(providerData.profileTheme).finish}
           style={styles.heroImage}
         />
       )}

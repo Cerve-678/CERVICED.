@@ -41,6 +41,7 @@ import { SafeAreaView, WindowControlsInsetProvider } from "../../components/Safe
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -91,6 +92,7 @@ import { MultiBookingSheet, type MultiBookingSheetResult } from "../../component
 import { AddOnPickerModal } from "../../components/AddOnPickerModal";
 import type { ClientPromotion } from "../../types/database";
 import {
+  parseThemeKey,
   resolveProviderTheme,
   withAlpha,
   isDarkColor,
@@ -4103,12 +4105,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             />
           </>
         ) : (
-          <LinearGradient
-            colors={
-              provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
+          <ProfileHeroBackdrop
+            colors={provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]}
+            finish={parseThemeKey(provider.profileTheme).finish}
             style={styles.heroImage}
           />
         )}
