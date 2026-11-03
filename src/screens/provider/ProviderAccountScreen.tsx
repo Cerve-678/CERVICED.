@@ -79,13 +79,17 @@ interface SettingsOptionProps {
   onPress: () => void;
   P: typeof LIGHT;
   danger?: boolean;
+  /** Shown, but part of the full CERVICED experience: a lock replaces the chevron. */
+  locked?: boolean;
 }
 
-const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger }: SettingsOptionProps) => (
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger, locked }: SettingsOptionProps) => (
   <TouchableOpacity
-    style={styles.row}
+    style={[styles.row, locked && { opacity: 0.6 }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
+    accessibilityRole="button"
+    accessibilityLabel={locked ? `${title}, locked. ${subtitle}` : undefined}
   >
     <View style={styles.rowLeft}>
       <View style={styles.rowIcon}>
@@ -96,7 +100,9 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger }
         <Text style={[styles.rowSub, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
-    <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.4 }} />
+    {locked
+      ? <Icon name="lock" size={14} color={P.sub} />
+      : <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.4 }} />}
   </TouchableOpacity>
 ));
 SettingsOption.displayName = 'SettingsOption';
@@ -140,6 +146,18 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
   const { t } = useTranslation();
+
+  const showAchievementsLocked = useCallback(() => {
+    Alert.alert(
+      t('providerAccount.linkOnly.achievements.lockedTitle'),
+      t('providerAccount.linkOnly.achievements.lockedBody'),
+      [
+        { text: t('providerAccount.linkOnly.achievements.notNow'), style: 'cancel' },
+        { text: t('providerAccount.linkOnly.achievements.seeMore'), onPress: () => navigation.navigate('FullCervicedFeatures') },
+      ],
+    );
+  }, [t, navigation]);
+
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
   const [showClientModal, setShowClientModal] = useState(false);
@@ -460,7 +478,16 @@ export default function ProviderAccountScreen({ navigation }: any) {
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="notifications" title={t('providerAccount.account.notifications.title')} subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.notifications.sub' : 'providerAccount.account.notifications.sub')} onPress={() => navigation.navigate('NotificationSettings')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
-              <SettingsOption icon="star" title={t('providerAccount.account.achievements.title')} subtitle={t('providerAccount.account.achievements.sub')} onPress={() => navigation.navigate('Achievements')} P={P} />
+              {/* Achievements are earned from CERVICED bookings, so link-only
+                  pros see the row locked (owner's call, 2026-11-03). */}
+              <SettingsOption
+                icon="star"
+                title={t('providerAccount.account.achievements.title')}
+                subtitle={t(isLinkOnly ? 'providerAccount.linkOnly.achievements.sub' : 'providerAccount.account.achievements.sub')}
+                onPress={isLinkOnly ? showAchievementsLocked : () => navigation.navigate('Achievements')}
+                locked={isLinkOnly}
+                P={P}
+              />
             </View>
 
             {/* ── Accessibility & Support ─────────────────────────────────── */}

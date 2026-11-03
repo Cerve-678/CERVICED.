@@ -5,7 +5,7 @@
 
 #generated
 
-**3040 functions** across **418 files**.
+**3047 functions** across **418 files**.
 
 ### `src/components/` (56)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -44,11 +44,11 @@
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
-- `ProviderFontPicker.tsx` — ProviderFontPicker
+- `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
-- `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
+- `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
@@ -301,7 +301,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
@@ -313,7 +313,7 @@
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
 - `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · Pills · PoliciesScreen · setPolicy
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
-- `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
+- `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view
 - `ProviderAnalyticsScreen.tsx` — AnimatedFillBar · AnimatedPath · bookingServiceMap · bucketNoun · buildInsight · chartBars · chartData · CompletionRing · fetchBookingsForRange · fetchSupportingMetrics · fmtGBP · hasCompletedInRange · inRange · insightText · kpi · maxBarIndex · monthKey · monthlyRatings · months · monthsAgo · onRefresh · period · prevPeriod · ProviderAnalyticsScreen · quadChartWidth · quadWidth · ranked · RatingAnalytics · ratingChartWidth · recent · RecentStream · revenueOf · reviewsInRange · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · tipsForBookings · topServices · TopServices · totalForBookings
 - `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · saveCancellationNotice · SectionHeader · set · showToast · Toast · toggleReminder

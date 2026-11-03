@@ -20,9 +20,9 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 
 > **Default is "yes" (product owner, 2026-10-17).** Link-only providers can use the app like any CERVICED provider. Only the exclusions named on this page are off. Anything not listed here, **ask the product owner** whether they can use it before building — don't assume either way.
 
-**Yes:** searchable (Search + Explore), profile (hero, About + optional Policies, specialities under Additional Information, logo, portfolio, opening hours in About), Book button with socials beside it, portfolio, in-app messages, Becca, Branding, Analytics, calendar sync.
+**Yes:** searchable (Search + Explore), profile (hero, About + optional Policies, specialities under Additional Information, logo, portfolio, opening hours in About), Book button with socials beside it, portfolio, in-app messages, Becca, Branding (limited: four colour sets, App, Blush, Grey and Charcoal; four fonts, Classic, Chunky & Rounded, Smooth & Rounded and Bakbak; and the Blend finish. Every other set, font and finish, and Make your own, show locked, 2026-11-03), Analytics, calendar sync.
 
-**No:** CERVICED's own booking flow (they book via their link), the price list on their profile, star ratings and reviews (no reviews section at all), teams, Offers / promo codes, all client-care tools (info packs, intake / consultation forms, Clientele list, reminders), Automations.
+**No:** CERVICED's own booking flow (they book via their link), the price list on their profile, star ratings and reviews (no reviews section at all), teams, Offers / promo codes, all client-care tools (info packs, intake / consultation forms, Clientele list, reminders), Automations. Achievements show in Settings but locked, linking to the Full CERVICED experience page (2026-11-03).
 
 - **Tabs:** Home, Portfolio, Messages, Profile. Becca is a floating button on Home.
 - **Messages tab:** one list titled General enquiries (questions from Get In Touch). No General enquiries / Messages tabs, since they take no CERVICED bookings (2026-10-19).
