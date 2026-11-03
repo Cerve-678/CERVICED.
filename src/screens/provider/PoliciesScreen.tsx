@@ -62,7 +62,6 @@ import {
   Card, Field, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
-import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
 type CancelNotice     = '' | 'none' | '24h' | '48h' | '72h';
 // 'half' is no longer offered, but policies saved before 'custom' still say it.
@@ -93,12 +92,11 @@ interface PolicyState {
   refundPolicyNote: string;
   bookingInstructions: string;
   policyImageUrl:   string;
-  // Shown to a client in the "scheduling conflict" prompt before they ask for
-  // a time outside this provider's normal availability. A distinct document
-  // from the provider's Terms & Conditions (the add-to-cart form, edited from
-  // InfoReg). Only surfaced while EMERGENCY_BOOKINGS_ENABLED is on, but it
-  // round-trips through save regardless so a stored value is never lost.
+  // Shown in the profile's Policy tab. Also read by the booking sheet's
+  // "scheduling conflict" prompt if EMERGENCY_BOOKINGS_ENABLED returns. A
+  // distinct document from the provider's Terms & Conditions.
   emergencyBookingPolicy: string;
+  travelPolicy: string;
 }
 
 // What CERVICED itself applies or charges. A link-only provider's bookings
@@ -131,6 +129,7 @@ const DEFAULT_POLICIES: PolicyState = {
   bookingInstructions: '',
   policyImageUrl:   '',
   emergencyBookingPolicy: '',
+  travelPolicy: '',
 };
 
 function Pills<T extends string>({ options, value, onChange }: {
@@ -511,32 +510,30 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             )}
 
-            {/* Emergency / out-of-hours requests are pulled from the client app
-                for now (EMERGENCY_BOOKINGS_ENABLED — see FUTURE_LOGIC.md), so
-                nothing reads this field yet and there's nothing to write it
-                for. The key still round-trips through save, so a value written
-                once the feature returns is safe meanwhile. */}
-            {EMERGENCY_BOOKINGS_ENABLED && (
-              <Card
-                title="Emergency Booking Policy"
-                sub="Shown to a client before they ask for a time outside your normal availability (optional). Separate from your Terms & Conditions."
-              >
-                {/* Placeholder deliberately does NOT exemplify a surcharge or
-                    any off-app payment term — the checkout flow doesn't read
-                    this field, so a money term written here would be an
-                    undisclosed off-app charge (see the deposit/balance
-                    liability boundary in CLAUDE.md and FUTURE_LOGIC.md's
-                    emergency-surcharge note). Keep examples to availability
-                    and process. */}
-                <Field
-                  label="Your emergency booking policy"
-                  value={policies.emergencyBookingPolicy}
-                  onChange={v => setPolicy('emergencyBookingPolicy', v)}
-                  placeholder="e.g. I only take out-of-hours requests from existing clients, and I need at least a day's notice to say yes"
-                  multiline
-                />
-              </Card>
-            )}
+            {/* Written policies only, shown on the profile. Neither one changes
+                what a client can book or pay in the app, so the placeholders
+                stay away from money: a charge written here would be an
+                off-app charge the checkout knows nothing about (see the
+                deposit/balance liability boundary in CLAUDE.md). */}
+            <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
+              <Field
+                label="Your travel policy"
+                value={policies.travelPolicy}
+                onChange={v => setPolicy('travelPolicy', v)}
+                placeholder='e.g. "I travel up to 10 miles and need somewhere to set up with a plug socket"'
+                multiline
+              />
+            </Card>
+
+            <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly.">
+              <Field
+                label="Your emergency appointment policy"
+                value={policies.emergencyBookingPolicy}
+                onChange={v => setPolicy('emergencyBookingPolicy', v)}
+                placeholder="e.g. I only take emergencies from existing clients, message me and I'll let you know if I can fit you in"
+                multiline
+              />
+            </Card>
 
             <Card title="Detailed Policy Image" sub="A picture of your full policy, for anything too detailed for the fields above, like a house-rules sheet or consent form. Clients open it from your profile (optional).">
               <View style={imgSt.grid}>

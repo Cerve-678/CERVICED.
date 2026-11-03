@@ -33,6 +33,9 @@ export interface PolicyDisplayData {
    *  this app has no refund-processing infra and doesn't calculate or
    *  enforce refunds automatically. Same free-text pattern as cancelNote. */
   refundPolicyNote?: string;
+  /** Free text, like refundPolicyNote. Neither changes what can be booked or paid. */
+  travelPolicy?: string;
+  emergencyBookingPolicy?: string;
 }
 
 /** The provider's own written Terms & Conditions, frozen at booking time.
@@ -209,8 +212,18 @@ export function buildPolicyDisplayRows(
   if (policy.refundPolicyNote) {
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
+  pushWrittenPolicies(rows, policy);
 
   return rows;
+}
+
+function pushWrittenPolicies(rows: PolicyDisplayRow[], policy: PolicyDisplayData): void {
+  if (policy.travelPolicy?.trim()) {
+    rows.push({ icon: 'car-outline', label: 'Travel', value: policy.travelPolicy.trim() });
+  }
+  if (policy.emergencyBookingPolicy?.trim()) {
+    rows.push({ icon: 'flash-outline', label: 'Emergency appointments', value: policy.emergencyBookingPolicy.trim() });
+  }
 }
 
 function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] {
@@ -221,6 +234,7 @@ function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] 
   if (policy.refundPolicyNote) {
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
+  pushWrittenPolicies(rows, policy);
   return rows;
 }
 
