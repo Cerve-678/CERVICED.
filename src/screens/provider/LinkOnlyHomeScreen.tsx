@@ -644,7 +644,7 @@ export default function LinkOnlyHomeScreen() {
                 <View style={styles.tileIcon}><Ionicons name="calendar-outline" size={20} color={P.accent} /></View>
                 <View style={styles.flex}>
                   <Text style={styles.cardTitle}>Become a full member</Text>
-                  <Text style={styles.stepHint}>Take bookings and payments right here instead of on your own link.</Text>
+                  <Text style={styles.stepHint}>Keep the full price of every booking, and let CERVICED fill your diary.</Text>
                 </View>
               </View>
               <View style={styles.offerLine}>
