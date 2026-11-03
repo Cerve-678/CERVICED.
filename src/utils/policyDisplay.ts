@@ -10,6 +10,8 @@ import { resolveDepositMode } from './depositPolicy';
 export interface PolicyDisplayData {
   cancelNotice?: string;
   cancelPenalty?: string;
+  /** The £ amount kept under a 'custom' penalty, at most half the price. */
+  cancelCustomFee?: string;
   cancelNote?: string;
   rescheduleNotice?: string;
   maxReschedules?: string;
@@ -31,6 +33,9 @@ export interface PolicyDisplayData {
    *  this app has no refund-processing infra and doesn't calculate or
    *  enforce refunds automatically. Same free-text pattern as cancelNote. */
   refundPolicyNote?: string;
+  /** Free text, like refundPolicyNote. Neither changes what can be booked or paid. */
+  travelPolicy?: string;
+  emergencyBookingPolicy?: string;
 }
 
 /** The provider's own written Terms & Conditions, frozen at booking time.
@@ -162,9 +167,12 @@ export function buildPolicyDisplayRows(
     });
   }
 
-  const cancelPenaltyText = policy.cancelPenalty && policy.cancelPenalty !== 'none'
-    ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'half the price kept'}`
-    : '';
+  const customCancelFee = feeLabel(policy.cancelCustomFee);
+  const cancelPenaltyText = policy.cancelPenalty === 'custom'
+    ? (customCancelFee ? ` · ${customCancelFee} kept, at most half the price` : '')
+    : policy.cancelPenalty && policy.cancelPenalty !== 'none'
+      ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'half the price kept'}`
+      : '';
   let cancelRule: string | null = null;
   if (enforcedCancellationNoticeHours && enforcedCancellationNoticeHours > 0) {
     cancelRule = `${enforcedCancellationNoticeHours} hours' notice${cancelPenaltyText}`;
@@ -180,20 +188,21 @@ export function buildPolicyDisplayRows(
   // (server-enforced in provider_update_booking_status()) — so it shows here
   // even when the action itself is "none".
   const grace = Number(policy.noShowGraceMinutes) || 0;
-  const noShowRule = policy.noShowAction && policy.noShowAction !== 'none'
+  const noShowRule = policy.noShowAction && policy.noShowAction !== 'none' && policy.noShowAction !== 'custom'
     // 'charge_full' was never enforced and is read as keeping the deposit;
     // an actual extra charge is the no-show fee row below.
     ? (policy.noShowAction === 'warn' ? 'Warning issued' : 'Deposit kept')
     : null;
   pushRow(rows, sectionRow('close-circle-outline', 'No-show', [
     noShowRule,
-    grace > 0 ? `${grace} min grace period` : null,
     policy.noShowNote,
   ]));
 
   const lateFee = feeLabel(policy.lateFee);
   if (lateFee) {
     rows.push({ icon: 'alarm-outline', label: 'Late fee', value: grace > 0 ? `${lateFee} after ${grace} min` : lateFee });
+  } else if (grace > 0) {
+    rows.push({ icon: 'alarm-outline', label: 'Late arrival', value: `${grace} min grace period` });
   }
   const noShowFee = feeLabel(policy.noShowFee);
   if (noShowFee) {
@@ -203,8 +212,18 @@ export function buildPolicyDisplayRows(
   if (policy.refundPolicyNote) {
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
+  pushWrittenPolicies(rows, policy);
 
   return rows;
+}
+
+function pushWrittenPolicies(rows: PolicyDisplayRow[], policy: PolicyDisplayData): void {
+  if (policy.travelPolicy?.trim()) {
+    rows.push({ icon: 'car-outline', label: 'Travel', value: policy.travelPolicy.trim() });
+  }
+  if (policy.emergencyBookingPolicy?.trim()) {
+    rows.push({ icon: 'flash-outline', label: 'Emergency appointments', value: policy.emergencyBookingPolicy.trim() });
+  }
 }
 
 function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] {
@@ -215,6 +234,7 @@ function buildLinkOnlyPolicyRows(policy: PolicyDisplayData): PolicyDisplayRow[] 
   if (policy.refundPolicyNote) {
     rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
+  pushWrittenPolicies(rows, policy);
   return rows;
 }
 
