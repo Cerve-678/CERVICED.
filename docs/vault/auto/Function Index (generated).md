@@ -5,7 +5,7 @@
 
 #generated
 
-**3017 functions** across **416 files**.
+**3018 functions** across **416 files**.
 
 ### `src/components/` (54)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -74,7 +74,7 @@
 - `payoutTiming.ts` — **isPayoutHoldDays** · **payoutHoldLabel** · **payoutHoldSentence**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
-- `providerFonts.ts` — **resolveProviderFontFamily**
+- `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
 - `skinTones.ts` — **matchesSkinTone**
 - `support.ts` — **supportMailtoUrl**

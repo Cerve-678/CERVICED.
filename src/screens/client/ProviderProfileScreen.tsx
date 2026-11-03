@@ -61,7 +61,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
-import { resolveProviderFontFamily } from "../../constants/providerFonts";
+import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { DynamicText } from "../../components/DynamicText";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
@@ -4990,7 +4990,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text
                     style={[
                       styles.providerDisplayName,
-                      { color: heroText, fontFamily: resolveProviderFontFamily(provider.brandFont) },
+                      {
+                        color: heroText,
+                        fontFamily: resolveProviderFontFamily(provider.brandFont),
+                        // Thin scripts are drawn larger so they read at the same size.
+                        fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont),
+                        lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont),
+                      },
                       heroIsDark && styles.heroTextShadow,
                     ]}
                   >
@@ -5547,6 +5553,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   );
 };
 
+/** The business name under the logo; a thin script is drawn larger than
+ *  this (see resolveProviderFontScale). */
+const NAME_SIZE = 30;
+const NAME_LINE_HEIGHT = 40;
+
 const styles = StyleSheet.create({
   background: {
     flex: 1,
@@ -5772,8 +5783,8 @@ const styles = StyleSheet.create({
   },
   providerDisplayName: {
     fontFamily: SERIF,
-    fontSize: 30,
-    lineHeight: 40,
+    fontSize: NAME_SIZE,
+    lineHeight: NAME_LINE_HEIGHT,
     textAlign: "center",
   },
   providerHandle: {
