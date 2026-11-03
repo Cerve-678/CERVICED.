@@ -46,6 +46,7 @@ import {
   searchPortfolio,
   getProviderBySlug,
   getProviderCancellationPolicy,
+  getBookingCancelNoticeHours,
   getProviderIdByDisplayName,
   getProviderLocationsByDisplayNames,
   getMobileProviderDisplayNames,
@@ -261,15 +262,19 @@ const bookingDetails: Capability = {
   needs: [{ kind: "booking", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const booking = entities.booking!.value;
-    const [cancellationResult, rescheduleResult] = await Promise.allSettled([
+    const [bookingNoticeResult, cancellationResult, rescheduleResult] = await Promise.allSettled([
+      getBookingCancelNoticeHours(booking.id),
       getProviderCancellationPolicy(booking.providerName),
       getProviderReschedulePolicyByDisplayName(booking.providerName),
     ]);
 
     // A zero cancellation notice can also mean the policy lookup was
     // unavailable, so never turn it into an unsafe "cancel any time" claim.
-    const cancellationHours =
-      cancellationResult.status === "fulfilled" ? cancellationResult.value : 0;
+    // The booking's own window first: a provider's later change doesn't apply.
+    const bookingNotice =
+      bookingNoticeResult.status === "fulfilled" ? bookingNoticeResult.value : null;
+    const cancellationHours = bookingNotice
+      ?? (cancellationResult.status === "fulfilled" ? cancellationResult.value : 0);
     const cancellation = cancellationHours > 0
       ? `${cancellationHours}h notice to cancel free of charge`
       : "Open the booking to check the latest cancellation terms";

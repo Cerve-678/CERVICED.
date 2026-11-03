@@ -256,6 +256,32 @@ function feeLabel(value: string | undefined): string | null {
   return `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
 }
 
+export type NoticeChoice = 'none' | '12h' | '24h' | '48h' | '72h';
+
+const NOTICE_CHOICE_HOURS: Record<NoticeChoice, number> = { none: 0, '12h': 12, '24h': 24, '48h': 48, '72h': 72 };
+
+/** The cancellation notice choice for an enforced window, shared by Policies
+ *  and Automations so the two screens offer the same five options. 0 maps to
+ *  'none' only when asked: a 0 column otherwise defers to the saved choice. */
+export function noticeChoiceForHours(
+  columnHours: number | null | undefined,
+  options?: { zeroIsNone?: boolean },
+): NoticeChoice | null {
+  if (columnHours === 0 && options?.zeroIsNone) return 'none';
+  const match = (Object.keys(NOTICE_CHOICE_HOURS) as NoticeChoice[])
+    .find(choice => choice !== 'none' && NOTICE_CHOICE_HOURS[choice] === columnHours);
+  return match ?? null;
+}
+
+/** What a save writes to providers.cancellation_notice_hours, or null to leave
+ *  it alone. That column is the window actually applied: it outranks the
+ *  written choice everywhere and defaults to 24. Only an actual change writes,
+ *  so saving some other field never overwrites the other screen's pick. */
+export function noticeHoursToSave(picked: string, loaded: string): number | null {
+  if (picked === loaded) return null;
+  return picked in NOTICE_CHOICE_HOURS ? NOTICE_CHOICE_HOURS[picked as NoticeChoice] : null;
+}
+
 /**
  * Mirror of cancel_notice_hours() (SQL) and apply-cancellation-refund's
  * noticeHours(): the explicit column wins, else the cancelNotice policy maps

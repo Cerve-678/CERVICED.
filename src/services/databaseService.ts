@@ -6923,10 +6923,28 @@ export interface ProviderBookingDetailMetadata {
   addressPolicy: ProviderAddressPolicy | null;
 }
 
-/** All provider policy fields needed by BookingDetailScreen in one row read. */
+/** The cancellation window a booking was made under
+ *  (bookings.cancel_notice_hours), or null for a booking from before it was
+ *  stored, which follows the provider's current window instead. */
+export async function getBookingCancelNoticeHours(bookingId: string): Promise<number | null> {
+  // A local, not-yet-saved booking has no row to read.
+  if (!isUuid(bookingId)) return null;
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("cancel_notice_hours")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error) throw error;
+  const hours = (data as { cancel_notice_hours: number | null } | null)?.cancel_notice_hours;
+  return typeof hours === "number" ? hours : null;
+}
+
+/** All provider policy fields needed by BookingDetailScreen in one row read.
+ *  With a bookingId, the cancellation window is that booking's own. */
 export async function getProviderBookingDetailMetadata(params: {
   providerId?: string;
   displayName: string;
+  bookingId?: string;
 }): Promise<ProviderBookingDetailMetadata> {
   let query = supabase
     .from("providers")
@@ -6937,11 +6955,14 @@ export async function getProviderBookingDetailMetadata(params: {
     ? query.eq("id", params.providerId)
     : query.eq("display_name", params.displayName);
 
-  const { data, error } = await query.maybeSingle();
+  const [{ data, error }, bookingNoticeHours] = await Promise.all([
+    query.maybeSingle(),
+    params.bookingId ? getBookingCancelNoticeHours(params.bookingId) : Promise.resolve(null),
+  ]);
   if (error) throw error;
   return {
     reschedulePolicy: mapReschedulePolicyRow(data),
-    cancellationNoticeHours: mapCancellationPolicyRow(data),
+    cancellationNoticeHours: bookingNoticeHours ?? mapCancellationPolicyRow(data),
     bookingPolicies:
       (data?.booking_policies as Record<string, unknown> | null) ?? null,
     addressPolicy: data
@@ -11884,7 +11905,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
     // for the notice window the settlement summary quotes.
     supabase
       .from('bookings')
-      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, late_reschedule_from, providers ( cancellation_notice_hours, booking_policies )')
+      .select('amount_paid, service_charge, base_price, add_ons_total, refunded_amount, policy_retained_amount, payment_type, cancelled_by, cancelled_at, booking_date, booking_time, late_reschedule_from, cancel_notice_hours, providers ( cancellation_notice_hours, booking_policies )')
       .eq('id', bookingId)
       .single(),
     supabase.from('provider_payouts').select('status, payout_amount').eq('booking_id', bookingId).maybeSingle(),
@@ -11940,7 +11961,7 @@ export async function getProviderRefundState(bookingId: string): Promise<Provide
           refundedToClientPence: settlementRow ? Number(settlementRow.amount_pence) : 0,
           providerKeptPence: retained ?? Number(settlementRow?.provider_kept_pence ?? 0),
           hoursBefore,
-          noticeHours: cancellationNoticeHours(providerRow?.cancellation_notice_hours, providerRow?.booking_policies),
+          noticeHours: b.cancel_notice_hours ?? cancellationNoticeHours(providerRow?.cancellation_notice_hours, providerRow?.booking_policies),
           keptIsDeposit: b.payment_type === 'deposit',
           movedLate: !!b.late_reschedule_from,
         }
