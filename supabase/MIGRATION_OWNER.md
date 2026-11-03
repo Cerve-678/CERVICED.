@@ -56,17 +56,17 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Written 2026-11-02, NOT applied (payment outcomes reach the client)
+### Applied 2026-11-03 (payment outcomes reach the client)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261102210000 | `payment_outcomes_reach_the_client` | **NOT APPLIED.** Written by session cerviced-cb on `feat/payment-outcome-notifications`. Apply after `20261102200000` so the versions stay in order; each rebuilds `notifications_type_check` from the live list, so neither loses the other's type. Adds `checkout_batches.outcome`, `record_checkout_outcome`, the "Payment received" trigger, `process_stale_checkouts` + cron `reconcile-checkouts`; drops the uncalled `expire_checkout_batches`. The app and the edge functions tolerate it being missing: notices just don't go out until it runs. |
+| 20261102210000 | `payment_outcomes_reach_the_client` | **APPLIED 2026-11-03** by session cerviced-cb at the user's request (`supabase db query --linked -f`, the file from `main`), version recorded by the file. Frontier before apply: `20261102200000`. Verified live: version present; `checkout_batches.outcome` exists; `notifications_type_check` holds 57 types including `payment_not_completed` and `payment_refunded`; trigger `after_checkout_finalised_notify_client` present; cron `reconcile-checkouts` active every 5 minutes; `record_checkout_outcome` executable by service_role only; `process_stale_checkouts` and the trigger function not executable by authenticated; `expire_checkout_batches` gone; the vault key exists; `checkout_batches` still has only its owner-read policy. **Open PR #258 has a different file with this same number** (`20261102210000_provider_price_bands`) and must renumber: its `ON CONFLICT DO NOTHING` would otherwise leave it unrecorded. |
 
-### Written 2026-11-02, NOT applied (client told about every refund)
+### Applied 2026-11-03 (client told about every refund)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261102200000 | `client_told_about_every_refund` | **NOT APPLIED.** Written by session cerviced-cb on `feat/refunds-show-history-and-tell-client`; the user declined the apply on 2026-11-02 pending review. Renumbered from 190000, which `become_full_member` took live first. Before applying: re-check live `max(version)` and open branches, then apply the file as-is (it rebuilds `notifications_type_check` from the live list and adds trigger `after_refund_notify_client` on `booking_refunds`). |
+| 20261102200000 | `client_told_about_every_refund` | **APPLIED 2026-11-03** by session cerviced-cb at the user's request (`supabase db query --linked -f`, the file from `main`), version recorded by the file. Frontier before apply: `20261102190000`. Verified live: version present; trigger `after_refund_notify_client` on `booking_refunds`; `payment_refunded` in `notifications_type_check`; `notify_client_of_refund` not executable by anon or authenticated. |
 
 ### Applied 2026-11-02 (become a full member)
 
