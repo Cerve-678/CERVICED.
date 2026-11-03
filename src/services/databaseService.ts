@@ -622,7 +622,7 @@ async function ownProviderIdExclusion(): Promise<string> {
 
 /** Providers who joined in the last 30 days — "New on CERVICED" section */
 const PUBLIC_PROVIDER_SUMMARY_SELECT =
-  "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
+  "id, slug, display_name, service_category, service_categories, logo_url, logo_framing, location_text, service_locations, latitude, longitude, rating, review_count, price_tier, price_bands, business_type, walk_ins_welcome, group_bookings_available, vegan_cruelty_free, is_featured, created_at, booking_mode";
 
 export async function getNewProviders(limit = 10): Promise<PublicProviderSummary[]> {
   const thirtyDaysAgo = new Date(
@@ -5409,20 +5409,45 @@ export type MyScheduleClosure = {
   isClosed: boolean;
   reopensOn: string | null;
   nextReleaseAt: string | null;
+  reason: string | null;
+  showReason: boolean;
+  autoClosed: boolean;
 };
 
 export async function getMyScheduleClosure(): Promise<MyScheduleClosure | null> {
   const { data, error } = await supabase.rpc("get_my_schedule_closure");
   if (error) throw error;
-  const row = (data as Array<{ is_closed: boolean; reopens_on: string | null; next_release_at: string | null }> | null)?.[0];
+  const row = (data as Array<{
+    is_closed: boolean;
+    reopens_on: string | null;
+    next_release_at: string | null;
+    reason: string | null;
+    show_reason: boolean;
+    auto_closed: boolean;
+  }> | null)?.[0];
   if (!row) return null;
-  return { isClosed: row.is_closed, reopensOn: row.reopens_on, nextReleaseAt: row.next_release_at };
+  return {
+    isClosed: row.is_closed,
+    reopensOn: row.reopens_on,
+    nextReleaseAt: row.next_release_at,
+    reason: row.reason,
+    showReason: row.show_reason,
+    autoClosed: row.auto_closed,
+  };
 }
 
 /** Stops new client bookings. With no date, it reopens on the provider's next
  *  release day, or when they reopen it if they don't have one. */
-export async function closeMySchedule(reopensOn: string | null): Promise<void> {
-  const { error } = await supabase.rpc("close_my_schedule", { p_reopens_on: reopensOn });
+export async function closeMySchedule(
+  reopensOn: string | null,
+  reason: string | null,
+  showReason: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc("close_my_schedule", {
+    p_reopens_on: reopensOn,
+    p_reason: reason,
+    p_show_reason: showReason,
+  });
   if (error) throw error;
 }
 
@@ -5431,7 +5456,14 @@ export async function reopenMySchedule(): Promise<void> {
   if (error) throw error;
 }
 
-/** All a client learns about a closure: yes or no, never why or until when. */
+/** Why a provider is closed, only if they chose to tell clients. Never until when. */
+export async function getProviderClosureReason(providerId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc("get_provider_closure_reason", { p_provider_id: providerId });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}
+
+/** Whether a client can book. Why it's closed is getProviderClosureReason. */
 export async function isProviderTakingBookings(providerId: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("provider_is_taking_bookings", { p_provider_id: providerId });
   if (error) throw error;
@@ -8607,6 +8639,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
   languages_spoken: string[] | null;
   specialties: string[] | null;
   price_range: string | null;
+  price_bands: string[] | null;
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
   external_booking_url: string | null;
@@ -8616,7 +8649,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     .select(
       "name, phone, business_name, business_email, business_phone, business_type, instagram, website, tiktok, " +
         "service_interests, service_locations, location_text, years_experience, team_size, accessibility_notes, languages_spoken, specialties, " +
-        "price_range, preferred_contact_methods, preferred_payment_methods, external_booking_url",
+        "price_range, price_bands, preferred_contact_methods, preferred_payment_methods, external_booking_url",
     )
     .eq("id", userId)
     .single();
@@ -8643,6 +8676,7 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     languages_spoken: string[] | null;
     specialties: string[] | null;
     price_range: string | null;
+    price_bands: string[] | null;
     preferred_contact_methods: string[] | null;
     preferred_payment_methods: string[] | null;
     external_booking_url: string | null;
@@ -8683,6 +8717,7 @@ export async function upgradeUserToProvider(
     serviceLocations?: string[];
     yearsExperience?: string;
     priceRange?: string;
+    priceBands?: string[];
     externalBookingUrl?: string;
     preferredContactMethods?: string[];
     accessibilityNotes?: string;
@@ -8737,6 +8772,7 @@ export async function upgradeUserToProvider(
         ? { referral_source: extras.referralSource }
         : {}),
       ...(extras?.priceRange ? { price_range: extras.priceRange } : {}),
+      ...(extras?.priceBands?.length ? { price_bands: extras.priceBands } : {}),
       ...(extras?.preferredContactMethods?.length
         ? { preferred_contact_methods: extras.preferredContactMethods }
         : {}),
@@ -8766,6 +8802,7 @@ export async function upgradeUserToProvider(
       .from("providers")
       .update({
         ...(extras?.priceRange ? { price_tier: extras.priceRange } : {}),
+        ...(extras?.priceBands?.length ? { price_bands: extras.priceBands } : {}),
         ...(extras?.externalBookingUrl
           ? { external_booking_url: extras.externalBookingUrl }
           : {}),
@@ -9745,6 +9782,7 @@ export async function updateProviderContactDetails(
     instagram?: string | null;
     website?: string | null;
     price_tier?: "budget" | "mid" | "premium" | "luxury" | null;
+    price_bands?: string[];
     accessibility_notes?: string | null;
     languages_spoken?: string[] | null;
     // Mirrors the live CHECK constraint providers_team_size_check

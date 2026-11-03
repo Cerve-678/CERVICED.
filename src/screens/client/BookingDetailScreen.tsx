@@ -50,6 +50,7 @@ import {
   getRefundRequestsForBooking,
 } from '../../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
+import { clientRequestNote } from '../../features/bookings/requestWindow';
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
@@ -992,8 +993,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <Ionicons name="time-outline" size={18} color="#FF9500" />
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#FF9500' }}>Awaiting Confirmation</Text>
-                  <Text style={{ fontSize: 12, color: '#FF950099', marginTop: 2 }}>
-                    Your provider hasn't confirmed this booking yet. You'll be notified once it's confirmed.
+                  <Text style={{ fontSize: 12, color: C.sub, marginTop: 2, lineHeight: 17 }}>
+                    {clientRequestNote(booking.providerName)}
                   </Text>
                 </View>
               </View>

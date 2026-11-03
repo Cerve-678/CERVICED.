@@ -1325,6 +1325,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     openingHours,
     openingHoursLoading,
     takingBookings,
+    closureReason,
     currentUserId,
     currentUserName,
     isOwnProvider,
@@ -2882,7 +2883,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     if (refuseBookingAsProvider()) return;
     if (!takingBookings) {
-      showAlert("Not taking bookings", "This provider isn't taking bookings right now.", "center");
+      showAlert("Not taking bookings", closureReason ? `This provider isn't taking bookings right now: ${closureReason.toLowerCase()}.` : "This provider isn't taking bookings right now.", "center");
       return;
     }
     if (tryOpenExternalBooking()) return;
@@ -2898,7 +2899,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     };
     if (holdForDetails(openBookingSheet)) return;
     openBookingSheet();
-  }, [tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider, takingBookings, holdForDetails]);
+  }, [tryOpenExternalBooking, isOwnProvider, showAlert, refuseBookingAsProvider, takingBookings, closureReason, holdForDetails]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -5465,6 +5466,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>
                   Services
                 </Text>
+
+                {!takingBookings && closureReason ? (
+                  <Text style={{ color: OP.sub, fontSize: 13, marginBottom: 10 }}>
+                    Not taking bookings: {closureReason.toLowerCase()}
+                  </Text>
+                ) : null}
 
                 {renderServiceCategoryBlock(visibleServices, () => {
                   Haptics.selectionAsync().catch(() => {});

@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **101 files**
 - … +71 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **187 files**
+Curated: [[Availability & Slots]] · **189 files**
 - `src/services/databaseService.ts` _(318)_
 - `src/services/AvailabilityService.ts` _(304)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **187 files**
 - `src/types/database.ts` _(23)_
 - `src/features/cart/presentation.ts` _(22)_
 - `src/screens/client/BookingsScreen.tsx` _(21)_
-- … +157 more
+- … +159 more
 
 ## Payments
 Curated: [[Payments]] · **154 files**
@@ -108,14 +108,14 @@ Curated: [[Payments]] · **154 files**
 - … +124 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **308 files**
+Curated: [[Booking Flow]] · **309 files**
 - `src/services/databaseService.ts` _(978)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
 - `src/screens/client/CartScreen.tsx` _(681)_
 - `src/services/becca/capabilities/client.ts` _(574)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(552)_
-- `src/screens/client/BookingDetailScreen.tsx` _(459)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(553)_
+- `src/screens/client/BookingDetailScreen.tsx` _(458)_
 - `src/screens/client/BookingsScreen.tsx` _(368)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_
@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **308 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/RescheduleScreen.tsx` _(176)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(143)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(145)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/screens/shared/NotificationsScreen.tsx` _(131)_
@@ -139,12 +139,12 @@ Curated: [[Booking Flow]] · **308 files**
 - `src/services/becca/capabilities/provider.ts` _(97)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- … +278 more
+- … +279 more
 
 ## Notifications
 Curated: [[Notifications]] · **176 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(340)_
+- `src/screens/shared/NotificationsScreen.tsx` _(343)_
 - `src/services/databaseService.ts` _(191)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_
@@ -210,7 +210,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **82 files**
 - … +52 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **60 files**
+Curated: [[Booking Flow]] · **62 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(207)_
 - `src/screens/client/BookingsScreen.tsx` _(84)_
 - `supabase/waitlist_holds.sql` _(75)_
@@ -227,7 +227,8 @@ Curated: [[Booking Flow]] · **60 files**
 - `supabase/booking_cancellation_actor_aware_fix.sql` _(13)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(12)_
 - `src/screens/provider/InfoRegScreen.tsx` _(10)_
-- `src/types/database.ts` _(8)_
+- `src/features/providers/CloseScheduleSection.tsx` _(9)_
+- `src/types/database.ts` _(9)_
 - `src/constants/waitlist.ts` _(7)_
 - `src/i18n/catalogs/en.ts` _(6)_
 - `src/screens/shared/NotificationsScreen.tsx` _(6)_
@@ -235,16 +236,15 @@ Curated: [[Booking Flow]] · **60 files**
 - `src/features/achievements/achievementPresentation.ts` _(5)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(5)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(5)_
+- `src/features/providers/scheduleClosure.ts` _(4)_
 - `supabase/fix_backfill_null_booking_end_time.sql` _(4)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
 - `supabase/fix_handle_booking_status_change_on_hold_notification.sql` _(4)_
 - `supabase/fix_provider_status_transition_guard.sql` _(4)_
-- `supabase/provider_fully_booked_alert.sql` _(4)_
-- `src/components/ModernBeautyCalendar.tsx` _(3)_
-- … +30 more
+- … +32 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **185 files**
+Curated: [[Booking Flow]] · **187 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
 - `src/services/databaseService.ts` _(242)_
@@ -255,7 +255,7 @@ Curated: [[Booking Flow]] · **185 files**
 - `src/screens/client/RescheduleScreen.tsx` _(144)_
 - `src/screens/client/CartScreen.tsx` _(128)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
-- `src/screens/provider/PoliciesScreen.tsx` _(74)_
+- `src/screens/provider/PoliciesScreen.tsx` _(75)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **185 files**
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `src/types/database.ts` _(37)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
-- … +155 more
+- … +157 more
 
 ## Auth
 Curated: [[Contexts]] · **194 files**
