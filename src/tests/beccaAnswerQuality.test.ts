@@ -37,6 +37,7 @@ jest.mock("../services/databaseService", () => {
       services: new Map(),
       specialityText: new Map(mockData.full ? [["p1", new Set(["Volume Lashes Full Set"])], ["p2", new Set(["Classic Set"])]] : []),
       specialityLabels: new Map(),
+      specialities: new Map(),
     })),
     getProviderPriceRanges: jest.fn(async () => (mockData.full ? ranges() : new Map())),
     getProviderBySlug: jest.fn(async () => (mockData.full
