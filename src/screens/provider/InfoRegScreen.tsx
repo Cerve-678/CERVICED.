@@ -1,3 +1,4 @@
+import { useDescriptionTopics } from '../../features/providers/useDescriptionTopics';
 import { SKIN_TONES } from '../../constants/skinTones';
 import React, { useState, useCallback, useMemo, useRef, useEffect, useContext, createContext } from 'react';
 import {
@@ -1110,6 +1111,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     () => suggestServiceDetails({ name, categoryName, fallbackKind }),
     [name, categoryName, fallbackKind],
   );
+  const descriptionTopics = useDescriptionTopics(name, description);
   const handleNameChange = (text: string) => {
     setName(text);
     const tags = offerSuggestions && !tagsTouched;
@@ -1395,17 +1397,21 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.serviceSheetLabel}>Description</Text>
                 <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
-                {/* A template's wording, offered, never written in for them. */}
-                {!description.trim() && suggestion.description ? (
+                {/* Wording offered, never written in for them. */}
+                {!description.trim() && suggestion.descriptionIdeas.map(idea => (
                   <TouchableOpacity
+                    key={idea}
                     style={[styles.chip, styles.serviceSheetSuggestion, { borderColor: accentColor }]}
-                    onPress={() => { tapSelect(); setDescription(suggestion.description ?? ''); }}
+                    onPress={() => { tapSelect(); setDescription(idea); }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Use suggested description: ${suggestion.description}`}
+                    accessibilityLabel={`Use suggested description: ${idea}`}
                   >
                     <Ionicons name="sparkles-outline" size={14} color={accentColor} />
-                    <Text style={[styles.chipText, styles.serviceSheetSuggestionText]} numberOfLines={2}>Use: “{suggestion.description}”</Text>
+                    <Text style={[styles.chipText, styles.serviceSheetSuggestionText]} numberOfLines={2}>Use: “{idea}”</Text>
                   </TouchableOpacity>
+                ))}
+                {descriptionTopics.length > 0 ? (
+                  <Text style={styles.serviceSheetHint}>Others offering this often mention {descriptionTopics.join(', ')}.</Text>
                 ) : null}
                 {descriptionHint ? <Text style={styles.serviceSheetHint}>{descriptionHint}</Text> : null}
               </View>
