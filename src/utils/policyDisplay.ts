@@ -144,11 +144,15 @@ function pushRow(rows: PolicyDisplayRow[], row: PolicyDisplayRow | null): void {
  * penalty, no-show or fee rows, and their own notice rather than the
  * enforced column (which defaults to 24 for every provider). Rows for values
  * stored before they switched to link-only stay hidden too.
+ *
+ * `showNoDeposit`: for the provider reading their own policy. A client's view
+ * leaves the row out when there's no deposit, but the provider's own summary
+ * has to say so, or "no deposit" and "not shown" look the same.
  */
 export function buildPolicyDisplayRows(
   policy: PolicyDisplayData | null | undefined,
   enforcedCancellationNoticeHours?: number,
-  options?: { linkOnly?: boolean },
+  options?: { linkOnly?: boolean; showNoDeposit?: boolean },
 ): PolicyDisplayRow[] {
   const rows: PolicyDisplayRow[] = [];
   if (!policy) return rows;
@@ -167,6 +171,8 @@ export function buildPolicyDisplayRows(
       label: 'Deposit',
       value: `${depositMode === 'deposit_required' ? `${amount} required` : `${amount} (optional)`}${policy.depositNonRefundable ? ', non-refundable' : ''}`,
     });
+  } else if (options?.showNoDeposit) {
+    rows.push({ icon: 'card-outline', label: 'Deposit', value: 'No deposit' });
   }
 
   const customCancelFee = feeLabel(policy.cancelCustomFee);
