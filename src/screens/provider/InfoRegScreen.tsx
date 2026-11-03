@@ -5591,9 +5591,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   saying the same thing. Business Details → Policies is the
                   ongoing editor of that same field; this is the signup-time
                   ask, same key, same format. */}
-              <Text style={[styles.policyLabel, { marginTop: 14 }]}>ANYTHING CLIENTS SHOULD KNOW</Text>
+              <Text style={[styles.policyLabel, { marginTop: 14 }]}>YOUR INSTRUCTIONS</Text>
               <Text style={styles.addressHint}>
-                Clients see this in their booking details on every new booking (optional). Changing it later won't update bookings already made. Put door or buzzer codes in Arrival details instead, which stays private until a booked client's address is released.
+                Shown to clients as your instructions in their booking details, on every new booking (optional), like arriving early or what to bring. Directions go in How to get there and door codes in Arrival details, so there's no need to repeat them here. Changing it later won't update bookings already made.
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
