@@ -91,6 +91,7 @@ interface ProviderCardData {
   // until real data is available.
   priceRange: { min: number; max: number } | null;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
+  priceBands: string[];
   businessType: BusinessType | null;
   specialties: string[];
   // null = not yet resolved (or unknown) — see providersWithAvailability.
@@ -663,6 +664,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       // the Price filter's tier-bucket sort/comparison, not for display.
       priceRange: null,
       priceTier: p.price_tier,
+      priceBands: p.price_bands ?? [],
       businessType: p.business_type,
       // Real provider/service specialities arrive in the batched facets read
       // below. Keep this empty until then rather than showing category-based
@@ -981,7 +983,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       if (services.length === 0) {
         // No service rows at all: only a price-only filter can still be
         // answered, from the provider's self-described tier.
-        const tierRange = resolveProviderPriceRange(null, p.priceTier);
+        const tierRange = resolveProviderPriceRange(null, p.priceTier, p.priceBands);
         if (!serviceCriteria.audience && !serviceCriteria.skinTone && serviceCriteria.priceBucket
           && priceRangeMatchesBucket(tierRange, serviceCriteria.priceBucket)) {
           out.set(p.providerId, tierRange);
@@ -1144,7 +1146,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         // With a price/audience/skin-tone filter on, sort by the services that
         // matched it rather than the whole menu.
         const matched = serviceMatchByProviderId?.get(p.providerId);
-        const key = priceSortKey(matched ?? resolveProviderPriceRange(p.priceRange, p.priceTier), direction);
+        const key = priceSortKey(matched ?? resolveProviderPriceRange(p.priceRange, p.priceTier, p.priceBands), direction);
         if (key == null) unpriced.push(p);
         else keyed.push({ p, key });
       }

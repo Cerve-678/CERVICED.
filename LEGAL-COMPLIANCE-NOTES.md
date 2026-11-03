@@ -229,6 +229,18 @@ Questions to raise, not resolved:
   `apply-cancellation-refund` reads the penalty from it. A tampered snapshot could
   lower or remove a late-cancel charge. This predates the custom amount.
 
+**Added 2026-11-03 — non-refundable deposits (user-directed, PR #261's
+replacement on `feat/non-refundable-deposit-v2`).** A provider can require one:
+it's kept whenever the client cancels, even well before the notice window.
+CERVICED refunds its own fee when the deposit is the only thing kept. The user
+chose to ship without a solicitor's review. Still open: whether keeping a
+deposit on a cancellation made well in advance is fair under the Consumer
+Rights Act 2015 (the amount against the provider's real loss), and whether the
+Consumer Contracts Regulations 2013 give a cooling-off right on these bookings
+(there is no stated position). Terms clauses 10, 13 and 31 carry wording that
+is **not lawyer-reviewed**, and Provider Terms have no re-consent step
+(section 10).
+
 ## 7. Reviews and user-generated content
 
 T&Cs already prohibit "false reviews" and fraudulent activity (good). Worth

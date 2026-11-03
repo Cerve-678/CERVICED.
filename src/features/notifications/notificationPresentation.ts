@@ -21,6 +21,13 @@ export function isCertificateNotification(type: string, metadata: unknown): bool
   return (metadata as Record<string, unknown>)['kind'] === 'fully_booked_certificate';
 }
 
+/** The schedule closed by itself. Same type, opens the schedule rather than the certificate. */
+export function isScheduleAutoClosedNotification(type: string, metadata: unknown): boolean {
+  if (type !== 'schedule_fully_booked') return false;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  return (metadata as Record<string, unknown>)['kind'] === 'schedule_auto_closed';
+}
+
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 const DAY_MS = 24 * 60 * 60 * 1000;
 
