@@ -2807,6 +2807,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     termsAcceptedAt: null,
     languagesSpoken: [],
     priceRange: '',
+    priceBands: [],
     serviceLocations: [],
     preferredPaymentMethods: [],
     fullAddress: '',
@@ -3033,6 +3034,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
                   languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
                   priceRange: prev.priceRange || prefilledPriceRange || '',
+                  priceBands: prev.priceBands.length ? prev.priceBands : (prefill.price_bands ?? []),
                   // Round-trip only — this screen neither shows nor owns contact
                   // channels (Communications does). It's carried purely because
                   // saveProviderToSupabase writes preferred_contact_methods on

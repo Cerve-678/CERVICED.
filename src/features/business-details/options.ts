@@ -174,14 +174,6 @@ export const ACCESSIBILITY_OPTS = ['Wheelchair accessible', 'Parking available',
 // column still exists (added alongside the other practice-detail columns) but
 // is intentionally unwritten by the UI; see the follow-up note in MEMORY.
 
-// Values match the canonical price_tier enum on `providers`.
-export const PRICE_OPTS = [
-  { value: 'budget',  label: '£  · Great value' },
-  { value: 'mid',     label: '££  · Mid-range' },
-  { value: 'premium', label: '£££  · Premium' },
-  { value: 'luxury',  label: '££££  · Luxury' },
-];
-
 // Values match the live CHECK constraint providers_team_size_check.
 export const TEAM_SIZE_OPTS = [
   { value: 'solo',       label: 'Just me' },

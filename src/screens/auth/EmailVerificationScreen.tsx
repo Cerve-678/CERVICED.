@@ -150,6 +150,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         languages_spoken:      meta['languages_spoken']        ?? [],
         specialties:           meta['specialties']             ?? [],
         price_range:               meta['price_range']               ?? null,
+        price_bands:               meta['price_bands']               ?? [],
         preferred_contact_methods: meta['preferred_contact_methods'] ?? [],
         preferred_payment_methods: meta['preferred_payment_methods'] ?? [],
         external_booking_url:      meta['external_booking_url']      ?? null,
