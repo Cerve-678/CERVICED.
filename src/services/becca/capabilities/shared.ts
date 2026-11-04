@@ -176,8 +176,8 @@ export interface ProximityResult<T> {
  * only one of them is "sorted by where you are":
  *
  *   • GPS         — a real position, so a real ranking.
- *   • saved city  — a centroid. Useful, and NOT where the client is standing,
- *                   so the reply says which city it used.
+ *   • saved place — the centre of an area or city the client picked. Useful,
+ *                   and NOT where they're standing, so the reply names it.
  *   • unknown     — permission refused or nothing saved. The list is returned
  *                   unranked and the reply says so, rather than presenting an
  *                   arbitrary order as "nearest".
@@ -225,8 +225,8 @@ export async function sortByProximity<
     providers: withDistance.map((entry) => entry.p),
     ranked: true,
     note:
-      location.source === "saved-city" && location.cityLabel
-        ? `Sorted by distance from **${location.cityLabel}**, the city on your profile.`
+      location.source === "saved-place" && location.placeLabel
+        ? `Sorted by distance from **${location.placeLabel.split(",")[0]}**, the area you picked on Home.`
         : location.isCoarse
           ? "Sorted by distance, though your location is only approximate right now."
           : "Sorted by distance from you.",

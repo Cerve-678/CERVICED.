@@ -18,7 +18,6 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
 
 // NAVIGATION IMPORTS - CORRECTED PATH
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -38,13 +37,14 @@ import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { resolveClientLocation } from '../../services/clientLocationService';
+import { geocodeUkPlace } from '../../services/ukGeocode';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { getOwnProviderIds, getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, getProvidersAvailability, prefetchProviderBySlug, type ProviderAvailabilityInfo } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
-import { getDistanceKm } from '../../utils/distance';
+import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
@@ -145,6 +145,8 @@ const ProviderRail = React.memo(function ProviderRail({
   );
 });
 
+const DEFAULT_NEARBY_RADIUS_MILES = 10;
+
 const RoundProviderRail = React.memo(function RoundProviderRail({
   providers,
   keyPrefix,
@@ -152,6 +154,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
   surface,
   border,
   text,
+  sub,
 }: {
   providers: Provider[];
   keyPrefix: string;
@@ -159,6 +162,8 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
   surface: string;
   border: string;
   text: string;
+  /** Pass to show each provider's distance under their name. */
+  sub?: string;
 }) {
   return (
     <FlatList
@@ -177,6 +182,9 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
             {item.logo ? <Image source={item.logo} style={styles.roundCardImage} contentFit="cover" transition={0} /> : null}
           </View>
           <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
+          {sub && item.distanceKm != null ? (
+            <Text style={[styles.roundCardDistance, { color: sub }]} numberOfLines={1}>{formatMiles(item.distanceKm)}</Text>
+          ) : null}
         </TouchableOpacity>
       )}
     />
@@ -295,17 +303,13 @@ export default function HomeScreen() {
   );
   const [providersLoading, setProvidersLoading] = useState(true);
 
-  // Device location, for the "Near You" section — null until permission is
-  // granted and a fix is obtained, OR until the user manually picks a city
-  // (see manualLocationLabel below). If GPS is denied, the fallback is a
-  // region the user actually chose (e.g. "Manchester, UK"), never the
-  // unsorted full provider list — that city gets geocoded once via the same
-  // Location.geocodeAsync used for provider registration, and the result is
-  // set here just as if it were a real GPS fix, so every downstream
-  // distance/sort/elastic-radius calculation stays exactly the same either way.
+  // Where "Near You" measures from: a picked area, the device's position, or
+  // a picked city, in that order (resolveClientLocation). Null until one of
+  // those is known. A picked place is geocoded once and set here just like a
+  // GPS fix, so every downstream distance/sort/radius step is the same.
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  // Set once the user has manually chosen a city (as opposed to GPS) — drives
-  // the "· LONDON" label suffix and lets LocationModal show the current pick.
+  // Set once the client has picked a place (as opposed to GPS) — drives the
+  // "· HAGGERSTON" label suffix and lets LocationModal show the current pick.
   const [manualLocationLabel, setManualLocationLabel] = useState<string | null>(null);
   // The device gave a position, but too vague a one to call it "where you are"
   // — on iOS this is Precise Location switched off, which still reports as
@@ -313,7 +317,17 @@ export default function HomeScreen() {
   // available, they just shouldn't be presented as exact.
   const [locationIsCoarse, setLocationIsCoarse] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [locationRadius, setLocationRadius] = useState(10);
+  // Miles. Saved, so the client's choice survives a restart.
+  const [locationRadius, setLocationRadius] = useState(DEFAULT_NEARBY_RADIUS_MILES);
+  useEffect(() => {
+    storage.getItem<number>(STORAGE_KEYS.NEAR_YOU_RADIUS)
+      .then(saved => { if (typeof saved === 'number' && saved > 0) setLocationRadius(saved); })
+      .catch(() => {});
+  }, []);
+  const handleRadiusChange = useCallback((miles: number) => {
+    setLocationRadius(miles);
+    storage.setItem(STORAGE_KEYS.NEAR_YOU_RADIUS, miles).catch(() => {});
+  }, []);
 
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedHairType, setSelectedHairType] = useState<any>(null);
@@ -574,7 +588,7 @@ export default function HomeScreen() {
     // and any of AuthContext's setUser calls hands back a fresh identity even
     // when nothing about the person changed. Two overlapping runs each resolve
     // location independently, and whichever finishes LAST wins — so a slow GPS
-    // fix from run one could land after run two's saved-city fallback and
+    // fix from run one could land after run two's saved-place fallback and
     // replace a precise position with a city centroid, or the reverse. Either
     // way Near You visibly re-sorts under the client for no reason they can
     // see. Same sequence-guard shape as the calendar's week paging.
@@ -583,10 +597,10 @@ export default function HomeScreen() {
       const location = await resolveClientLocation();
       if (locationRunCancelled || !location.coords) return;
       setUserCoords(location.coords);
-      // Only a city centroid gets labelled — that label is the whole reason
-      // the client can tell "distances from the middle of Manchester" from
-      // "distances from where you are".
-      setManualLocationLabel(location.source === 'saved-city' ? location.cityLabel : null);
+      // Only a picked place gets labelled — that label is the whole reason
+      // the client can tell "distances from Haggerston" from "distances from
+      // where you are".
+      setManualLocationLabel(location.source === 'saved-place' ? location.placeLabel : null);
       setLocationIsCoarse(location.isCoarse);
     })();
 
@@ -677,46 +691,51 @@ export default function HomeScreen() {
     [liveProviders, availabilityBySlug],
   );
 
-  // "Near You" — nearest-first, not "every active provider" in arbitrary DB
-  // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
-  // too-small radius rather than showing a near-empty list): try a tight
-  // 50km cut first, but if too few providers fall inside it — a sparse
-  // market, or a big chunk of the DB missing lat/lng — fall back to the
-  // nearest 15 regardless of the cutoff instead of an almost-empty row.
-  // With no location fix at all, falls back to the plain (unsorted) list.
-  const NEARBY_RADIUS_KM = 50;
-  const MIN_NEARBY_RESULTS = 5;
+  // "Near You" — nearest-first, and only providers inside the radius the
+  // client chose. It used to fall back to the nearest 15 at any distance
+  // whenever fewer than 5 were within 50km, which put providers across
+  // London (or in another country, when a geocode went wrong) under
+  // "Near you". An empty row now says so and offers a wider radius instead.
+  // With no location fix at all, the section prompts for one.
   const nearbyProviders = useMemo(() => {
-    if (!userCoords) return recommendationCandidates;
-
-    const withDistance = recommendationCandidates
+    if (!userCoords) return [];
+    const radiusKm = locationRadius * KM_PER_MILE;
+    return recommendationCandidates
       .filter(p => p.latitude != null && p.longitude != null)
       .map(p => ({
         ...p,
         distanceKm: getDistanceKm(userCoords.latitude, userCoords.longitude, p.latitude!, p.longitude!),
       }))
+      .filter(p => p.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm);
+  }, [recommendationCandidates, userCoords, locationRadius]);
 
-    const withinRadius = withDistance.filter(p => p.distanceKm <= NEARBY_RADIUS_KM);
-    return withinRadius.length >= MIN_NEARBY_RESULTS ? withinRadius : withDistance;
-  }, [recommendationCandidates, userCoords]);
-
-  // User picked a city from LocationModal (either the first-run prompt, or
-  // reopening it later to change area) — geocode it once and feed it into
-  // userCoords exactly like a real GPS fix, so nearbyProviders above needs no
-  // separate code path for "GPS" vs "manually chosen region."
-  const handleSelectRegion = useCallback(async (city: string) => {
+  // The client picked a place in LocationModal, or chose their own location
+  // again (null). A picked place is saved, and resolveClientLocation reads it
+  // back on every tab, so Search and Becca measure from the same spot.
+  const handleSelectPlace = useCallback(async (place: string | null) => {
     try {
-      const [match] = await Location.geocodeAsync(city);
-      if (match) {
-        setUserCoords({ latitude: match.latitude, longitude: match.longitude });
-        setManualLocationLabel(city);
-        // A hand-picked city supersedes whatever the device said, coarse or not.
-        setLocationIsCoarse(false);
-        await storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, city);
+      if (place === null) {
+        await storage.removeItem(STORAGE_KEYS.MANUAL_LOCATION);
+        const location = await resolveClientLocation();
+        setUserCoords(location.coords);
+        setManualLocationLabel(location.source === 'saved-place' ? location.placeLabel : null);
+        setLocationIsCoarse(location.isCoarse);
+        return;
       }
-    } catch {
-      // Silent failure — keeps whatever location state existed before
+      const coords = await geocodeUkPlace(place);
+      if (!coords) {
+        logger.error('HomeScreen: picked place could not be found', place);
+        return;
+      }
+      setUserCoords(coords);
+      setManualLocationLabel(place);
+      // A hand-picked place supersedes whatever the device said, coarse or not.
+      setLocationIsCoarse(false);
+      await storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, place);
+    } catch (error) {
+      // Keeps whatever location state existed before.
+      logger.error('HomeScreen: could not change location', error);
     }
   }, []);
 
@@ -1843,11 +1862,10 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* Near You Section — sorted by real distance once we have a
-                location fix, from GPS or a manually-chosen city. Never
-                falls back to the plain unsorted "every provider" list —
-                with no location at all yet, it prompts the user to pick a
-                city (LocationModal) instead. */}
+            {/* Near You Section — providers inside the chosen radius,
+                nearest first, measured from a picked area or the device.
+                With no location at all yet, it prompts the client to pick
+                an area (LocationModal) instead. */}
             <View style={styles.section}>
               <TouchableOpacity
                 style={styles.sectionHeader}
@@ -1882,18 +1900,32 @@ export default function HomeScreen() {
                     Enable location or choose your area to see providers near you
                   </Text>
                 </TouchableOpacity>
+              ) : nearbyProviders.length === 0 ? (
+                <TouchableOpacity
+                  style={[styles.nearYouPrompt, { backgroundColor: P.surface, borderColor: P.border }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowLocationModal(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.nearYouPromptText, { color: P.sub }]}>
+                    No providers within {locationRadius} {locationRadius === 1 ? 'mile' : 'miles'}
+                    {manualLocationLabel ? ` of ${manualLocationLabel.split(',')[0]}` : ' of you'} yet. Tap to search a wider radius.
+                  </Text>
+                </TouchableOpacity>
               ) : (
-                <RoundProviderRail providers={nearbyProviders.slice(0, 15)} keyPrefix="near" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
+                <RoundProviderRail providers={nearbyProviders.slice(0, 15)} keyPrefix="near" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} sub={P.sub} />
               )}
             </View>
 
             <LocationModal
               visible={showLocationModal}
               onClose={() => setShowLocationModal(false)}
-              selectedLocation={manualLocationLabel ?? ''}
+              selectedPlace={manualLocationLabel}
               selectedRadius={locationRadius}
-              onLocationChange={handleSelectRegion}
-              onRadiusChange={setLocationRadius}
+              onPlaceChange={handleSelectPlace}
+              onRadiusChange={handleRadiusChange}
             />
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'male-services').
@@ -2311,6 +2343,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     fontWeight: '600',
+  },
+  roundCardDistance: {
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: 'center',
   },
   nearYouPrompt: {
     borderRadius: 16,

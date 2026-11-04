@@ -26,3 +26,11 @@ export function formatDistance(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)}m`;
   return `${km < 10 ? km.toFixed(1) : Math.round(km)}km`;
 }
+
+export const KM_PER_MILE = 1.609344;
+
+/** Miles, the way UK clients read a distance: "0.4 mi", "3.2 mi", "12 mi". */
+export function formatMiles(km: number): string {
+  const miles = km / KM_PER_MILE;
+  return `${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi`;
+}

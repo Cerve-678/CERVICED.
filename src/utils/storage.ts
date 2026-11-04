@@ -53,4 +53,5 @@ LIKED_VIDEOS: 'liked_videos',
 BOOKMARKED_VIDEOS: 'bookmarked_videos',
 SAVED_PORTFOLIO: 'saved_portfolio_items',
 MANUAL_LOCATION: '@manual_location',
+NEAR_YOU_RADIUS: '@near_you_radius_miles',
 } as const;

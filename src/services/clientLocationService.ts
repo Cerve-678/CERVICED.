@@ -11,26 +11,25 @@
 import * as Location from 'expo-location';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import { logger } from '../utils/logger';
+import { searchPlaces } from '../data/cityAreas';
+import { geocodeUkPlace, type Coords } from './ukGeocode';
 
-export interface Coords {
-  latitude: number;
-  longitude: number;
-}
+export type { Coords };
 
 /** Where the answer came from — never inferred from whether coords are null. */
 export type ClientLocationSource =
   /** The device's own position. */
   | 'gps'
-  /** The centroid of a city the client picked by hand. Not where they are. */
-  | 'saved-city'
+  /** The centre of an area or city the client picked by hand. */
+  | 'saved-place'
   /** Permission refused, unavailable, or no saved city to fall back to. */
   | 'unknown';
 
 export interface ClientLocation {
   coords: Coords | null;
   source: ClientLocationSource;
-  /** The city name behind a 'saved-city' result, for display. Null otherwise. */
-  cityLabel: string | null;
+  /** The place behind a 'saved-place' result, for display. Null otherwise. */
+  placeLabel: string | null;
   /**
    * The fix is too coarse to state a distance confidently — on iOS this is
    * what "Precise Location" being switched off looks like, since permission
@@ -49,17 +48,56 @@ export interface ClientLocation {
  */
 export const COARSE_ACCURACY_THRESHOLD_M = 500;
 
-const UNKNOWN: ClientLocation = { coords: null, source: 'unknown', cityLabel: null, isCoarse: false };
+const UNKNOWN: ClientLocation = { coords: null, source: 'unknown', placeLabel: null, isCoarse: false };
 
 /**
- * Resolve once: device position if it can be had, otherwise the saved city's
- * centroid, otherwise nothing.
+ * Whether a saved place is a neighbourhood ("Haggerston, London") rather than
+ * a whole town ("London, UK"). A neighbourhood is a better answer than GPS,
+ * because the client picked it on purpose. A whole town is too broad to beat
+ * a real position, so it's only used when there's no fix.
+ */
+export function isNeighbourhood(place: string): boolean {
+  const [name, town] = place.split(',').map(part => part.trim().toLowerCase());
+  if (!name || !town) return false;
+  return searchPlaces(name).some(m => m.kind === 'area' && m.name.toLowerCase() === name && m.town.toLowerCase() === town);
+}
+
+/**
+ * Resolve once. In order: a neighbourhood the client picked, the device's
+ * position, a town the client picked, otherwise nothing.
  *
  * Never throws — every caller is decorating a list with distances, and none
  * of them should fail to render because location did. An unknown result is a
  * real answer the caller is expected to handle, not an error.
  */
 export async function resolveClientLocation(): Promise<ClientLocation> {
+  let savedPlace: string | null = null;
+  try {
+    savedPlace = await storage.getItem<string>(STORAGE_KEYS.MANUAL_LOCATION);
+  } catch (error) {
+    logger.error('resolveClientLocation: saved place could not be read', error);
+  }
+
+  const fromSavedPlace = async (): Promise<ClientLocation | null> => {
+    if (!savedPlace) return null;
+    try {
+      const coords = await geocodeUkPlace(savedPlace);
+      // The centre of a picked place is exact as a coordinate and not where
+      // the client is standing; `source` is what tells a caller that.
+      if (coords) return { coords, source: 'saved-place', placeLabel: savedPlace, isCoarse: false };
+    } catch (error) {
+      logger.error('resolveClientLocation: saved place could not be geocoded', error);
+    }
+    return null;
+  };
+
+  // undefined = not tried yet, so a failed neighbourhood lookup isn't repeated.
+  let picked: ClientLocation | null | undefined;
+  if (savedPlace && isNeighbourhood(savedPlace)) {
+    picked = await fromSavedPlace();
+    if (picked) return picked;
+  }
+
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status === 'granted') {
@@ -71,7 +109,7 @@ export async function resolveClientLocation(): Promise<ClientLocation> {
           longitude: position.coords.longitude,
         },
         source: 'gps',
-        cityLabel: null,
+        placeLabel: null,
         // null accuracy means the platform didn't say — believed rather than
         // assumed coarse, since treating "unstated" as vague would put a
         // warning on every fix from a platform that doesn't report it.
@@ -79,31 +117,12 @@ export async function resolveClientLocation(): Promise<ClientLocation> {
       };
     }
   } catch (error) {
-    // Falls through to the saved city. Logged rather than swallowed: a
+    // Falls through to the saved place. Logged rather than swallowed: a
     // permission API that keeps throwing is worth seeing in the logs, even
     // though the client just gets the fallback.
     logger.error('resolveClientLocation: device position unavailable', error);
   }
 
-  try {
-    const savedCity = await storage.getItem<string>(STORAGE_KEYS.MANUAL_LOCATION);
-    if (savedCity) {
-      const [match] = await Location.geocodeAsync(savedCity);
-      if (match) {
-        return {
-          coords: { latitude: match.latitude, longitude: match.longitude },
-          source: 'saved-city',
-          cityLabel: savedCity,
-          // A centroid is exact as a coordinate and wrong as a position. It's
-          // not "coarse" — `source` is what tells a caller not to present it
-          // as where the client is standing.
-          isCoarse: false,
-        };
-      }
-    }
-  } catch (error) {
-    logger.error('resolveClientLocation: saved city could not be geocoded', error);
-  }
-
-  return UNKNOWN;
+  if (picked === undefined) picked = await fromSavedPlace();
+  return picked ?? UNKNOWN;
 }

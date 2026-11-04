@@ -8,6 +8,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 // renders nothing.
 import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
+import { geocodeUkPlace, isInUk } from './ukGeocode';
 import { themeBrandingColours } from '../constants/providerThemes';
 import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import { normalizeServiceImages } from '../utils/serviceImageDraft';
@@ -403,8 +404,6 @@ function generateSlug(name: string): string {
 // Coarse UK bounding box — enough to catch a wildly wrong geocode (a real
 // production row's public location_text is literally "New York"; nothing
 // today stops the same mistake for the real address either).
-const UK_BOUNDS = { minLat: 49.8, maxLat: 60.9, minLng: -8.2, maxLng: 1.8 };
-
 // Loose UK postcode shape, checked as a substring of a freeform address line
 // (not an anchored full-string match) — a cheap pre-check to reject obvious
 // garbage before spending a geocode call.
@@ -452,10 +451,7 @@ export async function geocodeAndValidateUkAddress(
     latitude = match.latitude;
     longitude = match.longitude;
   }
-  if (
-    latitude < UK_BOUNDS.minLat || latitude > UK_BOUNDS.maxLat ||
-    longitude < UK_BOUNDS.minLng || longitude > UK_BOUNDS.maxLng
-  ) {
+  if (!isInUk({ latitude, longitude })) {
     throw new Error("That address doesn't look like it's in the UK — please check it and try again.");
   }
 
@@ -556,12 +552,13 @@ export async function saveProviderToSupabase(
   // correct behaviour, not a bug. Never blocks the save on failure.
   let latitude: number | undefined;
   let longitude: number | undefined;
+  // Asked as a UK place: on its own, "East London" geocoded to South Africa.
   if (data.location?.trim()) {
     try {
-      const [match] = await Location.geocodeAsync(data.location.trim());
-      if (match) {
-        latitude = match.latitude;
-        longitude = match.longitude;
+      const coords = await geocodeUkPlace(data.location);
+      if (coords) {
+        latitude = coords.latitude;
+        longitude = coords.longitude;
       }
     } catch {
       // Silent failure — providers row keeps whatever lat/lng it already had
