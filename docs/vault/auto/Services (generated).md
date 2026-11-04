@@ -20,7 +20,7 @@
 `AUTH_PROFILE_SNAPSHOT_MAX_AGE_MS` · `clearAuthProfileSnapshot` · `readAuthProfileSnapshot` · `saveAuthProfileSnapshot`
 
 ### `src/services/AvailabilityService.ts`
-`AvailabilityService` · `describeEmergencyReason` · `earliestBookableStartMs` · `isStartTaken` · `parseDurationToMinutes` · `parseTimeToMinutes` · `readEmergencyPolicy` · `resolveSlotOffer` · `resolveWorkingWindows` · `slotStartMs` · `snapToRequestable` · `takesEmergencyRequests` · `toWindowMins`
+`AvailabilityService` · `describeEmergencyReason` · `earliestBookableStartMs` · `isStartTaken` · `parseDurationToMinutes` · `parseTimeToMinutes` · `readEmergencyPolicy` · `resolveSlotOffer` · `resolveWorkingWindows` · `showEachBookingOnce` · `slotStartMs` · `snapToRequestable` · `takenSpanAt` · `takesEmergencyRequests` · `toWindowMins`
 
 ### `src/services/becca/aiInterpreter.ts`
 _no named exports_

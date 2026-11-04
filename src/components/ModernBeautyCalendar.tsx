@@ -1272,7 +1272,8 @@ const styles = StyleSheet.create({
   dayBadge:           { borderWidth: 1, borderRadius: 20, paddingVertical: 3, paddingHorizontal: 9 },
   dayBadgeText:       { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.2 },
   // Greyed and inert, not removed: the day keeps its shape so "all taken"
-  // and "never works this day" stay tellable apart.
+  // and "never works this day" stay tellable apart. A booking shows once, at
+  // its start; the times inside it never reach here (showEachBookingOnce).
   timeTabBlocked:     { opacity: 0.4 },
   timeTextBlocked:    { textDecorationLine: 'line-through' },
   requestLink:        { flexDirection: 'row', alignItems: 'center' },

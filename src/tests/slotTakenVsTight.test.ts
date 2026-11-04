@@ -1,4 +1,4 @@
-import { isStartTaken } from '../services/AvailabilityService';
+import { isStartTaken, showEachBookingOnce } from '../services/AvailabilityService';
 
 const span = (startH: number, endH: number, startM = 0, endM = 0) =>
   ({ start: startH * 60 + startM, end: endH * 60 + endM });
@@ -44,5 +44,36 @@ describe('isStartTaken', () => {
     const day = [span(10, 11), span(15, 16, 0, 50)];
     expect(isStartTaken(day, at(15, 30))).toBe(true);
     expect(isStartTaken(day, at(12))).toBe(false);
+  });
+});
+
+describe('showEachBookingOnce', () => {
+  const grid = (times: number[], spans: { start: number; end: number }[]) =>
+    times.map(startMins => ({ startMins, taken: isStartTaken(spans, startMins) }));
+
+  it('shows a 2-hour booking as one taken time, not four', () => {
+    const spans = [span(15, 17)];
+    const day = grid([at(14, 30), at(15), at(15, 30), at(16), at(16, 30), at(17)], spans);
+    expect(showEachBookingOnce(spans, day).map(s => s.startMins))
+      .toEqual([at(14, 30), at(15), at(17)]);
+  });
+
+  it('keeps the first grid time inside a booking that starts off the grid', () => {
+    const spans = [span(15, 17, 15, 15)];
+    const day = grid([at(15), at(15, 30), at(16), at(16, 30), at(17), at(17, 30)], spans);
+    expect(showEachBookingOnce(spans, day).map(s => s.startMins))
+      .toEqual([at(15), at(15, 30), at(17, 30)]);
+  });
+
+  it('shows two back-to-back bookings once each', () => {
+    const spans = [span(10, 11), span(11, 13)];
+    const day = grid([at(10), at(10, 30), at(11), at(11, 30), at(12), at(13)], spans);
+    expect(showEachBookingOnce(spans, day).map(s => s.startMins))
+      .toEqual([at(10), at(11), at(13)]);
+  });
+
+  it('leaves a day with nothing booked alone', () => {
+    const day = grid([at(9), at(10)], []);
+    expect(showEachBookingOnce([], day)).toEqual(day);
   });
 });

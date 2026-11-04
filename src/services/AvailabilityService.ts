@@ -388,7 +388,37 @@ const doTimesOverlap = (
 export const isStartTaken = (
   busySpans: readonly { start: number; end: number }[],
   startMins: number,
-): boolean => busySpans.some(span => span.start <= startMins && startMins < span.end);
+): boolean => takenSpanAt(busySpans, startMins) !== undefined;
+
+/** The appointment this start time falls inside, if any. */
+export const takenSpanAt = <S extends { start: number; end: number }>(
+  busySpans: readonly S[],
+  startMins: number,
+): S | undefined => busySpans.find(span => span.start <= startMins && startMins < span.end);
+
+/**
+ * The picker's whole grid with each appointment shown once.
+ *
+ * A 2-hour booking at 3pm covers 3:00, 3:30, 4:00 and 4:30 on a half-hour
+ * grid. Showing all four as greyed chips read as four separate times, some
+ * still open. Only the first grid time inside each appointment stays, as the
+ * one "booked" chip; the times after it are dropped, so the grid jumps from
+ * 3:00 to 5:00 the way the provider's day actually does.
+ */
+export const showEachBookingOnce = <T extends { startMins: number; taken: boolean }>(
+  busySpans: readonly { start: number; end: number }[],
+  slots: readonly T[],
+): T[] => {
+  const shown = new Set<{ start: number; end: number }>();
+  return slots.filter(slot => {
+    if (!slot.taken) return true;
+    const span = takenSpanAt(busySpans, slot.startMins);
+    if (!span) return true;
+    if (shown.has(span)) return false;
+    shown.add(span);
+    return true;
+  });
+};
 
 // Parse "HH:MM" or "HH:MM:SS" 24-hour time to minutes
 const parse24HTimeToMinutes = (timeStr: string): number => {
@@ -1063,9 +1093,12 @@ export const AvailabilityService = {
       // lookup is needed here and none must be re-applied.
       const busySpans = await fetchBusySpans(providerId, date, date);
 
-      return Array.from(candidates.entries())
+      const grid = Array.from(candidates.entries())
         .sort(([a], [b]) => a - b)
-        .flatMap(([startMins, reasons]): TimeSlot[] => {
+        .map(([startMins, reasons]) => ({ startMins, reasons, taken: isStartTaken(busySpans, startMins) }));
+
+      return showEachBookingOnce(busySpans, grid)
+        .flatMap(({ startMins, reasons }): TimeSlot[] => {
           const startMs = slotStartMs(date, startMins);
           const slotEnd = startMins + durationMinutes;
           const newEffStart = startMins - newBuffer.before;
