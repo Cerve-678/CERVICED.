@@ -2,6 +2,7 @@ import {
   isProviderProfileUuid,
   parseProviderProfileDeepLink,
   providerProfileDeepLink,
+  providerProfileWebLink,
 } from "../utils/providerProfileDeepLink";
 
 const PROVIDER_ID = "d631959b-468c-4a94-a4d3-df69bf4c5687";
@@ -35,6 +36,15 @@ describe("provider profile QR deep links", () => {
     expect(
       parseProviderProfileDeepLink(`cerviced://providers/${PROVIDER_ID}`),
     ).toBeNull();
+  });
+
+  it("builds and reads back the cerviced.co/@handle link for an Instagram bio", () => {
+    expect(providerProfileWebLink("Glo-Installs ")).toBe("https://cerviced.co/@glo-installs");
+    expect(parseProviderProfileDeepLink("https://cerviced.co/@glo-installs")).toBe(PROVIDER_SLUG);
+    expect(parseProviderProfileDeepLink("https://www.cerviced.co/@glo-installs/?igsh=abc")).toBe(PROVIDER_SLUG);
+    expect(parseProviderProfileDeepLink("https://cerviced.co/legal")).toBeNull();
+    expect(parseProviderProfileDeepLink("https://cerviced.co.evil.com/@glo-installs")).toBeNull();
+    expect(parseProviderProfileDeepLink("https://cerviced.co/@glo-installs/extra")).toBeNull();
   });
 
   it("identifies only legacy UUID targets for lookup", () => {

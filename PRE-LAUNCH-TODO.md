@@ -990,9 +990,17 @@ around it; see `supabase/MIGRATION_OWNER.md`.
 
 ## 20. LAUNCH FEATURE — Instagram-ready profile links (`cerviced.co/@handle`) (2026-10-02)
 
-Not built yet; parked on purpose to ship with the public App Store launch.
-Goal: a link a provider pastes into their Instagram bio that opens their
-CERVICED profile.
+**Built 2026-11-04 (`feat/profile-links`), except universal links.** The user
+asked for it ahead of launch. Goal: a link a provider pastes into their
+Instagram bio that opens their CERVICED profile.
+
+Done: pieces 1, 3, 4 and 5 below. The web page shows logo, name, category and
+area with "Open in CERVICED" and a waitlist link (the recommended option). The
+app accepts `https://cerviced.co/@x`; "Your profile link" is in the QR sheet on
+My Profile and on link-only Portfolio. Still to do: piece 2 (needs the Apple
+Team ID, the Android SHA-256 and a native rebuild) and piece 6 at launch.
+Until piece 2 lands, the link always opens the web page, even with the app
+installed, and "Open in CERVICED" hands over.
 
 **Decisions already made:**
 - URL shape: `cerviced.co/@<handle>`, which can't collide with site pages.

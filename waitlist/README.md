@@ -1,12 +1,15 @@
 # CERVICED waitlist site
 
 Pre-launch marketing site. **Not part of the app build** — no React Native, no
-Expo, no dependencies. Two files:
+Expo, no dependencies. The files:
 
 | File | What it is |
 |---|---|
 | `index.html` | The entire site. All CSS and JS inlined. |
 | `waitlist_signups.sql` | The table the form wants to write to. **Never applied.** |
+| `profile.html` | A provider's public link, `cerviced.co/@<slug>`, for their Instagram bio. Reads public fields of a live, active provider with the app's publishable key, and links into the app (`cerviced://provider/<slug>`). |
+| `vercel.json` | Routes `/@<handle>` to `profile.html`. |
+| `legal/index.html` | Terms, Privacy and other policies (`/legal`). |
 
 Nothing here imports from `src/`, and nothing in `src/` imports from here.
 

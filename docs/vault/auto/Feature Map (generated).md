@@ -210,7 +210,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **83 files**
 - … +53 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **62 files**
+Curated: [[Booking Flow]] · **63 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(207)_
 - `src/screens/client/BookingsScreen.tsx` _(84)_
 - `supabase/waitlist_holds.sql` _(75)_
@@ -241,7 +241,7 @@ Curated: [[Booking Flow]] · **62 files**
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
 - `supabase/fix_handle_booking_status_change_on_hold_notification.sql` _(4)_
 - `supabase/fix_provider_status_transition_guard.sql` _(4)_
-- … +32 more
+- … +33 more
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **190 files**

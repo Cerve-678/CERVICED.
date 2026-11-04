@@ -1884,7 +1884,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   onPress={() => { Haptics.selectionAsync().catch(() => {}); setProfileQrVisible(true); }}
                   activeOpacity={0.75}
                   accessibilityRole="button"
-                  accessibilityLabel="Show your profile QR code"
+                  accessibilityLabel="Show your profile link and QR code"
                 >
                   <Ionicons name="qr-code-outline" size={19} color={PP.text} />
                 </TouchableOpacity>
