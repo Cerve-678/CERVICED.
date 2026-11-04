@@ -5,7 +5,7 @@
 
 #generated
 
-**3084 functions** across **426 files**.
+**3088 functions** across **427 files**.
 
 ### `src/components/` (57)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -147,8 +147,9 @@
 - `presentation.ts` — **describeReserveFailure** · **durationToMinutes** · **findCartItemIssues** · **formatTimeSpan** · slotStartMs · **to24hMinutes** · toLabel
 - `pricing.ts` — **getCartAddOnsSummary** · **getCartItemFullPrice** · **resolveDepositPolicyArg** · **toDepositPolicy**
 
-### `src/features/explore/` (1)
+### `src/features/explore/` (2)
 - `moreLikeThis.ts` — **buildMoreLikeThis**
+- `specialityOptions.ts` — add · anyoneMatches · **buildSpecialityOptions** · curatedFor · inScope · titleCaseSpeciality
 
 ### `src/features/home/` (1)
 - `SkeletonSection.tsx` — **SkeletonSection**
@@ -298,7 +299,7 @@
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
 - `ProviderProfileScreen.tsx` — additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · formatDate · goodToKnowText · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openBookingSheet · openImageViewer · openLinkOnlyBooking · openOffersPanel · openSheets · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · ServiceDescription · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · minPickerDate · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen
-- `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
+- `SearchScreen.tsx` — activeFilterChips · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
 - `SubscriptionScreen.tsx` — SubscriptionScreen
 - `UserProfileScreen.tsx` — handleBiometricToggle · handleLogout · UserProfileScreen
 

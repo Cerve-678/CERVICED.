@@ -36,8 +36,9 @@ import { forgetCachedReads, searchProvidersAndServices, getServiceCoverImages, l
 import type { FacetService, ProviderAvailabilityStatus, ServiceSearchResult } from '../../services/databaseService';
 import { formatDurationMinutes } from '../../utils/dateUtils';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
-import { BUSINESS_TYPE_OPTS, SPECIALTIES_MAP, ALL_SPECIALTIES } from '../../features/business-details/options';
-import { matchesAnySpeciality, normalizeTerm } from '../../utils/fuzzyMatch';
+import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
+import { buildSpecialityOptions } from '../../features/explore/specialityOptions';
+import { matchesAnySpeciality } from '../../utils/fuzzyMatch';
 import userLearningService from '../../services/userLearningService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDistanceKm } from '../../utils/distance';
@@ -152,9 +153,9 @@ interface FilterOptions {
   // chosen one. Matched fuzzily (src/utils/fuzzyMatch.ts) against the union of
   // their business specialities, per-service tags and service names that
   // getProviderServiceFacets returns as specialityText, so the exact label
-  // here need not have been typed the same way by the provider. Option pool is
-  // the curated per-category SPECIALTIES_MAP, widened at render time with any
-  // real values the result set actually has (see specialityOptions).
+  // here need not have been typed the same way by the provider. The options
+  // follow the category tab, "Who it's for" and the other filters (see
+  // buildSpecialityOptions).
   specialty?: string[];
   // Straightforward provider-level boolean matches — no batched lookup
   // needed since these already ride along on the same DbProvider row
@@ -175,19 +176,6 @@ interface ProviderCardProps {
   index: number;
   P: AppTheme;
   widthStyle?: ViewStyle | undefined;
-}
-
-// A real provider tag/speciality is often stored lowercase-hyphenated
-// ("silk-press", "nail-art"); presented as a filter chip it wants to read like
-// the curated labels beside it. Normalize to words then title-case each.
-// Matching is fuzzy and case-insensitive, so this only affects display.
-function titleCaseSpeciality(raw: string): string {
-  const norm = normalizeTerm(raw);
-  if (!norm) return raw.trim();
-  return norm
-    .split(' ')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
 }
 
 // Formats a real £min–£max service-price range for the card — "£25" when
@@ -1033,60 +1021,16 @@ export default function SearchScreen({ navigation, route }: Props) {
     return matches;
   }, [specialityTextByProviderId, facetsLoaded, activeFilters.specialty]);
 
-  // The chips shown in the Speciality section. Starts from the curated list
-  // for the active category tab (the whole cross-category set on "All"), then
-  // widens with any SHORT real specialities/tags the current result set
-  // actually has — so a provider's own tag/speciality that isn't in the
-  // curated list still becomes filterable. Service names never become
-  // options; they're only matched against. A value already
-  // selected is always kept present so it stays toggle-off-able even after the
-  // category tab changes. Dedupe is by normalized form (see fuzzyMatch), so
-  // "nail-art" and "Nail art" collapse to one chip.
-  const specialityOptions = useMemo(() => {
-    const code = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
-    const curated = code ? (SPECIALTIES_MAP[code] ?? ALL_SPECIALTIES) : ALL_SPECIALTIES;
-
-    const seen = new Set<string>();
-    const out: string[] = [];
-    const add = (label: string) => {
-      const norm = normalizeTerm(label);
-      if (!norm || seen.has(norm)) return;
-      seen.add(norm);
-      out.push(label);
-    };
-
-    curated.forEach(add);
-
-    // Widen with real short values from the result set — providers' own
-    // specialities and service tags only. Service names are left out
-    // entirely: they still count when matching, but aren't specialities.
-    // Capped so the sheet stays scannable.
-    let extras = 0;
-    const EXTRA_CAP = 24;
-    for (const haystack of specialityLabelsByProviderId.values()) {
-      if (extras >= EXTRA_CAP) break;
-      for (const raw of haystack) {
-        if (extras >= EXTRA_CAP) break;
-        const tokenCount = normalizeTerm(raw).split(' ').filter(Boolean).length;
-        if (tokenCount === 0 || tokenCount > 3) continue; // skip empty + long free text
-        const label = titleCaseSpeciality(raw);
-        if (seen.has(normalizeTerm(label))) continue;
-        add(label);
-        extras += 1;
-      }
-    }
-
-    // Keep any current selection visible even if it fell outside the list.
-    (activeFilters.specialty ?? []).forEach(add);
-
-    return out;
-  }, [selectedFilter, specialityLabelsByProviderId, activeFilters.specialty]);
-
   // ── Client-side filter/sort on top of the server-searched set — category
   // and text query are already applied server-side (see the debounced effect
   // above); rating/price/distance/service-type/availability/sort narrow that
   // result set further, the same way HomeScreen's filter dropdown does. ─────
-  const filteredProviders = useMemo(() => {
+  //
+  // Split in two: every filter except Speciality first, so the Speciality
+  // chips can be built from what the other filters leave (see
+  // buildSpecialityOptions), then Speciality and the sort. null = a lookup
+  // one of the filters needs hasn't answered yet.
+  const narrowedProviders = useMemo<ProviderCardData[] | null>(() => {
     let list = [...providersWithSpecialties];
     if (!filtersAllowLinkOnly(activeFilters)) {
       list = list.filter(p => !p.isLinkOnly);
@@ -1100,14 +1044,14 @@ export default function SearchScreen({ navigation, route }: Props) {
       // follows below. Real prices arrive after the cards do, and judging a
       // provider before theirs land rejects every one of them — the client
       // would watch a full grid blink to "No providers found" and back.
-      if (!serviceMatchByProviderId) return [];
+      if (!serviceMatchByProviderId) return null;
       list = list.filter(p => serviceMatchByProviderId.has(p.providerId));
     }
     if (activeFilters.availableOnly) {
       // Don't claim a provider is bookable until the batched availability
       // lookup has answered. This makes "Available now" precise rather than
       // quietly including unknown or fully booked providers.
-      if (availabilityLoading) return [];
+      if (availabilityLoading) return null;
       list = list.filter(p => p.availability === 'available' || p.availability === 'limited');
     }
     // serviceType values are business_type's own values now — direct
@@ -1124,14 +1068,8 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.hairType) {
       // Same "don't claim a match until the batched lookup has answered" rule
       // as Available Now above — hairTypeMatchIds is null while unresolved.
-      if (!hairTypeMatchIds) return [];
+      if (!hairTypeMatchIds) return null;
       list = list.filter(p => hairTypeMatchIds.has(p.providerId));
-    }
-    if (activeFilters.specialty?.length) {
-      // Same "don't claim a match until the batched facets have answered" rule
-      // — specialityMatchIds is null while unresolved.
-      if (!specialityMatchIds) return [];
-      list = list.filter(p => specialityMatchIds.has(p.providerId));
     }
     if (activeFilters.walkInsWelcome) {
       list = list.filter(p => p.walkInsWelcome);
@@ -1141,6 +1079,48 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
     if (activeFilters.veganCrueltyFree) {
       list = list.filter(p => p.veganCrueltyFree);
+    }
+    return list;
+  }, [providersWithSpecialties, activeFilters, availabilityLoading, serviceCriteria, serviceMatchByProviderId, hairTypeMatchIds]);
+
+  // The chips shown in the Speciality section — see buildSpecialityOptions.
+  // They follow the category tab, "Who it's for", and whatever the other
+  // filters leave: with Men picked a client sees fades and beard trims, and
+  // with a price or distance on, only specialities someone left still offers.
+  // Until a lookup those filters need has answered, the unnarrowed list shows
+  // rather than an empty one.
+  const otherFiltersNarrow = !!(
+    activeFilters.priceRange || activeFilters.rating
+    || (activeFilters.distance && activeFilters.distance < 999)
+    || (activeFilters.serviceType && activeFilters.serviceType !== 'all')
+    || activeFilters.availableOnly || activeFilters.city?.length
+    || activeFilters.skinTone || activeFilters.hairType || activeFilters.audience
+    || activeFilters.walkInsWelcome || activeFilters.groupBookingsAvailable || activeFilters.veganCrueltyFree
+  );
+  const specialityOptions = useMemo(() => buildSpecialityOptions({
+    category: selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined,
+    audience: activeFilters.audience,
+    labelsByProvider: specialityLabelsByProviderId,
+    haystackByProvider: specialityTextByProviderId,
+    narrowedTo: otherFiltersNarrow && narrowedProviders && facetsLoaded
+      ? new Set(narrowedProviders.map(p => p.providerId))
+      : null,
+    selected: activeFilters.specialty ?? [],
+  }), [
+    selectedFilter, activeFilters.audience, activeFilters.specialty, specialityLabelsByProviderId,
+    specialityTextByProviderId, otherFiltersNarrow, narrowedProviders, facetsLoaded,
+  ]);
+
+  const filteredProviders = useMemo(() => {
+    if (!narrowedProviders) return [];
+    let list = narrowedProviders;
+    if (activeFilters.specialty?.length) {
+      // Same "don't claim a match until the batched facets have answered" rule
+      // — specialityMatchIds is null while unresolved.
+      if (!specialityMatchIds) return [];
+      list = list.filter(p => specialityMatchIds.has(p.providerId));
+    } else {
+      list = [...list];
     }
 
     if (activeFilters.sortBy === 'rating') {
@@ -1168,7 +1148,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithSpecialties, activeFilters, availabilityLoading, serviceCriteria, serviceMatchByProviderId, hairTypeMatchIds, specialityMatchIds]);
+  }, [narrowedProviders, activeFilters.specialty, activeFilters.sortBy, serviceMatchByProviderId, specialityMatchIds]);
 
   // "In search" on a link-only provider's Analytics. Counted once per provider
   // per search (query + category), and only once the result set has settled —
