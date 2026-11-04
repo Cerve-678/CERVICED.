@@ -100,6 +100,7 @@ import {
 } from "../../constants/providerThemes";
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
+import { providerProfileWebLink } from "../../utils/providerProfileDeepLink";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { slotsPillText } from "../../utils/slotsRowText";
@@ -2220,10 +2221,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const handleShare = useCallback(async () => {
     if (!provider) return;
     try {
+      // provider.id is the public slug (profileMapper). iOS shows `url` as
+      // the link and Android ignores it, so the message carries it there.
+      const link = providerProfileWebLink(provider.id);
       const shareOptions = {
-        message: `Check out @${provider.providerName} - ${provider.providerService} services in ${provider.location}. Rated ${provider.rating}/5 stars!`,
-        title: `${provider.providerName} - ${provider.providerService}`,
-        url: `https://app.yourapp.com/provider/${provider.id}`, // Replace with your app URL
+        message: Platform.OS === "ios"
+          ? `Check out ${provider.providerName} on CERVICED`
+          : `Check out ${provider.providerName} on CERVICED: ${link}`,
+        title: `${provider.providerName} on CERVICED`,
+        url: link,
       };
 
       const result = await Share.share(shareOptions);

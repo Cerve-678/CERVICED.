@@ -429,7 +429,7 @@
 - `performance.ts` — for
 - `policyDisplay.ts` — buildLinkOnlyPolicyRows · **buildPolicyDisplayRows** · **buildPolicySnapshot** · **cancellationNoticeHours** · feeLabel · **noticeChoiceForHours** · **noticeHoursToSave** · pushRow · pushWrittenPolicies · **readProviderTermsSnapshot** · rescheduleSummary · sectionRow
 - `providerPriceMatch.ts` — **priceRangeMatchesBucket** · **priceSortKey** · **resolveProviderPriceRange**
-- `providerProfileDeepLink.ts` — **isProviderProfileUuid** · **parseProviderProfileDeepLink** · **providerProfileDeepLink**
+- `providerProfileDeepLink.ts` — **isProviderProfileUuid** · **parseProviderProfileDeepLink** · **providerProfileDeepLink** · **providerProfileWebLink**
 - `readCache.ts` — cachedFetch · clear · **createReadCache** · **isCacheableRead** · **isWriteRequest** · pathOf · **readRequestKey** · requestMethod · requestUrl · that · tooLargeToKeep
 - `regionStore.ts` — **getRegion** · **setRegion**
 - `reorderCategories.ts` — exists · **reorderCategoriesWithinType**

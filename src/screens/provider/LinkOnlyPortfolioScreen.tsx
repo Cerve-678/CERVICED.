@@ -45,6 +45,8 @@ import { uploadToStorage } from '../../services/providerRegistrationService';
 import type { DbPortfolioItem } from '../../types/database';
 import { toUserMessage } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
+import { ProviderProfileQrSheet } from '../../components/ProviderProfileQrSheet';
+import { providerProfileWebLink } from '../../utils/providerProfileDeepLink';
 
 const GAP = 8;
 
@@ -62,6 +64,7 @@ export default function LinkOnlyPortfolioScreen() {
   const [profile, setProfile] = useState<DbProvider | null>(null);
   const [photos, setPhotos] = useState<DbPortfolioItem[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [linkSheetVisible, setLinkSheetVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [serviceCategories, setServiceCategories] = useState<string[]>([]);
   const [specialties, setSpecialties] = useState<string[]>([]);
@@ -261,6 +264,22 @@ export default function LinkOnlyPortfolioScreen() {
                   <Ionicons name="chevron-forward" size={16} color={P.accent} />
                 </View>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setLinkSheetVisible(true); }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Your profile link for Instagram"
+              >
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardTitle}>Your profile link</Text>
+                  <Ionicons name="link-outline" size={18} color={P.accent} />
+                </View>
+                <Text style={styles.cardSub}>Put it in your Instagram bio so clients can open your profile.</Text>
+                <Text style={styles.cardAction} numberOfLines={1}>
+                  {providerProfileWebLink(profile.slug).replace('https://', '')}
+                </Text>
+              </TouchableOpacity>
             </>
           )}
           {providerId && !failed && photos != null && (
@@ -371,6 +390,20 @@ export default function LinkOnlyPortfolioScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+      {profile ? (
+        <ProviderProfileQrSheet
+          visible={linkSheetVisible}
+          providerSlug={profile.slug}
+          providerName={profile.display_name || 'your business'}
+          isLive={profile.has_gone_live}
+          accentColor={P.accent}
+          backgroundColor={P.card}
+          textColor={P.text}
+          subtextColor={P.sub}
+          borderColor={P.border}
+          onClose={() => setLinkSheetVisible(false)}
+        />
+      ) : null}
     </ThemedBackground>
   );
 }

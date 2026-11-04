@@ -19,7 +19,10 @@
         "NSLocationWhenInUseUsageDescription": "This app uses your location to show nearby beauty service providers.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIUserInterfaceStyle": "Light"
-      }
+      },
+      "associatedDomains": [
+        "applinks:www.cerviced.co"
+      ]
     },
     "android": {
       "package": "com.cerviced.app",
@@ -42,7 +45,24 @@
         "googleMaps": {
           "apiKey": "PLACEHOLDER_FOR_ANDROID_GOOGLE_MAPS_KEY"
         }
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.cerviced.co",
+              "pathPrefix": "/@"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "platforms": [
       "ios",

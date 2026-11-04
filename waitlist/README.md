@@ -1,14 +1,21 @@
 # CERVICED waitlist site
 
 Pre-launch marketing site. **Not part of the app build** — no React Native, no
-Expo, no dependencies. Two files:
+Expo, no dependencies. The files:
 
 | File | What it is |
 |---|---|
 | `index.html` | The entire site. All CSS and JS inlined. |
 | `waitlist_signups.sql` | The table the form wants to write to. **Never applied.** |
+| `open-profile.html` | Behind a provider's link, `www.cerviced.co/@<slug>`, for their Instagram bio. No profile is shown on the web. With the app installed, universal links open the profile in the app and this page never loads; otherwise it opens the app (Android, or Instagram's in-app browser) or sends the visitor to the store. `APP_STORE_LIVE` / `PLAY_STORE_LIVE` at the top switch the fallback from this site to the stores at launch. |
+| `vercel.json` | Routes `/@<handle>` to `open-profile.html`, and serves the Apple app-association file as JSON. |
+| `.well-known/apple-app-site-association` | Tells iOS that `www.cerviced.co/@…` links belong to the app. Needs the Apple Team ID. |
+| `legal/index.html` | Terms, Privacy and other policies (`/legal`). |
 
 Nothing here imports from `src/`, and nothing in `src/` imports from here.
+
+Universal links are checked on `www.cerviced.co` only: the bare domain
+redirects to www, and Apple won't follow a redirect for the association file.
 
 ---
 

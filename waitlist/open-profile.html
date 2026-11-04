@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Opening CERVICED</title>
+<style>
+/* A provider's link (www.cerviced.co/@handle), for an Instagram bio. There is
+   no profile on the web: with the app installed, universal links open the
+   profile in the app before this page loads. This page only runs when that
+   didn't happen, and sends the visitor to the app or the store. */
+:root{ --bg:#F5F1EC; --text:#000000; --sub:#7E6667 }
+@media (prefers-color-scheme: dark){ :root{ --bg:#1A1815; --text:#F0ECE7; --sub:#9C8A8B } }
+html,body{ margin:0; background:var(--bg); color:var(--text) }
+body{
+  min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; padding:0 16px; text-align:center;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+.mark{ font-weight:800; font-size:20px; letter-spacing:3px }
+p{ color:var(--sub); font-size:15px; margin:10px 0 0 }
+a{ color:inherit }
+</style>
+</head>
+<body>
+<div class="mark">CERVICED</div>
+<p id="status">Opening CERVICED…</p>
+
+<script>
+(function () {
+  // Flip each to true the day the app is live in that store. Until then,
+  // anyone without the app lands on the waitlist.
+  var APP_STORE_LIVE = false;
+  var PLAY_STORE_LIVE = false;
+  var APP_STORE_URL = 'https://apps.apple.com/gb/app/id6761615066';
+  var PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.cerviced.app';
+  var HOME_URL = 'https://www.cerviced.co/';
+
+  var ua = navigator.userAgent || '';
+  var isAndroid = /Android/i.test(ua);
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  // Instagram, Facebook and TikTok open links in their own browser, which
+  // ignores universal links, so someone with the app can still land here.
+  var inAppBrowser = /Instagram|FBAN|FBAV|TikTok|musical_ly/i.test(ua);
+
+  var storeUrl = isAndroid
+    ? (PLAY_STORE_LIVE ? PLAY_STORE_URL : HOME_URL)
+    : (APP_STORE_LIVE ? APP_STORE_URL : HOME_URL);
+
+  var match = /^\/@([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/i.exec(location.pathname);
+  if (!match) { location.replace(HOME_URL); return; }
+  var appUrl = 'cerviced://provider/' + match[1].toLowerCase();
+
+  document.getElementById('status').innerHTML =
+    'If nothing happens, <a href="' + storeUrl + '">get CERVICED</a>.';
+
+  if (isAndroid) {
+    // Opens the app if it's installed, otherwise Chrome follows the fallback.
+    location.replace('intent://provider/' + match[1].toLowerCase()
+      + '#Intent;scheme=cerviced;package=com.cerviced.app;S.browser_fallback_url='
+      + encodeURIComponent(storeUrl) + ';end');
+    return;
+  }
+
+  if (isIOS && inAppBrowser) {
+    // Try the app; if the page is still showing shortly after, it isn't installed.
+    var left = false;
+    document.addEventListener('visibilitychange', function () { if (document.hidden) left = true; });
+    location.href = appUrl;
+    setTimeout(function () { if (!left) location.replace(storeUrl); }, 1500);
+    return;
+  }
+
+  // Safari with the app installed never reaches this page (universal links),
+  // and Safari can't try cerviced:// without an error alert when it's missing.
+  location.replace(storeUrl);
+})();
+</script>
+</body>
+</html>

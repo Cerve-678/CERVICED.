@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import {
   Modal,
+  Platform,
   Pressable,
   Share,
   StyleSheet,
@@ -11,7 +12,7 @@ import {
 import QRCode from "react-native-qrcode-svg";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { providerProfileDeepLink } from "../utils/providerProfileDeepLink";
+import { providerProfileDeepLink, providerProfileWebLink } from "../utils/providerProfileDeepLink";
 import { isDarkColor } from '../constants/providerThemes';
 
 type Props = {
@@ -28,7 +29,8 @@ type Props = {
   onClose: () => void;
 };
 
-/** Provider-owned, print-friendly QR for their public in-app profile. */
+/** Provider-owned link for an Instagram bio, plus a print-friendly QR for
+ *  their public in-app profile. */
 export function ProviderProfileQrSheet({
   visible,
   providerSlug,
@@ -42,14 +44,19 @@ export function ProviderProfileQrSheet({
   onClose,
 }: Props) {
   const deepLink = providerProfileDeepLink(providerSlug);
+  // Shared as https: Instagram, WhatsApp and most apps won't open a
+  // cerviced:// link. It opens the app, or the store for people without it.
+  const webLink = providerProfileWebLink(providerSlug);
   const share = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await Share.share({
       title: `${providerName} on CERVICED`,
-      message: `Open ${providerName}'s profile in CERVICED: ${deepLink}`,
-      url: deepLink,
+      // iOS shows `url` as the link and Android ignores it, so the message
+      // carries the link too. The iOS share sheet's Copy copies `url`.
+      message: Platform.OS === 'ios' ? `${providerName} on CERVICED` : webLink,
+      url: webLink,
     });
-  }, [deepLink, providerName]);
+  }, [webLink, providerName]);
 
   return (
     <Modal
@@ -66,16 +73,26 @@ export function ProviderProfileQrSheet({
         >
           <View style={[styles.handle, { backgroundColor: borderColor }]} />
           <View style={[styles.icon, { backgroundColor: `${accentColor}1F` }]}>
-            <Ionicons name="qr-code-outline" size={23} color={accentColor} />
+            <Ionicons name="link-outline" size={23} color={accentColor} />
           </View>
           <Text style={[styles.title, { color: textColor }]}>
-            Your profile QR
+            Your profile link
           </Text>
           <Text style={[styles.copy, { color: subtextColor }]}>
             {isLive
-              ? `Clients with the CERVICED app can scan this to open ${providerName}.`
-              : "This code starts working once your profile is live."}
+              ? "Put it in your Instagram bio. It opens your profile in the CERVICED app, or takes them to download it."
+              : "Your link and QR code start working once your profile is live."}
           </Text>
+          <View style={[styles.linkBox, { borderColor }]}>
+            <Text
+              style={[styles.linkText, { color: textColor }]}
+              selectable
+              numberOfLines={1}
+              accessibilityLabel={`Your profile link, ${webLink}`}
+            >
+              {webLink.replace("https://", "")}
+            </Text>
+          </View>
           <View
             style={styles.qrFrame}
             accessible
@@ -83,14 +100,14 @@ export function ProviderProfileQrSheet({
           >
             <QRCode
               value={deepLink}
-              size={220}
+              size={180}
               color="#171411"
               backgroundColor="#FFFFFF"
               ecl="M"
             />
           </View>
           <Text style={[styles.hint, { color: subtextColor }]}>
-            Keep it by your chair, on a card, or at your front desk.
+            Clients with the app can scan this. Keep it by your chair, on a card, or at your front desk.
           </Text>
           <TouchableOpacity
             style={[styles.shareButton, { backgroundColor: accentColor }]}
@@ -98,7 +115,7 @@ export function ProviderProfileQrSheet({
             activeOpacity={0.85}
           >
             <Ionicons name="share-outline" size={18} color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} />
-            <Text style={[styles.shareText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>SHARE PROFILE LINK</Text>
+            <Text style={[styles.shareText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>SHARE OR COPY LINK</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.closeButton}
@@ -147,8 +164,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
     maxWidth: 300,
   },
+  linkBox: {
+    alignSelf: "stretch",
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    marginTop: 18,
+  },
+  linkText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   qrFrame: {
-    marginTop: 22,
+    marginTop: 18,
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 16,
@@ -163,7 +194,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     textAlign: "center",
-    marginTop: 16,
+    marginTop: 14,
+    maxWidth: 300,
   },
   shareButton: {
     flexDirection: "row",
