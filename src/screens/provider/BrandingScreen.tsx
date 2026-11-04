@@ -40,6 +40,7 @@ import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } f
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
 import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
+import { ImageCropModal } from '../../components/ImageCropModal';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -101,6 +102,7 @@ export default function BrandingScreen({ navigation }: any) {
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
   const [lockedOpen, setLockedOpen]           = useState(false);
+  const [imageToCrop, setImageToCrop]         = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -171,15 +173,20 @@ export default function BrandingScreen({ navigation }: any) {
       Alert.alert('Permission needed', 'Allow access to your photo library to set a background image.');
       return;
     }
+    // No allowsEditing: iOS's editor ignores `aspect` and only crops to a
+    // square, which cut most of a portrait photo away. ImageCropModal starts
+    // on the whole photo instead, so leaving it alone keeps the full image.
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [9, 16],
+      mediaTypes: ['images'],
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
+    setImageToCrop(result.assets[0].uri);
+  }, [userId]);
 
-    const localUri = result.assets[0].uri;
+  const handleImageCropped = useCallback(async (localUri: string) => {
+    setImageToCrop(null);
+    if (!userId) return;
     const previousImage = backgroundImage;
     // The provider chose this image already; show it now, rather than making
     // the preview wait for the storage upload to finish.
@@ -288,6 +295,13 @@ export default function BrandingScreen({ navigation }: any) {
   return (
     <View style={[styles.bg, { backgroundColor: P.bg }]}>
       <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <ImageCropModal
+        uri={imageToCrop}
+        accent={P.accent}
+        onAccent={isDarkColor(P.accent) ? '#FFFFFF' : '#1A1815'}
+        onCancel={() => setImageToCrop(null)}
+        onDone={handleImageCropped}
+      />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
