@@ -5,7 +5,7 @@
 
 #generated
 
-**39 service modules.** Curated overview: [[Services]].
+**40 service modules.** Curated overview: [[Services]].
 
 ### `src/services/acuityTransferService.ts`
 `transferFromAcuity`
@@ -54,6 +54,9 @@ _no named exports_
 
 ### `src/services/becca/nvidiaInterpreter.ts`
 `nvidiaBeccaInterpreter`
+
+### `src/services/becca/providerNavigation.ts`
+`isProviderNavigationAsk` · `providerDestination`
 
 ### `src/services/becca/registry.ts`
 `capabilitiesFor` · `fitsSetup` · `getCapability` · `thinkingFor` · `toToolSchema`

@@ -46,6 +46,7 @@ Curated overview: [[Screens & Navigation]].
 - `Analytics`
 - `BookingHistory`
 - `Automations`
+- `Payments`
 - `ProfileMain`
 - `ProfileInfo`
 - `BeautyProfile`
@@ -72,7 +73,6 @@ Curated overview: [[Screens & Navigation]].
 - `EditProfile`
 - `Branding`
 - `Policies`
-- `Payments`
 - `BusinessInfo`
 - `ProviderIntakeForm`
 - `ProviderServicesMain`

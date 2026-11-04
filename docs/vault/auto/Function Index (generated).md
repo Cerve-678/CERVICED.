@@ -5,7 +5,7 @@
 
 #generated
 
-**3081 functions** across **425 files**.
+**3084 functions** across **426 files**.
 
 ### `src/components/` (57)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -305,7 +305,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · handleImageCropped · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
@@ -372,7 +372,7 @@
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
 - `ukGeocode.ts` — **geocodeUkPlace** · **isInUk**
 
-### `src/services/becca/` (10)
+### `src/services/becca/` (11)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
 - `askNormaliser.ts` — **normalizeAsk**
 - `engine.ts` — answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
@@ -380,6 +380,7 @@
 - `matcher.ts` — containsGappedPhrase · escape · plainAsk · scoreEntities · scorePhrases · **understand**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
 - `nvidiaInterpreter.ts` — validComposition · validInterpretation
+- `providerNavigation.ts` — **isProviderNavigationAsk** · **providerDestination**
 - `registry.ts` — **capabilitiesFor** · **fitsSetup** · **getCapability** · **thinkingFor** · **toToolSchema**
 - `smallTalk.ts` — asksBack · classify · plain · readings · **smallTalkReply**
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**

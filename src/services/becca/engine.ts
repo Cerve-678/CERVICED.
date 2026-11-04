@@ -39,6 +39,7 @@ import { smallTalkReply } from "./smallTalk";
 import { askChip, chip, dayLabel, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
+import { providerDestination } from "./providerNavigation";
 
 export interface EngineInput {
   message: string;
@@ -378,6 +379,25 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     );
   }
 
+  if (hat === "provider" && /^(?:how (?:do|can) i |where (?:do|can) i )(?:change|edit|set|find|update) (?:this|that|it)[?!.]*$/i.test(message.trim())) {
+    const previous = conversation?.lastCapabilityId;
+    const topic = previous === "pv.app_navigation" ? conversation?.lastNavigationAsk
+      : previous === "pv.hours" || previous === "pv.timeoff" || previous === "pv.today" ? "schedule"
+      : previous === "pv.capacity" ? "booking rules"
+      : undefined;
+    const destination = topic ? providerDestination(topic) : undefined;
+    if (destination) {
+      const linkOnly = isLinkOnlyTurn(hat);
+      const screen = linkOnly && destination.fullBookingOnly ? "schedule" : destination.screen;
+      return message_({
+        content: linkOnly && destination.fullBookingOnly
+          ? `That setting is managed on your own booking site. You can edit the opening hours shown on your CERVICED profile here.`
+          : `Go to **${destination.path}**. ${destination.detail}`,
+        suggestions: [navChip("change-setting", linkOnly && destination.fullBookingOnly ? "Open Opening Hours" : `Open ${destination.title}`, screen)],
+      }, hat);
+    }
+  }
+
   // A short social turn should feel like a conversation, not an intent that
   // failed to parse. Keep this deliberately narrow: "hi, can you find nails?"
   // is a real request and must continue through the capability matcher.
@@ -465,6 +485,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     ...(conversation?.lastCapabilityId
       ? { lastCapabilityId: conversation.lastCapabilityId }
       : {}),
+    ...(conversation?.lastNavigationAsk ? { lastNavigationAsk: conversation.lastNavigationAsk } : {}),
     ...(conversation?.lastProviders
       ? { lastProviders: conversation.lastProviders }
       : {}),
@@ -736,6 +757,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     hat,
     entities,
     lastCapabilityId: capability.id,
+    ...(capability.id === "pv.app_navigation" ? { lastNavigationAsk: ask } : {}),
     ...(entities.booking ? { lastBooking: entities.booking } : conversation?.lastBooking ? { lastBooking: conversation.lastBooking } : {}),
     // A turn that shows no providers must NOT erase the list the user is
     // still looking at: "find nails" -> "any free Saturday?" -> "none" ->
