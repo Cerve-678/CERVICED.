@@ -50,7 +50,7 @@ import {
   getRefundRequestsForBooking,
 } from '../../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
-import { clientRequestNote } from '../../features/bookings/requestWindow';
+import { clientRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
@@ -951,7 +951,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#FF9500' }}>Awaiting Confirmation</Text>
                   <Text style={{ fontSize: 12, color: C.sub, marginTop: 2, lineHeight: 17 }}>
-                    {clientRequestNote(booking.providerName)}
+                    {clientRequestNote(
+                      booking.providerName,
+                      requestAnswerDeadline(new Date(booking.createdAt), createBookingDateTime(booking.bookingDate, booking.bookingTime)),
+                    )}
                   </Text>
                 </View>
               </View>

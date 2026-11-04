@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Pending: booking requests answered by an hour before
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261104120000 | `booking_requests_answer_by_an_hour_before` | **NOT APPLIED** (branch `feat/request-answer-deadline`). Adds `booking_request_deadline` and three notification helpers, switches `process_expire_stale_pending_bookings` to the new deadline, patches the provider's request notification in `handle_new_booking`, `claim_cart_booking_slots`, `finalize_checkout` and `claim_waitlist_hold` on their live definitions (md5-guarded, each replacement count checked), and moves the `expire-stale-pending-bookings` cron to every 5 minutes. Read-only check against live on 2026-11-04: every md5 matched and every replacement found exactly the expected text. Apply, then merge the app. |
+
 ### Applied 2026-11-03 (admin dashboard, developer tools admin-only)
 
 | Authored version | Name | Status |
