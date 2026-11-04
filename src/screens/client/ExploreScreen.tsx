@@ -24,6 +24,7 @@ import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
 import { shuffle } from '../../utils/shuffle';
+import { spreadApart, type SpreadRule } from '../../utils/spreadApart';
 import { pickTourCardId } from '../../utils/coachMarkTargets';
 import { mergeSavedExploreCards } from '../../utils/mergeSavedExploreCards';
 import { ExploreStackParamList } from '../../navigation/types';
@@ -125,6 +126,18 @@ function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
     return true;
   });
 }
+
+// The DB hands rows back in upload order, so a provider who posts ten photos at
+// once, or one service's whole carousel, arrives as a block, and a shuffle
+// inside one page can't scatter a block that big. After mixing, nothing from
+// the same provider sits within six cards of itself, and the same category
+// isn't shown three in a row where something else is available.
+const EXPLORE_SPREAD: SpreadRule<PortfolioItem>[] = [
+  { keyOf: card => card.providerSlug ?? card.providerId, gap: 6 },
+  { keyOf: card => card.category, gap: 2 },
+];
+// How much of the feed already on screen a new page is spread against.
+const EXPLORE_SPREAD_LOOKBACK = 8;
 
 function interleaveDiscoverFeed(
   portfolioCards: PortfolioItem[],
@@ -541,10 +554,9 @@ const ExploreScreen = memo(() => {
     // own rows here, before interleaveDiscoverFeed mixes the two types
     // together, is what actually randomizes the feed — without it the same
     // provider's photos (or the same top-rated providers) reliably cluster/
-    // repeat in the same run every load. Shuffled at the row level (before
-    // serviceData's flatMap), not after, so a single service's own carousel
-    // photos stay adjacent to each other instead of scattering across the
-    // feed.
+    // repeat in the same run every load. spreadApart then breaks up whatever
+    // still clumps — one provider's batch of uploads, one service's carousel
+    // photos, a run of one category (see EXPLORE_SPREAD).
     // Deduped across both sources before interleaving — the same photo
     // file can arrive from both (see dedupeByImageUri). Order matters:
     // portfolio cards are passed first so they win over a service photo
@@ -553,9 +565,12 @@ const ExploreScreen = memo(() => {
     const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
     const deduped = dedupeByImageUri([...portfolioCards, ...serviceCards]);
     const keep = new Set(deduped.map(c => c.id));
-    const feed = interleaveDiscoverFeed(
-      portfolioCards.filter(c => keep.has(c.id)),
-      serviceCards.filter(c => keep.has(c.id)),
+    const feed = spreadApart(
+      interleaveDiscoverFeed(
+        portfolioCards.filter(c => keep.has(c.id)),
+        serviceCards.filter(c => keep.has(c.id)),
+      ),
+      EXPLORE_SPREAD,
     );
     discoverFeedCache.current.set(filter, feed);
     discoverPageCursors.current.set(filter, {
@@ -609,15 +624,21 @@ const ExploreScreen = memo(() => {
             .map(card => (card.image as { uri?: string } | undefined)?.uri)
             .filter((uri): uri is string => Boolean(uri)),
         );
-        const portfolioCards = portfolioData.map(mapDbPortfolioItem);
-        const serviceCards = serviceData.flatMap(mapDbServiceToCards);
-        const nextCards = interleaveDiscoverFeed(portfolioCards, serviceCards)
-          .filter(card => {
-            const uri = (card.image as { uri?: string } | undefined)?.uri;
-            if (!uri || knownUris.has(uri)) return false;
-            knownUris.add(uri);
-            return true;
-          });
+        // Shuffled and spread like the first page, and against the end of
+        // what's already showing so the join doesn't clump either.
+        const portfolioCards = shuffle(portfolioData).map(mapDbPortfolioItem);
+        const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
+        const nextCards = spreadApart(
+          interleaveDiscoverFeed(portfolioCards, serviceCards)
+            .filter(card => {
+              const uri = (card.image as { uri?: string } | undefined)?.uri;
+              if (!uri || knownUris.has(uri)) return false;
+              knownUris.add(uri);
+              return true;
+            }),
+          EXPLORE_SPREAD,
+          existing.slice(-EXPLORE_SPREAD_LOOKBACK),
+        );
         const updated = [...existing, ...nextCards];
         discoverFeedCache.current.set(filter, updated);
         return updated;
