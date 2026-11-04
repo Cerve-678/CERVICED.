@@ -74,3 +74,9 @@ it('never leaves a stray backslash in a place name', () => {
     for (const { areas } of regions) for (const area of areas) expect(area).not.toContain('\\');
   }
 });
+
+it('lists the Hackney neighbourhoods between Dalston and Shoreditch', () => {
+  expect(searchPlaces('haggerston')).toEqual([{ kind: 'area', name: 'Haggerston', town: 'London' }]);
+  expect(searchPlaces('hoxton')).toEqual([{ kind: 'area', name: 'Hoxton', town: 'London' }]);
+  expect(searchPlaces('london fields')).toContainEqual({ kind: 'area', name: 'London Fields', town: 'London' });
+});
