@@ -135,6 +135,7 @@ export type ProviderBeccaStackParamList = {
   Analytics: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Automations: undefined;
+  Payments: undefined;
 };
 
 // Cart Stack

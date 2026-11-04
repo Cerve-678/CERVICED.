@@ -474,6 +474,8 @@ export interface ConversationContext {
   entities: EntityBag;
   /** What Becca answered last, so "the first one" knows what list it means. */
   lastCapabilityId?: string;
+  /** Provider setting just located, for "how do I change this?" follow-ups. */
+  lastNavigationAsk?: string;
   /** The exact booking most recently discussed, for explicit follow-ups. */
   lastBooking?: NonNullable<EntityBag["booking"]>;
   /**

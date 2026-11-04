@@ -9,6 +9,7 @@ import type { BeccaHat, EntityBag, Understanding } from "./types";
 import { scoreToConfidence } from "./types";
 import { capabilitiesFor } from "./registry";
 import { containsPhrase } from "./entityResolver";
+import { isProviderNavigationAsk } from "./providerNavigation";
 
 /**
  * Scores a capability's phrase list against the message.
@@ -87,6 +88,19 @@ export function understand(
   if (named) {
     return {
       capabilityId: named.id,
+      entities,
+      confidence: "high",
+      score: 1,
+      alternatives: [],
+      rawMessage: message,
+    };
+  }
+
+  // An explicit request to FIND or CHANGE a provider control is different
+  // from a question about its current value ("what are my hours?").
+  if (hat === "provider" && isProviderNavigationAsk(message)) {
+    return {
+      capabilityId: "pv.app_navigation",
       entities,
       confidence: "high",
       score: 1,
