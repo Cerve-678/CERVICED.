@@ -45,7 +45,7 @@ export function ProviderProfileQrSheet({
 }: Props) {
   const deepLink = providerProfileDeepLink(providerSlug);
   // Shared as https: Instagram, WhatsApp and most apps won't open a
-  // cerviced:// link, and the web page works for people without the app.
+  // cerviced:// link. It opens the app, or the store for people without it.
   const webLink = providerProfileWebLink(providerSlug);
   const share = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -80,7 +80,7 @@ export function ProviderProfileQrSheet({
           </Text>
           <Text style={[styles.copy, { color: subtextColor }]}>
             {isLive
-              ? "Put it in your Instagram bio. It opens your profile, with or without the app."
+              ? "Put it in your Instagram bio. It opens your profile in the CERVICED app, or takes them to download it."
               : "Your link and QR code start working once your profile is live."}
           </Text>
           <View style={[styles.linkBox, { borderColor }]}>

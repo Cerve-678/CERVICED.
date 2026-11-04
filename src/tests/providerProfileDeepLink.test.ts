@@ -39,7 +39,7 @@ describe("provider profile QR deep links", () => {
   });
 
   it("builds and reads back the cerviced.co/@handle link for an Instagram bio", () => {
-    expect(providerProfileWebLink("Glo-Installs ")).toBe("https://cerviced.co/@glo-installs");
+    expect(providerProfileWebLink("Glo-Installs ")).toBe("https://www.cerviced.co/@glo-installs");
     expect(parseProviderProfileDeepLink("https://cerviced.co/@glo-installs")).toBe(PROVIDER_SLUG);
     expect(parseProviderProfileDeepLink("https://www.cerviced.co/@glo-installs/?igsh=abc")).toBe(PROVIDER_SLUG);
     expect(parseProviderProfileDeepLink("https://cerviced.co/legal")).toBeNull();

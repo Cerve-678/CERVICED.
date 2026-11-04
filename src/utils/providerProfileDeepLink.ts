@@ -5,8 +5,9 @@ const PROVIDER_PROFILE_LINK = new RegExp(
   `^cerviced://provider/(${UUID}|${SLUG})(?:[/?#]|$)`,
   "i",
 );
-// The public link a provider puts in their Instagram bio. It opens a web page
-// on cerviced.co (waitlist/profile.html), so it works without the app.
+// The link a provider puts in their Instagram bio. With the app installed it
+// opens the profile in the app (universal links); without, the redirect at
+// waitlist/open-profile.html sends them to the store.
 const PROVIDER_WEB_LINK = new RegExp(
   `^https?://(?:www\\.)?cerviced\\.co/@(${SLUG})/?(?:[?#]|$)`,
   "i",
@@ -23,9 +24,11 @@ export function providerProfileDeepLink(providerSlug: string): string {
 }
 
 /** The https link for sharing a profile: Instagram bios, WhatsApp, anywhere
- *  an app-scheme link wouldn't be tappable. */
+ *  an app-scheme link wouldn't be tappable. www, not the bare domain: the
+ *  bare domain redirects to www, and Apple won't follow a redirect when it
+ *  checks which app the link belongs to. */
 export function providerProfileWebLink(providerSlug: string): string {
-  return `https://cerviced.co/@${providerSlug.trim().toLowerCase()}`;
+  return `https://www.cerviced.co/@${providerSlug.trim().toLowerCase()}`;
 }
 
 /** Returns a provider slug or legacy provider UUID for an exact CERVICED QR/deep-link or web link. */

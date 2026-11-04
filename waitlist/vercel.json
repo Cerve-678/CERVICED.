@@ -1,5 +1,11 @@
 {
   "rewrites": [
-    { "source": "/@:handle", "destination": "/profile.html" }
+    { "source": "/@:handle", "destination": "/open-profile.html" }
+  ],
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    }
   ]
 }

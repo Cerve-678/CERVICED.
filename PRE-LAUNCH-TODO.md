@@ -990,17 +990,22 @@ around it; see `supabase/MIGRATION_OWNER.md`.
 
 ## 20. LAUNCH FEATURE — Instagram-ready profile links (`cerviced.co/@handle`) (2026-10-02)
 
-**Built 2026-11-04 (`feat/profile-links`), except universal links.** The user
-asked for it ahead of launch. Goal: a link a provider pastes into their
-Instagram bio that opens their CERVICED profile.
+**Built 2026-11-04 (`feat/profile-links`, PR #313).** The user asked for it
+ahead of launch. Goal: a link a provider pastes into their Instagram bio that
+opens their CERVICED profile.
 
-Done: pieces 1, 3, 4 and 5 below. The web page shows logo, name, category and
-area with "Open in CERVICED" and a waitlist link (the recommended option). The
-app accepts `https://cerviced.co/@x`; "Your profile link" is in the QR sheet on
-My Profile and on link-only Portfolio. Still to do: piece 2 (needs the Apple
-Team ID, the Android SHA-256 and a native rebuild) and piece 6 at launch.
-Until piece 2 lands, the link always opens the web page, even with the app
-installed, and "Open in CERVICED" hands over.
+**Decided 2026-11-04 (user):** no profile on the web. With the app installed,
+the link opens the provider's profile in the app; without it, it goes to the
+App Store / Play Store (to cerviced.co until the app is live there). This
+replaces "Still to decide" below. The link is `www.cerviced.co/@<slug>`
+because the bare domain redirects, which breaks Apple's association check.
+
+Done: `waitlist/open-profile.html` (redirect only), `app.json`
+associatedDomains + Android intentFilters, the app parsing the https link, and
+"Your profile link" in the QR sheet and on link-only Portfolio.
+Still needed: the Apple Team ID for `apple-app-site-association`, the Android
+signing SHA-256 for `assetlinks.json`, a native rebuild, and flipping
+`APP_STORE_LIVE` / `PLAY_STORE_LIVE` in `open-profile.html` at launch.
 
 **Decisions already made:**
 - URL shape: `cerviced.co/@<handle>`, which can't collide with site pages.
