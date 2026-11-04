@@ -30,7 +30,7 @@ describe('resolveClientLocation', () => {
     const result = await resolveClientLocation();
     expect(result.source).toBe('gps');
     expect(result.isCoarse).toBe(false);
-    expect(result.cityLabel).toBeNull();
+    expect(result.placeLabel).toBeNull();
   });
 
   it('flags a fix too vague to present as a position', async () => {
@@ -49,7 +49,7 @@ describe('resolveClientLocation', () => {
     expect((await resolveClientLocation()).isCoarse).toBe(false);
   });
 
-  it('falls back to the saved city, and says that is what it did', async () => {
+  it('falls back to a saved city, and says that is what it did', async () => {
     Location.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'denied' });
     storage.getItem.mockResolvedValue('Manchester, UK');
     Location.geocodeAsync.mockResolvedValue([{ latitude: 53.48, longitude: -2.24 }]);
@@ -58,9 +58,42 @@ describe('resolveClientLocation', () => {
     // A centroid is exact as a coordinate and wrong as a position, so the
     // caller must be able to tell it apart from a real fix — that is the whole
     // point of `source` existing rather than callers checking for null coords.
-    expect(result.source).toBe('saved-city');
-    expect(result.cityLabel).toBe('Manchester, UK');
+    expect(result.source).toBe('saved-place');
+    expect(result.placeLabel).toBe('Manchester, UK');
     expect(result.isCoarse).toBe(false);
+  });
+
+  it('measures from a picked neighbourhood ahead of the device', async () => {
+    // The client chose Dalston on purpose; a GPS fix from wherever they
+    // happen to be standing shouldn't quietly overrule that.
+    storage.getItem.mockResolvedValue('Dalston, London');
+    Location.geocodeAsync.mockResolvedValue([{ latitude: 51.546, longitude: -0.075 }]);
+
+    const result = await resolveClientLocation();
+    expect(result).toEqual({
+      coords: { latitude: 51.546, longitude: -0.075 },
+      source: 'saved-place',
+      placeLabel: 'Dalston, London',
+      isCoarse: false,
+    });
+    expect(Location.geocodeAsync).toHaveBeenCalledWith('Dalston, London, UK');
+    expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('prefers the device over a saved whole city', async () => {
+    Location.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    Location.getCurrentPositionAsync.mockResolvedValue(position(35));
+    storage.getItem.mockResolvedValue('London, UK');
+
+    expect((await resolveClientLocation()).source).toBe('gps');
+  });
+
+  it('ignores a place the geocoder puts outside the UK', async () => {
+    Location.requestForegroundPermissionsAsync.mockResolvedValue({ status: 'denied' });
+    storage.getItem.mockResolvedValue('East London');
+    Location.geocodeAsync.mockResolvedValue([{ latitude: -32.999, longitude: 27.875 }]);
+
+    expect((await resolveClientLocation()).source).toBe('unknown');
   });
 
   it('returns unknown rather than throwing when there is nothing to go on', async () => {
@@ -68,6 +101,6 @@ describe('resolveClientLocation', () => {
     storage.getItem.mockResolvedValue(null);
 
     const result = await resolveClientLocation();
-    expect(result).toEqual({ coords: null, source: 'unknown', cityLabel: null, isCoarse: false });
+    expect(result).toEqual({ coords: null, source: 'unknown', placeLabel: null, isCoarse: false });
   });
 });
