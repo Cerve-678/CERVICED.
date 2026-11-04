@@ -42,6 +42,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
+import { PolicyImageViewer } from "../../components/PolicyImageViewer";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -2104,6 +2105,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // (e.g. tapping a different portfolio photo) would silently keep showing
   // wherever the list last scrolled to. Bumping `key` on every open forces a
   // fresh FlatList each time so it lands on the right image.
+  const [showPolicyImage, setShowPolicyImage] = useState(false);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
       visible: true,
@@ -4366,6 +4368,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           onBookOffer={handleBookOffer}
         />
 
+        {/* The provider's detailed policy document, scrollable when it's
+            long — the same viewer the client's booking detail opens. */}
+        <PolicyImageViewer
+          uri={provider.bookingPolicies?.policyImageUrl || null}
+          visible={showPolicyImage}
+          onClose={() => setShowPolicyImage(false)}
+        />
+
         {/* Fullscreen service image carousel modal — hidden whenever the "All
             Services" sheet is open, since that sheet renders this same
             content as an internal overlay instead (see renderImageViewerOverlay
@@ -5476,12 +5486,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   {provider.bookingPolicies?.policyImageUrl ? (
                     <TouchableOpacity
                       activeOpacity={0.85}
-                      onPress={() =>
-                        openImageViewer(
-                          [{ uri: provider.bookingPolicies!.policyImageUrl }],
-                          0,
-                        )
-                      }
+                      onPress={() => setShowPolicyImage(true)}
                       style={[
                         styles.policyImageFab,
                         { backgroundColor: adaptiveAccentColor },
