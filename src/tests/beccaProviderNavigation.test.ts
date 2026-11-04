@@ -55,6 +55,20 @@ describe("Becca finds provider controls", () => {
     expect(result.suggestions?.[0]?.data).toMatchObject({ screen: "payments" });
   });
 
+  it.each([
+    ["Where do I change my cancellation policy?", "policies"],
+    ["How do I set my cancellation notice?", "policies"],
+    ["Where do I set a deposit?", "payments"],
+    ["Where do I turn off reminders?", "automations"],
+  ])("sends %s to the screen that owns it", async (ask, screen) => {
+    const result = await getCapability("pv.app_navigation", "provider")!.run(context(ask));
+    expect(result.suggestions?.[0]?.data).toMatchObject({ screen });
+  });
+
+  it("still answers a question about the policy itself with the summary", () => {
+    expect(route("What's my cancellation policy?")).toBe("pv.automations");
+  });
+
   it("keeps link-only booking settings on the external booking site", async () => {
     const result = await getCapability("pv.app_navigation", "provider")!.run(context("Where do I set walk-ins?", true));
     expect(result.text).toContain("your own booking site");

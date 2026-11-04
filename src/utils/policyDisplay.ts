@@ -131,8 +131,8 @@ function pushRow(rows: PolicyDisplayRow[], row: PolicyDisplayRow | null): void {
 }
 
 /**
- * `enforcedCancellationNoticeHours` is the Automations-screen number
- * (providers.cancellation_notice_hours) — when present and positive it wins
+ * `enforcedCancellationNoticeHours` is the window Policies saves to
+ * providers.cancellation_notice_hours — when present and positive it wins
  * over the descriptive `cancelNotice` text, since that's what the cancel flow
  * actually enforces. A frozen booking snapshot has no equivalent enforced
  * number (only the descriptive text was ever captured), so callers reading a
@@ -260,14 +260,11 @@ export type NoticeChoice = 'none' | '12h' | '24h' | '48h' | '72h';
 
 const NOTICE_CHOICE_HOURS: Record<NoticeChoice, number> = { none: 0, '12h': 12, '24h': 24, '48h': 48, '72h': 72 };
 
-/** The cancellation notice choice for an enforced window, shared by Policies
- *  and Automations so the two screens offer the same five options. 0 maps to
- *  'none' only when asked: a 0 column otherwise defers to the saved choice. */
+/** The Policies screen's cancellation notice choice for an enforced window.
+ *  A 0 column has no choice of its own and defers to the saved one. */
 export function noticeChoiceForHours(
   columnHours: number | null | undefined,
-  options?: { zeroIsNone?: boolean },
 ): NoticeChoice | null {
-  if (columnHours === 0 && options?.zeroIsNone) return 'none';
   const match = (Object.keys(NOTICE_CHOICE_HOURS) as NoticeChoice[])
     .find(choice => choice !== 'none' && NOTICE_CHOICE_HOURS[choice] === columnHours);
   return match ?? null;
@@ -276,7 +273,7 @@ export function noticeChoiceForHours(
 /** What a save writes to providers.cancellation_notice_hours, or null to leave
  *  it alone. That column is the window actually applied: it outranks the
  *  written choice everywhere and defaults to 24. Only an actual change writes,
- *  so saving some other field never overwrites the other screen's pick. */
+ *  so saving some other policy never rewrites the window. */
 export function noticeHoursToSave(picked: string, loaded: string): number | null {
   if (picked === loaded) return null;
   return picked in NOTICE_CHOICE_HOURS ? NOTICE_CHOICE_HOURS[picked as NoticeChoice] : null;

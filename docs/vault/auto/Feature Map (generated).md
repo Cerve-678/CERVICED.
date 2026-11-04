@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **100 files**
+Curated: [[Address Release]] · **101 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/services/databaseService.ts` _(185)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **100 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(18)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
-- … +70 more
+- … +71 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **190 files**
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **317 files**
 - … +287 more
 
 ## Notifications
-Curated: [[Notifications]] · **175 files**
+Curated: [[Notifications]] · **176 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(343)_
 - `src/services/databaseService.ts` _(191)_
@@ -173,10 +173,10 @@ Curated: [[Notifications]] · **175 files**
 - `src/services/becca/capabilities/provider.ts` _(26)_
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
-- … +145 more
+- … +146 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **83 files**
+Curated: [[Provider Onboarding & Go-Live]] · **82 files**
 - `src/services/databaseService.ts` _(88)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
@@ -207,10 +207,10 @@ Curated: [[Provider Onboarding & Go-Live]] · **83 files**
 - `src/screens/auth/SignUpStep3Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep4Screen.tsx` _(3)_
 - `src/screens/client/UserProfileScreen.tsx` _(3)_
-- … +53 more
+- … +52 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **62 files**
+Curated: [[Booking Flow]] · **63 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(207)_
 - `src/screens/client/BookingsScreen.tsx` _(84)_
 - `supabase/waitlist_holds.sql` _(75)_
@@ -241,7 +241,7 @@ Curated: [[Booking Flow]] · **62 files**
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
 - `supabase/fix_handle_booking_status_change_on_hold_notification.sql` _(4)_
 - `supabase/fix_provider_status_transition_guard.sql` _(4)_
-- … +32 more
+- … +33 more
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **191 files**
@@ -319,7 +319,7 @@ Curated: [[Services]] · **51 files**
 - `src/services/databaseService.ts` _(42)_
 - `src/services/becca/types.ts` _(41)_
 - `src/components/ChatComponents.tsx` _(36)_
-- `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_
+- `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(35)_
 - `src/services/beccaStorageService.ts` _(28)_
 - `src/navigation/types.ts` _(24)_
 - `src/services/becca/smallTalk.ts` _(24)_

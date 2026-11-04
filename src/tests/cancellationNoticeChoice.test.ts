@@ -1,16 +1,15 @@
 import { noticeChoiceForHours, noticeHoursToSave } from '../utils/policyDisplay';
 
-describe('one cancellation window for Policies and Automations', () => {
+describe('the cancellation window Policies sets', () => {
   it('shows the window actually applied', () => {
     expect(noticeChoiceForHours(12)).toBe('12h');
     expect(noticeChoiceForHours(24)).toBe('24h');
     expect(noticeChoiceForHours(72)).toBe('72h');
   });
 
-  it('lets an unset column defer to the written choice, unless asked for "none"', () => {
+  it('lets an unset column defer to the written choice', () => {
     expect(noticeChoiceForHours(0)).toBeNull();
     expect(noticeChoiceForHours(null)).toBeNull();
-    expect(noticeChoiceForHours(0, { zeroIsNone: true })).toBe('none');
   });
 
   it('has no choice for a window neither screen offers', () => {

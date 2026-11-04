@@ -973,7 +973,7 @@ const myAddress: Capability = {
         text: "You haven't set a full address yet — clients only see your general area.",
         suggestions: [
           navChip("services", "Set my address", "services"),
-          navChip("automations", "Address-release policy", "automations"),
+          navChip("policies", "Address-release policy", "policies"),
         ],
       };
     }
@@ -987,7 +987,7 @@ const myAddress: Capability = {
         `Clients only see it once your address-release policy allows it — not at booking time by default.`,
       suggestions: [
         navChip("services", "Change it", "services"),
-        navChip("automations", "Address-release policy", "automations"),
+        navChip("policies", "Address-release policy", "policies"),
       ],
     };
   },
@@ -1221,7 +1221,7 @@ const automations: Capability = {
     if (!profile) {
       return {
         text: "I couldn't load your provider profile just now.",
-        suggestions: [navChip("automations", "Open Automations", "automations")],
+        suggestions: [navChip("policies", "Open Policies", "policies")],
       };
     }
 
@@ -1233,7 +1233,7 @@ const automations: Capability = {
           "You haven't set any booking policies yet — no deposit, and no notice period for cancellations or reschedules. " +
           "Setting these protects you against late drop-outs.",
         suggestions: [
-          navChip("automations", "Set my policies", "automations"),
+          navChip("policies", "Set my policies", "policies"),
           navChip("infopacks", "Info Packs", "infopacks"),
         ],
       };
@@ -1288,7 +1288,7 @@ const automations: Capability = {
       card: { title: "BOOKING POLICIES", rows },
       work: ["Read your booking policies"],
       suggestions: [
-        navChip("automations", "Edit my policies", "automations"),
+        navChip("policies", "Edit my policies", "policies"),
         navChip("infopacks", "Info Packs", "infopacks"),
         askChip("capacity", "What's my booking cap?", "Am I full today?"),
       ],
