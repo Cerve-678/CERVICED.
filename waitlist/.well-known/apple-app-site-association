@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["ZJ3RB8B2XL.com.cerviced.app"],
+        "components": [
+          { "/": "/@*", "comment": "A provider's profile link, www.cerviced.co/@<slug>" }
+        ]
+      }
+    ]
+  }
+}

@@ -1003,8 +1003,9 @@ because the bare domain redirects, which breaks Apple's association check.
 Done: `waitlist/open-profile.html` (redirect only), `app.json`
 associatedDomains + Android intentFilters, the app parsing the https link, and
 "Your profile link" in the QR sheet and on link-only Portfolio.
-Still needed: the Apple Team ID for `apple-app-site-association`, the Android
-signing SHA-256 for `assetlinks.json`, a native rebuild, and flipping
+`waitlist/.well-known/apple-app-site-association` has Team ID ZJ3RB8B2XL.
+Still needed: the Android signing SHA-256 for `assetlinks.json`, a native
+rebuild, and flipping
 `APP_STORE_LIVE` / `PLAY_STORE_LIVE` in `open-profile.html` at launch.
 
 **Decisions already made:**
