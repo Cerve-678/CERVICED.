@@ -34,6 +34,31 @@ export const SPECIALTIES_MAP: Record<string, string[]> = {
   OTHER:      ['Massage', 'Body waxing', 'Spray tanning', 'Body sculpting', 'Holistic therapies'],
 };
 
+/**
+ * The client Search "Speciality" options once "Who it's for" is set to Men or
+ * Kids. Client-filter only: providers never pick from these, so each label is
+ * written to fuzzy-match how such work is usually named in a provider's
+ * specialities, tags or service names ("Beard trims" finds "Beard trim &
+ * shape-up"). A category with no entry falls back to SPECIALTIES_MAP. Women
+ * keep the main lists, which are already written for them.
+ */
+export const AUDIENCE_SPECIALTIES_MAP: Record<'men' | 'kids', Record<string, string[]>> = {
+  men: {
+    HAIR:       ['Barbering & fades', "Men's cuts", 'Skin fades', 'Beard trims', 'Hot towel shaves', 'Line-ups', 'Waves', 'Twists', 'Locs & retwists', 'Cornrows', 'Braids', 'Colour'],
+    NAILS:      ['Manicures', 'Pedicures'],
+    BROWS:      ['Threading', 'Waxing', 'Tinting & shaping'],
+    LASHES:     ['Lash tints', 'Lash lifts'],
+    MUA:        ['Grooming', 'Editorial', 'Film & TV'],
+    AESTHETICS: ['Facials', 'Acne treatments', 'Hyperpigmentation', 'Laser hair removal', 'Anti-wrinkle', 'Skin boosters'],
+    OTHER:      ['Massage', 'Body waxing'],
+  },
+  kids: {
+    HAIR:       ["Children's hair", "Kids' cuts", 'Cornrows', 'Box braids', 'Knotless braids', 'Twists', 'Locs & retwists', 'Natural & textured', 'Beads'],
+    NAILS:      ['Gel manicure', 'Nail art', 'Pedicures'],
+    MUA:        ['Prom & occasion', 'Face painting'],
+  },
+};
+
 /** Every curated speciality across all categories, deduped in a stable order —
  *  the option pool for the client filter's "All" category tab, where no single
  *  category scopes the list. Order follows SPECIALTIES_MAP's category order. */
