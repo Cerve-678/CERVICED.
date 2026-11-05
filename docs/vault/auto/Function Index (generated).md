@@ -5,7 +5,7 @@
 
 #generated
 
-**3084 functions** across **426 files**.
+**3085 functions** across **426 files**.
 
 ### `src/components/` (57)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -202,7 +202,7 @@
 - `DidYouBookSheet.tsx` — chip · days · defaultTime · **DidYouBookSheet** · handlePickerChange · handleSubmit · hhmm · startOfToday
 - `externalBookingLink.ts` — **displayExternalBookingUrl** · **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
 - `FullCervicedLockedSheet.tsx` — **FullCervicedLockedSheet** · seeMore
-- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
+- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
 - `linkOnlyAnalytics.ts` — **bookTapRatio** · **lastSevenDaysOfBookTaps** · **sumLinkOnlyStats**
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
