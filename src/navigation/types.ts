@@ -248,6 +248,7 @@ export type ProviderHomeStackParamList = {
   Branding: undefined;
   Policies: undefined;
   Payments: undefined;
+  Automations: undefined;
   // Pushed from the link-only Dashboard's Profile strength rows (Instagram,
   // accessibility, payment methods), same reasoning as EditProfile above.
   BusinessInfo: undefined;
@@ -322,6 +323,8 @@ export type ProviderServicesStackParamList = {
   Policies: undefined;
   Payments: undefined;
   Branding: undefined;
+  // Pushed from the Profile Health checklist's automations step.
+  Automations: undefined;
   // Pushed from the dashboard's saved-by-clients tile, same reasoning.
   Analytics: undefined;
   AddBooking: undefined;

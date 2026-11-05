@@ -396,6 +396,7 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
   stripe: 'Payments',
   portfolio: 'EditProfile',
   terms: 'EditProfile',
+  automations: 'Automations',
 };
 
 const ISSUE_COLOR = '#FF9500';

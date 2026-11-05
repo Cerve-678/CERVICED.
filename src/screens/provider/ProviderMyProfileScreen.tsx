@@ -120,6 +120,7 @@ import ServiceEditorSheet, {
 import { descriptionProblem, hasNoTags, type DescriptionProblem } from '../../features/providers/serviceTags';
 import {
   fetchGoLiveStatus,
+  deriveAutomationsSet,
   buildGoLiveSteps,
   buildGoLiveHeadline,
   type GoLiveStatus,
@@ -171,6 +172,7 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackPar
   // Record's exhaustiveness and is never actually navigated to.
   terms: 'EditProfile',
   portfolio: 'ProviderServicesMain',
+  automations: 'Automations',
 };
 
 /** Attention colours. Only the two "something's outstanding" tones are fixed:
@@ -773,6 +775,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // renders these, and workPhotos is already fetched here for the grid
   // below — reusing it avoids a duplicate portfolio_items query).
   const [termsSet, setTermsSet] = useState(false);
+  const [automationsSet, setAutomationsSet] = useState(false);
   const [reviews, setReviews] = useState<
     { id: string; name: string; rating: number; comment: string; date: string }[]
   >([]);
@@ -903,6 +906,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           setProviderId(profile.id);
           setProviderSlug(profile.slug);
           setReviewCount(profile.review_count ?? 0);
+          setAutomationsSet(deriveAutomationsSet(profile));
 
           // First wave: what's on screen when the page opens. The go-live
           // reads and the terms flag are here because together with the
@@ -1082,14 +1086,21 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     );
   }, [providerData, myBookingMode]);
 
-  /** goLive plus the two Profile-Health-only fields it never fetches itself
+  /** goLive plus the Profile-Health-only fields it never fetches itself
    *  (see GoLiveStatus's portfolioSet/termsSet doc comment) — merged here
    *  rather than inside fetchGoLiveStatus so that fetch stays free of a
    *  portfolio_items query ProviderHomeScreen would never use, reusing the
    *  workPhotos this screen already loads for its own grid instead. */
   const goLiveWithHealth = useMemo<GoLiveStatus | null>(
-    () => goLive ? { ...goLive, portfolioSet: workPhotos.length > 0, termsSet } : null,
-    [goLive, workPhotos, termsSet],
+    () => goLive
+      ? {
+          ...goLive,
+          portfolioSet: workPhotos.length > 0,
+          termsSet,
+          automationsSet: myBookingMode === 'external' ? undefined : automationsSet,
+        }
+      : null,
+    [goLive, workPhotos, termsSet, automationsSet, myBookingMode],
   );
 
   /** What the ring reads — every step counts, portfolio/T&Cs and the
