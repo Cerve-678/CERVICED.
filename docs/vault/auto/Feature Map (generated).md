@@ -127,7 +127,7 @@ Curated: [[Booking Flow]] · **318 files**
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/screens/shared/NotificationsScreen.tsx` _(131)_
-- `src/services/becca/engine.ts` _(127)_
+- `src/services/becca/engine.ts` _(130)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `supabase/booking_flow_fixes.sql` _(116)_
@@ -313,7 +313,7 @@ Curated: [[Contexts]] · **197 files**
 
 ## Becca / AI
 Curated: [[Services]] · **51 files**
-- `src/screens/shared/BeccaScreen.tsx` _(103)_
+- `src/screens/shared/BeccaScreen.tsx` _(104)_
 - `src/services/becca/engine.ts` _(61)_
 - `src/services/becca/capabilities/client.ts` _(52)_
 - `src/services/databaseService.ts` _(42)_

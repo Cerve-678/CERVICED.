@@ -1,4 +1,4 @@
-import { converse } from "../services/becca/engine";
+import { converse, isConfirmToken } from "../services/becca/engine";
 import { buildRebookCartItem } from "../features/bookings/rebook";
 import type { AddToCartParams } from "../contexts/CartContext";
 import type { RebookableService } from "../services/databaseService";
@@ -107,6 +107,17 @@ describe("Becca: rebook my last appointment", () => {
     const second = await tap(without, addToCart);
     expect(addToCart).toHaveBeenCalledTimes(1);
     expect(second.message.content).toContain("no longer waiting");
+  });
+
+  it("marks the cart buttons as confirm taps, so the chat shows their label, not the code", async () => {
+    const offer = await ask(jest.fn(), [{ ...last, addOns: [] }]);
+    const [add, notNow] = offer.message.suggestions!;
+
+    // BeccaScreen shows the chip's own words as the client's bubble for these,
+    // rather than the internal token it sends.
+    expect(isConfirmToken(add!.data!.message!)).toBe(true);
+    expect(add!.text).toBe("Add to my cart");
+    expect(isConfirmToken(notNow!.data!.message!)).toBe(false);
   });
 
   it("offers a single Add to my cart when the booking had no add-ons", async () => {
