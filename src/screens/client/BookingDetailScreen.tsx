@@ -52,6 +52,7 @@ import {
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { clientRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
+import { PolicyImageViewer } from '../../components/PolicyImageViewer';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
@@ -1486,25 +1487,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={{ height: 40 }} />
         </ScrollView>
 
-        {/* ─── Policy Image Modal ─── full-screen view of the provider's
-            detailed policy document, mirroring the profile's pop-up. */}
-        <Modal visible={showPolicyImage} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowPolicyImage(false)}>
-          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setShowPolicyImage(false)}>
-            {policyImageUrl && (
-              <Image source={{ uri: policyImageUrl }} style={{ width: '100%', height: '82%' }} contentFit="contain" fadeDuration={0} />
-            )}
-            <TouchableOpacity
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowPolicyImage(false); }}
-              style={{ position: 'absolute', top: insets.top + 12, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Close policy document"
-            >
-              <Ionicons name="close" size={26} color="#FFF" />
-            </TouchableOpacity>
-          </Pressable>
-        </Modal>
+        {/* ─── Policy Image ─── the provider's detailed policy document,
+            scrollable when it's long; the same viewer as their profile. */}
+        <PolicyImageViewer uri={policyImageUrl} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} />
 
         {/* ─── Cancel Modal ───────────────────────────────────────────────
             Same modal handles both states: the normal "are you sure" ask,

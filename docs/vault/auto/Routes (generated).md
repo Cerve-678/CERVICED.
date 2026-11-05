@@ -47,6 +47,7 @@ Curated overview: [[Screens & Navigation]].
 - `BookingHistory`
 - `Automations`
 - `Payments`
+- `Policies`
 - `ProfileMain`
 - `ProfileInfo`
 - `BeautyProfile`
@@ -72,7 +73,6 @@ Curated overview: [[Screens & Navigation]].
 - `BeccaStack`
 - `EditProfile`
 - `Branding`
-- `Policies`
 - `BusinessInfo`
 - `ProviderIntakeForm`
 - `ProviderServicesMain`

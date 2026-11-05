@@ -5,9 +5,9 @@
 
 #generated
 
-**3088 functions** across **426 files**.
+**3091 functions** across **428 files**.
 
-### `src/components/` (57)
+### `src/components/` (58)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -41,6 +41,7 @@
 - `MultiBookingSheet.tsx` — cancelSeparateEmergency · confirmSeparateEmergency · depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSeparateDate · handleSeparateTime · handleSubmit · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
 - `NotificationPreferencesView.tsx` — load · NotificationPreferencesView · persist · retrySave · StaticRow · toggle · ToggleRow
 - `PasswordRequirements.tsx` — **PasswordRequirements**
+- `PolicyImageViewer.tsx` — close · **PolicyImageViewer**
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
@@ -202,7 +203,7 @@
 - `DidYouBookSheet.tsx` — chip · days · defaultTime · **DidYouBookSheet** · handlePickerChange · handleSubmit · hhmm · startOfToday
 - `externalBookingLink.ts` — **displayExternalBookingUrl** · **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
 - `FullCervicedLockedSheet.tsx` — **FullCervicedLockedSheet** · seeMore
-- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
+- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
 - `linkOnlyAnalytics.ts` — **bookTapRatio** · **lastSevenDaysOfBookTaps** · **sumLinkOnlyStats**
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
@@ -320,7 +321,7 @@
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view
 - `ProviderAnalyticsScreen.tsx` — AnimatedFillBar · AnimatedPath · bookingServiceMap · bucketNoun · buildInsight · chartBars · chartData · CompletionRing · fetchBookingsForRange · fetchSupportingMetrics · fmtGBP · hasCompletedInRange · inRange · insightText · kpi · maxBarIndex · monthKey · monthlyRatings · months · monthsAgo · onRefresh · period · prevPeriod · ProviderAnalyticsScreen · quadChartWidth · quadWidth · ranked · RatingAnalytics · ratingChartWidth · recent · RecentStream · revenueOf · reviewsInRange · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · tipsForBookings · topServices · TopServices · totalForBookings
-- `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · saveCancellationNotice · SectionHeader · set · showToast · Toast · toggleReminder
+- `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
 - `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · cancelBooking · canDispute · catLabel · chipRow · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · CR · displayDuration · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleRefund · handleRefunded · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · handleSubmitDispute · isAddressReleased · parseMin · Perf · ProviderBookingDetailScreen · refreshBookingStatus · releaseAddressNow · relevantInfoPacks · Row · s · show · submitPassOn · to12 · toggleInitTime · updateBookingStatus
 - `ProviderBookingHistoryScreen.tsx` — agendaSort · BookingCard · counts · fetchBookings · fetchUnreadMessages · fetchWaitlist · filterBookings · fmtDayLabel · fmtMoney · fmtTime · handleComplete · handleConfirmInvite · handleHistoryFilterPress · handleTabPress · isHistoryStatus · items · matchesHistoryFilter · onRefresh · openInvitePicker · pendingCount · PendingPill · ProviderBookingHistoryScreen · rescheduleRequestCount · rescheduleRequestRows · SkeletonList · statusFor · waitlistCount
 - `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · ClientHistorySheet · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleMessage · handleRebook · handleSend · handleSheetChange · handleViewHistory · initials · load · ProviderClienteleScreen · snapPoints · TabBar · tomorrow9am
@@ -397,7 +398,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (55)
+### `src/utils/` (56)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -446,6 +447,7 @@
 - `serviceImageDraft.ts` — **normalizeServiceImages**
 - `shuffle.ts` — **shuffle**
 - `slotsRowText.ts` — **slotsPillText**
+- `spreadApart.ts` — **spreadApart**
 - `stripeConnectReturn.ts` — **parseStripeConnectReturn**
 - `tabBarGeometry.ts` — **tabBarClearance** · **tabBarContentHeight** · **tabBarIndicatorFrame** · **tabBarOccupiedHeight** · **tabBarRect**
 - `textAppearanceStore.ts` — **getTextAppearance** · **setTextAppearance** · **subscribeTextAppearance**
