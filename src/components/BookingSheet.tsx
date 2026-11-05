@@ -44,6 +44,7 @@ import type { DbPromotion } from '../types/database';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { durationWithAddOns, formatAddOnExtraTime, type ChosenAddOn } from '../features/bookings/addOnTime';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -117,6 +118,8 @@ export interface BookingSheetAddOn {
   name: string;
   price: number;
   description?: string;
+  /** Minutes this add-on adds to the appointment. */
+  extraMinutes?: number;
 }
 
 export interface BookingSheetService {
@@ -130,7 +133,7 @@ export interface BookingSheetService {
 }
 
 export interface BookingSheetResult {
-  selectedAddOns: { id: string | number; name: string; price: number }[];
+  selectedAddOns: ChosenAddOn[];
   date: string;
   time: string;
   notes: string;
@@ -183,7 +186,7 @@ interface BookingSheetProps {
   backgroundColor: string;
   initial?:
     | {
-        selectedAddOns?: { id: string | number; name: string; price: number }[] | undefined;
+        selectedAddOns?: ChosenAddOn[] | undefined;
         selectedDate?: string | undefined;
         selectedTime?: string | undefined;
         notes?: string | undefined;
@@ -238,9 +241,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     [adaptiveAccentColor]
   );
 
-  const [selectedAddOns, setSelectedAddOns] = useState<
-    { id: string | number; name: string; price: number }[]
-  >([]);
+  const [selectedAddOns, setSelectedAddOns] = useState<ChosenAddOn[]>([]);
+  // The appointment's real length: the service plus its add-ons' extra
+  // time. Everything that finds or checks a time uses this, not
+  // service.duration, so a client is only offered times it fits in.
+  const appointmentDuration = useMemo(
+    () => durationWithAddOns(service?.duration ?? '', selectedAddOns),
+    [service?.duration, selectedAddOns],
+  );
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
@@ -368,10 +376,13 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   useEffect(() => {
     if (!isVisible || !service || resolvedOnce.current) return;
     if (initial?.selectedDate && initial?.selectedTime) { resolvedOnce.current = true; return; }
+    // Wait until the add-ons are chosen: an add-on can make the appointment
+    // longer, and a time picked for the service alone may not fit it.
+    if (step === 'addons') return;
     resolvedOnce.current = true;
     setIsResolvingSlot(true);
     const uuidServiceId = service.dbId && UUID_RE.test(service.dbId) ? service.dbId : undefined;
-    AvailabilityService.resolveNextAvailableSlot(providerIdentifier, service.duration, uuidServiceId)
+    AvailabilityService.resolveNextAvailableSlot(providerIdentifier, appointmentDuration, uuidServiceId)
       .then(slot => {
         if (slot) {
           setSelectedDate(slot.date);
@@ -380,7 +391,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       })
       .catch(error => logger.error('Error auto-resolving next available slot:', error))
       .finally(() => setIsResolvingSlot(false));
-  }, [isVisible, service, providerIdentifier, initial?.selectedDate, initial?.selectedTime]);
+  }, [isVisible, service, providerIdentifier, initial?.selectedDate, initial?.selectedTime, step, appointmentDuration]);
 
   // Same auto-resolve, for the required consultation's own slot — always
   // resolved fresh (a consultation is never pre-filled via `initial`, it's
@@ -460,7 +471,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const toggleAddOn = useCallback((addOn: BookingSheetAddOn) => {
     setSelectedAddOns(prev => {
       const exists = prev.find(a => a.id === addOn.id);
-      return exists ? prev.filter(a => a.id !== addOn.id) : [...prev, { id: addOn.id, name: addOn.name, price: addOn.price }];
+      return exists
+        ? prev.filter(a => a.id !== addOn.id)
+        : [...prev, { id: addOn.id, name: addOn.name, price: addOn.price, extraMinutes: addOn.extraMinutes ?? 0 }];
     });
   }, []);
 
@@ -765,7 +778,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         <Text style={[styles.addOnDescription, { color: tokens.sub }]}>{addOn.description}</Text>
                       )}
                     </View>
-                    <Text style={[styles.addOnPrice, { color: adaptiveAccentColor }]}>+£{addOn.price}</Text>
+                    <View style={styles.addOnPriceColumn}>
+                      <Text style={[styles.addOnPrice, { color: adaptiveAccentColor }]}>+£{addOn.price}</Text>
+                      {!!addOn.extraMinutes && (
+                        <Text style={[styles.addOnTime, { color: tokens.sub }]}>{formatAddOnExtraTime(addOn.extraMinutes)}</Text>
+                      )}
+                    </View>
                     <View
                       style={[
                         styles.addOnCheckbox,
@@ -795,7 +813,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     selectedAddOns.map(a => (
                       <View key={a.id} style={styles.addOnSummaryRow}>
                         <Text style={[styles.addOnSummaryName, { color: tokens.text }]}>{a.name}</Text>
-                        <Text style={[styles.addOnSummaryPrice, { color: tokens.sub }]}>+£{a.price}</Text>
+                        <Text style={[styles.addOnSummaryPrice, { color: tokens.sub }]}>
+                          +£{a.price}{a.extraMinutes ? ` · ${formatAddOnExtraTime(a.extraMinutes)}` : ''}
+                        </Text>
                       </View>
                     ))
                   ) : (
@@ -850,7 +870,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   allowRequests={EMERGENCY_BOOKINGS_ENABLED}
                   providerLabel={providerDisplayName}
                   providerName={providerIdentifier}
-                  serviceDuration={service.duration}
+                  serviceDuration={appointmentDuration}
                   accentColor={adaptiveAccentColor}
                   textColor={tokens.text}
                   subColor={tokens.sub}
@@ -1344,7 +1364,9 @@ const styles = StyleSheet.create({
   },
   addOnName: { fontSize: 14, fontWeight: '600' },
   addOnDescription: { fontSize: 12, marginTop: 2 },
-  addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
+  addOnPrice: { fontSize: 13, fontWeight: '700' },
+  addOnPriceColumn: { alignItems: 'flex-end', marginRight: 10 },
+  addOnTime: { fontSize: 11, fontWeight: '600', marginTop: 2 },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   addOnCheckmark: { fontSize: 12, fontWeight: '700' },
   providerTermsBlock: { marginTop: 4 },

@@ -44,6 +44,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { findBufferClash } from '../../utils/bufferClash';
 import { isDarkColor } from '../../constants/providerThemes';
+import { formatAddOnExtraTime } from '../../features/bookings/addOnTime';
 
 const WARN = '#E8A13A';
 
@@ -195,8 +196,14 @@ export default function AddBookingScreen() {
   // check, working-hours fit) must use this, not baseServiceDuration alone,
   // or the UI will show "no conflict" for a slot the buffer actually
   // overlaps into.
+  // Picked add-ons can carry their own extra time (universal add-ons), which
+  // provider_create_manual_booking adds to the end time server-side. Counted
+  // here too, so the slots offered and the clash check match what's booked.
+  const addOnMinutes = (services.find(sv => sv.id === serviceId)?.add_ons ?? [])
+    .filter(addOn => selectedAddOnIds.includes(addOn.id))
+    .reduce((sum, addOn) => sum + Number(addOn.extra_minutes ?? 0), 0);
   const selectedServiceDuration = baseServiceDuration != null
-    ? baseServiceDuration + extraMinutes
+    ? baseServiceDuration + extraMinutes + addOnMinutes
     : undefined;
   useEffect(() => {
     if (!providerId) return;
@@ -679,7 +686,7 @@ export default function AddBookingScreen() {
                     const on = selectedAddOnIds.includes(addOn.id);
                     return (
                       <TouchableOpacity key={addOn.id} onPress={() => toggleAddOn(addOn.id)} style={[s.choice, { backgroundColor: P.surface, borderColor: on ? P.accent : P.border }]}>
-                        <View style={{ flex: 1 }}><Text style={[s.choiceTitle, { color: P.text }]}>{addOn.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>+£{Number(addOn.price).toFixed(2)}</Text></View>
+                        <View style={{ flex: 1 }}><Text style={[s.choiceTitle, { color: P.text }]}>{addOn.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>+£{Number(addOn.price).toFixed(2)}{addOn.extra_minutes ? ` · ${formatAddOnExtraTime(addOn.extra_minutes)}` : ''}</Text></View>
                         <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={on ? P.accent : P.sub} />
                       </TouchableOpacity>
                     );
@@ -700,7 +707,7 @@ export default function AddBookingScreen() {
                   <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.border, justifyContent: 'space-between' }]}>
                     <Text style={[s.choiceTitle, { color: P.text }]}>
                       {extraMinutes === 0 ? 'None' : `+${extraMinutes} min`}
-                      {' · '}{(selectedService.duration_minutes + extraMinutes)} min total
+                      {' · '}{(selectedService.duration_minutes + extraMinutes + addOnMinutes)} min total
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                       <TouchableOpacity
