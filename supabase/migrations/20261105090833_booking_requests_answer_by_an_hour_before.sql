@@ -215,7 +215,7 @@ END
 $verify$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261104120000', 'booking_requests_answer_by_an_hour_before')
+VALUES ('20261105090833', 'booking_requests_answer_by_an_hour_before')
 ON CONFLICT DO NOTHING;
 
 COMMIT;
