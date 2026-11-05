@@ -17,6 +17,7 @@ import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
 import BusinessInfoScreen from '../../../screens/provider/BusinessInfoScreen';
 import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
+import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import LinkOnlyHomeScreen from '../../../screens/provider/LinkOnlyHomeScreen';
 import LinkOnlyAnalyticsScreen from '../../../screens/provider/LinkOnlyAnalyticsScreen';
 import FullCervicedFeaturesScreen from '../../../screens/provider/FullCervicedFeaturesScreen';
@@ -131,6 +132,12 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
       <ProviderHomeStack.Screen
         name="Payments"
         component={PaymentsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="Automations"
+        component={ProviderAutomationsScreen}
         options={{ headerShown: false }}
       />
 
