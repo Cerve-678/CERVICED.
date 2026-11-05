@@ -1,4 +1,4 @@
-import { PROVIDER_REQUEST_NOTE } from '../../features/bookings/requestWindow';
+import { providerRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -1194,6 +1194,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const isApptToday = booking.bookingDate === dateToYMD(new Date());
   const apptStartPassed = !!apptStart && apptStart.getTime() < Date.now();
   const pendingExpired = isPendingConfirmation && apptStartPassed;
+  // When this request is declined automatically if it isn't answered.
+  const requestDeadline = isPendingConfirmation && apptStart && booking.createdAt
+    ? requestAnswerDeadline(new Date(booking.createdAt), apptStart)
+    : null;
 
   const totalPrice = (booking.price ?? 0) + (booking.addOns?.reduce((s: number, a: { price: number }) => s + (a.price ?? 0), 0) ?? 0);
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -2111,9 +2115,20 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </Text>
             ) : (
               <>
-                <Text style={{ textAlign: 'center', fontSize: 13, lineHeight: 18, color: P.sub, marginBottom: 10 }}>
-                  {PROVIDER_REQUEST_NOTE}
-                </Text>
+                {requestDeadline && (
+                  <Text
+                    style={{
+                      textAlign: 'center',
+                      fontSize: 13,
+                      lineHeight: 18,
+                      color: requestDeadline.urgent ? '#FF9500' : P.sub,
+                      fontWeight: requestDeadline.urgent ? '600' : '400',
+                      marginBottom: 10,
+                    }}
+                  >
+                    {providerRequestNote(requestDeadline)}
+                  </Text>
+                )}
                 <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
               </>
             )}

@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-05 (booking requests answered by an hour before)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261105090833 | `booking_requests_answer_by_an_hour_before` | **APPLIED 2026-11-05** (authored as 20261104120000, renumbered above the directory-listing migrations, file renamed to the version `apply_migration` recorded). Applied while Codex's `directory-listings-admin` held the lock, with the user's go-ahead: its two migrations were already live and touch none of these functions. Verified live: version recorded; `handle_new_booking`, `claim_cart_booking_slots`, `finalize_checkout` and `claim_waitlist_hold` call `booking_request_title` / `booking_request_answer_note` and keep their `SET search_path`; the four new helpers aren't executable by anon or authenticated; `process_expire_stale_pending_bookings` uses `booking_request_deadline`; `expire-stale-pending-bookings` runs `*/5 * * * *`. |
+
 ### Applied 2026-11-03 (admin dashboard, developer tools admin-only)
 
 | Authored version | Name | Status |

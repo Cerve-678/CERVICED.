@@ -5,7 +5,7 @@
 
 #generated
 
-**3087 functions** across **428 files**.
+**3091 functions** across **428 files**.
 
 ### `src/components/` (58)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -131,7 +131,7 @@
 - `rebook.ts` — **buildRebookCartItem** · durationLabel · **rebookAddOns**
 - `receipt.ts` — appointmentWhen · **buildClientReceiptHTML** · **buildProviderInvoiceHTML** · escapeHtml · methodLabel · money · renderDocument
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen** · **refundReplyDeadline**
-- `requestWindow.ts` — **clientRequestNote**
+- `requestWindow.ts` — **clientRequestNote** · day · **formatAnswerBy** · **providerRequestNote** · **requestAnswerDeadline**
 - `reviewState.ts` — **mergeBookingReviewStates**
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · minutesOfDay · **tipWindowClosesAt**
