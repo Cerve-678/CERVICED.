@@ -45,6 +45,7 @@ import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServic
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
+import { shuffle } from '../../utils/shuffle';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
@@ -546,7 +547,11 @@ export default function HomeScreen() {
           await Promise.allSettled([
             getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
             getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
-            getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))),
+            // Trending is ranked by 7-day bookings, which barely moves between
+            // visits — so the same provider always led the rail. Shuffle the
+            // trending set on each Home load so a client sees a different one
+            // first; every card shown is still genuinely trending.
+            getTrendingProviders(15).then(data => setTrending(shuffle(data.map(mapDbProvider)))),
           ]);
           if (locationRunCancelled) return;
 
