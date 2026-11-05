@@ -61,6 +61,9 @@ import {
   PAYMENT_METHOD_LABELS,
 } from '../../features/bookings/paymentPresentation';
 import {
+  clientBookingStatusLabel,
+  formatBookingTimeRange,
+  formatNoticePhrase,
   formatNoticeWindow,
   isLongBookingInfoPack,
 } from '../../features/bookings/clientBookingPresentation';
@@ -501,13 +504,15 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     try {
       await cancelBooking(booking.id);
       setShowCancelModal(false);
-      setSuccessMessage('Your appointment has been cancelled successfully.');
+      setSuccessMessage(booking.status === BookingStatus.PENDING
+        ? `Your request to ${booking.providerName} has been withdrawn.`
+        : `Your appointment with ${booking.providerName} is cancelled.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
     } catch (err) {
       logger.error('[BookingDetail] cancel failed:', err);
       Alert.alert(
-        'Cancellation Failed',
+        "Couldn't Cancel",
         // The notice window no longer blocks a cancel, but cancel_own_booking()
         // still throws readable guards for the cases that genuinely stop one
         // ("Booking not found", "This booking can no longer be cancelled") —
@@ -541,7 +546,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     setIsLoading(true);
     try {
       await markProviderNoShow(booking.id);
-      setSuccessMessage("We've let the provider know they were marked as a no-show.");
+      setSuccessMessage(`We've told ${booking.providerName} you reported that they didn't turn up.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
     } catch (error: any) {
@@ -638,7 +643,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     if (!booking) return;
     const check = canReschedule(booking.id);
     if (!check.canReschedule) {
-      setCooldownMessage(check.reason || 'Unable to reschedule at this time');
+      setCooldownMessage(check.reason || "This booking can't be moved right now.");
       setShowCooldownModal(true);
       return;
     }
@@ -652,7 +657,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     if (policy) {
       const used = booking.rescheduleRequest?.rescheduleCount ?? 0;
       if (policy.maxReschedules !== null && used >= policy.maxReschedules) {
-        setCooldownMessage(`${booking.providerName} allows ${policy.maxReschedules} reschedule${policy.maxReschedules === 1 ? '' : 's'} per booking.`);
+        setCooldownMessage(
+          policy.maxReschedules === 0
+            ? `${booking.providerName} doesn't let bookings be moved. You can cancel it instead.`
+            : `${booking.providerName} lets you move a booking ${policy.maxReschedules === 1 ? 'once' : `${policy.maxReschedules} times`}, and you've already done that.`,
+        );
         setShowCooldownModal(true);
         return;
       }
@@ -664,7 +673,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         // always blocked that case, so the lower bound that used to sit here
         // just moved the stop from this popup to that screen.
         if (hoursUntil < policy.rescheduleNoticeHours) {
-          setCooldownMessage(`${booking.providerName} requires ${formatNoticeWindow(policy.rescheduleNoticeHours)} notice to reschedule.`);
+          setCooldownMessage(`${booking.providerName} needs at least ${formatNoticePhrase(policy.rescheduleNoticeHours)} to move a booking, and your appointment is sooner than that. Message them if you need to change it.`);
           setShowCooldownModal(true);
           return;
         }
@@ -910,17 +919,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
           {/* Appointment Details */}
           <View style={st.section}>
-            <Text style={[st.sectionTitle, { color: C.sub }]}>APPOINTMENT DETAILS</Text>
+            <Text style={[st.sectionTitle, { color: C.sub }]}>YOUR APPOINTMENT</Text>
             <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
               {[
                 ['Service', booking.serviceName],
                 ['Date', formatBookingDisplayDate(booking.bookingDate)],
-                ['Time', booking.bookingTime],
+                ['Time', formatBookingTimeRange(booking.bookingTime, booking.endTime)],
                 // mapDbBookingToConfirmed derives `duration` from
                 // end_time − booking_time, and leaves it '' for the legacy
                 // rows written before end_time was required — which rendered
                 // as a labelled row with nothing beside it.
-                ['Duration', booking.duration || '—'],
+                ['How long', booking.duration || '—'],
               ].map(([label, value]) => (
                 <View key={label} style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>{label}</Text>
@@ -931,14 +940,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <Text style={[st.rowLabel, { color: C.sub }]}>Status</Text>
                 <View style={[st.statusBadge, { backgroundColor: getStatusColor(booking.status, booking.isPendingReschedule) }]}>
                   <Text style={st.statusText}>
-                    {booking.isPendingReschedule
-                      ? ((booking as any).rescheduleRequest?.providerAvailableDates ? 'RESCHEDULE AVAILABLE' : 'RESCHEDULE PENDING')
-                      : booking.status.replace('_', ' ').toUpperCase()}
+                    {clientBookingStatusLabel({
+                      status: booking.status,
+                      isPendingReschedule: booking.isPendingReschedule,
+                      newTimesOffered: !!booking.rescheduleRequest?.providerAvailableDates,
+                    })}
                   </Text>
                 </View>
               </View>
               <View style={[st.row, { borderBottomWidth: 0 }]}>
-                <Text style={[st.rowLabel, { color: C.sub }]}>Price</Text>
+                <Text style={[st.rowLabel, { color: C.sub }]}>Service price</Text>
                 <Text style={[st.rowValue, { color: C.text, fontWeight: '700' }]}>£{booking.price.toFixed(2)}</Text>
               </View>
             </View>
@@ -950,7 +961,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={{ backgroundColor: 'rgba(255,149,0,0.10)', borderColor: 'rgba(255,149,0,0.30)', borderWidth: 1, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Ionicons name="time-outline" size={18} color="#FF9500" />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#FF9500' }}>Awaiting Confirmation</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#FF9500' }}>Waiting for {booking.providerName} to say yes</Text>
                   <Text style={{ fontSize: 12, color: C.sub, marginTop: 2, lineHeight: 17 }}>
                     {clientRequestNote(
                       booking.providerName,
@@ -974,8 +985,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <View style={st.section}>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, padding: 14, flexDirection: 'row', alignItems: 'center' }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>Some appointment tasks couldn’t load</Text>
-                  <Text style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>Retry to make sure you don’t miss a required form or provider information.</Text>
+                  <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>We couldn’t load everything for this booking</Text>
+                  <Text style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>There may be a form to fill in or information from {booking.providerName}. Tap Retry to check.</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setTodoRetryNonce(value => value + 1); }}
@@ -989,7 +1000,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           )}
           {!isPast && todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>BEFORE YOUR APPOINTMENT</Text>
               {bookingIntakeForm && (
                 <TouchableOpacity style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: bookingIntakeForm.status === 'completed' ? 0.72 : 1 }]} activeOpacity={0.8}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClientIntakeForm', { formId: bookingIntakeForm.id, bookingId: bookingIntakeForm.bookingId, serviceName: booking.serviceName }); }}>
@@ -997,11 +1008,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{bookingIntakeForm.title}</Text>
                     <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>
-                      {bookingIntakeForm.status === 'completed' ? 'Submitted — tap to review your answers' : 'Your provider needs this before your appointment'}
+                      {bookingIntakeForm.status === 'completed' ? 'Submitted — tap to review your answers' : `${booking.providerName} needs you to fill this in before your appointment`}
                     </Text>
                   </View>
                   <View style={[st.todoBadge, { backgroundColor: bookingIntakeForm.status === 'completed' ? '#34C759' : C.accent }]}>
-                    <Text style={[st.todoBadgeText, { color: bookingIntakeForm.status === 'completed' ? '#FFF' : C.onAccent }]}>{bookingIntakeForm.status === 'completed' ? 'Completed' : 'Required'}</Text>
+                    <Text style={[st.todoBadgeText, { color: bookingIntakeForm.status === 'completed' ? '#FFF' : C.onAccent }]}>{bookingIntakeForm.status === 'completed' ? 'Done' : 'To do'}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -1018,7 +1029,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={{ fontSize: 20 }}>📄</Text>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{pack.title}</Text>
-                    <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>Prep & aftercare info from your provider</Text>
+                    <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>How to prepare and look after it, from {booking.providerName}</Text>
                   </View>
                   {!pack.viewedAt && <View style={[st.todoBadge, { backgroundColor: '#34C759' }]}><Text style={st.todoBadgeText}>New</Text></View>}
                 </TouchableOpacity>
@@ -1029,7 +1040,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Add-ons */}
           {(booking.addOns?.length ?? 0) > 0 && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>ADD-ONS ({booking.addOns!.length})</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>EXTRAS YOU ADDED ({booking.addOns!.length})</Text>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 {booking.addOns!.map((a, i) => (
                   <View key={i} style={[st.row, { borderBottomColor: C.border, borderBottomWidth: i < booking.addOns!.length - 1 ? StyleSheet.hairlineWidth : 0 }]}>
@@ -1044,9 +1055,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Payment */}
           <View style={st.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT STATUS</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT</Text>
               <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowReceipt(v => !v); }} activeOpacity={0.7}>
-                <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
+                <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide receipt' : 'View receipt'}</Text>
               </TouchableOpacity>
             </View>
             {/* What came back or was kept after a cancellation — at the top so
@@ -1078,14 +1089,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
                 {/* Three rows: Total, Paid (what left the card, fee included)
-                    and Due at Appointment. Paid + Due = Total. */}
-                <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
+                    and what's left to pay at the appointment. Paid + Left = Total. */}
+                <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Left to pay on the day</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
               </View>
             ) : (
               <View style={[st.receiptContainer, { backgroundColor: C.surface }]}>
                 <View style={[st.receiptPaper, { backgroundColor: C.card, borderColor: C.border }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, position: 'relative' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 1, color: C.text, textAlign: 'center' }}>PAYMENT RECEIPT</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 1, color: C.text, textAlign: 'center' }}>RECEIPT</Text>
                     <TouchableOpacity
                       onPress={async () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1118,7 +1129,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
                   {/* Itemised breakdown */}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Base Price</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Service</Text>
                     <Text style={{ color: C.text, fontSize: 13 }}>£{payment.servicePrice.toFixed(2)}</Text>
                   </View>
                   {(booking.addOns ?? []).map((a, i) => (
@@ -1134,7 +1145,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </View>
                   )}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Platform Fee</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>CERVICED booking fee</Text>
                     <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
                   </View>
 
@@ -1150,11 +1161,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Left to pay on the day</Text>
                     <Text style={{ color: payment.remainingBalance > 0 ? '#FF9500' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Payment Method</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Paid with</Text>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
                       {(booking.paymentMethod && PAYMENT_METHOD_LABELS[booking.paymentMethod]) || 'Card'}
                     </Text>
@@ -1179,9 +1190,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ color: C.sub, fontSize: 10, marginBottom: 2 }}>REF: {formatBookingRef(booking)}</Text>
+                    <Text style={{ color: C.sub, fontSize: 10, marginBottom: 2 }}>Booking reference: {formatBookingRef(booking)}</Text>
                     <Text style={{ color: C.sub, fontSize: 10 }}>
-                      {formatShortDate(new Date(booking.createdAt))}, {formatTime12(new Date(booking.createdAt))}
+                      Booked {formatShortDate(new Date(booking.createdAt))}, {formatTime12(new Date(booking.createdAt))}
                     </Text>
                   </View>
                 </View>
@@ -1301,17 +1312,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Contact & Location */}
           {booking.status !== BookingStatus.COMPLETED && booking.status !== BookingStatus.CANCELLED && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>CONTACT & LOCATION</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>CONTACT & WHERE TO GO</Text>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={[st.row, { borderBottomColor: C.border }]}>
-                  <Text style={[st.rowLabel, { color: C.sub }]}>Contact Provider</Text>
+                  <Text style={[st.rowLabel, { color: C.sub }]}>Get in touch with {booking.providerName}</Text>
                   <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); (booking.status === BookingStatus.PENDING ? void openProviderChat(booking) : void openContactSheet(booking)); }} style={[st.actionChip, { backgroundColor: C.accent, flexDirection: 'row', alignItems: 'center', gap: 5 }]} activeOpacity={0.7}>
                     <Ionicons name="chatbubble-ellipses-outline" size={14} color={C.onAccent} />
                     <Text style={{ color: C.onAccent, fontSize: 12, fontWeight: '600' }}>Contact</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={[st.row, { borderBottomWidth: 0 }]}>
-                  <Text style={[st.rowLabel, { color: C.sub }]}>{isMobile ? 'Your Address' : 'Location'}</Text>
+                  <Text style={[st.rowLabel, { color: C.sub }]}>{isMobile ? 'They come to you at' : 'Address'}</Text>
                   {isMobile ? (
                     booking.clientAddress ? (
                       <Text style={[st.rowValue, { color: C.text }]}>{booking.clientAddress}</Text>
@@ -1326,7 +1337,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   ) : isPending ? (
                     // A request isn't a booking yet, so there's no location
                     // to go to until the provider accepts it.
-                    <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>TBA</Text>
+                    <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>Shared once {booking.providerName} says yes</Text>
                   ) : hasMapDestination(booking) ? (
                     <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openInMaps(booking); }} activeOpacity={0.7} style={{ flex: 0.6 }}>
                       <Text style={[st.rowValue, { color: C.accent, flex: undefined }]}>{booking.address}</Text>
@@ -1337,13 +1348,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={[st.rowValue, { color: C.text }]}>{booking.address}</Text>
                   ) : (
                     <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>
-                      {addrCountdown ? `Available in ${addrCountdown}` : 'Address to be confirmed'}
+                      {addrCountdown ? `${booking.providerName} shares it in ${addrCountdown}` : `${booking.providerName} will share it before your appointment`}
                     </Text>
                   )}
                 </View>
                 {!isMobile && !isPending && !!booking.howToGetThere && !isAddressPending(booking.address) && (
                   <View style={[st.row, { borderBottomWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, alignItems: 'flex-start' }]}>
-                    <Text style={[st.rowLabel, { color: C.sub }]}>Arrival details</Text>
+                    <Text style={[st.rowLabel, { color: C.sub }]}>When you get there</Text>
                     <Text style={[st.rowValue, { color: C.text }]}>{booking.howToGetThere}</Text>
                   </View>
                 )}
@@ -1356,12 +1367,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <View style={st.section}>
               <View style={[st.rescheduleBanner, { backgroundColor: C.card, borderColor: C.accent }]}>
                 <Text style={[{ fontSize: 14, fontWeight: '700', color: C.accent, marginBottom: 4 }]}>
-                  {(booking as any).rescheduleRequest?.providerAvailableDates ? 'Available Times Received!' : 'Reschedule Requested'}
+                  {booking.rescheduleRequest?.providerAvailableDates ? `${booking.providerName} has offered new times` : 'You asked to move this booking'}
                 </Text>
                 <Text style={{ fontSize: 13, color: C.sub }}>
-                  {(booking as any).rescheduleRequest?.providerAvailableDates
-                    ? `${booking.providerName} has responded with available times. Tap Reschedule Now to confirm.`
-                    : `Waiting for ${booking.providerName} to respond with available dates.`}
+                  {booking.rescheduleRequest?.providerAvailableDates
+                    ? 'Tap Pick a New Time to choose one. Until you do, your booking stays at the time above.'
+                    : `Waiting for ${booking.providerName} to reply with times that work for them. Your booking stays at the time above until then.`}
                 </Text>
                 {/* Show what was actually requested — previously not surfaced
                     anywhere after submission (requestedDates/requestedTimes
@@ -1374,7 +1385,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       const t = (booking as any).rescheduleRequest.requestedTimes?.[i];
                       return (
                         <Text key={`${d}-${i}`} style={{ fontSize: 12, color: C.text, fontWeight: '600', marginTop: 2 }}>
-                          You requested: {formatBookingDisplayDate(d)}{formatTime12Safe(t) ? ` at ${formatTime12Safe(t)}` : ''}
+                          You asked for: {formatBookingDisplayDate(d)}{formatTime12Safe(t) ? ` at ${formatTime12Safe(t)}` : ''}
                         </Text>
                       );
                     })}
@@ -1388,7 +1399,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.actions}>
             {isPending && (
               <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
-                <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Decline Request</Text>
+                <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Withdraw Request</Text>
               </TouchableOpacity>
             )}
             {isUpcoming && (
@@ -1413,7 +1424,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
-                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>Provider didn't show up</Text>
+                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>{booking.providerName} didn't turn up</Text>
               </TouchableOpacity>
             )}
             {booking.isPendingReschedule && (
@@ -1423,7 +1434,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
                 {(booking as any).rescheduleRequest?.providerAvailableDates && (
                   <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); navigation.navigate('Reschedule', { bookingId: booking.id }); }} activeOpacity={0.7}>
-                    <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule Now</Text>
+                    <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Pick a New Time</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1451,7 +1462,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowTipModal(true); }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : tipClosed ? 'Tip closed' : 'Tip'}</Text>
+                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : tipClosed ? 'Tipping closed' : 'Tip'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[st.mapActionBtn, { backgroundColor: '#f28f0c58', borderColor: '#b9550dff' }, rebookBusy && st.mapActionBtnDisabled]}
@@ -1474,12 +1485,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowDisputeModal(true); }}
                 activeOpacity={0.7}
               >
-                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>This wasn't right — dispute it</Text>
+                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>Wasn't a no-show? Dispute it</Text>
               </TouchableOpacity>
             )}
             {!!booking.noShowDisputedAt && (
               <Text style={{ marginTop: 12, fontSize: 13, color: C.sub, textAlign: 'center' }}>
-                You disputed this no-show. {booking.providerName} has been told and support has a copy.
+                You disputed being marked as missed. {booking.providerName} has been told, and CERVICED support has a copy.
               </Text>
             )}
           </View>
@@ -1507,35 +1518,37 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 {cancelPolicyStillApplies ? (
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
-                    <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cancelling Now</Text>
+                    <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>This Is a Late Cancellation</Text>
                     <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
                       {isPastCancellationWindow
-                        ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
-                        : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
+                        ? `${booking.providerName} asks for ${formatNoticePhrase(cancellationNoticeHrs)} to cancel, and your appointment is sooner than that. If you cancel now, they may keep some or all of what you paid, as their cancellation policy says.`
+                        : `You moved this booking when it was already less than ${noticeWindowText} away. So if you cancel it, ${booking.providerName} may still keep some or all of what you paid, as their cancellation policy says.`}
                       {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it.` : ''}
                     </Text>
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
-                        <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                        <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Keep Booking</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleCancelBooking(); }} disabled={isLoading} activeOpacity={0.7}>
-                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Cancel</Text>}
+                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Cancel Anyway</Text>}
                       </TouchableOpacity>
                     </View>
                   </>
                 ) : (
                   <>
-                    <Text style={[st.sheetTitle, { color: C.text }]}>Cancel Booking</Text>
+                    <Text style={[st.sheetTitle, { color: C.text }]}>{isPending ? 'Withdraw Your Request?' : 'Cancel This Booking?'}</Text>
                     <Text style={[st.sheetSub, { color: C.sub }]}>
-                      Cancel "{booking.serviceName}"? This can't be undone.
-                      {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it. The rest, including the platform fee, comes back to you.` : ''}
+                      {isPending
+                        ? `Your request to ${booking.providerName} for ${booking.serviceName} will be withdrawn. You can't undo this.`
+                        : `Your ${booking.serviceName} with ${booking.providerName} will be cancelled. You can't undo this.`}
+                      {depositIsNonRefundable ? ` Your deposit can't be refunded, so ${booking.providerName} keeps it. Everything else, including the CERVICED booking fee, comes back to you.` : ''}
                     </Text>
                     <View style={st.sheetBtns}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
-                        <Text style={{ color: C.text, fontWeight: '600' }}>Keep Booking</Text>
+                        <Text style={{ color: C.text, fontWeight: '600' }}>{isPending ? 'Keep Request' : 'Keep Booking'}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleCancelBooking(); }} disabled={isLoading} activeOpacity={0.7}>
-                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Yes, Cancel</Text>}
+                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>{isPending ? 'Yes, Withdraw' : 'Yes, Cancel'}</Text>}
                       </TouchableOpacity>
                     </View>
                   </>
@@ -1551,7 +1564,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>{successIcon}</Text>
-              <Text style={[st.sheetTitle, { color: C.text }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>{successIcon === '✓' ? 'Done' : 'Heads Up'}</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{successMessage}</Text>
               {/* sheetBtn is `flex:1`, meant to share a sheetBtns row with a
                   sibling — used alone (even with alignSelf:'stretch') it has
@@ -1573,7 +1586,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
-              <Text style={[st.sheetTitle, { color: C.text }]}>Cannot Reschedule</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Can't Move This Booking</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{cooldownMessage}</Text>
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCooldownModal(false); }} activeOpacity={0.7}>
@@ -1592,16 +1605,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
-              <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Inside the Cancellation Window</Text>
+              <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Your Appointment Is Soon</Text>
               <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
-                {booking.providerName} asks for {formatNoticeWindow(lateRescheduleNoticeHrs ?? 0)} notice to cancel, and that has already started. You can still ask to reschedule, but if you later cancel the new date, their cancellation policy will apply as if you'd cancelled now.
+                {booking.providerName} asks for {formatNoticePhrase(lateRescheduleNoticeHrs ?? 0)} to cancel, and your appointment is sooner than that. You can still ask to move it. But if you then cancel the new time, their cancellation policy applies as if you'd cancelled today.
               </Text>
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setLateRescheduleNoticeHrs(null); }} activeOpacity={0.7}>
                   <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Keep Booking</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setLateRescheduleNoticeHrs(null); navigation.navigate('Reschedule', { bookingId: booking.id }); }} activeOpacity={0.7}>
-                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Reschedule</Text>
+                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Move It</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1620,9 +1633,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
-              <Text style={[st.sheetTitle, { color: C.text }]}>Provider didn't show up?</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Did {booking.providerName} not turn up?</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>
-                {booking.providerName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone. Are you sure?
+                Only report this if {booking.providerName} didn't come to your appointment. They'll be told and can dispute it with CERVICED support. You can't undo this.
               </Text>
               <View style={st.sheetBtns}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(false); }} disabled={isLoading} activeOpacity={0.7}>
@@ -1634,7 +1647,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   disabled={isLoading}
                   activeOpacity={0.7}
                 >
-                  {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Confirm</Text>}
+                  {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Report It</Text>}
                 </TouchableOpacity>
               </View>
             </View>
@@ -1648,9 +1661,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         <Modal visible={showDisputeModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowDisputeModal(false)}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
-              <Text style={[st.sheetTitle, { color: C.text }]}>Dispute this no-show</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Dispute being marked as missed</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>
-                {booking.providerName} marked this appointment as missed. Tell us what actually happened — they'll see it, and so will Cerviced support.
+                {booking.providerName} says you didn't turn up to this appointment. Tell us what actually happened. They'll see it, and so will CERVICED support.
               </Text>
               <TextInput
                 style={[st.disputeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
@@ -1777,7 +1790,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 )}
 
                 {!isOffAppRefund && (<>
-                <Text style={[st.supportHeading, { color: C.sub }]}>{supportKind === 'refund' ? "WHAT'S THE REFUND FOR?" : 'WHAT WENT WRONG?'}</Text>
+                <Text style={[st.supportHeading, { color: C.sub }]}>{supportKind === 'refund' ? "WHY DO YOU WANT A REFUND?" : 'WHAT WENT WRONG?'}</Text>
                 <View style={{ gap: 8 }}>
                   {(supportKind ? SUPPORT_REASONS[supportKind] : []).map(r => {
                     const selected = supportReason === r;
@@ -1933,8 +1946,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
           <View style={st.overlay}>
             <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
-              <Text style={[st.sheetTitle, { color: C.text }]}>Include Add-Ons?</Text>
-              <Text style={[st.sheetSub, { color: C.sub }]}>Would you like to include the same add-ons from your previous booking?</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Add the Same Extras?</Text>
+              <Text style={[st.sheetSub, { color: C.sub }]}>Do you want the same extras as last time?</Text>
               {booking.addOns?.map((a, i) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
                   <Text style={{ color: C.text }}>• {a.name}</Text>
@@ -1943,10 +1956,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               ))}
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); confirmRebook('without'); }} activeOpacity={0.7}>
-                  <Text style={{ color: C.text }}>Without Add-Ons</Text>
+                  <Text style={{ color: C.text }}>No Extras</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); confirmRebook('with'); }} activeOpacity={0.7}>
-                  <Text style={{ color: C.onAccent, fontWeight: '600' }}>With Add-Ons</Text>
+                  <Text style={{ color: C.onAccent, fontWeight: '600' }}>Add Extras</Text>
                 </TouchableOpacity>
               </View>
             </View>

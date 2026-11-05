@@ -21,8 +21,8 @@ Curated: [[Address Release]] · **101 files**
 - `src/screens/provider/BusinessInfoScreen.tsx` _(40)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
 - `supabase/address_release_notification.sql` _(33)_
-- `src/screens/client/BookingDetailScreen.tsx` _(32)_
 - `supabase/require_provider_address.sql` _(32)_
+- `src/screens/client/BookingDetailScreen.tsx` _(31)_
 - `src/features/business-details/options.ts` _(30)_
 - `src/types/booking.ts` _(30)_
 - `src/types/database.ts` _(29)_
@@ -84,8 +84,8 @@ Curated: [[Payments]] · **155 files**
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/services/bookingService.ts` _(101)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
-- `src/screens/client/BookingDetailScreen.tsx` _(85)_
 - `src/features/bookings/receipt.ts` _(83)_
+- `src/screens/client/BookingDetailScreen.tsx` _(83)_
 - `src/types/database.ts` _(59)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(56)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **318 files**
 - `src/screens/client/CartScreen.tsx` _(681)_
 - `src/services/becca/capabilities/client.ts` _(585)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(556)_
-- `src/screens/client/BookingDetailScreen.tsx` _(473)_
+- `src/screens/client/BookingDetailScreen.tsx` _(500)_
 - `src/screens/client/BookingsScreen.tsx` _(364)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_
@@ -244,12 +244,12 @@ Curated: [[Booking Flow]] · **63 files**
 - … +33 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **190 files**
+Curated: [[Booking Flow]] · **191 files**
 - `src/contexts/BookingContext.tsx` _(329)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(290)_
 - `src/services/databaseService.ts` _(252)_
-- `src/screens/client/BookingDetailScreen.tsx` _(197)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
+- `src/screens/client/BookingDetailScreen.tsx` _(190)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/services/becca/capabilities/client.ts` _(148)_
 - `src/screens/client/RescheduleScreen.tsx` _(144)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **190 files**
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `src/types/database.ts` _(37)_
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
-- … +160 more
+- … +161 more
 
 ## Auth
 Curated: [[Contexts]] · **197 files**

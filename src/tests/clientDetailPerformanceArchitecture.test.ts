@@ -47,16 +47,16 @@ describe('client detail screen performance and safety contracts', () => {
     expect(source).toContain('.catch(() => {}); setShowReceipt(v => !v);');
   });
 
-  it('says TBA for the location of a requested booking, on the detail and the list', () => {
+  it('holds back the location of a requested booking, on the detail and the list', () => {
     const detail = read('screens', 'client', 'BookingDetailScreen.tsx');
     const list = read('screens', 'client', 'BookingsScreen.tsx');
 
     // Mobile comes first: there the client's own address is still theirs to see.
-    const mobileBranch = detail.indexOf("{isMobile ? 'Your Address' : 'Location'}");
-    const tba = detail.indexOf('>TBA</Text>');
+    const mobileBranch = detail.indexOf("{isMobile ? 'They come to you at' : 'Address'}");
+    const pending = detail.indexOf('>Shared once {booking.providerName} says yes</Text>');
     expect(mobileBranch).toBeGreaterThan(-1);
-    expect(tba).toBeGreaterThan(mobileBranch);
-    expect(tba).toBeLessThan(detail.indexOf('{addrCountdown ? `Available in'));
+    expect(pending).toBeGreaterThan(mobileBranch);
+    expect(pending).toBeLessThan(detail.indexOf('{addrCountdown ? `${booking.providerName} shares it in'));
     expect(detail).toContain('!isMobile && !isPending && !!booking.howToGetThere');
     expect(list).toContain("if (b.status === BookingStatus.PENDING) return 'TBA';");
   });
