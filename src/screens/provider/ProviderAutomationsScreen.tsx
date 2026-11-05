@@ -13,13 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   updateProviderAutoAccept,
-  updateProviderCancellationPolicy,
   mergeProviderAutomationSettings,
   getMyProviderProfileContext,
   updateCurrentUserMetadata,
 } from '../../services/databaseService';
-import { loadProviderPolicies, saveProviderPolicies } from '../../services/providerRegistrationService';
-import { cancellationNoticeHours, noticeChoiceForHours } from '../../utils/policyDisplay';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 
@@ -63,13 +60,13 @@ interface ProviderAutomations {
 
   // Provider business rules
   autoConfirmBookings:    boolean;
-  cancellationNoticeHours:string;     // '0' | '12' | '24' | '48' | '72'
   waitlistEnabled:        boolean;
   autoAcceptWaitlist:     boolean;
   // Not here on purpose: scheduleReleaseDay (InfoRegScreen) and
   // depositRequiredNew (PaymentsScreen) share automation_settings but belong
-  // to those screens. The save below merges only this screen's keys, so
-  // there's nothing to carry back.
+  // to those screens. The cancellation notice window is set on Policies,
+  // next to the rest of the cancellation policy. The save below merges only
+  // this screen's keys, so there's nothing to carry back.
 }
 
 const DEFAULTS: ProviderAutomations = {
@@ -80,7 +77,6 @@ const DEFAULTS: ProviderAutomations = {
   birthdayGreeting:        false,
   newBookingRecap:         true,
   autoConfirmBookings:     true,  // matches providers.auto_accept_bookings DB default
-  cancellationNoticeHours: '0',   // matches providers.cancellation_notice_hours DB default
   waitlistEnabled:         false,
   autoAcceptWaitlist:      false,
 };
@@ -164,19 +160,6 @@ function Toast({ msg, ok, C }: { msg: string; ok: boolean; C: typeof C_DARK }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-/** Apply a cancellation window and write the matching choice into the
- *  provider's written policy, so Policies and their profile say the same.
- *  Policies are saved whole, so they're read again right before the write
- *  rather than from a copy loaded when this screen opened. */
-async function saveCancellationNotice(providerId: string, userId: string | null, hours: number): Promise<void> {
-  await updateProviderCancellationPolicy(providerId, hours);
-  const choice = noticeChoiceForHours(hours, { zeroIsNone: true });
-  if (!userId || !choice) return;
-  const policies = await loadProviderPolicies(userId);
-  if (!policies || policies['cancelNotice'] === choice) return;
-  await saveProviderPolicies(userId, { ...policies, cancelNotice: choice });
-}
-
 export default function ProviderAutomationsScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? C_DARK : C_LIGHT;
@@ -186,9 +169,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   const [toast, setToast]       = useState<{ msg: string; ok: boolean } | null>(null);
   const [d, setD]               = useState<ProviderAutomations>(DEFAULTS);
   const [providerId, setProviderId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  // The window as loaded, so a save only rewrites it when it was changed here.
-  const [loadedNoticeHours, setLoadedNoticeHours] = useState<string | null>(null);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -201,7 +181,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         const context = await getMyProviderProfileContext();
         const profile = context?.profile ?? null;
         if (profile) setProviderId(profile.id);
-        if (context?.userId) setUserId(context.userId);
         const m = (context?.userMetadata ?? {}) as {
           pa_client_reminder_timing?: string[];
           pa_rebooking_nudge_weeks?: string;
@@ -210,17 +189,12 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           pa_birthday_greeting?: boolean;
           pa_new_booking_recap?: boolean;
           pa_auto_confirm_bookings?: boolean;
-          pa_cancellation_notice_hours?: string | number;
           pa_waitlist_enabled?: boolean;
           pa_auto_accept_waitlist?: boolean;
         };
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
         const a = (profile as any)?.automation_settings ?? {};
-        const noticeHours = profile
-          ? String(cancellationNoticeHours(profile.cancellation_notice_hours, profile.booking_policies as { cancelNotice?: unknown } | null))
-          : String(m['pa_cancellation_notice_hours'] ?? DEFAULTS.cancellationNoticeHours);
-        setLoadedNoticeHours(noticeHours);
         setD({
           clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
@@ -232,8 +206,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           // and the booking flow read them from there, not user_metadata) —
           // the row is the real answer, not just a fallback.
           autoConfirmBookings:     profile?.auto_accept_bookings ?? m['pa_auto_confirm_bookings'] ?? DEFAULTS.autoConfirmBookings,
-          // The window actually applied, the same answer Policies shows.
-          cancellationNoticeHours: noticeHours,
           waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
         });
@@ -256,7 +228,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             pa_birthday_greeting:         d.birthdayGreeting,
             pa_new_booking_recap:         d.newBookingRecap,
             pa_auto_confirm_bookings:     d.autoConfirmBookings,
-            pa_cancellation_notice_hours: d.cancellationNoticeHours,
             pa_waitlist_enabled:          d.waitlistEnabled,
             pa_auto_accept_waitlist:      d.autoAcceptWaitlist,
             // pa_buffer_mins / pa_max_bookings_per_day /
@@ -271,9 +242,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         saves.push(updateProviderAutoAccept(providerId, d.autoConfirmBookings));
         // updateProviderScheduleSettings / updateProviderMaxBookingsPerDay are
         // SchedulingScreen's to call — same clobbering reason as above.
-        if (d.cancellationNoticeHours !== loadedNoticeHours) {
-          saves.push(saveCancellationNotice(providerId, userId, parseInt(d.cancellationNoticeHours, 10) || 0));
-        }
         // Mirror the client-facing automations onto the providers row —
         // user_metadata is invisible to client screens and pg_cron jobs,
         // so anything that must act on these settings reads them from here.
@@ -302,7 +270,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [d, providerId, userId, loadedNoticeHours, navigation]);
+  }, [d, providerId, navigation]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
     setD(prev => ({ ...prev, [key]: val }));
@@ -482,27 +450,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             and start-time intervals all moved to SchedulingScreen — they're
             scheduling rules, not automations, and splitting them across two
             screens made availability impossible to reason about in one place.
-            Cancellation notice stays here: it drives the cancellation policy
-            clients are shown, not when slots are bookable. */}
-
-        {/* Cancellation notice */}
-        <ChipSelect
-          label="Cancellation notice required"
-          options={[
-            { v: '0',  l: 'Any time' },
-            { v: '12', l: '12 hrs'   },
-            { v: '24', l: '24 hrs'   },
-            { v: '48', l: '48 hrs'   },
-            { v: '72', l: '72 hrs'   },
-          ]}
-          selected={d.cancellationNoticeHours}
-          multi={false}
-          onSelect={v => set('cancellationNoticeHours', v)}
-          C={C}
-        />
-        <Text style={[st.chipHint, { color: C.sub }]}>
-          Clients who cancel within this window will be shown your cancellation policy. A change applies to new bookings; bookings already made keep their window.
-        </Text>
+            Cancellation notice lives on Policies with the rest of the
+            cancellation policy, so there is one place to set it. */}
 
         {/* Info note */}
         <View style={[st.infoBox, { backgroundColor: C.surface, borderColor: C.border }]}>

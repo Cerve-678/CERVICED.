@@ -15,6 +15,7 @@ import ProviderAnalyticsScreen from "../../../screens/provider/ProviderAnalytics
 import ProviderBookingHistoryScreen from "../../../screens/provider/ProviderBookingHistoryScreen";
 import ProviderAutomationsScreen from "../../../screens/provider/ProviderAutomationsScreen";
 import PaymentsScreen from "../../../screens/provider/PaymentsScreen";
+import PoliciesScreen from "../../../screens/provider/PoliciesScreen";
 import { ProviderBeccaStackParamList } from "../../types";
 
 const ProviderBeccaStack =
@@ -134,6 +135,12 @@ export default function ProviderBeccaNavigator() {
       <ProviderBeccaStack.Screen
         name="Payments"
         component={PaymentsScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      <ProviderBeccaStack.Screen
+        name="Policies"
+        component={PoliciesScreen}
         options={{ headerShown: false, presentation: "card" }}
       />
     </ProviderBeccaStack.Navigator>

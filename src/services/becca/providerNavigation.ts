@@ -27,8 +27,16 @@ const destinations: { topic: RegExp; destination: ProviderDestination }[] = [
     destination: { title: "My Services", path: "My Services", screen: "services", detail: "Edit your services, prices and portfolio there.", fullBookingOnly: true },
   },
   {
-    topic: /\b(?:deposit|cancellation policy|reschedul(?:e|ing) policy|automations?)\b/i,
-    destination: { title: "Automations", path: "Business Details → Automations", screen: "automations", detail: "Update your deposit, cancellation and rescheduling settings there.", fullBookingOnly: true },
+    topic: /\b(?:cancellation (?:policy|notice|window)|reschedul(?:e|ing) policy|no[ -]?show policy|address release|(?:my |booking )?polic(?:y|ies))\b/i,
+    destination: { title: "Policies", path: "Business Profile → Business Details → Policies", screen: "policies", detail: "Set your cancellation notice, rescheduling and no-show rules there.", fullBookingOnly: true },
+  },
+  {
+    topic: /\bdeposits?\b/i,
+    destination: { title: "Payments", path: "Business Profile → Payments & payouts", screen: "payments", detail: "Choose whether you take a deposit, and how much, there.", fullBookingOnly: true },
+  },
+  {
+    topic: /\b(?:automations?|reminders?|rebooking nudges?|review requests?|waitlist)\b/i,
+    destination: { title: "Automations", path: "Business Profile → Automations & Preferences", screen: "automations", detail: "Choose the reminders and messages CERVICED sends for you there.", fullBookingOnly: true },
   },
   {
     topic: /\b(?:promotions?|offers?|discounts?|promo codes?)\b/i,
@@ -40,7 +48,7 @@ const destinations: { topic: RegExp; destination: ProviderDestination }[] = [
   },
   {
     topic: /\b(?:payment settings?|payouts?|bank details?)\b/i,
-    destination: { title: "Payments", path: "Business Details → Payments", screen: "payments", detail: "Review or update your payment details there.", fullBookingOnly: true },
+    destination: { title: "Payments", path: "Business Profile → Payments & payouts", screen: "payments", detail: "Review or update your payment details there.", fullBookingOnly: true },
   },
   {
     topic: /\b(?:clients?|clientele)\b/i,
