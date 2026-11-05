@@ -108,7 +108,7 @@ Curated: [[Payments]] · **155 files**
 - … +125 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **317 files**
+Curated: [[Booking Flow]] · **318 files**
 - `src/services/databaseService.ts` _(993)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(697)_
@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **317 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/RescheduleScreen.tsx` _(176)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(145)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(146)_
 - `src/services/AvailabilityService.ts` _(138)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/screens/shared/NotificationsScreen.tsx` _(131)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **317 files**
 - `src/components/BookingSheet.tsx` _(97)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- … +287 more
+- … +288 more
 
 ## Notifications
 Curated: [[Notifications]] · **177 files**

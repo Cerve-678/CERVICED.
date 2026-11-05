@@ -1,0 +1,50 @@
+import fs from 'fs';
+import path from 'path';
+import React from 'react';
+import { render, fireEvent } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PolicyImageViewer } from '../components/PolicyImageViewer';
+
+const metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+const withInsets = (ui: React.ReactElement) =>
+  render(<SafeAreaProvider initialMetrics={metrics}>{ui}</SafeAreaProvider>);
+
+const policy = 'https://example.com/policy.png';
+
+describe('PolicyImageViewer', () => {
+  it('shows a long policy at full width and its real height, inside a scroll view', () => {
+    const { getByLabelText } = withInsets(
+      <PolicyImageViewer uri={policy} visible onClose={() => {}} />,
+    );
+    const image = getByLabelText('Policy document');
+    // A 1000 x 4000 photo is drawn four times as tall as it is wide, not squeezed into one screen.
+    fireEvent(image, 'load', { nativeEvent: { source: { width: 1000, height: 4000 } } });
+    const { width, height } = getByLabelText('Policy document').props['style'];
+    expect(height).toBeCloseTo(width * 4);
+  });
+
+  it('closes from its close button', () => {
+    const onClose = jest.fn();
+    const { getByLabelText } = withInsets(
+      <PolicyImageViewer uri={policy} visible onClose={onClose} />,
+    );
+    fireEvent.press(getByLabelText('Close policy document'));
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('both places a client opens the policy image', () => {
+  const read = (file: string) =>
+    fs.readFileSync(path.join(__dirname, '..', 'screens', 'client', file), 'utf8');
+
+  it.each(['ProviderProfileScreen.tsx', 'BookingDetailScreen.tsx'])('%s uses the scrolling viewer', file => {
+    expect(read(file)).toContain('<PolicyImageViewer');
+  });
+
+  it('no longer opens it in the photo carousel, which fits it to one screen', () => {
+    expect(read('ProviderProfileScreen.tsx')).not.toMatch(/openImageViewer\(\s*\[\{ uri: provider\.bookingPolicies/);
+  });
+});
