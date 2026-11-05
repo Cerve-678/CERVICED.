@@ -119,7 +119,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Auto-accept bookings | ✅ | `ProviderAutomationsScreen.tsx` toggle → `providers.auto_accept_bookings` column, read by DB trigger `handle_new_booking()`. Confirmed still single source of truth — do not add a second toggle. |
 | Waitlist automation | ✅ | `ProviderAutomationsScreen.tsx` (`waitlistEnabled`, `autoAcceptWaitlist`) — DB-trigger-owned, see `WAITLIST.md` |
 | Promotions | ✅ | `ProviderPromotionsScreen.tsx` |
-| Provider automations (reminders, rebook nudge, review requests, buffer time, deposit requirement, max bookings/day) | ✅ | `ProviderAutomationsScreen.tsx` |
+| Provider automations (reminders, rebook nudge, review requests, check-ins, birthday greeting, daily recap, auto-accept, waitlist) | ✅ | `ProviderAutomationsScreen.tsx`. Buffer time and daily cap live on `SchedulingScreen`, deposits on `PaymentsScreen`, and the cancellation notice window on `PoliciesScreen` only (removed from Automations 2026-11-04). |
 | Provider analytics/revenue | ✅ | `ProviderAnalyticsScreen.tsx` — reads bookings/reviews |
 | Clientele view / inbox / conversations | ✅ | `ProviderClienteleScreen.tsx`, `ProviderInboxScreen.tsx`, `ProviderConversationScreen.tsx` |
 | Address release policy | ✅ | `providers.address_release_policy`, server-enforced via `client_bookings` view, not the app |

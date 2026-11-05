@@ -46,6 +46,7 @@ export const PROVIDER_PUSH_NAV: Record<string, string> = {
   history: "BookingHistory",
   automations: "Automations",
   payments: "Payments",
+  policies: "Policies",
 };
 
 export const PROVIDER_TAB_NAV: Record<string, { tab: string; screen: string }> = {
