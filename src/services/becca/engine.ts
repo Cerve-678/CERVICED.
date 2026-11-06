@@ -166,6 +166,12 @@ export function confirmToken(id: string): string {
   return `${CONFIRM_PREFIX}${id}`;
 }
 
+/** A confirm token is an internal instruction, never something to show the
+ *  person as their own message — the chip they tapped says it in words. */
+export function isConfirmToken(message: string): boolean {
+  return message.startsWith(CONFIRM_PREFIX);
+}
+
 /** Backing out — of a pending write, or of the conversation generally. */
 const DISMISSAL_RE =
   /^(never ?mind|nevermind|no thanks?|no ta|cancel that|forget it|leave it|not now|nothing|nah|no)\.?$/i;

@@ -223,6 +223,11 @@ that, putting it right means taking money back from Jo (section 2.8).
 1. **Reserve and price.** The server checks the basket, holds each slot for
    10 minutes and records the checkout. The server never trusts a price sent
    by the app: every amount is recalculated from the database.
+   Add-ons are priced from `service_add_ons`, the per-service copies of the
+   provider's own add-on list (`provider_add_ons`, since 5 November; one
+   price per add-on, the same on every service). An add-on's extra time
+   lengthens the booking's end time but never changes its price. **Not live
+   until migration `20261105223541_universal_add_ons` is applied.**
 2. **Add the fee** from section 1.3.
 3. **Check the provider can be paid.** If any provider in the basket hasn't
    finished setting up their Stripe account, checkout is refused.
@@ -945,7 +950,7 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
-| 12 | **Full membership shows a price nobody is charged.** Link-only pros who become full members see "£25.99 a month, 2 months free" (`src/constants/fullMembership.ts`); no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
+| 12 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
 
 ---
 
@@ -973,11 +978,13 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 31 Oct | The reschedule rule covers only bookings made after it went live, and a later move the provider proposes clears it | Older bookings were agreed under the old Terms; a date the provider chose is a fresh start |
 | 29 Oct | Provider debts: tell them, then take it from future payouts, including fee payouts. No pay-back button | Simple, transparent, and uses what's already built |
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
+| 5 Nov | Add-ons belong to the provider, not one service: one price everywhere, optional extra time, can be paused. Bookings keep the name and price paid | Providers retyped the same add-on per service, and a price change meant editing every copy |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
 | 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. Not live until `apply-cancellation-refund` is deployed from main, which must happen before an app build carrying this ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | 2 Nov | Link-only pros can become full members themselves. The app shows £25.99 a month with 2 months free, counted from the day they go live again, but charges nothing until pricing is final | Lets demand from client nudges turn into full providers now, without building billing first |
+| 6 Nov | The £25.99 monthly price comes off every full-membership screen; only "2 months free" stays | Pricing isn't final, so the app shouldn't name a number yet |
 | 2 Nov | A provider has 24 hours, not 48, to answer a booking request. Still fully refunded if they don't | The user's call, 2 November 2026 |
 | 3 Nov | Providers can require a non-refundable deposit: kept whenever the client cancels, frozen per booking, still refunded if the provider cancels, declines or doesn't answer. CERVICED refunds its fee when the deposit is the only thing kept | The user's call (2 and 3 Nov), including not waiting for a solicitor. **Not lawyer-reviewed** |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |

@@ -423,6 +423,21 @@ export default function HomeScreen() {
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
+  // Trending is shuffled when Home loads, but Home stays mounted while the
+  // client moves between tabs, so coming back used to show the same order.
+  // Reshuffle the rail every time Home comes back into view (not on its
+  // first focus, which the load above already shuffled). No refetch: the
+  // same trending providers, just a fresh order.
+  const trendingFocusSeen = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!trendingFocusSeen.current) {
+        trendingFocusSeen.current = true;
+        return;
+      }
+      setTrending(current => (current.length > 1 ? shuffle(current) : current));
+    }, []),
+  );
   const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityInfo>>(new Map());
 
   // Per-service audience refinement (services.audience) for the Male/Kids

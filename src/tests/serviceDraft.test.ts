@@ -15,7 +15,7 @@ describe('createServiceDraft', () => {
       serviceType: 'consultation',
       price: 0,
       images: [],
-      addOns: [],
+      addOnKeys: [],
       patchTestRequired: false,
     });
   });

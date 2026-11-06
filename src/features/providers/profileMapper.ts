@@ -46,6 +46,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
           name: addOn.name,
           price: Number(addOn.price),
           description: addOn.description ?? '',
+          extraMinutes: Number(addOn.extra_minutes ?? 0),
         })),
       // null = never stated → treated as safe (no warning), matching the
       // provider toggle's off-by-default meaning. Only an explicit false shows

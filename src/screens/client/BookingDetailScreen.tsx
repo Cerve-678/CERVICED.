@@ -1004,7 +1004,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     setViewingPack(pack);
                     if (!pack.viewedAt) {
-                      markInfoPackViewed(pack.id).catch(() => {});
+                      markInfoPackViewed(pack.id).catch(error => logger.error('[BookingDetail] mark info pack read failed:', error));
                       setBookingInfoPacks(prev => prev.map(p => p.id === pack.id ? { ...p, viewedAt: new Date().toISOString() } : p));
                     }
                   }}>

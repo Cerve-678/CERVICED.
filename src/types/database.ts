@@ -564,6 +564,10 @@ export interface DbServiceImage {
   fit: 'cover' | 'contain';
 }
 
+/** One service's copy of a provider add-on. Since universal add-ons
+ *  (20261105223541) these rows are DERIVED from provider_add_ons by
+ *  sync_provider_add_on_links(): never write them directly. Their ids are
+ *  what carts, checkout and booking_add_ons reference. */
 export interface DbServiceAddOn {
   id: string;
   service_id: string;
@@ -571,6 +575,34 @@ export interface DbServiceAddOn {
   price: number;
   description: string | null;
   is_active: boolean;
+  /** Minutes this add-on adds to the appointment. 0 = no extra time. */
+  extra_minutes: number;
+  provider_add_on_id: string | null;
+}
+
+/** Which services a provider add-on goes on. 'services' = only the ones
+ *  ticked by hand (included_service_ids). */
+export type ProviderAddOnAppliesTo = 'all' | 'categories' | 'services';
+
+/** An add-on as the provider made it, once, for all their services. Read by
+ *  its owner only; saved through replace_provider_add_ons(). */
+export interface DbProviderAddOn {
+  id: string;
+  provider_id: string;
+  name: string;
+  price: number;
+  description: string | null;
+  extra_minutes: number;
+  /** false = paused: hidden from clients on every service. */
+  is_active: boolean;
+  applies_to: ProviderAddOnAppliesTo;
+  /** services.category_name values, for applies_to = 'categories'. */
+  category_names: string[];
+  /** Ticked on these services even though the rule doesn't cover them. */
+  included_service_ids: string[];
+  /** Unticked on these services even though the rule covers them. */
+  excluded_service_ids: string[];
+  sort_order: number;
 }
 
 export interface DbProviderAvailability {
@@ -1007,7 +1039,7 @@ export type ProviderWithServices = Pick<
     >[];
     add_ons: Pick<
       DbServiceAddOn,
-      "id" | "name" | "price" | "description" | "is_active"
+      "id" | "name" | "price" | "description" | "is_active" | "extra_minutes"
     >[];
   })[];
   specialties: Pick<DbProviderSpecialty, "specialty">[];
