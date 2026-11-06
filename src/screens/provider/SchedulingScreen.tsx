@@ -78,15 +78,19 @@ export default function SchedulingScreen({ navigation }: any) {
   // Booking rules (moved from ProviderAutomationsScreen)
   const [bufferMins, setBufferMins]             = useState('0');
   const [bookingWindowDays, setBookingWindowDays] = useState('60');
-  // Monthly release: the release day's ONLY editor is this screen. One
-  // stored value (automation_settings.scheduleReleaseDay, merged in on save)
-  // drives the booking limit (utils/bookingHorizon, provider_last_bookable_
-  // date), the profile pill and the release message. It replaces the rolling
-  // window, which stays saved so switching back restores it. `releaseDay`
-  // survives a switch to 'rolling' so switching back keeps the day picked.
+  // Monthly release. Edited here AND in Edit Profile (InfoRegScreen): both
+  // write one stored value (automation_settings.scheduleReleaseDay, merged
+  // in on save), which drives the booking limit (utils/bookingHorizon,
+  // provider_last_bookable_date), the profile pill and the release message.
+  // It replaces the rolling window, which stays saved so switching back
+  // restores it. `releaseDay` survives a switch to 'rolling' so switching
+  // back keeps the day picked. `loadedReleaseDay` is what was stored when
+  // this screen opened: the save writes the day only if it changed, so an
+  // unrelated save here never puts back an older day.
   const [horizonMode, setHorizonMode] = useState<HorizonMode>('rolling');
   const [releaseDay, setReleaseDay] = useState<number | null>(null);
   const [releasePickerOpen, setReleasePickerOpen] = useState(false);
+  const [loadedReleaseDay, setLoadedReleaseDay] = useState<number | null>(null);
   const activeReleaseDay = horizonMode === 'monthly' ? releaseDay : null;
   const [minBookingNoticeHrs, setMinNotice]     = useState('0');
   const [slotIntervalMins, setSlotInterval]     = useState('60');
@@ -136,6 +140,7 @@ export default function SchedulingScreen({ navigation }: any) {
           setRequestAfter(profile.request_window_after_mins == null ? 'any' : String(profile.request_window_after_mins));
           const savedReleaseDay = toReleaseDay(profile.automation_settings?.scheduleReleaseDay);
           setReleaseDay(savedReleaseDay);
+          setLoadedReleaseDay(savedReleaseDay);
           setHorizonMode(savedReleaseDay != null ? 'monthly' : 'rolling');
         }
         // Same precedence as ProviderAutomationsScreen: the providers row is
@@ -215,10 +220,13 @@ export default function SchedulingScreen({ navigation }: any) {
           request_window_after_mins:  requestAfter  === 'any' ? null : parseInt(requestAfter, 10),
         }),
 
-        // Merged server-side so no other automation_settings key is touched.
-        activeReleaseDay != null
-          ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: activeReleaseDay })
-          : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']),
+        // Only when it changed here. Merged server-side so no other
+        // automation_settings key is touched.
+        activeReleaseDay === loadedReleaseDay
+          ? Promise.resolve()
+          : activeReleaseDay != null
+            ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: activeReleaseDay })
+            : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']),
       ]);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -233,7 +241,7 @@ export default function SchedulingScreen({ navigation }: any) {
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
     bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
-    allowBeyondWindow, requestBefore, requestAfter, activeReleaseDay, navigation,
+    allowBeyondWindow, requestBefore, requestAfter, activeReleaseDay, loadedReleaseDay, navigation,
   ]);
 
   const chooseHorizonMode = (value: string) => {
@@ -371,6 +379,7 @@ export default function SchedulingScreen({ navigation }: any) {
                     <Text style={[st.releaseDayHint, { color: C.sub }]}>
                       Days after that are greyed out for clients, and tapping one tells them the date it opens.
                     </Text>
+                    <Text style={[st.releaseDayHint, { color: C.sub }]}>It's the same setting as in Edit Profile, so changing it here changes it there too.</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={C.sub} style={{ opacity: 0.6 }} />
                 </TouchableOpacity>

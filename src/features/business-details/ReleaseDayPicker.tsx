@@ -18,12 +18,18 @@ interface ReleaseDayPickerProps {
   borderColor: string;
   onSelect: (day: number) => void;
   onClose: () => void;
+  /** Show an action that unsets the day (back to a rolling window). Edit
+   *  Profile uses it, because there the picker IS the control. Scheduling
+   *  doesn't: its rolling / monthly choice already does this. */
+  allowClear?: boolean;
+  onClear?: () => void;
 }
 
 /** Chooses the monthly release day: next month opens for booking on this day
- *  (utils/bookingHorizon), and followers with the bell on are told. Its one
- *  caller is SchedulingScreen, the release day's only editor. Going back to a
- *  rolling window is a choice on that screen, not an action in here.
+ *  (utils/bookingHorizon), and followers with the bell on are told. Used by
+ *  both screens that edit it: SchedulingScreen and InfoRegScreen (Edit
+ *  Profile). They save the same stored value, so a change on either shows
+ *  on the other.
  *
  *  A native single-column wheel (UIPickerView on iOS, Spinner on Android) with
  *  our own labels, rather than a date picker. The value is a monthly
@@ -40,6 +46,8 @@ export function ReleaseDayPicker({
   borderColor,
   onSelect,
   onClose,
+  allowClear = false,
+  onClear,
 }: ReleaseDayPickerProps) {
   return (
     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
@@ -76,6 +84,15 @@ export function ReleaseDayPicker({
               <Picker.Item key={day} label={`${ordinalSuffix(day)} of the month`} value={day} color={textColor} />
             ))}
           </Picker>
+          {allowClear && onClear && (
+            <TouchableOpacity
+              style={styles.releasePickerClearButton}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClear(); onClose(); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.releasePickerClearText, { color: subColor }]}>No release day, use a rolling window</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}>
             <Text style={[styles.releasePickerDoneText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Done</Text>
           </TouchableOpacity>
@@ -140,6 +157,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 10,
     marginBottom: 18,
+  },
+  releasePickerClearButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+  releasePickerClearText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 13,
+    textDecorationLine: 'underline',
   },
   releasePickerDoneButton: {
     borderRadius: 15,

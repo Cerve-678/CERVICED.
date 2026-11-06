@@ -60,13 +60,14 @@ import type { ProviderRegistrationData, ServiceImageDraft } from '../../services
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderReleaseDay } from '../../services/databaseService';
 import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo } from '../../components/FramedLogo';
 import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
 import { slotsPillText } from '../../utils/slotsRowText';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
 import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
@@ -2926,6 +2927,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // The cached profile can be edited while its live refresh is still in
   // flight. Preserve service changes if that refresh completes afterwards.
   const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
+  // The release day is also edited in Scheduling & Availability. True once
+  // it's changed here; until then the save leaves it alone and focus
+  // re-reads it, so this screen never writes back an older day.
+  const releaseDayEditedRef = useRef(false);
+  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
   // cache to fall back to) — gated in the render below, ahead of the normal
@@ -2979,6 +2985,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // responds, then reconcile it with Supabase in the background. The cache is
   // only a fast starting point: the live read still owns the final state and
   // failures only surface when neither source can provide a profile.
+  // Coming back to this screen picks up a release day changed in Scheduling
+  // & Availability meanwhile, unless it was already changed here.
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+    return navigation.addListener('focus', () => {
+      if (releaseDayEditedRef.current) return;
+      getMyProviderReleaseDay(userId)
+        .then(day => {
+          if (releaseDayEditedRef.current) return;
+          setProviderData(prev => (prev.scheduleReleaseDay === day ? prev : { ...prev, scheduleReleaseDay: day }));
+        })
+        .catch(err => logger.warn('InfoReg: release day refresh failed:', err?.message ?? err));
+    });
+  }, [navigation, user?.id]);
+
   useEffect(() => {
     if (!user?.id) { setIsLoadingProvider(false); return; }
     const userId = user.id;
@@ -3747,9 +3769,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
             : providerData.externalBookingUrl,
           bookingMode: isLinkOnly ? 'external' : 'cerviced',
+          scheduleReleaseDayEdited: releaseDayEditedRef.current,
         },
         !isEditMode && termsAccepted,
       );
+      releaseDayEditedRef.current = false;
       // First save only: the providers row now exists, so the specialities
       // answered at sign-up can finally be attached to it. Without this they
       // never reached the profile hero or Search's Speciality filter.
@@ -4807,6 +4831,37 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     onFocus={() => handleInputFocus('about', 'about')}
                   />
                 </View>
+              </View>
+
+              {/* The release day. Edited here AND in Scheduling &
+                  Availability: both write automation_settings.scheduleReleaseDay
+                  (merged in on save), which drives the booking limit
+                  (utils/bookingHorizon, provider_last_bookable_date), the
+                  profile pill and the release message. The save only writes
+                  it when it was changed here (releaseDayEditedRef), and the
+                  value is re-read on focus, so the two screens stay in step.
+                  The row IS the picker: tap, choose a day, or "No release
+                  day" there. */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('scheduleReleaseDay')}
+              >
+                <View style={styles.toggleInfo}>
+                  <Text style={styles.toggleLabel}>Monthly Release Day</Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead. You can also change it in Scheduling & Availability.</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.releaseDayBtn}
+                  onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.releaseDayBtnText}>
+                    {providerData.scheduleReleaseDay != null
+                      ? `Day ${providerData.scheduleReleaseDay} of every month`
+                      : 'Choose a day'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
+                </TouchableOpacity>
               </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
@@ -5900,6 +5955,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
+
+          <ReleaseDayPicker
+            visible={releaseDayPickerVisible}
+            value={providerData.scheduleReleaseDay ?? new Date().getDate()}
+            accentColor={adaptiveAccentColor}
+            cardColor={editTheme.card}
+            textColor={editTheme.text}
+            subColor={editTheme.sub}
+            borderColor={editTheme.border}
+            allowClear
+            onClear={() => { releaseDayEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseDay: null })); }}
+            onSelect={(day) => { releaseDayEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseDay: day })); }}
+            onClose={() => setReleaseDayPickerVisible(false)}
+          />
 
           <DialogHost />
         </SafeAreaView>
@@ -8433,6 +8502,24 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 1,
   },
 
+
+  releaseDayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: edge(0.12),
+    backgroundColor: surf(0.04),
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  releaseDayBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: fg(0.75),
+  },
 
   // ── Tab switcher ──
   // ── Policies step ──

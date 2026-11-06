@@ -41,13 +41,13 @@ Curated: [[Address Release]] · **101 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **192 files**
-- `src/services/databaseService.ts` _(318)_
+- `src/services/databaseService.ts` _(319)_
 - `src/services/AvailabilityService.ts` _(304)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/screens/provider/AddBookingScreen.tsx` _(161)_
 - `src/screens/client/SearchScreen.tsx` _(110)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
-- `src/screens/provider/InfoRegScreen.tsx` _(94)_
+- `src/screens/provider/InfoRegScreen.tsx` _(98)_
 - `src/services/becca/capabilities/client.ts` _(91)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/contexts/BookingContext.tsx` _(80)_
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **180 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **82 files**
-- `src/services/databaseService.ts` _(90)_
+- `src/services/databaseService.ts` _(91)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_

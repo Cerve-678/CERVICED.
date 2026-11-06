@@ -23,6 +23,7 @@ import {
   getProviderRegistrationDetails,
   getProviderRegistrationRecord,
   insertProviderRegistrationRow,
+  mergeProviderAutomationSettings,
   promoteUserToProvider,
   providerSlugExists,
   removeStorageObjects,
@@ -96,11 +97,15 @@ export interface ProviderRegistrationData {
   location: string;
   aboutText: string;
   /** Monthly release day (1-31): next month opens for booking on this day
-   *  (utils/bookingHorizon) and bell followers are told. READ-ONLY here: it's
-   *  loaded so InfoReg's profile preview pill can show it, but this save never
-   *  writes it. Scheduling & Availability is its only editor, so saving Edit
-   *  Profile can't wipe a day set there. null = rolling window instead. */
+   *  (utils/bookingHorizon) and bell followers are told. null = rolling
+   *  window instead. Edited here (Edit Profile) AND in Scheduling &
+   *  Availability; both write the same automation_settings key, so a change
+   *  on one shows on the other. */
   scheduleReleaseDay: number | null;
+  /** True only when the provider changed the release day on this screen
+   *  since it loaded. The save writes the day only then, so saving Edit
+   *  Profile never puts back an older day over one just set in Scheduling. */
+  scheduleReleaseDayEdited?: boolean;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
   // computed BEFORE the `gradient` field above gets its hardcoded fallback
@@ -595,8 +600,8 @@ export async function saveProviderToSupabase(
   // edits silently split across rows. Fail loudly instead.
   let providerId: string;
 
-  // automation_settings: nothing here belongs to this screen. The release
-  // day is set in Scheduling, and the other keys belong to Automations and
+  // automation_settings: only scheduleReleaseDay is written here, merged in
+  // after the row is saved (below). The other keys belong to Automations and
   // Payments, which merge their own.
 
   if (existingProvider) {
@@ -729,6 +734,15 @@ export async function saveProviderToSupabase(
       const message = error instanceof Error ? error.message : 'Unknown database error';
       throw new Error(`Provider insert failed: ${message}`);
     }
+  }
+
+  // The release day, only if it was changed on this screen (see
+  // scheduleReleaseDayEdited). Merged server-side so no other key in
+  // automation_settings is touched.
+  if (data.scheduleReleaseDayEdited) {
+    await (data.scheduleReleaseDay != null
+      ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
+      : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
   }
 
   // Now that the new logo_url is durably saved, remove the old versioned
