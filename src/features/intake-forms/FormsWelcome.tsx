@@ -213,7 +213,7 @@ export function FormsWelcome({
     <HowItWorksSheet
       visible={visible}
       P={P}
-      heading="Ask it once. Read it on the booking."
+      heading="Ask, and they complete."
       steps={STEPS}
       primaryLabel="Start from a template"
       onPrimary={onStart}
