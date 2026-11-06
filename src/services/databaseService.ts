@@ -53,6 +53,8 @@ import type {
   DbProviderAvailabilityOverride,
   BusinessType,
   ServiceCategory,
+  DbProviderAddOn,
+  ProviderAddOnAppliesTo,
 } from "../types/database";
 import type { AddressReleasePolicy } from "../features/business-details/options";
 import { logger, reportError } from "../utils/logger";
@@ -1599,7 +1601,7 @@ export async function getProviderBySlug(
           skin_tones_suitable,
           service_type,
           service_images ( id, url, sort_order, aspect_ratio ),
-          service_add_ons ( id, name, price, description, is_active )
+          service_add_ons ( id, name, price, description, is_active, extra_minutes )
         ),
         provider_specialties ( specialty )
       `,
@@ -2495,7 +2497,7 @@ export async function getMyProviderServices(): Promise<
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active, extra_minutes, provider_add_on_id )",
     )
     .eq("provider_id", provider.id)
     .eq("is_active", true)
@@ -2723,7 +2725,7 @@ export async function getMyPromotionManagerCore(): Promise<{
     supabase
       .from("services")
       .select(
-        "id, provider_id, service_category, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+        "id, provider_id, service_category, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active, extra_minutes, provider_add_on_id )",
       )
       .eq("provider_id", provider.id)
       .eq("is_active", true)
@@ -10113,8 +10115,8 @@ export interface RebookableService {
    */
   providerSlug: string;
   providerDisplayName: string;
-  /** Live add-ons for this service, at today's prices. */
-  addOns: { id: string; name: string; price: number }[];
+  /** Live add-ons for this service, at today's prices and extra time. */
+  addOns: { id: string; name: string; price: number; extraMinutes: number }[];
 }
 
 /**
@@ -10174,7 +10176,7 @@ export async function getRebookableService(
   const { data } = await supabase
     .from("services")
     .select(
-      "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active )",
+      "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active, extra_minutes )",
     )
     .eq("provider_id", providerId)
     .eq("name", serviceName)
@@ -10192,7 +10194,12 @@ export async function getRebookableService(
     providerDisplayName: provider.display_name,
     addOns: ((data as any).service_add_ons ?? [])
       .filter((a: any) => a.is_active)
-      .map((a: any) => ({ id: a.id, name: a.name, price: Number(a.price) })),
+      .map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        price: Number(a.price),
+        extraMinutes: Number(a.extra_minutes ?? 0),
+      })),
   };
 }
 
@@ -11492,6 +11499,76 @@ export async function replaceProviderServiceCatalog(
     p_services: services,
   });
   if (error) throw error;
+}
+
+/** Where each of a provider's services sits in their menu, so a save can
+ *  match the services it just created (which had no id yet) back to their
+ *  new ids by category and position. The provider's own rows, so no
+ *  has_gone_live filter: this runs before a new provider has gone live. */
+export async function getProviderServicePositions(
+  providerId: string,
+): Promise<{ id: string; category_name: string; sort_order: number }[]> {
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, category_name, sort_order")
+    .eq("provider_id", providerId)
+    .limit(500);
+  if (error) throw error;
+  return (data ?? []) as { id: string; category_name: string; sort_order: number }[];
+}
+
+/** The provider's own add-on list (universal add-ons), for editing. Owner
+ *  read only (RLS), so no has_gone_live filter: a provider edits their list
+ *  before going live. */
+export async function getMyProviderAddOns(providerId: string): Promise<DbProviderAddOn[]> {
+  const { data, error } = await supabase
+    .from("provider_add_ons")
+    .select(
+      "id, provider_id, name, price, description, extra_minutes, is_active, applies_to, category_names, included_service_ids, excluded_service_ids, sort_order",
+    )
+    .eq("provider_id", providerId)
+    .order("sort_order", { ascending: true })
+    .limit(50);
+  if (error) throw error;
+  return ((data ?? []) as DbProviderAddOn[]).map(row => ({
+    ...row,
+    price: Number(row.price),
+    extra_minutes: Number(row.extra_minutes ?? 0),
+    category_names: row.category_names ?? [],
+    included_service_ids: row.included_service_ids ?? [],
+    excluded_service_ids: row.excluded_service_ids ?? [],
+  }));
+}
+
+export interface ProviderAddOnSaveItem {
+  /** The saved id, or null for an add-on made in this editing session. */
+  id: string | null;
+  /** The app's own key for this item, echoed back with its saved id. */
+  client_key: string;
+  name: string;
+  price: number;
+  description: string | null;
+  extra_minutes: number;
+  is_active: boolean;
+  applies_to: ProviderAddOnAppliesTo;
+  category_names: string[];
+  included_service_ids: string[];
+  excluded_service_ids: string[];
+}
+
+/** Saves the provider's whole add-on list (replace_provider_add_ons): rows
+ *  left out are deleted, and every service's add-ons are re-derived in the
+ *  same transaction. Returns each item's client_key with its saved id. */
+export async function replaceProviderAddOns(
+  providerId: string,
+  addOns: ProviderAddOnSaveItem[],
+): Promise<{ client_key: string; add_on_id: string }[]> {
+  const { data, error } = await supabase.rpc("replace_provider_add_ons", {
+    p_provider_id: providerId,
+    p_add_ons: addOns,
+  });
+  if (error) throw error;
+  return (data ?? []) as { client_key: string; add_on_id: string }[];
 }
 
 /**

@@ -60,7 +60,12 @@ OWNER:  (none)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **NOT APPLIED.** Written 2026-11-06 on `feat/info-packs-redesign`. Numbered above `20261105090833` (live max as last recorded here); re-check the live frontier and open PR branches at apply time. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates trigger `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`. The function body `handle_new_info_pack()` is **not** redefined, so it cannot revert a newer live version; a guard RAISEs if the trigger or function is missing. Older app builds omit the column and keep today's send-on-save. **Order:** apply, then merge the app (the new screen inserts the column, which PostgREST rejects until it exists). |
+| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **NOT APPLIED.** Written 2026-11-06 on `feat/info-packs-redesign`. Numbered above `20261105223541` (universal add-ons, the live max as last recorded here); re-check the live frontier and open PR branches at apply time. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates trigger `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`. The function body `handle_new_info_pack()` is **not** redefined, so it cannot revert a newer live version; a guard RAISEs if the trigger or function is missing. Older app builds omit the column and keep today's send-on-save. **Order:** apply, then merge the app (the new screen inserts the column, which PostgREST rejects until it exists). |
+### Applied 2026-11-06 (universal add-ons)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261105223541 | `universal_add_ons` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f`. Codex's `directory-listings-admin` lock was still claimed in the main folder's uncommitted copy of this file, but all its migrations were already live and touch none of these functions. The md5 guards on `prepare_checkout`, `provider_create_manual_booking` and `replace_provider_services` passed. Verified live: version recorded; `provider_add_ons` has RLS with one owner-read policy, anon can't read it and authenticated can't write it; 17 shared add-ons, all 53 `service_add_ons` rows linked; `replace_provider_add_ons` executable by authenticated only, `sync_provider_add_on_links` by neither; `prepare_checkout` adds add-on minutes to the end time; `replace_provider_services` calls the sync. |
 
 ### Applied 2026-11-05 (booking requests answered by an hour before)
 

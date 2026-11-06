@@ -50,7 +50,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       bufferAfterMins: null,
       description: svc.description || '',
       images: [],
-      addOns: [],
+      addOnKeys: [],
       tags: [],
       techniqueTags: [],
       outcomeTags: [],
