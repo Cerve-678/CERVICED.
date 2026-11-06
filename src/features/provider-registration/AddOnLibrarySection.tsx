@@ -39,7 +39,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
         )}
       </View>
       <Text style={[styles.note, { color: palette.sub }]}>
-        Make an add-on once and choose which services it goes on. Change its price here and it changes everywhere.
+        Make an add-on once and choose which services it goes on. Change its price here and it changes everywhere. If an add-on has extra time, the appointment gets longer when a client picks it.
       </Text>
 
       {library.length > 0 && (

@@ -226,7 +226,7 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
 
             <View style={styles.group}>
               <Text style={[styles.label, { color: palette.sub }]}>EXTRA TIME</Text>
-              <Text style={[styles.hint, { color: palette.sub }]}>Added to the appointment when a client picks it, so only times with room for it are offered.</Text>
+              <Text style={[styles.hint, { color: palette.sub }]}>If a client picks this, their appointment gets longer by this much. They'll only see times when you're free for the whole thing.</Text>
               <ExtraTimeChips value={extraMinutes} onChange={setExtraMinutes} palette={palette} />
             </View>
 

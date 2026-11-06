@@ -227,6 +227,9 @@ export function ServiceAddOnsField({
       {name.trim().length > 0 && (
         <>
           <Text style={[styles.kicker, { color: palette.sub }]}>EXTRA TIME</Text>
+          <Text style={[styles.note, { color: palette.sub }]}>
+            Makes the appointment longer when a client picks it. They'll only see times when you're free for the whole thing.
+          </Text>
           <ExtraTimeChips value={extraMinutes} onChange={setExtraMinutes} palette={palette} />
           <Text style={[styles.kicker, { color: palette.sub }]}>OFFER IT ON</Text>
           <View style={styles.chips}>

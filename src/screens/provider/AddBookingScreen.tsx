@@ -682,6 +682,11 @@ export default function AddBookingScreen() {
               {selectedService && serviceAddOns.length > 0 && (
                 <>
                   <Text style={[s.label, { color: P.text }]}>Add-ons</Text>
+                  {serviceAddOns.some(addOn => Number(addOn.extra_minutes ?? 0) > 0) && (
+                    <Text style={[s.choiceMeta, { color: P.sub, marginTop: -4, marginBottom: 6 }]}>
+                      An add-on with extra time makes this booking longer by that much.
+                    </Text>
+                  )}
                   {serviceAddOns.map(addOn => {
                     const on = selectedAddOnIds.includes(addOn.id);
                     return (
