@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-06 (info pack send-to-upcoming is a choice)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f`; version recorded by the file. Frontier before applying: live max `20261105223541`, no open PR branch above it. Lock was `(none)`. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`; `handle_new_info_pack()` not redefined. Verified live: trigger def carries the WHEN clause, column default `true` / NOT NULL, every existing row TRUE, version present. Written on `feat/info-packs-redesign` (#330). |
+
 ### Applied 2026-11-06 (universal add-ons)
 
 | Authored version | Name | Status |

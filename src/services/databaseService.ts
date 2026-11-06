@@ -6656,8 +6656,25 @@ export async function getIntakeFormByBooking(
     .limit(1)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return mapIntakeForm(data);
+  // Throws rather than returning null: null means "no form on this booking",
+  // and the provider's booking detail offers to send one when it sees that.
+  if (error) throw error;
+  return data ? mapIntakeForm(data) : null;
+}
+
+/** Every form sent for one booking, oldest first (provider booking detail
+ *  shows each one's sent/received state, not just the latest). */
+export async function getIntakeFormsByBooking(
+  bookingId: string,
+): Promise<IntakeForm[]> {
+  const { data, error } = await supabase
+    .from("booking_intake_forms")
+    .select("*")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (error) throw error;
+  return (data ?? []).map(mapIntakeForm);
 }
 
 export async function getIntakeFormById(
@@ -6761,17 +6778,23 @@ export async function getInfoPacksByBooking(
     .from("booking_info_packs")
     .select("*")
     .eq("booking_id", bookingId)
-    .order("created_at", { ascending: true });
-  if (error) return [];
+    .order("created_at", { ascending: true })
+    .limit(50);
+  // Throws rather than returning []: an empty list means "nothing sent", and
+  // the provider's booking detail offers to send a pack when it sees that.
+  if (error) throw error;
   return (data ?? []).map(mapBookingInfoPack);
 }
 
-/** Mark an info pack as read — clears it from the booking's attention badge */
+/** Mark an info pack as read — clears it from the booking's attention badge,
+ *  and is what the provider's "opened" count reads. */
 export async function markInfoPackViewed(packId: string): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from("booking_info_packs")
     .update({ viewed_at: new Date().toISOString() })
-    .eq("id", packId);
+    .eq("id", packId)
+    .is("viewed_at", null);
+  if (error) throw error;
 }
 
 /** Booking ids that need the client's attention (pending intake forms +
@@ -10321,34 +10344,87 @@ export interface ProviderInfoPackRow {
   created_at: string;
 }
 
+const INFO_PACK_COLUMNS = "id, provider_id, title, service, service_names, content, created_at";
+
 /** Fetch all info packs for a provider (keyed by provider user_id, not provider row id) */
 export async function getProviderInfoPacksByUserId(
   providerUserId: string,
 ): Promise<ProviderInfoPackRow[]> {
   const { data, error } = await supabase
     .from("info_packs")
-    .select("*")
+    .select(INFO_PACK_COLUMNS)
     .eq("provider_id", providerUserId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(200);
   if (error) throw error;
   return (data ?? []) as ProviderInfoPackRow[];
 }
 
-/** Create a new info pack */
+/** Create a new info pack.
+ *  `send_to_upcoming` decides whether the on_info_pack_created trigger sends
+ *  it to matching upcoming bookings right now (and notifies those clients).
+ *  False: only bookings made from now on get it. Needs migration
+ *  20261106113000; older builds omit it and the column defaults to TRUE. */
 export async function createInfoPack(data: {
   provider_id: string;
   title: string;
   service: string;
   service_names: string[];
   content: string;
+  send_to_upcoming: boolean;
 }): Promise<ProviderInfoPackRow> {
   const { data: row, error } = await supabase
     .from("info_packs")
     .insert(data)
-    .select()
+    .select(INFO_PACK_COLUMNS)
     .single();
   if (error) throw error;
   return row as ProviderInfoPackRow;
+}
+
+/** Edit an info pack. Changes the pack only: clients who already received it
+ *  keep their own copy in booking_info_packs (product decision 2026-11-05),
+ *  and nothing is re-sent. Bookings made afterwards get the new wording. */
+export async function updateInfoPack(
+  id: string,
+  changes: {
+    title: string;
+    service: string;
+    service_names: string[];
+    content: string;
+  },
+): Promise<ProviderInfoPackRow> {
+  const { data: row, error } = await supabase
+    .from("info_packs")
+    .update(changes)
+    .eq("id", id)
+    .select(INFO_PACK_COLUMNS)
+    .single();
+  if (error) throw error;
+  return row as ProviderInfoPackRow;
+}
+
+/** Who each of these packs has reached: one row per booking it was sent to,
+ *  with viewed_at once the client opened it. Feeds "Sent to N · N opened" on
+ *  the list and the ticks in the send sheet. */
+export async function getInfoPackDeliveries(
+  infoPackIds: string[],
+): Promise<{ infoPackId: string; bookingId: string; viewedAt: string | null }[]> {
+  if (infoPackIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("booking_info_packs")
+    .select("info_pack_id, booking_id, viewed_at")
+    .in("info_pack_id", infoPackIds)
+    // Bounded: a provider's whole send history, newest first. At this cap the
+    // oldest sends stop counting, which only ever under-states a total.
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (error) throw error;
+  return (data ?? []).map((r: { info_pack_id: string; booking_id: string; viewed_at: string | null }) => ({
+    infoPackId: r.info_pack_id,
+    bookingId: r.booking_id,
+    viewedAt: r.viewed_at ?? null,
+  }));
 }
 
 /** Delete an info pack by id */
