@@ -5,6 +5,8 @@ export interface ProviderProfileAddOn {
   name: string;
   price: number;
   description: string;
+  /** Minutes this add-on adds to the appointment. 0 = no extra time. */
+  extraMinutes: number;
 }
 
 export interface ProviderProfileService {

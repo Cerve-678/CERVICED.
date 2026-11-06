@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
+import { durationWithAddOns } from '../features/bookings/addOnTime';
 import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, getServiceIdsByNames, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow, getCurrentAuthUserId, subscribeToUserBookingChanges, subscribeToRescheduleRequestChanges } from '../services/databaseService';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
@@ -1501,7 +1502,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           providerName: item.providerDisplayName ?? item.providerName,
           date: appointment?.date || '',
           time: appointment?.time || '',
-          duration: item.duration,
+          duration: durationWithAddOns(item.duration, item.addOns),
           cartItemId: item.id,
           serviceId: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : undefined,
           // Without this the item is re-checked against the very rules the
@@ -1695,7 +1696,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         // providerLocations is keyed by provider id (display names aren't unique)
         const itemProviderId = providerIdCache[item.providerName];
         const groupInfo = groupInfoForItem(item);
-        const endTime = calculateEndTime(appointment.time, item.duration);
+        // The appointment's length includes its add-ons' extra time.
+        const endTime = calculateEndTime(appointment.time, durationWithAddOns(item.duration, item.addOns));
         const initialStatus = providerCapCache[item.providerName]?.auto_accept
           ? BookingStatus.UPCOMING
           : BookingStatus.PENDING;
@@ -1745,7 +1747,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           serviceName: item.serviceName,
           serviceDescription: item.serviceDescription,
           price: item.price,
-          duration: item.duration,
+          duration: durationWithAddOns(item.duration, item.addOns),
           quantity: item.quantity,
           bookingDate: appointment.date,
           bookingTime: appointment.time,
@@ -1830,7 +1832,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   if (!apt || !providerId) return null;
                   const pgTime = timeTo24(apt.time);
                   if (!pgTime) return null;
-                  const endTimeStr = calculateEndTime(apt.time, item.duration);
+                  const endTimeStr = calculateEndTime(apt.time, durationWithAddOns(item.duration, item.addOns));
                   const pgEndTime = timeTo24(endTimeStr);
                   const groupInfo = groupInfoForItem(item);
                   const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
@@ -2148,7 +2150,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         throw new BookingError("Missing appointment details — please pick your time again.");
       }
       const pgTime = timeTo24(schedule.selectedTime);
-      const endTimeStr = calculateEndTime(schedule.selectedTime, item.duration);
+      const endTimeStr = calculateEndTime(schedule.selectedTime, durationWithAddOns(item.duration, item.addOns));
       const pgEndTime = timeTo24(endTimeStr);
       if (!pgTime || !pgEndTime) {
         throw new BookingError("Couldn't confirm this time is still available — please try again.");

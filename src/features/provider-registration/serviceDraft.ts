@@ -28,7 +28,8 @@ export interface ProviderServiceDraft {
   bufferAfterMins: number | null;
   description: string;
   images: ServiceImageDraft[];
-  addOns: { id: number; dbId: string | null; name: string; price: number }[];
+  /** Keys of the provider's add-ons ticked on this service. */
+  addOnKeys: string[];
   tags: string[];
   techniqueTags: string[];
   outcomeTags: string[];
@@ -69,7 +70,7 @@ export function createServiceDraft(template?: ServiceTemplateSeed | null): Provi
     bufferAfterMins: null,
     description: template?.description ?? '',
     images: [],
-    addOns: [],
+    addOnKeys: [],
     tags: template?.styleTags ?? [],
     techniqueTags: template?.techniqueTags ?? [],
     outcomeTags: template?.outcomeTags ?? [],

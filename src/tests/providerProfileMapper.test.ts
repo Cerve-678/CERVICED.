@@ -29,7 +29,7 @@ describe('mapProviderProfileData', () => {
 
     expect(cutServices[0]!.images).toEqual([{ uri: 'first.jpg' }, { uri: 'second.jpg' }]);
     expect(images.map(image => image.url)).toEqual(['second.jpg', 'first.jpg']);
-    expect(cutServices[0]!.addOns).toEqual([{ id: 'addon-1', name: 'Treatment', price: 10, description: '' }]);
+    expect(cutServices[0]!.addOns).toEqual([{ id: 'addon-1', name: 'Treatment', price: 10, description: '', extraMinutes: 0 }]);
   });
 
   it('carries the stated payment methods and accessibility tags through for the profile', () => {

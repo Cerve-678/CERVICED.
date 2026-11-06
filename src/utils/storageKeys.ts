@@ -58,6 +58,8 @@ export const TOUR_SEEN_PREFIXES = {
   CLIENT_EXPLORE: '@client_explore_tour_seen_',
   /** ProviderHomeScreen — the provider's first-run tour */
   PROVIDER_HOME:  '@provider_tour_seen_',
+  /** ProviderInfoPackScreen — the Info Packs welcome */
+  PROVIDER_INFO_PACKS: '@provider_info_packs_welcome_seen_',
 } as const;
 
 export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];

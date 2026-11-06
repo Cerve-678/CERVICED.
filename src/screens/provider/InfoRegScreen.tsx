@@ -55,12 +55,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppDialog } from '../../components/AppDialog';
 
 // Supabase registration service
-import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage, ServiceDescriptionVerificationError } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft } from '../../services/databaseService';
+import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo } from '../../components/FramedLogo';
@@ -99,6 +100,18 @@ import {
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import {
+  applyRuleToServices,
+  defaultAddOnKeysForCategory,
+  removeAddOnFromServices,
+  removeCategoryFromLibrary,
+  renameCategoryInLibrary,
+  type AddOnLibraryItem,
+} from '../../features/provider-registration/addOnLibrary';
+import { AddOnLibrarySection } from '../../features/provider-registration/AddOnLibrarySection';
+import { AddOnEditorModal, type AddOnEditorResult } from '../../features/provider-registration/AddOnEditorModal';
+import { ServiceAddOnsField } from '../../features/provider-registration/ServiceAddOnsField';
+import { formatAddOnExtraTime } from '../../features/bookings/addOnTime';
 import { InfoRegPager } from '../../features/provider-registration/InfoRegPager';
 import {
   CATEGORY_KINDS,
@@ -276,24 +289,10 @@ const DEFAULT_POLICIES: ProviderPolicies = {
   waitlistSelectionMethod: 'fifo',
 };
 
-// Add-on interface
-interface AddOnData {
-  id: number;
-  // The real service_add_ons.id, when this add-on already exists in the DB —
-  // null for one created in this editing session. Threaded through to the
-  // save payload so replace_provider_services can update the row in place
-  // instead of deleting and recreating it under a new id, which used to
-  // silently break any cart or booking that had selected this exact add-on
-  // (service_add_ons.id has no stable identity across a save otherwise).
-  dbId: string | null;
-  name: string;
-  price: number;
-}
-
 interface ServiceData {
   id: number;
   // The real services.id, when this service already exists in the DB — null
-  // for one created in this editing session. See AddOnData.dbId for why: a
+  // for one created in this editing session. A
   // provider re-saving ANY service used to regenerate every service's id,
   // which orphaned every client cart item and booking pointing at the old
   // one (bookings.service_id is ON DELETE SET NULL — 96% of live bookings
@@ -307,7 +306,9 @@ interface ServiceData {
   bufferAfterMins: number | null;
   description: string;
   images: ServiceImageDraft[];
-  addOns: AddOnData[];
+  /** Keys of the provider's add-ons ticked on this service (see
+   *  features/provider-registration/addOnLibrary). */
+  addOnKeys: string[];
   // Discoverability tags
   tags: string[];
   techniqueTags: string[];
@@ -906,7 +907,12 @@ const bufferBeforeToPicker = (mins: number | null | undefined): string =>
 interface ServiceModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (service: ServiceData) => void;
+  /** `newAddOns` are add-ons made inside this editor, which join the
+   *  provider's list only now that the service is saved. */
+  onSave: (service: ServiceData, newAddOns: AddOnLibraryItem[]) => Promise<void>;
+  providerId: string | null;
+  /** The provider's add-ons; undefined when they failed to load. */
+  addOnLibrary: AddOnLibraryItem[] | undefined;
   service?: ServiceData | null;
   categoryName: string;
   /** True when editing an existing service (vs adding / template pre-fill). */
@@ -929,6 +935,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   visible,
   onClose,
   onSave,
+  providerId,
+  addOnLibrary,
   service,
   categoryName,
   isEditing = false,
@@ -975,10 +983,14 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [bufferBefore, setBufferBefore] = useState(bufferBeforeToPicker(service?.bufferBeforeMins));
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
+  const [descriptionHistory, setDescriptionHistory] = useState<ServiceDescriptionRevision[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRequestRef = useRef(0);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [images, setImages] = useState<ServiceImageDraft[]>(service?.images || []);
-  const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
-  const [newAddOnName, setNewAddOnName] = useState('');
-  const [newAddOnPrice, setNewAddOnPrice] = useState('');
+  const [addOnKeys, setAddOnKeys] = useState<string[]>(service?.addOnKeys || []);
+  const [pendingAddOns, setPendingAddOns] = useState<AddOnLibraryItem[]>([]);
+  const chromeTheme = useContext(InfoRegChromeContext);
   // Tag state
   const [selectedTags, setSelectedTags] = useState<string[]>(service?.tags || []);
   const [selectedTechniques, setSelectedTechniques] = useState<string[]>(service?.techniqueTags || []);
@@ -1070,8 +1082,12 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setBufferBefore(bufferBeforeToPicker(service?.bufferBeforeMins));
     setBufferAfter(service?.bufferAfterMins?.toString() || '');
     setDescription(service?.description || '');
+    historyRequestRef.current += 1;
+    setDescriptionHistory(null);
+    setHistoryLoading(false);
     setImages(service?.images || []);
-    setAddOns(service?.addOns || []);
+    setAddOnKeys(service?.addOnKeys || []);
+    setPendingAddOns([]);
     setSelectedTags(service?.tags || []);
     setSelectedTechniques(service?.techniqueTags || []);
     setSelectedOutcomes(service?.outcomeTags || []);
@@ -1176,21 +1192,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     });
   };
 
-  const handleAddAddOn = () => {
-    if (!newAddOnName.trim() || !newAddOnPrice.trim()) {
-      tapWarn();
-      setError('Give the add-on a name and a price.');
-      return;
-    }
-    setError(null);
-    setAddOns([...addOns, { id: Date.now(), dbId: null, name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
-    setNewAddOnName('');
-    setNewAddOnPrice('');
-    Keyboard.dismiss();
-  };
-
-  const handleRemoveAddOn = (id: number) => setAddOns(addOns.filter(a => a.id !== id));
-
   const handleAddTrend = () => {
     const t = trendInput.trim().toLowerCase().replace(/\s+/g, '-');
     if (t && !trendNames.includes(t)) {
@@ -1206,7 +1207,25 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setContraindicationInput('');
   };
 
-  const handleSave = () => {
+  const showDescriptionHistory = async () => {
+    if (!providerId || !service) return;
+    if (descriptionHistory) { historyRequestRef.current += 1; setDescriptionHistory(null); return; }
+    const request = ++historyRequestRef.current;
+    setHistoryLoading(true);
+    try {
+      const revisions = await getServiceDescriptionHistory(
+        providerId, service.dbId, service.dbId ?? String(service.id),
+      );
+      if (request === historyRequestRef.current) setDescriptionHistory(revisions);
+    } catch (cause) {
+      logger.error('[ServiceModal] description history failed:', cause);
+      if (request === historyRequestRef.current) setError('Could not load previous descriptions. Please try again.');
+    } finally {
+      if (request === historyRequestRef.current) setHistoryLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
     const tagsNow: ServiceTagGroups = {
       styleTags: selectedTags,
       techniqueTags: selectedTechniques,
@@ -1236,33 +1255,41 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       return;
     }
     setError(null);
-    onSave({
-      id: service?.id || Date.now(),
-      dbId: service?.dbId ?? null,
-      name: name.trim(),
-      price: parseFloat(price) || 0,
-      duration: duration.trim(),
-      bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
-      bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
-      description: description.trim(),
-      images,
-      addOns,
-      tags: selectedTags,
-      techniqueTags: selectedTechniques,
-      outcomeTags: selectedOutcomes,
-      occasionTags: selectedOccasions,
-      trendNames,
-      isPregnancySafe,
-      patchTestRequired,
-      minAge: minAge ? parseInt(minAge, 10) : null,
-      contraindications,
-      aftercareNotes: aftercareNotes.trim(),
-      serviceType,
-      hairTypesSuitable,
-      skinTonesSuitable,
-      audience,
-    });
-    onClose();
+    setSavingDraft(true);
+    try {
+      await onSave({
+        id: service?.id || Date.now(),
+        dbId: service?.dbId ?? null,
+        name: name.trim(),
+        price: parseFloat(price) || 0,
+        duration: duration.trim(),
+        bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
+        bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
+        description: description.trim(),
+        images,
+        addOnKeys,
+        tags: selectedTags,
+        techniqueTags: selectedTechniques,
+        outcomeTags: selectedOutcomes,
+        occasionTags: selectedOccasions,
+        trendNames,
+        isPregnancySafe,
+        patchTestRequired,
+        minAge: minAge ? parseInt(minAge, 10) : null,
+        contraindications,
+        aftercareNotes: aftercareNotes.trim(),
+        serviceType,
+        hairTypesSuitable,
+        skinTonesSuitable,
+        audience,
+      }, pendingAddOns);
+      onClose();
+    } catch (cause) {
+      logger.error('[ServiceModal] service draft backup failed:', cause);
+      setError('Could not back up this description. Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
   };
 
   const handleInputFocus = (inputName: string) => {
@@ -1297,7 +1324,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   ];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!savingDraft) onClose(); }}>
       <KeyboardDismissView style={styles.modalOverlay}>
         {/* Tap the strip above the sheet to dismiss. Rendered first so the
             sheet paints over it, and absolute so it doesn't take part in the
@@ -1306,7 +1333,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
-          onPress={() => { tapLight(); onClose(); }}
+          onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
           accessibilityRole="button"
           accessibilityLabel="Close without saving"
         />
@@ -1332,7 +1359,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => { tapLight(); onClose(); }}
+                onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
@@ -1405,6 +1432,35 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.serviceSheetLabel}>Description</Text>
                 <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
+                {providerId && service ? (
+                  <>
+                    <TouchableOpacity onPress={() => { void showDescriptionHistory(); }} accessibilityRole="button" style={{ marginTop: 10, marginBottom: 8 }}>
+                      <Text style={[styles.serviceSheetHint, { color: accentColor }]}>
+                        {descriptionHistory ? 'Hide previous descriptions' : 'View previous descriptions'}
+                      </Text>
+                    </TouchableOpacity>
+                    {descriptionHistory ? <Text style={styles.serviceSheetHint}>Choose a version, save this service, then tap Save & Publish on your profile.</Text> : null}
+                    {historyLoading ? <ActivityIndicator color={accentColor} /> : null}
+                    {descriptionHistory?.length === 0 ? <Text style={styles.serviceSheetHint}>No previous descriptions yet.</Text> : null}
+                    {descriptionHistory?.map(revision => (
+                      <TouchableOpacity
+                        key={revision.id}
+                        onPress={() => { setDescription(revision.description); setDescriptionHistory(null); setError(null); }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Restore description from ${new Date(revision.created_at).toLocaleDateString()}`}
+                        style={[styles.serviceSheetInput, { marginBottom: 8, paddingVertical: 10 }, fieldBox]}
+                      >
+                        <Text style={styles.serviceSheetHint}>
+                          {revision.source === 'draft' ? 'Editor draft' : 'Published'} · {new Date(revision.created_at).toLocaleString()}
+                        </Text>
+                        <Text style={{ color: chrome.fg(0.9) }} numberOfLines={4}>
+                          {revision.description || '(Empty description)'}
+                        </Text>
+                        <Text style={[styles.serviceSheetHint, { color: accentColor, marginTop: 6 }]}>Use this description</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                ) : null}
                 {/* Wording offered, never written in for them. */}
                 {!description.trim() && suggestion.descriptionIdeas.map(idea => (
                   <TouchableOpacity
@@ -1689,32 +1745,21 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               </View>
 
               {/* ── Add-Ons ──────────────────────────────────────────── */}
-              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; serviceInputPositions.current['newAddOnPrice'] = e.nativeEvent.layout.y; }}>
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Add-Ons (Optional)</Text>
-                <Text style={styles.serviceSheetHint}>Optional extras clients can add to this service</Text>
-                {addOns.length > 0 && (
-                  <View style={styles.addOnsContainer}>
-                    {addOns.map((addOn) => (
-                      <View key={addOn.id} style={styles.addOnItem}>
-                        <View style={styles.addOnInfo}>
-                          <Text style={styles.addOnName}>{addOn.name}</Text>
-                          <Text style={styles.addOnPrice}>+£{addOn.price}</Text>
-                        </View>
-                        <TouchableOpacity style={styles.removeAddOnButton} onPress={() => { tapWarn(); handleRemoveAddOn(addOn.id); }}>
-                          <Text style={styles.removeAddOnText}>×</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </View>
-                )}
-                <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, styles.addOnNameInput, fieldBox]} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('newAddOnName')} />
-                  <TextInput style={[styles.serviceSheetInput, styles.addOnPriceInput, fieldBox]} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={chrome.fg(0.4)} keyboardType="decimal-pad" onFocus={() => handleInputFocus('newAddOnPrice')} />
-                  <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddAddOn(); }}>
-                    <Text style={styles.addAddOnButtonText}>+</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.serviceSheetHint}>Extras clients can add to this service. Your add-ons are shared, so tick any you already have.</Text>
+                <ServiceAddOnsField
+                  library={addOnLibrary}
+                  pending={pendingAddOns}
+                  onPendingChange={setPendingAddOns}
+                  tickedKeys={addOnKeys}
+                  onTickedChange={setAddOnKeys}
+                  categoryName={categoryName}
+                  palette={chromeTheme}
+                  inputStyle={[styles.serviceSheetInput, fieldBox]}
+                  onInputFocus={() => handleInputFocus('newAddOnName')}
+                />
               </View>
             </ScrollView>
 
@@ -1724,9 +1769,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 style={[styles.serviceSheetSave, { backgroundColor: accentColor }]}
                 onPress={() => { tapMedium(); handleSave(); }}
                 activeOpacity={0.85}
+                disabled={savingDraft}
               >
                 <Text style={[styles.serviceSheetSaveText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                  {isEditing ? 'Save changes' : 'Add service'}
+                  {savingDraft ? 'Saving…' : isEditing ? 'Save changes' : 'Add service'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2461,20 +2507,29 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                           </View>
                         </View>
 
-                        {/* Add-ons preview */}
-                        {service.addOns && service.addOns.length > 0 && (
-                          <View style={[styles.previewServiceAddOns, { borderTopColor: PP.border }]}>
-                            <Text style={[styles.previewAddOnsLabel, { color: PP.sub }]}>Add-ons available:</Text>
-                            {service.addOns.map((addOn) => (
-                              <View key={addOn.id} style={styles.previewAddOnRow}>
-                                <Text style={[styles.previewAddOnName, { color: PP.sub }]}>+ {addOn.name}</Text>
-                                <Text style={[styles.previewAddOnPrice, { color: accentColor }]}>
-                                  +£{addOn.price}
-                                </Text>
-                              </View>
-                            ))}
-                          </View>
-                        )}
+                        {/* Add-ons preview: the ones ticked on this service
+                            that clients can actually pick (paused ones hidden). */}
+                        {(() => {
+                          const shown = (providerData.addOnLibrary ?? []).filter(
+                            addOn => addOn.isActive && service.addOnKeys.includes(addOn.key),
+                          );
+                          if (shown.length === 0) return null;
+                          return (
+                            <View style={[styles.previewServiceAddOns, { borderTopColor: PP.border }]}>
+                              <Text style={[styles.previewAddOnsLabel, { color: PP.sub }]}>Add-ons available:</Text>
+                              {shown.map((addOn) => (
+                                <View key={addOn.key} style={styles.previewAddOnRow}>
+                                  <Text style={[styles.previewAddOnName, { color: PP.sub }]}>
+                                    + {addOn.name}{addOn.extraMinutes > 0 ? ` (${formatAddOnExtraTime(addOn.extraMinutes)})` : ''}
+                                  </Text>
+                                  <Text style={[styles.previewAddOnPrice, { color: accentColor }]}>
+                                    +£{addOn.price}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          );
+                        })()}
                       </BlurView>
                     ))}
                   </View>
@@ -2804,6 +2859,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     logo: null,
     logoFraming: null,
     categories: {},
+    // A brand-new sign-up has no saved add-ons to protect, so it starts with
+    // an empty list it can add to. An existing profile replaces this with
+    // what loaded (or undefined if that failed).
+    addOnLibrary: [],
     categoryDescriptions: {},
     phone: '',
     email: '',
@@ -2866,6 +2925,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // 'app' theme) for a beat before the real saved data pops in, which reads
   // as a glitch. Gated in the render below, same as the other profile screens.
   const [isLoadingProvider, setIsLoadingProvider] = useState(true);
+  // The cached profile can be edited while its live refresh is still in
+  // flight. Preserve service changes if that refresh completes afterwards.
+  const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
   // cache to fall back to) — gated in the render below, ahead of the normal
@@ -2963,7 +3025,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           .then(data => {
             if (cancelled) return;
             if (data) {
-              setProviderData(data);
+              setProviderData({
+                ...data,
+                categories: { ...data.categories, ...editedServiceCategoriesRef.current },
+              });
               setIsEditMode(true);
               // Being in edit mode means this profile was published, which
               // required agreeing. Seed the real state rather than faking a
@@ -3393,8 +3458,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Handle data transfer from Acuity Scheduling URL
   const handleTransferData = useCallback(async (url: string) => {
     const extracted = await transferFromAcuity(url);
-    // Preserve any existing contact fields not covered by Acuity import
-    setProviderData(prev => ({ ...prev, ...extracted }));
+    // Preserve any existing contact fields not covered by Acuity import.
+    // Imported services start with whichever add-ons already cover their
+    // category, the same as a service added by hand.
+    setProviderData(prev => ({
+      ...prev,
+      ...extracted,
+      categories: prev.addOnLibrary
+        ? Object.fromEntries(Object.entries(extracted.categories).map(([categoryName, services]) => [
+            categoryName,
+            services.map(service => ({
+              ...service,
+              addOnKeys: defaultAddOnKeysForCategory(prev.addOnLibrary ?? [], categoryName),
+            })),
+          ]))
+        : extracted.categories,
+    }));
     const firstCat = Object.keys(extracted.categories)[0];
     if (firstCat) setSelectedCategory(firstCat);
     setShowTransferModal(false);
@@ -3437,7 +3516,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               delete newCategories[name];
               const newDescriptions = { ...prev.categoryDescriptions };
               delete newDescriptions[name];
-              return { ...prev, categories: newCategories, categoryDescriptions: newDescriptions };
+              return {
+                ...prev,
+                categories: newCategories,
+                categoryDescriptions: newDescriptions,
+                ...(prev.addOnLibrary ? { addOnLibrary: removeCategoryFromLibrary(prev.addOnLibrary, name) } : {}),
+              };
             });
             if (selectedCategory === name) {
               const remaining = Object.keys(providerData.categories).filter(c => c !== name);
@@ -3462,7 +3546,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         newCategories[targetKey] = prev.categories[key] || [];
         newDescriptions[targetKey] = key === oldName ? description : (prev.categoryDescriptions?.[key] ?? '');
       });
-      return { ...prev, categories: newCategories, categoryDescriptions: newDescriptions };
+      return {
+        ...prev,
+        categories: newCategories,
+        categoryDescriptions: newDescriptions,
+        // An add-on set to "All <category>" follows the category's new name.
+        ...(prev.addOnLibrary && oldName !== trimmedNew
+          ? { addOnLibrary: renameCategoryInLibrary(prev.addOnLibrary, oldName, trimmedNew) }
+          : {}),
+      };
     });
 
     if (selectedCategory === oldName) {
@@ -3473,7 +3565,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   }, [selectedCategory]);
 
   // Add/Edit service
-  const handleSaveService = useCallback((service: ServiceData) => {
+  const handleSaveService = useCallback(async (service: ServiceData, newAddOns: AddOnLibraryItem[]) => {
+    // Save the provider's accepted wording before touching the larger profile
+    // draft. A later refresh or failed publish cannot erase this copy.
+    const ownerId = providerDbId ?? (user?.id ? await getProviderIdForUserId(user.id) : null);
+    if (ownerId) {
+      await saveServiceDescriptionDraft(
+        ownerId, service.dbId, service.dbId ?? String(service.id), service.name, service.description,
+      );
+    } else if (isEditMode) {
+      throw new Error('Could not resolve provider for description backup');
+    }
     setProviderData(prev => {
       const categoryServices = prev.categories[currentCategory] || [];
       const existingIndex = categoryServices.findIndex(s => s.id === service.id);
@@ -3488,16 +3590,67 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         updatedServices = [...categoryServices, service];
       }
 
+      let categories: Record<string, ServiceData[]> = {
+        ...prev.categories,
+        [currentCategory]: updatedServices,
+      };
+      // An add-on made inside the service editor for "All <category>" or
+      // "Every service" goes on those other services now too. "Just this
+      // service" is already ticked on this one.
+      for (const addOn of newAddOns) {
+        if (addOn.appliesTo !== 'services') categories = applyRuleToServices(categories, addOn);
+      }
+      for (const [name, services] of Object.entries(categories)) {
+        if (services !== prev.categories[name]) editedServiceCategoriesRef.current[name] = services;
+      }
       return {
         ...prev,
-        categories: {
-          ...prev.categories,
-          [currentCategory]: updatedServices,
-        },
+        categories,
+        ...(newAddOns.length && prev.addOnLibrary
+          ? { addOnLibrary: [...prev.addOnLibrary, ...newAddOns] }
+          : {}),
       };
     });
     setEditingService(null);
-  }, [currentCategory]);
+  }, [currentCategory, providerDbId, user?.id, isEditMode]);
+
+  // ── Universal add-ons: the provider's own list ─────────────────────────
+  const [editingAddOn, setEditingAddOn] = useState<AddOnLibraryItem | null>(null);
+  const [showAddOnEditor, setShowAddOnEditor] = useState(false);
+  const openAddOnEditor = useCallback((item: AddOnLibraryItem | null) => {
+    setEditingAddOn(item);
+    setShowAddOnEditor(true);
+  }, []);
+  const closeAddOnEditor = useCallback(() => {
+    setShowAddOnEditor(false);
+    setEditingAddOn(null);
+  }, []);
+  const handleSaveAddOn = useCallback((result: AddOnEditorResult) => {
+    setProviderData(prev => {
+      const library = prev.addOnLibrary ?? [];
+      const exists = library.some(item => item.key === result.item.key);
+      return {
+        ...prev,
+        addOnLibrary: exists
+          ? library.map(item => (item.key === result.item.key ? result.item : item))
+          : [...library, result.item],
+        // Only a change to WHERE it goes re-places it. A price or name edit
+        // keeps any service it was ticked off (or on) by hand.
+        categories: result.placementChanged
+          ? applyRuleToServices(prev.categories, result.item, result.pickedServiceIds)
+          : prev.categories,
+      };
+    });
+    closeAddOnEditor();
+  }, [closeAddOnEditor]);
+  const handleDeleteAddOn = useCallback((key: string) => {
+    setProviderData(prev => ({
+      ...prev,
+      addOnLibrary: (prev.addOnLibrary ?? []).filter(item => item.key !== key),
+      categories: removeAddOnFromServices(prev.categories, key),
+    }));
+    closeAddOnEditor();
+  }, [closeAddOnEditor]);
 
   // Delete service
   const handleDeleteService = useCallback((categoryName: string, serviceId: number) => {
@@ -3589,6 +3742,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         user.id,
         {
           ...providerData,
+          // The live profile refresh and the modal can both update the form.
+          // Publish the service drafts retained from the modal save.
+          categories: { ...providerData.categories, ...editedServiceCategoriesRef.current },
           externalBookingUrl: isLinkOnly
             ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
             : providerData.externalBookingUrl,
@@ -3627,6 +3783,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
+      if (e instanceof ServiceDescriptionVerificationError) {
+        logger.error('[InfoRegScreen] service descriptions could not be verified:', e);
+        Alert.alert(
+          'Descriptions not confirmed',
+          'We could not confirm that your service descriptions were published. Your edits are still in this editor. Check them and try Save & Publish again.',
+        );
+        return;
+      }
       // saveProviderToSupabase prefixes its error with the failing step, which
       // is what makes these diagnosable — but that belongs in the log, not in
       // front of a provider. toUserMessage reports it and returns safe copy.
@@ -4163,7 +4327,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onPick={(template) => {
             setShowTemplatePicker(false);
             setIsEditingService(false);
-            setEditingService(createServiceDraft(template));
+            // A new service starts with every add-on whose rule already
+            // covers its category ("All Lashes", "Every service").
+            setEditingService({
+              ...createServiceDraft(template),
+              addOnKeys: defaultAddOnKeysForCategory(providerData.addOnLibrary ?? [], currentCategory),
+            });
             setShowServiceModal(true);
           }}
         />
@@ -4171,16 +4340,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         {/* Add/Edit Service Modal */}
         <ServiceModal
           visible={showServiceModal}
+          providerId={providerDbId}
           onClose={() => {
             setShowServiceModal(false);
             setEditingService(null);
           }}
           onSave={handleSaveService}
+          addOnLibrary={providerData.addOnLibrary}
           service={editingService}
           categoryName={currentCategory}
           isEditing={isEditingService}
           fallbackKind={selectedServiceType || providerData.providerService}
           accentColor={adaptiveAccentColor}
+        />
+
+        {/* Add-on editor — opened from "Your add-ons" on the services page */}
+        <AddOnEditorModal
+          visible={showAddOnEditor}
+          item={editingAddOn}
+          categories={providerData.categories}
+          palette={chromeTheme}
+          onClose={closeAddOnEditor}
+          onSave={handleSaveAddOn}
+          onDelete={handleDeleteAddOn}
         />
 
         {/* Edit Category Modal */}
@@ -5296,6 +5478,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </>
                 )}
               </View>
+
+              <AddOnLibrarySection
+                library={providerData.addOnLibrary}
+                categories={providerData.categories}
+                palette={chromeTheme}
+                onEdit={openAddOnEditor}
+                onNew={() => openAddOnEditor(null)}
+              />
 
               <TouchableOpacity
                 style={styles.docNextButton}
@@ -8186,63 +8376,11 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
 
   // Add-Ons Styles
-  addOnsContainer: {
-    marginTop: 10,
-    marginBottom: 15,
-    gap: 8,
-  },
-  addOnItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: surf(0.3),
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-  },
-  addOnInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'space-between',
-    marginRight: 10,
-  },
-  addOnName: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 14,
-    color: P.text,
-    flex: 1,
-  },
-  addOnPrice: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    color: P.accent,
-  },
-  removeAddOnButton: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,100,100,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  removeAddOnText: {
-    fontSize: 16,
-    color: '#c00',
-    fontWeight: 'bold',
-  },
   addAddOnRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginTop: 10,
-  },
-  addOnNameInput: {
-    flex: 2,
-  },
-  addOnPriceInput: {
-    flex: 1,
   },
   addAddOnButton: {
     width: 44,

@@ -43,6 +43,7 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderConversation`
 - `Promotions`
 - `InfoPacks`
+- `ProviderIntakeForm`
 - `Analytics`
 - `BookingHistory`
 - `Automations`
@@ -74,7 +75,6 @@ Curated overview: [[Screens & Navigation]].
 - `EditProfile`
 - `Branding`
 - `BusinessInfo`
-- `ProviderIntakeForm`
 - `ProviderServicesMain`
 - `ProviderAccountMain`
 - `MyPublicProfile`
