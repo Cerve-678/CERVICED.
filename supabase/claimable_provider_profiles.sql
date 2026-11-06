@@ -1,5 +1,8 @@
 -- ============================================================
 -- CERVICED — Claimable (scraped) Provider Profiles
+-- HISTORICAL BASELINE ONLY. Its plaintext claim_token column and RPC are
+-- superseded by migrations/20261103183657_private_provider_claim_codes.sql.
+-- Do not apply this standalone script to a live project.
 -- Run this entire script in the Supabase SQL Editor.
 --
 -- Lets a provider row exist with no owner yet (source = 'scraped',

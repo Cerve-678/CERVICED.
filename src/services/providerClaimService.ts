@@ -45,11 +45,13 @@ export async function searchUnclaimedProviders(query: string): Promise<Unclaimed
 }
 
 export interface UnclaimedProviderDetail extends UnclaimedProviderSummary {
+  logoFraming: import('../types/database').LogoFraming | null;
   aboutText: string | null;
   phone: string | null;
   email: string | null;
   instagram: string | null;
   website: string | null;
+  externalBookingUrl: string | null;
 }
 
 /** Fuller row for the preview step, once one search result has been picked —
@@ -64,12 +66,14 @@ export async function getUnclaimedProviderDetail(id: string): Promise<UnclaimedP
     serviceCategory: data.service_category,
     locationText: data.location_text,
     logoUrl: data.logo_url,
+    logoFraming: data.logo_framing,
     scrapedFields: data.scraped_fields || [],
     aboutText: data.about_text,
     phone: data.phone,
     email: data.email,
     instagram: data.instagram,
     website: data.website,
+    externalBookingUrl: data.external_booking_url,
   };
 }
 

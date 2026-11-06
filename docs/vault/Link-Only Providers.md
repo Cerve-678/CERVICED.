@@ -38,6 +38,24 @@ Designs: sign-up + provider + client flow canvas https://claude.ai/artifact/KHoS
 
 Exactly four things: **logo**, **About**, **opening hours**, **at least one portfolio photo**. Policies are optional. The server's `check_and_set_provider_live()` has a separate branch for `booking_mode = 'external'` — see [[Provider Onboarding & Go-Live]]. The app list is `buildLinkOnlyGoLiveSteps` in `src/features/providers/goLiveStatus.ts` and must never claim a step the server doesn't gate on.
 
+### Unclaimed directory listings
+
+An imported link-only listing may have only a business name, service category, location and public link. It has no owner account or email (`is_claimed = false`, `user_id = null`, `email = null`, `booking_mode = 'external'`, `has_gone_live = false`). Search includes these listings as unclaimed; their profile shows the imported details, a link to the provider's public page and a claim action. The normal provider go-live checklist applies after ownership is claimed.
+
+For a single manually sourced listing, enter its real values in the SQL Editor; no email, auth user, logo, hours or portfolio items are required:
+
+```sql
+INSERT INTO public.providers
+  (slug, display_name, service_category, location_text,
+   external_booking_url, booking_mode, is_claimed, source, source_url)
+VALUES
+  ('sample-studio-hair', 'Sample Studio', 'HAIR', 'London',
+   'https://example.com/sample-studio', 'external', false, 'scraped',
+   'https://example.com/sample-studio');
+```
+
+When a listing has no trusted contact email, the claim screen opens a prefilled email to support requesting an ownership review. Support verifies evidence through an independent business channel, then adds the verified contact email to that listing. The owner returns to Claim this business, receives the existing one-time code at that address, signs up and completes their account and profile. Never attach an account merely because someone entered a new email or knows the public link.
+
 ## Becoming a full member (2026-11-02)
 
 Self-serve, from link-only Home (product owner, 2026-11-02; design canvas https://claude.ai/artifact/SorjEEw3DPKAa8y7NSpzjJ, concept C plus B):

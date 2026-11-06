@@ -80,8 +80,10 @@ import {
   recordProviderStat,
   addMyExternalBooking,
   getPublicProviderAddress,
+  getProviderPortfolio,
   type PublicProviderAddress,
 } from "../../services/databaseService";
+import { FramedLogo } from '../../components/FramedLogo';
 import type { ProviderStatKind } from "../../types/database";
 import { DidYouBookSheet, type DidYouBookResult } from "../../features/providers/DidYouBookSheet";
 import { toUserMessage } from "../../utils/userFacingError";
@@ -1028,22 +1030,27 @@ const offersStyles = StyleSheet.create({
 });
 
 // ── Unclaimed Provider View ──────────────────────────────────────────────────
-// Read-only card for an imported-but-unclaimed listing (is_claimed = false).
-// Deliberately has no services/availability/booking UI at all — those don't
-// exist for a row nobody has onboarded yet. Its one job is to show enough to
-// recognise the business and offer a way to claim it.
+// Imported directory profiles use the same client-facing language as any
+// link-only provider. Their claim state stays inside the admin workflow.
 function UnclaimedProviderView({
   provider,
   theme,
   onBack,
-  onClaim,
 }: {
   provider: UnclaimedProviderDetail;
   theme: ProviderThemeTokens;
   onBack: () => void;
-  onClaim: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const [portfolio, setPortfolio] = useState<{ id: string; image_url: string }[]>([]);
+  useEffect(() => {
+    let active = true;
+    getProviderPortfolio(provider.id).then(result => {
+      if (active) setPortfolio(result.work);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [provider.id]);
+  const referralMessage = `Hi ${provider.displayName}, I’ve booked with you and would love to see you on CERVICED. It could help clients discover you and upgrade your booking management so you can operate like a pro.`;
   return (
     <View style={[unclaimedStyles.container, { backgroundColor: theme.bg }]}>
       <View style={[unclaimedStyles.header, { paddingTop: insets.top + 8 }]}>
@@ -1064,12 +1071,9 @@ function UnclaimedProviderView({
         showsVerticalScrollIndicator={false}
       >
         {provider.logoUrl ? (
-          <Image
-            source={{ uri: provider.logoUrl }}
-            style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]}
-            contentFit="cover"
-            transition={0}
-          />
+          <View style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]}>
+            <FramedLogo uri={provider.logoUrl} framing={provider.logoFraming} slot="large" style={{ borderRadius: 44 }} />
+          </View>
         ) : (
           <View style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]} />
         )}
@@ -1089,23 +1093,43 @@ function UnclaimedProviderView({
             {provider.aboutText}
           </Text>
         )}
-
-        <View style={[unclaimedStyles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text style={[unclaimedStyles.noticeText, { color: theme.sub }]}>
-            This listing hasn't been claimed by its owner yet, so it isn't
-            bookable — details here were imported and may be out of date.
-          </Text>
+        {portfolio.length > 0 && (
+          <View style={unclaimedStyles.portfolio}>
+            <Text style={[unclaimedStyles.sectionTitle, { color: theme.text }]}>Portfolio</Text>
+            <View style={unclaimedStyles.portfolioGrid}>
+              {portfolio.map(item => <Image key={item.id} source={{ uri: item.image_url }} style={unclaimedStyles.portfolioImage} contentFit="cover" transition={0} />)}
+            </View>
+          </View>
+        )}
+        <View style={[unclaimedStyles.missionCard, { backgroundColor: theme.surface, borderColor: theme.sep }]}>
+          <Text style={[unclaimedStyles.missionTitle, { color: theme.text }]}>DEAR CLIENTS</Text>
+          <Text style={[unclaimedStyles.missionText, { color: theme.sub }]}>This provider is not currently on the CERVICED app. We’re displaying them to help our clients find brilliant beauty professionals because beauty is at the forefront of our mission.</Text>
+          <Text style={[unclaimedStyles.missionText, { color: theme.sub }]}>Do you know this provider? If you’ve booked with them, invite them to join CERVICED. Successful referrals earn 50 points.</Text>
+          <Text selectable style={[unclaimedStyles.referralCopy, { color: theme.text }]}>{referralMessage}</Text>
+          <TouchableOpacity onPress={() => Share.share({ message: referralMessage }).catch(() => {})} style={[unclaimedStyles.shareButton, { borderColor: theme.sep }]} accessibilityRole="button">
+            <Text style={[unclaimedStyles.shareButtonText, { color: theme.text }]}>Copy or send message</Text>
+          </TouchableOpacity>
         </View>
+
       </ScrollView>
 
       <View style={[unclaimedStyles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: theme.sep }]}>
-        <TouchableOpacity
-          style={[unclaimedStyles.claimButton, { backgroundColor: theme.accent }]}
-          onPress={onClaim}
-          activeOpacity={0.85}
-        >
-          <Text style={unclaimedStyles.claimButtonText}>Claim this business</Text>
-        </TouchableOpacity>
+        <View style={unclaimedStyles.footerActions}>
+          {provider.externalBookingUrl && (
+            <TouchableOpacity
+              style={[unclaimedStyles.claimButton, { backgroundColor: theme.surface }]}
+              onPress={() => openExternalBookingPage(provider.externalBookingUrl!).catch(() => {
+                Alert.alert("Couldn't open page", 'Please try again later.');
+              })}
+              activeOpacity={0.85}
+            >
+              <Text style={[unclaimedStyles.claimButtonText, { color: theme.text }]}>Book with them</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => Share.share({ message: referralMessage }).catch(() => {})} style={[unclaimedStyles.knowButton, { borderColor: theme.sep }]} accessibilityRole="button">
+            <Text style={[unclaimedStyles.knowButtonText, { color: theme.text }]}>Do you know{`\n`}this provider?</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -1148,25 +1172,25 @@ const unclaimedStyles = StyleSheet.create({
     textAlign: "center",
     marginTop: 16,
   },
-  noticeCard: {
-    alignItems: "flex-start",
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 28,
-  },
-  noticeText: {
-    flex: 1,
-    fontFamily: "Jura-VariableFont_wght",
-    fontSize: 12,
-    lineHeight: 17,
-  },
+  portfolio: { width: '100%', marginTop: 26 },
+  sectionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 16, marginBottom: 10 },
+  portfolioGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  portfolioImage: { width: '31%', aspectRatio: 1, borderRadius: 10 },
+  missionCard: { width: '100%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, padding: 16, marginTop: 26, gap: 10 },
+  missionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 1 },
+  missionText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19 },
+  referralCopy: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18, padding: 10, borderRadius: 10, backgroundColor: '#0000000A' },
+  shareButton: { minHeight: 42, borderRadius: 11, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  shareButtonText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 13 },
   footer: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  footerActions: { flexDirection: 'row', gap: 8 },
   claimButton: {
-    borderRadius: 16,
+    borderRadius: 16, flex: 1,
     paddingVertical: 16,
     alignItems: "center",
   },
+  knowButton: { flex: 1, minHeight: 52, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  knowButtonText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 12, textAlign: 'center', lineHeight: 15 },
   claimButtonText: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 14,
@@ -3480,19 +3504,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           provider={unclaimedProvider}
           theme={OP}
           onBack={() => navigation.goBack()}
-          onClaim={() => {
-            // ClaimProvider is a root-stack screen, several levels above
-            // wherever this tab screen sits — navigating via the root ref
-            // (rather than this screen's own `navigation`, whose parent
-            // chain doesn't reliably reach the root stack from every tab)
-            // is the same pattern notificationTapHandler.ts uses to jump to
-            // a screen outside the current tab.
-            if (navigationRef.isReady()) {
-              (navigationRef as any).navigate("ClaimProvider", {
-                providerId: unclaimedProvider.id,
-              });
-            }
-          }}
         />
       );
     }

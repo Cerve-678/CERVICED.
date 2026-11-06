@@ -62,6 +62,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261105090833 | `booking_requests_answer_by_an_hour_before` | **APPLIED 2026-11-05** (authored as 20261104120000, renumbered above the directory-listing migrations, file renamed to the version `apply_migration` recorded). Applied while Codex's `directory-listings-admin` held the lock, with the user's go-ahead: its two migrations were already live and touch none of these functions. Verified live: version recorded; `handle_new_booking`, `claim_cart_booking_slots`, `finalize_checkout` and `claim_waitlist_hold` call `booking_request_title` / `booking_request_answer_note` and keep their `SET search_path`; the four new helpers aren't executable by anon or authenticated; `process_expire_stale_pending_bookings` uses `booking_request_deadline`; `expire-stale-pending-bookings` runs `*/5 * * * *`. |
 
+### Pending: email-free link-only directory claims
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261103183657 | `private_provider_claim_codes` | **APPLIED 2026-11-03.** Adds private, RLS-protected claim-code storage and the missing claim RPCs, replacing legacy plaintext provider-row tokens. Verified live: version recorded; claim-code table has RLS with no client policies; anon and authenticated cannot read it; only `authenticated` can execute the claim RPC; only `service_role` can issue codes. The updated `request-claim-verification` Edge Function was deployed as version 18 with pre-signup JWT enforcement disabled, and an unauthenticated invalid-ID request returned 400 without sending email or writing data. |
+
 ### Applied 2026-11-03 (admin dashboard, developer tools admin-only)
 
 | Authored version | Name | Status |

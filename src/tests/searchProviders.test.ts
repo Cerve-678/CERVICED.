@@ -6,7 +6,7 @@ jest.mock('../lib/supabase', () => ({
     from: () => {
       const result = mockResponses.shift() ?? { data: [], error: null };
       const chain: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'or', 'limit', 'overlaps', 'in', 'order']) {
+      for (const method of ['select', 'eq', 'or', 'limit', 'overlaps', 'in', 'order', 'maybeSingle']) {
         chain[method] = (...args: unknown[]) => { mockCalls.push({ method, args }); return chain; };
       }
       chain['then'] = (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve);
@@ -18,7 +18,7 @@ jest.mock('../lib/supabase', () => ({
     },
   },
 }));
-import { searchProviders, searchProvidersAndServices } from '../services/databaseService';
+import { getProviders, getUnclaimedProviderDetail, searchProviders, searchProvidersAndServices } from '../services/databaseService';
 
 const rankedRow = (providerId: string, serviceId: string, rank: number, corrected: string | null = null) => ({
   service_id: serviceId, provider_id: providerId, provider_slug: providerId, provider_name: providerId,
@@ -28,6 +28,28 @@ const rankedRow = (providerId: string, serviceId: string, rank: number, correcte
 });
 
 beforeEach(() => { mockResponses.length = 0; mockRpcResponses.length = 0; mockCalls.length = 0; });
+it('includes only link-only unclaimed listings alongside live providers', async () => {
+  await getProviders();
+  expect(mockCalls).toContainEqual({
+    method: 'or',
+    args: ['and(has_gone_live.eq.true,is_active.eq.true),and(is_claimed.eq.false,booking_mode.eq.external,is_active.eq.true)'],
+  });
+  mockCalls.length = 0;
+  mockResponses.push(
+    { data: [], error: null },
+    { data: [{ id: 'directory' }], error: null },
+    { data: [{ id: 'directory', display_name: 'Directory Studio' }], error: null },
+  );
+  await searchProviders('Directory Studio');
+  expect(mockCalls).toContainEqual({
+    method: 'or',
+    args: ['and(has_gone_live.eq.true,is_active.eq.true),and(is_claimed.eq.false,booking_mode.eq.external,is_active.eq.true)'],
+  });
+});
+it('finds an unclaimed profile from a search card slug', async () => {
+  await getUnclaimedProviderDetail('directory-studio');
+  expect(mockCalls).toContainEqual({ method: 'eq', args: ['slug', 'directory-studio'] });
+});
 it('ranks exact names then services before broad category results, before truncation', async () => {
   mockResponses.push(
     { data: [{ provider_id: 'service' }], error: null },

@@ -17,6 +17,7 @@ import AboutScreen from '../../../screens/shared/AboutScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
 import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
+import AdminDirectoryListingsScreen from '../../../screens/shared/AdminDirectoryListingsScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
@@ -296,6 +297,7 @@ export default function ProviderAccountNavigator() {
         component={AdminMoneyScreen}
         options={{ headerShown: false }}
       />
+      <ProviderAccountStack.Screen name="AdminDirectoryListings" component={AdminDirectoryListingsScreen} options={{ headerShown: false }} />
 
       <ProviderAccountStack.Screen
         name="DevSettings"

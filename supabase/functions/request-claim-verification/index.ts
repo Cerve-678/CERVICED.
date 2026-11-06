@@ -26,7 +26,14 @@ function maskEmail(email: string): string {
 }
 
 function generateCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  const value = crypto.getRandomValues(new Uint32Array(1))[0];
+  return String(100000 + value % 900000);
+}
+
+async function hashCode(code: string): Promise<string> {
+  const bytes = new TextEncoder().encode(code);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 serve(async (req) => {
@@ -36,7 +43,7 @@ serve(async (req) => {
 
   try {
     const { providerId } = await req.json();
-    if (!providerId) {
+    if (typeof providerId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(providerId)) {
       return new Response(JSON.stringify({ error: 'Missing required field: providerId' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -50,7 +57,7 @@ serve(async (req) => {
 
     const { data: provider, error: fetchError } = await supabase
       .from('providers')
-      .select('id, email, display_name, is_claimed, claim_token_last_sent_at')
+      .select('id, email, display_name, is_claimed, source')
       .eq('id', providerId)
       .maybeSingle();
 
@@ -60,7 +67,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (provider.is_claimed) {
+    if (provider.is_claimed || provider.source !== 'scraped') {
       return new Response(JSON.stringify({ error: 'This listing has already been claimed.' }), {
         status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -73,40 +80,21 @@ serve(async (req) => {
       );
     }
 
-    // Cooldown — without this, anyone can trigger a real email send to a
-    // scraped business's inbox repeatedly with no limit. One send per
-    // listing per 60 seconds, checked before any code is generated/sent.
-    if (provider.claim_token_last_sent_at) {
-      const elapsedMs = Date.now() - new Date(provider.claim_token_last_sent_at).getTime();
-      if (elapsedMs < 60 * 1000) {
-        return new Response(
-          JSON.stringify({ error: 'Please wait a moment before requesting another code.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-      }
-    }
-
-    // Single-use, 15-minute code stored on the row's existing claim_token
-    // column. Retry once on the (very unlikely) UNIQUE collision with
-    // another pending code. claim_attempts resets to 0 here so a fresh
-    // code always gets its own full set of 5 guesses (see claim_attempts
-    // lockout in claim_provider_profile()).
+    // The RPC atomically stores a hash in an RLS-protected table and limits
+    // sends to one per listing per minute. No code appears on a public row.
     const code = generateCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-    const { error: updateError } = await supabase
-      .from('providers')
-      .update({
-        claim_token: code,
-        claim_token_expires_at: expiresAt,
-        claim_attempts: 0,
-        claim_token_last_sent_at: new Date().toISOString(),
-      })
-      .eq('id', providerId)
-      .eq('is_claimed', false);
-
-    if (updateError) {
-      throw new Error(`Could not generate a verification code: ${updateError.message}`);
+    const { data: issued, error: issueError } = await supabase.rpc('issue_provider_claim_code', {
+      p_provider_id: providerId,
+      p_code_hash: await hashCode(code),
+    });
+    if (issueError) {
+      throw new Error(`Could not generate a verification code: ${issueError.message}`);
+    }
+    if (!issued) {
+      return new Response(JSON.stringify({ error: 'Please wait a moment before requesting another code.' }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const emailRes = await fetch('https://api.resend.com/emails', {

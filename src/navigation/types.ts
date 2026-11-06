@@ -188,6 +188,7 @@ export type ProfileStackParamList = {
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;
+  AdminDirectoryListings: undefined;
   /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
   Points: undefined;
@@ -394,6 +395,7 @@ export type ProviderAccountStackParamList = {
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;
+  AdminDirectoryListings: undefined;
   /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
   DevSettings: undefined;

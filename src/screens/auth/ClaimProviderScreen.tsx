@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
   StyleSheet,
   Text,
   TextInput,
@@ -35,6 +36,7 @@ import {
   type UnclaimedProviderDetail,
 } from '../../services/providerClaimService';
 import { logger } from '../../utils/logger';
+import { SUPPORT_EMAIL } from '../../constants/support';
 
 type Props = StackScreenProps<RootStackParamList, 'ClaimProvider'>;
 
@@ -163,6 +165,26 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
     }
   }, [selected]);
 
+  const handleRequestReview = useCallback(async () => {
+    if (!selected) return;
+    const subject = `Claim listing: ${selected.displayName}`;
+    const body = [
+      `Listing ID: ${selected.id}`,
+      `Business: ${selected.displayName}`,
+      selected.instagram ? `Instagram: @${selected.instagram}` : null,
+      '',
+      'Please verify that I own this business. My account email will be:',
+      '',
+      'Proof of ownership (for example, a link to my business profile):',
+      '',
+    ].filter(line => line !== null).join('\n');
+    try {
+      await Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    } catch {
+      Alert.alert('Contact support', `Email ${SUPPORT_EMAIL} with your business name and proof that you own it. We'll help you claim the listing.`);
+    }
+  }, [selected]);
+
   const handleConfirmCode = useCallback(async () => {
     if (!selected || code.trim().length < 6) {
       Alert.alert('Enter code', 'Please enter the 6-digit code from your email.');
@@ -225,11 +247,11 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
             <>
               <Text style={[styles.title, { color: t.text }]}>Is your business already listed?</Text>
               <Text style={[styles.subtitle, { color: t.sub }]}>
-                Search by business name or city. If we've found your listing, you can claim it and skip re-entering your info.
+                Search by business name, city, or Instagram name. If we’ve found your listing, request an ownership review and skip re-entering your info.
               </Text>
               <TextInput
                 style={[styles.input, { color: t.text, backgroundColor: t.surface, borderColor: t.border }]}
-                placeholder="Business name or city"
+                placeholder="Business name, city or @Instagram"
                 placeholderTextColor={t.sub}
                 value={query}
                 onChangeText={setQuery}
@@ -282,12 +304,19 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
                 </View>
               )}
               {selected.aboutText ? <Text style={[styles.aboutText, { color: t.text }]}>{selected.aboutText}</Text> : null}
+              {!selected.email && (
+                <View style={[styles.noticeBox, { backgroundColor: t.surface, borderColor: t.border }]}>
+                  <Text style={[styles.noticeText, { color: t.text }]}>
+                    This listing has no contact email yet. Send us the email you want to use and proof that this is your business. After we verify it, you can get a code and finish setting up your account.
+                  </Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: t.accent }]}
-                onPress={handleRequestCode}
+                onPress={selected.email ? handleRequestCode : handleRequestReview}
                 disabled={isBusy}
               >
-                {isBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>THIS IS MY BUSINESS</Text>}
+                {isBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>{selected.email ? 'THIS IS MY BUSINESS' : 'REQUEST OWNERSHIP REVIEW'}</Text>}
               </TouchableOpacity>
             </>
           )}

@@ -90,7 +90,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     ? describeDelta(data.money.paid_in_pence, data.money.paid_in_prev_pence, span, { format: pounds })
     : null;
 
-  const go = (route: 'AdminMoney' | 'DevSettings') => {
+  const go = (route: 'AdminMoney' | 'AdminDirectoryListings' | 'DevSettings') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     navigation.navigate(route);
   };
@@ -193,6 +193,19 @@ export default function AdminDashboardScreen({ navigation }: any) {
               <Row P={P} label="Directory listings nobody has claimed" value={formatCount(data.providers.listings_unclaimed)} />
               <Row P={P} label="Claims waiting for a decision" value={formatCount(data.providers.claims_pending)} last />
             </View>
+            <TouchableOpacity
+              style={[styles.card, { backgroundColor: P.card, borderColor: P.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+              onPress={() => go('AdminDirectoryListings')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Manage directory listings"
+            >
+              <View>
+                <Text style={[styles.body, { color: P.text, fontWeight: '700' }]}>Manage directory listings</Text>
+                <Text style={[styles.small, { color: P.sub }]}>Add a logo and external booking link</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={P.sub} />
+            </TouchableOpacity>
 
             <Text style={[styles.section, { color: P.sub }]}>BOOKINGS, LAST {span} DAYS</Text>
             <View style={styles.grid}>

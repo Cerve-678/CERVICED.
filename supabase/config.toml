@@ -479,6 +479,11 @@ enabled = true
 [functions.stripe-connect-return]
 verify_jwt = false
 
+# Claim discovery occurs before sign-up. The function sends only to the
+# verified listing email and the database atomically rate-limits each listing.
+[functions.request-claim-verification]
+verify_jwt = false
+
 [functions.create-connect-account]
 verify_jwt = true
 

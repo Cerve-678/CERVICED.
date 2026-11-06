@@ -730,7 +730,7 @@ export async function getProviders(
     .from("providers")
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .eq("is_active", true)
-    .eq("has_gone_live", true)
+    .or("and(has_gone_live.eq.true,is_active.eq.true),and(is_claimed.eq.false,booking_mode.eq.external,is_active.eq.true)")
     // Unlike Explore's recommendation feed,
     // this is a plain browse/list, not a recommendation — a provider's own
     // business is allowed to appear here (see ownProviderIdExclusion).
@@ -1243,7 +1243,7 @@ export async function searchProvidersAndServices(
     .select(PUBLIC_PROVIDER_SUMMARY_SELECT)
     .in("id", allIds)
     .eq("is_active", true)
-    .eq("has_gone_live", true)
+    .or("and(has_gone_live.eq.true,is_active.eq.true),and(is_claimed.eq.false,booking_mode.eq.external,is_active.eq.true)")
     // An explicit, typed search is not a recommendation — a provider's own
     // business is allowed to turn up when it actually matches the query
     // (see ownProviderIdExclusion).
@@ -10538,7 +10538,7 @@ export interface UnclaimedProviderSearchRow {
 export async function searchUnclaimedProviders(
   query: string,
 ): Promise<UnclaimedProviderSearchRow[]> {
-  const safeQuery = sanitizeIlikeTerm(query.trim());
+  const safeQuery = sanitizeIlikeTerm(query.trim().replace(/^@/, ''));
   if (safeQuery.length < 2) return [];
   const { data, error } = await supabase
     .from("providers")
@@ -10547,7 +10547,7 @@ export async function searchUnclaimedProviders(
     )
     .eq("is_claimed", false)
     .or(
-      `display_name.ilike.%${safeQuery}%,location_text.ilike.%${safeQuery}%`,
+      `display_name.ilike.%${safeQuery}%,location_text.ilike.%${safeQuery}%,instagram.ilike.%${safeQuery}%`,
     )
     .limit(20);
 
@@ -10556,11 +10556,13 @@ export async function searchUnclaimedProviders(
 }
 
 export interface UnclaimedProviderDetailRow extends UnclaimedProviderSearchRow {
+  logo_framing: import('../types/database').LogoFraming | null;
   about_text: string | null;
   phone: string | null;
   email: string | null;
   instagram: string | null;
   website: string | null;
+  external_booking_url: string | null;
 }
 
 /**
@@ -10569,14 +10571,15 @@ export interface UnclaimedProviderDetailRow extends UnclaimedProviderSearchRow {
  * see that function's comment for why has_gone_live isn't checked here.
  */
 export async function getUnclaimedProviderDetail(
-  id: string,
+  identifier: string,
 ): Promise<UnclaimedProviderDetailRow | null> {
+  const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
   const { data, error } = await supabase
     .from("providers")
     .select(
-      "id, display_name, service_category, location_text, logo_url, scraped_fields, about_text, phone, email, instagram, website",
+      "id, display_name, service_category, location_text, logo_url, logo_framing, scraped_fields, about_text, phone, email, instagram, website, external_booking_url",
     )
-    .eq("id", id)
+    .eq(isId ? "id" : "slug", identifier)
     .eq("is_claimed", false)
     .maybeSingle();
 
@@ -11861,6 +11864,91 @@ export async function getAdminDashboardOverview(days: AdminDashboardPeriod): Pro
     throw new Error('The dashboard came back in an unexpected shape.');
   }
   return overview as AdminDashboardOverview;
+}
+
+export interface AdminDirectoryListing {
+  id: string;
+  slug: string;
+  display_name: string;
+  service_category: string;
+  location_text: string | null;
+  logo_url: string | null;
+  logo_framing: import('../types/database').LogoFraming | null;
+  external_booking_url: string;
+  instagram: string | null;
+  website: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AdminDirectoryListingInput {
+  id?: string | undefined;
+  displayName: string;
+  serviceCategory: string;
+  locationText: string;
+  externalBookingUrl: string;
+  logoUrl?: string | null | undefined;
+  instagram?: string | undefined;
+  website?: string | undefined;
+  logoFraming?: import('../types/database').LogoFraming | null | undefined;
+}
+
+export interface AdminDirectoryPortfolioItem {
+  id: string;
+  provider_id: string;
+  image_url: string;
+  aspect_ratio: number;
+  created_at: string;
+}
+
+/** Admin-only directory listing manager. The database verifies admin access. */
+export async function getAdminDirectoryListings(): Promise<AdminDirectoryListing[]> {
+  const { data, error } = await supabase.rpc('admin_directory_listings');
+  if (error) throw error;
+  return Array.isArray(data) ? data as AdminDirectoryListing[] : [];
+}
+
+export async function saveAdminDirectoryListing(input: AdminDirectoryListingInput): Promise<string> {
+  const { data, error } = await supabase.rpc('admin_upsert_directory_listing', {
+    p_id: input.id ?? null,
+    p_display_name: input.displayName,
+    p_service_category: input.serviceCategory,
+    p_location_text: input.locationText,
+    p_external_booking_url: input.externalBookingUrl,
+    p_logo_url: input.logoUrl ?? null,
+    p_instagram: input.instagram ?? null,
+    p_website: input.website ?? null,
+    p_logo_framing: input.logoFraming ?? null,
+  });
+  if (error) throw error;
+  if (typeof data !== 'string') throw new Error('The listing could not be saved.');
+  return data;
+}
+
+export async function setAdminDirectoryListingVisibility(id: string, visible: boolean): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_directory_listing_visibility', { p_id: id, p_visible: visible });
+  if (error) throw error;
+}
+
+export async function deleteAdminDirectoryListing(id: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_delete_directory_listing', { p_id: id });
+  if (error) throw error;
+}
+
+export async function getAdminDirectoryListingPortfolio(providerId: string): Promise<AdminDirectoryPortfolioItem[]> {
+  const { data, error } = await supabase.rpc('admin_directory_listing_portfolio', { p_provider_id: providerId });
+  if (error) throw error;
+  return Array.isArray(data) ? data as AdminDirectoryPortfolioItem[] : [];
+}
+
+export async function addAdminDirectoryListingPortfolio(providerId: string, imageUrl: string, aspectRatio: number): Promise<void> {
+  const { error } = await supabase.rpc('admin_add_directory_listing_portfolio', { p_provider_id: providerId, p_image_url: imageUrl, p_aspect_ratio: aspectRatio });
+  if (error) throw error;
+}
+
+export async function deleteAdminDirectoryListingPortfolio(id: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_delete_directory_listing_portfolio', { p_id: id });
+  if (error) throw error;
 }
 
 /** Puts a failed or waiting payout back as due now; the next release run sends it. */
