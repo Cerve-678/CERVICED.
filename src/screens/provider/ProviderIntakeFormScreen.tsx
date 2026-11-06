@@ -47,6 +47,7 @@ import {
 import { FormsWelcome } from '../../features/intake-forms/FormsWelcome';
 import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { useHowItWorks } from '../../components/HowItWorksSheet';
 import { logger } from '../../utils/logger';
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
@@ -198,7 +199,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const [loadingBookings, setLoadingBookings] = useState(false);
 
   // ── How Forms work (first visit, then the ⓘ) ──────────────────────────────
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const welcome = useHowItWorks();
   const welcomeCheckedRef = useRef(false);
 
   const autoTemplate = detectTemplate(serviceName, relevantTemplates);
@@ -323,12 +324,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     resolveTourForUser(TOUR_KEYS.PROVIDER_FORMS, [{ key: 'welcome' }], user.id)
       .then(decision => {
         if (!alive || !decision.show) return;
-        setWelcomeOpen(true);
+        welcome.showOnArrival();
         void recordTourSeen(TOUR_KEYS.PROVIDER_FORMS, user.id);
       })
       .catch(error => logger.error('[Forms] welcome check failed:', error));
     return () => { alive = false; };
-  }, [loading, mode, user?.id]);
+  }, [loading, mode, user?.id, welcome.showOnArrival]);
 
 
   const toggleService = useCallback((name: string) => {
@@ -516,7 +517,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             </Text>
             {mode === 'picker' && (
               <TouchableOpacity
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setWelcomeOpen(true); }}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); welcome.show(); }}
                 hitSlop={10}
                 activeOpacity={0.7}
                 style={[styles.infoBtn, { backgroundColor: P.iconBg }]}
@@ -1054,13 +1055,13 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       </Modal>
 
       <FormsWelcome
-        visible={welcomeOpen}
+        visible={welcome.open}
         P={P}
         exampleTitle={welcomeExample?.label ?? 'Consultation Form'}
         exampleQuestions={welcomeExample ? welcomeExample.questions.filter(q => q.type !== 'policy' && q.label.trim()) : []}
         serviceChips={providerServiceNames}
-        onStart={() => { setWelcomeOpen(false); setPickerTab('templates'); }}
-        onClose={() => setWelcomeOpen(false)}
+        onStart={() => { welcome.hide(); setPickerTab('templates'); }}
+        onClose={welcome.hide}
       />
 
       <DialogHost />

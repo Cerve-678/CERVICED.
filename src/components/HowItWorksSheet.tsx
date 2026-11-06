@@ -23,8 +23,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // opacity/transform only. With Reduce Motion on it doesn't play: each step
 // shows its finished frame and the dots step through.
 
-/** 1 = real time. Raised from 1 on 2026-11-06 ("slightly faster"). */
-const PLAYBACK_SPEED = 1.25;
+/** 1 = real time. 1.25 on 2026-11-06 ("slightly faster") was then too
+ *  quick ("slow it down a bit"), so it settled at 1.1. */
+const PLAYBACK_SPEED = 1.1;
+
+/** A native-stack push takes ~350ms on iOS; wait it out before presenting. */
+const ARRIVAL_DELAY_MS = 600;
 
 export interface StoryStep {
   start: number;
@@ -44,6 +48,46 @@ export interface HowItWorksPalette {
 
 /** Interpolates the story clock, clamped: `at([1, 2], [0, 1])`. */
 export type StoryAt = (input: number[], output: number[]) => Animated.AnimatedInterpolation<number>;
+
+/**
+ * Open state for a HowItWorksSheet.
+ *
+ * `show` always re-presents. An RN Modal asked to present while its screen is
+ * still sliding in is dropped by iOS without an error, but `open` stays true,
+ * so the next ⓘ tap set it to true again, changed nothing, and the button
+ * looked dead (Forms, 2026-11-06). Cycling false → true on the next frame
+ * makes the Modal present fresh either way.
+ *
+ * `showOnArrival` is for the first-visit open: it waits out the push first.
+ */
+export function useHowItWorks() {
+  const [open, setOpen] = useState(false);
+  const frameRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    setOpen(false);
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      setOpen(true);
+    });
+  }, []);
+
+  const showOnArrival = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => { timerRef.current = null; show(); }, ARRIVAL_DELAY_MS);
+  }, [show]);
+
+  const hide = useCallback(() => setOpen(false), []);
+
+  useEffect(() => () => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  return { open, show, showOnArrival, hide };
+}
 
 function stepAt(steps: readonly StoryStep[], t: number): number {
   for (let i = steps.length - 1; i >= 0; i--) if (t >= steps[i]!.start) return i;
