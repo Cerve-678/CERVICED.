@@ -32,7 +32,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useFont } from '../../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { hasMapDestination, isMobileBooking } from '../../types/booking';
+import { hasDirectionsDestination, hasMapDestination, isMobileBooking, type BookingCoordinates } from '../../types/booking';
+import { directionsUrlFor } from '../../utils/mapsLink';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
@@ -413,6 +414,18 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
   const [bookingActionItems, setBookingActionItems] = useState<Record<string, number>>({});
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapFocused, setMapFocused] = useState(false);
+  const [canGeocodeOnAndroid, setCanGeocodeOnAndroid] = useState(false);
+  const [addressPins, setAddressPins] = useState<Record<string, { address: string; coordinates: BookingCoordinates }>>({});
+  const attemptedAddressGeocodes = useRef(new Set<string>());
+  const mapBookings = useMemo(() => todayBookings.flatMap(booking => {
+    if (booking.status === BookingStatus.PENDING || !hasDirectionsDestination(booking)) return [];
+    const resolvedPin = addressPins[booking.id];
+    const coordinates = resolvedPin?.address === booking.address
+      ? resolvedPin.coordinates
+      : hasMapDestination(booking) ? booking.coordinates : null;
+    return coordinates ? [{ booking, coordinates }] : [];
+  }), [todayBookings, addressPins]);
 
   // ✅ Track rated bookings and tips
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
@@ -462,22 +475,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const openInMaps = useCallback(async (booking: ConfirmedBooking) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const { coordinates, address } = booking;
-      const label = encodeURIComponent(address);
-      const url = Platform.select({
-        ios: `maps:${coordinates.latitude},${coordinates.longitude}?q=${label}`,
-        android: `geo:${coordinates.latitude},${coordinates.longitude}?q=${label}`,
-      });
-      if (url) {
-        const canOpen = await Linking.canOpenURL(url);
-        if (canOpen) {
-          await Linking.openURL(url);
-        } else {
-          await Linking.openURL(
-            `https://www.google.com/maps/search/?api=1&query=${coordinates.latitude},${coordinates.longitude}`
-          );
-        }
-      }
+      if (!hasDirectionsDestination(booking)) return;
+      await Linking.openURL(directionsUrlFor({
+        fullAddress: booking.address,
+      }));
     } catch {
       Alert.alert('Error', 'Unable to open maps');
     }
@@ -826,18 +827,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [reloadBookingsIfStale]);
 
   useEffect(() => {
-    if (currentBooking?.coordinates && mapRef.current) {
+    const activePin = mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates;
+    if (activePin && mapRef.current) {
       mapRef.current.animateToRegion(
         {
-          latitude: currentBooking.coordinates.latitude,
-          longitude: currentBooking.coordinates.longitude,
+          latitude: activePin.latitude,
+          longitude: activePin.longitude,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         },
         1000
       );
     }
-  }, [currentBooking]);
+  }, [currentBooking?.id, mapBookings]);
 
   // Keep map location current only while this tab is visible. Tab screens
   // remain mounted, so a permanent timer otherwise polls GPS while the
@@ -848,10 +850,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   useFocusEffect(useCallback(() => {
     let active = true;
     let subscription: Location.LocationSubscription | null = null;
+    setMapFocused(true);
 
     const startLocationUpdates = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (active && Platform.OS === 'android') setCanGeocodeOnAndroid(status === 'granted');
         if (status === 'granted' && active) {
           const applyLocation = (location: Location.LocationObject) => {
             if (!active) return;
@@ -893,9 +897,42 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     return () => {
       active = false;
+      setMapFocused(false);
       subscription?.remove();
     };
   }, []));
+
+  // Older bookings can expose the released street address while their
+  // coordinate snapshot is null. Resolve only those missing pins while this
+  // screen is visible. Never geocode a masked address or a mobile base.
+  useEffect(() => {
+    if (!mapFocused || isFilterView || allTodayBookingsCompleted ||
+        (Platform.OS === 'android' && !canGeocodeOnAndroid)) return;
+    let cancelled = false;
+    const resolveMissingPins = async () => {
+      for (const booking of todayBookings) {
+        if (cancelled) break;
+        if (booking.status === BookingStatus.PENDING || !hasDirectionsDestination(booking) || hasMapDestination(booking)) continue;
+        const key = `${booking.id}:${booking.address}`;
+        if (attemptedAddressGeocodes.current.has(key)) continue;
+        attemptedAddressGeocodes.current.add(key);
+        try {
+          const [match] = await Location.geocodeAsync(booking.address);
+          if (!cancelled && match && Number.isFinite(match.latitude) && Number.isFinite(match.longitude)) {
+            setAddressPins(previous => ({
+              ...previous,
+              [booking.id]: { address: booking.address, coordinates: { latitude: match.latitude, longitude: match.longitude } },
+            }));
+          }
+        } catch (error) {
+          logger.error('[Bookings] released address geocoding failed:', error);
+        }
+        if (cancelled) attemptedAddressGeocodes.current.delete(key);
+      }
+    };
+    void resolveMissingPins();
+    return () => { cancelled = true; };
+  }, [mapFocused, isFilterView, allTodayBookingsCompleted, canGeocodeOnAndroid, todayBookings]);
 
   // ✅ Reset map to user area when all bookings are completed
   useEffect(() => {
@@ -1141,8 +1178,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ==================== COMPUTED VALUES ====================
 
   const routeCoordinates = useMemo(
-    () => todayBookings.map(b => b.coordinates).filter(Boolean) as { latitude: number; longitude: number }[],
-    [todayBookings]
+    () => mapBookings.map(({ coordinates }) => coordinates),
+    [mapBookings]
   );
 
   const listItems = useMemo((): GroupedListItem[] => {
@@ -1411,8 +1448,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     ref={mapRef}
                     style={styles.map}
                     initialRegion={{
-                      latitude: currentBooking?.coordinates?.latitude ?? userLocation?.latitude ?? 51.5074,
-                      longitude: currentBooking?.coordinates?.longitude ?? userLocation?.longitude ?? -0.1278,
+                      latitude: mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates.latitude ?? userLocation?.latitude ?? 51.5074,
+                      longitude: mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates.longitude ?? userLocation?.longitude ?? -0.1278,
                       latitudeDelta: 0.15,
                       longitudeDelta: 0.15,
                     }}
@@ -1427,13 +1464,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     {todayBookings.length > 0 && !allTodayBookingsCompleted ? (
                       <>
-                        {todayBookings.filter(hasMapDestination).map(booking => (
+                        {mapBookings.map(({ booking, coordinates }) => (
                           <Marker
                             key={booking.id}
-                            coordinate={booking.coordinates}
+                            coordinate={coordinates}
                             title={booking.serviceName}
                             description={booking.providerName}
-                            onPress={() => focusMapOnLocation(booking.coordinates)}
+                            onPress={() => focusMapOnLocation(coordinates)}
                             tracksViewChanges
                           >
                             {/* collapsable={false} — Android's view-flattening
@@ -1678,7 +1715,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       </>
                                     ) : (
                                       <>
-                                        {hasMapDestination(currentBooking) && (
+                                        {currentBooking.status !== BookingStatus.PENDING && hasDirectionsDestination(currentBooking) && (
                                           <TouchableOpacity
                                             style={styles.directionsButton}
                                             onPress={() => openInMaps(currentBooking)}
@@ -1784,7 +1821,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           </>
                                         ) : (
                                           <>
-                                            {hasMapDestination(booking) && (
+                                            {booking.status !== BookingStatus.PENDING && hasDirectionsDestination(booking) && (
                                               <TouchableOpacity
                                                 style={styles.directionsButton}
                                                 onPress={() => openInMaps(booking)}

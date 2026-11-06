@@ -24,3 +24,15 @@ export function mapsUrlFor(
     ? `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`
     : `https://www.google.com/maps/search/?api=1&query=${query}`;
 }
+
+/** Route to the released booking address. Booking coordinates can be a pin for
+ * the provider's public area, so they must not override the street address. */
+export function directionsUrlFor(
+  place: { fullAddress: string },
+  os: typeof Platform.OS = Platform.OS,
+): string {
+  const encoded = encodeURIComponent(place.fullAddress);
+  return os === 'ios'
+    ? `https://maps.apple.com/?daddr=${encoded}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+}

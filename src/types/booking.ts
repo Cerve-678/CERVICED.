@@ -88,7 +88,8 @@ export function isMobileBooking(b: {
  *
  * `ConfirmedBooking.coordinates` is TYPED non-null but is genuinely null at
  * runtime whenever the client_bookings view masks it (address not yet released)
- * or the provider never geocoded — mapDbBookingToConfirmed casts null through
+ * or the booking snapshot omitted the provider's saved coordinates —
+ * mapDbBookingToConfirmed casts null through
  * `as unknown as BookingCoordinates`. Callers must check, not trust the type.
  */
 export function hasMapDestination(b: {
@@ -108,6 +109,16 @@ export function hasMapDestination(b: {
     b.coordinates?.latitude != null &&
     b.coordinates?.longitude != null
   );
+}
+
+/** A released venue address can open turn-by-turn directions even if it was
+ * never geocoded. Map markers still require hasMapDestination's coordinates. */
+export function hasDirectionsDestination(b: {
+  address?: string | null | undefined;
+  providerBusinessType?: string | null | undefined;
+  clientAddress?: string | null | undefined;
+}): boolean {
+  return !isMobileBooking(b) && !isAddressPending(b.address);
 }
 
 /** Statuses a booking never leaves. Nothing may re-derive a booking out of one
