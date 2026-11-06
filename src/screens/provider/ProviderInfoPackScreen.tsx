@@ -456,7 +456,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
           <View style={s.titleWrap}>
             <Text style={[s.screenTitle, { color: P.text }]}>{headerTitle}</Text>
             {!inForm && (
-              <TouchableOpacity onPress={() => setWelcomeOpen(true)} hitSlop={10} style={[s.infoBtn, { backgroundColor: P.iconBg }]} accessibilityLabel="How Info Packs work">
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setWelcomeOpen(true); }} hitSlop={10} activeOpacity={0.7} style={[s.infoBtn, { backgroundColor: P.iconBg }]} accessibilityLabel="How Info Packs work">
                 <Ionicons name="information" size={13} color={P.text} />
               </TouchableOpacity>
             )}

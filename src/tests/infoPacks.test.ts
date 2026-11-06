@@ -6,6 +6,8 @@ import {
   hasSection,
   insertSection,
   isHeadingLine,
+  PACK_HEADINGS,
+  PACK_SECTIONS,
   packCoversService,
   packServiceLabel,
   packsNotYetSent,
@@ -84,6 +86,21 @@ describe('sections inside a pack', () => {
     expect(insertSection(once, 'AFTERCARE')).toBe(once);
     expect(insertSection('', 'WHAT TO BRING')).toBe('WHAT TO BRING\n');
     expect(hasSection(once, 'AFTERCARE')).toBe(true);
+  });
+
+  it('offers every section as a heading the client preview recognises', () => {
+    expect(PACK_SECTIONS.length).toBeGreaterThanOrEqual(9);
+    expect(new Set(PACK_SECTIONS.map(sec => sec.heading)).size).toBe(PACK_SECTIONS.length);
+    for (const sec of PACK_SECTIONS) expect(isHeadingLine(sec.heading)).toBe(true);
+  });
+
+  it('starts every example on a heading the ADD row knows, so it shows as used', () => {
+    const known = new Set<string>(Object.values(PACK_HEADINGS));
+    for (const tpl of allPackTemplates()) {
+      const firstLine = tpl.content.split('\n')[0]!;
+      expect(known.has(firstLine)).toBe(true);
+      expect(PACK_SECTIONS.some(sec => hasSection(tpl.content, sec.heading))).toBe(true);
+    }
   });
 
   it('tells headings from shouted sentences', () => {

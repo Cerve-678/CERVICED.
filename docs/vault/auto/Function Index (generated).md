@@ -5,9 +5,9 @@
 
 #generated
 
-**3215 functions** across **442 files**.
+**3221 functions** across **444 files**.
 
-### `src/components/` (58)
+### `src/components/` (59)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -28,6 +28,7 @@
 - `FramedLogo.tsx` — **FramedLogo**
 - `FullyBookedCertificate.tsx` — ConfettiPiece · FullyBookedCertificate · **fullyBookedLine** · makePieces · pieces
 - `HairTypeSelector.tsx` — **HairTypeSelector**
+- `HowItWorksSheet.tsx` — at · **HowItWorksSheet** · jumpTo · pause · play · stepAt
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
 - `ImageCropModal.tsx` — handleBox · handleMark · handleUsePhoto · **ImageCropModal** · make · photo · responders
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · runPendingNavigation · selectImageIndex · trackCarouselOffset
@@ -158,10 +159,11 @@
 ### `src/features/info-packs/` (4)
 - `infoPackLogic.ts` — **clientPreviewNames** · **countClients** · **formsNotYetSent** · **hasPlaceholder** · **hasSection** · **insertSection** · **isHeadingLine** · **isUpcomingOpenBooking** · **packCoversService** · **packServiceLabel** · **packsNotYetSent** · **splitUpcomingForPack** · **summarizeDeliveries**
 - `InfoPackSendSheet.tsx` — hint · **InfoPackSendSheet**
-- `InfoPackWelcome.tsx` — at · **InfoPackWelcome** · jumpTo · pause · play · stepAt · writeLine
+- `InfoPackWelcome.tsx` — **InfoPackWelcome** · renderStage · writeLine
 - `packTemplates.ts` — **allPackTemplates** · mentions · **packTemplatesFor** · **rankPackTemplates** · **servicesForTemplate** · t · words
 
-### `src/features/intake-forms/` (1)
+### `src/features/intake-forms/` (2)
+- `FormsWelcome.tsx` — answers · **FormsWelcome** · renderStage · writeIn
 - `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst
 
 ### `src/features/maintenance/` (9)
