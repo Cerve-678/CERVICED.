@@ -41,7 +41,7 @@ _no named exports_
 `askChip` · `chip` · `dayLabel` · `money` · `navChip` · `NEAR_ME_RE` · `oneOf` · `possessive` · `providerFromDb` · `providerWords` · `resolveProviderDbId` · `serviceWords` · `sortByProximity`
 
 ### `src/services/becca/engine.ts`
-`chooseLayout` · `confirmToken` · `converse` · `respond`
+`chooseLayout` · `confirmToken` · `converse` · `isConfirmToken` · `respond`
 
 ### `src/services/becca/entityResolver.ts`
 `containsPhrase` · `resolveBooking` · `resolveDate` · `resolveEntities` · `resolveMoney` · `resolveProvider` · `resolveService` · `resolveTimeOfDay`

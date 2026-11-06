@@ -5,7 +5,7 @@
 
 #generated
 
-**3198 functions** across **439 files**.
+**3199 functions** across **439 files**.
 
 ### `src/components/` (58)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -388,7 +388,7 @@
 ### `src/services/becca/` (11)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
 - `askNormaliser.ts` — **normalizeAsk**
-- `engine.ts` — answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
+- `engine.ts` — answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · **isConfirmToken** · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
 - `matcher.ts` — containsGappedPhrase · escape · plainAsk · scoreEntities · scorePhrases · **understand**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
