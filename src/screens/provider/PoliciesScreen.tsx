@@ -276,7 +276,7 @@ export default function PoliciesScreen({ navigation }: any) {
     if (!userId) return;
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
+      Alert.alert('Permission Required', 'To add an image, allow CERVICED to use your photos in your phone’s Settings.');
       return;
     }
     // No allowsEditing: iOS's editor only crops to a square, which cuts the
@@ -348,7 +348,7 @@ export default function PoliciesScreen({ navigation }: any) {
       navigation.goBack();
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(toUserMessage(e, 'Could not save your changes.', 'PoliciesScreen.save'), 'error');
+      flash(toUserMessage(e, "Couldn't save your changes. Please try again.", 'PoliciesScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -574,7 +574,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 stay away from money: a charge written here would be an
                 off-app charge the checkout knows nothing about (see the
                 deposit/balance liability boundary in CLAUDE.md). */}
-            <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
+            <Card title="Travel" sub="If you go to clients, say how far you'll travel and anything they need to know first. Shown on your profile (optional).">
               <Field
                 label="Your travel policy"
                 value={policies.travelPolicy}

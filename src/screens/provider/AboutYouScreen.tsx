@@ -149,7 +149,7 @@ export default function AboutYouScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'AboutYouScreen.save'), 'error');
+      flash(toUserMessage(e, "Couldn't save your changes. Please try again.", 'AboutYouScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -246,7 +246,7 @@ export default function AboutYouScreen({ navigation }: any) {
               )}
             </Card>
 
-            <Card title="Accessibility" sub="Help clients with access needs find you.">
+            <Card title="Accessibility" sub="Pick anything that helps clients with access needs find you.">
               <ChipGroup options={ACCESSIBILITY_OPTS} selected={accessibility} onToggle={v => toggleChip(accessibility, setAccessibility, v)} />
             </Card>
 

@@ -102,7 +102,7 @@ export function ReleaseDayPicker({
 
 /** What a release day does, in one place for every screen that sets it. */
 export const RELEASE_DAY_EXPLAINER =
-  'On this day each month, next month opens for booking at 9am (10am in summer) and followers with the bell on are told. Until then clients can book up to the end of this month.';
+  'On this day each month, the next month opens for booking at 9am (10am in summer), and clients who follow you with the bell on are told. Until then, clients can book up to the end of this month.';
 
 // Geometry/typography only — every colour comes from the caller's theme
 // tokens via props. (Same pattern as LocationPicker's localStyles.)

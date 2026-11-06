@@ -49,7 +49,7 @@ beforeEach(() => {
 test('keeps booking release, Stripe balance and bank payouts distinct across four sections', async () => {
   const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
-  expect(ui.getByText('Test mode · no real money moves')).toBeTruthy();
+  expect(ui.getByText('Test mode: no real money is moving')).toBeTruthy();
   expect(ui.getByText('Your payout account is connected')).toBeTruthy();
   expect(ui.queryByText('Deposit settings')).toBeNull();
   fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
@@ -60,7 +60,7 @@ test('keeps booking release, Stripe balance and bank payouts distinct across fou
   expect(ui.queryByText('£10.00')).toBeNull();
   expect(ui.queryByText('£100.00')).toBeNull();
   expect(ui.getAllByText('£90.00').length).toBeGreaterThan(0);
-  expect(ui.getByText(/This is not a bank arrival date/)).toBeTruthy();
+  expect(ui.getByText(/That's not when it reaches your bank/)).toBeTruthy();
   fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
   expect(ui.getByText('£12.00')).toBeTruthy();
   expect(ui.getByText('On the way')).toBeTruthy();
@@ -194,7 +194,7 @@ test('an account with no professional profile is told to finish setting one up, 
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
-  expect(ui.getByText('Finish setting up your professional profile to choose when you get paid.')).toBeTruthy();
+  expect(ui.getByText('Finish setting up your business profile to choose when you get paid.')).toBeTruthy();
   expect(ui.queryByText('7 days')).toBeNull();
   expect(setPayoutHoldDays).not.toHaveBeenCalled();
 });
@@ -240,5 +240,5 @@ test('says a held payment is on hold while the client has a refund request open'
   fireEvent.press(ui.getByRole('tab', { name: 'Booking payments' }));
   fireEvent.press(ui.getByText('Hair appointment'));
   expect(ui.getByText(/on hold until that’s settled/)).toBeTruthy();
-  expect(ui.queryByText(/Eligible for release from/)).toBeNull();
+  expect(ui.queryByText(/Can be paid out from/)).toBeNull();
 });

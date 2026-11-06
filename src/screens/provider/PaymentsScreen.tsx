@@ -75,8 +75,8 @@ import { closeWithinTab } from '../../navigation/closeWithinTab';
 // the button itself only has room for `label` + `hint`.
 const DEPOSIT_MODE_OPTS: { value: DepositMode; label: string; hint: string; sub: string }[] = [
   { value: 'full_only',        label: 'None',     hint: 'Pay in full',  sub: 'Clients pay the full price when they book.' },
-  { value: 'client_choice',    label: 'Optional', hint: 'Client picks', sub: 'Clients choose: pay a deposit now, or pay in full now.' },
-  { value: 'deposit_required', label: 'Required', hint: 'Deposit only', sub: 'Clients must pay the deposit to book \u2014 paying in full isn\u2019t offered.' },
+  { value: 'client_choice',    label: 'Optional', hint: 'Client picks', sub: 'Clients choose to pay a deposit or the full price when they book.' },
+  { value: 'deposit_required', label: 'Required', hint: 'Deposit only', sub: 'Clients pay a deposit when they book. They can\u2019t pay the full price up front.' },
 ];
 
 // The buttons the client booking sheet shows for each mode — previewed under
@@ -160,7 +160,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
         }
       } catch {
         setLoadFailed(true);
-        flash('Could not load your payment settings', 'error');
+        flash("Couldn't load your payment settings. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -173,10 +173,10 @@ export default function PaymentsScreen({ navigation, route }: any) {
   }
 
   const handleSave = useCallback(async () => {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash('Finish setting up your business profile first.', 'error'); return; }
     // See loadFailed above: writing without a successful read would delete the
     // policy keys this screen carries but doesn't edit.
-    if (loadFailed) { flash('Your payment settings could not be loaded — reopen this screen before saving', 'error'); return; }
+    if (loadFailed) { flash("Your payment settings didn't load, so saving now could lose them. Close this page and open it again.", 'error'); return; }
     // Without an amount the client booking sheet falls back to a 20% deposit
     // this provider never agreed to, so an empty amount can't be saved.
     if (depositMode !== 'full_only' && !(Number(depositAmount) > 0)) {
@@ -214,7 +214,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
       flash('Payment settings saved', 'success');
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(toUserMessage(e, 'Could not save your changes.', 'PaymentsScreen.save'), 'error');
+      flash(toUserMessage(e, "Couldn't save your changes. Please try again.", 'PaymentsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -255,9 +255,9 @@ export default function PaymentsScreen({ navigation, route }: any) {
 
           <ProviderStripePayments stripeReturn={route?.params?.stripeReturn} setup={setupSummary}>
           {loading ? <ActivityIndicator color={C.accent} size="large" /> : <>
-          {loadFailed && <Toast message="Payment settings could not load. Reopen this screen before saving." type="error" />}
+          {loadFailed && <Toast message="Your payment settings didn't load, so saving now could lose them. Close this page and open it again." type="error" />}
 
-          <Card title="Deposits" sub="Whether clients pay something up front to hold their slot.">
+          <Card title="Deposits" sub="Whether clients pay something when they book, to hold their appointment.">
             <View style={st.modeRow}>
               {DEPOSIT_MODE_OPTS.map(o => {
                 const on = depositMode === o.value;
@@ -341,7 +341,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 ))}
               </View>
               {depositMode === 'deposit_required' && (
-                <Text style={[st.footnote, { color: C.sub }]}>The balance is due at their appointment.</Text>
+                <Text style={[st.footnote, { color: C.sub }]}>They pay the rest at their appointment.</Text>
               )}
             </View>
           </Card>
@@ -363,13 +363,13 @@ export default function PaymentsScreen({ navigation, route }: any) {
               }}
             />
             <Text style={[st.footnote, { color: C.sub, marginTop: 6 }]}>
-              Cerviced doesn't process payments you take in person — these are shown to clients as a heads-up, nothing more.
+              These only show on your profile, so clients know how they can pay you. CERVICED doesn't take or track payments made in person.
             </Text>
             <View style={[st.toldPanel, { backgroundColor: C.bg }]}>
               <Text style={[st.eyebrow, { color: C.accentText }]}>WHAT CLIENTS ARE TOLD</Text>
               <Text style={[st.body, { color: C.text }]}>
                 {acceptedLabels.length === 0
-                  ? 'No payment types selected yet — clients won’t see any payment guidance on your profile.'
+                  ? 'Nothing picked yet, so your profile won’t say how clients can pay you.'
                   : `Accepts ${acceptedLabels.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`}
               </Text>
             </View>
@@ -390,7 +390,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
             <View style={{ flex: 1 }}>
               <Text style={[st.rowTitle, { color: C.text }]}>Refund policy</Text>
               <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>
-                {refundPolicyNote || 'Not written yet — clients booking with you won’t see one.'}
+                {refundPolicyNote || 'Not written yet, so clients won’t see a refund policy when they book.'}
               </Text>
             </View>
             <Text style={[st.rowAction, { color: C.accentText }]}>{refundPolicyNote ? 'Edit in Policies' : 'Write one'}</Text>
@@ -401,7 +401,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
             <View style={{ flex: 1 }}>
               <Text style={[st.rowTitle, { color: C.text, fontSize: 13 }]}>Getting Paid</Text>
               <Text style={[st.footnote, { color: C.sub }]}>
-                Anything a client pays in person — the balance after a deposit included — is between you and them. Cerviced doesn’t collect, hold, verify or record those payments, so keep your own receipts.
+                Anything a client pays you in person, including what’s left after a deposit, is between you and them. CERVICED doesn’t collect, hold, check or record those payments, so keep your own receipts.
               </Text>
             </View>
           </View>

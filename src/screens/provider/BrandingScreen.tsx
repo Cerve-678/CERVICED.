@@ -164,7 +164,7 @@ export default function BrandingScreen({ navigation }: any) {
   }, [user?.id]);
 
   const pickImage = useCallback(async () => {
-    if (!userId) { Alert.alert('Not signed in'); return; }
+    if (!userId) { Alert.alert("You're signed out. Sign in again to change your branding."); return; }
     // Avoid asking the native permission service again once access is already
     // granted. That extra hop delayed the picker even for returning providers.
     let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -251,7 +251,7 @@ export default function BrandingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Save failed', toUserMessage(e, 'Could not save your changes.', 'BrandingScreen.save'));
+      Alert.alert('Save failed', toUserMessage(e, "Couldn't save your changes. Please try again.", 'BrandingScreen.save'));
     } finally {
       setSaving(false);
     }
@@ -345,8 +345,7 @@ export default function BrandingScreen({ navigation }: any) {
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Each set pairs two backdrop colours with an accent that suits them.
-              Swipe through the collections, or tap Custom to build your own.
+              Each set is two background colours with a highlight colour that suits them. Swipe to see more sets, or tap Make Your Own to pick each colour yourself.
             </Text>
             <ProviderThemePicker
               value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
@@ -365,8 +364,8 @@ export default function BrandingScreen({ navigation }: any) {
             <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
               {backgroundImage
-                ? 'Your background photo is showing instead. Remove it to use a finish.'
-                : 'How your two backdrop colours sit behind the top of your profile.'}
+                ? 'You have a background photo, so it shows instead of a finish. Remove the photo to use one.'
+                : 'How your two background colours blend at the top of your profile.'}
             </Text>
             <View style={styles.finishRow}>
               {HERO_FINISHES.map(f => {
@@ -403,7 +402,7 @@ export default function BrandingScreen({ navigation }: any) {
 
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>Choose how your business name appears on your public profile.</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>The font your business name is shown in on your profile.</Text>
             <ProviderFontPicker
               value={brandFont}
               onChange={setBrandFont}
@@ -421,7 +420,7 @@ export default function BrandingScreen({ navigation }: any) {
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              A photo background overrides the gradient. Clients see it behind your profile.
+              If you add a photo, it replaces your background colours. Clients see it behind your profile.
             </Text>
             <View style={styles.imageRow}>
               {backgroundImage ? (
@@ -477,7 +476,7 @@ export default function BrandingScreen({ navigation }: any) {
       <FullCervicedLockedSheet
         visible={lockedOpen}
         title="Unlock the rest of your branding"
-        note="You can use the App, Blush, Grey and Charcoal colours, the Classic, Chunky & Rounded, Smooth & Rounded and Bakbak fonts, and the Blend finish now."
+        note="Right now you can use the App, Blush, Grey and Charcoal colours, the Classic, Chunky & Rounded, Smooth & Rounded and Bakbak fonts, and the Blend finish. Full members get the rest."
         onClose={() => setLockedOpen(false)}
         onSeeMore={() => navigation.navigate('FullCervicedFeatures')}
       />

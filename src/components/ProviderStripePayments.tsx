@@ -192,8 +192,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   return <>
     <View style={styles.intro}>
       <Text style={[styles.eyebrow, { color: C.accentText }]}>YOUR BUSINESS, IN BALANCE</Text>
-      <Text style={[styles.description, { color: C.text }]}>A little clarity for every payment.</Text>
-      {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>Test mode · no real money moves</Text>}
+      <Text style={[styles.description, { color: C.text }]}>See what you've earned and when it reaches your bank.</Text>
+      {finance && !finance.livemode && finance.connected && <Text style={[styles.testBadge, { color: C.accentText, backgroundColor: C.surface }]}>Test mode: no real money is moving</Text>}
     </View>
     <View style={styles.tabs}>
       {visibleTabs.map(tab => {
@@ -234,7 +234,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       <View style={[styles.hero, { backgroundColor: C.accent }]}>
         <Text style={[styles.heroLabel, { color: C.bg }]}>AVAILABLE IN STRIPE</Text>
         <Text style={[styles.heroAmount, { color: C.bg }]}>{finance?.connected ? balances(finance.available) : '—'}</Text>
-        <Text style={[styles.heroNote, { color: C.bg }]}>{finance?.connected ? 'Ready for your Stripe payout schedule.' : !finance ? (loading ? 'Checking your Stripe balance…' : 'Balance unavailable. Refresh to try again.') : 'Connect your payout account to see your balance.'}</Text>
+        <Text style={[styles.heroNote, { color: C.bg }]}>{finance?.connected ? 'Stripe pays this into your bank on your payout schedule.' : !finance ? (loading ? 'Checking your Stripe balance…' : 'Balance unavailable. Refresh to try again.') : 'Connect your payout account to see your balance.'}</Text>
         <View style={[styles.heroDivider, { borderColor: C.bg }]} />
         <View style={styles.heroRow}>
           <Text style={[styles.heroNote, { color: C.bg }]}>Clearing in Stripe</Text>
@@ -249,7 +249,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <View style={[styles.iconChip, { backgroundColor: C.surface }]}><Ionicons name="business-outline" size={18} color={C.accentText} /></View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: C.text }]}>{accountTitle}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? 'Finish with Stripe to receive online booking payments'
+            <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? 'Finish setting up with Stripe to get paid for bookings made in the app'
               : account.bankAccount ? `Paid to ${account.bankAccount.bankName ?? 'your bank'} ••${account.bankAccount.last4}. Tap Manage to change it.`
               : 'Bank details managed securely by Stripe'}</Text>
           </View>
@@ -259,14 +259,14 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
       </>}
 
-      <IconCard icon="calendar-outline" title="On its way to your bank" sub="An estimated arrival, once Stripe has scheduled a payout.">
+      <IconCard icon="calendar-outline" title="On its way to your bank" sub="When your next payout should reach your bank, once Stripe has scheduled it.">
         {nextPayout ? <View style={[styles.amountPanel, { backgroundColor: C.bg }]}>
           <Text style={[styles.amount, { color: C.text }]}>{money(nextPayout.amount, nextPayout.currency)}</Text>
           <Text style={[styles.caption, { color: C.text }]}>Expected {date(nextPayout.arrivalDate * 1000)}</Text>
-        </View> : <Text style={[styles.description, { color: C.text }]}>{financeError ? 'Payout information is unavailable. Refresh to try again.' : loading ? 'Checking scheduled payouts…' : 'No upcoming payout in your recent Stripe activity.'}</Text>}
+        </View> : <Text style={[styles.description, { color: C.text }]}>{financeError ? 'Payout information is unavailable. Refresh to try again.' : loading ? 'Checking scheduled payouts…' : 'No payout is on its way yet.'}</Text>}
         <PaymentAction secondary label="View payouts" disabled={false} onPress={() => setSection('payouts')} />
       </IconCard>
-      <IconCard icon="receipt-outline" title="Recent booking activity" sub="Your latest online booking payments.">
+      <IconCard icon="receipt-outline" title="Recent booking activity" sub="The latest payments clients made in the app.">
         {!!payoutError && <Notice text={payoutError} />}
         {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
         {payouts.slice(0, 3).map(row => <View key={row.id} style={[styles.activity, { borderColor: C.border }]}>
@@ -293,13 +293,13 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
 
     {shownSection === 'bookings' && <>
       <Text style={[styles.sectionTitle, { color: C.text }]}>Booking payments</Text>
-      <Text style={[styles.sectionNote, { color: C.sub }]}>Latest 50 online payments. Open a booking payment to see your share and release status.</Text>
+      <Text style={[styles.sectionNote, { color: C.sub }]}>Your latest 50 payments made in the app. Tap one to see your share and when it's paid out.</Text>
       {!!payoutError && <Notice text={payoutError} />}
       {!loading && !payoutError && payouts.length === 0 && <EmptyState icon="receipt-outline" title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
       {payouts.map(row => <BookingPayment key={row.id} row={row} tips={tipGroups.byBooking.get(row.booking_id)} busy={busy} onRefund={() => setRefundRow(row)} />)}
       {feeEarnings.length > 0 && <>
         <Text style={[styles.sectionTitle, { color: C.text }]}>Late & no-show fees</Text>
-        <Text style={[styles.sectionNote, { color: C.sub }]}>Your share after Stripe's card fee. Refund or answer a dispute from the booking itself.</Text>
+        <Text style={[styles.sectionNote, { color: C.sub }]}>What you get after the card fee. To refund one or answer a dispute, open that booking.</Text>
         {feeEarnings.map(fee => <View key={fee.id} style={[styles.booking, { backgroundColor: C.card, borderColor: C.border }]}>
           <View style={styles.bookingHead}>
             <View style={{ flex: 1 }}>
@@ -342,7 +342,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{title}</Text><Text style={[styles.caption, { color: C.text }]}>{detail}</Text></View>
         </View>)}
       </View>
-      <Card title="Bank payouts" sub="Actual payouts from Stripe to your bank. Arrival dates are estimates.">
+      <Card title="Bank payouts" sub="Money Stripe has sent to your bank. Arrival dates are estimates.">
         {!!financeError && <Notice text={financeError} />}
         {!loading && !financeError && !finance?.payouts.length && <EmptyState icon="wallet-outline" title="No bank payouts yet" detail="Once Stripe schedules your first payout, you can follow its progress here." />}
         {finance?.payouts.map(p => <View key={p.id} style={[styles.bankRow, { borderColor: C.border }]}>
@@ -357,10 +357,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </Card>
     </>}
     {shownSection === 'settings' && <>
-      <Card title="When you get paid" sub="How long after an appointment your share is released to our payment partners. They then pay it into your bank, which usually takes a few more working days.">
+      <Card title="When you get paid" sub="How long after an appointment your share is passed to Stripe, our payment partner. Stripe then pays it into your bank, which usually takes a few more working days.">
         {!!holdError && <Notice text={holdError} />}
         {holdUnavailable
-          ? <Notice text="Finish setting up your professional profile to choose when you get paid." />
+          ? <Notice text="Finish setting up your business profile to choose when you get paid." />
           : <>
             <View style={styles.holdOptions}>
               {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
@@ -372,7 +372,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
                 </TouchableOpacity>;
               })}
             </View>
-            <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
+            <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>If you make it longer, payments already waiting wait longer too. If you make it shorter, the change starts from your next booking.</Text>
           </>}
       </Card>
       {children}
@@ -390,7 +390,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
 
 function feeStatusLabel(fee: ProviderFeeEarning): string {
   if (fee.status === 'refunded') return 'Refunded to client';
-  if (fee.openDispute) return 'Disputed — waiting on your answer';
+  if (fee.openDispute) return 'Disputed: waiting for your answer';
   switch (fee.payoutStatus) {
     case 'held': return fee.releaseAfter ? `Released from ${date(new Date(fee.releaseAfter).getTime())}` : 'Held';
     case 'transferred': return 'Released to Stripe';
@@ -445,7 +445,7 @@ function BookingPayment({ row, tips, busy, onRefund }: { row: ProviderPayout; ti
       {[['Your share before refunds', row.payout_amount]].map(([label, amount]) => <View key={label} style={styles.row}>
         <Text style={[styles.description, { color: C.text }]}>{label}</Text><Text style={[styles.label, { color: C.text }]}>{money(Number(amount), row.currency)}</Text>
       </View>)}
-      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{onRefundHold(row) ? 'Your client asked for a refund, so this payment is on hold until that’s settled. Then whatever is still yours is released as normal.' : row.status === 'held' ? `Eligible for release from ${date(new Date(row.release_after).getTime())}. This is not a bank arrival date.` : row.status === 'transferred' ? 'Your share has been released to Stripe. See Payouts for bank transfers.' : row.status === 'failed' ? 'Your share needs attention before it can be released. Contact support if this continues.' : 'This booking’s payout has been cancelled or returned.'}</Text>
+      <Text style={[styles.caption, { color: C.text, marginTop: 12 }]}>{onRefundHold(row) ? 'Your client asked for a refund, so this payment is on hold until that’s settled. Then whatever is still yours is released as normal.' : row.status === 'held' ? `Can be paid out from ${date(new Date(row.release_after).getTime())}. That's not when it reaches your bank.` : row.status === 'transferred' ? 'Your share has been passed to Stripe. See Payouts for when it reaches your bank.' : row.status === 'failed' ? 'There’s a problem paying out your share. Contact CERVICED support if it doesn’t clear.' : 'This booking’s payout has been cancelled or returned.'}</Text>
       {['held', 'transferred', 'failed'].includes(row.status) && <PaymentAction secondary disabled={busy} label="Refund client" onPress={onRefund} />}
     </View>}
   </View>;

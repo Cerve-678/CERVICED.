@@ -203,7 +203,7 @@ export default function SchedulingScreen({ navigation }: any) {
       navigation.goBack();
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(toUserMessage(e, 'Could not save your changes.', 'SchedulingScreen.save'), 'error');
+      flash(toUserMessage(e, "Couldn't save your changes. Please try again.", 'SchedulingScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -299,7 +299,7 @@ export default function SchedulingScreen({ navigation }: any) {
 
             <View style={{ height: 14 }} />
             <ToggleRow label="Walk-ins welcome" sub="Clients can turn up without booking first" value={walkIns} onChange={setWalkIns} />
-            <ToggleRow label="Group bookings" sub="Bridal parties, hen dos, group sessions" value={groupBookings} onChange={setGroupBookings} />
+            <ToggleRow label="Group bookings" sub="You take bookings for groups, like bridal parties and hen dos" value={groupBookings} onChange={setGroupBookings} />
           </Card>
 
           <Card
@@ -343,7 +343,7 @@ export default function SchedulingScreen({ navigation }: any) {
                 </Text>
                 <RadioGroup options={BOOKING_WINDOW_OPTS} value={bookingWindowDays} onChange={setBookingWindowDays} />
                 <Text style={[st.windowExplainer, { color: C.sub, marginTop: 8 }]}>
-                  Rather open a whole month at once? Set a monthly release day in Edit Profile.
+                  Want to open a whole month at a time instead? Set a monthly release day in Edit Profile.
                 </Text>
               </>
             )}

@@ -87,11 +87,11 @@ export default function ServicesPricingScreen({ navigation }: any) {
           try {
             setSpecialties(await getProviderSpecialties(providerData.id));
           } catch {
-            flash('Could not load specialties', 'error');
+            flash("Couldn't load your specialties. Close this page and open it again.", 'error');
           }
         }
       } catch {
-        flash('Could not load your practice details', 'error');
+        flash("Couldn't load your details. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -108,7 +108,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
   }
 
   async function handleSave() {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash('Finish setting up your business profile first.', 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -144,7 +144,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'ServicesPricingScreen.save'), 'error');
+      flash(toUserMessage(e, "Couldn't save your changes. Please try again.", 'ServicesPricingScreen.save'), 'error');
     } finally {
       setSaving(false);
     }

@@ -266,7 +266,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
       navigation.goBack();
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      showToast('Could not save — try again', false);
+      showToast("Couldn't save. Please try again.", false);
     } finally {
       setSaving(false);
     }
@@ -321,7 +321,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         <SectionHeader
           icon="sparkles-outline"
           label="WHAT CERVICED SENDS FOR YOU"
-          sub="These are automated messages the platform sends to your clients on your behalf. Toggle each on or off, and configure timing where applicable."
+          sub="Messages CERVICED sends your clients for you. Turn each one on or off, and choose when it's sent where you can."
           C={C}
         />
 
@@ -329,7 +329,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, marginBottom: 8 }]}>
           <Text style={[st.cardTitle, { color: C.text, marginBottom: 4 }]}>Appointment reminders to clients</Text>
           <Text style={[st.cardDesc, { color: C.sub, marginBottom: 12 }]}>
-            Cerviced sends a push notification to clients at each selected interval before their appointment.
+            CERVICED sends clients a notification at each time you pick before their appointment.
           </Text>
           <View style={st.chipRow}>
             {([
@@ -353,7 +353,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             })}
           </View>
           {d.clientReminderTiming.length === 0 && (
-            <Text style={[st.hint, { color: C.sub }]}>No reminders selected — clients won't receive any automated reminders.</Text>
+            <Text style={[st.hint, { color: C.sub }]}>Nothing picked, so clients won't get any reminders.</Text>
           )}
         </View>
 
@@ -373,13 +373,13 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           onSelect={v => set('rebookingNudgeWeeks', v)}
           C={C}
         />
-        <Text style={[st.chipHint, { color: C.sub }]}>Cerviced prompts the client to rebook after this many weeks since their last appointment with you. Your setting here is also their starting interval in Beauty Maintenance, and clients who already get Maintenance reminders for that service don't get this nudge as well.</Text>
+        <Text style={[st.chipHint, { color: C.sub }]}>This many weeks after a client's last appointment with you, CERVICED reminds them to book again. It's also when their Beauty Maintenance reminders start. Clients who already get Maintenance reminders for that service won't get this one too.</Text>
 
-        <Text style={[st.chipHint, { color: C.sub }]}>Looking for your monthly release day? It's set in Edit Profile now, and it decides how far ahead clients can book.</Text>
+        <Text style={[st.chipHint, { color: C.sub }]}>Your monthly release day is set in Edit Profile. It decides how far ahead clients can book.</Text>
 
         <AutoCard
           title="Review request"
-          description="2 hours after an appointment is marked completed, Cerviced asks the client to leave a star rating and review."
+          description="2 hours after an appointment is marked as done, CERVICED asks the client to rate and review it."
           value={d.autoReviewRequest}
           onToggle={v => set('autoReviewRequest', v)}
           C={C}
@@ -387,7 +387,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         <AutoCard
           title="Post-appointment check-in"
-          description="The day after a treatment, Cerviced sends a short follow-up asking the client how they're feeling."
+          description="The day after a treatment, CERVICED sends the client a short message asking how they're feeling."
           value={d.postApptCheckIn}
           onToggle={v => set('postApptCheckIn', v)}
           C={C}
@@ -395,7 +395,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         <AutoCard
           title="Birthday greeting"
-          description="Cerviced sends a personalised birthday message to clients who have their birthday on file — a simple way to stay front of mind."
+          description="CERVICED sends a birthday message to clients who've added their birthday."
           value={d.birthdayGreeting}
           onToggle={v => set('birthdayGreeting', v)}
           C={C}
@@ -403,7 +403,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         <AutoCard
           title="Daily booking recap"
-          description="Each morning, Cerviced sends you a push notification summarising your appointments for the day."
+          description="Each morning, CERVICED sends you a notification with that day's appointments."
           value={d.newBookingRecap}
           onToggle={v => set('newBookingRecap', v)}
           C={C}
@@ -413,13 +413,13 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         <SectionHeader
           icon="settings-outline"
           label="YOUR BUSINESS RULES"
-          sub="These settings control how bookings flow through your calendar and what clients experience when they book with you."
+          sub="How bookings are accepted, and what happens when you're fully booked."
           C={C}
         />
 
         <AutoCard
           title="Auto-confirm bookings"
-          description="New booking requests are confirmed instantly without manual approval. Best for providers with a fixed open schedule."
+          description="Bookings are confirmed straight away, without you having to accept each one. Best if your hours rarely change."
           value={d.autoConfirmBookings}
           onToggle={v => set('autoConfirmBookings', v)}
           C={C}
@@ -430,7 +430,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         <AutoCard
           title="Enable waitlist"
-          description="When your day is fully booked, clients can join a waitlist. Cerviced notifies them if a slot opens up."
+          description="When a day is fully booked, clients can join a waitlist. CERVICED tells them if a time frees up."
           value={d.waitlistEnabled}
           onToggle={v => set('waitlistEnabled', v)}
           C={C}
@@ -439,7 +439,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         {d.waitlistEnabled && (
           <AutoCard
             title="Auto-invite from waitlist"
-            description="When a booking is cancelled, automatically invite and schedule the next person in the queue."
+            description="When a booking is cancelled, the next person on the waitlist is invited to take the time automatically."
             value={d.autoAcceptWaitlist}
             onToggle={v => set('autoAcceptWaitlist', v)}
             C={C}
@@ -457,7 +457,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         <View style={[st.infoBox, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Ionicons name="information-circle-outline" size={15} color={C.sub} style={{ marginTop: 1 }} />
           <Text style={[st.infoText, { color: C.sub }]}>
-            Automated messages (reminders, nudges, review requests) are sent by Cerviced — not from your personal number or email. Rules such as buffer time and daily caps are applied automatically to every message we send on your behalf.
+            Reminders, nudges and review requests come from CERVICED, not from your own phone number or email.
           </Text>
         </View>
       </ScrollView>

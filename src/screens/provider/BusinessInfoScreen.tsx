@@ -180,7 +180,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           }
         }
       } catch {
-        flash('Could not load business details', 'error');
+        flash("Couldn't load your business info. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -255,9 +255,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
         `Change your service type to ${pendingCategoryLabel}?`,
         `You won't be able to change it again for ${CATEGORY_COOLDOWN_DAYS} days.\n\n`
         + `• Clients will find you under ${pendingCategoryLabel} instead of ${savedCategoryLabel} in Explore and Search.\n`
-        + `• Your portfolio photos move across with you.\n`
-        + `• Your specialties are cleared — ${pendingCategoryLabel} offers a different list, so you'll need to pick them again in Services & Pricing.\n\n`
-        + 'Bookings you already have are unaffected.',
+        + `• Your portfolio photos stay on your profile.\n`
+        + `• Your specialties are cleared, because ${pendingCategoryLabel} has a different list. You'll need to pick them again in Services & Pricing.\n\n`
+        + "Bookings you already have don't change.",
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Change it', style: 'destructive', onPress: () => { void commitSave(); } },
@@ -354,7 +354,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
       // AllowingDbGuard, not the plain version: the service-type cooldown
       // raises a P0001 that names the exact date the provider can change it
       // again, and that date is the only useful part of the failure.
-      flash(toUserMessageAllowingDbGuard(e, 'Could not save your changes.', 'BusinessInfoScreen.save'), 'error');
+      flash(toUserMessageAllowingDbGuard(e, "Couldn't save your changes. Please try again.", 'BusinessInfoScreen.save'), 'error');
     } finally {
       setSaving(false);
     }

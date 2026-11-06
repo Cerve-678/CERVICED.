@@ -78,7 +78,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <Text style={[styles.title, { color: P.text }]}>Business Profile</Text>
-          <Text style={[styles.subtitle, { color: P.sub }]}>Manage how your business appears on Cerviced</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>Change what clients see about your business on CERVICED</Text>
 
           {/* Profile */}
           <View style={[styles.section, { backgroundColor: P.section }]}>
@@ -86,14 +86,14 @@ export default function BusinessProfileScreen({ navigation }: any) {
             <SettingsOption
               icon="storefront"
               title="Edit Profile"
-              subtitle="Services, portfolio, pricing & location"
+              subtitle="Your services and prices, photos, description and address"
               onPress={() => navigation.navigate('EditProfile')}
               P={P}
             />
             <SettingsOption
               icon="palette"
               title="Branding & Style"
-              subtitle="Background image, gradient & accent colour"
+              subtitle="The colours, background and font on your profile"
               onPress={() => navigation.navigate('Branding')}
               P={P}
             />
@@ -105,28 +105,28 @@ export default function BusinessProfileScreen({ navigation }: any) {
             <SettingsOption
               icon="badge"
               title="Business Details"
-              subtitle="Identity, practice, credentials & accessibility"
+              subtitle="Your business info, specialties, policies, qualifications and booking rules"
               onPress={() => navigation.navigate('BusinessDetails')}
               P={P}
             />
             <SettingsOption
               icon="payment"
               title="Payments & payouts"
-              subtitle="Your money, booking payments & payment settings"
+              subtitle="Deposits, how clients pay you, and getting paid"
               onPress={() => navigation.navigate('Payments')}
               P={P}
             />
             <SettingsOption
               icon="chat-dots"
               title="Communications"
-              subtitle="How booked clients contact you, and your details for them"
+              subtitle="How clients with a booking can contact you"
               onPress={() => navigation.navigate('Communications')}
               P={P}
             />
             <SettingsOption
               icon="auto-awesome"
               title="Automations & Preferences"
-              subtitle="Reminders, business rules & booking automation"
+              subtitle="Messages CERVICED sends your clients for you, and how bookings are accepted"
               onPress={() => navigation.navigate('Automations')}
               P={P}
             />

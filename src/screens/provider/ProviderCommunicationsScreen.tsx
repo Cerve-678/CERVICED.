@@ -59,10 +59,10 @@ const CP = CP_DARK; // static fallback for StyleSheet.create
 type ContactMethod = 'in_app' | 'email' | 'whatsapp' | 'phone';
 
 const METHOD_META: Record<ContactMethod, { icon: string; label: string; description: string }> = {
-  in_app:   { icon: 'chatbubble-ellipses-outline', label: 'In-app messaging',  description: 'Booked clients chat with you inside Cerviced. Anyone browsing your profile can also start a general enquiry via Get In Touch' },
-  email:    { icon: 'mail-outline',                label: 'Email',              description: 'Booked clients can email you' },
-  whatsapp: { icon: 'logo-whatsapp',               label: 'WhatsApp',           description: 'Booked clients open a WhatsApp chat with you' },
-  phone:    { icon: 'call-outline',                label: 'Phone call',         description: 'Booked clients can call you' },
+  in_app:   { icon: 'chatbubble-ellipses-outline', label: 'In-app messaging',  description: 'Clients with a booking can message you in CERVICED. Anyone looking at your profile can also message you from Get In Touch' },
+  email:    { icon: 'mail-outline',                label: 'Email',              description: 'Clients with a booking can email you' },
+  whatsapp: { icon: 'logo-whatsapp',               label: 'WhatsApp',           description: 'Clients with a booking can message you on WhatsApp' },
+  phone:    { icon: 'call-outline',                label: 'Phone call',         description: 'Clients with a booking can call you' },
 };
 
 const ALL_METHODS: ContactMethod[] = ['in_app', 'email', 'whatsapp', 'phone'];
@@ -143,7 +143,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
           whatsapp: mine.whatsapp_number ?? '',
         });
       } catch {
-        flash('Could not load contact preferences', 'error');
+        flash("Couldn't load your contact settings. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -203,7 +203,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'ProviderCommunicationsScreen.save'), 'error');
+      flash(toUserMessage(e, "Couldn't save your changes. Please try again.", 'ProviderCommunicationsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -297,7 +297,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                           />
                           {!booked[method].trim() && (
                             publicValue
-                              ? <Text style={[s.inputHint, { color: C.sub }]}>Using your public {method === 'email' ? 'email' : 'number'}. Type here to give booked clients a different one.</Text>
+                              ? <Text style={[s.inputHint, { color: C.sub }]}>Using your public {method === 'email' ? 'email' : 'number'}. Type here to give clients with a booking a different one.</Text>
                               : isOn && <Text style={s.rowWarn}>Not added yet</Text>
                           )}
                         </View>
