@@ -99,6 +99,24 @@ const LOAD_MORE_COOLDOWN_MS = 300;
 // are fetched as the client reaches the end of this initial window.
 const DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20;
 const DISCOVER_INITIAL_SERVICE_LIMIT = 10;
+// “All” should feel like discovery, not an upload log. A single newest-first
+// database page can only ever contain the latest work, even if we shuffle it
+// on the device. Sample three small, widely separated windows instead: there
+// is still fresh work at the top of the source pool, alongside established
+// work and a deeper part of the catalogue. Category tabs stay newest-first
+// before their in-app shuffle, because their pools are naturally smaller.
+const ALL_PORTFOLIO_WINDOWS = [
+  // Keep the full initial page so Explore always has enough content to scroll
+  // even when the catalogue is still small.
+  { offset: 0, limit: DISCOVER_INITIAL_PORTFOLIO_LIMIT },
+  { offset: 36, limit: 8 },
+  { offset: 108, limit: 8 },
+] as const;
+const ALL_SERVICE_WINDOWS = [
+  { offset: 0, limit: DISCOVER_INITIAL_SERVICE_LIMIT },
+  { offset: 18, limit: 4 },
+  { offset: 54, limit: 4 },
+] as const;
 // The back-to-top arrow appears once the grid is scrolled this many screen
 // heights down, fading in over the next fifth of a screen.
 const BACK_TO_TOP_AFTER_SCREENS = 1;
@@ -130,11 +148,11 @@ function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
 // The DB hands rows back in upload order, so a provider who posts ten photos at
 // once, or one service's whole carousel, arrives as a block, and a shuffle
 // inside one page can't scatter a block that big. After mixing, nothing from
-// the same provider sits within six cards of itself, and the same category
-// isn't shown three in a row where something else is available.
+// the same provider sits within six cards of itself. Categories intentionally
+// remain free to repeat: seeing two Nails looks together is often useful
+// inspiration, and forced category alternation made the feed less natural.
 const EXPLORE_SPREAD: SpreadRule<PortfolioItem>[] = [
   { keyOf: card => card.providerSlug ?? card.providerId, gap: 6 },
-  { keyOf: card => card.category, gap: 2 },
 ];
 // How much of the feed already on screen a new page is spread against.
 const EXPLORE_SPREAD_LOOKBACK = 8;
@@ -537,16 +555,28 @@ const ExploreScreen = memo(() => {
   // was cached for the current filter).
   const loadDiscoverFeed = useCallback(async (filter: string): Promise<PortfolioItem[]> => {
     const category = filter !== 'All' ? filterMap[filter] : undefined;
-    const [portfolioData, serviceData] = await withTimeout(
+    const portfolioWindows = filter === 'All'
+      ? ALL_PORTFOLIO_WINDOWS
+      : [{ offset: 0, limit: DISCOVER_INITIAL_PORTFOLIO_LIMIT }];
+    const serviceWindows = filter === 'All'
+      ? ALL_SERVICE_WINDOWS
+      : [{ offset: 0, limit: DISCOVER_INITIAL_SERVICE_LIMIT }];
+    const [portfolioPages, servicePages] = await withTimeout(
       Promise.all([
         // Explore is a browse surface, including for providers viewing their
         // own public work. Do not hide a provider's images from this feed.
-        getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT),
-        getDiscoverServices(category, DISCOVER_INITIAL_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
+        Promise.all(portfolioWindows.map(window =>
+          getExplorePortfolioItems(category, window.limit, window.offset),
+        )),
+        Promise.all(serviceWindows.map(window =>
+          getDiscoverServices(category, window.limit, undefined, { excludeOwnProvider: false }, window.offset),
+        )),
       ]),
       8_000,
       'Explore feed',
     );
+    const portfolioData = portfolioPages.flat();
+    const serviceData = servicePages.flat();
 
     // Every getDiscover*/getPortfolioItems query is deterministically
     // ordered (created_at, rating, scraped_at — see databaseService.ts) so
@@ -573,12 +603,16 @@ const ExploreScreen = memo(() => {
       EXPLORE_SPREAD,
     );
     discoverFeedCache.current.set(filter, feed);
+    // Sampling older windows is only for the first screenful's variety. The
+    // cursor must still begin straight after page zero, otherwise pagination
+    // jumps from the newest items to offset 116 and permanently skips the
+    // middle of the catalogue.
     discoverPageCursors.current.set(filter, {
-      portfolioOffset: portfolioData.length,
-      serviceOffset: serviceData.length,
+      portfolioOffset: portfolioWindows[0]!.limit,
+      serviceOffset: serviceWindows[0]!.limit,
       hasMore:
-        portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
-        serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+        portfolioPages[0]!.length === portfolioWindows[0]!.limit ||
+        servicePages[0]!.length === serviceWindows[0]!.limit,
     });
     return feed;
   }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);

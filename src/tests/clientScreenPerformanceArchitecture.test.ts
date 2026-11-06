@@ -34,7 +34,8 @@ describe('client screen performance contracts', () => {
       'utf8',
     );
 
-    expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT)');
+    expect(source).toContain('const ALL_PORTFOLIO_WINDOWS');
+    expect(source).toContain('getExplorePortfolioItems(category, window.limit, window.offset)');
     expect(database).toContain('const EXPLORE_PORTFOLIO_SELECT');
     expect(database).toContain('.select(EXPLORE_PORTFOLIO_SELECT)');
   });
