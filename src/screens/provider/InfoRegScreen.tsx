@@ -2859,6 +2859,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // 'app' theme) for a beat before the real saved data pops in, which reads
   // as a glitch. Gated in the render below, same as the other profile screens.
   const [isLoadingProvider, setIsLoadingProvider] = useState(true);
+  // The cached profile can be edited while its live refresh is still in
+  // flight. Preserve service changes if that refresh completes afterwards.
+  const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
   // cache to fall back to) — gated in the render below, ahead of the normal
@@ -2956,7 +2959,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           .then(data => {
             if (cancelled) return;
             if (data) {
-              setProviderData(data);
+              setProviderData({
+                ...data,
+                categories: { ...data.categories, ...editedServiceCategoriesRef.current },
+              });
               setIsEditMode(true);
               // Being in edit mode means this profile was published, which
               // required agreeing. Seed the real state rather than faking a
@@ -3518,6 +3524,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       for (const addOn of newAddOns) {
         if (addOn.appliesTo !== 'services') categories = applyRuleToServices(categories, addOn);
       }
+      for (const [name, services] of Object.entries(categories)) {
+        if (services !== prev.categories[name]) editedServiceCategoriesRef.current[name] = services;
+      }
       return {
         ...prev,
         categories,
@@ -3657,6 +3666,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         user.id,
         {
           ...providerData,
+          // The live profile refresh and the modal can both update the form.
+          // Publish the service drafts retained from the modal save.
+          categories: { ...providerData.categories, ...editedServiceCategoriesRef.current },
           externalBookingUrl: isLinkOnly
             ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
             : providerData.externalBookingUrl,
