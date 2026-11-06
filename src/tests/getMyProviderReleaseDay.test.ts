@@ -1,13 +1,23 @@
 const mockResult: { data: unknown; error: unknown } = { data: null, error: null };
 const mockEq = jest.fn();
 
+// "Mock" prefix: jest.mock factories may only reference names starting with it.
+type MockChain = {
+  select: () => MockChain;
+  eq: (...args: unknown[]) => MockChain;
+  order: () => MockChain;
+  limit: () => MockChain;
+  maybeSingle: () => Promise<typeof mockResult>;
+};
+
 jest.mock('../lib/supabase', () => {
-  const chain: Record<string, unknown> = {};
-  chain.select = () => chain;
-  chain.eq = (...args: unknown[]) => { mockEq(...args); return chain; };
-  chain.order = () => chain;
-  chain.limit = () => chain;
-  chain.maybeSingle = () => Promise.resolve(mockResult);
+  const chain: MockChain = {
+    select: () => chain,
+    eq: (...args: unknown[]) => { mockEq(...args); return chain; },
+    order: () => chain,
+    limit: () => chain,
+    maybeSingle: () => Promise.resolve(mockResult),
+  };
   return { supabase: { from: () => chain }, clearCachedReads: jest.fn() };
 });
 
