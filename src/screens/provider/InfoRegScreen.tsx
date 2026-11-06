@@ -255,7 +255,8 @@ interface ProviderPolicies {
    *  the read site. */
   noShowGraceMinutes: string;
   /** Optional instructions stamped onto every new booking (e.g. "please
-   *  arrive 10 minutes early") — shown to clients in their booking details */
+   *  arrive 10 minutes early") — shown to clients in their booking details
+   *  and their day-before reminder */
   bookingInstructions: string;
   /** Optional photo of a fuller policy document (e.g. a house-rules sheet,
    *  a scanned consent form) — shown to clients via a pop-up on their
@@ -5685,7 +5686,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ask, same key, same format. */}
               <Text style={[styles.policyLabel, { marginTop: 14 }]}>YOUR INSTRUCTIONS</Text>
               <Text style={styles.addressHint}>
-                Shown to clients as your instructions in their booking details, on every new booking (optional), like arriving early or what to bring. Directions go in How to get there and door codes in Arrival details, so there's no need to repeat them here. Changing it later won't update bookings already made.
+                Shown to clients as your instructions in their booking details and in the reminder the day before, on every new booking (optional), like arriving early or what to bring. Directions go in How to get there and door codes in Arrival details, so there's no need to repeat them here. Changing it later won't update bookings already made.
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
