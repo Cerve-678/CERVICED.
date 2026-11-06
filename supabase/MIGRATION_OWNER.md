@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  booking-exact-coordinates (Claude, branch fix/booking-exact-coordinates, 2026-11-06)
 ```
+
+### Pending (bookings carry exact venue coordinates)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261106130000 | `bookings_stamp_exact_venue_coordinates` | **NOT APPLIED** — waiting for the user's go-ahead. Numbered above live max `20261105223541` and above the highest unapplied migration on an open PR (`20261106113000`, `feat/info-packs-redesign`). Redefines `stamp_booking_address_snapshot()` from the live definition (md5 guard `2143cc34…`) so it also stamps the provider's exact private coordinates on non-mobile bookings, and backfills active bookings with none. Dry-run on live 2026-11-06 inside a rolled-back transaction: 4 of 4 active venue bookings got coordinates, 0 mobile bookings touched, version not kept. |
 
 ### Applied 2026-11-06 (universal add-ons)
 
