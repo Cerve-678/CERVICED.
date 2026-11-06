@@ -18,6 +18,7 @@ import {
   getProviderBookingPolicies,
   getProviderLogoUrlByUserId,
   getProviderServicePositions,
+  getProviderServiceDescriptionSnapshots,
   getProviderRegistrationCore,
   getProviderRegistrationDetails,
   getProviderRegistrationRecord,
@@ -34,6 +35,7 @@ import {
   updateProviderRegistrationRow,
   uploadPublicStorageObject,
 } from './databaseService';
+import { serviceDescriptionsMatch, type ExpectedServiceDescription } from '../features/provider-registration/serviceDescriptionVerification';
 import type { DbProvider, BusinessType, LogoFraming, ProviderBookingMode } from '../types/database';
 import {
   reconcileAddressReleasePolicy,
@@ -470,6 +472,13 @@ export async function geocodeAndValidateUkAddress(
 // Upserts the provider row, uploads images, replaces services/images/add-ons.
 // Also updates the user's role to 'provider' and refreshes the AsyncStorage cache.
 
+export class ServiceDescriptionVerificationError extends Error {
+  constructor() {
+    super('Service descriptions did not pass the post-save check');
+    this.name = 'ServiceDescriptionVerificationError';
+  }
+}
+
 /**
  * A local or remote image's width/height ratio, or null if it can't be read.
  *
@@ -769,7 +778,7 @@ export async function saveProviderToSupabase(
   // delete + reinsert in one transaction. If any insert fails, it ALL rolls
   // back and the provider's existing services are untouched (previously a
   // mid-save failure wiped services — see supabase/replace_provider_services.sql).
-  const servicesPayload: Record<string, unknown>[] = [];
+  const servicesPayload: (Record<string, unknown> & ExpectedServiceDescription)[] = [];
   for (const [categoryName, services] of Object.entries(data.categories)) {
     const safeCat = categoryName.replace(/[^a-zA-Z0-9]/g, '_');
     for (let sortOrder = 0; sortOrder < services.length; sortOrder++) {
@@ -856,6 +865,24 @@ export async function saveProviderToSupabase(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown database error';
     throw new Error(`Saving services failed: ${message}`);
+  }
+
+  // A 200 from the catalogue RPC says it ran, not that the provider's latest
+  // wording survived. Read it back before telling them the profile is saved.
+  try {
+    const stored = await getProviderServiceDescriptionSnapshots(providerId);
+    if (!serviceDescriptionsMatch(servicesPayload, stored)) {
+      logger.error('[providerRegistration] service descriptions differ after publish', {
+        providerId,
+        expectedCount: servicesPayload.length,
+        storedCount: stored.length,
+      });
+      throw new ServiceDescriptionVerificationError();
+    }
+  } catch (error) {
+    if (error instanceof ServiceDescriptionVerificationError) throw error;
+    logger.error('[providerRegistration] service description readback failed:', error);
+    throw new ServiceDescriptionVerificationError();
   }
 
   // 5a. Add-ons. Saved after the catalogue so services created in this save

@@ -55,12 +55,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppDialog } from '../../components/AppDialog';
 
 // Supabase registration service
-import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage, ServiceDescriptionVerificationError } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft } from '../../services/databaseService';
+import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo } from '../../components/FramedLogo';
@@ -908,7 +909,8 @@ interface ServiceModalProps {
   onClose: () => void;
   /** `newAddOns` are add-ons made inside this editor, which join the
    *  provider's list only now that the service is saved. */
-  onSave: (service: ServiceData, newAddOns: AddOnLibraryItem[]) => void;
+  onSave: (service: ServiceData, newAddOns: AddOnLibraryItem[]) => Promise<void>;
+  providerId: string | null;
   /** The provider's add-ons; undefined when they failed to load. */
   addOnLibrary: AddOnLibraryItem[] | undefined;
   service?: ServiceData | null;
@@ -933,6 +935,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   visible,
   onClose,
   onSave,
+  providerId,
   addOnLibrary,
   service,
   categoryName,
@@ -980,6 +983,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [bufferBefore, setBufferBefore] = useState(bufferBeforeToPicker(service?.bufferBeforeMins));
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
+  const [descriptionHistory, setDescriptionHistory] = useState<ServiceDescriptionRevision[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRequestRef = useRef(0);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [images, setImages] = useState<ServiceImageDraft[]>(service?.images || []);
   const [addOnKeys, setAddOnKeys] = useState<string[]>(service?.addOnKeys || []);
   const [pendingAddOns, setPendingAddOns] = useState<AddOnLibraryItem[]>([]);
@@ -1075,6 +1082,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setBufferBefore(bufferBeforeToPicker(service?.bufferBeforeMins));
     setBufferAfter(service?.bufferAfterMins?.toString() || '');
     setDescription(service?.description || '');
+    historyRequestRef.current += 1;
+    setDescriptionHistory(null);
+    setHistoryLoading(false);
     setImages(service?.images || []);
     setAddOnKeys(service?.addOnKeys || []);
     setPendingAddOns([]);
@@ -1197,7 +1207,25 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setContraindicationInput('');
   };
 
-  const handleSave = () => {
+  const showDescriptionHistory = async () => {
+    if (!providerId || !service) return;
+    if (descriptionHistory) { historyRequestRef.current += 1; setDescriptionHistory(null); return; }
+    const request = ++historyRequestRef.current;
+    setHistoryLoading(true);
+    try {
+      const revisions = await getServiceDescriptionHistory(
+        providerId, service.dbId, service.dbId ?? String(service.id),
+      );
+      if (request === historyRequestRef.current) setDescriptionHistory(revisions);
+    } catch (cause) {
+      logger.error('[ServiceModal] description history failed:', cause);
+      if (request === historyRequestRef.current) setError('Could not load previous descriptions. Please try again.');
+    } finally {
+      if (request === historyRequestRef.current) setHistoryLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
     const tagsNow: ServiceTagGroups = {
       styleTags: selectedTags,
       techniqueTags: selectedTechniques,
@@ -1227,33 +1255,41 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       return;
     }
     setError(null);
-    onSave({
-      id: service?.id || Date.now(),
-      dbId: service?.dbId ?? null,
-      name: name.trim(),
-      price: parseFloat(price) || 0,
-      duration: duration.trim(),
-      bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
-      bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
-      description: description.trim(),
-      images,
-      addOnKeys,
-      tags: selectedTags,
-      techniqueTags: selectedTechniques,
-      outcomeTags: selectedOutcomes,
-      occasionTags: selectedOccasions,
-      trendNames,
-      isPregnancySafe,
-      patchTestRequired,
-      minAge: minAge ? parseInt(minAge, 10) : null,
-      contraindications,
-      aftercareNotes: aftercareNotes.trim(),
-      serviceType,
-      hairTypesSuitable,
-      skinTonesSuitable,
-      audience,
-    }, pendingAddOns);
-    onClose();
+    setSavingDraft(true);
+    try {
+      await onSave({
+        id: service?.id || Date.now(),
+        dbId: service?.dbId ?? null,
+        name: name.trim(),
+        price: parseFloat(price) || 0,
+        duration: duration.trim(),
+        bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
+        bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
+        description: description.trim(),
+        images,
+        addOnKeys,
+        tags: selectedTags,
+        techniqueTags: selectedTechniques,
+        outcomeTags: selectedOutcomes,
+        occasionTags: selectedOccasions,
+        trendNames,
+        isPregnancySafe,
+        patchTestRequired,
+        minAge: minAge ? parseInt(minAge, 10) : null,
+        contraindications,
+        aftercareNotes: aftercareNotes.trim(),
+        serviceType,
+        hairTypesSuitable,
+        skinTonesSuitable,
+        audience,
+      }, pendingAddOns);
+      onClose();
+    } catch (cause) {
+      logger.error('[ServiceModal] service draft backup failed:', cause);
+      setError('Could not back up this description. Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
   };
 
   const handleInputFocus = (inputName: string) => {
@@ -1288,7 +1324,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   ];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!savingDraft) onClose(); }}>
       <KeyboardDismissView style={styles.modalOverlay}>
         {/* Tap the strip above the sheet to dismiss. Rendered first so the
             sheet paints over it, and absolute so it doesn't take part in the
@@ -1297,7 +1333,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
-          onPress={() => { tapLight(); onClose(); }}
+          onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
           accessibilityRole="button"
           accessibilityLabel="Close without saving"
         />
@@ -1323,7 +1359,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => { tapLight(); onClose(); }}
+                onPress={() => { if (!savingDraft) { tapLight(); onClose(); } }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
@@ -1396,6 +1432,35 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.serviceSheetLabel}>Description</Text>
                 <TextInput style={[styles.serviceSheetInput, styles.serviceSheetInputMultiline, fieldBox]} value={description} onChangeText={setDescription} placeholder="What's included, what to expect" placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} onFocus={() => handleInputFocus('serviceDescription')} />
+                {providerId && service ? (
+                  <>
+                    <TouchableOpacity onPress={() => { void showDescriptionHistory(); }} accessibilityRole="button" style={{ marginTop: 10, marginBottom: 8 }}>
+                      <Text style={[styles.serviceSheetHint, { color: accentColor }]}>
+                        {descriptionHistory ? 'Hide previous descriptions' : 'View previous descriptions'}
+                      </Text>
+                    </TouchableOpacity>
+                    {descriptionHistory ? <Text style={styles.serviceSheetHint}>Choose a version, save this service, then tap Save & Publish on your profile.</Text> : null}
+                    {historyLoading ? <ActivityIndicator color={accentColor} /> : null}
+                    {descriptionHistory?.length === 0 ? <Text style={styles.serviceSheetHint}>No previous descriptions yet.</Text> : null}
+                    {descriptionHistory?.map(revision => (
+                      <TouchableOpacity
+                        key={revision.id}
+                        onPress={() => { setDescription(revision.description); setDescriptionHistory(null); setError(null); }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Restore description from ${new Date(revision.created_at).toLocaleDateString()}`}
+                        style={[styles.serviceSheetInput, { marginBottom: 8, paddingVertical: 10 }, fieldBox]}
+                      >
+                        <Text style={styles.serviceSheetHint}>
+                          {revision.source === 'draft' ? 'Editor draft' : 'Published'} · {new Date(revision.created_at).toLocaleString()}
+                        </Text>
+                        <Text style={{ color: chrome.fg(0.9) }} numberOfLines={4}>
+                          {revision.description || '(Empty description)'}
+                        </Text>
+                        <Text style={[styles.serviceSheetHint, { color: accentColor, marginTop: 6 }]}>Use this description</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                ) : null}
                 {/* Wording offered, never written in for them. */}
                 {!description.trim() && suggestion.descriptionIdeas.map(idea => (
                   <TouchableOpacity
@@ -1704,9 +1769,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 style={[styles.serviceSheetSave, { backgroundColor: accentColor }]}
                 onPress={() => { tapMedium(); handleSave(); }}
                 activeOpacity={0.85}
+                disabled={savingDraft}
               >
                 <Text style={[styles.serviceSheetSaveText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                  {isEditing ? 'Save changes' : 'Add service'}
+                  {savingDraft ? 'Saving…' : isEditing ? 'Save changes' : 'Add service'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2859,6 +2925,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // 'app' theme) for a beat before the real saved data pops in, which reads
   // as a glitch. Gated in the render below, same as the other profile screens.
   const [isLoadingProvider, setIsLoadingProvider] = useState(true);
+  // The cached profile can be edited while its live refresh is still in
+  // flight. Preserve service changes if that refresh completes afterwards.
+  const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
   // cache to fall back to) — gated in the render below, ahead of the normal
@@ -2956,7 +3025,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           .then(data => {
             if (cancelled) return;
             if (data) {
-              setProviderData(data);
+              setProviderData({
+                ...data,
+                categories: { ...data.categories, ...editedServiceCategoriesRef.current },
+              });
               setIsEditMode(true);
               // Being in edit mode means this profile was published, which
               // required agreeing. Seed the real state rather than faking a
@@ -3493,7 +3565,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   }, [selectedCategory]);
 
   // Add/Edit service
-  const handleSaveService = useCallback((service: ServiceData, newAddOns: AddOnLibraryItem[]) => {
+  const handleSaveService = useCallback(async (service: ServiceData, newAddOns: AddOnLibraryItem[]) => {
+    // Save the provider's accepted wording before touching the larger profile
+    // draft. A later refresh or failed publish cannot erase this copy.
+    const ownerId = providerDbId ?? (user?.id ? await getProviderIdForUserId(user.id) : null);
+    if (ownerId) {
+      await saveServiceDescriptionDraft(
+        ownerId, service.dbId, service.dbId ?? String(service.id), service.name, service.description,
+      );
+    } else if (isEditMode) {
+      throw new Error('Could not resolve provider for description backup');
+    }
     setProviderData(prev => {
       const categoryServices = prev.categories[currentCategory] || [];
       const existingIndex = categoryServices.findIndex(s => s.id === service.id);
@@ -3518,6 +3600,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       for (const addOn of newAddOns) {
         if (addOn.appliesTo !== 'services') categories = applyRuleToServices(categories, addOn);
       }
+      for (const [name, services] of Object.entries(categories)) {
+        if (services !== prev.categories[name]) editedServiceCategoriesRef.current[name] = services;
+      }
       return {
         ...prev,
         categories,
@@ -3527,7 +3612,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       };
     });
     setEditingService(null);
-  }, [currentCategory]);
+  }, [currentCategory, providerDbId, user?.id, isEditMode]);
 
   // ── Universal add-ons: the provider's own list ─────────────────────────
   const [editingAddOn, setEditingAddOn] = useState<AddOnLibraryItem | null>(null);
@@ -3657,6 +3742,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         user.id,
         {
           ...providerData,
+          // The live profile refresh and the modal can both update the form.
+          // Publish the service drafts retained from the modal save.
+          categories: { ...providerData.categories, ...editedServiceCategoriesRef.current },
           externalBookingUrl: isLinkOnly
             ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
             : providerData.externalBookingUrl,
@@ -3695,6 +3783,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
+      if (e instanceof ServiceDescriptionVerificationError) {
+        logger.error('[InfoRegScreen] service descriptions could not be verified:', e);
+        Alert.alert(
+          'Descriptions not confirmed',
+          'We could not confirm that your service descriptions were published. Your edits are still in this editor. Check them and try Save & Publish again.',
+        );
+        return;
+      }
       // saveProviderToSupabase prefixes its error with the failing step, which
       // is what makes these diagnosable — but that belongs in the log, not in
       // front of a provider. toUserMessage reports it and returns safe copy.
@@ -4244,6 +4340,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         {/* Add/Edit Service Modal */}
         <ServiceModal
           visible={showServiceModal}
+          providerId={providerDbId}
           onClose={() => {
             setShowServiceModal(false);
             setEditingService(null);

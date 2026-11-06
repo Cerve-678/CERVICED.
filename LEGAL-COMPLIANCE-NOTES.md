@@ -507,7 +507,8 @@ See `docs/vault/Link-Only Providers.md`. Raised, not resolved:
    wording for price, trial length, auto-renewal, cancellation and refunds, and
    the App Store / Play billing rules for in-app subscriptions.
 4. **"Become a full member" shows a price (2026-11-02).** Link-only Home and
-   the switch sheet say "£25.99 a month, 2 months free on us", but nothing is
+   the switch sheet said "£25.99 a month, 2 months free on us" (the price was
+   taken off every screen on 2026-11-06; "2 months free" still shows), but nothing is
    charged and the Terms don't mention a provider subscription. A stated price
    and free period reads as a promise: before anyone is billed, the Terms need
    the price, that the free months start the day they go live again

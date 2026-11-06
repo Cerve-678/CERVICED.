@@ -53,14 +53,20 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  booking-exact-coordinates (Claude, branch fix/booking-exact-coordinates, 2026-11-06)
+OWNER:  (none)
 ```
 
-### Pending (bookings carry exact venue coordinates)
+### Applied 2026-11-06 (bookings carry exact venue coordinates)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261106130000 | `bookings_stamp_exact_venue_coordinates` | **NOT APPLIED** — waiting for the user's go-ahead. Numbered above live max `20261105223541` and above the highest unapplied migration on an open PR (`20261106113000`, `feat/info-packs-redesign`). Redefines `stamp_booking_address_snapshot()` from the live definition (md5 guard `2143cc34…`) so it also stamps the provider's exact private coordinates on non-mobile bookings, and backfills active bookings with none. Dry-run on live 2026-11-06 inside a rolled-back transaction: 4 of 4 active venue bookings got coordinates, 0 mobile bookings touched, version not kept. |
+| 20261106130000 | `bookings_stamp_exact_venue_coordinates` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f` from the main folder (worktrees aren't linked). Frontier before applying: live max `20261106113000`, nothing unapplied above it; md5 guard `2143cc34…` matched. Redefines `stamp_booking_address_snapshot()` so non-mobile bookings also get the provider's exact private coordinates, and backfilled active bookings with none. Verified live: version present; 0 active venue bookings without coordinates; 0 mobile bookings with them; function keeps `SET search_path`, not executable by anon or authenticated; `trg_stamp_booking_address_snapshot` still BEFORE INSERT. New md5 `67801162…`. Written on `fix/booking-exact-coordinates` (#331). |
+
+### Applied 2026-11-06 (info pack send-to-upcoming is a choice)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f`; version recorded by the file. Frontier before applying: live max `20261105223541`, no open PR branch above it. Lock was `(none)`. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`; `handle_new_info_pack()` not redefined. Verified live: trigger def carries the WHEN clause, column default `true` / NOT NULL, every existing row TRUE, version present. Written on `feat/info-packs-redesign` (#330). |
 
 ### Applied 2026-11-06 (universal add-ons)
 
