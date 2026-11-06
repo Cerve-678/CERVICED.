@@ -194,7 +194,7 @@
 - `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `RequiredLabel.tsx` — **RequiredLabel**
 - `SectionHeader.tsx` — **SectionHeader**
-- `ServiceAddOnsField.tsx` — all · create · removePending · ruleNote · **ServiceAddOnsField** · suggestions · toggle · useExisting
+- `ServiceAddOnsField.tsx` — all · create · removePending · reuseExisting · ruleNote · **ServiceAddOnsField** · suggestions · toggle
 - `serviceDraft.ts` — **createServiceDraft** · nextDraftId
 - `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**

@@ -84,7 +84,7 @@ export function ServiceAddOnsField({
     onTickedChange(setAddOnOnService(tickedKeys, key, !tickedKeys.includes(key)));
   };
 
-  const useExisting = (item: AddOnLibraryItem) => {
+  const reuseExisting = (item: AddOnLibraryItem) => {
     tapSelect();
     onTickedChange(setAddOnOnService(tickedKeys, item.key, true));
     setName('');
@@ -211,7 +211,7 @@ export function ServiceAddOnsField({
                 <Text style={[styles.sub, { color: palette.sub }]} numberOfLines={1}>You already have this one</Text>
               </View>
               <TouchableOpacity
-                onPress={() => useExisting(item)}
+                onPress={() => reuseExisting(item)}
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${item.name} on this service`}
