@@ -132,6 +132,10 @@ export type ProviderBeccaStackParamList = {
   };
   Promotions: undefined;
   InfoPacks: undefined;
+  ProviderIntakeForm:
+    | { bookingId: string; clientUserId: string; serviceName: string; formId?: string }
+    | { openTerms: true }
+    | undefined;
   Analytics: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Automations: undefined;

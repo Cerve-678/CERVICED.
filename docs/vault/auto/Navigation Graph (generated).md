@@ -5,7 +5,7 @@
 
 #generated
 
-**158 edges** across **48 screens**. Node-graph version: [[Screen Flow (generated)]].
+**159 edges** across **48 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -110,6 +110,7 @@ graph LR
   ProviderAnalyticsScreen --> PaymentsScreen
   ProviderAnalyticsScreen --> ProviderBookingDetailScreen
   ProviderBookingDetailScreen --> ProviderConversationScreen
+  ProviderBookingDetailScreen --> ProviderInfoPackScreen
   ProviderBookingDetailScreen --> ProviderIntakeFormScreen
   ProviderBookingHistoryScreen --> ProviderBookingDetailScreen
   ProviderBookingHistoryScreen --> ProviderInboxScreen
@@ -210,7 +211,7 @@ graph LR
 - `provider/PoliciesScreen` → `provider/PaymentsScreen`
 - `provider/ProviderAccountScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/BusinessProfileScreen`, `provider/FullCervicedFeaturesScreen`, `provider/InfoRegScreen`, `provider/PoliciesScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAchievementsScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderNotificationSettingsScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/AdminDashboardScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/LanguageRegionScreen`, `shared/ReportProblemScreen`, `shared/TextSizingScreen`, `SignUpStep3`
 - `provider/ProviderAnalyticsScreen` → `provider/PaymentsScreen`, `provider/ProviderBookingDetailScreen`
-- `provider/ProviderBookingDetailScreen` → `provider/ProviderConversationScreen`, `provider/ProviderIntakeFormScreen`
+- `provider/ProviderBookingDetailScreen` → `provider/ProviderConversationScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderIntakeFormScreen`
 - `provider/ProviderBookingHistoryScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderInboxScreen`
 - `provider/ProviderClienteleScreen` → `provider/ProviderConversationScreen`
 - `provider/ProviderHomeScreen` → `provider/InfoRegScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`, `shared/NotificationsScreen`

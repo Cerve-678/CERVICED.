@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Pending: info pack send-to-upcoming is a choice
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **NOT APPLIED.** Written 2026-11-06 on `feat/info-packs-redesign`. Numbered above `20261105090833` (live max as last recorded here); re-check the live frontier and open PR branches at apply time. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates trigger `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`. The function body `handle_new_info_pack()` is **not** redefined, so it cannot revert a newer live version; a guard RAISEs if the trigger or function is missing. Older app builds omit the column and keep today's send-on-save. **Order:** apply, then merge the app (the new screen inserts the column, which PostgREST rejects until it exists). |
+
 ### Applied 2026-11-05 (booking requests answered by an hour before)
 
 | Authored version | Name | Status |

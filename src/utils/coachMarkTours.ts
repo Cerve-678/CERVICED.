@@ -29,6 +29,9 @@ export const TOUR_KEYS = {
   CLIENT_HOME: 'client_home',
   CLIENT_EXPLORE: 'client_explore',
   PROVIDER_HOME: 'provider_home',
+  /** The Info Packs welcome (how packs work), shown on the first visit and
+   *  reopened any time from the screen's ⓘ. */
+  PROVIDER_INFO_PACKS: 'provider_info_packs',
 } as const;
 
 export type TourKey = (typeof TOUR_KEYS)[keyof typeof TOUR_KEYS];
@@ -46,6 +49,7 @@ export const TOUR_CURRENT_VERSION: Record<TourKey, number> = {
   client_home: 1,
   client_explore: 1,
   provider_home: 1,
+  provider_info_packs: 1,
 };
 
 /** A step's shape as far as this module cares — the real CoachMarkStep adds

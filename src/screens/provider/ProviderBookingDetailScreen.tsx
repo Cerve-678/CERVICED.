@@ -1,5 +1,6 @@
 import { providerRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   View,
   Text,
@@ -45,8 +46,10 @@ import {
   upsertProviderRescheduleRequest,
   getClientBeautyProfile,
   getClientBookingHistory,
-  getIntakeFormByBooking,
+  getIntakeFormsByBooking,
   getInfoPacksByBooking,
+  getProviderFormLibrary,
+  sendLibraryFormToClient,
   getProviderAddressPolicy,
   releaseBookingAddress,
   getMyProviderFullAddress,
@@ -69,6 +72,7 @@ import {
   subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
+  LibraryForm,
   BookingInfoPack,
   ProviderInfoPackRow,
   ProviderAddressPolicy,
@@ -86,6 +90,7 @@ import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profile
 import { describeRefundOutcome } from '../../features/bookings/paymentPresentation';
 import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '../../components/IssueRefundSheet';
 import { formatBookingRef } from '../../features/bookings/presentation';
+import { formsNotYetSent, packsNotYetSent } from '../../features/info-packs/infoPackLogic';
 import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings/receipt';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
@@ -161,8 +166,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
   // A tip the client paid in the app after the appointment (booking_tips).
   const [tip, setTip] = useState<ProviderBookingTip | null>(null);
-  const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
+  // Forms & packs on this booking. 'error' is kept apart from "none sent" so
+  // the section never suggests sending something that may already be there.
+  const [intakeForms, setIntakeForms] = useState<IntakeForm[]>([]);
+  const [formsState, setFormsState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
+  const [packsState, setPacksState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [libraryForms, setLibraryForms] = useState<LibraryForm[]>([]);
+  const [libraryState, setLibraryState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [sendingItemId, setSendingItemId] = useState<string | null>(null);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const [dbReschedule, setDbReschedule] = useState<DbBookingRescheduleRequest | null>(null);
   // Whether the request lookup has come back. An old reschedule notification
@@ -264,8 +276,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [profileExpanded, setProfileExpanded] = useState(false);
 
   const [providerInfoPacks, setProviderInfoPacks] = useState<ProviderInfoPackRow[]>([]);
-  const [showInfoPackPicker, setShowInfoPackPicker] = useState(false);
-  const [isAttachingInfoPack, setIsAttachingInfoPack] = useState(false);
+  const [providerPacksState, setProviderPacksState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   // ProviderBookingHistoryScreen already collapses group siblings into one
   // card and passes them here directly (groupSiblings param) — no refetch
@@ -430,31 +441,39 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     return () => { active = false; };
   }, [bookingId]);
 
-  useEffect(() => {
+  const loadSentItems = useCallback(() => {
     if (!bookingId) return;
-    getIntakeFormByBooking(bookingId)
-      .then(f => setIntakeForm(f))
-      .catch((err) => logger.error('[ProviderBookingDetail] intake form load failed:', err));
+    setFormsState('loading');
+    setPacksState('loading');
+    getIntakeFormsByBooking(bookingId)
+      .then(f => { setIntakeForms(f); setFormsState('ready'); })
+      .catch((err) => { logger.error('[ProviderBookingDetail] intake forms load failed:', err); setFormsState('error'); });
     getInfoPacksByBooking(bookingId)
-      .then(p => setBookingInfoPacks(p))
-      .catch((err) => logger.error('[ProviderBookingDetail] info packs load failed:', err));
+      .then(p => { setBookingInfoPacks(p); setPacksState('ready'); })
+      .catch((err) => { logger.error('[ProviderBookingDetail] info packs load failed:', err); setPacksState('error'); });
   }, [bookingId]);
 
-  // Fetch current provider's service category + available info packs once on mount
+  useEffect(() => { loadSentItems(); }, [loadSentItems]);
+
+  // The provider's own category, info packs and form library — what this
+  // booking could be sent. Independent reads; one failing doesn't hide the rest.
   useEffect(() => {
-    (async () => {
-      try {
-        if (!user) return;
-        const [category, packs] = await Promise.all([
-          getProviderServiceCategoryByUserId(user.id),
-          getProviderInfoPacksByUserId(user.id),
-        ]);
-        if (category) setProviderServiceCategory(category as ServiceCategory);
-        setProviderInfoPacks(packs);
-      } catch (err) {
-        logger.error('[ProviderBookingDetail] provider category / info pack load failed:', err);
-      }
-    })();
+    if (!user) return;
+    let alive = true;
+    Promise.allSettled([
+      getProviderServiceCategoryByUserId(user.id),
+      getProviderInfoPacksByUserId(user.id),
+      getProviderFormLibrary(),
+    ]).then(([category, packs, forms]) => {
+      if (!alive) return;
+      if (category.status === 'fulfilled' && category.value) setProviderServiceCategory(category.value as ServiceCategory);
+      else if (category.status === 'rejected') logger.error('[ProviderBookingDetail] category load failed:', category.reason);
+      if (packs.status === 'fulfilled') { setProviderInfoPacks(packs.value); setProviderPacksState('ready'); }
+      else { logger.error('[ProviderBookingDetail] provider info packs load failed:', packs.reason); setProviderPacksState('error'); }
+      if (forms.status === 'fulfilled') { setLibraryForms(forms.value); setLibraryState('ready'); }
+      else { logger.error('[ProviderBookingDetail] form library load failed:', forms.reason); setLibraryState('error'); }
+    });
+    return () => { alive = false; };
   }, [user]);
 
   const baseBooking = passedProviderBooking ?? fetchedBooking;
@@ -473,17 +492,54 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     } as ConfirmedBooking;
   }, [baseBooking, liveBookingOverrides]);
 
-  // Packs scoped to specific services (service_names non-empty) only make
-  // sense for a booking that's actually one of those services — an
-  // "ALL SERVICES" pack (empty service_names) still applies to every
-  // booking. Without this filter the picker offered every pack the provider
-  // has ever created, including ones for services unrelated to this booking.
-  const relevantInfoPacks = useMemo(() => {
-    const name = booking?.serviceName;
-    return providerInfoPacks.filter(
-      pack => pack.service_names.length === 0 || (!!name && pack.service_names.includes(name)),
-    );
-  }, [providerInfoPacks, booking?.serviceName]);
+  // What this booking still hasn't been sent, from the provider's own packs
+  // and forms that cover its service (an empty service list = every service).
+  const missingPacks = useMemo(
+    () => packsNotYetSent(providerInfoPacks, bookingInfoPacks.map(p => p.infoPackId), booking?.serviceName),
+    [providerInfoPacks, bookingInfoPacks, booking?.serviceName],
+  );
+  const missingForms = useMemo(
+    () => formsNotYetSent(libraryForms.filter(f => !f.isTerms), intakeForms, booking?.serviceName),
+    [libraryForms, intakeForms, booking?.serviceName],
+  );
+  const hasPackForService = useMemo(
+    () => providerInfoPacks.some(p => p.service_names.length === 0 || (!!booking?.serviceName && p.service_names.includes(booking.serviceName))),
+    [providerInfoPacks, booking?.serviceName],
+  );
+  const hasFormForService = useMemo(
+    () => libraryForms.some(f => !f.isTerms && (f.serviceNames.length === 0 || (!!booking?.serviceName && f.serviceNames.includes(booking.serviceName)))),
+    [libraryForms, booking?.serviceName],
+  );
+
+  const sendMissingPack = useCallback(async (pack: ProviderInfoPackRow) => {
+    if (!bookingId || sendingItemId) return;
+    setSendingItemId(pack.id);
+    try {
+      await attachInfoPackToBooking(bookingId, pack.id);
+      setBookingInfoPacks(await getInfoPacksByBooking(bookingId));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e) {
+      // Let the DB's own guard through ("This booking was cancelled...").
+      Alert.alert('Info pack not sent', toUserMessageAllowingDbGuard(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
+    } finally {
+      setSendingItemId(null);
+    }
+  }, [bookingId, sendingItemId]);
+
+  const sendMissingForm = useCallback(async (form: LibraryForm) => {
+    if (!bookingId || !clientUserId || sendingItemId) return;
+    setSendingItemId(form.id);
+    try {
+      const sent = await sendLibraryFormToClient(form.id, bookingId, clientUserId);
+      setIntakeForms(prev => [...prev, sent]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e) {
+      logger.error('[ProviderBookingDetail] send form failed:', e);
+      Alert.alert('Form not sent', 'Could not send that form. Please try again.');
+    } finally {
+      setSendingItemId(null);
+    }
+  }, [bookingId, clientUserId, sendingItemId]);
 
   useEffect(() => {
     // Multi-service booking is gated off (MULTI_SERVICE_BOOKING_ENABLED): don't
@@ -1863,99 +1919,158 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 );
               })()}
 
-              {/* ── FORMS & PACKS section — receiving area only, no creation here.
-                    Forms/packs are built in their own screens and auto-send. ── */}
-              <View style={styles.section}>
-                <View style={styles.intakeFormHeader}>
-                  <Text style={[styles.sectionLabel, { color: P.sub }]}>FORMS & PACKS</Text>
-                </View>
-                {intakeForm ? (
-                  <TouchableOpacity
-                    style={[styles.intakeFormCard, {
-                      backgroundColor: intakeForm.status === 'completed' ? '#34C759' + '12' : '#FF9500' + '12',
-                      borderColor: intakeForm.status === 'completed' ? '#34C759' + '44' : '#FF9500' + '44',
-                    }]}
-                    onPress={() => navigation.navigate('ProviderIntakeForm', {
-                      bookingId: booking!.id,
-                      clientUserId: clientUserId ?? '',
-                      serviceName: booking!.serviceName,
-                      formId: intakeForm.id,
-                    })}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.intakeFormCardInner}>
-                      <Text style={[styles.intakeFormTitle, { color: P.text }]}>{intakeForm.title}</Text>
-                      <View style={[styles.intakeFormStatus, {
-                        backgroundColor: intakeForm.status === 'completed' ? '#34C759' + '22' : '#FF9500' + '22',
-                      }]}>
-                        <Text style={[styles.intakeFormStatusText, {
-                          color: intakeForm.status === 'completed' ? '#34C759' : '#FF9500',
-                        }]}>
-                          {intakeForm.status === 'completed' ? 'Received' : 'Sent'}
-                        </Text>
-                      </View>
+              {/* ── FORMS & PACKS — what this booking has been sent, whether the
+                    client has done/read it, and anything that covers its service
+                    but hasn't gone yet. Forms and packs are written in their own
+                    screens; this only sends them. ── */}
+              {(() => {
+                const status = booking!.status;
+                const stillAhead = status === BookingStatus.PENDING || status === BookingStatus.UPCOMING;
+                const canSendPacks = !!clientUserId
+                  && status !== BookingStatus.CANCELLED
+                  && status !== BookingStatus.NO_SHOW
+                  && status !== BookingStatus.PROVIDER_NO_SHOW;
+                const canSendForms = !!clientUserId && stillAhead;
+                const service = booking!.serviceName || 'this service';
+                const loading = formsState === 'loading' || packsState === 'loading';
+                const nothingAtAll = intakeForms.length === 0 && bookingInfoPacks.length === 0;
+                const green = '#34C759';
+                const amber = '#FF9500';
+                const statusCard = (done: boolean, tone: string) => ({
+                  backgroundColor: done ? tone + '12' : P.card,
+                  borderColor: done ? tone + '44' : P.border,
+                });
+                const suggestRow = (key: string, icon: 'clipboard-outline' | 'document-text-outline', title: string, sub: string, action: string, onPress: () => void, busy: boolean) => (
+                  <View key={key} style={[styles.suggestRow, { borderColor: P.border }]}>
+                    <Ionicons name={icon} size={15} color={P.sub} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{title}</Text>
+                      <Text style={[styles.intakeFormSub, { color: P.sub, marginTop: 1 }]}>{sub}</Text>
                     </View>
-                    <Text style={[styles.intakeFormSub, { color: P.sub }]}>
-                      {intakeForm.status === 'completed'
-                        ? 'Client responses received — tap to view'
-                        : 'Sent to client — waiting to receive'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
-                    {booking!.status === BookingStatus.CANCELLED
-                      ? 'No form on this booking. It was cancelled, so nothing more will be sent.'
-                      : 'No form on this booking — forms linked to this service send automatically.'}
-                  </Text>
-                )}
-
-                {/* Info packs sent with this booking + read receipts */}
-                {bookingInfoPacks.map(pack => (
-                  <View
-                    key={pack.id}
-                    style={[styles.intakeFormCard, {
-                      marginTop: 8,
-                      backgroundColor: pack.viewedAt ? '#34C759' + '12' : P.card,
-                      borderColor: pack.viewedAt ? '#34C759' + '44' : P.border,
-                    }]}
-                  >
-                    <View style={styles.intakeFormCardInner}>
-                      <View style={styles.packTitleRow}>
-                        <Ionicons name="document-text-outline" size={15} color={P.accent} />
-                        <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
-                      </View>
-                      <View style={[styles.intakeFormStatus, {
-                        backgroundColor: pack.viewedAt ? '#34C759' + '22' : P.sub + '22',
-                      }]}>
-                        <Text style={[styles.intakeFormStatusText, {
-                          color: pack.viewedAt ? '#34C759' : P.sub,
-                        }]}>
-                          {pack.viewedAt ? 'Read' : 'Not read'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.intakeFormSub, { color: P.sub }]}>
-                      {pack.viewedAt
-                        ? 'Client has read this info pack'
-                        : 'Sent to client — not read yet'}
-                    </Text>
+                    <TouchableOpacity
+                      onPress={onPress}
+                      disabled={!!sendingItemId}
+                      style={[styles.suggestBtn, { backgroundColor: P.accent + '1A', opacity: sendingItemId && !busy ? 0.5 : 1 }]}
+                      activeOpacity={0.75}
+                    >
+                      {busy
+                        ? <ActivityIndicator size="small" color={P.accent} />
+                        : <Text style={[styles.suggestBtnText, { color: P.accent }]}>{action}</Text>}
+                    </TouchableOpacity>
                   </View>
-                ))}
+                );
 
-                {/* Send Info Pack — not on a cancelled booking; there's no
-                    appointment left to prepare for. attach_info_pack_to_booking
-                    refuses it server-side too. */}
-                {booking!.status !== BookingStatus.CANCELLED && (
-                  <TouchableOpacity
-                    style={[styles.sendInfoPackBtn, { borderColor: P.border }]}
-                    onPress={() => setShowInfoPackPicker(true)}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="document-text-outline" size={15} color={P.accent} style={{ marginRight: 6 }} />
-                    <Text style={[styles.sendInfoPackText, { color: P.accent }]}>Send Info Pack</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                return (
+                  <View style={styles.section}>
+                    <View style={styles.intakeFormHeader}>
+                      <Text style={[styles.sectionLabel, { color: P.sub }]}>FORMS & PACKS</Text>
+                    </View>
+
+                    {/* Forms sent, with whether the client has answered */}
+                    {intakeForms.map(form => {
+                      const done = form.status === 'completed';
+                      return (
+                        <TouchableOpacity
+                          key={form.id}
+                          style={[styles.intakeFormCard, statusCard(done, green), { marginBottom: 8 }, !done && { borderColor: amber + '44', backgroundColor: amber + '10' }]}
+                          onPress={() => navigation.navigate('ProviderIntakeForm', {
+                            bookingId: booking!.id,
+                            clientUserId: clientUserId ?? '',
+                            serviceName: booking!.serviceName,
+                            formId: form.id,
+                          })}
+                          activeOpacity={0.8}
+                        >
+                          <View style={styles.intakeFormCardInner}>
+                            <View style={styles.packTitleRow}>
+                              <Ionicons name="clipboard-outline" size={15} color={P.accent} />
+                              <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{form.title}</Text>
+                            </View>
+                            <View style={[styles.intakeFormStatus, { backgroundColor: (done ? green : amber) + '22' }]}>
+                              <Text style={[styles.intakeFormStatusText, { color: done ? green : amber }]}>{done ? 'Answered' : 'Waiting'}</Text>
+                            </View>
+                          </View>
+                          <Text style={[styles.intakeFormSub, { color: P.sub }]}>
+                            {done
+                              ? `Answered${form.completedAt ? ` ${formatShortDayDate(new Date(form.completedAt))}` : ''} · tap to see the answers`
+                              : `Sent ${formatShortDayDate(new Date(form.sentAt))} · not answered yet`}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {/* Packs sent, with read receipts */}
+                    {bookingInfoPacks.map(pack => (
+                      <View key={pack.id} style={[styles.intakeFormCard, statusCard(!!pack.viewedAt, green), { marginBottom: 8 }]}>
+                        <View style={styles.intakeFormCardInner}>
+                          <View style={styles.packTitleRow}>
+                            <Ionicons name="document-text-outline" size={15} color={P.accent} />
+                            <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
+                          </View>
+                          <View style={[styles.intakeFormStatus, { backgroundColor: pack.viewedAt ? green + '22' : P.sub + '22' }]}>
+                            <Text style={[styles.intakeFormStatusText, { color: pack.viewedAt ? green : P.sub }]}>{pack.viewedAt ? 'Read' : 'Not read'}</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.intakeFormSub, { color: P.sub }]}>
+                          {pack.viewedAt
+                            ? `Read ${formatShortDayDate(new Date(pack.viewedAt))}`
+                            : `Sent ${formatShortDayDate(new Date(pack.createdAt))} · not opened yet`}
+                        </Text>
+                      </View>
+                    ))}
+
+                    {loading && nothingAtAll && (
+                      <ActivityIndicator size="small" color={P.sub} style={{ alignSelf: 'flex-start', marginVertical: 6 }} />
+                    )}
+
+                    {(formsState === 'error' || packsState === 'error') && (
+                      <TouchableOpacity onPress={loadSentItems} activeOpacity={0.7} style={{ marginBottom: 8 }}>
+                        <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
+                          Couldn't check what's been sent. <Text style={{ color: P.accent, fontWeight: '700' }}>Try again</Text>
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Not sent yet: forms and packs that cover this service */}
+                    {formsState === 'ready' && libraryState === 'ready' && canSendForms && missingForms.map(form =>
+                      suggestRow(`form-${form.id}`, 'clipboard-outline', form.title, `Form for ${service} · not sent yet`, 'Send', () => { void sendMissingForm(form); }, sendingItemId === form.id),
+                    )}
+                    {packsState === 'ready' && providerPacksState === 'ready' && canSendPacks && missingPacks.map(pack =>
+                      suggestRow(`pack-${pack.id}`, 'document-text-outline', pack.title, `Info pack for ${service} · not sent yet`, 'Send', () => { void sendMissingPack(pack); }, sendingItemId === pack.id),
+                    )}
+
+                    {/* Nothing covers this service at all */}
+                    {formsState === 'ready' && libraryState === 'ready' && canSendForms && intakeForms.length === 0 && !hasFormForService && (
+                      <View style={[styles.suggestRow, styles.suggestRowEmpty, { borderColor: P.border }]}>
+                        <Ionicons name="clipboard-outline" size={15} color={P.sub} />
+                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>No form covers {service} yet.</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('ProviderIntakeForm')} activeOpacity={0.7} hitSlop={8}>
+                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>Create one</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    {packsState === 'ready' && providerPacksState === 'ready' && canSendPacks && bookingInfoPacks.length === 0 && !hasPackForService && (
+                      <View style={[styles.suggestRow, styles.suggestRowEmpty, { borderColor: P.border }]}>
+                        <Ionicons name="document-text-outline" size={15} color={P.sub} />
+                        <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>No info pack covers {service} yet.</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('InfoPacks')} activeOpacity={0.7} hitSlop={8}>
+                          <Text style={[styles.suggestBtnText, { color: P.accent }]}>Create one</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {!loading && nothingAtAll && !canSendPacks && (
+                      <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
+                        {status === BookingStatus.CANCELLED
+                          ? 'Nothing was sent, and nothing more will be. This booking was cancelled.'
+                          : !clientUserId
+                            ? "This client doesn't have a CERVICED account, so forms and packs can't be sent to them."
+                            : 'Nothing was sent for this booking.'}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
 
               {/* ── Perforated divider ── */}
               <Perf color={perf} notch={P.bg} edge={cardBorder} />
@@ -3044,94 +3159,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         )}
       </Modal>
 
-      {/* ── Info Pack Picker Modal ──────────────────────────────────────────── */}
-      <Modal
-        visible={showInfoPackPicker}
-        transparent statusBarTranslucent navigationBarTranslucent
-        animationType="fade"
-        onRequestClose={() => setShowInfoPackPicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '70%', paddingBottom: Math.max(40, insets.bottom + 16) }]}>
-            <Text style={[styles.respondModalTitle, { color: P.text }]}>Send Info Pack</Text>
-            <Text style={[styles.respondModalSub, { color: P.sub, marginBottom: 12 }]}>
-              Choose a pack to send to the client for this booking.
-            </Text>
-
-            {relevantInfoPacks.length === 0 ? (
-              <Text style={[styles.respondModalSub, { color: P.sub, textAlign: 'center', marginVertical: 24 }]}>
-                {providerInfoPacks.length === 0
-                  ? 'No info packs yet — create them in your Info Packs settings.'
-                  : 'No info packs match this booking’s service.'}
-              </Text>
-            ) : (
-              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-                {relevantInfoPacks.map(pack => {
-                  const alreadySent = bookingInfoPacks.some(bp => bp.infoPackId === pack.id);
-                  return (
-                    <TouchableOpacity
-                      key={pack.id}
-                      disabled={alreadySent || isAttachingInfoPack}
-                      onPress={async () => {
-                        if (!bookingId) return;
-                        setIsAttachingInfoPack(true);
-                        try {
-                          await attachInfoPackToBooking(bookingId, pack.id);
-                          const updated = await getInfoPacksByBooking(bookingId);
-                          setBookingInfoPacks(updated);
-                          setShowInfoPackPicker(false);
-                        } catch (e) {
-                          // Let the DB's own guard through ("This booking was cancelled...").
-                          Alert.alert('Info pack not sent', toUserMessageAllowingDbGuard(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
-                        } finally {
-                          setIsAttachingInfoPack(false);
-                        }
-                      }}
-                      style={[
-                        styles.intakeFormCard,
-                        {
-                          marginBottom: 8,
-                          backgroundColor: alreadySent ? '#34C759' + '12' : P.surface,
-                          borderColor: alreadySent ? '#34C759' + '44' : P.border,
-                          opacity: alreadySent || isAttachingInfoPack ? 0.6 : 1,
-                        },
-                      ]}
-                      activeOpacity={0.75}
-                    >
-                      <View style={styles.intakeFormCardInner}>
-                        <View style={styles.packTitleRow}>
-                          <Ionicons name="document-text-outline" size={15} color={P.accent} />
-                          <Text style={[styles.intakeFormTitle, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
-                        </View>
-                        {alreadySent && (
-                          <View style={[styles.intakeFormStatus, { backgroundColor: '#34C759' + '22' }]}>
-                            <Text style={[styles.intakeFormStatusText, { color: '#34C759' }]}>Sent</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={[styles.intakeFormSub, { color: P.sub }]}>
-                        {pack.service_names.length === 0 ? 'All services' : pack.service_names.join(', ')}
-                      </Text>
-                      <Text style={[styles.intakeFormSub, { color: P.sub }]} numberOfLines={2}>
-                        {pack.content}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-
-            <View style={[styles.respondModalActions, { marginTop: 16 }]}>
-              <TouchableOpacity
-                style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]}
-                onPress={() => setShowInfoPackPicker(false)}
-              >
-                <Text style={[styles.respondModalBtnText, { color: P.text }]}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
       <DialogHost />
     </View>
   );
@@ -4199,25 +4226,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: 'italic',
   },
-  sendInfoPackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-  },
   packTitleRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  sendInfoPackText: {
+  // A form or pack that covers this service but hasn't been sent: dashed,
+  // so it reads as "not here yet" next to the solid sent cards.
+  suggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  suggestRowEmpty: {
+    paddingVertical: 12,
+  },
+  suggestBtn: {
+    minWidth: 64,
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 100,
+  },
+  suggestBtnText: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '700',
   },
 });
 
