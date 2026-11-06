@@ -6,6 +6,7 @@ import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
 import type { EmergencyReason } from '../services/AvailabilityService';
+import type { ChosenAddOn } from '../features/bookings/addOnTime';
 
 /**
  * Resolve a cart item to a real provider UUID: carried providerId → slug lookup
@@ -58,11 +59,10 @@ export interface CartItem {
   instanceId?: string;
   addedAt: string;
   serviceInstanceIndex?: number;
-  addOns?: {
-    id: string | number;
-    name: string;
-    price: number;
-  }[];
+  /** Picked add-ons. `duration` above stays the service's own length; the
+   *  appointment's length is durationWithAddOns(duration, addOns)
+   *  (features/bookings/addOnTime), which adds each one's extraMinutes. */
+  addOns?: ChosenAddOn[];
   /** Date/time picked on the provider profile before adding to cart. Absent
    *  for items added via other entry points (Explore "Book Now", rebook) —
    *  those still need scheduling in the cart. */
@@ -158,11 +158,7 @@ export interface AddToCartParams {
     duration: string;
     description: string;
     instanceId?: string | number;
-    addOns?: {
-      id: string | number;
-      name: string;
-      price: number;
-    }[];
+    addOns?: ChosenAddOn[];
   };
   quantity?: number;
   selectedOptions?: Record<string, any>;
