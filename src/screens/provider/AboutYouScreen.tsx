@@ -103,7 +103,7 @@ export default function AboutYouScreen({ navigation }: any) {
           );
         }
       } catch {
-        flash('Could not load trust & access details', 'error');
+        flash("Couldn't load your details. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -120,7 +120,7 @@ export default function AboutYouScreen({ navigation }: any) {
   }
 
   async function handleSave() {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash('Finish setting up your business profile first.', 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -189,15 +189,15 @@ export default function AboutYouScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            <Card title="Credentials & Policies" sub="Builds trust with clients and helps them book with confidence.">
+            <Card title="Credentials & Policies" sub="Shown on your profile, so clients know they're in good hands.">
               <Field label="Qualifications & Training" value={qualifications} onChange={setQualifications} placeholder="e.g. NVQ Level 3, VTCT, City & Guilds..." multiline />
-              <ToggleRow label="Professionally insured" sub="You hold valid professional indemnity insurance. Shown as your own declaration — Cerviced doesn't verify insurance." value={isInsured} onChange={setIsInsured} />
-              <ToggleRow label="DBS checked" sub="Important if you work with children or vulnerable adults. Shown as your own declaration — Cerviced doesn't verify DBS status." value={dbsChecked} onChange={setDbsChecked} />
-              <ToggleRow label="Online consultations available" sub="Clients can book a virtual consultation before their appointment" value={onlineConsult} onChange={setOnlineConsult} />
+              <ToggleRow label="Professionally insured" sub="Turn on if you have professional indemnity insurance. Clients see it as your own statement. CERVICED doesn't check it." value={isInsured} onChange={setIsInsured} />
+              <ToggleRow label="DBS checked" sub="A criminal record check. It matters most if you work with children or vulnerable adults. Clients see it as your own statement. CERVICED doesn't check it." value={dbsChecked} onChange={setDbsChecked} />
+              <ToggleRow label="Online consultations available" sub="Clients can talk to you by video or phone before their appointment" value={onlineConsult} onChange={setOnlineConsult} />
 
               <SectionLabel text="Patch test policy" />
               <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: C.sub, marginBottom: 8, marginTop: -6 }}>
-                Shown to clients before they book, so they know if a patch test is needed in advance.
+                Clients see this before they book, so they know whether they need a patch test first.
               </Text>
               <RadioGroup options={PATCH_OPTS} value={patchTest} onChange={setPatchTest} />
             </Card>
@@ -206,7 +206,7 @@ export default function AboutYouScreen({ navigation }: any) {
                 service_locations, the same list the client Search "City"
                 filter reads, so every city selected here is one a client can
                 actually filter by. */}
-            <Card title="Where You're Based" sub="Select every city you cover. Clients filter search by these, so add anywhere you'll travel to.">
+            <Card title="Where You're Based" sub="Pick every city you work in. Clients search by city, so add anywhere you'll travel to.">
               {/* The shared searchable city finder — same component signup
                   (Step 4), InfoRegScreen and the client Search "City" filter
                   all use, so a city always means the same thing on both
@@ -219,7 +219,7 @@ export default function AboutYouScreen({ navigation }: any) {
                 placeholder="Select the cities you cover"
               />
               <View style={{ height: 18 }} />
-              <Field label="Travel Radius" value={travelRadius} onChange={setTravelRadius} placeholder="e.g. 10 miles" note="Optional — how far you're willing to travel within those areas." />
+              <Field label="Travel Radius" value={travelRadius} onChange={setTravelRadius} placeholder="e.g. 10 miles" note="Optional. How far you'll travel within those cities." />
             </Card>
 
             <Card title="Languages Spoken" sub="Clients often search for providers who speak their language.">

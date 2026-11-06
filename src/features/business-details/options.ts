@@ -320,10 +320,10 @@ export const BUSINESS_TYPE_META: Record<BusinessType, {
   /** How a client should be told where this booking happens. */
   clientVenueLabel: string;
 }> = {
-  salon:      { label: 'Salon',       sub: 'Clients come to a commercial salon premises.',                                                       venue: 'provider', clientVenueLabel: 'You travel to the salon' },
-  studio:     { label: 'Studio',      sub: 'Clients come to a dedicated studio space.',                                                          venue: 'provider', clientVenueLabel: 'You travel to the studio' },
-  home_based: { label: 'Home Studio', sub: 'Clients come to your home — address stays private until you release it.',                            venue: 'provider', clientVenueLabel: 'You travel to the provider’s home studio' },
-  mobile:     { label: 'Mobile',      sub: 'You travel to the client. Your address is never sent automatically — only if you send it yourself.', venue: 'client',   clientVenueLabel: 'The provider travels to you' },
+  salon:      { label: 'Salon',       sub: 'Clients come to your salon.',                                                                        venue: 'provider', clientVenueLabel: 'You travel to the salon' },
+  studio:     { label: 'Studio',      sub: 'Clients come to your studio.',                                                                       venue: 'provider', clientVenueLabel: 'You travel to the studio' },
+  home_based: { label: 'Home Studio', sub: 'Clients come to your home. Your address stays private until it’s sent to them.',                   venue: 'provider', clientVenueLabel: 'You travel to the provider’s home studio' },
+  mobile:     { label: 'Mobile',      sub: 'You go to the client. Your address is only ever sent if you send it yourself.',                     venue: 'client',   clientVenueLabel: 'The provider travels to you' },
 };
 
 export const BUSINESS_TYPE_OPTS: { value: BusinessType; label: string; sub: string }[] =
@@ -366,14 +366,14 @@ export function providerTravelsToClient(type: BusinessType | null | undefined): 
 }
 
 export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string; sub: string }[] = [
-  { value: 'always',            label: 'Always visible',  sub: 'Your full address shows in the Contact section of your profile.' },
-  { value: 'on_confirmation',   label: 'On confirmation', sub: 'Shared automatically when the booking is confirmed.' },
-  { value: 'day_before',        label: '24h before',      sub: 'Shared automatically 24 hours before the appointment.' },
-  { value: 'two_days_before',   label: '48h before',      sub: 'Shared automatically 48 hours before the appointment.' },
-  { value: 'three_days_before', label: '72h before',      sub: 'Shared automatically 72 hours before the appointment.' },
-  { value: 'five_days_before',  label: '5 days before',   sub: 'Shared automatically 5 days before the appointment.' },
-  { value: 'week_before',       label: '1 week before',   sub: 'Shared automatically 1 week before the appointment.' },
-  { value: 'manual',            label: 'Manual release',  sub: 'Nothing is sent automatically — you send your address per booking from that booking\u2019s detail page.' },
+  { value: 'always',            label: 'Always visible',  sub: 'Anyone can see your full address on your profile.' },
+  { value: 'on_confirmation',   label: 'On confirmation', sub: 'Sent automatically as soon as the booking is confirmed.' },
+  { value: 'day_before',        label: '24h before',      sub: 'Sent automatically 24 hours before the appointment.' },
+  { value: 'two_days_before',   label: '48h before',      sub: 'Sent automatically 48 hours before the appointment.' },
+  { value: 'three_days_before', label: '72h before',      sub: 'Sent automatically 72 hours before the appointment.' },
+  { value: 'five_days_before',  label: '5 days before',   sub: 'Sent automatically 5 days before the appointment.' },
+  { value: 'week_before',       label: '1 week before',   sub: 'Sent automatically 1 week before the appointment.' },
+  { value: 'manual',            label: 'Manual release',  sub: 'Nothing is sent automatically. You send it yourself, from each booking\u2019s page.' },
 ];
 
 /**

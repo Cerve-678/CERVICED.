@@ -134,7 +134,7 @@ export default function SchedulingScreen({ navigation }: any) {
             : (m['pa_max_bookings_per_day'] ?? 'unlimited'),
         );
       } catch {
-        flash('Could not load your scheduling settings', 'error');
+        flash("Couldn't load your settings. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -151,7 +151,7 @@ export default function SchedulingScreen({ navigation }: any) {
   }
 
   const handleSave = useCallback(async () => {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash('Finish setting up your business profile first.', 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -276,7 +276,7 @@ export default function SchedulingScreen({ navigation }: any) {
                 Working Hours & Blocked Dates
               </Text>
               <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 2, lineHeight: 16, color: C.sub }}>
-                Your day-by-day hours, breaks, blocked dates and one-off changes
+                Set your hours for each day, your breaks, days off and one-off changes
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={C.sub} style={{ opacity: 0.5 }} />
@@ -284,7 +284,7 @@ export default function SchedulingScreen({ navigation }: any) {
 
           <Card
             title="Availability"
-            sub="The shape of your typical week. Your actual bookable slots come from Working Hours above."
+            sub="A rough guide to your week for clients. The times they can actually book come from Working Hours above."
           >
             <SectionLabel text="When you're typically available" />
             <ChipGroup
@@ -298,23 +298,26 @@ export default function SchedulingScreen({ navigation }: any) {
             <RadioGroup options={NEW_CLIENTS_OPTS} value={acceptsNew} onChange={setAcceptsNew} />
 
             <View style={{ height: 14 }} />
-            <ToggleRow label="Walk-ins welcome" sub="Clients can book without advance notice" value={walkIns} onChange={setWalkIns} />
+            <ToggleRow label="Walk-ins welcome" sub="Clients can turn up without booking first" value={walkIns} onChange={setWalkIns} />
             <ToggleRow label="Group bookings" sub="Bridal parties, hen dos, group sessions" value={groupBookings} onChange={setGroupBookings} />
           </Card>
 
           <Card
             title="Booking Rules"
-            sub="How bookings land in your calendar — these are enforced when a client picks a slot."
+            sub="These decide which times clients can pick when they book."
           >
             <SectionLabel text="Buffer time between appointments" />
+            <Text style={[st.windowExplainer, { color: C.sub }]}>Time kept free between appointments, to clean up or travel. Clients can't book into it.</Text>
             <RadioGroup options={BUFFER_OPTS} value={bufferMins} onChange={setBufferMins} />
 
             <View style={{ height: 18 }} />
             <SectionLabel text="Appointment start-time intervals" />
+            <Text style={[st.windowExplainer, { color: C.sub }]}>How often start times are offered. Every 30 min means clients see 9:00, 9:30, 10:00 and so on.</Text>
             <RadioGroup options={SLOT_INTERVAL_OPTS} value={slotIntervalMins} onChange={setSlotInterval} />
 
             <View style={{ height: 18 }} />
             <SectionLabel text="Minimum notice before booking" />
+            <Text style={[st.windowExplainer, { color: C.sub }]}>How soon before an appointment clients can book it. With 2 hrs, a client can't book a 3pm appointment after 1pm.</Text>
             <RadioGroup options={MIN_NOTICE_OPTS} value={minBookingNoticeHrs} onChange={setMinNotice} />
 
             <View style={{ height: 18 }} />
@@ -328,7 +331,7 @@ export default function SchedulingScreen({ navigation }: any) {
                   <Text style={[st.releaseDayText, { color: C.text }]}>Monthly release on the {ordinalSuffix(releaseDay)}</Text>
                   {releaseStatus && <Text style={[st.releaseDayHint, { color: C.text }]}>{releaseStatus}</Text>}
                   <Text style={[st.releaseDayHint, { color: C.sub }]}>
-                    Days after that are greyed out for clients, and tapping one tells them the date it opens.
+                    Later dates are greyed out for clients. If they tap one, they're told when it opens.
                   </Text>
                   <Text style={[st.releaseDayHint, { color: C.sub }]}>Change or remove it in Edit Profile.</Text>
                 </View>
@@ -347,6 +350,7 @@ export default function SchedulingScreen({ navigation }: any) {
 
             <View style={{ height: 18 }} />
             <SectionLabel text="Maximum bookings per day" />
+            <Text style={[st.windowExplainer, { color: C.sub }]}>Once a day has this many bookings, clients can't book it.</Text>
             <RadioGroup options={MAX_PER_DAY_OPTS} value={maxBookingsPerDay} onChange={setMaxPerDay} />
           </Card>
 

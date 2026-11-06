@@ -18,13 +18,13 @@ Curated: [[Address Release]] · **101 files**
 - `src/components/AddressPicker.tsx` _(47)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
-- `src/screens/provider/BusinessInfoScreen.tsx` _(40)_
+- `src/screens/provider/BusinessInfoScreen.tsx` _(38)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
 - `supabase/address_release_notification.sql` _(33)_
 - `src/screens/client/BookingDetailScreen.tsx` _(32)_
 - `supabase/require_provider_address.sql` _(32)_
-- `src/features/business-details/options.ts` _(30)_
 - `src/types/booking.ts` _(30)_
+- `src/features/business-details/options.ts` _(29)_
 - `src/types/database.ts` _(29)_
 - `supabase/address_release_enforcement.sql` _(27)_
 - `supabase/stamp_booking_address_snapshot_fallback_location_text.sql` _(26)_
@@ -58,8 +58,8 @@ Curated: [[Availability & Slots]] · **192 files**
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/client/CartScreen.tsx` _(50)_
 - `src/screens/client/HomeScreen.tsx` _(44)_
-- `src/screens/provider/SchedulingScreen.tsx` _(44)_
 - `supabase/waitlist_holds.sql` _(43)_
+- `src/screens/provider/SchedulingScreen.tsx` _(42)_
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
 - `src/components/BookingSheet.tsx` _(35)_
 - `supabase/add_providers_availability_rpc.sql` _(31)_
@@ -371,10 +371,10 @@ Curated: [[Payments]] · **82 files**
 - `src/types/database.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(5)_
-- `src/screens/provider/PoliciesScreen.tsx` _(5)_
 - `src/screens/shared/AdminDashboardScreen.tsx` _(5)_
 - `src/services/bookingService.ts` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/constants/feeTerms.ts` _(4)_
 - `src/features/bookings/addOnTime.ts` _(4)_
+- `src/features/bookings/paymentPresentation.ts` _(4)_
 - … +52 more

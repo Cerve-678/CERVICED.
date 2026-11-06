@@ -79,48 +79,48 @@ export default function BusinessDetailsScreen({ navigation }: any) {
 
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
           <Text style={[st.intro, { color: C.sub }]}>
-            Everything clients see about your business, grouped so you can update one area at a time.
+            This is everything clients see about your business. Tap an area to change it.
           </Text>
 
           <NavRow
             icon="storefront-outline"
             title="Business Info"
-            subtitle="Name, Instagram, website, contact & booking emails"
+            subtitle="Your name, links and emails, what you do, and where you see clients"
             onPress={() => navigation.navigate('BusinessInfo')}
             C={C}
           />
           <NavRow
             icon="pricetags-outline"
             title="Services & Pricing"
-            subtitle="Specialties, clientele, pricing & style"
+            subtitle="What you specialise in, who you see, your price range and style. Your services and prices are set in Edit Profile."
             onPress={() => navigation.navigate('ServicesPricing')}
             C={C}
           />
           <NavRow
             icon="document-text-outline"
             title="Policies"
-            subtitle="Cancellations, reschedules, no-shows & refunds"
+            subtitle="What happens when clients cancel, move a booking, run late or don't turn up, plus deposits and refunds"
             onPress={() => navigation.navigate('Policies')}
             C={C}
           />
           <NavRow
             icon="shield-checkmark-outline"
             title="About You"
-            subtitle="Credentials, patch test policy, cities covered & accessibility"
+            subtitle="Your qualifications, insurance, patch tests, the cities you work in, languages and access"
             onPress={() => navigation.navigate('AboutYou')}
             C={C}
           />
           <NavRow
             icon="calendar-outline"
             title="Scheduling & Availability"
-            subtitle="Working hours, availability, buffers & booking rules"
+            subtitle="Your hours, gaps between appointments, and how soon and how far ahead clients can book"
             onPress={() => navigation.navigate('Scheduling')}
             C={C}
           />
 
           <Text style={[st.footnote, { color: C.sub }]}>
-            Looking for reminders and client nudges? Those live in Automations & Preferences.
-            Payment types, deposits and payouts moved to Payments, alongside Automations.
+            Reminders and messages sent to clients are in Automations & Preferences.
+            Deposits, how clients pay you, and your payouts are in Payments.
           </Text>
         </ScrollView>
       </SafeAreaView>

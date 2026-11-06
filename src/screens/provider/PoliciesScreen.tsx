@@ -168,7 +168,7 @@ function Pills<T extends string>({ options, value, onChange }: {
 /** '' (no fee) or pounds with up to 2 decimals — the same shape the server reads. */
 // How a late or no-show fee is charged. Bookings freeze the fee at checkout, and
 // this describes the fee terms clients agree to there.
-const FEE_CHARGE_NOTE = "Charged to the client's saved card, by you, within 24 hours of the appointment. If the card declines, the client is asked to pay within 7 days, and on bookings made on the current fee wording the card may be tried again up to three times. Clients agree to the fee at checkout.";
+const FEE_CHARGE_NOTE = "You charge it yourself, to the client's saved card, within 24 hours of the appointment. If their card is declined, they're asked to pay within 7 days, and on some bookings the card is also tried again automatically, up to three times. Clients agree to this fee when they book.";
 
 /** The cap on every custom amount, in bold wherever a provider sets one. */
 function HalfPriceCap() {
@@ -258,7 +258,7 @@ export default function PoliciesScreen({ navigation }: any) {
         setCarriedPolicies(carried);
       } catch {
         setLoadFailed(true);
-        flash('Could not load your policies', 'error');
+        flash("Couldn't load your policies. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -309,10 +309,10 @@ export default function PoliciesScreen({ navigation }: any) {
   const handleRemovePolicyImage = useCallback(() => setPolicy('policyImageUrl', ''), [setPolicy]);
 
   const handleSave = useCallback(async () => {
-    if (!userId) { flash('No provider profile found', 'error'); return; }
+    if (!userId) { flash('Finish setting up your business profile first.', 'error'); return; }
     // See loadFailed above: writing without a successful read would replace
     // the stored blob with defaults.
-    if (loadFailed) { flash('Your policies could not be loaded — reopen this screen before saving', 'error'); return; }
+    if (loadFailed) { flash("Your policies didn't load, so saving now could lose them. Close this page and open it again.", 'error'); return; }
     if (![policies.lateFee, policies.noShowFee].every(isFeeAmount)) {
       flash('Enter fees as pounds, like 10 or 12.50', 'error');
       return;
@@ -409,7 +409,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 onChange={v => setPolicy('cancelNotice', v)}
               />
               {!isLinkOnly && (
-                <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>A change applies to new bookings. Bookings already made keep the notice they were booked with.</Text>
+                <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Changing this only affects new bookings. Bookings already made keep the notice they were booked with.</Text>
               )}
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
@@ -420,8 +420,8 @@ export default function PoliciesScreen({ navigation }: any) {
                 />
                 {policies.cancelPenalty === 'deposit' && (
                   <>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>If they paid a deposit, you keep the deposit.</Text>
-                    <Text style={[capSt.note, { color: C.text }]}>If they paid in full, you can only charge up to half the service price.</Text>
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>If they paid a deposit, you keep it.</Text>
+                    <Text style={[capSt.note, { color: C.text }]}>If they paid in full, you keep the deposit amount, but never more than half the service price.</Text>
                   </>
                 )}
                 {(policies.cancelPenalty === 'custom' || policies.cancelPenalty === 'half') && (
@@ -432,7 +432,7 @@ export default function PoliciesScreen({ navigation }: any) {
                       onChange={v => setPolicies(prev => ({ ...prev, cancelPenalty: 'custom', cancelCustomFee: v.replace(/[^0-9.]/g, '') }))}
                       placeholder="e.g. 20"
                       keyboardType="decimal-pad"
-                      note={policies.cancelPenalty === 'half' ? 'Currently half the price. Enter an amount to change it.' : "If it's more than half the price, you keep half. If they only paid a deposit, you can't keep more than that deposit."}
+                      note={policies.cancelPenalty === 'half' ? 'This is set to half the price. Type an amount to change it.' : "If it's more than half the price, you keep half. If they only paid a deposit, you can't keep more than that deposit."}
                     />
                     <HalfPriceCap />
                   </View>
@@ -462,14 +462,14 @@ export default function PoliciesScreen({ navigation }: any) {
               {/* One grace period, kept under noShowGraceMinutes: checkout quotes it
                   beside the late fee, and provider_update_booking_status() won't
                   accept a no-show until it has passed. */}
-              <Card title="Late" sub="How long a client can be late, and what you can charge after that. Leave the fee blank for no fee.">
+              <Card title="Late" sub="How late a client can be, and what you can charge after that. Leave the fee blank to charge nothing.">
                 <Field
                   label="Grace period (minutes)"
                   value={policies.noShowGraceMinutes}
                   onChange={v => setPolicy('noShowGraceMinutes', v.replace(/[^0-9]/g, ''))}
                   placeholder="e.g. 15"
                   keyboardType="phone-pad"
-                  note="How long after the booked start time before a client counts as late. You can't mark a No Show until this has passed. 0 = no grace period."
+                  note="How many minutes after the start time before a client counts as late. You can't mark them as a no-show until this has passed. Enter 0 for none."
                 />
                 <Field
                   label="Late arrival fee (£)"
@@ -477,7 +477,7 @@ export default function PoliciesScreen({ navigation }: any) {
                   onChange={v => setPolicy('lateFee', v.replace(/[^0-9.]/g, ''))}
                   placeholder="e.g. 10"
                   keyboardType="decimal-pad"
-                  note="For arriving after your grace period above."
+                  note="Charged if they arrive after the grace period above."
                 />
                 <HalfPriceCap />
                 <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>{FEE_CHARGE_NOTE}</Text>
@@ -503,7 +503,7 @@ export default function PoliciesScreen({ navigation }: any) {
                       onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
                       placeholder="e.g. 20"
                       keyboardType="decimal-pad"
-                      note="For not turning up. You mark the booking as a no-show first."
+                      note="For not turning up. Mark the booking as a no-show first, then charge it."
                     />
                     <HalfPriceCap />
                     <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 12 }]}>{FEE_CHARGE_NOTE}</Text>
@@ -516,8 +516,8 @@ export default function PoliciesScreen({ navigation }: any) {
             <Card
               title="Non-Refundable Deposit"
               sub={isLinkOnly
-                ? 'Tell clients if a booking needs a non-refundable deposit. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn\'t apply it or take any money.'
-                : 'If you say yes, you keep the deposit whenever a client cancels, even in good time. It still goes back to them if you cancel, decline or don\'t answer. It only applies to new bookings.'}
+                ? 'Tell clients if a booking needs a deposit they can\'t get back. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn\'t apply it or take any money.'
+                : 'If this is on, you keep the deposit whenever a client cancels, even with plenty of notice. They still get it back if you cancel, decline or don\'t answer. It only applies to new bookings.'}
             >
               <ToggleRow
                 label="Do you require a non-refundable deposit to secure bookings?"
@@ -541,7 +541,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 refund-processing infra, so there is deliberately no
                 percentage/amount field here that would imply the app
                 calculates or enforces a refund automatically. */}
-            <Card title="Refund Policy" sub={isLinkOnly ? 'When you give refunds, in your own words, so clients know before they book. Shown on your profile (optional).' : 'When you give refunds, in your own words, so clients know before they book. Shown on their booking (optional).'}>
+            <Card title="Refund Policy" sub={isLinkOnly ? 'When you give refunds, in your own words, so clients know before they book. Shown on your profile (optional).' : 'When you give refunds, in your own words, so clients know before they book. Shown on your profile and on their booking (optional).'}>
               <Field
                 label="Your refund policy"
                 value={policies.refundPolicyNote}
@@ -553,7 +553,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Shown on CERVICED bookings, which link-only pros don't have. */}
             {!isLinkOnly && (
-              <Card title="Your Instructions" sub="Shown to clients as your instructions in their booking details, on every new booking (optional), like arriving early or what to bring. Directions and door codes have their own boxes beside your address, so there's no need to repeat them here. Changing it later won't update bookings already made.">
+              <Card title="Your Instructions" sub="Shown on every new booking, like arriving early or what to bring (optional). Directions and door codes have their own boxes next to your address. Changing this won't update bookings already made.">
                 <Field
                   label="Instructions"
                   value={policies.bookingInstructions}
@@ -584,7 +584,7 @@ export default function PoliciesScreen({ navigation }: any) {
               />
             </Card>
 
-            <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly.">
+            <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients have to contact you to arrange one. They can't book it in the app.">
               <Field
                 label="Your emergency appointment policy"
                 value={policies.emergencyBookingPolicy}

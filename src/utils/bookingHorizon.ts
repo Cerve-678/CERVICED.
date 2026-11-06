@@ -124,7 +124,7 @@ export function rollingWindowExplainer(windowDays: number, now: Date = new Date(
   const last = lastBookableDate({ booking_window_days: windowDays }, now);
   if (!last) return 'Clients can book any date in the future.';
   return `Today clients can book up to ${formatShortDayDate(last)}. This moves forward one day every day. `
-    + 'Days after it are greyed out for clients, and tapping one tells them the date it opens.';
+    + "Later dates are greyed out for clients. If they tap one, they're told when it opens.";
 }
 
 /** Parses the Scheduling screen's window choice for saving. '0' is "Any
