@@ -11563,6 +11563,20 @@ export async function getProviderServicePositions(
   return (data ?? []) as { id: string; category_name: string; sort_order: number }[];
 }
 
+/** Read back the fields needed to confirm a full profile publish actually
+ * stored the descriptions the editor submitted. */
+export async function getProviderServiceDescriptionSnapshots(
+  providerId: string,
+): Promise<{ id: string; category_name: string; sort_order: number; description: string | null }[]> {
+  const { data, error } = await supabase
+    .from('services')
+    .select('id, category_name, sort_order, description')
+    .eq('provider_id', providerId)
+    .limit(1000);
+  if (error) throw error;
+  return (data ?? []) as { id: string; category_name: string; sort_order: number; description: string | null }[];
+}
+
 /** The provider's own add-on list (universal add-ons), for editing. Owner
  *  read only (RLS), so no has_gone_live filter: a provider edits their list
  *  before going live. */

@@ -55,7 +55,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppDialog } from '../../components/AppDialog';
 
 // Supabase registration service
-import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage, ServiceDescriptionVerificationError } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { transferFromAcuity } from '../../services/acuityTransferService';
@@ -3783,6 +3783,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
+      if (e instanceof ServiceDescriptionVerificationError) {
+        logger.error('[InfoRegScreen] service descriptions could not be verified:', e);
+        Alert.alert(
+          'Descriptions not confirmed',
+          'We could not confirm that your service descriptions were published. Your edits are still in this editor. Check them and try Save & Publish again.',
+        );
+        return;
+      }
       // saveProviderToSupabase prefixes its error with the failing step, which
       // is what makes these diagnosable — but that belongs in the log, not in
       // front of a provider. toUserMessage reports it and returns safe copy.
