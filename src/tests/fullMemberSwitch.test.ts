@@ -5,6 +5,8 @@ const read = (...parts: string[]) => fs.readFileSync(path.join(__dirname, '..', 
 
 const SCREENS = [
   ['features', 'providers', 'BecomeFullMemberSheet.tsx'],
+  ['features', 'providers', 'FullMemberConversion.tsx'],
+  ['features', 'providers', 'conversionSteps.ts'],
   ['screens', 'provider', 'FullCervicedFeaturesScreen.tsx'],
   ['screens', 'provider', 'LinkOnlyHomeScreen.tsx'],
 ];
@@ -27,8 +29,20 @@ describe('becoming a full member', () => {
     expect(body).toMatch(/if \(bookingMode !== 'cerviced'\) throw error;/);
   });
 
-  it('sends the one-way switch once, however fast the taps', () => {
+  it('runs the one-way switch once, from the converting screen', () => {
     const sheet = read('features', 'providers', 'BecomeFullMemberSheet.tsx');
-    expect(sheet).toMatch(/if \(inFlight\.current\) return;/);
+    // The sheet only opens the converting screen; the screen runs the switch.
+    expect(sheet).not.toMatch(/becomeFullMember\(/);
+    const conversion = read('features', 'providers', 'FullMemberConversion.tsx');
+    expect(conversion).toMatch(/if \(running\.current\) return;/);
+  });
+
+  it('keeps the link-only tabs until the provider taps through', () => {
+    const auth = read('contexts', 'AuthContext.tsx');
+    const rpc = auth.slice(auth.indexOf('const becomeFullMember = useCallback'), auth.indexOf('const enterFullMemberMode = useCallback'));
+    // Flipping the mode unmounts the converting screen, so the switch itself mustn't.
+    expect(rpc).not.toMatch(/setMyBookingMode/);
+    const sheet = read('features', 'providers', 'BecomeFullMemberSheet.tsx');
+    expect(sheet).toMatch(/onFinish=\{enterFullMemberMode\}/);
   });
 });

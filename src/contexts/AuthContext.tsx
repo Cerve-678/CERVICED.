@@ -115,10 +115,14 @@ interface AuthContextType {
    *  null for an account with no provider hat. Resolved with myProviderId,
    *  and from the sign-up answer before the providers row exists. */
   myBookingMode: ProviderBookingMode | null;
-  /** Link-only → full member, one way. Flips myBookingMode to 'cerviced' once
-   *  the server has, which swaps the provider tabs for the full set. Throws
-   *  on failure; the caller shows the error. */
+  /** Link-only → full member, one way, on the server only. Does NOT flip
+   *  myBookingMode: the conversion screen lives inside the link-only tabs and
+   *  would unmount mid-animation, so it calls enterFullMemberMode() when the
+   *  provider taps through. Throws on failure; the caller shows the error. */
   becomeFullMember: () => Promise<void>;
+  /** Swaps the provider tabs for the full set once becomeFullMember() has
+   *  succeeded. Unmounts every link-only screen, including its caller. */
+  enterFullMemberMode: () => void;
   switchMode: () => Promise<void>;
   upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
@@ -248,8 +252,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { bookingMode } = await getProviderOwnershipForUserId(user.id);
       if (bookingMode !== 'cerviced') throw error;
     }
-    setMyBookingMode('cerviced');
   }, [user?.id]);
+
+  const enterFullMemberMode = useCallback(() => {
+    setMyBookingMode('cerviced');
+  }, []);
 
   // Mirrors activeMode for applyMode's noop check without pulling activeMode
   // into that callback's deps (which would otherwise force it to be
@@ -1041,14 +1048,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember,
+    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember, enterFullMemberMode,
     switchMode, upgradeToProvider, addClientProfile, login,
     beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember,
+    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember, enterFullMemberMode,
     switchMode, upgradeToProvider, addClientProfile, login,
     beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
