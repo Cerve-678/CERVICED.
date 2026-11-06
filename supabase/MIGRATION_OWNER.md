@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-06 (bookings carry exact venue coordinates)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261106130000 | `bookings_stamp_exact_venue_coordinates` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f` from the main folder (worktrees aren't linked). Frontier before applying: live max `20261106113000`, nothing unapplied above it; md5 guard `2143cc34…` matched. Redefines `stamp_booking_address_snapshot()` so non-mobile bookings also get the provider's exact private coordinates, and backfilled active bookings with none. Verified live: version present; 0 active venue bookings without coordinates; 0 mobile bookings with them; function keeps `SET search_path`, not executable by anon or authenticated; `trg_stamp_booking_address_snapshot` still BEFORE INSERT. New md5 `67801162…`. Written on `fix/booking-exact-coordinates` (#331). |
+
 ### Applied 2026-11-06 (info pack send-to-upcoming is a choice)
 
 | Authored version | Name | Status |
