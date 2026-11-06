@@ -56,11 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Pending: info pack send-to-upcoming is a choice
+### Applied 2026-11-06 (info pack send-to-upcoming is a choice)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **NOT APPLIED.** Written 2026-11-06 on `feat/info-packs-redesign`. Numbered above `20261105223541` (universal add-ons, the live max as last recorded here); re-check the live frontier and open PR branches at apply time. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates trigger `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`. The function body `handle_new_info_pack()` is **not** redefined, so it cannot revert a newer live version; a guard RAISEs if the trigger or function is missing. Older app builds omit the column and keep today's send-on-save. **Order:** apply, then merge the app (the new screen inserts the column, which PostgREST rejects until it exists). |
+| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f`; version recorded by the file. Frontier before applying: live max `20261105223541`, no open PR branch above it. Lock was `(none)`. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`; `handle_new_info_pack()` not redefined. Verified live: trigger def carries the WHEN clause, column default `true` / NOT NULL, every existing row TRUE, version present. Written on `feat/info-packs-redesign` (#330). |
+
 ### Applied 2026-11-06 (universal add-ons)
 
 | Authored version | Name | Status |

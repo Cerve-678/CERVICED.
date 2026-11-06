@@ -19,6 +19,8 @@
 -- never re-sends: clients who already have a pack keep their copy in
 -- booking_info_packs, by product decision (2026-11-05).
 
+BEGIN;
+
 -- Guard: the trigger and function this migration depends on must exist live.
 DO $$
 BEGIN
@@ -47,3 +49,9 @@ CREATE TRIGGER on_info_pack_created
   FOR EACH ROW
   WHEN (NEW.send_to_upcoming)
   EXECUTE FUNCTION public.handle_new_info_pack();
+
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261106113000', 'info_pack_send_to_upcoming_is_a_choice')
+ON CONFLICT (version) DO NOTHING;
+
+COMMIT;
