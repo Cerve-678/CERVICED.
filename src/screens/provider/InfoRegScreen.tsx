@@ -819,7 +819,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                       <Ionicons name="create-outline" size={20} color={accentColor} style={styles.templateScratchIcon} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.templateScratchTitle}>Start from scratch</Text>
-                        <Text style={styles.templateScratchSub}>Blank service — fill in your own details</Text>
+                        <Text style={styles.templateScratchSub}>A blank service. Fill in your own details.</Text>
                       </View>
                     </TouchableOpacity>
                   )}
@@ -1490,7 +1490,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Buffer Time (optional)</Text>
-                <Text style={styles.serviceSheetHint}>Blocks extra minutes around this service so back-to-back bookings can't crowd it. "My default" follows the buffer set in Scheduling; "None" turns it off for this service only.</Text>
+                <Text style={styles.serviceSheetHint}>Extra minutes kept free before or after this service, so the next booking can't start straight away. "My default" uses the gap you set in Scheduling. "None" means no gap for this service.</Text>
                 <View style={styles.serviceSheetPairRow}>
                   <View style={styles.serviceSheetPairItem}>
                     <Text style={styles.serviceSheetLabel}>Before</Text>
@@ -1559,7 +1559,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 {isEditing
                   ? <Text style={styles.serviceSheetSection}>Who's This For?</Text>
                   : <RequiredLabel required labelStyle={styles.serviceSheetSection} styles={styles}>Who's This For?</RequiredLabel>}
-                <Text style={styles.serviceSheetHint}>Helps the app suggest this service to the right clients</Text>
+                <Text style={styles.serviceSheetHint}>Helps CERVICED show this service to the right clients</Text>
                 <View style={styles.chipGrid}>
                   {SERVICE_AUDIENCE_OPTS.map(({ value, label }) => {
                     const active = audience === value;
@@ -1612,7 +1612,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['trendInput'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Trend Names (Optional)</Text>
-                <Text style={styles.serviceSheetHint}>Viral names clients search for — tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
+                <Text style={styles.serviceSheetHint}>Popular names clients search for. Tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
                 {trendNames.length > 0 && (
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
@@ -1644,7 +1644,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.inputGroup}>
                   <View style={styles.serviceSheetSectionRule} />
                   <Text style={styles.serviceSheetSection}>Suitable Hair Types</Text>
-                  <Text style={styles.serviceSheetHint}>Select which hair types this service suits — leave blank if it suits all</Text>
+                  <Text style={styles.serviceSheetHint}>Pick the hair types this service suits. Leave blank if it suits all of them.</Text>
                   <ChipSelect options={HAIR_TYPES} selected={hairTypesSuitable} onToggle={toggleTag(hairTypesSuitable, setHairTypesSuitable)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
@@ -1665,7 +1665,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {isAesthetics && (
                 <View style={[styles.inputGroup, styles.safetyCard]}>
                   <Text style={styles.safetySectionTitle}>Treatment Safety</Text>
-                  <Text style={styles.serviceSheetHint}>Required for aesthetic treatments — shown to clients under the service description</Text>
+                  <Text style={styles.serviceSheetHint}>Needed for aesthetic treatments. Clients see it under the service description.</Text>
 
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
@@ -1690,7 +1690,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['contraindicationInput'] = e.nativeEvent.layout.y; }}>
                     <Text style={styles.serviceSheetLabel}>Contraindications</Text>
-                    <Text style={styles.serviceSheetHint}>Conditions that prevent this treatment — type your own, or tap a common one below</Text>
+                    <Text style={styles.serviceSheetHint}>Health conditions that mean someone shouldn't have this treatment. Type your own, or tap a common one below.</Text>
                     {contraindications.length > 0 && (
                       <View style={styles.chipGrid}>
                         {contraindications.map(c => (
@@ -1748,7 +1748,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; }}>
                 <View style={styles.serviceSheetSectionRule} />
                 <Text style={styles.serviceSheetSection}>Add-Ons (Optional)</Text>
-                <Text style={styles.serviceSheetHint}>Extras clients can add to this service. Your add-ons are shared, so tick any you already have.</Text>
+                <Text style={styles.serviceSheetHint}>Extras clients can add to this service. Add-ons you've made can go on any service, so tick any you already have.</Text>
                 <ServiceAddOnsField
                   library={addOnLibrary}
                   pending={pendingAddOns}
@@ -1851,7 +1851,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                 <Text style={styles.templateSheetSub}>
                   {showSubcategories
                     ? `Suggested for your ${CATEGORY_META[myKind].label} business — tap to fill in`
-                    : "Pick a type — we'll suggest matching services & tags"}
+                    : "Pick a type and we'll suggest matching services and tags"}
                 </Text>
               </View>
               <TouchableOpacity style={styles.modalCloseButton} onPress={() => { tapLight(); onClose(); }}>
@@ -3013,8 +3013,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           .catch(err => {
             logger.warn('claimProviderProfile failed:', err?.message ?? err);
             setClaimError(
-              "We couldn't confirm your business claim — the code may have expired or been entered wrong. " +
-              'You can retry from Settings, or just continue setting up your profile below.'
+              "We couldn't confirm your claim on this business. The code may have run out or been typed wrong.  " +
+              'You can try again from Settings, or carry on setting up your profile below.'
             );
           })
           .finally(() => clearPendingClaim());
@@ -3676,7 +3676,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (totalServices <= 1) {
       showConfirm(
         'This will pause your account',
-        "Deleting your last service removes you from client search until you add another — you won't be bookable with an empty catalogue. This takes effect once you save.",
+        "If you delete your last service, clients can't find or book you until you add another. This happens when you save.",
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Delete anyway', style: 'destructive', onPress: remove },
@@ -3712,16 +3712,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // but their booking link is, since it's the only way clients book them.
     if (isLinkOnly) {
       if (!normalizeExternalBookingUrl(providerData.externalBookingUrl)) {
-        Alert.alert('Missing Information', 'Please add your booking link — it\'s where clients go when they tap Book.');
+        Alert.alert('Missing Information', 'Please add your booking link. It\'s where clients go when they tap Book.');
         return;
       }
     } else {
       if (!providerData.businessType) {
-        Alert.alert('Missing Information', 'Please choose your business type — it decides whether clients come to you or you travel to them, and which address-sharing options you get.');
+        Alert.alert('Missing Information', 'Please choose your business type. It decides whether clients come to you or you go to them, and when your address can be sent.');
         return;
       }
       if (!providerData.fullAddress.trim()) {
-        Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
+        Alert.alert('Missing Information', 'Please enter your full address. Every business type needs one, including mobile. It’s never shown publicly.');
         return;
       }
     }
@@ -3779,7 +3779,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       }
       Alert.alert(
         'Profile Saved!',
-        'Your provider profile has been saved successfully.',
+        'Your profile is saved.',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
@@ -4473,7 +4473,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>01</Text>
               <Text style={styles.docHeading}>Identity</Text>
-              <Text style={styles.docSub}>Business identity · how clients first find you</Text>
+              <Text style={styles.docSub}>Your name, type and area: how clients first find you</Text>
 
             {/* Plain circular avatar picker — no card chrome around it. The
                 standard avatar treatment (circle + corner camera badge) reads
@@ -4605,7 +4605,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </Text>
                 </View>
                 <Text style={styles.inputHint}>
-                  Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 14 days.
+                  You can’t change it here. Go to Business Profile → Business Details → Business Info. After a change, you have to wait 14 days to change it again.
                 </Text>
               </View>
 
@@ -4719,7 +4719,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     setProviderData(prev => ({ ...prev, location }))
                   }
                   accentColor={adaptiveAccentColor}
-                  subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
+                  subtitle="Shown on your profile and used to show you in local searches. It isn't your exact address."
                 />
               </View>
 
@@ -4823,7 +4823,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               >
                 <View style={styles.toggleInfo}>
                   <Text style={styles.toggleLabel}>Monthly Release Day</Text>
-                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it blank and clients can book a set number of days ahead instead (set in Scheduling).</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.releaseDayBtn}
@@ -4843,7 +4843,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Portfolio</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Photos of your work, shown on your public profile in a two-column gallery.
+                  Photos of your work, shown in a gallery on your profile.
                 </Text>
 
                 {portfolioLoading ? (
@@ -4923,7 +4923,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>03</Text>
               <Text style={styles.docHeading}>Contact</Text>
-              <Text style={styles.docSub}>Public details — anyone browsing can use these</Text>
+              <Text style={styles.docSub}>Public details. Anyone looking at your profile can use these.</Text>
 
             {/* Contact Information — the PUBLIC audience. Anything filled in
                 here is published: it's what the Get In Touch button on your
@@ -4932,10 +4932,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 audience (clients who already hold an appointment, via Booking
                 Details → Contact) and do not hide anything from this list. */}
               <Text style={styles.sectionSubtitle}>
-                Public — anything you fill in here appears on your profile under
-                Get In Touch, for general enquiries from anyone browsing. Contact
-                options for clients who've already booked are set separately in
-                Communications.
+                Public. Anything you fill in here shows on your profile under Get In Touch, so anyone can contact you. How clients with a booking contact you is set separately, in Communications.
               </Text>
 
               <View
@@ -5561,7 +5558,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </View>
                 </View>
                 <Text style={styles.inputHint}>
-                  Not editable here — change it in Business Profile → Business Details → Business Info.
+                  You can’t change it here. Go to Business Profile → Business Details → Business Info.
                 </Text>
 
               <View style={[styles.docFieldRow, { marginTop: 14 }]}>
@@ -5574,10 +5571,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
               <Text style={styles.addressHint}>
                 {providerData.businessType === 'mobile'
-                  ? "Never shown publicly, and never sent to a client automatically — you travel to them, so they give you their address instead. If you do want to share yours, pick Manual release below and send it per booking from that booking's detail page. Include your postcode."
+                  ? "Never shown publicly or sent to clients automatically. You go to them, so they give you their address. If you'd like to be able to share yours, pick Manual release below, then send it from a booking's page. Include your postcode."
                   : providerData.businessType === 'home_based'
-                  ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
-                  : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
+                  ? 'Only sent to clients at the time you pick below. Never shown publicly. Include your postcode.'
+                  : 'Your business address. Clients see it once their booking is confirmed. Include your postcode.'}
               </Text>
               {/* Stays editable here, unlike the business type above it. This
                   screen is the only editor of the private address — moving it
@@ -5602,7 +5599,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <>
                   <Text style={[styles.policyLabel, { marginTop: 14 }]}>HOW TO GET THERE</Text>
                   <Text style={styles.addressHint}>
-                    Optional, shown on your profile — nearest station, where to park, landmarks. Anyone can see this, so no door codes.
+                    Optional. Shown on your profile, so anyone can see it: nearest station, where to park, landmarks. Don't put door codes here.
                   </Text>
                   <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                     <TextInput
@@ -5621,7 +5618,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
                   <Text style={[styles.policyLabel, { marginTop: 14 }]}>ARRIVAL DETAILS</Text>
                   <Text style={styles.addressHint}>
-                    Optional, private — door or buzzer codes, flat number, which entrance. Only booked clients see this, at the same time as your address.
+                    Optional and private: door or buzzer codes, flat number, which entrance. Only clients with a booking see this, when they get your address.
                   </Text>
                   <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                     <TextInput
@@ -5710,7 +5707,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   the same privacy the address field gets. */}
               <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS PHOTOS</Text>
               <Text style={styles.addressHint}>
-                Photos of your venue or workspace, shown publicly under Additional Information on your profile rather than in your portfolio — clients booking mobile or home-based providers often look for these before choosing who to book, so adding some can help boost bookings.
+                Photos of your venue or workspace. They show on your profile under Additional Information, not in your portfolio. Clients often look at these before choosing who to book, so adding some can help.
               </Text>
               <View style={[styles.portfolioGrid, styles.addressPhotoGrid]}>
                 {venuePhotos.map(item => (
@@ -5782,7 +5779,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ask, same key, same format. */}
               <Text style={[styles.policyLabel, { marginTop: 14 }]}>YOUR INSTRUCTIONS</Text>
               <Text style={styles.addressHint}>
-                Shown to clients as your instructions in their booking details, on every new booking (optional), like arriving early or what to bring. Directions go in How to get there and door codes in Arrival details, so there's no need to repeat them here. Changing it later won't update bookings already made.
+                Shown on every new booking, like arriving early or what to bring (optional). Directions go in How to get there and door codes in Arrival details. Changing this won't update bookings already made.
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput
@@ -5820,7 +5817,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   is_terms row, exactly what get_provider_terms serves. */}
               <Text style={[styles.policyLabel, { marginTop: 18 }]}>YOUR TERMS &amp; CONDITIONS</Text>
               <Text style={styles.addressHint}>
-                Clients read and agree to these before they can add you to their basket (optional).
+                Clients read and agree to these before they can add your services to their cart (optional).
               </Text>
               <View style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
                 <TextInput

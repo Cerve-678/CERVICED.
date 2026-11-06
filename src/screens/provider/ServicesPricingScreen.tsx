@@ -87,11 +87,11 @@ export default function ServicesPricingScreen({ navigation }: any) {
           try {
             setSpecialties(await getProviderSpecialties(providerData.id));
           } catch {
-            flash('Could not load specialties', 'error');
+            flash("Couldn't load your specialties. Close this page and open it again.", 'error');
           }
         }
       } catch {
-        flash('Could not load your practice details', 'error');
+        flash("Couldn't load your details. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -108,7 +108,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
   }
 
   async function handleSave() {
-    if (!providerId) { flash('No provider profile found', 'error'); return; }
+    if (!providerId) { flash('Finish setting up your business profile first.', 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -144,7 +144,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(toUserMessage(e, 'Could not save your changes.', 'ServicesPricingScreen.save'), 'error');
+      flash(toUserMessage(e, "Couldn't save your changes. Please try again.", 'ServicesPricingScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -212,7 +212,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            <Card title="Your Specialties" sub="Select everything you're trained and experienced in. This drives search results.">
+            <Card title="Your Specialties" sub="Pick everything you're trained and experienced in. Clients find you by these in Search.">
               {serviceCategory ? (
                 <TouchableOpacity
                   style={[s.lockedChip, { backgroundColor: C.surface, borderColor: C.border, marginBottom: 12 }]}
@@ -233,7 +233,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
                 onToggle={v => toggleChip(specialties, setSpecialties, v)}
               />
               <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>
-                These are the {serviceTypeLabel} specialties. Your service type is set in Business Info — changing it clears this list.
+                These are the specialties for {serviceTypeLabel}. If you change your service type in Business Info, this list is cleared.
               </Text>
             </Card>
 
@@ -247,7 +247,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
                   <SectionLabel text="Hair types you cater to" />
                   <ChipGroup options={HAIR_TYPES} selected={hairTypesCatered} onToggle={v => toggleChip(hairTypesCatered, setHairTypesCatered, v)} />
                   <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
-                    Clients filter by this in search. Leave all unselected if you cater to every hair type. You can set more specific hair types per service when editing that service.
+                    Clients can filter Search by hair type. Leave them all unpicked if you work with every hair type. You can also set hair types on each service when you edit it.
                   </Text>
                 </>
               )}
@@ -273,7 +273,7 @@ export default function ServicesPricingScreen({ navigation }: any) {
                 previously split across this screen, Automations and the
                 calendar with no single place to reason about it. */}
 
-            <Card title="Your Style & Products" sub="Many clients specifically look for providers using certain products.">
+            <Card title="Your Style & Products" sub="Some clients look for providers who use particular products.">
               <SectionLabel text="Style aesthetic" />
               <ChipGroup options={styleOptions} selected={styleAesthetic} onToggle={v => toggleChip(styleAesthetic, setStyleAesthetic, v)} />
               <View style={{ height: 14 }} />

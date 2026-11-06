@@ -180,7 +180,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
           }
         }
       } catch {
-        flash('Could not load business details', 'error');
+        flash("Couldn't load your business info. Close this page and open it again.", 'error');
       } finally {
         setLoading(false);
       }
@@ -255,9 +255,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
         `Change your service type to ${pendingCategoryLabel}?`,
         `You won't be able to change it again for ${CATEGORY_COOLDOWN_DAYS} days.\n\n`
         + `• Clients will find you under ${pendingCategoryLabel} instead of ${savedCategoryLabel} in Explore and Search.\n`
-        + `• Your portfolio photos move across with you.\n`
-        + `• Your specialties are cleared — ${pendingCategoryLabel} offers a different list, so you'll need to pick them again in Services & Pricing.\n\n`
-        + 'Bookings you already have are unaffected.',
+        + `• Your portfolio photos stay on your profile.\n`
+        + `• Your specialties are cleared, because ${pendingCategoryLabel} has a different list. You'll need to pick them again in Services & Pricing.\n\n`
+        + "Bookings you already have don't change.",
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Change it', style: 'destructive', onPress: () => { void commitSave(); } },
@@ -354,7 +354,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
       // AllowingDbGuard, not the plain version: the service-type cooldown
       // raises a P0001 that names the exact date the provider can change it
       // again, and that date is the only useful part of the failure.
-      flash(toUserMessageAllowingDbGuard(e, 'Could not save your changes.', 'BusinessInfoScreen.save'), 'error');
+      flash(toUserMessageAllowingDbGuard(e, "Couldn't save your changes. Please try again.", 'BusinessInfoScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -398,7 +398,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 own card, split out from the contact fields below, so the name
                 reads as the headline fact rather than one more row in a list of
                 handles and emails. */}
-            <Card title="Name" sub="Your business name, shown on your public profile.">
+            <Card title="Name" sub="The name clients see on your profile.">
               {/* The one place a provider's public business name can be
                   changed. Locked for 14 days after each change — the note
                   says when it reopens rather than just refusing. */}
@@ -409,15 +409,15 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 readOnly={nameLocked}
                 placeholder="Your business name"
                 note={nameLocked && nameUnlocksAt
-                  ? `Shown on your profile. You changed it recently — you can change it again on ${formatLongDate(nameUnlocksAt)}.`
-                  : 'Shown on your profile. Once you change it, you can’t change it again for 14 days.'}
+                  ? `You changed it recently. You can change it again on ${formatLongDate(nameUnlocksAt)}.`
+                  : 'After you change it, you’ll have to wait 14 days before you can change it again.'}
               />
             </Card>
 
             {/* Contact & links — the handles and addresses clients and Cerviced
                 reach the business through. */}
-            <Card title="Contact & Links" sub="Your links and email addresses — how clients and Cerviced reach you.">
-              <Field label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap to visit your page." />
+            <Card title="Contact & Links" sub="How clients and CERVICED can find you and get in touch.">
+              <Field label="Instagram Handle" value={instagram} onChange={setInstagram} placeholder="@yourbusiness" note="Shown on your profile. Clients can tap it to open your Instagram." />
               <Field label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
               {/* Two emails, and the old labels had them backwards. `business_email`
                   on `users` is the account/business address — it is never rendered
@@ -427,8 +427,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   "Booking Notification Email", which describes a feature that does
                   not exist: nothing in the app or the edge functions ever emails a
                   provider about a booking (those are push + in-app only). */}
-              <Field label="Business Email" value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Your business address. Cerviced uses this to reach you, and it prefills the enquiry email below." />
-              <Field label="Public Enquiry Email" value={bookingEmail} onChange={setBookingEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Shown on your profile under Get In Touch. Prefilled from your business email — change it only if you'd rather enquiries went elsewhere." />
+              <Field label="Business Email" value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Private. Only CERVICED uses it, to contact you. It also fills in the enquiry email below to start with." />
+              <Field label="Public Enquiry Email" value={bookingEmail} onChange={setBookingEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Shown on your profile under Get In Touch, so clients can email you. It starts as your business email. Change it if you'd like enquiries to go somewhere else." />
             </Card>
 
             {/* Service Type. Sits between the identity card and Business Type
@@ -444,7 +444,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 specialties describing the old one. */}
             <Card
               title="Service Type"
-              sub="The headline service your business offers. Clients browse and filter by this in Explore and Search."
+              sub="The main type of service you offer. Clients use it to find you in Explore and Search."
             >
               {categoryLocked ? (
                 <>
@@ -459,9 +459,9 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   </View>
                   <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>
                     {!cooldownLive
-                      ? 'Set at sign-up. Contact support if you need to change your service type.'
+                      ? 'You chose this when you signed up. To change it, contact CERVICED support.'
                       : categoryUnlocksAt
-                        ? `You changed this recently — you can change it again on ${formatLongDate(categoryUnlocksAt)}.`
+                        ? `You changed this recently. You can change it again on ${formatLongDate(categoryUnlocksAt)}.`
                         : ''}
                   </Text>
                 </>
@@ -478,7 +478,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                       value={customServiceType}
                       onChange={setCustomServiceType}
                       placeholder="e.g. Massage therapy"
-                      note="Shown on your profile in place of a category name."
+                      note="Clients see this on your profile instead of a category."
                     />
                   )}
                   {categoryChanged ? (
@@ -488,14 +488,14 @@ export default function BusinessInfoScreen({ navigation }: any) {
                     <View style={[s.warnBox, { backgroundColor: C.accent + '14', borderColor: C.accent + '40' }]}>
                       <Ionicons name="alert-circle-outline" size={16} color={C.accent} />
                       <Text style={[s.warnText, { color: C.text }]}>
-                        Saving this moves you from {savedCategoryLabel} to {pendingCategoryLabel}. Your
-                        portfolio photos move with you, your specialties are cleared, and you won't be
-                        able to change your service type again for {CATEGORY_COOLDOWN_DAYS} days.
+                        If you save, clients will find you under {pendingCategoryLabel} instead
+                        of {savedCategoryLabel}. Your portfolio photos stay, but your specialties are cleared,
+                        so you'll need to pick them again. You then can't change this for {CATEGORY_COOLDOWN_DAYS} days.
                       </Text>
                     </View>
                   ) : (
                     <Text style={[s.cardSub, { color: C.sub, marginTop: 4, marginBottom: 0 }]}>
-                      Once you change this, you can't change it again for {CATEGORY_COOLDOWN_DAYS} days.
+                      After you change this, you'll have to wait {CATEGORY_COOLDOWN_DAYS} days before you can change it again.
                     </Text>
                   )}
                 </>
@@ -509,8 +509,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
             <Card
               title="Business Type"
               sub={isLinkOnly
-                ? 'Where you see clients. Shown on your profile.'
-                : 'Where you see clients. This decides whether — and when — your address is shared with them.'}
+                ? 'Where your appointments happen. Shown on your profile.'
+                : 'Where your appointments happen. This decides if and when clients are sent your address.'}
             >
               <RadioGroup
                 options={BUSINESS_TYPE_OPTS}
@@ -534,8 +534,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   <Text style={[s.cardTitle, { color: C.text, marginBottom: 4 }]}>Address Release</Text>
                   <Text style={[s.cardSub, { color: C.sub }]}>
                     {businessType === 'mobile'
-                      ? 'You travel to your clients, so they give you their address. Yours is never sent automatically — pick Manual release if you want the option to send it per booking.'
-                      : 'When a booked client can see your address.'}
+                      ? 'You go to your clients, so they give you their address. Yours is never sent automatically. Pick Manual release if you’d like to be able to send it yourself on a booking.'
+                      : 'Choose when clients with a booking are sent your address.'}
                   </Text>
                   {/* Mobile gets an explicit "never" choice, stored as NULL.
                       Without it, not-sharing would only ever be the initial
@@ -557,7 +557,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             </Card>
 
             {isLinkOnly && (
-              <Card title="Your Booking Link" sub="Where clients book you — Fresha, Treatwell, Acuity or similar">
+              <Card title="Your Booking Link" sub="The page where clients book you, like Fresha, Treatwell or Acuity.">
                 <Field
                   label="Booking Link"
                   value={externalBookingUrl}
@@ -569,7 +569,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             )}
 
             {isLinkOnly && (
-              <Card title="Accessibility" sub="Help clients with access needs find you.">
+              <Card title="Accessibility" sub="Pick anything that helps clients with access needs find you.">
                 <ChipGroup
                   options={ACCESSIBILITY_OPTS}
                   selected={accessibility}
@@ -617,7 +617,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
             >
               <View style={{ flex: 1 }}>
                 <Text style={[s.cardTitle, { color: C.text }]}>Contact Preferences</Text>
-                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>Contact details for booked clients — set them in Communications</Text>
+                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>How clients with a booking can reach you. Set this in Communications.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={C.sub} />
             </TouchableOpacity>

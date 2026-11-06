@@ -272,7 +272,7 @@ export function ServiceImageCarousel({
       </ScrollView>
       {images.length > 1 && (
         <Text style={styles.carouselHint}>
-          Hold a photo to drag it — the first one leads your service.
+          Hold a photo to drag it. The first photo is the one clients see first.
         </Text>
       )}
       {images.length > 0 && (
