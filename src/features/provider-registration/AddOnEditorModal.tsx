@@ -30,9 +30,11 @@ import {
   type AddOnLibraryItem,
   type AddOnServiceRef,
 } from './addOnLibrary';
+import { formatAddOnExtraTime } from '../bookings/addOnTime';
 import {
   ADD_ON_FONTS,
   AddOnChip,
+  formatAddOnPrice,
   ExtraTimeChips,
   TickBox,
   tapLight,
@@ -136,6 +138,16 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
     );
   const toggleService = (id: number) =>
     setPickedServices(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  const setCategoryPicked = (ids: number[], on: boolean) =>
+    setPickedServices(prev => (on ? [...new Set([...prev, ...ids])] : prev.filter(id => !ids.includes(id))));
+
+  // The card clients see when they book (AddOnPickerModal's layout), from
+  // what's typed so far. Hidden until there's a name and a price that reads
+  // as a number.
+  const previewPrice = price.trim() === '' ? NaN : Number(price.replace(/[£,\s]/g, ''));
+  const preview = name.trim() && Number.isFinite(previewPrice) && previewPrice >= 0
+    ? { name: name.trim(), description: description.trim(), price: formatAddOnPrice(previewPrice), time: formatAddOnExtraTime(extraMinutes) }
+    : null;
 
   const handleSave = () => {
     const priceValue = price.trim() === '' ? NaN : Number(price.replace(/[£,\s]/g, ''));
@@ -213,20 +225,24 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
               </View>
               <View style={styles.priceCol}>
                 <Text style={[styles.label, { color: palette.sub }]}>PRICE</Text>
-                <TextInput
-                  value={price}
-                  onChangeText={setPrice}
-                  placeholder="£"
-                  placeholderTextColor={palette.sub}
-                  keyboardType="decimal-pad"
-                  style={[styles.input, field]}
-                />
+                <View style={[styles.priceBox, { backgroundColor: palette.card, borderColor: palette.border }]}>
+                  <Text style={[styles.pound, { color: palette.sub }]}>£</Text>
+                  <TextInput
+                    value={price}
+                    onChangeText={setPrice}
+                    placeholder="0"
+                    placeholderTextColor={palette.sub}
+                    keyboardType="decimal-pad"
+                    accessibilityLabel="Price in pounds"
+                    style={[styles.priceInput, { color: palette.text }]}
+                  />
+                </View>
               </View>
             </View>
 
             <View style={styles.group}>
               <Text style={[styles.label, { color: palette.sub }]}>EXTRA TIME</Text>
-              <Text style={[styles.hint, { color: palette.sub }]}>If a client picks this, their appointment gets longer by this much. They'll only see times when you're free for the whole thing.</Text>
+              <Text style={[styles.hint, { color: palette.sub }]}>The appointment gets this much longer when a client picks it.</Text>
               <ExtraTimeChips value={extraMinutes} onChange={setExtraMinutes} palette={palette} />
             </View>
 
@@ -283,28 +299,49 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
 
               {appliesTo === 'services' && (
                 <View style={[styles.list, { borderColor: palette.border, backgroundColor: palette.card }]}>
-                  {Object.entries(categories).flatMap(([categoryName, services]) =>
-                    services.map((service, index) => {
-                      const on = pickedServices.includes(service.id);
-                      const first = categoryName === categoryNames[0] && index === 0;
-                      return (
-                        <TouchableOpacity
-                          key={service.id}
-                          activeOpacity={0.8}
-                          onPress={() => { tapSelect(); toggleService(service.id); }}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: on }}
-                          style={[styles.listRow, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border }]}
-                        >
-                          <TickBox on={on} palette={palette} />
-                          <View style={styles.listText}>
-                            <Text style={[styles.rowName, { color: palette.text }]} numberOfLines={1}>{service.name || 'Untitled service'}</Text>
-                            <Text style={[styles.rowMeta, { color: palette.sub }]} numberOfLines={1}>{categoryName}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    }),
-                  )}
+                  {/* Grouped under each category, with a tick-all per
+                      category. Tick-all ticks only the services there now;
+                      to cover ones added later, "Categories" is the rule. */}
+                  {Object.entries(categories).filter(([, services]) => services.length > 0).map(([categoryName, services], groupIndex) => {
+                    const ids = services.map(service => service.id);
+                    const pickedHere = ids.filter(id => pickedServices.includes(id)).length;
+                    const allHere = pickedHere === ids.length;
+                    return (
+                      <View key={categoryName}>
+                        <View style={[styles.groupHead, { backgroundColor: palette.surface }, groupIndex > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border }]}>
+                          <Text style={[styles.groupName, { color: palette.text }]} numberOfLines={1}>{categoryName}</Text>
+                          <Text style={[styles.rowMeta, { color: palette.sub }]}>{pickedHere} of {ids.length}</Text>
+                          <TouchableOpacity
+                            onPress={() => { tapSelect(); setCategoryPicked(ids, !allHere); }}
+                            activeOpacity={0.7}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${allHere ? 'Untick' : 'Tick'} all ${categoryName}`}
+                          >
+                            <Text style={[styles.groupAction, { color: palette.accent }]}>{allHere ? 'Untick all' : 'Tick all'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {services.map(service => {
+                          const on = pickedServices.includes(service.id);
+                          return (
+                            <TouchableOpacity
+                              key={service.id}
+                              activeOpacity={0.8}
+                              onPress={() => { tapSelect(); toggleService(service.id); }}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: on }}
+                              style={[styles.listRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border }]}
+                            >
+                              <TickBox on={on} palette={palette} />
+                              <View style={styles.listText}>
+                                <Text style={[styles.rowName, { color: palette.text }]} numberOfLines={1}>{service.name || 'Untitled service'}</Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
                   {Object.values(categories).every(list => list.length === 0) && (
                     <Text style={[styles.hint, styles.listEmpty, { color: palette.sub }]}>Add a service first.</Text>
                   )}
@@ -337,6 +374,21 @@ export function AddOnEditorModal<S extends AddOnServiceRef>({
             )}
           </ScrollView>
 
+          {preview && !error ? (
+            <View style={[styles.preview, { borderColor: palette.border }]}>
+              <Text style={[styles.previewLabel, { color: palette.sub }]}>CLIENTS SEE</Text>
+              <View style={styles.previewRow}>
+                <View style={styles.listText}>
+                  <Text style={[styles.rowName, { color: palette.text }]} numberOfLines={1}>{preview.name}</Text>
+                  {preview.description ? <Text style={[styles.rowMeta, { color: palette.sub }]} numberOfLines={1}>{preview.description}</Text> : null}
+                </View>
+                <View style={styles.previewPriceCol}>
+                  <Text style={[styles.previewPrice, { color: palette.accent }]}>+{preview.price}</Text>
+                  {preview.time ? <Text style={[styles.rowMeta, { color: palette.sub }]}>{preview.time}</Text> : null}
+                </View>
+              </View>
+            </View>
+          ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <TouchableOpacity
             onPress={handleSave}
@@ -382,6 +434,31 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   multiline: { minHeight: 64, textAlignVertical: 'top' },
+  priceBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingLeft: 12,
+  },
+  pound: { fontFamily: ADD_ON_FONTS.body, fontWeight: '800', fontSize: 15 },
+  priceInput: {
+    flex: 1,
+    fontFamily: ADD_ON_FONTS.body,
+    fontWeight: '600',
+    fontSize: 15,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 11,
+  },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 9 },
+  groupName: { flex: 1, minWidth: 0, fontFamily: ADD_ON_FONTS.display, fontSize: 12.5, letterSpacing: 0.3 },
+  groupAction: { fontFamily: ADD_ON_FONTS.body, fontWeight: '800', fontSize: 12 },
+  preview: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10, gap: 4 },
+  previewLabel: { fontFamily: ADD_ON_FONTS.display, fontSize: 9.5, letterSpacing: 1.3 },
+  previewRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  previewPriceCol: { alignItems: 'flex-end' },
+  previewPrice: { fontFamily: ADD_ON_FONTS.display, fontSize: 15 },
   segment: { flexDirection: 'row', borderRadius: 12, padding: 3, gap: 2 },
   segmentItem: { flex: 1, borderRadius: 9, paddingVertical: 8, alignItems: 'center' },
   segmentText: { fontFamily: ADD_ON_FONTS.body, fontWeight: '800', fontSize: 12.5 },
