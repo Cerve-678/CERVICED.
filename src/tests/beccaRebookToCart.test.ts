@@ -26,8 +26,8 @@ const live: RebookableService = {
   providerSlug: "lola-studio",
   providerDisplayName: "Lola Studio",
   addOns: [
-    { id: "a1", name: "Nail Art", price: 8 },
-    { id: "a2", name: "Chrome", price: 5 },
+    { id: "a1", name: "Nail Art", price: 8, extraMinutes: 15 },
+    { id: "a2", name: "Chrome", price: 5, extraMinutes: 0 },
   ],
 };
 
@@ -69,7 +69,7 @@ describe("buildRebookCartItem", () => {
     const { item, notes } = buildRebookCartItem(withRemoved, live, "p1", true);
 
     expect(item.service).toMatchObject({ id: "s1", price: 40, duration: "1h 15m" });
-    expect(item.service.addOns).toEqual([{ id: "a1", name: "Nail Art", price: 8 }]);
+    expect(item.service.addOns).toEqual([{ id: "a1", name: "Nail Art", price: 8, extraMinutes: 15 }]);
     expect(item.providerImage).toEqual({ uri: "https://example.com/logo.png" });
     expect(item.forceNewInstance).toBe(true);
     expect(notes).toEqual([
@@ -99,7 +99,7 @@ describe("Becca: rebook my last appointment", () => {
     const done = await tap(withAddOns, addToCart);
 
     expect(addToCart).toHaveBeenCalledTimes(1);
-    expect(addToCart.mock.calls[0][0].service.addOns).toEqual([{ id: "a1", name: "Nail Art", price: 8 }]);
+    expect(addToCart.mock.calls[0][0].service.addOns).toEqual([{ id: "a1", name: "Nail Art", price: 8, extraMinutes: 15 }]);
     expect(done.message.content).toContain("It’s in your cart, ready to book.");
     expect(done.message.suggestions![0]).toMatchObject({ text: "Go to cart", data: { screen: "CartMain" } });
 
