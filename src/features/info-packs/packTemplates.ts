@@ -1,4 +1,5 @@
 import type { ServiceCategory } from '../../types/database';
+import { PACK_HEADINGS } from './infoPackLogic';
 
 // ── Example packs ────────────────────────────────────────────────────────────
 // Starting points a provider edits before saving — never sent as they are.
@@ -33,14 +34,7 @@ const LATE = [
   'My booking policy covers lateness and rescheduling: [add where clients can find your policy]',
 ];
 
-const H = {
-  before: 'BEFORE YOUR APPOINTMENT',
-  after: 'AFTERCARE',
-  bring: 'WHAT TO BRING',
-  last: 'MAKING IT LAST',
-  arrive: 'ARRIVING',
-  late: 'RUNNING LATE',
-} as const;
+const H = PACK_HEADINGS;
 
 function t(
   id: string,
