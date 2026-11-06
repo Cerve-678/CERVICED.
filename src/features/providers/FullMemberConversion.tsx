@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -28,9 +27,10 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
-import { withAlpha } from '../../constants/providerThemes';
+import { isDarkColor, withAlpha } from '../../constants/providerThemes';
 import { FULL_MEMBER_FREE_START_LINE } from '../../constants/fullMembership';
 import TabIcon from '../../components/TabIcon';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { fetchGoLiveStatus, type GoLiveStatus } from './goLiveStatus';
 import {
   buildConversionSteps,
@@ -70,7 +70,7 @@ interface ServerResult {
 }
 
 export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: FullMemberConversionProps) {
-  const { palette: P, isDarkMode } = useTheme();
+  const { palette: P } = useTheme();
   const { becomeFullMember } = useAuth();
   const insets = useSafeAreaInsets();
   const bottomInset = useSystemBottomInset();
@@ -94,7 +94,11 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
     return () => { mounted.current = false; };
   }, []);
 
-  useEffect(() => { onPhaseChange(phase); }, [phase, onPhaseChange]);
+  useEffect(() => {
+    onPhaseChange(phase);
+    if (phase === 'done') AccessibilityInfo.announceForAccessibility("You're a full member.");
+    if (phase === 'failed') AccessibilityInfo.announceForAccessibility("We couldn't finish switching you over.");
+  }, [phase, onPhaseChange]);
 
   const run = useCallback(async () => {
     if (running.current) return;
@@ -178,9 +182,10 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
   const isLive = result?.status?.isLive ?? false;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: bottomInset + 16 }]}>
-      {/* onAccent is white on the light chocolate and near-black on the dark rose. */}
-      <StatusBar barStyle={isDarkMode ? 'dark-content' : 'light-content'} />
+    <View style={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: bottomInset + 16 }]} accessibilityViewIsModal>
+      {/* Follows the foreground, not the mode: some branding sets put a dark
+          onAccent on a pale accent in light mode. */}
+      <FocusAwareStatusBar barStyle={isDarkColor(fg) ? 'dark-content' : 'light-content'} />
       <Animated.View style={[styles.flex, { opacity: appear }]}>
         {phase === 'working' && (
           <>
@@ -208,7 +213,12 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
                 const done = i < stepsDone;
                 const active = i === stepsDone;
                 return (
-                  <View key={step.label} style={[styles.step, !done && !active && styles.pending]}>
+                  <View
+                    key={step.label}
+                    style={[styles.step, !done && !active && styles.pending]}
+                    accessible
+                    accessibilityLabel={`${step.label}, ${done ? 'done' : active ? 'in progress' : 'waiting'}`}
+                  >
                     {done ? (
                       <View style={styles.tick}><Ionicons name="checkmark" size={14} color={P.accent} /></View>
                     ) : active ? (
@@ -223,7 +233,7 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
             </View>
 
             <View style={styles.flex} />
-            <View style={styles.tabs}>
+            <View style={styles.tabs} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               {TABS.map((tab, i) => (
                 <MockTab
                   key={tab.to[1] + i}
@@ -265,7 +275,12 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
             )}
             {!isLive && <Text style={styles.note}>{FULL_MEMBER_FREE_START_LINE}</Text>}
             <View style={styles.flex} />
-            <TouchableOpacity style={styles.cta} onPress={onFinish} activeOpacity={0.85} accessibilityRole="button">
+            <TouchableOpacity
+              style={styles.cta}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); onFinish(); }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+            >
               <Text style={styles.ctaText}>{isLive ? 'Go to Home' : 'Finish going live'}</Text>
             </TouchableOpacity>
           </>
@@ -273,14 +288,24 @@ export function FullMemberConversion({ onFinish, onCancel, onPhaseChange }: Full
 
         {phase === 'failed' && (
           <>
-            <View style={styles.alert}><Ionicons name="alert" size={30} color={fg} /></View>
+            <View style={styles.alert} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Ionicons name="alert" size={30} color={fg} /></View>
             <Text style={styles.failTitle}>We couldn't finish switching you over.</Text>
             <Text style={styles.note}>{failure}</Text>
             <View style={styles.flex} />
-            <TouchableOpacity style={styles.cta} onPress={() => { void run(); }} activeOpacity={0.85} accessibilityRole="button">
+            <TouchableOpacity
+              style={styles.cta}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); void run(); }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+            >
               <Text style={styles.ctaText}>Try again</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.ghost} onPress={onCancel} activeOpacity={0.7} accessibilityRole="button">
+            <TouchableOpacity
+              style={styles.ghost}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onCancel(); }}
+              activeOpacity={0.55}
+              accessibilityRole="button"
+            >
               <Text style={styles.ghostText}>Not now</Text>
             </TouchableOpacity>
           </>

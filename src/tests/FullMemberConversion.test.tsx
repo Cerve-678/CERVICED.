@@ -21,7 +21,9 @@ jest.mock('../components/TabIcon', () => () => null);
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn().mockResolvedValue(undefined),
+  impactAsync: jest.fn().mockResolvedValue(undefined),
   NotificationFeedbackType: { Success: 'success', Error: 'error' },
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
 }));
 jest.mock('../utils/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn() }, reportError: jest.fn() }));
 
