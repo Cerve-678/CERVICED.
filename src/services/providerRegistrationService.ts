@@ -23,7 +23,6 @@ import {
   getProviderRegistrationDetails,
   getProviderRegistrationRecord,
   insertProviderRegistrationRow,
-  mergeProviderAutomationSettings,
   promoteUserToProvider,
   providerSlugExists,
   removeStorageObjects,
@@ -97,10 +96,10 @@ export interface ProviderRegistrationData {
   location: string;
   aboutText: string;
   /** Monthly release day (1-31): next month opens for booking on this day
-   *  (utils/bookingHorizon) and bell followers are told. InfoReg (Edit
-   *  Profile) is its ONLY editor — one change, and the booking limit, the
-   *  profile pill and the release message all follow. Saved by merging just
-   *  this key into automation_settings. null = rolling window instead. */
+   *  (utils/bookingHorizon) and bell followers are told. READ-ONLY here: it's
+   *  loaded so InfoReg's profile preview pill can show it, but this save never
+   *  writes it. Scheduling & Availability is its only editor, so saving Edit
+   *  Profile can't wipe a day set there. null = rolling window instead. */
   scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
@@ -596,9 +595,9 @@ export async function saveProviderToSupabase(
   // edits silently split across rows. Fail loudly instead.
   let providerId: string;
 
-  // automation_settings: only scheduleReleaseDay belongs to this screen, and
-  // it's merged in after the row is saved (below). The other keys belong to
-  // Automations and Payments, which merge their own.
+  // automation_settings: nothing here belongs to this screen. The release
+  // day is set in Scheduling, and the other keys belong to Automations and
+  // Payments, which merge their own.
 
   if (existingProvider) {
     try {
@@ -731,12 +730,6 @@ export async function saveProviderToSupabase(
       throw new Error(`Provider insert failed: ${message}`);
     }
   }
-
-  // The release day — merged server-side so no other key in
-  // automation_settings is touched.
-  await (data.scheduleReleaseDay != null
-    ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
-    : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
 
   // Now that the new logo_url is durably saved, remove the old versioned
   // object it replaced — best-effort, never blocks the save. Without this,

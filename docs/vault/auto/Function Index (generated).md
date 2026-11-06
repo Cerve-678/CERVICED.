@@ -5,7 +5,7 @@
 
 #generated
 
-**3204 functions** across **440 files**.
+**3205 functions** across **440 files**.
 
 ### `src/components/` (58)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -137,10 +137,11 @@
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · minutesOfDay · **tipWindowClosesAt**
 
-### `src/features/business-details/` (4)
+### `src/features/business-details/` (5)
 - `bookingInstructions.ts` — **selectedBookingInstructions** · **toggleBookingInstruction**
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
 - `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **productsPlaceholder** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
+- `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `useLearnedSpecialities.ts` — **useSpecialityOptionsWithLearned**
 
 ### `src/features/cart/` (4)
@@ -186,7 +187,7 @@
 ### `src/features/provider-bookings/` (1)
 - `tipPresentation.ts` — **formatTipAmount** · pounds · **providerTipNote**
 
-### `src/features/provider-registration/` (18)
+### `src/features/provider-registration/` (17)
 - `AddOnEditorModal.tsx` — **AddOnEditorModal** · categoryNames · handleDelete · handleSave · listNames · placementHint · toggleCategory · toggleService
 - `addOnLibrary.ts` — **addOnAppliesTo** · **addOnKeysForSavedService** · **applyRuleToServices** · **buildAddOnSaveItems** · **defaultAddOnKeysForCategory** · **describeAddOnRule** · joinNames · **libraryItemFromRow** · mapServices · **newAddOnKey** · **removeAddOnFromServices** · **removeCategoryFromLibrary** · **renameCategoryInLibrary** · **ruleCovers** · **servicesWithAddOn** · **setAddOnOnService** · **suggestAddOns** · **validateAddOn** · withKey
 - `AddOnLibrarySection.tsx` — **AddOnLibrarySection**
@@ -197,7 +198,6 @@
 - `InfoRegPager.tsx` — handleMomentumEnd · **InfoRegPager** · recordEnd
 - `infoRegSections.ts` — **infoRegSectionIndex**
 - `LogoCardFramer.tsx` — animateTo · **LogoCardFramer**
-- `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `RequiredLabel.tsx` — **RequiredLabel**
 - `SectionHeader.tsx` — **SectionHeader**
 - `ServiceAddOnsField.tsx` — all · create · removePending · reuseExisting · ruleNote · **ServiceAddOnsField** · suggestions · toggle
@@ -348,7 +348,7 @@
 - `ProviderNotificationSettingsScreen.tsx` — ProviderNotificationSettingsScreen
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
-- `SchedulingScreen.tsx` — flash · handleSave · releaseStatus · SchedulingScreen · toggleChip
+- `SchedulingScreen.tsx` — chooseHorizonMode · flash · handleSave · releaseStatus · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
 
 ### `src/screens/shared/` (13)

@@ -66,7 +66,7 @@ import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/p
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo } from '../../components/FramedLogo';
 import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
-import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
+import { slotsPillText } from '../../utils/slotsRowText';
 import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
@@ -84,7 +84,7 @@ import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { openLegalPage } from '../../utils/legalPage';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
-import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
+import { formatLongDate } from '../../utils/dateUtils';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
@@ -2364,13 +2364,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewSlotsCardHighlight}
                 />
-                {/* Mirrors the computed pill on the real client-facing
-                    profile — same scheduleReleaseDay source, so the preview
-                    never shows text the live screen wouldn't. */}
+                {/* Mirrors the pill on the real client-facing profile: same
+                    helper, same scheduleReleaseDay source, so the preview
+                    never shows text the live screen wouldn't. The day itself
+                    is set in Scheduling & Availability. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
-                  {providerData.scheduleReleaseDay != null
-                    ? `New slots drop on the ${ordinalSuffix(providerData.scheduleReleaseDay)}`
-                    : "Set a release day below"}
+                  {slotsPillText(providerData.scheduleReleaseDay)}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
                   <BellIcon size={16} color={PP.sub} />
@@ -2805,7 +2804,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // magic number left to keep in sync when the layout changes.
   const fieldNodes = useRef<Record<string, ViewInstance | null>>({});
 
-  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const registerField = useCallback(
     (name: string) => (node: ViewInstance | null) => { fieldNodes.current[name] = node; },
     [],
@@ -4811,34 +4809,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* The release day's ONLY editor. One stored value
-                  (automation_settings.scheduleReleaseDay, merged in on save)
-                  drives the booking limit (utils/bookingHorizon,
-                  provider_last_bookable_date), the profile pill and the
-                  release message. Scheduling shows it read-only. The row IS
-                  the picker: tap, choose a day, or "No release day" there. */}
-              <View
-                style={styles.inputGroup}
-                ref={registerField('scheduleReleaseDay')}
-              >
-                <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Monthly Release Day</Text>
-                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.releaseDayBtn}
-                  onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.releaseDayBtnText}>
-                    {providerData.scheduleReleaseDay != null
-                      ? `Day ${providerData.scheduleReleaseDay} of every month`
-                      : 'Choose a day'}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
-                </TouchableOpacity>
-              </View>
-
             {/* Portfolio — client work gallery shown on your public profile */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Portfolio</Text>
@@ -5930,19 +5900,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          <ReleaseDayPicker
-            visible={releaseDayPickerVisible}
-            value={providerData.scheduleReleaseDay ?? new Date().getDate()}
-            accentColor={adaptiveAccentColor}
-            cardColor={editTheme.card}
-            textColor={editTheme.text}
-            subColor={editTheme.sub}
-            borderColor={editTheme.border}
-            allowClear
-            onClear={() => setProviderData(prev => ({ ...prev, scheduleReleaseDay: null }))}
-            onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
-            onClose={() => setReleaseDayPickerVisible(false)}
-          />
 
           <DialogHost />
         </SafeAreaView>
@@ -8476,24 +8433,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 1,
   },
 
-
-  releaseDayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: edge(0.12),
-    backgroundColor: surf(0.04),
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 10,
-  },
-  releaseDayBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: fg(0.75),
-  },
 
   // ── Tab switcher ──
   // ── Policies step ──

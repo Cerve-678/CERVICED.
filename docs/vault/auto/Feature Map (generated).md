@@ -47,7 +47,7 @@ Curated: [[Availability & Slots]] · **192 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(161)_
 - `src/screens/client/SearchScreen.tsx` _(110)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
-- `src/screens/provider/InfoRegScreen.tsx` _(91)_
+- `src/screens/provider/InfoRegScreen.tsx` _(94)_
 - `src/services/becca/capabilities/client.ts` _(91)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(82)_
 - `src/contexts/BookingContext.tsx` _(80)_
@@ -182,7 +182,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **82 files**
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(43)_
-- `src/screens/provider/InfoRegScreen.tsx` _(39)_
+- `src/screens/provider/InfoRegScreen.tsx` _(38)_
 - `src/contexts/RegistrationContext.tsx` _(28)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
