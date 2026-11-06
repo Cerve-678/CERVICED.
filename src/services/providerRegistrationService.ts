@@ -277,12 +277,25 @@ function sniffImageType(
   return null;
 }
 
-/** Longest side, in pixels, of any image this app uploads. The largest a
- *  photo is ever shown is full screen width, 1,290 px on the biggest iPhone
- *  (there is no pinch-zoom), and an Explore card is a few hundred. At 2,048 a
- *  portrait photo is still 1,536 px wide, so nothing looks softer anywhere,
- *  while a 4,000-8,000 px original's 3-7 MB drops to roughly 400-700 KB. */
+/** Longest side, in pixels, of any photo this app uploads. The largest a
+ *  photo is ever shown is full screen width, 1,290 px on the biggest iPhone,
+ *  and an Explore card is a few hundred. At 2,048 a portrait photo is still
+ *  1,536 px wide, so nothing looks softer anywhere, while a 4,000-8,000 px
+ *  original's 3-7 MB drops to roughly 400-700 KB. */
 export const MAX_UPLOAD_IMAGE_EDGE_PX = 2048;
+
+/** Tallest a 'document' upload is kept. High enough that a long policy sheet
+ *  keeps its full width, low enough that a very long screenshot can't make a
+ *  bitmap too big for the phone to hold (2,048 x 8,192 is about 64 MB). */
+export const MAX_DOCUMENT_IMAGE_HEIGHT_PX = 8192;
+
+/** How an upload is shrunk. A 'photo' fits its longest side in
+ *  MAX_UPLOAD_IMAGE_EDGE_PX. A 'document' (the detailed policy image) is read
+ *  top to bottom at full screen width, and can be pinch-zoomed, so its width
+ *  is what has to stay sharp: capping a long sheet by its height left a
+ *  1,179 x 6,000 screenshot about 400 px wide, which reads blurry at full
+ *  width. */
+export type UploadImageShape = 'photo' | 'document';
 
 async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
   // Use expo-file-system to read the local file reliably on both iOS and Android.
@@ -315,17 +328,26 @@ async function readLocalFileBytes(localUri: string): Promise<Uint8Array> {
 async function shrinkImageForUpload(
   localUri: string,
   sniffedMime: string | undefined,
+  shape: UploadImageShape,
 ): Promise<string | null> {
   try {
     // Rendered once to read the upright (EXIF-applied) size, then reused as
     // the resize source so the file is only decoded once.
     const original = await ImageManipulator.manipulate(localUri).renderAsync();
     const { width, height } = original;
-    if (Math.max(width, height) <= MAX_UPLOAD_IMAGE_EDGE_PX) return null;
-    const resized = await ImageManipulator.manipulate(original)
-      .resize(width >= height
+    let target: { width: number } | { height: number };
+    if (shape === 'document') {
+      const scale = Math.min(MAX_UPLOAD_IMAGE_EDGE_PX / width, MAX_DOCUMENT_IMAGE_HEIGHT_PX / height);
+      if (scale >= 1) return null;
+      target = { width: Math.round(width * scale) };
+    } else {
+      if (Math.max(width, height) <= MAX_UPLOAD_IMAGE_EDGE_PX) return null;
+      target = width >= height
         ? { width: MAX_UPLOAD_IMAGE_EDGE_PX }
-        : { height: MAX_UPLOAD_IMAGE_EDGE_PX })
+        : { height: MAX_UPLOAD_IMAGE_EDGE_PX };
+    }
+    const resized = await ImageManipulator.manipulate(original)
+      .resize(target)
       .renderAsync();
     const saved = await resized.saveAsync(
       sniffedMime === 'image/png'
@@ -342,13 +364,14 @@ async function shrinkImageForUpload(
 export async function uploadToStorage(
   bucket: string,
   storagePath: string,
-  localUri: string
+  localUri: string,
+  shape: UploadImageShape = 'photo',
 ): Promise<string> {
   let bytes = await readLocalFileBytes(localUri);
 
   // Oversized photos are shrunk before upload, so every screen that shows
   // them later downloads a few hundred KB rather than several MB.
-  const shrunkUri = await shrinkImageForUpload(localUri, sniffImageType(bytes)?.mime);
+  const shrunkUri = await shrinkImageForUpload(localUri, sniffImageType(bytes)?.mime, shape);
   if (shrunkUri) bytes = await readLocalFileBytes(shrunkUri);
 
   // Content type comes from the bytes, never from the name. Only if the bytes
