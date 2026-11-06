@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -119,7 +119,7 @@ export default function MessagesScreen({ navigation }: any) {
         activeOpacity={0.7}
       >
         {item.provider?.logo_url ? (
-          <Image source={{ uri: item.provider.logo_url }} style={styles.avatar} />
+          <LogoCircle uri={item.provider.logo_url} framing={item.provider.logo_framing} style={styles.avatar} />
         ) : (
           <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: OP.surface }]}>
             <Text style={[styles.avatarInitials, { color: OP.accent }]}>{initials(name)}</Text>

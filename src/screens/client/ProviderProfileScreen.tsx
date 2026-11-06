@@ -35,6 +35,7 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
+import { LogoCircle } from "../../components/FramedLogo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -4240,6 +4241,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             visible={didYouBookVisible}
             providerName={provider.displayName}
             logoUrl={provider.providerLogo?.uri ?? null}
+            logoFraming={provider.providerLogoFraming}
             services={provider.specialties}
             accentColor={adaptiveAccentColor}
             tokens={{ text: OP.text, sub: OP.sub, border: OP.border, surface: OP.surface, bg: OP.bg }}
@@ -4972,12 +4974,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               {/* Provider Logo - Bigger */}
               <View style={styles.logoContainer}>
                 <View style={styles.logoWrapper}>
-                  {provider.providerLogo ? (
-                    <Image
-                      source={provider.providerLogo}
+                  {provider.providerLogo?.uri ? (
+                    <LogoCircle
+                      uri={provider.providerLogo.uri}
+                      framing={provider.providerLogoFraming}
                       style={styles.providerLogo}
-                      contentFit="cover"
-                      transition={0}
                     />
                   ) : (
                     <View

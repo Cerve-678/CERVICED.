@@ -64,7 +64,7 @@ import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProvide
 import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
-import { FramedLogo } from '../../components/FramedLogo';
+import { FramedLogo, LogoCircle } from '../../components/FramedLogo';
 import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
 import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
 import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
@@ -2263,12 +2263,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             <View style={styles.previewLogoContainer}>
               <View style={styles.previewLogoWrapper}>
                 {providerData.logo ? (
-                  <Image
-                    source={{ uri: providerData.logo }}
-                    style={styles.previewProviderLogo}
-                    resizeMode="cover"
-                    fadeDuration={0}
-                  />
+                  <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.previewProviderLogo} />
                 ) : (
                   <View style={[styles.previewProviderLogo, { backgroundColor: accentColor, alignItems: 'center', justifyContent: 'center' }]}>
                     <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>
@@ -3404,10 +3399,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!providerData.logo) setLogoPage(0);
   }, [providerData.logo]);
 
-  // No crop step (user, 2026-11-03). With allowsEditing, expo-image-picker
+  // The circle and the two Home cards are each framed in their own shape, by
+  // pinch and drag. Only a zoom and an offset are stored per shape; the logo
+  // image itself stays as picked.
+  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
+  const [logoImageRatio, setLogoImageRatio] = useState(1);
+
+  // No iOS crop step (user, 2026-11-03). With allowsEditing, expo-image-picker
   // falls back to iOS's older UIImagePickerController, which was slow to
-  // appear; without it the system photo picker opens straight away. The circle
-  // fills with the photo (resizeMode cover) and the Home cards are framed below.
+  // appear; without it the system photo picker opens straight away. The new
+  // photo goes straight into the circle framer instead, so it can be adjusted
+  // (user, 2026-11-06: "circle logo doesn't allow adjustment").
   const handleSelectLogo = async () => {
     // No permission request first: picking from the library needs none on
     // iOS or Android, and asking added a round trip before every picker.
@@ -3419,16 +3421,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      // A new image makes the old card framing meaningless, so it resets.
+      // A new image makes the old framing meaningless, so it resets.
       setProviderData(prev => ({ ...prev, logo: asset.uri, logoFraming: null }));
+      setLogoImageRatio(asset.width > 0 && asset.height > 0 ? asset.width / asset.height : 1);
+      setFramingSlot('circle');
     }
   };
-
-  // The two Home cards are framed separately, in their own shape, by pinch
-  // and drag. Only a zoom and an offset are
-  // stored per card; the logo image itself stays as picked.
-  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
-  const [logoImageRatio, setLogoImageRatio] = useState(1);
 
   const handleFrameLogo = (slot: LogoCardSlot) => {
     const logo = providerData.logo;
@@ -4481,7 +4479,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 first page of a swipe: the next two pages are the same logo in
                 the small and large Home cards, at their real sizes, so the
                 provider sees each crop in place rather than in a list below.
-                Tapping any page reopens the crop. */}
+                Tapping any page opens the framer for that shape; the circle's
+                framer can also swap the photo. */}
               <View style={styles.logoSection}>
                 {providerData.logo ? (
                   <>
@@ -4501,20 +4500,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoContainer}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleFrameLogo('circle'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Adjust logo"
                               accessibilityHint="Swipe left to see it on Home"
                             >
-                              <Image
-                                source={{ uri: providerData.logo }}
-                                style={styles.providerLogo}
-                                resizeMode="cover"
-                                // Per the Scalability rules: without this any unrelated
-                                // re-render can retrigger the default fade-in as a flicker.
-                                fadeDuration={0}
-                              />
+                              <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.providerLogo} />
                               {/* Badge sits on the 45° diagonal of the circle rather than a
                                   square's corner, so it hugs the edge instead of floating
                                   off it — offset = r - (r/√2) - badgeR, rounded. */}
@@ -4582,6 +4574,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 initial={framingSlot ? providerData.logoFraming?.[framingSlot] : undefined}
                 onDone={handleLogoFramed}
                 onCancel={() => setFramingSlot(null)}
+                onReplace={framingSlot === 'circle' ? () => { tapSelect(); handleSelectLogo(); } : undefined}
                 palette={{
                   bg: chrome.surf(0.98),
                   card: chrome.surf(0.35),

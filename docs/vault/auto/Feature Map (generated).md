@@ -19,12 +19,13 @@ Curated: [[Address Release]] · **101 files**
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
 - `src/screens/provider/BusinessInfoScreen.tsx` _(40)_
+- `src/screens/client/BookingsScreen.tsx` _(38)_
+- `src/types/booking.ts` _(35)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
 - `supabase/address_release_notification.sql` _(33)_
-- `src/screens/client/BookingDetailScreen.tsx` _(32)_
 - `supabase/require_provider_address.sql` _(32)_
 - `src/features/business-details/options.ts` _(30)_
-- `src/types/booking.ts` _(30)_
+- `src/screens/client/BookingDetailScreen.tsx` _(29)_
 - `src/types/database.ts` _(29)_
 - `supabase/address_release_enforcement.sql` _(27)_
 - `supabase/stamp_booking_address_snapshot_fallback_location_text.sql` _(26)_
@@ -33,7 +34,6 @@ Curated: [[Address Release]] · **101 files**
 - `src/screens/client/ProfileInfoScreen.tsx` _(21)_
 - `src/features/providers/goLiveStatus.ts` _(20)_
 - `src/services/addressLookupService.ts` _(20)_
-- `src/screens/client/BookingsScreen.tsx` _(19)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(18)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
@@ -108,15 +108,15 @@ Curated: [[Payments]] · **157 files**
 - … +127 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **328 files**
+Curated: [[Booking Flow]] · **329 files**
 - `src/services/databaseService.ts` _(1014)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(698)_
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/services/becca/capabilities/client.ts` _(585)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(572)_
-- `src/screens/client/BookingDetailScreen.tsx` _(474)_
-- `src/screens/client/BookingsScreen.tsx` _(364)_
+- `src/screens/client/BookingDetailScreen.tsx` _(472)_
+- `src/screens/client/BookingsScreen.tsx` _(395)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
@@ -132,14 +132,14 @@ Curated: [[Booking Flow]] · **328 files**
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
+- `src/types/booking.ts` _(107)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/types/booking.ts` _(106)_
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- … +298 more
+- … +299 more
 
 ## Notifications
 Curated: [[Notifications]] · **181 files**
@@ -262,10 +262,10 @@ Curated: [[Booking Flow]] · **196 files**
 - `src/utils/policyDisplay.ts` _(67)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
 - `src/screens/provider/InfoRegScreen.tsx` _(61)_
+- `src/screens/client/BookingsScreen.tsx` _(58)_
 - `src/services/bookingService.ts` _(58)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
-- `src/screens/client/BookingsScreen.tsx` _(53)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_

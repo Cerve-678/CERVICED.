@@ -31,6 +31,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import userLearningService from '../../services/userLearningService';
 import { HairTypeSelector } from '../../components/HairTypeSelector';
 import { ProviderCard } from '../../features/home/ProviderCard';
+import { LogoCircle } from '../../components/FramedLogo';
 import { ServiceButton } from '../../features/home/ServiceButton';
 import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
@@ -185,7 +186,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
       renderItem={({ item }) => (
         <TouchableOpacity style={styles.roundCard} onPress={() => onProviderPress(item)} activeOpacity={0.7}>
           <View style={[styles.roundCardBlur, { backgroundColor: surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }]}>
-            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} contentFit="cover" transition={0} /> : null}
+            {item.logo?.uri ? <LogoCircle uri={item.logo.uri} framing={item.logoFraming} style={styles.roundCardImage} /> : null}
           </View>
           <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
           {sub && item.distanceKm != null ? (
@@ -519,7 +520,7 @@ export default function HomeScreen() {
         providerReviewCount: p.review_count,
         kind: 'service' as const,
         serviceId: s.id,
-        ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+        ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
       };
     };
 

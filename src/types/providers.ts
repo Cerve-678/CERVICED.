@@ -1,4 +1,5 @@
 import { ImageSourcePropType } from 'react-native';
+import type { LogoFraming } from './database';
 
 export type ServiceCategory = 'HAIR' | 'NAILS' | 'MUA' | 'LASHES' | 'BROWS' | 'AESTHETICS';
 
@@ -19,6 +20,8 @@ export interface PortfolioItem {
   imageUri?: string;
   providerName?: string;
   providerLogoUri?: string;
+  /** How the provider framed their circle logo; null = fill and centre. */
+  providerLogoFraming?: LogoFraming | null | undefined;
   providerSlug?: string;
   providerRating?: number;
   providerReviewCount?: number;

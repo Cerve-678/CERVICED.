@@ -22,6 +22,7 @@ import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
   DbProvider,
+  LogoFraming,
   DbBooking,
   DbUser,
   DbNotification,
@@ -1397,6 +1398,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   public_directions,
   about_text,
   logo_url,
+  logo_framing,
   gradient,
   accent_color,
   background_image_url,
@@ -1985,7 +1987,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 // response small without narrowing the shared getPortfolioItems() contract.
 const EXPLORE_PORTFOLIO_SELECT = `
   id, provider_id, image_url, caption, category, tags, price, aspect_ratio,
-  provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
 `;
 
 /** Fetch the lean portfolio projection used by Explore's public masonry feed. */
@@ -2030,7 +2032,7 @@ export async function getPortfolioItems(
     .select(
       `
       *,
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("provider.is_active", true)
@@ -2076,7 +2078,7 @@ export async function searchPortfolio(
     .select(
       `
       *,
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("provider.is_active", true)
@@ -2117,7 +2119,7 @@ export async function getDiscoverServices(
       `
       id, provider_id, name, description, price, service_category,
       service_images!inner ( url, sort_order, aspect_ratio, fit ),
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("is_active", true)
@@ -2253,7 +2255,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
           .select(
             `
             *,
-            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
           `,
           )
           .in("id", portfolioIds)
@@ -2272,7 +2274,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
             `
             id, provider_id, name, description, price,
             service_images ( url, sort_order ),
-            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
           `,
           )
           .in("id", serviceIds)
@@ -4337,6 +4339,7 @@ export interface UserConversationWithProvider {
     slug: string;
     display_name: string;
     logo_url: string | null;
+    logo_framing: LogoFraming | null;
   } | null;
 }
 
@@ -4352,7 +4355,7 @@ export async function getUserConversations(): Promise<
   const { data, error } = await supabase
     .from("provider_conversations")
     .select(
-      "id, provider_id, user_id, last_message, last_message_at, unread_count_user, unread_count_provider, created_at, updated_at, provider: providers ( id, slug, display_name, logo_url )",
+      "id, provider_id, user_id, last_message, last_message_at, unread_count_user, unread_count_provider, created_at, updated_at, provider: providers ( id, slug, display_name, logo_url, logo_framing )",
     )
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false })
@@ -7824,14 +7827,14 @@ export async function getMyProviderSaverCount(): Promise<number> {
 /** The public provider fields a booked-elsewhere card and its detail need. */
 const EXTERNAL_BOOKING_SELECT =
   "id, client_id, provider_id, booking_date, start_time, service_label, created_at, " +
-  "provider:providers(id, slug, display_name, logo_url, location_text, business_type, external_booking_url, has_gone_live, is_active)";
+  "provider:providers(id, slug, display_name, logo_url, logo_framing, location_text, business_type, external_booking_url, has_gone_live, is_active)";
 
 export type ClientExternalBookingWithProvider = DbClientExternalBooking & {
   /** Null once the provider is no longer live — their row stops being
    *  readable, but the client's own note of the booking stays theirs. */
   provider: Pick<
     DbProvider,
-    "id" | "slug" | "display_name" | "logo_url" | "location_text" | "business_type" | "external_booking_url"
+    "id" | "slug" | "display_name" | "logo_url" | "logo_framing" | "location_text" | "business_type" | "external_booking_url"
   > | null;
 };
 
@@ -7851,6 +7854,7 @@ function mapExternalBookingRow(row: unknown): ClientExternalBookingWithProvider 
         slug: r.provider.slug,
         display_name: r.provider.display_name,
         logo_url: r.provider.logo_url,
+        logo_framing: r.provider.logo_framing ?? null,
         location_text: r.provider.location_text,
         business_type: r.provider.business_type,
         external_booking_url: r.provider.external_booking_url,

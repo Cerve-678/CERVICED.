@@ -165,17 +165,19 @@ export interface LogoCardFrame {
   y: number;
 }
 
-/** The provider's per-card logo framing (`providers.logo_framing`).
+/** The provider's per-shape logo framing (`providers.logo_framing`).
  *  `imageRatio` is the logo image's width ÷ height, which the frames are
- *  relative to. A missing card means "fill and centre", the default. */
+ *  relative to. A missing shape means "fill and centre", the default. */
 export interface LogoFraming {
   imageRatio: number;
   small?: LogoCardFrame;
   large?: LogoCardFrame;
+  /** The round profile logo, wherever the app draws the logo as a circle. */
+  circle?: LogoCardFrame;
 }
 
-/** The two Home card shapes a logo is framed for. */
-export type LogoCardSlot = 'small' | 'large';
+/** The shapes a logo is framed for: the two Home cards and the circle. */
+export type LogoCardSlot = 'small' | 'large' | 'circle';
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -973,6 +975,7 @@ export type ProviderWithServices = Pick<
   | "public_directions"
   | "about_text"
   | "logo_url"
+  | "logo_framing"
   | "gradient"
   | "accent_color"
   | "background_image_url"
@@ -1114,6 +1117,7 @@ export interface PortfolioItemWithProvider extends DbPortfolioItem {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;
@@ -1138,6 +1142,7 @@ export interface DiscoverServiceWithProvider {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;
