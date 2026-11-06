@@ -23,7 +23,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus, type RefundRequest } from '../../types/booking';
+import { canDisputeNoShow, hasDirectionsDestination, isAddressPending, isMobileBooking, PaymentStatus, type RefundRequest } from '../../types/booking';
+import { directionsUrlFor } from '../../utils/mapsLink';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import {
@@ -403,22 +404,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   }, [C.accent]);
 
   const openInMaps = useCallback(async (b: ConfirmedBooking) => {
-    // coordinates is typed non-null but is null whenever the release view masks
-    // it or the provider never geocoded, so reading .latitude straight off it
-    // threw a TypeError that the catch below reported as "Unable to open maps".
-    if (!hasMapDestination(b)) {
+    if (!hasDirectionsDestination(b)) {
       Alert.alert('Location Unavailable', 'This appointment does not have a mappable address yet.');
       return;
     }
-    const { latitude, longitude } = b.coordinates;
     try {
-      const label = encodeURIComponent(b.address);
-      const url = Platform.select({
-        ios: `maps:${latitude},${longitude}?q=${label}`,
-        android: `geo:${latitude},${longitude}?q=${label}`,
-      });
-      if (url && await Linking.canOpenURL(url)) await Linking.openURL(url);
-      else await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
+      await Linking.openURL(directionsUrlFor({
+        fullAddress: b.address,
+      }));
     } catch (err) { logger.error('[BookingDetail] open maps failed:', err); Alert.alert("Couldn't Open Maps", 'Please try again in a moment.'); }
   }, []);
 
@@ -1327,14 +1320,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     // A request isn't a booking yet, so there's no location
                     // to go to until the provider accepts it.
                     <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>TBA</Text>
-                  ) : hasMapDestination(booking) ? (
+                  ) : hasDirectionsDestination(booking) ? (
                     <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openInMaps(booking); }} activeOpacity={0.7} style={{ flex: 0.6 }}>
                       <Text style={[st.rowValue, { color: C.accent, flex: undefined }]}>{booking.address}</Text>
                     </TouchableOpacity>
-                  ) : !isAddressPending(booking.address) ? (
-                    // A real address the provider never geocoded — show it as
-                    // plain text rather than a Directions link that can't work.
-                    <Text style={[st.rowValue, { color: C.text }]}>{booking.address}</Text>
                   ) : (
                     <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>
                       {addrCountdown ? `Available in ${addrCountdown}` : 'Address to be confirmed'}

@@ -1,4 +1,4 @@
-import { isMobileBooking, hasMapDestination } from '../types/booking';
+import { isMobileBooking, hasDirectionsDestination, hasMapDestination } from '../types/booking';
 
 const COORDS = { latitude: 51.5, longitude: -0.1 } as never;
 
@@ -51,5 +51,11 @@ describe('who travels to whom', () => {
     expect(
       hasMapDestination({ address: 'Real Street', coordinates: null, providerBusinessType: 'salon' }),
     ).toBe(false);
+  });
+
+  it('offers directions to a released venue address without coordinates', () => {
+    expect(hasDirectionsDestination({ address: '12 High Street, London', providerBusinessType: 'salon' })).toBe(true);
+    expect(hasDirectionsDestination({ address: 'Address will be confirmed by provider', providerBusinessType: 'salon' })).toBe(false);
+    expect(hasDirectionsDestination({ address: '12 High Street, London', providerBusinessType: 'mobile' })).toBe(false);
   });
 });
