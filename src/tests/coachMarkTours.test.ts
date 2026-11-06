@@ -89,6 +89,7 @@ describe('the tours', () => {
       CLIENT_EXPLORE: 'client_explore',
       PROVIDER_HOME: 'provider_home',
       PROVIDER_INFO_PACKS: 'provider_info_packs',
+      PROVIDER_FORMS: 'provider_forms',
     });
   });
 

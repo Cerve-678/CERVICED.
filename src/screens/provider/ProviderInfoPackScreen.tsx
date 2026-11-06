@@ -43,6 +43,7 @@ import {
 } from '../../services/databaseService';
 import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { useHowItWorks } from '../../components/HowItWorksSheet';
 import type { BookingWithAddOns } from '../../types/database';
 import { declaredCategories } from '../../features/intake-forms/formTemplates';
 import {
@@ -210,7 +211,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const [sendingBookingId, setSendingBookingId] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<InfoPack | null>(null);
   const [showAllExamples, setShowAllExamples] = useState(false);
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const welcome = useHowItWorks();
 
   const todayYmd = useMemo(() => dateToYMD(new Date()), []);
   const reach = useMemo(() => summarizeDeliveries(deliveries), [deliveries]);
@@ -277,12 +278,12 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     resolveTourForUser(TOUR_KEYS.PROVIDER_INFO_PACKS, [{ key: 'welcome' }], user.id)
       .then(decision => {
         if (!alive || !decision.show) return;
-        setWelcomeOpen(true);
+        welcome.showOnArrival();
         void recordTourSeen(TOUR_KEYS.PROVIDER_INFO_PACKS, user.id);
       })
       .catch(error => logger.error('[InfoPacks] welcome check failed:', error));
     return () => { alive = false; };
-  }, [user?.id]);
+  }, [user?.id, welcome.showOnArrival]);
 
   // ── Form helpers ──
   const isFirstPack = packs.length === 0;
@@ -456,7 +457,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
           <View style={s.titleWrap}>
             <Text style={[s.screenTitle, { color: P.text }]}>{headerTitle}</Text>
             {!inForm && (
-              <TouchableOpacity onPress={() => setWelcomeOpen(true)} hitSlop={10} style={[s.infoBtn, { backgroundColor: P.iconBg }]} accessibilityLabel="How Info Packs work">
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); welcome.show(); }} hitSlop={10} activeOpacity={0.7} style={[s.infoBtn, { backgroundColor: P.iconBg }]} accessibilityLabel="How Info Packs work">
                 <Ionicons name="information" size={13} color={P.text} />
               </TouchableOpacity>
             )}
@@ -818,13 +819,13 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       </Modal>
 
       <InfoPackWelcome
-        visible={welcomeOpen}
+        visible={welcome.open}
         P={P}
         exampleTitle={welcomeExample?.title ?? 'Aftercare'}
         exampleLines={welcomeLines.length > 0 ? welcomeLines : ['Keep it dry for 24 hours.', 'Message me with any questions.']}
         serviceChips={myServices}
-        onStart={() => { setWelcomeOpen(false); openCreate(); }}
-        onClose={() => setWelcomeOpen(false)}
+        onStart={() => { welcome.hide(); openCreate(); }}
+        onClose={welcome.hide}
       />
 
       <DialogHost />

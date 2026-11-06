@@ -28,7 +28,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
-import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_PRICE_LINE } from '../../constants/fullMembership';
+import { FULL_MEMBER_FREE_LINE } from '../../constants/fullMembership';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel } from '../../constants/payoutTiming';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -173,7 +173,7 @@ export default function FullCervicedFeaturesScreen() {
         >
           <Text style={styles.primaryText}>Become a full member</Text>
         </TouchableOpacity>
-        <Text style={styles.footnote}>{FULL_MEMBER_FREE_LINE}. {FULL_MEMBER_PRICE_LINE}.</Text>
+        <Text style={styles.footnote}>{FULL_MEMBER_FREE_LINE}.</Text>
       </ScrollView>
       <BecomeFullMemberSheet visible={showSheet} onClose={() => setShowSheet(false)} />
     </ThemedBackground>

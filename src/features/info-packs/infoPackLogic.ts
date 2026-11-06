@@ -106,10 +106,32 @@ export function packServiceLabel(serviceNames: readonly string[]): string {
 // its lines. Nothing new to store, and the client's booking page already shows
 // the text as written.
 
+/** Every section heading a pack can have. The ADD row and the example packs
+ *  (packTemplates.ts) both read these, so a heading inserted by hand and one
+ *  from an example are the same line and `hasSection` sees either. */
+export const PACK_HEADINGS = {
+  before: 'BEFORE YOUR APPOINTMENT',
+  expect: 'WHAT TO EXPECT',
+  arrive: 'ARRIVING',
+  bring: 'WHAT TO BRING',
+  late: 'RUNNING LATE',
+  after: 'AFTERCARE',
+  last: 'MAKING IT LAST',
+  next: 'YOUR NEXT APPOINTMENT',
+  questions: 'QUESTIONS',
+} as const;
+
+/** The ADD row, in the order a client meets them: before, on the day, after. */
 export const PACK_SECTIONS = [
-  { key: 'before', heading: 'BEFORE YOUR APPOINTMENT', label: 'Before' },
-  { key: 'after', heading: 'AFTERCARE', label: 'Aftercare' },
-  { key: 'bring', heading: 'WHAT TO BRING', label: 'What to bring' },
+  { key: 'before', heading: PACK_HEADINGS.before, label: 'Before' },
+  { key: 'expect', heading: PACK_HEADINGS.expect, label: 'What to expect' },
+  { key: 'arrive', heading: PACK_HEADINGS.arrive, label: 'Arriving' },
+  { key: 'bring', heading: PACK_HEADINGS.bring, label: 'What to bring' },
+  { key: 'late', heading: PACK_HEADINGS.late, label: 'Running late' },
+  { key: 'after', heading: PACK_HEADINGS.after, label: 'Aftercare' },
+  { key: 'last', heading: PACK_HEADINGS.last, label: 'Making it last' },
+  { key: 'next', heading: PACK_HEADINGS.next, label: 'Next appointment' },
+  { key: 'questions', heading: PACK_HEADINGS.questions, label: 'Questions' },
 ] as const;
 
 export type PackSectionKey = (typeof PACK_SECTIONS)[number]['key'];
