@@ -488,8 +488,8 @@ export default function BusinessInfoScreen({ navigation }: any) {
                     <View style={[s.warnBox, { backgroundColor: C.accent + '14', borderColor: C.accent + '40' }]}>
                       <Ionicons name="alert-circle-outline" size={16} color={C.accent} />
                       <Text style={[s.warnText, { color: C.text }]}>
-                        If you save, clients will find you under {pendingCategoryLabel} instead of
-                        {savedCategoryLabel}. Your portfolio photos stay, but your specialties are cleared,
+                        If you save, clients will find you under {pendingCategoryLabel} instead
+                        of {savedCategoryLabel}. Your portfolio photos stay, but your specialties are cleared,
                         so you'll need to pick them again. You then can't change this for {CATEGORY_COOLDOWN_DAYS} days.
                       </Text>
                     </View>
