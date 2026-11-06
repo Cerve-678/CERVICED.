@@ -79,7 +79,7 @@ import {
 } from '../../features/providers/goLiveStatus';
 import { DiaryCard } from '../../features/providers/DiaryCard';
 import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
-import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS, FULL_MEMBER_MONTHLY_PRICE } from '../../constants/fullMembership';
+import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS } from '../../constants/fullMembership';
 import { joinNudgeBarDismissedKey } from '../../utils/storageKeys';
 import { logger } from '../../utils/logger';
 import type { ProviderHomeStackParamList } from '../../navigation/types';
@@ -649,7 +649,6 @@ export default function LinkOnlyHomeScreen() {
               </View>
               <View style={styles.offerLine}>
                 <View style={styles.offerChip}><Text style={styles.offerChipText}>{FULL_MEMBER_FREE_MONTHS} MONTHS FREE</Text></View>
-                <Text style={styles.footnote}>then {FULL_MEMBER_MONTHLY_PRICE} a month</Text>
               </View>
               <TouchableOpacity style={styles.primary} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
                 <Text style={styles.primaryText}>Become a full member</Text>

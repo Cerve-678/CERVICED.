@@ -5,7 +5,7 @@
 
 #generated
 
-**3204 functions** across **440 files**.
+**3215 functions** across **442 files**.
 
 ### `src/components/` (58)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -85,7 +85,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (8)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · becomeFullMember · beginSignupVerification · cancelSignupVerification · clearStorageFolder · completeVerifiedSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · becomeFullMember · beginSignupVerification · cancelSignupVerification · clearStorageFolder · completeVerifiedSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · enterFullMemberMode · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getItemQuantity · getProviderTotal · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `DisplaySettingsContext.tsx` — apply · **DisplaySettingsProvider** · loadAccountDisplaySettings · persist · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
@@ -206,16 +206,18 @@
 - `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (29)
-- `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm
+### `src/features/providers/` (31)
+- `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
 - `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · toggleAutoClose · tomorrow
+- `conversionSteps.ts` — **buildConversionSteps** · **countLeftToGoLive**
 - `descriptionTopics.ts` — **learnDescriptionTopics** · meaningful
 - `DiaryCard.tsx` — createStyles · daySummary · **DiaryCard** · disconnect · load · openChooser · saveChoice · styles · week · weekRangeLabel
 - `diaryDays.ts` — **buildDashboardWeek** · **diaryEventMinutes** · **hoursFor** · **startOfDay**
 - `DidYouBookSheet.tsx` — chip · days · defaultTime · **DidYouBookSheet** · handlePickerChange · handleSubmit · hhmm · startOfToday
 - `externalBookingLink.ts` — **displayExternalBookingUrl** · **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
 - `FullCervicedLockedSheet.tsx` — **FullCervicedLockedSheet** · seeMore
+- `FullMemberConversion.tsx` — createStyles · **FullMemberConversion** · MockTab · run · steps · styles
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
 - `linkOnlyAnalytics.ts` — **bookTapRatio** · **lastSevenDaysOfBookTaps** · **sumLinkOnlyStats**
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**
