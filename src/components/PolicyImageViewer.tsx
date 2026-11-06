@@ -60,6 +60,10 @@ export function PolicyImageViewer({ uri, visible, onClose }: PolicyImageViewerPr
               style={{ width, height: imageHeight }}
               contentFit="contain"
               transition={0}
+              // expo-image normally decodes at the view's size, which is what
+              // pinch-zoom then enlarges: small print went soft at 2-3x. One
+              // full-resolution image on its own screen is worth the memory.
+              allowDownscaling={false}
               onLoad={event => {
                 const { width: w, height: h } = event.source;
                 if (w > 0 && h > 0) setRatio({ uri, value: h / w });
