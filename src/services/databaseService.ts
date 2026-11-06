@@ -2596,6 +2596,52 @@ export interface MyServiceDraft {
   audience?: Exclude<ServiceAudienceValue, ''>;
 }
 
+export interface ServiceDescriptionRevision {
+  id: string;
+  description: string;
+  source: 'draft' | 'published';
+  created_at: string;
+}
+
+/** Back up exactly what the provider accepted in the service editor, before
+ * the larger profile form can refresh or fail to publish it. */
+export async function saveServiceDescriptionDraft(
+  providerId: string,
+  serviceId: string | null,
+  draftKey: string,
+  serviceName: string,
+  description: string,
+): Promise<void> {
+  const { error } = await supabase.from('service_description_history').insert({
+    provider_id: providerId,
+    service_id: serviceId,
+    draft_key: draftKey,
+    service_name: serviceName,
+    description,
+    source: 'draft',
+  });
+  if (error) throw error;
+}
+
+/** Recent draft and published wording for one service. RLS confines this to
+ * the signed-in owner; the provider id also bounds the lookup. */
+export async function getServiceDescriptionHistory(
+  providerId: string,
+  serviceId: string | null,
+  draftKey: string,
+): Promise<ServiceDescriptionRevision[]> {
+  const query = supabase.from('service_description_history')
+    .select('id, description, source, created_at')
+    .eq('provider_id', providerId)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  const { data, error } = serviceId
+    ? await query.eq('service_id', serviceId)
+    : await query.eq('draft_key', draftKey);
+  if (error) throw error;
+  return (data ?? []) as ServiceDescriptionRevision[];
+}
+
 /** The tag/audience columns a draft carries, and nothing for what it doesn't. */
 function myServiceFindabilityColumns(draft: MyServiceDraft): Record<string, unknown> {
   return {
