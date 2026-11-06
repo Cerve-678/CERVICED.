@@ -236,9 +236,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id, user?.accountType]);
 
   const becomeFullMember = useCallback(async () => {
-    await becomeFullMemberRpc();
+    try {
+      await becomeFullMemberRpc();
+    } catch (error) {
+      // The RPC refuses when the account already takes bookings through
+      // CERVICED — which is what a second call sees after a first one landed
+      // server-side but never reached the app (a dropped response, a retry).
+      // That's the outcome they asked for, not a failure: ask the DB what's
+      // true and only rethrow if they really are still link-only.
+      if (!user?.id) throw error;
+      const { bookingMode } = await getProviderOwnershipForUserId(user.id);
+      if (bookingMode !== 'cerviced') throw error;
+    }
     setMyBookingMode('cerviced');
-  }, []);
+  }, [user?.id]);
 
   // Mirrors activeMode for applyMode's noop check without pulling activeMode
   // into that callback's deps (which would otherwise force it to be

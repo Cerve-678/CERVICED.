@@ -9,7 +9,7 @@
 // link-only tabs for the full provider set, so this sheet (and the screen
 // that opened it) simply unmounts. The full Home then shows the go-live
 // checklist they need to finish.
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -20,7 +20,6 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import {
   FULL_MEMBER_FREE_MONTHS,
   FULL_MEMBER_FREE_START_LINE,
-  FULL_MEMBER_PRICE_LINE,
 } from '../../constants/fullMembership';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -50,6 +49,7 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
   const bottomInset = useSystemBottomInset();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   const close = () => {
     if (pending) return;
@@ -58,7 +58,10 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
   };
 
   const confirm = async () => {
-    if (pending) return;
+    // A ref, not `pending`: two taps inside one frame both read the old state
+    // and would each fire the one-way switch.
+    if (inFlight.current) return;
+    inFlight.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setPending(true);
     setError(null);
@@ -69,6 +72,7 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
     } catch (err) {
       setError(toUserMessageAllowingDbGuard(err, "We couldn't switch you over. Please try again.", '[BecomeFullMember]'));
       setPending(false);
+      inFlight.current = false;
     }
   };
 
@@ -88,7 +92,6 @@ export function BecomeFullMemberSheet({ visible, onClose }: BecomeFullMemberShee
             <Text style={[styles.offerNumber, { color: P.onAccent }]}>{FULL_MEMBER_FREE_MONTHS}</Text>
             <View style={styles.flex}>
               <Text style={[styles.offerKicker, { color: P.onAccent }]}>MONTHS FREE ON US</Text>
-              <Text style={[styles.offerSub, { color: P.onAccent }]}>{FULL_MEMBER_PRICE_LINE}</Text>
             </View>
           </View>
           <Text style={[styles.freeStart, { color: P.sub }]}>{FULL_MEMBER_FREE_START_LINE}</Text>
@@ -142,7 +145,6 @@ const styles = StyleSheet.create({
   offer: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16, marginTop: 14 },
   offerNumber: { fontFamily: 'BakbakOne-Regular', fontSize: 44, lineHeight: 50 },
   offerKicker: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1.4 },
-  offerSub: { fontSize: 13, marginTop: 2, opacity: 0.88 },
   freeStart: { fontSize: 13, lineHeight: 18, marginTop: 8 },
   sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.4, marginTop: 22 },
   changes: { gap: 14, marginTop: 12 },
