@@ -42,12 +42,13 @@ describe('AddOnLibrarySection', () => {
 
   it('keeps the guide folded once there are add-ons, and opens it on tap', () => {
     render(<AddOnLibrarySection library={[lashRemoval]} categories={categories} palette={palette} onEdit={() => {}} onNew={() => {}} />);
+    const firstStep = ADD_ON_GUIDE_STEPS[0]!.title;
 
-    expect(screen.queryByText(ADD_ON_GUIDE_STEPS[0].title)).toBeNull();
+    expect(screen.queryByText(firstStep)).toBeNull();
     // New add-ons start from the button beside + Add Category, not here.
     expect(screen.queryByText('Make your first add-on')).toBeNull();
     fireEvent.press(screen.getByText('How add-ons work'));
-    expect(screen.getByText(ADD_ON_GUIDE_STEPS[0].title)).toBeTruthy();
+    expect(screen.getByText(firstStep)).toBeTruthy();
   });
 
   it('shows price, extra time and where it goes on each row, and edits on tap', () => {
