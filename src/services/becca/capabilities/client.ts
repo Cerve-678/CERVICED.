@@ -1082,7 +1082,7 @@ const findProviders: Capability = {
     if (steps.length < 3) steps.push("Putting the list together…");
     return steps;
   },
-  async run({ entities, rawMessage }): Promise<CapabilityResult> {
+  async run({ entities, rawMessage, clientArea }): Promise<CapabilityResult> {
     const service = entities.service!.value;
     const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
     const priceFilter = entities.money?.value;
@@ -1150,7 +1150,7 @@ const findProviders: Capability = {
     const wantsNearby = NEAR_ME_RE.test(rawMessage);
     let proximityNote = "";
     if (wantsNearby && dbProviders.length > 0) {
-      const nearest = await sortByProximity(dbProviders);
+      const nearest = await sortByProximity(dbProviders, clientArea);
       dbProviders = nearest.providers;
       proximityNote = `\n\n${nearest.note}`;
       if (nearest.ranked) work.push("Sorted them by distance from you");
@@ -2829,7 +2829,7 @@ const topRated: Capability = {
     "whos the best", "the best", "any good", "new providers", "newest",
     "just joined", "trending", "popular", "well reviewed", "good reviews",
   ],
-  async run({ rawMessage }): Promise<CapabilityResult> {
+  async run({ rawMessage, clientArea }): Promise<CapabilityResult> {
     const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
     let rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
 
@@ -2840,7 +2840,7 @@ const topRated: Capability = {
     const wantsNearby = NEAR_ME_RE.test(rawMessage);
     let proximityNote = "";
     if (wantsNearby && rows.length > 0) {
-      const nearest = await sortByProximity(rows);
+      const nearest = await sortByProximity(rows, clientArea);
       rows = nearest.providers;
       proximityNote = `\n\n${nearest.note}`;
     }
@@ -2951,7 +2951,7 @@ const nearbyProviders: Capability = {
   // close rivals here, one of them is plainly wrong for the sentence.
   excludeWhen:
     /\b(?:top[\s-]?rated|best[\s-]?rated|highest[\s-]?rated|best|well[\s-]?reviewed|good reviews|trending|popular|newest|new providers|just joined)\b/i,
-  async run(): Promise<CapabilityResult> {
+  async run({ clientArea }): Promise<CapabilityResult> {
     const rows = await getProviders();
     if (rows.length === 0) {
       return {
@@ -2960,7 +2960,7 @@ const nearbyProviders: Capability = {
       };
     }
 
-    const nearest = await sortByProximity(rows);
+    const nearest = await sortByProximity(rows, clientArea);
 
     // Location refused or unknown: say so instead of presenting the default
     // rating order as "nearest", which is the one thing this answer must

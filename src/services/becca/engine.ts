@@ -48,6 +48,8 @@ export interface EngineInput {
   /** Client hat: CartContext's addToCart. See CapabilityContext.addToCart. */
   addToCart?: (item: AddToCartParams) => void;
   userId?: string;
+  /** Client hat: Account → Your area (users.client_area). See CapabilityContext.clientArea. */
+  clientArea?: string | null;
   /** Injected so date logic is deterministic and testable. */
   now?: Date;
   /**
@@ -626,6 +628,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     now,
     ...(hat === "client" && input.addToCart ? { addToCart: input.addToCart } : {}),
     ...(userId ? { userId } : {}),
+    ...(hat === "client" && input.clientArea ? { clientArea: input.clientArea } : {}),
     ...(personal ? { personal } : {}),
   };
 

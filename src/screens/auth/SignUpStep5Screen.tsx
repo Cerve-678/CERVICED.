@@ -32,7 +32,6 @@ import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
 import AreaPicker from '../../components/AreaPicker';
 import { serviceLocationsFromArea } from '../../utils/clientArea';
-import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
 import { toPickColumn } from '../../features/beauty-profile/pickList';
@@ -188,18 +187,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     if (changed && !selectedFrequency) reveal(frequencyY.current);
   };
 
-  // Near You measures from a place the client picked on this device
-  // (STORAGE_KEYS.MANUAL_LOCATION, read by resolveClientLocation), not from
-  // users.client_area — so the sign-up answer is also saved there, or Near
-  // You would ignore it until they picked it again on Home. Non-blocking.
-  const saveAreaForNearYou = () => {
-    const area = selectedArea.trim();
-    if (!area) return;
-    storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, area).catch((e) => {
-      logger.error('[signup] could not save the picked area for Near You:', e);
-    });
-  };
-
   const selectReferral = (source: string) => {
     setSelectedReferral(source);
   };
@@ -258,7 +245,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         invokeSendAccountEmail('client_hat_added').catch((e) => {
           logger.error('[email] client hat email failed to send:', e);
         });
-        saveAreaForNearYou();
         // resetData + navigation now happen when the celebration is dismissed.
         setCelebratedHat('client');
       } catch (e: any) {
@@ -352,7 +338,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         return;
       }
 
-      if (!isProvider) saveAreaForNearYou();
       resetData();
       navigation.navigate('EmailVerification', { email: personalEmail });
     } catch (e: any) {
