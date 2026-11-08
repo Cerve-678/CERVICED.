@@ -2,7 +2,7 @@
 //
 // Skin type and style vibe are multi-pick (user, 2026-11-08). Their users
 // columns move from text to text[] in
-// supabase/migrations/20261108210000_beauty_profile_skin_type_and_style_vibe_multi_pick.sql,
+// supabase/migrations/20261108240000_beauty_profile_skin_type_and_style_vibe_multi_pick.sql,
 // and the app treats both as string[] everywhere. A value can still arrive in
 // the old one-answer shape: a row read before that migration is applied, or
 // sign-up metadata saved by an older build and turned into a row at email

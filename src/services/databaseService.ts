@@ -6295,7 +6295,7 @@ interface BookingBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[] | null;
   treatment_history: string[] | null;
-  /** text[] once 20261108210000 is applied; a single string before it. Read through toPickList. */
+  /** text[] once 20261108240000 is applied; a single string before it. Read through toPickList. */
   skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[] | null;
@@ -9312,7 +9312,7 @@ export interface UserBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[];
   treatment_history: string[];
-  /** text[] once 20261108210000 is applied; a single string on rows before it. Read through toPickList. */
+  /** text[] once 20261108240000 is applied; a single string on rows before it. Read through toPickList. */
   skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[];

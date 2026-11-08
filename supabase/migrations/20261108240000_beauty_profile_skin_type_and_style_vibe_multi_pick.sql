@@ -171,7 +171,7 @@ END
 $$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261108210000', 'beauty_profile_skin_type_and_style_vibe_multi_pick')
+VALUES ('20261108240000', 'beauty_profile_skin_type_and_style_vibe_multi_pick')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
