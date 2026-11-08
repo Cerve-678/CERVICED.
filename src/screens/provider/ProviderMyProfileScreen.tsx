@@ -204,6 +204,10 @@ const PROFILE_TABS: { key: ProfileTab; label: string; icon: keyof typeof Ionicon
 ];
 
 const MAX_REVIEW_PREVIEWS = 2;
+// The Deposits & rules tile lists this many rules (deposit first, as
+// buildPolicyDisplayRows orders them), then "+N more". The full list is one
+// tap away in Policies.
+const MAX_POLICY_PREVIEWS = 3;
 const MAX_PORTFOLIO_TILES = 9;
 // Enough to fill the rail's first view; the rest load with the lower cards.
 const PORTFOLIO_FIRST_TILES = 3;
@@ -2065,7 +2069,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         </Text>
                       ) : (
                         <View style={styles.policyList}>
-                          {policyRows.map(row => (
+                          {policyRows.slice(0, MAX_POLICY_PREVIEWS).map(row => (
                             <View key={row.label} style={styles.policyItem}>
                               <Ionicons name={row.icon} size={13} color={accentColor} />
                               <View style={styles.policyItemText}>
@@ -2078,6 +2082,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                               </View>
                             </View>
                           ))}
+                          {policyRows.length > MAX_POLICY_PREVIEWS ? (
+                            <Text style={[styles.policyMore, { color: PP.sub }]}>
+                              +{policyRows.length - MAX_POLICY_PREVIEWS} more
+                            </Text>
+                          ) : null}
                         </View>
                       )}
                     </TouchableOpacity>
@@ -3317,6 +3326,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 7,
+  },
+  policyMore: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   policyItemText: {
     flex: 1,
