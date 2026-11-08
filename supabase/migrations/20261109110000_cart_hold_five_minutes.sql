@@ -334,4 +334,8 @@ SELECT cron.alter_job(
   schedule := '* * * * *'
 );
 
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261109110000', 'cart_hold_five_minutes')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
