@@ -5,6 +5,7 @@ import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
+import ProviderRecentActivityScreen from '../../../screens/provider/ProviderRecentActivityScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
@@ -62,6 +63,11 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="Clientele"
         component={ProviderClienteleScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      <ProviderServicesStack.Screen
+        name="RecentActivity"
+        component={ProviderRecentActivityScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
       <ProviderServicesStack.Screen

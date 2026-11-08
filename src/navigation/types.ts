@@ -313,6 +313,8 @@ export type ProviderServicesStackParamList = {
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
+  // My Profile → Recent activity → See all.
+  RecentActivity: undefined;
   // Pushed from the Clientele screen's Message button, for the same reason
   // ProviderSchedule is registered here — a cross-tab navigate would land the
   // conversation at a bare tab root and its back button would fire an
