@@ -217,6 +217,7 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     lines: [
       ...serviceLines(booking, payment.servicePrice),
       ...(payment.serviceCharge > 0 ? [{ label: 'Cerviced platform fee', amount: payment.serviceCharge, kind: 'fee' as const }] : []),
+      ...(payment.depositPaid > 0 ? [{ label: 'Deposit paid', amount: payment.depositPaid, kind: 'fee' as const }] : []),
     ],
     total: payment.total,
     state,

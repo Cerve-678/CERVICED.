@@ -1047,8 +1047,18 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT STATUS</Text>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowReceipt(v => !v); }} activeOpacity={0.7}>
-                <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
+              {/* A dotted-outline pill so it reads as a button, not a stray
+                  coloured word beside the heading. */}
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowReceipt(v => !v); }}
+                activeOpacity={0.5}
+                accessibilityRole="button"
+                accessibilityLabel={showReceipt ? 'Hide receipt' : 'View receipt'}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={[st.receiptButton, { borderColor: C.accent }]}
+              >
+                <Ionicons name={showReceipt ? 'chevron-up' : 'receipt-outline'} size={13} color={C.accentText} />
+                <Text style={{ color: C.accentText, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
             {/* What came back or was kept after a cancellation — at the top so
@@ -1139,6 +1149,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.sub, fontSize: 13 }}>Platform Fee</Text>
                     <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
                   </View>
+                  {payment.depositPaid > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>Deposit paid</Text>
+                      <Text style={{ color: C.text, fontSize: 13 }}>£{payment.depositPaid.toFixed(2)}</Text>
+                    </View>
+                  )}
 
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
@@ -2136,6 +2152,7 @@ const st = StyleSheet.create({
   todoCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 8 },
   todoBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   todoBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
+  receiptButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderStyle: 'dotted', borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6 },
   receiptContainer: { borderRadius: 8, padding: 12 },
   receiptPaper: { padding: 16, borderRadius: 6, borderWidth: 1, borderStyle: 'dashed' },
   receiptFullyPaidBadge: { backgroundColor: 'rgba(52,199,89,0.15)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12, marginTop: 10, alignSelf: 'center' },

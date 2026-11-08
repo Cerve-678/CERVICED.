@@ -958,7 +958,11 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const lines =
     line(params.service, params.basePrice, false) +
     params.addOns.map(a => line(`+ ${a.name}`, Number(a.price) || 0, true)).join('') +
-    (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
+    (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '') +
+    // The deposit, once paid, as its own line — same as the in-app receipt
+    // (calculateBookingPaymentBreakdown's depositPaid). Part of the price, not
+    // added to the total.
+    (isDeposit && !isUnpaid && params.depositAmount > 0 ? line('Deposit paid', params.depositAmount, true) : '');
 
   const payRows =
     payRow('Paid', paidAmount, remaining <= 0) +

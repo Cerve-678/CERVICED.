@@ -84,11 +84,11 @@ Curated: [[Payments]] · **161 files**
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/services/bookingService.ts` _(101)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
-- `src/screens/client/BookingDetailScreen.tsx` _(86)_
-- `src/features/bookings/receipt.ts` _(83)_
+- `src/screens/client/BookingDetailScreen.tsx` _(91)_
+- `src/features/bookings/receipt.ts` _(88)_
 - `src/types/database.ts` _(59)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(58)_
-- `src/features/bookings/paymentPresentation.ts` _(48)_
+- `src/features/bookings/paymentPresentation.ts` _(53)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
 - `src/services/becca/capabilities/client.ts` _(46)_

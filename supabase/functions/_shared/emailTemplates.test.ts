@@ -245,6 +245,27 @@ describe('booking confirmation money', () => {
     expect(html).not.toContain('Due to provider');
   });
 
+  it('lists a paid deposit in the breakdown, above the total', () => {
+    const { html } = bookingConfirmationEmail({
+      ...BOOKING,
+      paymentType: 'deposit',
+      paymentStatus: 'deposit_paid',
+      depositAmount: 20,
+      amountPaid: 21.99,
+    });
+    const depositLine = html.search(/>Deposit paid<\/td>\s*<td[^>]*>£20\.00</);
+    expect(depositLine).toBeGreaterThan(-1);
+    expect(depositLine).toBeLessThan(html.indexOf('>Total<'));
+  });
+
+  it('leaves the deposit line out until the deposit is paid, and on a full payment', () => {
+    const unpaid = bookingConfirmationEmail({
+      ...BOOKING, paymentType: 'deposit', paymentStatus: 'pending', depositAmount: 20, amountPaid: 0,
+    }).html;
+    expect(unpaid).not.toMatch(/>Deposit paid<\/td>/);
+    expect(bookingConfirmationEmail(BOOKING).html).not.toMatch(/>Deposit paid<\/td>/);
+  });
+
   it('never calls a hand-added unpaid booking paid in full', () => {
     const { html } = bookingConfirmationEmail({
       ...BOOKING,
