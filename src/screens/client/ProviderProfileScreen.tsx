@@ -115,12 +115,14 @@ import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../feature
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 import {
   ProviderAdditionalInfoSection,
+  ProviderWorkWithBlock,
   ProviderContactSection,
   ProviderOpeningHoursSection,
   ProviderPortfolioSection,
   ProviderReviewPreviewSection,
   ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
+import { productsGroup, workWithGroups } from "../../features/providers/workWith";
 import { PAYMENT_OPTS } from "../../features/business-details/options";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -1779,6 +1781,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // Its own section, from Services & Pricing's "Products I Work With".
+    const products = productsGroup(provider);
+    if (products) groups.push(products);
     if (provider.languagesSpoken.length > 0) {
       groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
     }
@@ -1815,8 +1820,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     return groups;
   }, [provider]);
 
+  // "I work with" under the bio — clientele, skin tones and hair types from
+  // About You.
+  const workWith = useMemo(() => (provider ? workWithGroups(provider) : []), [provider]);
+
   // One natural-language paragraph rather than a label/value dump — these are
-  // five unrelated one-liners, and as rows they read like a spec sheet for
+  // unrelated one-liners, and as rows they read like a spec sheet for
   // facts a client only skims.
   const goodToKnowText = useMemo(() => {
     if (!provider) return "";
@@ -1824,12 +1833,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.walkInsWelcome) sentences.push("Walk-ins are welcome");
     if (provider.groupBookingsAvailable) {
       sentences.push("Group bookings are available");
-    }
-    if (provider.veganCrueltyFree) {
-      sentences.push("Products used are vegan and cruelty-free");
-    }
-    if (provider.productsUsed.trim()) {
-      sentences.push(`Works with ${provider.productsUsed.trim()}`);
     }
     return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
   }, [provider]);
@@ -5437,6 +5440,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
                         onCollapse={handleAboutCollapse}
                       />
+                      <ProviderWorkWithBlock groups={workWith} palette={sectionPalette} />
                     </>
                   ) : (
                     /* Policy tab content */

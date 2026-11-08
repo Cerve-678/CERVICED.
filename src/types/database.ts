@@ -414,6 +414,10 @@ export interface DbProvider {
   // the client Search "Hair Type" filter matches on; services.hair_types_
   // suitable below is the narrower per-service refinement.
   hair_types_catered: string[] | null;
+  // Provider-level skin tones worked with (SKIN_TONES vocabulary), asked in
+  // About You's I Work With card. NULL/empty = not stated — unlike hair types,
+  // never read as "all". services.skin_tones_suitable is the per-service one.
+  skin_tones_catered: string[] | null;
   availability_windows: string[] | null;
   accepts_new_clients: "yes" | "waitlist" | "no" | null;
   walk_ins_welcome: boolean;
@@ -1028,6 +1032,8 @@ export type ProviderWithServices = Pick<
   | "group_bookings_available"
   | "vegan_cruelty_free"
   | "products_used"
+  | "clientele"
+  | "skin_tones_catered"
   | "hair_types_catered"
   | "preferred_payment_methods"
 > & {

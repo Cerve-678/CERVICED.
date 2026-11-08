@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Authored 2026-11-08, NOT applied (provider "I work with" skin tones)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109100000 | `provider_skin_tones_catered` | **NOT APPLIED.** Adds nullable `providers.skin_tones_catered text[]`, nothing else. Rollback-only dry run succeeded 2026-11-08 (column `ARRAY`, anon can select, authenticated can update, 16 rows; nothing kept, live max stayed 20261109000000). **Apply before merging** `feat/products-and-who-you-work-with`: that branch adds the column to the public profile select, so without it every provider profile load fails. |
+
 ### Applied 2026-11-08 (client beauty profile: skin type and style vibe are multi-pick)
 
 | Authored version | Name | Status |
