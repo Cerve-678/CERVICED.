@@ -46,11 +46,11 @@ export type HomeStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
-        /** Opens the Activity Centre sheet (from the Settings card). */
-        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
@@ -94,11 +94,11 @@ export type BeccaStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
-        /** Opens the Activity Centre sheet (from the Settings card). */
-        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
@@ -164,11 +164,11 @@ export type CartStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
-        /** Opens the Activity Centre sheet (from the Settings card). */
-        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
@@ -216,11 +216,11 @@ export type ProfileStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
-        /** Opens the Activity Centre sheet (from the Settings card). */
-        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };

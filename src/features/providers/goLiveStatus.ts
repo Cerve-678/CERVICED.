@@ -144,7 +144,7 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
     },
     {
       key: 'schedule',
-      label: 'Set your weekly schedule',
+      label: 'Set your schedule and availability',
       done: status.scheduleSet,
       required: true,
       blocking: true,
