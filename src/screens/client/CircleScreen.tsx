@@ -31,6 +31,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAppDialog } from '../../components/AppDialog';
 import {
+  unblockPerson,
   blockPerson,
   getMyPeople,
   removeFollower,
@@ -84,6 +85,7 @@ type Row =
   | { kind: 'request'; key: string; entry: PersonListEntry }
   | { kind: 'following'; key: string; entry: PersonListEntry }
   | { kind: 'follower'; key: string; entry: PersonListEntry }
+  | { kind: 'blocked'; key: string; entry: PersonListEntry }
   | { kind: 'sharing'; key: string }
   | { kind: 'note'; key: string; text: string }
   | { kind: 'retry'; key: string; text: string };
@@ -130,6 +132,9 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
   const [requests, setRequests] = useState<PersonListEntry[]>([]);
   const [following, setFollowing] = useState<PersonListEntry[]>([]);
   const [followers, setFollowers] = useState<PersonListEntry[]>([]);
+  // Loaded on its own: until migration 20261109130000 is applied the server
+  // doesn't know this list, and that mustn't take the other lists down.
+  const [blocked, setBlocked] = useState<PersonListEntry[]>([]);
   const loadSeq = useRef(0);
 
   const [query, setQuery] = useState('');
@@ -192,6 +197,15 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     }
   }, []);
 
+  const loadBlocked = useCallback(async () => {
+    try {
+      setBlocked(await getMyPeople('blocked'));
+    } catch (err) {
+      // Not shown: an empty Blocked section is the honest fallback.
+      toUserMessageAllowingDbGuard(err, undefined, '[circle] load blocked list');
+    }
+  }, []);
+
   const loadSettings = useCallback(async () => {
     if (!userId) return;
     try {
@@ -207,8 +221,9 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
   useFocusEffect(
     useCallback(() => {
       void loadLists();
+      void loadBlocked();
       void loadSettings();
-    }, [loadLists, loadSettings]),
+    }, [loadLists, loadBlocked, loadSettings]),
   );
 
   // ── Search ────────────────────────────────────────────────────────────────
@@ -361,7 +376,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       const first = firstName(name);
       showConfirm(
         `Block ${first}?`,
-        `You'll stop following each other, and ${first} won't be able to find you or follow you. They won't be told. You can't undo this in the app yet.`,
+        `You'll stop following each other, and ${first} won't be able to find you or follow you. They won't be told. You can unblock them at the bottom of Your circle.`,
         [
           {
             text: 'Block',
@@ -374,6 +389,9 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
                 setRequests((list) => withoutPerson(list, personId));
                 setFollowing((list) => withoutPerson(list, personId));
                 setFollowers((list) => withoutPerson(list, personId));
+                setBlocked((list) => withPersonFirst(list, {
+                  userId: personId, name, avatarUrl: null, status: 'blocked', since: new Date().toISOString(),
+                }));
                 afterFollowChange();
                 showToast(`${first} is blocked`, 'info');
               }),
@@ -383,6 +401,29 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       );
     },
     [showConfirm, runForRow, afterFollowChange, showToast],
+  );
+
+  const confirmUnblock = useCallback(
+    (entry: PersonListEntry) => {
+      const first = firstName(entry.name);
+      showConfirm(
+        `Unblock ${first}?`,
+        `${first} will be able to find you and ask to follow you again. You won't follow each other unless one of you asks again.`,
+        [
+          {
+            text: 'Unblock',
+            onPress: () =>
+              void runForRow(entry.userId, "Couldn't unblock", '[circle] unblock person', async () => {
+                await unblockPerson(entry.userId);
+                setBlocked((list) => withoutPerson(list, entry.userId));
+                afterFollowChange();
+              }),
+          },
+          { text: 'Keep blocked', style: 'cancel' },
+        ],
+      );
+    },
+    [showConfirm, runForRow, afterFollowChange],
   );
 
   // ── Sharing switches ──────────────────────────────────────────────────────
@@ -415,6 +456,26 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       }
     },
     [userId, savingSetting, afterFollowChange, loadLists, showAlert],
+  );
+
+  // Under-18s start with this off; turning it on gets a confirm first
+  // (decided 2026-11-08), in line with not nudging children to share more.
+  const onShowWhereIGoChange = useCallback(
+    (on: boolean) => {
+      if (!on || !settings?.isMinor) {
+        void saveSetting({ showWhereIGo: on });
+        return;
+      }
+      showConfirm(
+        'Show where I go?',
+        "From now on, people you accept as followers will see your face on providers you book or recommend, and how many times you've been. Your account stays private.",
+        [
+          { text: 'Turn on', onPress: () => void saveSetting({ showWhereIGo: true }) },
+          { text: 'Not now', style: 'cancel' },
+        ],
+      );
+    },
+    [settings?.isMinor, saveSetting, showConfirm],
   );
 
   const onPrivateChange = useCallback(
@@ -529,8 +590,15 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           ? followers.map((entry) => ({ kind: 'follower', key: `f-${entry.userId}`, entry }))
           : [{ kind: 'note', key: 'f-empty', text: 'Nobody follows you yet.' }],
     });
+    if (blocked.length > 0) {
+      out.push({
+        key: 'blocked',
+        title: `BLOCKED · ${blocked.length}`,
+        data: blocked.map((entry) => ({ kind: 'blocked', key: `b-${entry.userId}`, entry })),
+      });
+    }
     return out;
-  }, [inSearch, results, searching, searchError, trimmed, requests, contactsState, contactMatches, listsState, following, followers]);
+  }, [inSearch, results, searching, searchError, trimmed, requests, contactsState, contactMatches, listsState, following, followers, blocked]);
 
   // ── Rendering ─────────────────────────────────────────────────────────────
 
@@ -595,11 +663,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           title="Show where I go"
           sub={
             settings.showWhereIGo
-              ? "People who follow you see your face on providers you recommend or have booked, including past appointments, and how many times you've been. Never which service you had."
+              ? "People who follow you see your face on providers you recommend, or book after turning this on, and how many times you've been. Never which service you had."
               : 'Nobody sees where you go, recommends included.'
           }
           value={settings.showWhereIGo}
-          onChange={(v) => void saveSetting({ showWhereIGo: v })}
+          onChange={onShowWhereIGoChange}
           disabled={savingSetting}
           P={P}
         />
@@ -781,6 +849,16 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
             <GhostButton small label="Remove" onPress={() => confirmRemoveFollower(e)} P={P} accessibilityLabel={`Remove ${e.name}`} />
             {moreButton(e.userId, e.name)}
           </>,
+        );
+      }
+      case 'blocked': {
+        const e = item.entry;
+        return personRow(
+          e.userId,
+          e.name,
+          e.avatarUrl,
+          null,
+          <GhostButton small label="Unblock" onPress={() => confirmUnblock(e)} P={P} accessibilityLabel={`Unblock ${e.name}`} />,
         );
       }
     }

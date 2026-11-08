@@ -43,13 +43,15 @@ export interface ContactMatch extends PersonSummary {
   phoneHash: string;
 }
 
-export type PeopleListKind = 'followers' | 'following' | 'requests';
+/** 'blocked' needs migration 20261109130000; before it, the server answers 'Unknown list.' */
+export type PeopleListKind = 'followers' | 'following' | 'requests' | 'blocked';
 
 export interface PersonListEntry {
   userId: string;
   name: string;
   avatarUrl: string | null;
-  status: FollowStatus;
+  /** 'blocked' only in the blocked list. */
+  status: FollowStatus | 'blocked';
   since: string;
 }
 

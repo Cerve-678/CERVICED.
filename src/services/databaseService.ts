@@ -12586,7 +12586,7 @@ export async function getMyPeople(kind: PeopleListKind): Promise<PersonListEntry
       user_id: string;
       name: string | null;
       avatar_url: string | null;
-      status: FollowStatus;
+      status: FollowStatus | 'blocked';
       since: string;
     }[]
   ).map((row) => ({
