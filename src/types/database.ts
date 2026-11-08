@@ -837,6 +837,10 @@ export interface DbReview {
   comment: string | null;
   tip_amount: number | null;
   created_at: string;
+  /** The client chose to review anonymously. The database then hides who
+   *  wrote it from everyone but the client themself, the provider included:
+   *  see supabase/migrations/20261108140000_anonymous_reviews.sql. */
+  is_anonymous: boolean;
 }
 
 export interface DbNotification {
@@ -1171,16 +1175,31 @@ export interface BookingWithAddOns extends DbBooking {
 }
 
 /** Review with user name — used by ProviderProfileScreen */
-export interface ReviewWithUser extends DbReview {
+/**
+ * A review as the provider it is about sees it. On an anonymous review the
+ * database blanks everything that leads back to the client: who wrote it, and
+ * the booking, service and tip that would name them.
+ */
+export interface ReviewWithUser
+  extends Omit<DbReview, "user_id" | "booking_id" | "service_id" | "tip_amount"> {
+  user_id: string | null;
+  booking_id: string | null;
+  service_id: string | null;
+  tip_amount: number | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 
-/** Public review payload: deliberately excludes booking and payment linkage. */
+/** Public review payload: deliberately excludes booking and payment linkage,
+ *  and the reviewer entirely on an anonymous review. */
 export interface PublicReviewWithUser
   extends Pick<
     DbReview,
-    "id" | "user_id" | "provider_id" | "rating" | "comment" | "created_at"
+    "id" | "provider_id" | "rating" | "comment" | "created_at" | "is_anonymous"
   > {
+  /** null on an anonymous review. */
+  user_id: string | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 

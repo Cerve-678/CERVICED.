@@ -54,6 +54,7 @@ import type { GroupedListItem } from '../../features/bookings/presentationTypes'
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { ExternalBookingCard } from '../../features/bookings/ExternalBookingCard';
+import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import { externalBookingStart, splitExternalBookings } from '../../features/bookings/externalBookings';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
@@ -468,6 +469,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+  // Off by default: a review is named unless the client chooses otherwise.
+  const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [showRebookAddOnsModal, setShowRebookAddOnsModal] = useState(false);
   const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
@@ -734,6 +737,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           service_id: null,
           user_id: user.id,
           rating,
+          is_anonymous: reviewAnonymous,
           ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
         });
       }
@@ -747,6 +751,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         setShowRatingModal(false);
         setRating(0);
         setReviewText('');
+        setReviewAnonymous(false);
         setTimeout(() => {
           mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
           modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -756,7 +761,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert('Error', 'Failed to submit rating.');
       setIsLoading(false);
     }
-  }, [selectedBooking, rating, reviewText, user]);
+  }, [selectedBooking, rating, reviewText, reviewAnonymous, user]);
 
   // A tip is a distinct Stripe payment, not a number attached to a review.
   const handleTipSubmit = useCallback(async () => {
@@ -1145,6 +1150,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             logger.log('Opening rating modal for booking:', booking.id);
             setRating(0);
             setReviewText('');
+            setReviewAnonymous(false);
             setShowRatingModal(true);
           } else if (route.params?.openBookingId) {
             logger.log('Navigating to BookingDetail screen');
@@ -2263,7 +2269,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             showRatingModal/rating/reviewText but nothing rendered a modal, so
             tapping Rate did nothing visible. handleRatingSubmit already wired
             up a real submitReview() call; only the UI was missing. ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 {!hasRated ? (
@@ -2288,8 +2294,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       />
                       <Text style={styles.characterCount}>{reviewText.length}/500</Text>
                     </View>
+                    <AnonymousReviewToggle
+                      value={reviewAnonymous}
+                      onValueChange={setReviewAnonymous}
+                      palette={{ text: P.text, sub: P.sub, accent: P.accent, border: P.border }}
+                      disabled={isLoading}
+                    />
                     <View style={popSt.sheetBtns}>
-                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }} activeOpacity={0.7}>
                         <Text style={{ color: P.text }}>Skip</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : P.accent }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>

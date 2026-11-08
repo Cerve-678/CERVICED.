@@ -28,6 +28,7 @@ import { canDisputeNoShow, hasDirectionsDestination, isAddressPending, isMobileB
 import { directionsUrlFor } from '../../utils/mapsLink';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import {
   describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
@@ -185,6 +186,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+  // Off by default: a review is named unless the client chooses otherwise.
+  const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [showTipModal, setShowTipModal] = useState(false);
@@ -750,14 +753,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       }
       const alreadyReviewed = await hasReviewedBooking(booking.id);
       if (!alreadyReviewed) {
-        await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
+        await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, is_anonymous: reviewAnonymous, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
       }
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);
-      setTimeout(() => { setShowRatingModal(false); setRating(0); setReviewText(''); }, 2000);
+      setTimeout(() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }, 2000);
     } catch (err) { logger.error('[BookingDetail] submit rating failed:', err); Alert.alert('Rating Not Saved', 'Please try again in a moment.'); }
     finally { setIsLoading(false); }
-  }, [booking, rating, reviewText, user]);
+  }, [booking, rating, reviewText, reviewAnonymous, user]);
 
   /**
    * Record a tip. This previously only set local component state, so the tip was
@@ -1855,7 +1858,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Rating Modal ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 {!hasRated ? (
@@ -1874,8 +1877,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       multiline numberOfLines={3} placeholder="Share your experience (optional)"
                       placeholderTextColor={C.sub} value={reviewText} onChangeText={setReviewText} maxLength={500}
                     />
+                    <AnonymousReviewToggle
+                      value={reviewAnonymous}
+                      onValueChange={setReviewAnonymous}
+                      palette={{ text: C.text, sub: C.sub, accent: C.accent, border: C.border }}
+                      disabled={isLoading}
+                    />
                     <View style={st.sheetBtns}>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }} activeOpacity={0.7}>
                         <Text style={{ color: C.text }}>Skip</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: rating === 0 ? C.border : C.accent }]} disabled={rating === 0 || isLoading} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleRatingSubmit(); }} activeOpacity={0.7}>

@@ -76,6 +76,12 @@ import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from 
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
 import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
+import {
+  toMyProviderReview,
+  toPublicReview,
+  type MyProviderReviewRow,
+  type PublicReviewRow,
+} from "../features/providers/reviewPresentation";
 export type { BookingReviewState } from "../features/bookings/reviewState";
 import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
@@ -4773,7 +4779,13 @@ export async function getUnreadNotificationCount(
 // REVIEWS
 // ─────────────────────────────────────────────────────────
 
-/** Fetch reviews for a provider */
+/**
+ * Fetch reviews for a provider.
+ *
+ * Through get_provider_reviews, not the table: an anonymous review is hidden
+ * from direct reads, and the RPC returns it with the reviewer blanked. It also
+ * resolves reviewer names itself, so there is no second round trip.
+ */
 export async function getProviderReviews(
   providerId: string,
   options: { limit?: number } = {},
@@ -4782,87 +4794,25 @@ export async function getProviderReviews(
     Math.max(Math.trunc(options.limit ?? DEFAULT_REVIEWS_QUERY_LIMIT), 1),
     DEFAULT_REVIEWS_QUERY_LIMIT,
   );
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("id, user_id, provider_id, rating, comment, created_at")
-    .eq("provider_id", providerId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
+  const { data, error } = await supabase.rpc("get_provider_reviews", {
+    p_provider_id: providerId,
+    p_limit: limit,
+  });
   if (error) throw error;
-  const reviews = (data ?? []) as Pick<
-    DbReview,
-    "id" | "user_id" | "provider_id" | "rating" | "comment" | "created_at"
-  >[];
-  if (reviews.length === 0) return [];
-
-  // Reviewer name/avatar comes from a SECURITY DEFINER RPC, not an embedded
-  // join on the users table — that join relied on a blanket read policy on
-  // users that also exposed health data to anyone (see
-  // fix_users_table_pii_leak.sql). Batched into one call, not per-row.
-  const userIds = [...new Set(reviews.map((r) => r.user_id))];
-  const { data: profiles, error: profilesError } = await supabase.rpc(
-    "get_user_public_profiles",
-    {
-      p_user_ids: userIds,
-    },
-  );
-  if (profilesError) throw profilesError;
-  const profileById = new Map<string, Pick<DbUser, "name" | "avatar_url">>(
-    (profiles ?? []).map(
-      (profile: {
-        id: string;
-        name: string | null;
-        avatar_url: string | null;
-      }) => [
-        profile.id,
-        { name: profile.name ?? "", avatar_url: profile.avatar_url },
-      ],
-    ),
-  );
-
-  return reviews.map((r) => ({
-    ...r,
-    user: profileById.get(r.user_id) ?? { name: "", avatar_url: null },
-  })) as PublicReviewWithUser[];
+  return ((data ?? []) as PublicReviewRow[]).map(toPublicReview);
 }
 
-/** Fetch reviews for the currently authenticated provider */
+/**
+ * Fetch reviews for the currently authenticated provider. An anonymous review
+ * comes back with no reviewer, booking, service or tip — the booking would
+ * name the client.
+ */
 export async function getMyProviderReviews(): Promise<ReviewWithUser[]> {
-  const provider = await getMyProviderProfile();
-  if (!provider) return [];
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("*")
-    .eq("provider_id", provider.id)
-    .order("created_at", { ascending: false })
-    .limit(DEFAULT_REVIEWS_QUERY_LIMIT);
+  const { data, error } = await supabase.rpc("get_my_provider_reviews", {
+    p_limit: DEFAULT_REVIEWS_QUERY_LIMIT,
+  });
   if (error) throw error;
-  const reviews = (data ?? []) as DbReview[];
-  if (reviews.length === 0) return [];
-
-  const userIds = [...new Set(reviews.map((review) => review.user_id))];
-  const { data: profiles, error: profilesError } = await supabase.rpc(
-    "get_user_public_profiles",
-    { p_user_ids: userIds },
-  );
-  if (profilesError) throw profilesError;
-  const profileById = new Map<string, Pick<DbUser, "name" | "avatar_url">>(
-    (profiles ?? []).map(
-      (profile: {
-        id: string;
-        name: string | null;
-        avatar_url: string | null;
-      }) => [
-        profile.id,
-        { name: profile.name ?? "", avatar_url: profile.avatar_url },
-      ],
-    ),
-  );
-  return reviews.map((review) => ({
-    ...review,
-    user: profileById.get(review.user_id) ?? { name: "", avatar_url: null },
-  }));
+  return ((data ?? []) as MyProviderReviewRow[]).map(toMyProviderReview);
 }
 
 /** Submit a review for a completed booking */
@@ -4874,6 +4824,8 @@ export async function submitReview(review: {
   rating: number;
   comment?: string;
   tip_amount?: number;
+  /** Hide who wrote it from everyone, the provider included. */
+  is_anonymous?: boolean;
 }): Promise<DbReview> {
   const { data, error } = await supabase
     .from("reviews")

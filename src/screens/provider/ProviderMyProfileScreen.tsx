@@ -132,6 +132,7 @@ import {
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
 import { splitPortfolioByKind } from '../../features/providers/venuePhotos';
+import { mapProviderReviews, type ProviderReviewItem } from '../../features/providers/reviewPresentation';
 
 
 // Hero → content transition, inherited from the client-facing profile.
@@ -781,9 +782,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // below — reusing it avoids a duplicate portfolio_items query).
   const [termsSet, setTermsSet] = useState(false);
   const [automationsSet, setAutomationsSet] = useState(false);
-  const [reviews, setReviews] = useState<
-    { id: string; name: string; rating: number; comment: string; date: string }[]
-  >([]);
+  const [reviews, setReviews] = useState<ProviderReviewItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
   // How far ahead clients can book, for the release-date quick view. Re-read
@@ -958,19 +957,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             getProviderReviews(profile.id, { limit: 20 })
               .then(dbReviews => {
                 if (!active) return;
-                setReviews(
-                  dbReviews.map(r => ({
-                    id: r.id,
-                    name: r.user?.name ?? 'Anonymous',
-                    rating: r.rating,
-                    comment: r.comment ?? '',
-                    date: new Date(r.created_at).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    }),
-                  })),
-                );
+                // Same mapper as the client's view of this profile, so an
+                // anonymous review reads "Anonymous" here too.
+                setReviews(mapProviderReviews(dbReviews));
               })
               .catch(() => {}),
 
