@@ -19,8 +19,7 @@ import type { AppTheme } from '../../constants/theme';
 import { getIntakeFormById, submitIntakeFormAnswers, IntakeForm, IntakeFormQuestion } from '../../services/databaseService';
 import { HomeScreenProps } from '../../navigation/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
-import { useSettingsStackHidesTabBar } from '../../navigation/settingsTabBar';
+import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { ThemedBackground } from '../../components/ThemedBackground';
 
@@ -30,8 +29,8 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   const { formId, serviceName } = route.params;
   const { palette: P } = useTheme();
   const insets = useSafeAreaInsets();
-  // Opened from the Profile tab there is no tab bar to clear, only the home indicator.
-  const tabBarHidden = useSettingsStackHidesTabBar();
+  // A form is a focused task: no bottom nav, whichever tab it was opened from.
+  useHideTabBar();
 
   const [form, setForm]         = useState<IntakeForm | null>(null);
   const [answers, setAnswers]   = useState<Record<string, string>>({});
@@ -50,10 +49,9 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   // straight to the read-only answers view instead of the congrats screen.
   const [justSubmitted, setJustSubmitted] = useState(false);
 
-  // footer's bottom padding clears the floating tab bar when the keyboard is
+  // The footer's bottom padding clears the home indicator when the keyboard is
   // closed, but that same clearance becomes a dead gap between the Submit
-  // button and the keyboard once it's open (same fix as ProviderChatScreen /
-  // ChatComponents.tsx's ChatInput).
+  // button and the keyboard once it's open.
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -179,7 +177,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
         <KeyboardDismissView style={{ flex: 1 }}>
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[styles.content, { paddingBottom: 120 }]}
+            contentContainerStyle={[styles.content, { paddingBottom: submitted ? 24 + insets.bottom : 24 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -247,7 +245,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
 
           {/* Submit button — hidden once completed, since there's nothing left to submit */}
           {!submitted && (
-            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border, paddingBottom: keyboardVisible ? 12 : tabBarHidden ? Math.max(insets.bottom, 12) : FLOATING_TAB_BAR_CLEARANCE }]}>
+            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border, paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 12) }]}>
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: P.accent }]}
                 onPress={handleSubmit}
@@ -462,12 +460,9 @@ const styles = StyleSheet.create({
   },
   doneBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
+  // Sits below the ScrollView rather than floating over it, so the last
+  // question always scrolls fully clear of the Submit button.
   footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    // Bottom padding clears the floating pill tab bar when the keyboard is
-    // closed (see the keyboardVisible swap at the call site) — it used to be
-    // a flat 36, which is roughly home-indicator clearance only, so the pill
-    // sat right on top of the Submit button.
     paddingHorizontal: 16, paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },

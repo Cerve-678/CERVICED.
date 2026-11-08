@@ -2023,9 +2023,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Info Pack Full-Screen Reader — long packs only. Short ones get
             the compact popup below instead of taking over the whole screen. */}
-        <Modal visible={!!viewingPack && isLongBookingInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
-          <View style={{ flex: 1, backgroundColor: C.bg }}>
-            <SafeAreaView style={{ flex: 1 }}>
+        <Modal visible={!!viewingPack && isLongBookingInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent navigationBarTranslucent onRequestClose={() => setViewingPack(null)}>
+          {/* Insets come from context: a <SafeAreaView> inside a Modal applies
+              none, which put the back button under the status bar. */}
+          <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }}>
               {/* Header */}
               <View style={{
                 flexDirection: 'row', alignItems: 'center',
@@ -2045,7 +2046,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
               {viewingPack && (
                 <ScrollView
-                  contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 28, paddingBottom: 60 }}
+                  contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 28, paddingBottom: 60 + insets.bottom }}
                   showsVerticalScrollIndicator={false}
                 >
                   {/* Service pill */}
@@ -2075,7 +2076,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </Text>
                 </ScrollView>
               )}
-            </SafeAreaView>
           </View>
         </Modal>
 
