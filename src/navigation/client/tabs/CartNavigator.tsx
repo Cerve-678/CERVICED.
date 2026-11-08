@@ -7,6 +7,7 @@ import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
+import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import { CartStackParamList } from '../../types';
@@ -64,6 +65,24 @@ export default function CartNavigator() {
           headerTransparent: false,
           headerBlurEffect: undefined,
           headerShadowVisible: false,
+          headerTitleStyle: {
+            fontFamily: 'BakbakOne',
+            fontSize: 22,
+            color: theme.text,
+          },
+          headerTintColor: theme.text,
+        }}
+      />
+
+      <CartStack.Screen
+        name="ActivityCentre"
+        component={ActivityCentreScreen}
+        options={{
+          title: 'Activity Centre',
+          presentation: 'card',
+          headerTransparent: false,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
             fontFamily: 'BakbakOne',
             fontSize: 22,
