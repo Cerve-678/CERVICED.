@@ -106,7 +106,6 @@ export interface ProviderProfileData {
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
-  travelRadius: string;
   productsUsed: string;
   bookingPolicies: {
     cancelNotice?: string;

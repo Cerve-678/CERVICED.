@@ -149,7 +149,6 @@ import {
   ADDRESS_RELEASE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
-  providerTravelsToClient,
   ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
   SERVICE_TYPE_OPTS,
@@ -2896,7 +2895,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     priceRange: '',
     priceBands: [],
     serviceLocations: [],
-    travelRadius: '',
     preferredPaymentMethods: [],
     fullAddress: '',
     howToGetThere: '',
@@ -4742,37 +4740,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
                 />
               </View>
-
-              {/* How far a mobile provider travels → providers.travel_radius,
-                  shown on the client profile as "Travels up to …". Asked here,
-                  beside the location it's measured from, and only when the
-                  business type means they travel (mobile); the profile hides
-                  the line for every other type, so an old value can't
-                  contradict a salon or studio. Free text, like the column.
-                  Blank clears it. Policies → Travel is a separate free-text
-                  note, not tied to this. */}
-              {providerTravelsToClient(providerData.businessType || null) && (
-                <View
-                  style={styles.inputGroup}
-                  ref={registerField('travelRadius')}
-                >
-                  <Text style={styles.inputLabel}>How far you travel</Text>
-                  <View style={[styles.inputBlur, styles.profileInputBox]}>
-                    <TextInput
-                      style={styles.textInput}
-                      value={providerData.travelRadius ?? ''}
-                      onChangeText={(text) =>
-                        setProviderData(prev => ({ ...prev, travelRadius: text }))
-                      }
-                      placeholder="e.g. 10 miles"
-                      placeholderTextColor={chrome.fg(0.4)}
-                      maxLength={40}
-                      onFocus={() => handleInputFocus('travelRadius', 'identity')}
-                    />
-                  </View>
-                  <Text style={styles.inputHint}>Shown on your profile as "Travels up to …". Leave blank to hide it (optional).</Text>
-                </View>
-              )}
 
               {/* Jump-to-next affordance at the foot of the section, once
                   there's nothing left to fill in above it — not a "confirm
