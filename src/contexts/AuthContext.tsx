@@ -25,6 +25,7 @@ import {
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/withTimeout';
+import { toPickColumn } from '../features/beauty-profile/pickList';
 import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnapshot } from '../services/authProfileSnapshot';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 import type { ProviderBookingMode } from '../types/database';
@@ -76,9 +77,9 @@ export interface ClientProfileData {
   dobMonth: string;
   dobYear: string;
   hairType: string;
-  skinType: string;
+  skinType: string[];
   skinConcerns: string[];
-  styleVibe: string;
+  styleVibe: string[];
   allergies: string[];
   treatmentHistory: string[];
   medicalNotes: string;
@@ -842,9 +843,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
       hair_type: profileData.hairType || null,
-      skin_type: profileData.skinType || null,
+      skin_type: toPickColumn(profileData.skinType),
       skin_concerns: profileData.skinConcerns,
-      style_vibe: profileData.styleVibe || null,
+      style_vibe: toPickColumn(profileData.styleVibe),
       allergies: profileData.allergies,
       treatment_history: profileData.treatmentHistory,
       medical_notes: profileData.medicalNotes || null,

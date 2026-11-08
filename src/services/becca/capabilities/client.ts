@@ -64,6 +64,7 @@ import { hasUsefulHistory, type Capability, type CapabilityResult, type PendingA
 import { buildRebookCartItem, rebookAddOns } from "../../../features/bookings/rebook";
 import { CATEGORY_LABELS, SERVICE_CATALOGUE } from "../serviceCatalogue";
 import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
+import { formatPickList, toPickList } from "../../../features/beauty-profile/pickList";
 import {
   chip,
   navChip,
@@ -3457,11 +3458,13 @@ const beautyProfile: Capability = {
     // neither recites nor interprets them (see BECCA_CAPABILITIES.md §2.1).
     const fields: { title: string; detail: string }[] = [];
     if (profile?.hair_type) fields.push({ title: "Hair type", detail: profile.hair_type });
-    if (profile?.skin_type) fields.push({ title: "Skin type", detail: profile.skin_type });
+    const skinTypes = toPickList(profile?.skin_type);
+    if (skinTypes.length) fields.push({ title: "Skin type", detail: formatPickList(skinTypes) });
     if (profile?.nail_shape) fields.push({ title: "Nail shape", detail: profile.nail_shape });
     if (profile?.lash_style) fields.push({ title: "Lash style", detail: profile.lash_style });
     if (profile?.brow_style) fields.push({ title: "Brow style", detail: profile.brow_style });
-    if (profile?.style_vibe) fields.push({ title: "Style", detail: profile.style_vibe });
+    const styleVibes = toPickList(profile?.style_vibe);
+    if (styleVibes.length) fields.push({ title: "Style", detail: formatPickList(styleVibes) });
     const bits = fields.map((f) => `- **${f.title}:** ${f.detail}`);
 
     if (bits.length === 0) {

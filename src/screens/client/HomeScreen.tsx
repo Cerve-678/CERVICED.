@@ -52,6 +52,7 @@ import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import type { PortfolioItem, ServiceCategory } from '../../types/providers';
+import { toPickList } from '../../features/beauty-profile/pickList';
 
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
@@ -465,7 +466,7 @@ export default function HomeScreen() {
       userLearningService.setUserProfile({
         serviceInterests:    u.serviceInterests    || [],
         hairType:            u.hairType            || '',
-        styleVibe:           u.styleVibe           || '',
+        styleVibe:           toPickList(u.styleVibe),
         treatmentHistory:    u.treatmentHistory    || [],
         maintenanceFrequency: u.maintenanceFrequency || '',
       });
