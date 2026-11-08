@@ -1,6 +1,6 @@
 /**
- * What a client sees under a provider's bio as "I work with", and the
- * Products section of Additional Information. Pure, so the profile screen
+ * The "I work with" rows (clients, skin tones, hair types) and the Products
+ * section, both shown in Additional Information on a provider's profile. Pure, so the profile screen
  * and its tests read the same thing.
  */
 import { SKIN_TONES } from '../../constants/skinTones';
@@ -19,8 +19,8 @@ function inOrder(picked: readonly string[], vocabulary: readonly string[], allLa
   return [...known, ...extra];
 }
 
-/** The rows under "I work with". A row with nothing stated is left out, and
- *  so is the whole block when none of the three is stated. */
+/** The "I work with" rows for Additional Information. A row with nothing
+ *  stated is left out. */
 export function workWithGroups(provider: {
   clientele: readonly string[];
   skinTonesCatered: readonly string[];
@@ -28,7 +28,7 @@ export function workWithGroups(provider: {
 }): ChipGroup[] {
   const groups: ChipGroup[] = [];
   if (provider.clientele.length > 0) {
-    groups.push({ label: 'Clients', chips: [...provider.clientele] });
+    groups.push({ label: 'Works with', chips: [...provider.clientele] });
   }
   if (provider.skinTonesCatered.length > 0) {
     groups.push({ label: 'Skin tones', chips: inOrder(provider.skinTonesCatered, SKIN_TONES, 'All skin tones') });

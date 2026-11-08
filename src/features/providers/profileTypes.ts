@@ -109,7 +109,7 @@ export interface ProviderProfileData {
   /** providers.products_used, a comma-separated brand list — split with
    *  splitProductsUsed (features/business-details/productBrands.ts). */
   productsUsed: string;
-  /** "I work with", shown under the bio. Each empty when not stated. */
+  /** "I work with", shown in Additional Information. Each empty when not stated. */
   clientele: string[];
   skinTonesCatered: string[];
   hairTypesCatered: string[];

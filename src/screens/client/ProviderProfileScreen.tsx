@@ -115,7 +115,6 @@ import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../feature
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 import {
   ProviderAdditionalInfoSection,
-  ProviderWorkWithBlock,
   ProviderContactSection,
   ProviderOpeningHoursSection,
   ProviderPortfolioSection,
@@ -1781,6 +1780,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // Who they work with (clients, skin tones, hair types) from About You's
+    // "I Work With" — here, not in the About/Policy card, which is the bio.
+    groups.push(...workWithGroups(provider));
     // Its own section, from Services & Pricing's "Products I Work With".
     const products = productsGroup(provider);
     if (products) groups.push(products);
@@ -1819,10 +1821,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     return groups;
   }, [provider]);
-
-  // "I work with" under the bio — clientele, skin tones and hair types from
-  // About You.
-  const workWith = useMemo(() => (provider ? workWithGroups(provider) : []), [provider]);
 
   // One natural-language paragraph rather than a label/value dump — these are
   // unrelated one-liners, and as rows they read like a spec sheet for
@@ -5440,7 +5438,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
                         onCollapse={handleAboutCollapse}
                       />
-                      <ProviderWorkWithBlock groups={workWith} palette={sectionPalette} />
                     </>
                   ) : (
                     /* Policy tab content */
