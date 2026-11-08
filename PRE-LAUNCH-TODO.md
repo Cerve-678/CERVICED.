@@ -1419,3 +1419,19 @@ wording, walk-ins and group bookings are shown to clients, not enforced. Travel
 radius is the one that may matter: a mobile provider can be booked to an
 address outside their radius. Decide whether that should be checked against
 the client's address at checkout.
+
+## 32. Review later — which bookings still unlock a client's beauty profile (2026-11-08)
+
+Since `get_client_beauty_profile_for_booking` (migration 20261108100000, PR
+#342), a provider only gets the part of a client's Beauty Profile that fits the
+booked service, plus allergies, medical notes and photography consent.
+
+Still open: **any** booking with that provider unlocks it, whatever its state
+or age. A cancelled booking, a declined or never-accepted request, and a
+booking from years ago all still let the provider read the client's allergies
+and medical notes. This is the same as before #342.
+
+Decide whether access should end when a booking is cancelled or declined, and
+whether it should lapse after a set time (for example, some months after the
+appointment). Parked by the user on 2026-11-08: "leave for now but put in to
+do review future". Raised by the security review of #342.
