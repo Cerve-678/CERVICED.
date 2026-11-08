@@ -5,7 +5,7 @@
 
 #generated
 
-**3333 functions** across **467 files**.
+**3332 functions** across **467 files**.
 
 ### `src/components/` (61)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -225,7 +225,7 @@
 - `aboutPreview.ts` — **aboutPreview**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
-- `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · toggleAutoClose · tomorrow
+- `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · tomorrow
 - `conversionSteps.ts` — **buildConversionSteps** · **countLeftToGoLive**
 - `descriptionTopics.ts` — **learnDescriptionTopics** · meaningful
 - `DiaryCard.tsx` — createStyles · daySummary · **DiaryCard** · disconnect · load · openChooser · saveChoice · styles · week · weekRangeLabel
