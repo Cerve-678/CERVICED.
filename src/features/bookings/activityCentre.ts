@@ -48,7 +48,8 @@ export type ActivityKind =
   | 'refund_request'
   | 'refund_pending'
   | 'reschedule_waiting'
-  | 'awaiting_confirmation';
+  | 'awaiting_confirmation'
+  | 'done';
 
 /** Where tapping an item takes the client. */
 export type ActivityTarget =
@@ -59,9 +60,10 @@ export type ActivityTarget =
 /**
  * How the item's live dot moves. `urgent` = its deadline is within a day,
  * `soon` = a hard deadline further off, `still` = tied to an appointment with
- * no deadline of its own, `waiting` = someone else has it.
+ * no deadline of its own, `waiting` = someone else has it, `done` = finished
+ * in the last few days, shown struck through.
  */
-export type ActivityPulse = 'urgent' | 'soon' | 'still' | 'waiting';
+export type ActivityPulse = 'urgent' | 'soon' | 'still' | 'waiting' | 'done';
 
 export interface ActivityItem {
   key: string;
@@ -81,6 +83,8 @@ export interface ActivityItem {
 export interface ClientActivity {
   needsYou: ActivityItem[];
   inProgress: ActivityItem[];
+  /** Finished recently, newest first. Struck through on the page. */
+  done: ActivityItem[];
 }
 
 const DAY_MS = 86_400_000;
@@ -332,9 +336,52 @@ export function buildClientActivity(
     });
   }
 
+  // ── Done ──────────────────────────────────────────────────
+
+  // A booking still asking for a form or pack shows that, not an older one done.
+  const stillOpen = new Set([
+    ...remote.pendingFormBookingIds.map(id => `form:${id}`),
+    ...remote.unreadPackBookingIds.map(id => `pack:${id}`),
+  ]);
+  const done: ActivityItem[] = [];
+  const seenDone = new Set<string>();
+  for (const d of remote.recentlyDone) {
+    const doneMs = isoMs(d.doneAt);
+    if (doneMs === null) continue;
+    const { service, provider } = names(byId.get(d.bookingId));
+    const base = { kind: 'done' as const, pulse: 'done' as const, target: { type: 'booking' as const, bookingId: d.bookingId }, sortAt: doneMs };
+    if (d.kind === 'form_sent' || d.kind === 'pack_read') {
+      const open = `${d.kind === 'form_sent' ? 'form' : 'pack'}:${d.bookingId}`;
+      if (stillOpen.has(open) || seenDone.has(open)) continue;
+      seenDone.add(open);
+      done.push(d.kind === 'form_sent'
+        ? { ...base, key: `done:form:${d.id}`, title: 'Fill in your form', detail: `Sent to ${provider} for ${service}.`, summary: 'Form sent' }
+        : { ...base, key: `done:pack:${d.id}`, title: 'Read your info pack', detail: `From ${provider} for ${service}.`, summary: 'Info pack read' });
+    } else if (d.kind === 'fee_paid') {
+      done.push({
+        ...base,
+        key: `done:fee:${d.id}`,
+        title: `Pay your ${d.feeKind === 'late' ? 'late' : 'no-show'} fee · ${pounds(d.amountPence)}`,
+        detail: `Paid on ${formatShortDayDate(new Date(doneMs))}.`,
+        summary: 'Fee paid',
+      });
+    } else {
+      done.push({
+        ...base,
+        key: `done:refund:${d.id}`,
+        title: 'Refund requested',
+        detail: d.outcome === 'refunded'
+          ? `${service} with ${provider}. Decided: refund issued.`
+          : `${service} with ${provider}. Decided: not refunded. Open the booking to see why.`,
+        summary: 'Refund request decided',
+      });
+    }
+  }
+
   return {
     needsYou: needsYou.sort(byDueDate).map(item => ({ ...item, pulse: needsYouPulse(item, nowMs) })),
     inProgress: inProgress.sort(byDueDate).map(item => ({ ...item, pulse: 'waiting' as const })),
+    done: done.sort((a, b) => b.sortAt - a.sortAt),
   };
 }
 
@@ -352,6 +399,8 @@ export interface ActivityTimeline {
   days: ActivityDay[];
   /** Everything someone else has, at the end of the line. */
   inProgress: ActivityItem[];
+  /** Finished recently, after that. */
+  done: ActivityItem[];
 }
 
 function localDayKey(ms: number): string {
@@ -379,7 +428,7 @@ export function activityTimeline(activity: ClientActivity, now: Date = new Date(
     days.push({ key, isToday, label: isToday ? 'TODAY' : formatShortDayDate(key).toUpperCase(), items: [item] });
   }
   if (days.length < 2) return null;
-  return { days, inProgress: activity.inProgress };
+  return { days, inProgress: activity.inProgress, done: activity.done };
 }
 
 /** Per-booking count of forms + unread packs — the "!" on each booking row. */

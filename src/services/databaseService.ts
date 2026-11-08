@@ -6936,6 +6936,15 @@ export async function getMyBookingActionItems(): Promise<
   return counts;
 }
 
+export type ClientActivityDone =
+  | { kind: 'form_sent'; id: string; bookingId: string; doneAt: string }
+  | { kind: 'pack_read'; id: string; bookingId: string; doneAt: string }
+  | { kind: 'fee_paid'; id: string; bookingId: string; doneAt: string; feeKind: BookingFeeKind; amountPence: number }
+  | { kind: 'refund_decided'; id: string; bookingId: string; doneAt: string; outcome: 'refunded' | 'declined' };
+
+/** How long a finished item stays struck through in the Activity Centre. */
+export const ACTIVITY_DONE_DAYS = 7;
+
 /** Everything the client's Activity Centre needs that isn't already on the
  *  bookings in BookingContext — one round of parallel reads, each capped.
  *  features/bookings/activityCentre.ts turns this plus the bookings into the
@@ -6972,6 +6981,10 @@ export interface ClientActivityRemote {
     bookingTime: string;
     holdExpiresAt: string;
   }[];
+  /** What the client finished in the last ACTIVITY_DONE_DAYS days, so the
+   *  Activity Centre can strike it through instead of it just disappearing.
+   *  Only things with a recorded finish time are here. */
+  recentlyDone: ClientActivityDone[];
 }
 
 const ACTIVITY_QUERY_LIMIT = 50;
@@ -6981,10 +6994,11 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     data: { user },
   } = await getSessionUser();
   if (!user) {
-    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [] };
+    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [] };
   }
 
-  const [forms, packs, refunds, fees, holds] = await Promise.all([
+  const since = new Date(Date.now() - ACTIVITY_DONE_DAYS * 86_400_000).toISOString();
+  const [forms, packs, refunds, fees, holds, formsDone, packsDone, feesDone, refundsDone] = await Promise.all([
     supabase
       .from("booking_intake_forms")
       .select("booking_id")
@@ -7018,8 +7032,43 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
       .eq("status", "on_hold")
       .gt("hold_expires_at", new Date().toISOString())
       .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_intake_forms")
+      .select("id, booking_id, completed_at")
+      .eq("client_user_id", user.id)
+      .eq("status", "completed")
+      .gte("completed_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_info_packs")
+      .select("id, booking_id, viewed_at")
+      .eq("client_user_id", user.id)
+      .gte("viewed_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    // Only fees the client was asked to pay (they carry an invoice, whether
+    // the client paid it or a retry on their saved card did), not ones the
+    // card covered first time without them ever seeing a request.
+    supabase
+      .from("booking_fee_charges")
+      .select("id, booking_id, kind, amount_pence, charged_at")
+      .eq("client_user_id", user.id)
+      .eq("status", "succeeded")
+      .not("stripe_invoice_id", "is", null)
+      .gte("charged_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("refund_requests")
+      .select("id, booking_id, status, resolved_at")
+      .eq("client_id", user.id)
+      .in("status", ["refunded", "declined"])
+      .gte("resolved_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
   ]);
   if (forms.error) throw forms.error;
+  if (formsDone.error) throw formsDone.error;
+  if (packsDone.error) throw packsDone.error;
+  if (feesDone.error) throw feesDone.error;
+  if (refundsDone.error) throw refundsDone.error;
   if (packs.error) throw packs.error;
   if (refunds.error) throw refunds.error;
   if (fees.error) throw fees.error;
@@ -7032,7 +7081,23 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     booking_date: string; booking_time: string; hold_expires_at: string;
   };
 
+  type FormDoneRow = { id: string; booking_id: string; completed_at: string };
+  type PackDoneRow = { id: string; booking_id: string; viewed_at: string };
+  type FeeDoneRow = { id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; charged_at: string };
+  type RefundDoneRow = { id: string; booking_id: string; status: 'refunded' | 'declined'; resolved_at: string };
+  const recentlyDone: ClientActivityDone[] = [
+    ...((formsDone.data ?? []) as FormDoneRow[]).map(r => ({ kind: 'form_sent' as const, id: r.id, bookingId: r.booking_id, doneAt: r.completed_at })),
+    ...((packsDone.data ?? []) as PackDoneRow[]).map(r => ({ kind: 'pack_read' as const, id: r.id, bookingId: r.booking_id, doneAt: r.viewed_at })),
+    ...((feesDone.data ?? []) as FeeDoneRow[]).map(r => ({
+      kind: 'fee_paid' as const, id: r.id, bookingId: r.booking_id, doneAt: r.charged_at, feeKind: r.kind, amountPence: r.amount_pence,
+    })),
+    ...((refundsDone.data ?? []) as RefundDoneRow[]).map(r => ({
+      kind: 'refund_decided' as const, id: r.id, bookingId: r.booking_id, doneAt: r.resolved_at, outcome: r.status,
+    })),
+  ];
+
   return {
+    recentlyDone,
     pendingFormBookingIds: ((forms.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
     unreadPackBookingIds: ((packs.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
     openRefundRequests: ((refunds.data ?? []) as RefundRow[]).map(r => ({
