@@ -24,6 +24,7 @@ import { CircleStack } from '../../components/CircleStack';
 import { Image } from 'expo-image';
 import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,7 @@ import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
 import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { cityFilterKeys, matchesCityFilter } from '../../utils/providerCity';
 import SearchGuideSheet, { AVAILABILITY_INFO } from '../../features/providers/SearchGuideSheet';
 import {
   resolveProviderPriceRange,
@@ -103,10 +105,11 @@ interface ProviderCardData {
   // computed distance, which stays available for the Distance filter/sort
   // via latitude/longitude above but is no longer displayed per-card.
   location: string;
-  // Service-coverage cities (providers.service_locations) — what the City
-  // filter matches against. Distinct from `location` above, which is a
-  // single display string, not a list of covered cities.
-  serviceLocations: string[];
+  // What the City filter matches against, built once per provider by
+  // cityFilterKeys (src/utils/providerCity.ts): the InfoReg location
+  // (location_text, never the 'London' display fallback above), the town it
+  // sits in, and the places in service_locations ("Areas you cover").
+  cityKeys: ReadonlySet<string>;
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
@@ -128,13 +131,13 @@ interface FilterOptions {
   // all) — providers whose availability hasn't resolved yet are never
   // filtered out, same not-excluded-when-unknown rule Distance follows.
   availableOnly?: boolean;
-  // Matches against a provider's service_locations array (see
-  // src/constants/ukCities.ts) — a provider covering ANY selected city is a
+  // Matches where a provider is based (InfoReg's "Where you're based",
+  // location_text), read up to its town, plus the places in
+  // service_locations (a mobile provider's "Areas you cover") — see
+  // matchesCityFilter in src/utils/providerCity.ts. A provider matching ANY selected place is a
   // match (OR, not AND), independent of the GPS-based Distance filter above.
-  // CityMultiSelect is the shared picker (also used by the client's sign-up
-  // LOCATION question) so this stays a multi-select, not the single-city pill
-  // it used to be. No provider screen edits service_locations any more, so
-  // this only matches values saved before About You's cities card was removed.
+  // CityMultiSelect is the picker, so this stays a multi-select, not the
+  // single-city pill it used to be.
   city?: string[];
   // Matches against the provider-level providers.hair_types_catered, folded
   // into the same batched getProvidersAvailability() RPC call as the
@@ -665,7 +668,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       service: p.service_category,
       logo: p.logo_url ? { uri: p.logo_url } : require('../../../assets/icon.png'),
       location: p.location_text ?? 'London',
-      serviceLocations: p.service_locations ?? [],
+      cityKeys: cityFilterKeys(p.location_text, p.service_locations),
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
       distanceMiles: null,
@@ -707,18 +710,23 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (tab) setSelectedFilter(tab);
   }, [route?.params?.category]);
 
-  // Resolve location once on mount, through the same resolver Home uses.
+  // Resolve location through the same resolver Home uses.
   // Search previously had GPS or nothing, so refusing the permission disabled
   // distance filtering here while Home was happily sorting by the client's
   // saved city — the same app state, two different answers, on adjacent tabs.
-  React.useEffect(() => {
+  // Re-run on focus, so a place just picked on Home's Near You applies here
+  // too, and when the account's Your area changes, which the resolver falls
+  // back to when nothing was picked on this phone.
+  const accountArea = user?.clientArea ?? null;
+  useFocusEffect(useCallback(() => {
     let cancelled = false;
     (async () => {
-      const location = await resolveClientLocation();
+      const location = await resolveClientLocation({ accountArea });
       if (cancelled) return;
       if (!location.coords) {
         // Distance controls are disabled with an explanation rather than
         // pretending to apply a filter that cannot be calculated.
+        setUserCoords(null);
         setLocationState('unavailable');
         return;
       }
@@ -726,7 +734,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       setLocationState('available');
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [accountArea]));
 
   // Debounced server search — fires when query or category changes. Also
   // covers the initial mount fetch (no query yet) — selectedFilter is
@@ -1126,7 +1134,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       list = list.filter(p => p.distanceMiles != null && p.distanceMiles <= activeFilters.distance!);
     }
     if (activeFilters.city?.length) {
-      list = list.filter(p => activeFilters.city!.some(c => p.serviceLocations.includes(c)));
+      list = list.filter(p => matchesCityFilter(activeFilters.city!, p.cityKeys));
     }
     if (activeFilters.hairType) {
       // Same "don't claim a match until the batched lookup has answered" rule

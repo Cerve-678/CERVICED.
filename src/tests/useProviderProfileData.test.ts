@@ -14,10 +14,7 @@ import {
 import { getUnclaimedProviderDetail } from "../services/providerClaimService";
 import userLearningService from "../services/userLearningService";
 import { mapProviderProfileData } from "../features/providers/profileMapper";
-import {
-  mapProviderReviews,
-  useProviderProfileData,
-} from "../features/providers/useProviderProfileData";
+import { useProviderProfileData } from "../features/providers/useProviderProfileData";
 
 jest.mock("../services/databaseService", () => ({
   getProviderActivePromotions: jest.fn(),
@@ -208,29 +205,5 @@ describe("useProviderProfileData", () => {
       }),
     );
     expect(result.current.provider?.id).toBe("studio-new");
-  });
-
-  it("maps review rows into display-safe values", () => {
-    expect(
-      mapProviderReviews([
-        {
-          id: "review-1",
-          user_id: "user-1",
-          provider_id: "provider-1",
-          rating: 5,
-          comment: null,
-          created_at: "2026-08-19T12:00:00.000Z",
-          user: { name: "   ", avatar_url: null },
-        },
-      ]),
-    ).toEqual([
-      {
-        id: "review-1",
-        name: "Anonymous",
-        rating: 5,
-        comment: "",
-        date: "19 Aug 2026",
-      },
-    ]);
   });
 });

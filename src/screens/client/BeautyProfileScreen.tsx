@@ -34,6 +34,7 @@ import { SetupFlow, type Step } from '../../features/maintenance/SetupFlow';
 import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS } from '../../utils/maintenanceSuggestions';
 import { useMaintenance } from '../../features/maintenance/useMaintenance';
 import type { ItemAction } from '../../features/maintenance/MaintenanceItemCard';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 
 type BeautyView = 'landing' | 'maintenance' | 'setup' | 'profile';
 
@@ -170,7 +171,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           hair_type:           draftSnapshot.hairType            || null,
           scalp_condition:     draftSnapshot.scalpCondition      || null,
           hair_goals:          draftSnapshot.hairGoals,
-          skin_type:           draftSnapshot.skinType            || null,
+          skin_type:           toPickColumn(draftSnapshot.skinType),
           skin_tone:           draftSnapshot.skinTone            || null,
           skin_concerns:       draftSnapshot.skinConcerns,
           sensitive_areas:     draftSnapshot.sensitiveAreas,
@@ -185,7 +186,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           makeup_eyes:         draftSnapshot.makeupEyes          || null,
           makeup_lips:         draftSnapshot.makeupLips          || null,
           allergies:           draftSnapshot.allergies,
-          style_vibe:          draftSnapshot.styleVibe           || null,
+          style_vibe:          toPickColumn(draftSnapshot.styleVibe),
           medical_notes:       draftSnapshot.medicalNotes        || null,
           photography_consent: draftSnapshot.photographyConsent,
           treatment_history:   draftSnapshot.treatmentHistory,

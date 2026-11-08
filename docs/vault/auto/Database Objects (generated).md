@@ -10,7 +10,7 @@ Curated overview: [[Data Layer — Supabase]]. "Defined in" skips the `RUN_ALL_M
 ## Summary
 - **41** tables
 - **2** views
-- **97** functions
+- **96** functions
 - **29** triggers
 - **102** policies
 - **25** cron jobs
@@ -62,7 +62,7 @@ Curated overview: [[Data Layer — Supabase]]. "Defined in" skips the `RUN_ALL_M
 - `client_bookings` — `supabase/address_release_enforcement.sql`
 - `trending_providers` — `supabase/trending_providers_view.sql`
 
-## Functions (97)
+## Functions (96)
 - `append_saved_portfolio_item` — `supabase/user_preferences_migration.sql`
 - `apply_provider_booking_instructions` — `supabase/booking_flow_fixes.sql`
 - `assign_waitlist_position` — `supabase/waitlist_schema.sql`
@@ -91,7 +91,6 @@ Curated overview: [[Data Layer — Supabase]]. "Defined in" skips the `RUN_ALL_M
 - `enforce_booking_bookability` — `supabase/availability_v2.sql`
 - `expire_cart_holds` — `supabase/fix_cart_checkout_slot_hold.sql`
 - `expire_waitlist_holds` — `supabase/waitlist_holds.sql`
-- `get_client_beauty_profile_for_provider` — `supabase/fix_users_table_pii_leak.sql`
 - `get_promotion_audience` — `supabase/promotion_interest_targeting.sql`
 - `get_provider_busy_spans` — `supabase/provider_busy_spans_rpc.sql`
 - `get_provider_terms` — `supabase/RUN_ALL_MIGRATIONS.sql`

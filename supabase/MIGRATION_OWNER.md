@@ -56,11 +56,35 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-08 (client beauty profile: skin type and style vibe are multi-pick)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108240000 | `beauty_profile_skin_type_and_style_vibe_multi_pick` | **APPLIED 2026-11-08** by cerviced-17 on the user's go-ahead, straight after 20261108230000, via `supabase db query --linked -f` from the main folder; version recorded by the file. Renumbered 140000 → 150000 → 170000 → 210000 → 240000 as other migrations landed. Rollback-only dry run first (succeeded, nothing kept). Converts `users.skin_type` and `users.style_vibe` text → text[] (a single answer becomes a one-item list; blank → NULL), and rebuilds `get_client_beauty_profile_for_booking(uuid)` from its live definition with only those two OUT columns changed to text[]. Guard refuses if any other function reads the columns; #342's `beauty_profile_fields_for_category` is allowed because it only names them as labels. Verified live: version present; both columns `_text`; function returns `skin_type text[]` / `style_vibe text[]`, still SECURITY DEFINER with `search_path=public, pg_temp`, anon can't execute, authenticated can; 7 users with a skin type, 6 with a style vibe. **The app must ship #352 with it**: builds without #352 write a plain string here. Written on `feat/beauty-profile-multi-pick` (#352). |
+
+### Applied 2026-11-08 (anonymous reviews)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108230000 | `anonymous_reviews` | **APPLIED 2026-11-08** by cerviced-17 on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Renumbered 140000 → 160000 → 200000 → 230000 as 141616, #340, #342 and #358 (220000) landed. Frontier before applying: live max `20261108220000`; lock `(none)`; md5 guard on `handle_review_received` (`2184a117…`) matched. Adds `reviews.is_anonymous BOOLEAN NOT NULL DEFAULT false`; `reviews_public_read` / `reviews_owner_read` skip anonymous rows; new `reviews_reviewer_read` lets the author read their own; adds `get_provider_reviews(uuid,integer)` and `get_my_provider_reviews(integer)` (blank reviewer/booking/service/tip on anonymous rows); rebuilds `handle_review_received` so an anonymous review's notification has no booking link. Verified live: version present; column default false / NOT NULL; six reviews policies incl. `reviews_reviewer_read`; both readers authenticated-only (anon can't execute); new `handle_review_received` md5 `a6f572b1…`. Written on `feat/anonymous-reviews` (#350). |
+
 ### Applied 2026-11-08 (following people + Recommend)
 
 | Authored version | Name | Status |
 |---|---|---|
 | 20261108220000 | `follow_people_and_recommend` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the worktree (absolute path, `--workdir` the main folder). Frontier before applying: live max `20261108190000` (#340 at 180000 and #342 at 190000 applied); #350 at 200000 and #352 at 210000 are held on the user's decisions and will renumber above this one. Lock was `(none)` on main. Additive only: no existing function, view or constraint redefined. Verified live: version present; 7 tables with RLS, 0 policies, no anon/authenticated table grants; the 16 app RPCs are executable by authenticated only; the 12 helpers aren't executable by authenticated; every SECURITY DEFINER function has search_path set; both `users` triggers are present; 16 phone hashes backfilled; trigram index present. A read-only smoke test as a client returned the expected defaults. Written on `feat/follow-people-backend` (#358). |
+
+### Applied 2026-11-08 (a provider only gets the beauty-profile fields for the booked service)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108190000 | `beauty_profile_shared_by_booked_service` | **APPLIED 2026-11-08** by cerviced-82 on the user's go-ahead, straight after 20261108180000, via `supabase db query --linked -f` from the main folder. Renumbered 100000 → 110000 → 180000 → 190000 as #340 and 20261108141616 landed. Forced-rollback dry run first. Adds `get_client_beauty_profile_for_booking(uuid)` (SECURITY DEFINER, search_path set, authenticated only; answers only that booking's provider; nulls fields the booked service's category doesn't get) and `beauty_profile_fields_for_category(text)` (nobody may execute it), and DROPs `get_client_beauty_profile_for_provider(uuid)`. Starts with a guard that refuses if `users.skin_type`/`style_vibe` aren't text. #352 (multi-pick, now 20261108240000) must rebuild this function with text[]. Verified live: version present; old function gone; anon can't execute, authenticated can; helper not executable by authenticated; NAILS → allergies, medical_notes, photography_consent, nail_length, nail_shape. Lock released. Written on `feat/beauty-profile-by-booked-service` (#342). |
+
+### Applied 2026-11-08 (provider venue moved off bookings so clients can't read it early)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108180000 | `booking_venue_details_private` | **APPLIED 2026-11-08** by cerviced-82 on the user's go-ahead, after the authoring session ended, via `supabase db query --linked -f` from the main folder; `send-booking-confirmation` deployed straight after from the PR worktree (`--project-ref ztrfpfvvejzaysrelmfm`). Live max before: `20261108141616`. Forced-rollback dry run first (131 venue rows = 131 non-mobile bookings, columns dropped, view intact). Verified live: version present; 3 columns gone; 131 venue rows; RLS on with one policy (provider SELECT, authenticated); anon can't select, authenticated can't insert; `booking_released_venue` not executable by authenticated; `client_booking_venue` authenticated only; old stamp function dropped, `trg_stamp_booking_venue_details` present; `client_bookings` still security_invoker; table not in realtime. Original notes: the edge function `send-booking-confirmation` must be deployed in the same window (it reads the new `booking_released_venue()`; the old one selects a column this drops). Renumbered from 20261108100000: above live max `20261108141616` and above the unapplied #350 (160000) and #352 (170000); #342 follows at 20261108190000. md5 guards on `client_bookings` (`46b52e14…`), `claim_cart_booking_slots` (`5feeca61…`), `stamp_booking_address_snapshot` (`67801162…`). Creates `booking_venue_details` (provider-read RLS only), `booking_released_venue()` (service_role), `client_booking_venue()` (authenticated, own client/provider + released), rebuilds `client_bookings` on it, replaces the stamp trigger with AFTER INSERT `stamp_booking_venue_details()`, drops the venue lines from the claim, copies 126 venues, then DROPS `bookings.provider_address_snapshot`, `provider_directions_snapshot`, `provider_coordinates`. Dry-run on live 2026-11-08, rolled back: client lost raw access (column gone, 0 venue rows), released view addresses unchanged except 10 mobile bookings that no longer show the provider's base; provider still reads its 37 venues. |
 
 ### Applied 2026-11-06 (bookings carry exact venue coordinates)
 

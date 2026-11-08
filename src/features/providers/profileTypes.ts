@@ -106,7 +106,6 @@ export interface ProviderProfileData {
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
-  travelRadius: string;
   productsUsed: string;
   bookingPolicies: {
     cancelNotice?: string;
@@ -122,6 +121,8 @@ export interface ProviderProfileData {
     depositAmount?: string;
     noShowAction?: string;
     policyImageUrl?: string;
+    /** Every page, in order. policyImageUrl is the first, for older builds. */
+    policyImageUrls?: string[];
     // Authored on PoliciesScreen, shown in the Policy tab. EmergencyBookingPrompt
     // also reads it while EMERGENCY_BOOKINGS_ENABLED is on.
     emergencyBookingPolicy?: string;

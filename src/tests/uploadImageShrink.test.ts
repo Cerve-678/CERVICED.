@@ -62,7 +62,11 @@ jest.mock('../services/databaseService', () => ({
 
 jest.mock('expo-location', () => ({}));
 
-import { MAX_UPLOAD_IMAGE_EDGE_PX, uploadToStorage } from '../services/providerRegistrationService';
+import {
+  MAX_DOCUMENT_IMAGE_HEIGHT_PX,
+  MAX_UPLOAD_IMAGE_EDGE_PX,
+  uploadToStorage,
+} from '../services/providerRegistrationService';
 
 beforeEach(() => {
   mockUploaded.length = 0;
@@ -114,6 +118,35 @@ describe('uploadToStorage image shrinking', () => {
     expect(mockUploaded).toHaveLength(1);
   });
 
+  it('keeps a long policy document at full width instead of shrinking it by its height', async () => {
+    // A long phone screenshot: as a photo it would end up about 400 px wide.
+    mockFiles['file:///policy.png'] = mockPNG;
+    mockSizes['file:///policy.png'] = { width: 1179, height: 6000 };
+
+    await uploadToStorage('portfolio', 'u1/policy.png', 'file:///policy.png', 'document');
+
+    expect(mockResizeCalls).toEqual([]);
+    expect(mockUploaded).toHaveLength(1);
+  });
+
+  it('caps a very wide document by its width', async () => {
+    mockFiles['file:///scan.jpg'] = mockJPEG;
+    mockSizes['file:///scan.jpg'] = { width: 4000, height: 12000 };
+
+    await uploadToStorage('portfolio', 'u1/scan.jpg', 'file:///scan.jpg', 'document');
+
+    expect(mockResizeCalls).toEqual([{ width: MAX_UPLOAD_IMAGE_EDGE_PX }]);
+  });
+
+  it('caps an extremely long document by its height so the phone can hold it', async () => {
+    mockFiles['file:///endless.png'] = mockPNG;
+    mockSizes['file:///endless.png'] = { width: 1179, height: 20000 };
+
+    await uploadToStorage('portfolio', 'u1/endless.png', 'file:///endless.png', 'document');
+
+    expect(mockResizeCalls).toEqual([{ width: Math.round(1179 * (MAX_DOCUMENT_IMAGE_HEIGHT_PX / 20000)) }]);
+  });
+
   it('uploads the original when the image cannot be decoded for shrinking', async () => {
     mockFiles['file:///odd.jpg'] = mockJPEG;
     mockSizes['file:///odd.jpg'] = { width: 9000, height: 9000 };
@@ -123,5 +156,38 @@ describe('uploadToStorage image shrinking', () => {
 
     expect(mockUploaded).toHaveLength(1);
     expect(Array.from(mockUploaded[0]!.bytes)).toEqual(mockJPEG);
+  });
+});
+
+describe('uploadToStorage document images (the detailed policy image)', () => {
+  it('keeps a long policy screenshot at its full width instead of shrinking it by its height', async () => {
+    // As a photo this would go to 2048 tall and about 400 wide: blurry at full screen width.
+    mockFiles['file:///policy.png'] = mockPNG;
+    mockSizes['file:///policy.png'] = { width: 1179, height: 6000 };
+
+    await uploadToStorage('portfolio', 'u1/policy.png', 'file:///policy.png', 'document');
+
+    expect(mockResizeCalls).toEqual([]);
+    expect(mockUploaded).toHaveLength(1);
+  });
+
+  it('narrows a very wide document to the usual width cap', async () => {
+    mockFiles['file:///scan.jpg'] = mockJPEG;
+    mockSizes['file:///scan.jpg'] = { width: 4000, height: 6000 };
+
+    await uploadToStorage('portfolio', 'u1/scan.jpg', 'file:///scan.jpg', 'document');
+
+    expect(mockResizeCalls).toEqual([{ width: MAX_UPLOAD_IMAGE_EDGE_PX }]);
+  });
+
+  it('shrinks an extremely long one only as far as the height cap needs', async () => {
+    mockFiles['file:///long.png'] = mockPNG;
+    mockSizes['file:///long.png'] = { width: 1179, height: 16384 };
+
+    await uploadToStorage('portfolio', 'u1/long.png', 'file:///long.png', 'document');
+
+    expect(mockResizeCalls).toEqual([
+      { width: Math.round(1179 * (MAX_DOCUMENT_IMAGE_HEIGHT_PX / 16384)) },
+    ]);
   });
 });

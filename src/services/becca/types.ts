@@ -549,6 +549,12 @@ export interface CapabilityContext {
   /** Signed-in user id, when available. */
   userId?: string;
   /**
+   * Client hat only: Account → Your area (users.client_area), from
+   * AuthContext. "Near me" answers measure from it when nothing was picked
+   * on this phone — see planClientLocation.
+   */
+  clientArea?: string;
+  /**
    * Provider hat only: the provider is link-only (takes bookings on their own
    * booking site). Only capabilities marked `fitsLinkOnly` ever run with this
    * set; they read it to keep their wording and follow-up chips to what a

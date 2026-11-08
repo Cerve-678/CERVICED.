@@ -17,7 +17,7 @@ const policy = 'https://example.com/policy.png';
 describe('FullImageViewer', () => {
   it('shows a long policy at full width and its real height, inside a scroll view', () => {
     const { getByLabelText } = withInsets(
-      <FullImageViewer uri={policy} visible onClose={() => {}} label="Policy document" />,
+      <FullImageViewer uris={[policy]} visible onClose={() => {}} label="Policy document" />,
     );
     const image = getByLabelText('Policy document');
     // A 1000 x 4000 photo is drawn four times as tall as it is wide, not squeezed into one screen.
@@ -29,10 +29,20 @@ describe('FullImageViewer', () => {
   it('closes from its close button', () => {
     const onClose = jest.fn();
     const { getByLabelText } = withInsets(
-      <FullImageViewer uri={policy} visible onClose={onClose} label="Policy document" />,
+      <FullImageViewer uris={[policy]} visible onClose={onClose} label="Policy document" />,
     );
     fireEvent.press(getByLabelText('Close policy document'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows every page of a policy in order, each labelled, and says how to zoom', () => {
+    const { getByLabelText, getByText } = withInsets(
+      <FullImageViewer uris={[policy, 'https://example.com/page-2.png']} visible onClose={() => {}} label="Policy document" />,
+    );
+    expect(getByLabelText('Policy document, page 1 of 2')).toBeTruthy();
+    expect(getByLabelText('Policy document, page 2 of 2')).toBeTruthy();
+    expect(getByText('Page 2 of 2')).toBeTruthy();
+    expect(getByText('Pinch or double-tap to zoom')).toBeTruthy();
   });
 });
 

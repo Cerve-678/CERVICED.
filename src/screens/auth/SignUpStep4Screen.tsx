@@ -25,6 +25,7 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useRevealNext, type CardLayout } from '../../components/signup/useRevealNext';
 import AreaPicker from '../../components/AreaPicker';
 import { HAIR_TYPES } from '../../constants/hairTypes';
+import { SKIN_TYPES, STYLE_VIBES } from '../../features/beauty-profile/options';
 import { PRICE_BANDS, tierForBands } from '../../constants/priceBands';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -33,9 +34,7 @@ import {
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep4'>;
 
-const SKIN_TYPES        = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'];
 const SKIN_CONCERNS     = ['Acne', 'Redness', 'Dry patches', 'Oiliness', 'Hyperpigmentation', 'Sensitivity', 'Fine lines', 'Uneven tone', 'None'];
-const STYLE_VIBES       = ['Natural', 'Glam', 'Minimal', 'Bold', 'Classic', 'Edgy', 'Soft', 'Trendy'];
 const ALLERGENS         = ['Latex', 'Fragrances', 'Dyes / PPD', 'Nuts', 'Nickel', 'Sulfates', 'Parabens', 'Lanolin', 'Shellfish', 'Gluten', 'None known'];
 const TREATMENT_HISTORY = ['Facials', 'Lash extensions', 'Brow tinting', 'Hair colour', 'Nails', 'Waxing', 'Dermaplaning', 'Microneedling', 'Chemical peels', 'None'];
 
@@ -85,9 +84,9 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const paymentMethodsY   = React.useRef<CardLayout>({ y: 0, height: 0 });
 
   const [selectedHairType,   setSelectedHairType]   = useState<string>(data.hairType);
-  const [selectedSkinType,   setSelectedSkinType]   = useState<string>(data.skinType);
+  const [selectedSkinTypes,  setSelectedSkinTypes]  = useState<string[]>(data.skinType);
   const [selectedConcerns,   setSelectedConcerns]   = useState<string[]>(data.skinConcerns);
-  const [selectedStyleVibe,  setSelectedStyleVibe]  = useState<string>(data.styleVibe);
+  const [selectedStyleVibes, setSelectedStyleVibes] = useState<string[]>(data.styleVibe);
   const [selectedAllergens,  setSelectedAllergens]  = useState<string[]>(data.allergies);
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>(data.treatmentHistory);
   const [medicalNotes,       setMedicalNotes]       = useState<string>(data.medicalNotes);
@@ -132,13 +131,13 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const pickHair = (type: string) => {
     const next = selectedHairType === type ? '' : type;
     setSelectedHairType(next);
-    if (next && !selectedSkinType) reveal(skinY.current);
+    if (next && !selectedSkinTypes.length) reveal(skinY.current);
   };
 
-  const pickSkin = (type: string) => {
-    const next = selectedSkinType === type ? '' : type;
-    setSelectedSkinType(next);
-    if (next && !selectedConcerns.length) reveal(skinConcernsY.current);
+  // Skin type and style vibe are multi-pick (user, 2026-11-08), so like every
+  // other toggle they leave the page where it is.
+  const toggleSkinType = (type: string) => {
+    setSelectedSkinTypes(prev => (prev.includes(type) ? prev.filter(v => v !== type) : [...prev, type]));
   };
 
   const toggleConcern = (item: string) => {
@@ -149,10 +148,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     });
   };
 
-  const pickStyleVibe = (vibe: string) => {
-    const next = selectedStyleVibe === vibe ? '' : vibe;
-    setSelectedStyleVibe(next);
-    if (next && !selectedAllergens.length) reveal(allergyY.current);
+  const toggleStyleVibe = (vibe: string) => {
+    setSelectedStyleVibes(prev => (prev.includes(vibe) ? prev.filter(v => v !== vibe) : [...prev, vibe]));
   };
 
   const toggleAllergen = (item: string) => {
@@ -208,9 +205,9 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     } else {
       updateData({
         hairType: selectedHairType,
-        skinType: selectedSkinType,
+        skinType: selectedSkinTypes,
         skinConcerns: selectedConcerns,
-        styleVibe: selectedStyleVibe,
+        styleVibe: selectedStyleVibes,
         allergies: selectedAllergens,
         treatmentHistory: selectedTreatments,
         medicalNotes,
@@ -243,9 +240,9 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
     const firstEmptyY =
       !selectedHairType         ? hairY :
-      !selectedSkinType         ? skinY :
+      !selectedSkinTypes.length ? skinY :
       !selectedConcerns.length  ? skinConcernsY :
-      !selectedStyleVibe        ? styleVibeY :
+      !selectedStyleVibes.length ? styleVibeY :
       !selectedAllergens.length ? allergyY :
       !selectedTreatments.length ? treatmentY :
       null;
@@ -291,16 +288,16 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               {chips(plain(HAIR_TYPES), v => selectedHairType === v, pickHair)}
             </QuestionCard>
 
-            <QuestionCard title="SKIN TYPE" prompt="How would you describe your skin?" error={showErrors && !selectedSkinType} onLayout={onLayoutFor(skinY)}>
-              {chips(plain(SKIN_TYPES), v => selectedSkinType === v, pickSkin)}
+            <QuestionCard title="SKIN TYPE" prompt="How would you describe your skin? Pick all that apply." error={showErrors && !selectedSkinTypes.length} onLayout={onLayoutFor(skinY)}>
+              {chips(plain(SKIN_TYPES), v => selectedSkinTypes.includes(v), toggleSkinType)}
             </QuestionCard>
 
             <QuestionCard title="SKIN CONCERNS" prompt="Any specific concerns you'd like addressed?" error={showErrors && !selectedConcerns.length} onLayout={onLayoutFor(skinConcernsY)}>
               {chips(plain(SKIN_CONCERNS), v => selectedConcerns.includes(v), toggleConcern)}
             </QuestionCard>
 
-            <QuestionCard title="STYLE VIBE" prompt="What best describes your aesthetic?" error={showErrors && !selectedStyleVibe} onLayout={onLayoutFor(styleVibeY)}>
-              {chips(plain(STYLE_VIBES), v => selectedStyleVibe === v, pickStyleVibe)}
+            <QuestionCard title="STYLE VIBE" prompt="What best describes your aesthetic? Pick as many as fit." error={showErrors && !selectedStyleVibes.length} onLayout={onLayoutFor(styleVibeY)}>
+              {chips(plain(STYLE_VIBES), v => selectedStyleVibes.includes(v), toggleStyleVibe)}
             </QuestionCard>
 
             <QuestionCard title="ALLERGIES" prompt="Select any known allergies or sensitivities." error={showErrors && !selectedAllergens.length} onLayout={onLayoutFor(allergyY)}>
