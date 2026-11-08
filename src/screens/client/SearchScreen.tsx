@@ -23,6 +23,7 @@ import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
 import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -704,18 +705,23 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (tab) setSelectedFilter(tab);
   }, [route?.params?.category]);
 
-  // Resolve location once on mount, through the same resolver Home uses.
+  // Resolve location through the same resolver Home uses.
   // Search previously had GPS or nothing, so refusing the permission disabled
   // distance filtering here while Home was happily sorting by the client's
   // saved city — the same app state, two different answers, on adjacent tabs.
-  React.useEffect(() => {
+  // Re-run on focus, so a place just picked on Home's Near You applies here
+  // too, and when the account's Your area changes, which the resolver falls
+  // back to when nothing was picked on this phone.
+  const accountArea = user?.clientArea ?? null;
+  useFocusEffect(useCallback(() => {
     let cancelled = false;
     (async () => {
-      const location = await resolveClientLocation();
+      const location = await resolveClientLocation({ accountArea });
       if (cancelled) return;
       if (!location.coords) {
         // Distance controls are disabled with an explanation rather than
         // pretending to apply a filter that cannot be calculated.
+        setUserCoords(null);
         setLocationState('unavailable');
         return;
       }
@@ -723,7 +729,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       setLocationState('available');
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [accountArea]));
 
   // Debounced server search — fires when query or category changes. Also
   // covers the initial mount fetch (no query yet) — selectedFilter is

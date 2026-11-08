@@ -23,6 +23,7 @@ import {
   becomeFullMember as becomeFullMemberRpc,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { STORAGE_KEYS as LOCATION_STORAGE_KEYS } from '../utils/storage';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/withTimeout';
 import { toPickColumn } from '../features/beauty-profile/pickList';
@@ -961,6 +962,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // next account that logs in on this device.
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
+      // Home's Near You choice on this phone. It outranks the account's Your
+      // area, so leaving it would measure the next account from this one's
+      // pick (see planClientLocation).
+      LOCATION_STORAGE_KEYS.MANUAL_LOCATION,
+      LOCATION_STORAGE_KEYS.NEAR_YOU_USE_DEVICE,
     ]).catch(() => {});
     await clearAuthProfileSnapshot();
     await unregisterPushToken().catch(() => {});
