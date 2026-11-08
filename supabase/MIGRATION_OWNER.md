@@ -56,7 +56,11 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Applied 2026-11-08 (client beauty profile: skin type and style vibe are multi-pick)
+### Applied 2026-11-08 (provider "I work with" skin tones)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 202611091000| 20261109100000 | `provider_skin_tones_catered` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Rollback-only dry run first (succeeded, nothing kept). Adds nullable `providers.skin_tones_catered text[]`, nothing else. Verified live: version present and is the new max; column `ARRAY`; anon can select, authenticated can update; RLS still on; 16 rows. Written on `feat/products-and-who-you-work-with` (#381), whose public profile select names the column. |2026-11-08 (client beauty profile: skin type and style vibe are multi-pick)
 
 | Authored version | Name | Status |
 |---|---|---|
