@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  cerviced-82 (Claude; took over booking-venue-private from an ended session on the user's go-ahead, applying #340 then #342, 2026-11-08)
+OWNER:  (none)
 ```
+
+### Applied 2026-11-08 (a provider only gets the beauty-profile fields for the booked service)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108190000 | `beauty_profile_shared_by_booked_service` | **APPLIED 2026-11-08** by cerviced-82 on the user's go-ahead, straight after 20261108180000, via `supabase db query --linked -f` from the main folder. Renumbered 100000 → 110000 → 180000 → 190000 as #340 and 20261108141616 landed. Forced-rollback dry run first. Adds `get_client_beauty_profile_for_booking(uuid)` (SECURITY DEFINER, search_path set, authenticated only; answers only that booking's provider; nulls fields the booked service's category doesn't get) and `beauty_profile_fields_for_category(text)` (nobody may execute it), and DROPs `get_client_beauty_profile_for_provider(uuid)`. Starts with a guard that refuses if `users.skin_type`/`style_vibe` aren't text. #352 (multi-pick, now 20261108210000) must rebuild this function with text[]. Verified live: version present; old function gone; anon can't execute, authenticated can; helper not executable by authenticated; NAILS → allergies, medical_notes, photography_consent, nail_length, nail_shape. Lock released. Written on `feat/beauty-profile-by-booked-service` (#342). |
 
 ### Applied 2026-11-08 (provider venue moved off bookings so clients can't read it early)
 
