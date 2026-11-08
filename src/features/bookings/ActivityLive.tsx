@@ -15,14 +15,26 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, TouchableOpacity
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ActivityItem, ActivityPulse } from './activityCentre';
 
-export function useReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
+// The last answer, so a second visit knows straight away.
+let knownReduceMotion: boolean | null = null;
+
+/**
+ * The phone's Reduce Motion setting, or null until it's known. Callers hold
+ * back one-shot entrances while it's null, or a Reduce Motion user would see
+ * them play once before the answer arrives.
+ */
+export function useReduceMotion(): boolean | null {
+  const [reduce, setReduce] = useState<boolean | null>(knownReduceMotion);
   useEffect(() => {
     let alive = true;
+    const remember = (on: boolean) => {
+      knownReduceMotion = on;
+      if (alive) setReduce(on);
+    };
     AccessibilityInfo.isReduceMotionEnabled()
-      .then(on => { if (alive) setReduce(on); })
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+      .then(remember)
+      .catch(() => remember(false));
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', remember);
     return () => {
       alive = false;
       sub.remove();
@@ -161,6 +173,8 @@ export function StatusPill({ messages, animate }: { messages: readonly string[];
   const [index, setIndex] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
   const cycling = animate && messages.length > 1;
+  // A refresh that brings back the same lines mustn't restart the cycle.
+  const signature = messages.join('\n');
 
   useEffect(() => {
     setIndex(0);
@@ -177,7 +191,9 @@ export function StatusPill({ messages, animate }: { messages: readonly string[];
       clearInterval(id);
       fade.stopAnimation();
     };
-  }, [cycling, messages, fade]);
+    // messages is read through signature, so a new array with the same lines is ignored.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycling, signature, fade]);
 
   const text = messages[index] ?? messages[0] ?? '';
   return (

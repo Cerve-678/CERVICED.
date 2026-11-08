@@ -5,7 +5,7 @@
 
 #generated
 
-**3376 functions** across **477 files**.
+**3377 functions** across **477 files**.
 
 ### `src/components/` (63)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -125,7 +125,7 @@
 
 ### `src/features/bookings/` (26)
 - `activityCentre.ts` — **activityTimeline** · appointmentMs · beforeDay · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · localDayKey · names · needsYouPulse · pounds · shortDay · when
-- `ActivityLive.tsx` — **ActivityTile** · **LiveDot** · **StatusPill** · **TimelineGroup** · **TimelineRail** · useEntrance · **useReduceMotion**
+- `ActivityLive.tsx` — **ActivityTile** · **LiveDot** · remember · **StatusPill** · **TimelineGroup** · **TimelineRail** · useEntrance · **useReduceMotion**
 - `addOnTime.ts` — **addOnExtraMinutes** · **durationWithAddOns** · **formatAddOnExtraTime**
 - `AnonymousReviewToggle.tsx` — **AnonymousReviewToggle**
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**

@@ -51,8 +51,8 @@ export default function ActivityCentreScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const reduceMotion = useReduceMotion();
   const focused = useIsFocused();
-  const animate = focused && !reduceMotion;
-  const enter = !reduceMotion;
+  const animate = focused && reduceMotion === false;
+  const enter = reduceMotion === false;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -169,7 +169,7 @@ export default function ActivityCentreScreen({ navigation }: Props) {
           <Text style={[st.notice, { color: P.sub }]}>Couldn't check for updates just now. Pull down to try again.</Text>
         )}
 
-        {!loaded && empty ? (
+        {(!loaded && empty) || reduceMotion === null ? (
           <ActivityIndicator color={P.accent} style={st.loading} />
         ) : (
           <>
