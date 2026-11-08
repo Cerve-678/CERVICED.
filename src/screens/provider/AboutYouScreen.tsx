@@ -10,8 +10,9 @@
  * Location lives in Edit Profile (InfoRegScreen) now: "Where you're based"
  * writes location_text, which is what Search's City filter goes by
  * (src/utils/providerCity.ts, still also matching any saved
- * service_locations), and "How far you travel" beside it writes travel_radius
- * for a mobile provider. Nothing edits service_locations any more.
+ * service_locations). Nothing edits service_locations any more. How far a
+ * mobile provider travels is said once, in Policies → Travel; travel_radius
+ * is no longer read or written by the app.
  *
  * Two things worth knowing before editing:
  *

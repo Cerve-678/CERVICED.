@@ -1888,16 +1888,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                     service_name_snapshot: item.serviceName,
                     service_category_snapshot: item.providerService || null,
                     provider_logo_snapshot: logoUrl,
-                    provider_address_snapshot: isMobile
-                      ? null
-                      : providerLocations[providerId]?.address ?? apt.address ?? null,
+                    // No venue here: the server stamps it into
+                    // booking_venue_details when the slot is held.
                     provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
-                    provider_coordinates: isMobile
-                      ? null
-                      : (() => {
-                          const c = providerLocations[providerId]?.coordinates;
-                          return c ? { lat: c.latitude, lng: c.longitude } : null;
-                        })(),
                     customer_name: apt.customerName,
                     customer_email: apt.customerEmail,
                     customer_phone: apt.customerPhone,

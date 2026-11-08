@@ -44,7 +44,7 @@ import {
   respondToRescheduleRequest,
   rejectRescheduleRequest,
   upsertProviderRescheduleRequest,
-  getClientBeautyProfile,
+  getClientBeautyProfileForBooking,
   getClientBookingHistory,
   getIntakeFormsByBooking,
   getInfoPacksByBooking,
@@ -62,7 +62,6 @@ import {
   updateGroupBookingStatus,
   providerCancelGroupBooking,
   providerInitiateGroupReschedule,
-  getProviderServiceCategoryByUserId,
   getOrCreateConversation,
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
@@ -79,14 +78,13 @@ import {
   getProviderBookingTip,
 } from '../../services/databaseService';
 import { formatTipAmount, providerTipNote, type ProviderBookingTip } from '../../features/provider-bookings/tipPresentation';
-import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
+import type { DbBooking, DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
 import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate, formatDayOrdinalShortMonth } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
-import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
 import { describeRefundOutcome } from '../../features/bookings/paymentPresentation';
 import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '../../components/IssueRefundSheet';
 import { formatBookingRef } from '../../features/bookings/presentation';
@@ -271,7 +269,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [addressReleasedAt, setAddressReleasedAt] = useState<string | null>(null);
   const [releasingAddress, setReleasingAddress] = useState(false);
 
-  const [providerServiceCategory, setProviderServiceCategory] = useState<ServiceCategory | null>(null);
   const [clientHistoryVisible, setClientHistoryVisible] = useState(false);
   const [clientHistoryBookings, setClientHistoryBookings] = useState<DbBooking[]>([]);
   const [clientHistoryLoading, setClientHistoryLoading] = useState(false);
@@ -418,9 +415,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       .catch((err) => logger.error('[ProviderBookingDetail] booking user id load failed:', err));
   }, [bookingId, clientUserId]);
 
+  // Per booking, not per client: the server returns only the fields the
+  // booked service's category gets (plus the safety fields), so nothing on
+  // this screen filters the profile any more.
   useEffect(() => {
-    if (!clientUserId) return;
-    getClientBeautyProfile(clientUserId)
+    if (!clientUserId || !bookingId) return;
+    getClientBeautyProfileForBooking(bookingId)
       .then(p => {
         setClientProfile(p);
         // Auto-expand if allergies or medical notes are present
@@ -429,7 +429,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         }
       })
       .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
-  }, [clientUserId]);
+  }, [clientUserId, bookingId]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -455,19 +455,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   useEffect(() => { loadSentItems(); }, [loadSentItems]);
 
-  // The provider's own category, info packs and form library — what this
-  // booking could be sent. Independent reads; one failing doesn't hide the rest.
+  // The provider's own info packs and form library — what this booking could
+  // be sent. Independent reads; one failing doesn't hide the rest.
   useEffect(() => {
     if (!user) return;
     let alive = true;
     Promise.allSettled([
-      getProviderServiceCategoryByUserId(user.id),
       getProviderInfoPacksByUserId(user.id),
       getProviderFormLibrary(),
-    ]).then(([category, packs, forms]) => {
+    ]).then(([packs, forms]) => {
       if (!alive) return;
-      if (category.status === 'fulfilled' && category.value) setProviderServiceCategory(category.value as ServiceCategory);
-      else if (category.status === 'rejected') logger.error('[ProviderBookingDetail] category load failed:', category.reason);
       if (packs.status === 'fulfilled') { setProviderInfoPacks(packs.value); setProviderPacksState('ready'); }
       else { logger.error('[ProviderBookingDetail] provider info packs load failed:', packs.reason); setProviderPacksState('error'); }
       if (forms.status === 'fulfilled') { setLibraryForms(forms.value); setLibraryState('ready'); }
@@ -1767,12 +1764,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── CLIENT PROFILE section ── */}
               {clientProfile && (() => {
-                // Determine which fields to show; fall back to all if category unknown
-                const relevantFields = providerServiceCategory
-                  ? SERVICE_PROFILE_FIELDS[providerServiceCategory]
-                  : undefined;
-                const show = (field: keyof ClientBeautyProfile) =>
-                  !relevantFields || relevantFields.includes(field);
                 const hasCritical = clientProfile.allergies.length > 0 || !!clientProfile.medicalNotes;
                 return (
                   <>
@@ -1818,28 +1809,27 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           </View>
                         );
 
-                        const s = (f: keyof ClientBeautyProfile) => show(f);
                         const CR = (items: string[], color?: string) => chipRow(items, color);
 
-                        const hasSkin = (s('skinType') && clientProfile.skinType) || (s('skinTone') && clientProfile.skinTone) || (s('skinConcerns') && clientProfile.skinConcerns.length > 0) || (s('sensitiveAreas') && clientProfile.sensitiveAreas.length > 0);
-                        const hasHair = (s('hairType') && clientProfile.hairType) || (s('scalpCondition') && clientProfile.scalpCondition) || (s('hairGoals') && clientProfile.hairGoals.length > 0) || (s('treatmentHistory') && clientProfile.treatmentHistory.length > 0);
-                        const hasNails = (s('nailLength') && clientProfile.nailLength) || (s('nailShape') && clientProfile.nailShape);
-                        const hasLashesBrows = (s('lashStyle') && clientProfile.lashStyle) || (s('lashStatus') && clientProfile.lashStatus) || (s('browStyle') && clientProfile.browStyle) || (s('browCondition') && clientProfile.browCondition);
-                        const hasMakeup = (s('makeupCoverage') && clientProfile.makeupCoverage) || (s('makeupFinish') && clientProfile.makeupFinish) || (s('makeupEyes') && clientProfile.makeupEyes) || (s('makeupLips') && clientProfile.makeupLips);
-                        const hasStyle = s('styleVibe') && clientProfile.styleVibe;
-                        const hasAlerts = (s('allergies') && clientProfile.allergies.length > 0) || (s('medicalNotes') && clientProfile.medicalNotes);
+                        const hasSkin = (clientProfile.skinType) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
+                        const hasHair = (clientProfile.hairType) || (clientProfile.scalpCondition) || (clientProfile.hairGoals.length > 0) || (clientProfile.treatmentHistory.length > 0);
+                        const hasNails = (clientProfile.nailLength) || (clientProfile.nailShape);
+                        const hasLashesBrows = (clientProfile.lashStyle) || (clientProfile.lashStatus) || (clientProfile.browStyle) || (clientProfile.browCondition);
+                        const hasMakeup = (clientProfile.makeupCoverage) || (clientProfile.makeupFinish) || (clientProfile.makeupEyes) || (clientProfile.makeupLips);
+                        const hasStyle = clientProfile.styleVibe;
+                        const hasAlerts = (clientProfile.allergies.length > 0) || (clientProfile.medicalNotes);
 
                         return (
                           <>
                             {/* ── HEALTH & ALERTS (always first) ── */}
                             {hasAlerts && catLabel('Health & Alerts')}
-                            {s('allergies') && clientProfile.allergies.length > 0 && (
+                            {clientProfile.allergies.length > 0 && (
                               <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                 <Text style={[styles.rowLabel, { color: '#FF9500' }]}>⚠ Allergies</Text>
                                 {CR(clientProfile.allergies, '#FF9500')}
                               </View>
                             )}
-                            {s('medicalNotes') && clientProfile.medicalNotes ? (
+                            {clientProfile.medicalNotes ? (
                               <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                 <Text style={[styles.rowLabel, { color: '#FF3B30' }]}>⚕ Medical notes</Text>
                                 <Text style={[styles.rowValue, { color: P.text, flex: 1, textAlign: 'left', marginLeft: 8 }]}>{clientProfile.medicalNotes}</Text>
@@ -1850,15 +1840,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasSkin && (
                               <>
                                 {catLabel('Skin')}
-                                {s('skinType') && clientProfile.skinType ? <Row label="Skin type" value={clientProfile.skinType} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('skinTone') && clientProfile.skinTone ? <Row label="Skin tone" value={clientProfile.skinTone} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('skinConcerns') && clientProfile.skinConcerns.length > 0 && (
+                                {clientProfile.skinType ? <Row label="Skin type" value={clientProfile.skinType} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.skinTone ? <Row label="Skin tone" value={clientProfile.skinTone} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.skinConcerns.length > 0 && (
                                   <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                     <Text style={[styles.rowLabel, { color: P.text }]}>Skin concerns</Text>
                                     {CR(clientProfile.skinConcerns)}
                                   </View>
                                 )}
-                                {s('sensitiveAreas') && clientProfile.sensitiveAreas.length > 0 && (
+                                {clientProfile.sensitiveAreas.length > 0 && (
                                   <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                     <Text style={[styles.rowLabel, { color: P.text }]}>Sensitive areas</Text>
                                     {CR(clientProfile.sensitiveAreas)}
@@ -1871,15 +1861,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasHair && (
                               <>
                                 {catLabel('Hair')}
-                                {s('hairType') && clientProfile.hairType ? <Row label="Hair type" value={clientProfile.hairType} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('scalpCondition') && clientProfile.scalpCondition ? <Row label="Scalp condition" value={clientProfile.scalpCondition} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('treatmentHistory') && clientProfile.treatmentHistory.length > 0 && (
+                                {clientProfile.hairType ? <Row label="Hair type" value={clientProfile.hairType} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.scalpCondition ? <Row label="Scalp condition" value={clientProfile.scalpCondition} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.treatmentHistory.length > 0 && (
                                   <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                     <Text style={[styles.rowLabel, { color: P.text }]}>Treatment history</Text>
                                     {CR(clientProfile.treatmentHistory)}
                                   </View>
                                 )}
-                                {s('hairGoals') && clientProfile.hairGoals.length > 0 && (
+                                {clientProfile.hairGoals.length > 0 && (
                                   <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                     <Text style={[styles.rowLabel, { color: P.text }]}>Hair goals</Text>
                                     {CR(clientProfile.hairGoals)}
@@ -1892,8 +1882,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasNails && (
                               <>
                                 {catLabel('Nails')}
-                                {s('nailLength') && clientProfile.nailLength ? <Row label="Preferred length" value={clientProfile.nailLength} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('nailShape') && clientProfile.nailShape ? <Row label="Preferred shape" value={clientProfile.nailShape} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.nailLength ? <Row label="Preferred length" value={clientProfile.nailLength} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.nailShape ? <Row label="Preferred shape" value={clientProfile.nailShape} textColor={P.text} divColor={rowDiv} /> : null}
                               </>
                             )}
 
@@ -1901,10 +1891,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasLashesBrows && (
                               <>
                                 {catLabel('Lashes & Brows')}
-                                {s('lashStyle') && clientProfile.lashStyle ? <Row label="Lash style" value={clientProfile.lashStyle} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('lashStatus') && clientProfile.lashStatus ? <Row label="Lash status" value={clientProfile.lashStatus} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('browStyle') && clientProfile.browStyle ? <Row label="Brow style" value={clientProfile.browStyle} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('browCondition') && clientProfile.browCondition ? <Row label="Brow condition" value={clientProfile.browCondition} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.lashStyle ? <Row label="Lash style" value={clientProfile.lashStyle} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.lashStatus ? <Row label="Lash status" value={clientProfile.lashStatus} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.browStyle ? <Row label="Brow style" value={clientProfile.browStyle} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.browCondition ? <Row label="Brow condition" value={clientProfile.browCondition} textColor={P.text} divColor={rowDiv} /> : null}
                               </>
                             )}
 
@@ -1912,10 +1902,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasMakeup && (
                               <>
                                 {catLabel('Makeup')}
-                                {s('makeupCoverage') && clientProfile.makeupCoverage ? <Row label="Coverage" value={clientProfile.makeupCoverage} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('makeupFinish') && clientProfile.makeupFinish ? <Row label="Finish" value={clientProfile.makeupFinish} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('makeupEyes') && clientProfile.makeupEyes ? <Row label="Eye style" value={clientProfile.makeupEyes} textColor={P.text} divColor={rowDiv} /> : null}
-                                {s('makeupLips') && clientProfile.makeupLips ? <Row label="Lip preference" value={clientProfile.makeupLips} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupCoverage ? <Row label="Coverage" value={clientProfile.makeupCoverage} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupFinish ? <Row label="Finish" value={clientProfile.makeupFinish} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupEyes ? <Row label="Eye style" value={clientProfile.makeupEyes} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupLips ? <Row label="Lip preference" value={clientProfile.makeupLips} textColor={P.text} divColor={rowDiv} /> : null}
                               </>
                             )}
 
@@ -1929,7 +1919,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
                             {/* ── CONSENT ── */}
                             {catLabel('Consent')}
-                            {s('photographyConsent') && (
+                            {(
                               <Row
                                 label="Photography consent"
                                 value={clientProfile.photographyConsent ? 'Yes' : 'No'}

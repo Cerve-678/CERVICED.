@@ -74,7 +74,7 @@ jest.mock("../services/databaseService", () => {
     getMyNotifications: on([{ id: "n1", title: "Booking confirmed", message: "Your lashes are booked in.", is_read: false, booking_id: "b1" }], []),
     getUserConversations: on([{ id: "c1", unread_count_user: 2, provider: { id: "p1", slug: "lola-studio", display_name: "Lola Studio" } }], []),
     getSavedPortfolioIds: on(["x", "y"], []),
-    getClientBeautyProfile: on({ lashStyle: "Wispy", styleVibe: "Natural" }, {}),
+    getUserBeautyProfile: on({ lash_style: "Wispy", style_vibe: "Natural" }, null),
     getProviderSchedulingConstraints: jest.fn(async () => ({ minBookingNoticeHrs: 24, bookingWindowDays: 60, scheduleReleaseDay: null })),
     // provider
     getMyProviderProfile: jest.fn(async () => ({ id: "me" })),
