@@ -56,11 +56,11 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Written 2026-11-08, NOT applied (following people + Recommend)
+### Applied 2026-11-08 (following people + Recommend)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261108220000 | `follow_people_and_recommend` | **NOT APPLIED.** Written on `feat/follow-people-backend`. Numbered above #340 (applied as 180000), #342 (190000), #350 (200000) and #352 (210000). The peers renumbered twice on 2026-11-08, so re-check before applying; live max was `20261108141616` when written. Only adds things: 6 new tables (RLS on, no policies), helper functions, triggers on `users` (`AFTER UPDATE OF phone`, `AFTER UPDATE OF has_client_profile`) and 16 RPCs for authenticated users. It redefines no existing function or view and doesn't touch `notifications_type_check`. Apply only on the user's go-ahead, after re-checking the frontier. |
+| 20261108220000 | `follow_people_and_recommend` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the worktree (absolute path, `--workdir` the main folder). Frontier before applying: live max `20261108190000` (#340 at 180000 and #342 at 190000 applied); #350 at 200000 and #352 at 210000 are held on the user's decisions and will renumber above this one. Lock was `(none)` on main. Additive only: no existing function, view or constraint redefined. Verified live: version present; 7 tables with RLS, 0 policies, no anon/authenticated table grants; the 16 app RPCs are executable by authenticated only; the 12 helpers aren't executable by authenticated; every SECURITY DEFINER function has search_path set; both `users` triggers are present; 16 phone hashes backfilled; trigram index present. A read-only smoke test as a client returned the expected defaults. Written on `feat/follow-people-backend` (#358). |
 
 ### Applied 2026-11-06 (bookings carry exact venue coordinates)
 
