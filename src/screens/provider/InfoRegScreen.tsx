@@ -4727,10 +4727,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     filter/sort, free-text search matching, and the location
                     line on provider cards.
 
-                    The separate "cities you cover" multi-select (serviceLocations
-                    → providers.service_locations, feeding the client Search
-                    "City" filter) lives in Business Details › AboutYouScreen —
-                    not duplicated here.
+                    The separate "cities you cover" list (serviceLocations →
+                    providers.service_locations, feeding the client Search
+                    "City" filter) has no editor anywhere now — About You's
+                    "Where You're Based" card was removed. This screen only
+                    round-trips the saved value; it doesn't ask for it.
 
                     Same stepped city → region → area picker the client uses for
                     "Your area" (AreaPicker) — "Other city…" / "Other…" fall back
@@ -5793,9 +5794,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
 
 
-              {/* WHERE YOU WORK (cities covered) moved up to 01 · Identity,
-                  alongside "Where you're based" — the two location questions
-                  belong together rather than four sections apart. */}
 
               {/* PRICE RANGE moved out to Services & Pricing (ServicesPricingScreen) —
                   same field, same providers.price_tier column, alongside the

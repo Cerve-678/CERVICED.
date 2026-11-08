@@ -129,8 +129,10 @@ interface FilterOptions {
   // Matches against a provider's service_locations array (see
   // src/constants/ukCities.ts) — a provider covering ANY selected city is a
   // match (OR, not AND), independent of the GPS-based Distance filter above.
-  // CityMultiSelect is the shared picker (also used by signup's "Where You
-  // Work") so this stays a multi-select, not the single-city pill it used to be.
+  // CityMultiSelect is the shared picker (also used by the client's sign-up
+  // LOCATION question) so this stays a multi-select, not the single-city pill
+  // it used to be. No provider screen edits service_locations any more, so
+  // this only matches values saved before About You's cities card was removed.
   city?: string[];
   // Matches against the provider-level providers.hair_types_catered, folded
   // into the same batched getProvidersAvailability() RPC call as the
