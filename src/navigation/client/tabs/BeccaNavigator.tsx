@@ -8,6 +8,7 @@ import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen
 import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
+import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import CartScreen from '../../../screens/client/CartScreen';
 import { BeccaStackParamList } from '../../types';
@@ -86,6 +87,24 @@ export default function BeccaNavigator() {
           headerStyle: {
             backgroundColor: theme.background,
           },
+          headerTitleStyle: {
+            fontFamily: 'BakbakOne',
+            fontSize: 22,
+            color: theme.text,
+          },
+          headerTintColor: theme.text,
+        }}
+      />
+
+      <BeccaStack.Screen
+        name="ActivityCentre"
+        component={ActivityCentreScreen}
+        options={{
+          title: 'Activity Centre',
+          presentation: 'card',
+          headerTransparent: false,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
             fontFamily: 'BakbakOne',
             fontSize: 22,

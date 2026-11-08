@@ -5668,8 +5668,8 @@ export async function getActiveRescheduleRequestsForBookings(
   return out;
 }
 
-/** Provider responds with their available slots. Routed through
- *  respond_to_reschedule_request() so the caller's provider ownership of
+/** Provider responds with their available slots. Routed through the policy
+ *  wrapper around respond_to_reschedule_request() so provider ownership of
  *  the booking and the request's 'pending' status are re-verified
  *  server-side — RLS on booking_reschedule_requests is SELECT-only, a
  *  direct .update() can no longer write this row at all. responseNote
@@ -5679,12 +5679,24 @@ export async function respondToRescheduleRequest(
   bookingId: string,
   availableSlots: { date: string; times: string[] }[],
   responseNote?: string,
+  cancelIfDeclined = false,
 ): Promise<void> {
-  const { error } = await supabase.rpc("respond_to_reschedule_request", {
+  const { error } = await supabase.rpc("respond_to_reschedule_request_with_policy", {
     p_booking_id: bookingId,
     p_available_slots: availableSlots,
     p_response_note: responseNote ?? null,
+    p_cancel_if_declined: cancelIfDeclined,
   });
+  if (error?.code === 'PGRST202') {
+    if (cancelIfDeclined) throw new Error('Cancel if declined is not available yet. Please try again after the database update.');
+    const legacy = await supabase.rpc("respond_to_reschedule_request", {
+      p_booking_id: bookingId,
+      p_available_slots: availableSlots,
+      p_response_note: responseNote ?? null,
+    });
+    if (legacy.error) throw legacy.error;
+    return;
+  }
   if (error) throw error;
 }
 
@@ -5718,18 +5730,40 @@ export async function confirmRescheduleOwnBooking(
 }
 
 /** Provider initiates a reschedule by proposing new slots directly.
- *  Routed through provider_initiate_reschedule() so the caller's provider
+ *  Routed through the policy wrapper around provider_initiate_reschedule() so the caller's provider
  *  ownership of the booking is re-verified server-side (original_date/time
  *  are read from the booking row itself, not trusted from the client) —
  *  same reasoning as respondToRescheduleRequest above. */
 export async function upsertProviderRescheduleRequest(params: {
   booking_id: string;
   proposed_slots: { date: string; times: string[] }[];
+  cancel_if_declined?: boolean;
+  note?: string;
 }): Promise<void> {
-  const { error } = await supabase.rpc("provider_initiate_reschedule", {
+  const note = params.note?.trim() || null;
+  const { error } = await supabase.rpc("provider_initiate_reschedule_with_note", {
     p_booking_id: params.booking_id,
     p_proposed_slots: params.proposed_slots,
+    p_cancel_if_declined: params.cancel_if_declined ?? false,
+    p_note: note,
   });
+  if (error?.code === 'PGRST202') {
+    if (note) throw new Error('Reschedule notes are not available yet. Please try again after the database update.');
+    const current = await supabase.rpc("provider_initiate_reschedule_with_policy", {
+      p_booking_id: params.booking_id,
+      p_proposed_slots: params.proposed_slots,
+      p_cancel_if_declined: params.cancel_if_declined ?? false,
+    });
+    if (!current.error) return;
+    if (current.error.code !== 'PGRST202') throw current.error;
+    if (params.cancel_if_declined) throw new Error('Cancel if declined is not available yet. Please try again after the database update.');
+    const legacy = await supabase.rpc("provider_initiate_reschedule", {
+      p_booking_id: params.booking_id,
+      p_proposed_slots: params.proposed_slots,
+    });
+    if (legacy.error) throw legacy.error;
+    return;
+  }
   if (error) throw error;
 }
 
@@ -5752,8 +5786,9 @@ export async function rejectRescheduleRequest(
 }
 
 /** Client declines a provider's offered reschedule times instead of
- *  silently abandoning the screen. The booking is untouched; only the
- *  request row closes. Routed through decline_reschedule_offer() so
+ *  silently abandoning the screen. The booking stays at its original time
+ *  unless this offer opted into cancellation and a full refund. Routed through
+ *  decline_reschedule_offer() so
  *  client ownership and the request's 'provider_responded' status are
  *  re-verified server-side. Requires supabase/fix_reschedule_flow_completion.sql. */
 export async function declineRescheduleOffer(bookingId: string): Promise<void> {
