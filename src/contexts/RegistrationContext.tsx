@@ -40,6 +40,9 @@ export interface RegistrationData {
   // Preferences — for matching / discovery only
   serviceInterests: string[];
   serviceLocations: string[];
+  // Client sign-up's "Where are you based?" (AreaPicker, "Camden, London").
+  // Saved to users.client_area — the same column Account > Your area edits.
+  clientArea: string;
   maintenanceFrequency: string;
   referralSource: string;
   // Personalisation — affects home feed gating
@@ -108,6 +111,7 @@ const initialData: RegistrationData = {
   // Preferences
   serviceInterests: [],
   serviceLocations: [],
+  clientArea: '',
   maintenanceFrequency: '',
   referralSource: '',
   // Personalisation

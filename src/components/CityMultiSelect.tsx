@@ -29,10 +29,9 @@ interface CityMultiSelectProps {
 }
 
 /**
- * Searchable multi-select for UK service-coverage cities. A single reusable
- * source for "where do you work" (signup, Step 4) and the client-side Search
- * "City" filter, so the two stay in sync — the same string always means the
- * same thing on both sides.
+ * Searchable multi-select for UK service-coverage cities, used by the
+ * client-side Search "City" filter. (Client sign-up used to ask with it too;
+ * it now asks for one area with AreaPicker, like Account > Your area.)
  *
  * Each entry can be either a whole city ("Manchester") or, for cities with
  * structured data (see src/data/cityAreas.ts — now all of UK_CITIES),

@@ -85,6 +85,9 @@ export interface ClientProfileData {
   photographyConsent: boolean;
   serviceInterests: string[];
   serviceLocations: string[];
+  /** "Where are you based?" from sign-up — users.client_area, the same column
+   *  Account > Your area edits. Omitted or blank leaves the column alone. */
+  clientArea?: string;
   maintenanceFrequency: string;
   referralSource: string;
   gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
@@ -832,6 +835,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const dob = profileData.dobYear && profileData.dobMonth && profileData.dobDay
       ? `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`
       : null;
+    // Only written when answered, so a skipped question can't blank an area
+    // the account already saved from Account > Your area.
+    const clientArea = profileData.clientArea?.trim() || null;
     try {
       await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
@@ -845,6 +851,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       photography_consent: profileData.photographyConsent,
       service_interests: profileData.serviceInterests,
       service_locations: profileData.serviceLocations,
+      ...(clientArea ? { client_area: clientArea } : {}),
       maintenance_frequency: profileData.maintenanceFrequency || null,
       referral_source: profileData.referralSource || null,
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
@@ -855,7 +862,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Keep the user-facing copy friendly, but record the real Postgres reason
     // (Metro/console only) so any future failure here is diagnosable at a glance.
     } catch (error) { logger.error('addClientProfile failed:', error); throw error; }
-    setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
+    setUser({ ...user, ...(dob ? { dob } : {}), ...(clientArea ? { clientArea } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
   }, [user]);
