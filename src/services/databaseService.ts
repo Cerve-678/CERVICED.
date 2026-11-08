@@ -10100,6 +10100,9 @@ export async function updateProviderContactDetails(
     price_bands?: string[];
     accessibility_notes?: string | null;
     languages_spoken?: string[] | null;
+    // "Areas you cover" (About You, mobile providers only). Matched by the
+    // client Search City filter — see src/utils/providerCity.ts.
+    service_locations?: string[];
     // Mirrors the live CHECK constraint providers_team_size_check
     // ('solo' | 'small_team' | 'large_team'). Clear with null — an empty string
     // violates the constraint and the update throws.

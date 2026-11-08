@@ -1,4 +1,4 @@
-// "Areas you cover" in Edit Profile edits providers.service_locations. Loading
+// "Areas you cover" (About You) edits providers.service_locations. Loading
 // a profile must hand back exactly what was saved, in order, so the next save
 // writes it back unchanged (and an emptied list saves as empty).
 
