@@ -112,6 +112,10 @@ import ServiceBookingCharts from '../../features/providers/ServiceBookingCharts'
 import { SERVICE_BOOKING_LOOKBACK_DAYS, summariseServiceBookings, type ServiceBookingSummary } from '../../features/providers/serviceBookingSummary';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
 import { formatDurationMinutes } from '../../utils/dateUtils';
+import { toReleaseDay, type BookingHorizonSettings } from '../../utils/bookingHorizon';
+import { describeReleaseQuickView } from '../../features/providers/releaseQuickView';
+import { ManageScheduleRows } from '../../features/providers/ManageScheduleRows';
+import { useCalendarViewPreference } from '../../features/provider-bookings/calendarViewPreference';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
   toEditorValue,
@@ -782,6 +786,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
+  // How far ahead clients can book, for the release-date quick view. Re-read
+  // with the profile on every focus, so a change in Scheduling shows on return.
+  const [bookingHorizon, setBookingHorizon] = useState<BookingHorizonSettings | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
   // null means "not answered yet" — a failed read must never render as an
   // all-false checklist telling a live provider they've done nothing.
@@ -903,6 +910,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           // address. Nothing on this screen shows those, and that read was
           // what kept the whole page on its loading shell.
           setProviderData(providerRowToRegistrationData(profile));
+          setBookingHorizon({
+            booking_window_days: profile.booking_window_days,
+            schedule_release_day: toReleaseDay(profile.automation_settings?.scheduleReleaseDay),
+          });
           setIsLoading(false);
           setProviderId(profile.id);
           setProviderSlug(profile.slug);
@@ -1141,6 +1152,16 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // The payout card hapticks on its own press, so this only navigates.
   const handleOpenPayments = useCallback(() => {
     navigation.navigate('Payments');
+  }, [navigation]);
+
+  const [calendarView, setCalendarView] = useCalendarViewPreference(user?.id);
+  const releaseQuickView = useMemo(
+    () => (bookingHorizon ? describeReleaseQuickView(bookingHorizon) : null),
+    [bookingHorizon],
+  );
+  // Where the release day is set (and also in Edit Profile).
+  const handleOpenRelease = useCallback(() => {
+    navigation.navigate('Scheduling');
   }, [navigation]);
 
   const handleEditSchedule = useCallback(() => {
@@ -2258,6 +2279,33 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           </TouchableOpacity>
                         ))}
                       </View>
+                    </BlurView>
+                  </View>
+
+                  <View style={styles.dashCardShadow}>
+                    <BlurView
+                      intensity={cardBlurIntensity}
+                      tint={cardBlurTint}
+                      style={[styles.dashCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+                    >
+                      <LinearGradient
+                        colors={cardHighlightColors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={styles.cardHighlight}
+                      />
+                      <ManageScheduleRows
+                        release={releaseQuickView}
+                        onOpenRelease={handleOpenRelease}
+                        calendarView={calendarView}
+                        onChangeCalendarView={setCalendarView}
+                        textColor={PP.text}
+                        subTextColor={PP.sub}
+                        accentColor={accentColor}
+                        onAccentColor={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'}
+                        chipBg={tintSoft}
+                        borderColor={PP.border}
+                      />
                     </BlurView>
                   </View>
 
