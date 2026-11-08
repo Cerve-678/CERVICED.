@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About Cerviced</title>
+<meta name="description" content="Beauty is run by independent specialists, and clients keep a routine across several of them. Cerviced is built for that: one cart for every provider, a beauty profile that remembers you, and real tools for providers' businesses.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;500;600;700&display=swap">
+<style>
+/* ── Tokens ─────────────────────────────────────────────────────────────
+   Values are the app's provider-hat palette (DESIGN_SYSTEM.md → L / D).
+   Do not drift these by hand.       */
+:root{
+  --bg:#F5F1EC;
+  --surface:#EDE8E2;
+  --card:#FFFFFF;
+  --accent:#5C4033;
+  --accent-text:#5C4033;
+  --on-accent:#FFFFFF;
+  --accent-dim:rgba(92,64,51,0.12);
+  --secondary:rgba(92,64,51,0.12);
+  --secondary-text:#5C4033;
+  --text:#000000;
+  --sub:#7E6667;
+  --border:rgba(126,102,103,0.14);
+  --sep:rgba(126,102,103,0.08);
+  --shadow:0 1px 2px rgba(92,64,51,0.05), 0 12px 32px -12px rgba(92,64,51,0.18);
+  --ring:rgba(92,64,51,0.55);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1A1815;
+    --surface:#201D1A;
+    --card:#252220;
+    --accent:#AF9197;
+    --accent-text:#AF9197;
+    --on-accent:#FFFFFF;
+    --accent-dim:rgba(175,145,151,0.10);
+    --secondary:rgba(175,145,151,0.10);
+    --secondary-text:#AF9197;
+    --text:#F0ECE7;
+    --sub:#7E6667;
+    --border:rgba(126,102,103,0.18);
+    --sep:rgba(126,102,103,0.10);
+    --shadow:0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.6);
+    --ring:rgba(175,145,151,0.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1A1815;
+  --surface:#201D1A;
+  --card:#252220;
+  --accent:#AF9197;
+  --accent-text:#AF9197;
+  --on-accent:#FFFFFF;
+  --accent-dim:rgba(175,145,151,0.10);
+  --secondary:rgba(175,145,151,0.10);
+  --secondary-text:#AF9197;
+  --text:#F0ECE7;
+  --sub:#7E6667;
+  --border:rgba(126,102,103,0.18);
+  --sep:rgba(126,102,103,0.10);
+  --shadow:0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.6);
+  --ring:rgba(175,145,151,0.6);
+}
+
+*{box-sizing:border-box;}
+/* An author `display` rule beats the UA stylesheet's [hidden]{display:none},
+   so .field{display:flex} would keep hidden fields visible without this. */
+[hidden]{display:none !important;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Jura','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:17px;
+  line-height:1.6;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.display,.label,button,.btn{
+  font-family:'Bakbak One','Haettenschweiler','Arial Narrow',Impact,sans-serif;
+  font-weight:400;
+}
+h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-0.005em;line-height:1.05;}
+p{margin:0;}
+a{color:var(--accent-text);}
+
+.wrap{width:min(1080px,100% - 44px);margin-inline:auto;}
+.label{
+  font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--sub);
+}
+:focus-visible{outline:2px solid var(--ring);outline-offset:3px;border-radius:4px;}
+
+/* ── Masthead ─────────────────────────────────────────────────────── */
+.masthead{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:26px 0 0;
+}
+.wordmark{
+  font-family:'Bakbak One',sans-serif;
+  font-size:20px;letter-spacing:0.26em;text-transform:uppercase;
+  color:var(--text);text-decoration:none;
+}
+
+
+.btn{
+  font-family:'Bakbak One','Haettenschweiler','Arial Narrow',Impact,sans-serif;
+  font-weight:400;
+}
+h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-0.005em;line-height:1.05;}
+p{margin:0;}
+a{color:var(--accent-text);}
+
+.wrap{width:min(1080px,100% - 44px);margin-inline:auto;}
+.label{
+  font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--sub);
+}
+:focus-visible{outline:2px solid var(--ring);outline-offset:3px;border-radius:4px;}
+
+/* ── Masthead ─────────────────────────────────────────────────────── */
+.masthead{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:26px 0 0;
+}
+.wordmark{
+  font-family:'Bakbak One',sans-serif;
+  font-size:20px;letter-spacing:0.26em;text-transform:uppercase;
+  color:var(--text);text-decoration:none;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.hero{
+  display:grid;grid-template-columns:1.05fr 0.95fr;gap:64px;align-items:center;
+  padding:84px 0 96px;
+}
+.hero h1{
+  font-size:clamp(40px,6.2vw,74px);
+  text-transform:uppercase;
+  letter-spacing:-0.015em;
+}
+.hero h1 .quiet{color:var(--sub);}
+.hero-copy{display:flex;flex-direction:column;gap:24px;align-items:flex-start;}
+.lede{font-size:19px;color:var(--sub);max-width:44ch;}
+
+.btn{
+  display:inline-block;border:0;cursor:pointer;
+  padding:15px 30px;border-radius:999px;
+  background:var(--accent);color:var(--on-accent);
+  font-size:14px;letter-spacing:0.11em;text-transform:uppercase;
+  text-decoration:none;
+  transition:transform .18s ease, opacity .18s ease;
+}
+.btn:hover{transform:translateY(-2px);opacity:.92;}
+.btn:active{transform:translateY(0);}
+
+
+/* ── About: hero ──────────────────────────────────────────────────────
+   Layout: a manifesto headline beside one client's month, kept across four
+   independent providers. That month is the whole argument of the page. */
+.hero{
+  display:grid;grid-template-columns:1.1fr 0.9fr;gap:64px;align-items:center;
+  padding:84px 0 88px;
+}
+.hero-copy{display:flex;flex-direction:column;gap:24px;align-items:flex-start;min-width:0;}
+.hero h1{font-size:clamp(38px,5.6vw,68px);text-transform:uppercase;letter-spacing:-0.015em;}
+.hero h1 .quiet{color:var(--sub);}
+.lede{font-size:19px;color:var(--sub);max-width:46ch;}
+
+.month{
+  background:var(--card);border:1px solid var(--border);border-radius:22px;
+  box-shadow:var(--shadow);padding:22px;min-width:0;
+}
+.month-head{display:flex;justify-content:space-between;align-items:baseline;padding:2px 4px 14px;}
+.month-head .count{font-family:'Bakbak One',sans-serif;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--secondary-text);}
+.visit{
+  display:grid;grid-template-columns:54px 1fr auto;gap:14px;align-items:center;
+  padding:13px 4px;border-top:1px solid var(--sep);
+}
+.wk{font-family:'Bakbak One',sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--sub);line-height:1.2;}
+.wk b{display:block;font-weight:400;font-size:20px;letter-spacing:0;color:var(--text);font-variant-numeric:tabular-nums;}
+.svc{font-size:15px;line-height:1.3;color:var(--text);}
+.who{font-size:12.5px;color:var(--sub);}
+.pill{
+  font-family:'Bakbak One',sans-serif;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+  padding:5px 10px;border-radius:999px;background:var(--accent-dim);color:var(--accent-text);white-space:nowrap;
+}
+.pill.soft{background:transparent;border:1px dashed var(--border);color:var(--sub);}
+.month-foot{margin-top:14px;padding:14px 4px 2px;border-top:1.5px solid var(--border);font-size:13px;color:var(--sub);}
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+section{padding:72px 0;border-top:1px solid var(--sep);}
+.section-head{display:flex;flex-direction:column;gap:14px;max-width:62ch;margin-bottom:44px;}
+.section-head h2{font-size:clamp(26px,3.4vw,38px);text-transform:uppercase;}
+.section-head p{color:var(--sub);}
+.prose{display:flex;flex-direction:column;gap:18px;max-width:62ch;font-size:17.5px;}
+.prose p{color:var(--sub);}
+.prose p strong{color:var(--text);font-weight:600;}
+
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px 32px;}
+.point{display:flex;flex-direction:column;gap:12px;min-width:0;}
+.point h3{font-size:19px;text-transform:uppercase;letter-spacing:0.01em;}
+.point p{font-size:15.5px;color:var(--sub);}
+.rule{width:34px;height:3px;border-radius:2px;background:var(--accent);}
+
+.manifesto{
+  background:var(--surface);border:1px solid var(--border);border-radius:24px;
+  padding:clamp(28px,5vw,56px);display:flex;flex-direction:column;gap:22px;align-items:flex-start;
+}
+.manifesto h2{font-size:clamp(30px,4.6vw,54px);text-transform:uppercase;max-width:18ch;}
+.manifesto p{color:var(--sub);max-width:58ch;font-size:17.5px;}
+.ctas{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;}
+.ctas a.plain{font-size:15px;font-weight:600;}
+
+/* ── Header menu ──────────────────────────────────────────────────── */
+.sitenav{display:flex;align-items:center;gap:6px 22px;flex-wrap:wrap;justify-content:flex-end;}
+.sitenav a{
+  font-size:14px;font-weight:600;color:var(--text);text-decoration:none;
+  padding:6px 0;
+}
+.sitenav a:hover{color:var(--accent-text);}
+.sitenav a.join{
+  padding:8px 16px;border-radius:999px;
+  background:var(--accent);color:var(--on-accent);
+  font-family:'Bakbak One',sans-serif;font-weight:400;
+  font-size:12px;letter-spacing:0.12em;text-transform:uppercase;
+}
+.sitenav a.join:hover{color:var(--on-accent);opacity:0.9;}
+section[id]{scroll-margin-top:24px;}
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+.site-foot{border-top:1px solid var(--sep);padding:48px 0 40px;font-size:14px;color:var(--sub);}
+.foot-cols{
+  display:grid;grid-template-columns:1.3fr repeat(3,1fr);gap:36px 32px;
+}
+.foot-brand{display:flex;flex-direction:column;gap:10px;align-items:flex-start;}
+.foot-brand p{max-width:30ch;}
+.site-foot h2{
+  font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--text);margin:0 0 14px;line-height:1.3;
+}
+.site-foot ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
+.site-foot a{color:var(--sub);text-decoration:none;}
+.site-foot a:hover{color:var(--accent-text);text-decoration:underline;text-underline-offset:3px;}
+.site-foot .wordmark{color:var(--text);}
+.foot-base{
+  margin-top:40px;padding-top:20px;border-top:1px solid var(--sep);
+  display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;font-size:13px;
+}
+
+
+.sitenav a[aria-current="page"]{color:var(--accent-text);}
+
+@media (max-width:880px){
+  .hero{grid-template-columns:1fr;gap:44px;padding:56px 0 64px;}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .foot-cols{grid-template-columns:1fr 1fr;}
+  .foot-brand{grid-column:1 / -1;}
+}
+@media (max-width:640px){
+  .masthead{flex-direction:column;align-items:flex-start;gap:14px;}
+  .sitenav{justify-content:flex-start;gap:4px 18px;}
+  .grid{grid-template-columns:1fr;}
+}
+@media (max-width:420px){
+  .foot-cols{grid-template-columns:1fr;}
+  .visit{grid-template-columns:46px 1fr;}
+  .visit .pill{grid-column:2;justify-self:start;}
+}
+@media (prefers-reduced-motion: reduce){ .btn:hover{transform:none;} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="wordmark" href="/">Cerviced</a>
+    <nav class="sitenav" aria-label="Main">
+      <a href="/about" aria-current="page">About us</a>
+      <a href="/#for-you">How it works</a>
+      <a href="/legal#safety">Health &amp; safety</a>
+      <a href="/legal">Terms &amp; policies</a>
+      <a class="join" href="/#join">Join the waitlist</a>
+    </nav>
+  </header>
+
+  <div class="hero" id="top">
+    <div class="hero-copy">
+      <span class="label">About Cerviced</span>
+      <h1>Beauty has changed.<br>Booking hasn't.<br><span class="quiet">Until now.</span></h1>
+      <p class="lede">The best work in beauty is done by independent specialists: the nail tech with a home studio, the braider who travels to you, the aesthetician building a name one client at a time. Their clients don't book one appointment. They keep a routine, across several people, every few weeks. Cerviced is built for that routine.</p>
+      <a class="btn" href="/#join">Join the waitlist</a>
+    </div>
+
+    <div class="month" aria-label="Example: one client's month across four providers">
+      <div class="month-head">
+        <span class="label">One client's month</span>
+        <span class="count">4 providers</span>
+      </div>
+      <div class="visit"><span class="wk">Week<b>1</b></span><span><span class="svc">Silk press</span><br><span class="who">Nia Hair · Brixton</span></span><span class="pill">Booked</span></div>
+      <div class="visit"><span class="wk">Week<b>2</b></span><span><span class="svc">Lash refill</span><br><span class="who">Studio Ren · Camberwell</span></span><span class="pill">Booked</span></div>
+      <div class="visit"><span class="wk">Week<b>3</b></span><span><span class="svc">Gel infill</span><br><span class="who">Amara Nails · comes to you</span></span><span class="pill">Booked</span></div>
+      <div class="visit"><span class="wk">Week<b>4</b></span><span><span class="svc">Brow lamination</span><br><span class="who">Due again, reminder on the day</span></span><span class="pill soft">Due</span></div>
+      <p class="month-foot">One app, one profile, one checkout for all of it. Names are examples.</p>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="label">Why we exist</span>
+      <h2>Booking was built for the salon front desk</h2>
+    </div>
+    <div class="prose">
+      <p>Most booking software started with one business, one diary and one checkout. That made sense when a salon did everything under one roof.</p>
+      <p>It doesn't fit beauty today. A client sees a different expert for hair, lashes, nails and skin, and each of those experts runs a business of one. <strong>The client has a routine. The provider has a business. Nothing connected the two.</strong></p>
+      <p>Cerviced starts from both ends at once: the client's whole routine, and the independent provider's whole business. Every feature we build joins them up.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="label">For clients</span>
+      <h2>Your whole routine, in one place</h2>
+    </div>
+    <div class="grid">
+      <div class="point"><span class="rule"></span><h3>One cart, every provider</h3><p>Add hair in one postcode, lashes in another and nails at home, then pay once. Book back-to-back and the times line up for you.</p></div>
+      <div class="point"><span class="rule"></span><h3>A profile that remembers you</h3><p>Your hair type, skin, allergies and preferences, saved once. A provider sees only what their service needs, and only once you've booked them.</p></div>
+      <div class="point"><span class="rule"></span><h3>Maintenance that keeps time</h3><p>Cerviced works out when your infills, refills and touch-ups are due and reminds you on the day. If you've already booked, it stays quiet.</p></div>
+      <div class="point"><span class="rule"></span><h3>Becca, your assistant</h3><p>Ask in your own words. Becca finds providers, answers questions about your bookings and puts your last appointment back in your cart in one tap.</p></div>
+      <div class="point"><span class="rule"></span><h3>Waitlists that move</h3><p>When a time you wanted frees up, it's held for you and you're told straight away. If you pass, it goes to the next person in line.</p></div>
+      <div class="point"><span class="rule"></span><h3>Rescheduling on a clock</h3><p>Ask to move an appointment and the other side has 45 minutes to answer. You both see the deadline, so nobody waits days for a reply.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="label">For providers</span>
+      <h2>Your business, run like one</h2>
+      <p>A profile on Cerviced is the whole business behind the chair: your rules, your brand, your diary and your money.</p>
+    </div>
+    <div class="grid">
+      <div class="point"><span class="rule"></span><h3>Your rules, applied for you</h3><p>Set your own deposits, cancellation and rescheduling policies, and late and no-show fees. Clients agree to them before they pay, and the app applies them.</p></div>
+      <div class="point"><span class="rule"></span><h3>Your brand, not a template</h3><p>Choose from curated colour collections and business-name fonts so your profile looks like your business.</p></div>
+      <div class="point"><span class="rule"></span><h3>Your diary, your release day</h3><p>Let clients book a set time ahead, or open a month at a time on the day you choose.</p></div>
+      <div class="point"><span class="rule"></span><h3>Clients who arrive ready</h3><p>Send info packs and forms before each appointment, so you know what you need to before anyone sits down.</p></div>
+      <div class="point"><span class="rule"></span><h3>Paid properly</h3><p>Clients pay by card, Apple Pay, Google Pay or PayPal. Payouts go to your bank on the schedule you choose, and every tip goes to you in full.</p></div>
+      <div class="point"><span class="rule"></span><h3>Found by the right people</h3><p>Clients search by what they actually want, typos and all, and find you by service, area and the details that matter to them.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="manifesto">
+      <span class="label">Where this goes</span>
+      <h2>The future of beauty is independent</h2>
+      <p>More specialists are going it alone, building loyal clients and real businesses on their own terms. They deserve tools as good as their work. Their clients deserve one place for everything they do to look and feel like themselves.</p>
+      <p>Cerviced is that place. We're opening soon, starting in the UK.</p>
+      <div class="ctas">
+        <a class="btn" href="/#join">Join the waitlist</a>
+        <a class="plain" href="/legal">Read our terms &amp; policies</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-cols">
+      <div class="foot-brand">
+        <a class="wordmark" href="/">Cerviced</a>
+        <p>Booking for independent beauty &amp; wellness providers across the UK. Pre-launch.</p>
+        <a href="mailto:support@cerviced.co">support@cerviced.co</a>
+      </div>
+      <nav aria-labelledby="foot-cerviced">
+        <h2 id="foot-cerviced">Cerviced</h2>
+        <ul>
+          <li><a href="/about">About us</a></li>
+          <li><a href="/#for-you">For providers &amp; clients</a></li>
+          <li><a href="/#join">Join the waitlist</a></li>
+          <li><a href="mailto:support@cerviced.co">Contact us</a></li>
+        </ul>
+      </nav>
+      <nav aria-labelledby="foot-legal">
+        <h2 id="foot-legal">Legal</h2>
+        <ul>
+          <li><a href="/legal#terms">Terms &amp; Conditions</a></li>
+          <li><a href="/legal#provider-terms">Provider Terms of Business</a></li>
+          <li><a href="/legal#privacy">Privacy Policy</a></li>
+          <li><a href="/legal#cookies">Cookies</a></li>
+          <li><a href="/legal#fees">Fees, cancellations &amp; refunds</a></li>
+        </ul>
+      </nav>
+      <nav aria-labelledby="foot-safety">
+        <h2 id="foot-safety">Safety &amp; community</h2>
+        <ul>
+          <li><a href="/legal#safety">Health &amp; Safety</a></li>
+          <li><a href="/legal#providers">Provider Standards</a></li>
+          <li><a href="/legal#community">Community Guidelines</a></li>
+          <li><a href="/legal#reviews">Reviews Policy</a></li>
+          <li><a href="/legal#complaints">Complaints &amp; reporting</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="foot-base">
+      <span>© 2026 Cerviced Ltd, registered in England and Wales.</span>
+      <span>United Kingdom</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
