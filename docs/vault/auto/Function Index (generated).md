@@ -5,7 +5,7 @@
 
 #generated
 
-**3349 functions** across **471 files**.
+**3351 functions** across **471 files**.
 
 ### `src/components/` (62)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -35,7 +35,7 @@
 - `ImageCropModal.tsx` — handleBox · handleMark · handleUsePhoto · **ImageCropModal** · make · photo · responders
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · runPendingNavigation · selectImageIndex · trackCarouselOffset
 - `IslandPillTabBar.tsx` — goToTab · IslandPillTabBar · **tabBarSpotlightRect**
-- `IssueRefundSheet.tsx` — close · formatPence · formatRefundDate · IssueRefundSheet · loadState · preview · re · requestSteps · submit
+- `IssueRefundSheet.tsx` — close · formatPence · formatRefundDate · IssueRefundSheet · loadState · preview · re · requestSteps · submit · toggleCancelAfterRefund
 - `KeyboardDismissView.tsx` — **KeyboardDismissView**
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — LocationModal · matches
@@ -137,7 +137,7 @@
 - `ExternalBookingCard.tsx` — createStyles · styles
 - `externalBookings.ts` — **bookedOnLabel** · **bookingSiteName** · **externalBookingStart** · **splitExternalBookings**
 - `noShowDispute.ts` — **fileNoShowDispute**
-- `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **describeRefundOutcome** · **describeSettlementTiming** · money · **previewProviderRefund**
+- `paymentPresentation.ts` — **calculateBookingPaymentBreakdown** · **cancelsWithRefund** · **describeRefundOutcome** · **describeSettlementTiming** · money · **previewProviderRefund**
 - `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
 - `rebook.ts` — **buildRebookCartItem** · durationLabel · **rebookAddOns**
 - `receipt.ts` — appointmentWhen · **buildClientReceiptHTML** · **buildProviderInvoiceHTML** · escapeHtml · methodLabel · money · renderDocument
