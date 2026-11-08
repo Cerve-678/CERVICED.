@@ -75,6 +75,7 @@ import {
   getMyBookmarkCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
+  getProviderRecentBookings,
   getMyServiceCatalogue,
   getProviderPortfolio,
   getMyProviderTermsText,
@@ -115,6 +116,8 @@ import { formatDurationMinutes } from '../../utils/dateUtils';
 import { toReleaseDay, type BookingHorizonSettings } from '../../utils/bookingHorizon';
 import { describeReleaseQuickView } from '../../features/providers/releaseQuickView';
 import { ManageScheduleRows } from '../../features/providers/ManageScheduleRows';
+import { RecentBookingRow } from '../../features/providers/RecentBookingRow';
+import { RECENT_ACTIVITY_PREVIEW } from '../../features/providers/recentBookingActivity';
 import { useCalendarViewPreference } from '../../features/provider-bookings/calendarViewPreference';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
@@ -201,6 +204,10 @@ const PROFILE_TABS: { key: ProfileTab; label: string; icon: keyof typeof Ionicon
 ];
 
 const MAX_REVIEW_PREVIEWS = 2;
+// The Deposits & rules tile lists this many rules (deposit first, as
+// buildPolicyDisplayRows orders them), then "+N more". The full list is one
+// tap away in Policies.
+const MAX_POLICY_PREVIEWS = 3;
 const MAX_PORTFOLIO_TILES = 9;
 // Enough to fill the rail's first view; the rest load with the lower cards.
 const PORTFOLIO_FIRST_TILES = 3;
@@ -803,6 +810,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // What clients actually book, busiest first — the one thing on this screen
   // that reports back on the catalogue rather than describing it.
   const [serviceBookings, setServiceBookings] = useState<ServiceBookingSummary | null>(null);
+  // The latest bookings by when they were made, for Recent activity above
+  // Manage. Empty until loaded, and the card isn't drawn while it's empty.
+  const [recentBookings, setRecentBookings] = useState<BookingWithAddOns[]>([]);
 
   // Editor state. editingId is the row being changed, or null for a new
   // service in editingCategory.
@@ -944,6 +954,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               })
               .catch(err => {
                 logger.error('[MyServices] bookmark count load failed:', err);
+              }),
+
+            getProviderRecentBookings(profile.id, RECENT_ACTIVITY_PREVIEW)
+              .then(rows => {
+                if (active) setRecentBookings(rows);
+              })
+              .catch(err => {
+                logger.error('[MyServices] recent bookings load failed:', err);
               }),
 
             getMyServiceBookingRows(SERVICE_BOOKING_LOOKBACK_DAYS)
@@ -1147,7 +1165,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
   const [calendarView, setCalendarView] = useCalendarViewPreference(user?.id);
   const releaseQuickView = useMemo(
-    () => (bookingHorizon ? describeReleaseQuickView(bookingHorizon) : null),
+    () => (bookingHorizon ? describeReleaseQuickView(bookingHorizon) : undefined),
     [bookingHorizon],
   );
   // Where the release day is set (and also in Edit Profile).
@@ -1169,7 +1187,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // navigate.
   const todaySchedule = useTodaySchedule(providerId);
 
-  const handleOpenTodayBooking = useCallback(
+  // Also Recent activity's rows, which hold the same raw rows.
+  const handleOpenBooking = useCallback(
     (booking: BookingWithAddOns) => {
       // The cards hold raw rows; the detail screen reads a ConfirmedBooking, and
       // shows no client or service on anything else.
@@ -1189,6 +1208,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     },
     [navigation],
   );
+
+  // See all is booking history's History tab, whose filter starts on All —
+  // not a separate recent-activity list.
+  const handleOpenRecentActivity = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    navigation.navigate('BookingHistory', { initialTab: 'history' });
+  }, [navigation]);
 
   const handleOpenAnalytics = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
@@ -1586,7 +1612,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     <TodaySummaryCard
       schedule={todaySchedule}
       palette={todayPalette}
-      onOpenBooking={handleOpenTodayBooking}
+      onOpenBooking={handleOpenBooking}
       onOpenDay={handleOpenTodayDay}
     />
   ) : null;
@@ -1594,7 +1620,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     <TodayBookingCards
       schedule={todaySchedule}
       palette={todayPalette}
-      onOpenBooking={handleOpenTodayBooking}
+      onOpenBooking={handleOpenBooking}
     />
   ) : null;
 
@@ -2045,7 +2071,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         </Text>
                       ) : (
                         <View style={styles.policyList}>
-                          {policyRows.map(row => (
+                          {policyRows.slice(0, MAX_POLICY_PREVIEWS).map(row => (
                             <View key={row.label} style={styles.policyItem}>
                               <Ionicons name={row.icon} size={13} color={accentColor} />
                               <View style={styles.policyItemText}>
@@ -2058,6 +2084,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                               </View>
                             </View>
                           ))}
+                          {policyRows.length > MAX_POLICY_PREVIEWS ? (
+                            <Text style={[styles.policyMore, { color: PP.sub }]}>
+                              +{policyRows.length - MAX_POLICY_PREVIEWS} more
+                            </Text>
+                          ) : null}
                         </View>
                       )}
                     </TouchableOpacity>
@@ -2222,6 +2253,48 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
                   {/* ── Today, the other card ──────────────────────────────── */}
                   {todaySchedule?.phase === 'cardsLead' ? todaySummaryCard : todayBookingCards}
+
+                  {/* ── Recent activity ────────────────────────────────────── */}
+                  {recentBookings.length > 0 ? (
+                    <>
+                      <View style={styles.rowHeader}>
+                        <Text style={[styles.sectionLabel, { color: PP.sub }]}>RECENT ACTIVITY</Text>
+                        <TouchableOpacity
+                          onPress={handleOpenRecentActivity}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel="See all recent bookings"
+                        >
+                          <Text style={[styles.rowHeaderLink, { color: accentColor }]}>See all</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.dashCardShadow}>
+                        <BlurView
+                          intensity={cardBlurIntensity}
+                          tint={cardBlurTint}
+                          style={[styles.dashCard, styles.recentCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+                        >
+                          <LinearGradient
+                            colors={cardHighlightColors}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={styles.cardHighlight}
+                          />
+                          {recentBookings.map((booking, i) => (
+                            <RecentBookingRow
+                              key={booking.id}
+                              booking={booking}
+                              onPress={handleOpenBooking}
+                              textColor={PP.text}
+                              subTextColor={PP.sub}
+                              borderColor={PP.border}
+                              isLast={i === recentBookings.length - 1}
+                            />
+                          ))}
+                        </BlurView>
+                      </View>
+                    </>
+                  ) : null}
 
                   {/* ── Manage ─────────────────────────────────────────────── */}
                   <View style={styles.rowHeader}>
@@ -2770,6 +2843,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
+  // The rows carry their own vertical padding.
+  recentCard: {
+    paddingVertical: 6,
+  },
   halfRow: {
     flexDirection: 'row',
     gap: HALF_GAP,
@@ -3251,6 +3328,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 7,
+  },
+  policyMore: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   policyItemText: {
     flex: 1,

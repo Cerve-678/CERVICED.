@@ -34,6 +34,7 @@ import {
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
 } from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
+import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -934,7 +935,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={[st.statusBadge, { backgroundColor: getStatusColor(booking.status, booking.isPendingReschedule) }]}>
                   <Text style={st.statusText}>
                     {booking.isPendingReschedule
-                      ? ((booking as any).rescheduleRequest?.providerAvailableDates ? 'RESCHEDULE AVAILABLE' : 'RESCHEDULE PENDING')
+                      ? (booking.rescheduleRequest?.providerAvailableDates ? 'RESCHEDULE OFFERED' : 'RESCHEDULE PENDING')
                       : booking.status.replace('_', ' ').toUpperCase()}
                   </Text>
                 </View>
@@ -1047,8 +1048,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT STATUS</Text>
-              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowReceipt(v => !v); }} activeOpacity={0.7}>
-                <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
+              {/* A dotted-outline pill so it reads as a button, not a stray
+                  coloured word beside the heading. */}
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowReceipt(v => !v); }}
+                activeOpacity={0.5}
+                accessibilityRole="button"
+                accessibilityLabel={showReceipt ? 'Hide receipt' : 'View receipt'}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={[st.receiptButton, { borderColor: C.accent }]}
+              >
+                <Text style={{ color: C.accentText, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
             {/* What came back or was kept after a cancellation — at the top so
@@ -1118,27 +1128,33 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
-                  {/* Itemised breakdown */}
+                  {/* Itemised breakdown: the service by name, its add-ons
+                      indented under it (then a Subtotal, only when there are
+                      add-ons), and the platform fee in lighter text. Nothing
+                      above Total is a payment — the deposit sits below it,
+                      with Paid. */}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Base Price</Text>
-                    <Text style={{ color: C.text, fontSize: 13 }}>£{payment.servicePrice.toFixed(2)}</Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600', flexShrink: 1, marginRight: 12 }} numberOfLines={2}>{booking.serviceName || 'Service'}</Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>£{payment.servicePrice.toFixed(2)}</Text>
                   </View>
                   {(booking.addOns ?? []).map((a, i) => (
-                    <View key={`ao-${i}`} style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13, flexShrink: 1, marginRight: 12 }} numberOfLines={1}>• {a.name}</Text>
-                      <Text style={{ color: C.text, fontSize: 13 }}>+£{a.price.toFixed(2)}</Text>
+                    <View key={`ao-${i}`} style={[st.rcptRow, st.rcptAddOnRow]}>
+                      <Text style={{ color: C.sub, fontSize: 13, flexShrink: 1, marginRight: 12 }} numberOfLines={1}>+ {a.name}</Text>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>£{a.price.toFixed(2)}</Text>
                     </View>
                   ))}
                   {payment.addOnsTotal > 0 && (
                     <View style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13 }}>Subtotal</Text>
+                      <Text style={{ color: C.text, fontSize: 13 }}>Subtotal</Text>
                       <Text style={{ color: C.text, fontSize: 13 }}>£{payment.subtotal.toFixed(2)}</Text>
                     </View>
                   )}
-                  <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Platform Fee</Text>
-                    <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
-                  </View>
+                  {payment.serviceCharge > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 12 }}>Platform fee</Text>
+                      <Text style={{ color: C.sub, fontSize: 12 }}>£{payment.serviceCharge.toFixed(2)}</Text>
+                    </View>
+                  )}
 
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
@@ -1147,8 +1163,21 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>Total</Text>
                     <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>£{payment.total.toFixed(2)}</Text>
                   </View>
+
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
+
+                  {/* The deposit is part of the price, so it's listed here
+                      with what was paid, never added above Total. Paid says
+                      it includes the fee whenever a deposit line sits next to
+                      it, so the two figures don't look like they disagree. */}
+                  {payment.depositPaid > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>Deposit paid</Text>
+                      <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>£{payment.depositPaid.toFixed(2)}</Text>
+                    </View>
+                  )}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.depositPaid > 0 ? 'Paid (incl. fee)' : payment.paidLabel}</Text>
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>
@@ -1354,13 +1383,44 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <View style={st.section}>
               <View style={[st.rescheduleBanner, { backgroundColor: C.card, borderColor: C.accent }]}>
                 <Text style={[{ fontSize: 14, fontWeight: '700', color: C.accent, marginBottom: 4 }]}>
-                  {(booking as any).rescheduleRequest?.providerAvailableDates ? 'Available Times Received!' : 'Reschedule Requested'}
+                  {booking.rescheduleRequest?.providerAvailableDates
+                    ? (booking.rescheduleRequest.requestedBy === 'provider' ? 'New Time Offered' : 'Available Times Received')
+                    : 'Reschedule Requested'}
                 </Text>
                 <Text style={{ fontSize: 13, color: C.sub }}>
-                  {(booking as any).rescheduleRequest?.providerAvailableDates
-                    ? `${booking.providerName} has responded with available times. Tap Reschedule Now to confirm.`
+                  {booking.rescheduleRequest?.providerAvailableDates
+                    ? (booking.rescheduleRequest.requestedBy === 'provider'
+                        ? `${booking.providerName} has offered a new available time for this booking. Tap Reschedule Now to confirm the new date.`
+                        : `${booking.providerName} has responded with available times. Tap Reschedule Now to confirm.`)
                     : `Waiting for ${booking.providerName} to respond with available dates.`}
                 </Text>
+                {/* Until when. The client's window starts when the provider
+                    offers times (updated_at); the provider's when the client
+                    asked. Same anchors the expiry cron uses. */}
+                {(() => {
+                  const offered = !!booking.rescheduleRequest?.providerAvailableDates;
+                  const by = rescheduleReplyBy(offered ? booking.rescheduleRequest?.providerRespondedAt : booking.rescheduleRequest?.requestedAt);
+                  if (!by) return null;
+                  return (
+                    <Text style={{ fontSize: 13, color: C.text, fontWeight: '600', marginTop: 6 }}>
+                      {offered
+                        ? `You have until ${by} to choose, or your booking stays as it is.`
+                        : `${booking.providerName} has until ${by} to reply, or your booking stays as it is.`}
+                    </Text>
+                  );
+                })()}
+                {booking.rescheduleRequest?.providerAvailableDates && !!booking.rescheduleRequest.providerNote && (
+                  <Text style={{ fontSize: 13, color: C.text, marginTop: 8, lineHeight: 19 }}>
+                    Note from {booking.providerName}: {booking.rescheduleRequest.providerNote}
+                  </Text>
+                )}
+                {booking.rescheduleRequest?.providerAvailableDates && (
+                  <Text style={{ fontSize: 12, color: C.sub, marginTop: 6 }}>
+                    {booking.rescheduleRequest.cancelIfDeclined
+                      ? 'If you decline, this booking will be cancelled and any payment refunded in full.'
+                      : `If you decline, your original appointment on ${formatBookingDisplayDate(booking.bookingDate)} stays booked.`}
+                  </Text>
+                )}
                 {/* Show what was actually requested — previously not surfaced
                     anywhere after submission (requestedDates/requestedTimes
                     come from booking_reschedule_requests via
@@ -2007,9 +2067,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Info Pack Full-Screen Reader — long packs only. Short ones get
             the compact popup below instead of taking over the whole screen. */}
-        <Modal visible={!!viewingPack && isLongBookingInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
-          <View style={{ flex: 1, backgroundColor: C.bg }}>
-            <SafeAreaView style={{ flex: 1 }}>
+        <Modal visible={!!viewingPack && isLongBookingInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent navigationBarTranslucent onRequestClose={() => setViewingPack(null)}>
+          {/* Insets come from context: a <SafeAreaView> inside a Modal applies
+              none, which put the back button under the status bar. */}
+          <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }}>
               {/* Header */}
               <View style={{
                 flexDirection: 'row', alignItems: 'center',
@@ -2029,7 +2090,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
               {viewingPack && (
                 <ScrollView
-                  contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 28, paddingBottom: 60 }}
+                  contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 28, paddingBottom: 60 + insets.bottom }}
                   showsVerticalScrollIndicator={false}
                 >
                   {/* Service pill */}
@@ -2059,7 +2120,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </Text>
                 </ScrollView>
               )}
-            </SafeAreaView>
           </View>
         </Modal>
 
@@ -2120,10 +2180,12 @@ const st = StyleSheet.create({
   todoCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 8 },
   todoBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   todoBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
+  receiptButton: { borderWidth: 1.5, borderStyle: 'dotted', borderRadius: 100, paddingHorizontal: 14, paddingVertical: 6 },
   receiptContainer: { borderRadius: 8, padding: 12 },
   receiptPaper: { padding: 16, borderRadius: 6, borderWidth: 1, borderStyle: 'dashed' },
   receiptFullyPaidBadge: { backgroundColor: 'rgba(52,199,89,0.15)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12, marginTop: 10, alignSelf: 'center' },
   receiptFullyPaidText: { color: '#34C759', fontSize: 12, fontWeight: '700' },
+  rcptAddOnRow: { paddingLeft: 12 },
   rcptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   actions: { marginTop: 8, marginBottom: 8, gap: 12 },
   cancelBtn: { borderWidth: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },

@@ -11,7 +11,7 @@ import { getRefundRequestsForBooking } from '../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../features/bookings/refundRequestTimeline';
 import type { RefundRequest } from '../types/booking';
 import RefundRequestTimeline from './RefundRequestTimeline';
-import { describeSettlementTiming, previewProviderRefund } from '../features/bookings/paymentPresentation';
+import { cancelsWithRefund, describeSettlementTiming, previewProviderRefund } from '../features/bookings/paymentPresentation';
 import { newRequestId } from '../utils/requestId';
 import { logger } from '../utils/logger';
 import { toUserMessage } from '../utils/userFacingError';
@@ -23,8 +23,10 @@ import { isDarkColor } from '../constants/providerThemes';
 // platform fee is never shown (it isn't theirs). When the client's late
 // cancellation was already settled by the provider's policy, that is shown as
 // done and the only choice is refunding MORE on top: never "apply the policy"
-// again. A reason is required before money moves. Issuing a refund does NOT
-// cancel the appointment; that's the separate Cancel action. When the client
+// again. A reason is required before money moves. A full refund of an upcoming
+// booking also cancels the appointment unless the provider unticks that box;
+// the cancel's own full refund then finds nothing left and moves no money
+// (refund-payment counts every refund already made). When the client
 // has an open refund request, it sits at the top with its timeline, so the
 // provider can see what they're answering while they choose the amount.
 
@@ -73,12 +75,13 @@ export interface RefundIssued {
 
 /** Mount only while open: each mount is a fresh refund attempt (new request
  *  id, reloaded state), so a retry after a failure can never refund twice. */
-export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onClose, onRefunded }: {
+export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onClose, onRefunded, onCancelAppointment }: {
   booking: RefundSheetBooking;
   palette: RefundSheetPalette;
   isDarkMode: boolean;
   onClose: () => void;
   onRefunded: (result: RefundIssued) => void;
+  onCancelAppointment?: (() => Promise<void>) | undefined;
 }) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance>(null);
@@ -87,6 +90,8 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [cancelAfterRefund, setCancelAfterRefund] = useState(false);
   // What the sheet shows comes from the server (getProviderRefundState); the
   // refund-payment function re-derives every figure when the refund is made.
   const [state, setState] = useState<ProviderRefundState | null>(null);
@@ -139,6 +144,19 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
     [state, mode, amountText],
   );
 
+  // Ticked by default on a full refund (see cancelsWithRefund); the provider's
+  // own choice is remembered if they switch to partial and back.
+  const cancelChoice = useRef<boolean | null>(null);
+  const canCancel = !!onCancelAppointment;
+  useEffect(() => {
+    setCancelAfterRefund(cancelsWithRefund(preview.isFull, canCancel, cancelChoice.current));
+  }, [preview.isFull, canCancel]);
+  const toggleCancelAfterRefund = useCallback(() => {
+    const next = !cancelAfterRefund;
+    cancelChoice.current = next;
+    setCancelAfterRefund(next);
+  }, [cancelAfterRefund]);
+
   const submit = useCallback(async () => {
     if (!reason || busy || !state) return;
     if (preview.error || preview.refundPence <= 0) return;
@@ -154,14 +172,25 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
         ...(isFull ? {} : { amountPence: preview.refundPence }),
         requestId: requestId.current,
       });
+      let cancellationFailed = false;
+      if (cancelAfterRefund && preview.isFull && onCancelAppointment) {
+        try {
+          await onCancelAppointment();
+        } catch (cancelError) {
+          cancellationFailed = true;
+          logger.error('[IssueRefundSheet] refund succeeded but cancellation failed:', cancelError);
+        }
+      }
       const who = booking.customerName?.split(' ')[0] || 'your client';
       onRefunded({
         completed,
         isFull,
         title: completed ? 'Refund issued' : 'Refund processing',
-        message: completed
-          ? `${isFull ? `${who} is being refunded in full` : `${formatPence(preview.refundPence)} is on its way back to ${who}`}. Their bank may take a few days to show it.`
-          : 'Stripe is still processing the refund. Check again shortly.',
+        message: cancellationFailed
+          ? 'The refund was issued, but the appointment could not be cancelled. Please cancel it from the booking details.'
+          : completed
+          ? `${isFull ? `${who} is being refunded in full` : `${formatPence(preview.refundPence)} is on its way back to ${who}`}. Their bank may take a few days to show it.${cancelAfterRefund && isFull ? ' The appointment has been cancelled.' : ''}`
+          : `Stripe is still processing the refund. Check again shortly.${cancelAfterRefund && isFull ? ' The appointment has been cancelled.' : ''}`,
       });
     } catch (err) {
       // refund-payment's 409 messages are written for the provider ("You can
@@ -172,7 +201,7 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
     } finally {
       setBusy(false);
     }
-  }, [booking, reason, note, busy, state, preview, onRefunded]);
+  }, [booking, reason, note, busy, state, preview, onRefunded, cancelAfterRefund, onCancelAppointment]);
 
   const first = booking.customerName?.split(' ')[0];
   const canSubmit = !!state && state.heldPence > 0 && !!reason
@@ -423,7 +452,22 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                               maxLength={500}
                               editable={!busy}
                             />
-                            <Text style={{ color: P.sub, fontSize: 12 }}>This doesn't cancel the appointment. Banks usually take 5–10 working days to show a refund.</Text>
+                            {onCancelAppointment && (
+                              <TouchableOpacity accessibilityRole="switch" accessibilityState={{ checked: cancelAfterRefund && preview.isFull, disabled: busy || !preview.isFull }}
+                                disabled={busy || !preview.isFull} onPress={toggleCancelAfterRefund}
+                                style={[styles.optionRow, { backgroundColor: P.card, borderColor: P.border, marginTop: 8, opacity: preview.isFull ? 1 : 0.5 }]}>
+                                <Ionicons name={cancelAfterRefund ? 'checkbox' : 'square-outline'} size={22} color={cancelAfterRefund ? P.accent : P.sub} />
+                                <View style={styles.optionText}>
+                                  <Text style={[styles.optionLabel, { color: P.text }]}>Cancel appointment too</Text>
+                                  <Text style={[styles.optionSub, { color: P.sub }]}>{!preview.isFull
+                                    ? 'Choose a full refund to cancel the appointment.'
+                                    : cancelAfterRefund
+                                    ? 'The client will be told the appointment is cancelled.'
+                                    : 'The appointment stays booked, and the client has nothing left to pay.'}</Text>
+                                </View>
+                              </TouchableOpacity>
+                            )}
+                            <Text style={{ color: P.sub, fontSize: 12 }}>Banks usually take 5–10 working days to show a refund.</Text>
                           </>
                         )}
                       </>
@@ -439,19 +483,22 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                 </TouchableOpacity>
               ) : (
                 <>
+                  {confirming && <Text style={{ color: P.text, fontSize: 13, marginBottom: 8 }}>
+                    Are you sure you want to issue this refund{cancelAfterRefund && preview.isFull ? ' and cancel the appointment' : ''}? This cannot be undone.
+                  </Text>}
                   {!!submitError && <Text accessibilityLiveRegion="polite" style={[styles.error, { marginBottom: 8 }]}>{submitError}</Text>}
                   <TouchableOpacity
                     style={[styles.cta, { backgroundColor: P.accent, opacity: canSubmit ? 1 : 0.4 }]}
                     activeOpacity={0.8}
                     disabled={!canSubmit || busy}
-                    onPress={() => void submit()}
+                    onPress={() => confirming ? void submit() : setConfirming(true)}
                   >
                     {busy
                       ? <ActivityIndicator size="small" color={isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740'} />
-                      : <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>{state && state.heldPence > 0 && !reason ? 'Choose a reason' : ctaLabel}</Text>}
+                      : <Text style={[styles.ctaText, { color: isDarkColor(P.accent) ? '#FFFFFF' : '#1B2740' }]}>{state && state.heldPence > 0 && !reason ? 'Choose a reason' : confirming ? 'Yes, issue refund' : ctaLabel}</Text>}
                   </TouchableOpacity>
-                  <TouchableOpacity style={{ alignItems: 'center', padding: 8 }} disabled={busy} onPress={onClose} activeOpacity={0.7}>
-                    <Text style={{ color: P.sub, fontSize: 14 }}>Cancel</Text>
+                  <TouchableOpacity style={{ alignItems: 'center', padding: 8 }} disabled={busy} onPress={confirming ? () => setConfirming(false) : onClose} activeOpacity={0.7}>
+                    <Text style={{ color: P.sub, fontSize: 14 }}>{confirming ? 'Go back' : 'Cancel'}</Text>
                   </TouchableOpacity>
                 </>
               )}

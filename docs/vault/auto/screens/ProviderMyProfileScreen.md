@@ -14,6 +14,7 @@ tags: [screen, provider]
 - [[BrandingScreen\|Branding]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 - `ProviderHome` _(navigator / dynamic)_
+- [[ProviderBookingHistoryScreen\|BookingHistory]]
 - [[ProviderAnalyticsScreen\|Analytics]]
 - [[PoliciesScreen\|Policies]]
 - [[BusinessInfoScreen\|BusinessInfo]]

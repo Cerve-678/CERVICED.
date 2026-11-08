@@ -44,46 +44,31 @@ function latestDefinitionOf(name: string): { file: string; body: string } {
 // removed — a client can now always cancel, and the window only records a
 // late cancel against their reliability. The auto-expiry bound below still
 // matters so a pending reschedule resolves in time to be acted on.
+// 2026-11-08: the answer window became a flat 45 minutes
+// (reschedule_reply_window(), 20261109120000_reschedule_reply_45_minutes.sql).
+// The cancellation-window bound was dropped then, because it could never be
+// the earliest term: it was floored at updated_at + 4 hours. The guarantee it
+// protected (a request resolves while the client can still act on it) now
+// holds by a wide margin, and this test checks that instead.
 describe('a pending reschedule request expires before the cancellation window closes', () => {
-  it('process_expire_stale_reschedule_requests() bounds its deadline by cancel_notice_hours()', () => {
+  it('process_expire_stale_reschedule_requests() ends every request within the reply window', () => {
     const { body } = latestDefinitionOf('process_expire_stale_reschedule_requests');
-
-    // The new bound must exist and must be gated on there being a real
-    // cancellation-notice policy at all (no notice period -> no window to
-    // race against).
-    expect(body).toMatch(
-      /WHEN COALESCE\(b\.cancel_notice_hours, public\.cancel_notice_hours\(p\.cancellation_notice_hours, p\.booking_policies\)\) > 0/,
-    );
-
-    // It has to be anchored on the appointment minus the cancel-notice
-    // hours, not some independent constant — otherwise it could drift from
-    // what cancel_own_booking() itself enforces.
-    expect(body).toMatch(
-      /booking_date::TIMESTAMP \+ b\.booking_time\)\s*-\s*\(COALESCE\(b\.cancel_notice_hours, public\.cancel_notice_hours\(p\.cancellation_notice_hours, p\.booking_policies\)\) \|\| ' hours'\)::INTERVAL\s*-\s*INTERVAL '6 hours'/,
-    );
-
-    // Floored at the same 4-hour "real chance to answer" minimum the
-    // existing rescheduleNotice bound already uses, so a request made
-    // minutes before the client's own cancel window shuts doesn't expire on
-    // the very next tick.
-    expect(body).toMatch(/rr\.updated_at \+ INTERVAL '4 hours'/);
-
-    // When there is no cancellation-notice policy at all, the new bound must
-    // not constrain anything (no window ever closes to race against).
-    expect(body).toContain("ELSE 'infinity'::TIMESTAMP");
+    expect(body).toMatch(/rr\.updated_at \+ public\.reschedule_reply_window\(\)/);
+    // Never past the appointment itself.
+    expect(body).toMatch(/LEAST\(\s*b\.booking_date::TIMESTAMP \+ b\.booking_time,/);
+    // The old provider-setting window (24h-72h) is gone.
+    expect(body).not.toContain("p.booking_policies->>'rescheduleNotice'");
   });
 
   it('cancel_notice_hours() is the single source both cancel_own_booking() and the warning cron read', () => {
-    // All three call sites must resolve the SAME function — that is the
+    // Both call sites must resolve the SAME function — that is the
     // whole point of extracting it, after MIGRATION_OWNER.md's queue flagged
     // cancel_own_booking()'s inline copy as a drift risk.
     const cancelBody = latestDefinitionOf('cancel_own_booking').body;
     const warningBody = latestDefinitionOf('process_cancel_window_closing_warnings').body;
-    const expiryBody = latestDefinitionOf('process_expire_stale_reschedule_requests').body;
 
     expect(cancelBody).toContain('public.cancel_notice_hours(');
     expect(warningBody).toContain('public.cancel_notice_hours(');
-    expect(expiryBody).toContain('public.cancel_notice_hours(');
 
     // cancel_own_booking() still reads cancel_notice_hours() as the single
     // source, but the notice window no longer BLOCKS a cancellation (the

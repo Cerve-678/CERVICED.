@@ -56,7 +56,23 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
-### Applied 2026-11-08 (client beauty profile: skin type and style vibe are multi-pick)
+### Applied 2026-11-08 (reschedule: 45 minutes to answer, both people told)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109120000 | `reschedule_reply_45_minutes` | **APPLIED 2026-11-08** on the user's go-ahead, straight after 20261109110000, via `supabase db query --linked -f` from the main folder; version recorded by the file. Frontier before applying: live max `20261109110000`; lock `(none)`; md5 guards matched (`handle_reschedule_request_change` `63a4aaa1…`, `process_expire_stale_reschedule_requests` `717bdca9…`); 0 open reschedule requests. Forced-rollback dry run first. Adds `reschedule_reply_window()` (45 minutes; anon can't execute); expiry = LEAST(appointment start, updated_at + window), both sides notified, one pair per group; "your turn" notifications quote the window; cron `reschedule-request-expiry` every minute; cron `provider-stale-reschedule-reminders` unscheduled and `process_provider_stale_reschedule_reminders()` dropped. Verified live: version present; window `00:45:00`; new md5s trigger `ffe7e1f7…` / expiry `af9f271a…`; expiry still SECURITY DEFINER; trigger still attached. Written on `feat/reschedule-reply-45-minutes` (#387). |
+
+### Applied 2026-11-08 (cart checkout holds slots for 5 minutes)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109110000 | `cart_hold_five_minutes` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Frontier before applying: live max `20261109100000`; lock `(none)`; md5 guards matched (`prepare_checkout` `31bcc5e0…`, `hold_cart_booking_slots` `2e5b099f…`). Forced-rollback dry run first. `prepare_checkout()` and `hold_cart_booking_slots()` copied from live with only the hold interval changed 10 → 5 minutes; `checkout_batches.expires_at` default 5 minutes; cron `expire-cart-holds` `*/5` → every minute. Verified live: version present; both functions say 5 minutes (new md5s `b781dde0…` / `fac4fd25…`); default `now() + 00:05:00`; anon can't execute `prepare_checkout`, authenticated can. Written on `fix/cart-hold-five-minutes` (#386). |
+
+### Applied 2026-11-08 (provider "I work with" skin tones)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 202611091000| 20261109100000 | `provider_skin_tones_catered` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Rollback-only dry run first (succeeded, nothing kept). Adds nullable `providers.skin_tones_catered text[]`, nothing else. Verified live: version present and is the new max; column `ARRAY`; anon can select, authenticated can update; RLS still on; 16 rows. Written on `feat/products-and-who-you-work-with` (#381), whose public profile select names the column. |2026-11-08 (client beauty profile: skin type and style vibe are multi-pick)
 
 | Authored version | Name | Status |
 |---|---|---|

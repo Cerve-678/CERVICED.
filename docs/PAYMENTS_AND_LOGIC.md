@@ -166,9 +166,16 @@ Due at Appointment           £0.00
 Service                            £300.00
 Cerviced platform fee                £3.13
 Total                              £303.13
-Paid                                £63.13
+Deposit paid                        £60.00
+Paid (incl. fee)                    £63.13
 Due at Appointment                 £240.00
 ```
+
+Once a deposit has been paid, the receipt also lists it as **Deposit paid**,
+under Total with the payment, and Paid reads **Paid (incl. fee)** so the two
+figures don't look like they disagree. The deposit is part of the service
+price, never a line above Total, so Total doesn't change. Nothing shows before
+the deposit is paid, or on a booking paid in full.
 
 Every receipt (in the app, on booking details, and in the confirmation email)
 ends with the same two figures: **Paid**, what left the card with the fee
@@ -183,7 +190,7 @@ the default, 24 hours.
 
 | When | What happens | Money |
 |---|---|---|
-| Checkout | Amy's slot is held for 10 minutes while she pays | — |
+| Checkout | Amy's slot is held for 5 minutes while she pays | — |
 | Amy pays | Her card is authorised, then captured | Amy pays **£63.40** (£60 + £3.40 fee) |
 | Booking confirmed | A **held payout** is created for Jo | CERVICED holds £60 |
 | The appointment ends, Tue 3pm | The hold clock starts | — |
@@ -200,7 +207,7 @@ that, putting it right means taking money back from Jo (section 2.8).
 | Word | Meaning |
 |---|---|
 | **Checkout batch** | One checkout. It can contain several bookings with several providers |
-| **Hold (slot)** | A time slot reserved for 10 minutes while the client pays |
+| **Hold (slot)** | A time slot reserved for 5 minutes while the client pays |
 | **Authorise / capture** | Authorise = the bank reserves the money on the card. Capture = the money is actually taken. CERVICED captures straight after authorising |
 | **Held payout** | The provider's share, waiting at CERVICED until its release time |
 | **Release / transfer** | CERVICED sending a held payout to the provider's Stripe account |
@@ -221,7 +228,7 @@ that, putting it right means taking money back from Jo (section 2.8).
 ### 2.1 Taking a booking payment (checkout)
 
 1. **Reserve and price.** The server checks the basket, holds each slot for
-   10 minutes and records the checkout. The server never trusts a price sent
+   5 minutes and records the checkout. The server never trusts a price sent
    by the app: every amount is recalculated from the database.
    Add-ons are priced from `service_add_ons`, the per-service copies of the
    provider's own add-on list (`provider_add_ons`, since 5 November; one
@@ -371,6 +378,16 @@ Pay or PayPal.
   deposit, and later the provider gives it back. The provider's refund sheet
   shows what has already gone back and what's left, and after a full refund it
   only shows the summary.
+- **A full refund of an upcoming booking cancels it too, unless the provider
+  unticks "Cancel appointment too"** on the refund sheet (from the booking
+  detail or Payments → Booking payments). It cancels only that one service:
+  multi-service booking is off, so each service of an older group booking is
+  cancelled on its own (the whole group would cancel together once it's back).
+  Unticked, the appointment stays booked with nothing left to pay. A refund
+  followed by a cancel never refunds twice: the cancel's automatic full refund
+  counts every refund Stripe already made and finds nothing left
+  (`refund-payment` returns `already_refunded`). A partial refund then a
+  cancel gives back the rest.
 - **A partial refund of everything the provider still holds is a full
   refund**: the client gets back everything they paid, fee included. The one
   exception is after a late cancellation the policy settled, where giving back
@@ -824,7 +841,7 @@ Keep the list short and review it monthly.
 | Job | Schedule (UTC) | What it does |
 |---|---|---|
 | `release-due-payouts` | Every 15 min | `process_due_payouts()` → `release-payouts`, only when something is due |
-| `expire-cart-holds` | Every 5 min | Frees unpaid 10-minute slot holds |
+| `expire-cart-holds` | Every minute | Frees unpaid 5-minute slot holds |
 | `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
 | `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them |
 | `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
@@ -835,7 +852,7 @@ Keep the list short and review it monthly.
 
 | Name | Kind | What it does |
 |---|---|---|
-| `prepare_checkout` | RPC | Validates the basket and places 10-minute holds |
+| `prepare_checkout` | RPC | Validates the basket and places 5-minute holds |
 | `record_checkout_outcome` | RPC (service role) | Records how a checkout ended without bookings, once (a real outcome can replace `abandoned`), and tells the client unless nothing was taken |
 | `notify_client_payment_received` | Trigger on `checkout_batches` | "Payment received" when a checkout is finalised |
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |
@@ -982,6 +999,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
 | 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. Not live until `apply-cancellation-refund` is deployed from main, which must happen before an app build carrying this ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
+| 8 Nov | A paid deposit gets its own "Deposit paid" line on the client's receipt (booking details, PDF, confirmation email), under Total beside "Paid (incl. fee)". It's part of the price, so Total, Paid and Due don't change. (First built above Total; moved the same day because it read as an addition) | The client wanted to see the deposit amount itself, not only the Paid figure that includes the fee |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | 2 Nov | Link-only pros can become full members themselves. The app shows £25.99 a month with 2 months free, counted from the day they go live again, but charges nothing until pricing is final | Lets demand from client nudges turn into full providers now, without building billing first |
 | 6 Nov | The £25.99 monthly price comes off every full-membership screen; only "2 months free" stays | Pricing isn't final, so the app shouldn't name a number yet |
