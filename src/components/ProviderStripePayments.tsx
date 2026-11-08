@@ -13,6 +13,7 @@ import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
 import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getProviderTipEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 import { groupTipsByBooking } from '../features/payments/tipsByBooking';
+import { providerCancelGroupBooking, providerCancelOwnBooking } from '../services/databaseService';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
@@ -165,6 +166,18 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   // confirmation goes through the in-app dialog, never a native alert.
   const [refundRow, setRefundRow] = useState<ProviderPayout | null>(null);
   const { showAlert, DialogHost } = useAppDialog();
+  // The same "Cancel appointment too" the booking detail offers, for a booking
+  // that's still upcoming or pending. A group booking cancels as a whole, as
+  // it does there.
+  const cancelRefundBooking = useMemo(() => {
+    const row = refundRow;
+    const booking = row?.booking;
+    if (!row || !booking || (booking.status !== 'confirmed' && booking.status !== 'pending')) return undefined;
+    return async () => {
+      if (booking.group_booking_id) await providerCancelGroupBooking(booking.group_booking_id);
+      else await providerCancelOwnBooking(row.booking_id);
+    };
+  }, [refundRow]);
   const handleRefunded = useCallback(({ title, message }: RefundIssued) => {
     setRefundRow(null);
     void load();
@@ -383,6 +396,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       isDarkMode={isDarkMode}
       onClose={() => setRefundRow(null)}
       onRefunded={handleRefunded}
+      onCancelAppointment={cancelRefundBooking}
     />}
     <DialogHost />
   </>;

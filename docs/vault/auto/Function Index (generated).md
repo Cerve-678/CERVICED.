@@ -5,7 +5,7 @@
 
 #generated
 
-**3351 functions** across **471 files**.
+**3352 functions** across **471 files**.
 
 ### `src/components/` (62)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -51,7 +51,7 @@
 - `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
-- `ProviderStripePayments.tsx` — balances · BookingPayment · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
+- `ProviderStripePayments.tsx` — balances · BookingPayment · cancelRefundBooking · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline

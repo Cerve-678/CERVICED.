@@ -11967,7 +11967,12 @@ export interface ProviderPayout {
   booking_id: string;
   payout_amount: number;
   gross_amount: number;
-  booking?: { service_name_snapshot: string | null; customer_name: string | null; booking_date: string } | undefined;
+  /** `status` and `group_booking_id` let the refund sheet offer "Cancel
+   *  appointment too" on a booking that's still upcoming or pending. */
+  booking?: {
+    service_name_snapshot: string | null; customer_name: string | null; booking_date: string;
+    status: DbBooking['status']; group_booking_id: string | null;
+  } | undefined;
   platform_fee: number;
   currency: string;
   status: 'held' | 'transferred' | 'failed' | 'cancelled' | 'reversed';
@@ -12015,7 +12020,7 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   const bookingIds = data.map(row => row.booking_id);
   const [{ data: bookings, error: bookingsError }, { data: openRequests, error: requestsError }] = await Promise.all([
     supabase.from('bookings')
-      .select('id, service_name_snapshot, customer_name, booking_date')
+      .select('id, service_name_snapshot, customer_name, booking_date, status, group_booking_id')
       .eq('provider_id', provider.id).in('id', bookingIds),
     // At most one open request per booking, so the cap matches the payouts'.
     supabase.from('refund_requests')

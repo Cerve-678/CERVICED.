@@ -372,10 +372,10 @@ Pay or PayPal.
   shows what has already gone back and what's left, and after a full refund it
   only shows the summary.
 - **A full refund of an upcoming booking cancels it too, unless the provider
-  unticks "Cancel appointment too"** on the refund sheet (booking detail only;
-  the Payments list's sheet doesn't offer the cancel). Unticked, the
-  appointment stays booked with nothing left to pay. Refund first, then cancel
-  in either order never refunds twice: the cancel's automatic full refund
+  unticks "Cancel appointment too"** on the refund sheet (from the booking
+  detail or Payments → Booking payments; a group booking cancels as a whole).
+  Unticked, the appointment stays booked with nothing left to pay. A refund
+  followed by a cancel never refunds twice: the cancel's automatic full refund
   counts every refund Stripe already made and finds nothing left
   (`refund-payment` returns `already_refunded`). A partial refund then a
   cancel gives back the rest.
