@@ -30,6 +30,9 @@ export const STORAGE_KEYS = {
   /** Device calendar ids a link-only provider chose to show as their diary on
    *  Home. Device-only on purpose: the events never leave the phone. */
   DIARY_CALENDAR_IDS:  '@cerviced_diary_calendar_ids',
+  /** Prefix: the view a provider's Home calendar opens in, stored at
+   *  `<this>:<userId>` (features/provider-bookings/calendarViewPreference.ts). */
+  PROVIDER_CALENDAR_VIEW: '@cerviced_provider_calendar_view',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
