@@ -2236,7 +2236,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <FocusAwareStatusBar barStyle="light-content" />
+      {/* The clock sits on the hero, which is pale for light presets with no
+          cover photo — white there was unreadable. */}
+      <FocusAwareStatusBar barStyle={heroIsDark ? 'light-content' : 'dark-content'} />
       <View style={[styles.previewContainer, { backgroundColor: PP.bg }]}>
         {/* Hero photo/gradient backdrop — mirror ProviderProfileScreen: a real
             cover photo (with a dark gradient overlay for legible text) when
@@ -2719,10 +2721,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // reads useTheme().isDarkMode or branches on device/app appearance) — but
   // its chrome DOES follow the provider's own chosen branding once they're
   // editing an existing profile (see chromeTheme below, computed once
-  // isEditMode/providerData are known). statusBarStyle stays pinned to
-  // 'dark-content' regardless — every provider theme's card/sheet surfaces
-  // stay pale enough for dark status-bar content to read fine on top.
-  const statusBarStyle = 'dark-content' as const;
+  // isEditMode/providerData are known). The status bar follows that too: see
+  // statusBarStyle next to chromeTheme.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { user, myBookingMode } = useAuth();
   // Link-only providers (own booking page) only fill in Identity, About &
@@ -2972,6 +2972,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     () => resolveChromeTheme(isEditMode, providerData.profileTheme),
     [isEditMode, providerData.profileTheme],
   );
+  // The clock and battery sit straight on chromeTheme.bg (nothing frosted
+  // behind them), so they flip with it. Pinning 'dark-content' left them
+  // black-on-black for a provider with a dark theme (Black, Charcoal…).
+  const statusBarStyle = chromeTheme.isDark ? 'light-content' : 'dark-content';
   const styles = useMemo(
     () => makeStyles(chromeTheme, screenWidth, screenHeight),
     [chromeTheme, screenWidth, screenHeight],
