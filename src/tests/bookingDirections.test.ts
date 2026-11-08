@@ -4,7 +4,7 @@ import type { BookingWithAddOns } from '../types/database';
 // How to get there is part of the provider's private venue. Clients get it
 // from the client_bookings view, null until the address is released;
 // providers get their own from a booking_venue_details embed (migration
-// 20261108100000). The app's only job is to carry it through untouched —
+// 20261108180000). The app's only job is to carry it through untouched —
 // and to show nothing at all when the view has withheld it.
 
 function makeRow(overrides: Partial<BookingWithAddOns> = {}): BookingWithAddOns {

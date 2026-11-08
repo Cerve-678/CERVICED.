@@ -428,7 +428,7 @@ ALTER TABLE public.bookings
   DROP COLUMN provider_coordinates;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261108100000', 'booking_venue_details_private')
+VALUES ('20261108180000', 'booking_venue_details_private')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

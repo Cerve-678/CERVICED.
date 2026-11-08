@@ -716,7 +716,7 @@ export interface DbBooking {
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
   // The provider's private venue is NOT on the bookings table (migration
-  // 20261108100000): it lives in booking_venue_details, which clients can't
+  // 20261108180000): it lives in booking_venue_details, which clients can't
   // read. These three are client_bookings VIEW columns, null until the
   // address is released. A provider's own read embeds booking_venue_details
   // instead; mapDbBookingToConfirmed reads whichever is present.

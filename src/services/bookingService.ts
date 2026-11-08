@@ -289,7 +289,7 @@ export class BookingService {
  * A client reads client_bookings, whose three venue columns are null until
  * the address is released. A provider reads bookings with a
  * booking_venue_details embed (their own venue, always). The bookings table
- * itself has no venue columns (migration 20261108100000), so a plain
+ * itself has no venue columns (migration 20261108180000), so a plain
  * select('*') gets neither and the venue is simply empty.
  */
 export function readBookingVenue(db: Pick<BookingWithAddOns,
