@@ -9,7 +9,7 @@ import path from 'path';
  */
 const root = path.join(__dirname, '..', '..');
 const sql = fs.readFileSync(
-  path.join(root, 'supabase', 'migrations', '20261108180000_beauty_profile_shared_by_booked_service.sql'),
+  path.join(root, 'supabase', 'migrations', '20261108190000_beauty_profile_shared_by_booked_service.sql'),
   'utf8',
 );
 const screen = fs.readFileSync(

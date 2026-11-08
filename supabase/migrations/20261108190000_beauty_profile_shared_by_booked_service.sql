@@ -31,9 +31,9 @@
 --
 -- NOT applied. Before applying: take the lock in MIGRATION_OWNER.md, and
 -- renumber above live max(version) and above any unapplied migration on an
--- open PR branch. Renumbered twice on 2026-11-08 (100000 → 110000 → 180000):
+-- open PR branch. Renumbered on 2026-11-08 (100000 → 110000 → 180000 → 190000):
 -- #340 took 100000, then 20261108141616 went live and #350/#352 moved to
--- 160000/170000.
+-- 160000/170000, then #340 took 180000.
 
 BEGIN;
 
@@ -170,7 +170,7 @@ GRANT EXECUTE ON FUNCTION public.get_client_beauty_profile_for_booking(uuid)
 DROP FUNCTION IF EXISTS public.get_client_beauty_profile_for_provider(uuid);
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261108180000', 'beauty_profile_shared_by_booked_service')
+VALUES ('20261108190000', 'beauty_profile_shared_by_booked_service')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

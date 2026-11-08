@@ -6334,7 +6334,7 @@ export async function getClientBeautyProfileForBooking(
   // field the booked service's category doesn't get, so a nail booking never
   // brings the client's hair, skin or makeup details onto the provider's
   // phone. Allergies, medical notes and photography consent always come back.
-  // See 20261108180000_beauty_profile_shared_by_booked_service.sql.
+  // See 20261108190000_beauty_profile_shared_by_booked_service.sql.
   const { data, error } = await supabase
     .rpc("get_client_beauty_profile_for_booking", { p_booking_id: bookingId })
     .maybeSingle();
