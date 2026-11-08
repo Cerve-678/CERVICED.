@@ -7,10 +7,11 @@
  *
  * The "Where You're Based" card (cities covered → providers.service_locations,
  * travel radius → providers.travel_radius) was removed from here on purpose.
- * Nothing in the app edits those two columns any more: sign-up's "WHERE YOU
- * WORK" and InfoReg's "Where you're based" both write location_text, a
- * different column. Existing values still feed Search's City filter and the
- * profile's "Travels up to …" line.
+ * Location lives in Edit Profile (InfoRegScreen) now: "Where you're based"
+ * writes location_text, which is what Search's City filter goes by
+ * (src/utils/providerCity.ts, still also matching any saved
+ * service_locations), and "How far you travel" beside it writes travel_radius
+ * for a mobile provider. Nothing edits service_locations any more.
  *
  * Two things worth knowing before editing:
  *

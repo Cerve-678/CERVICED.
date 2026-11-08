@@ -149,6 +149,7 @@ import {
   ADDRESS_RELEASE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
+  providerTravelsToClient,
   ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
   SERVICE_TYPE_OPTS,
@@ -2895,6 +2896,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     priceRange: '',
     priceBands: [],
     serviceLocations: [],
+    travelRadius: '',
     preferredPaymentMethods: [],
     fullAddress: '',
     howToGetThere: '',
@@ -4719,11 +4721,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     filter/sort, free-text search matching, and the location
                     line on provider cards.
 
-                    The separate "cities you cover" list (serviceLocations →
-                    providers.service_locations, feeding the client Search
-                    "City" filter) has no editor anywhere now — About You's
-                    "Where You're Based" card was removed. This screen only
-                    round-trips the saved value; it doesn't ask for it.
+                    It is also what the client Search "City" filter goes by:
+                    src/utils/providerCity.ts reads "Shoreditch, London" (or a
+                    bare "Shoreditch") up to London. The old "cities you cover"
+                    list (serviceLocations → providers.service_locations) has no
+                    editor now that About You's "Where You're Based" card is
+                    gone; this screen only round-trips it so saved cities keep
+                    matching that filter.
 
                     Same stepped city → region → area picker the client uses for
                     "Your area" (AreaPicker) — "Other city…" / "Other…" fall back
@@ -4738,6 +4742,37 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
                 />
               </View>
+
+              {/* How far a mobile provider travels → providers.travel_radius,
+                  shown on the client profile as "Travels up to …". Asked here,
+                  beside the location it's measured from, and only when the
+                  business type means they travel (mobile); the profile hides
+                  the line for every other type, so an old value can't
+                  contradict a salon or studio. Free text, like the column.
+                  Blank clears it. Policies → Travel is a separate free-text
+                  note, not tied to this. */}
+              {providerTravelsToClient(providerData.businessType || null) && (
+                <View
+                  style={styles.inputGroup}
+                  ref={registerField('travelRadius')}
+                >
+                  <Text style={styles.inputLabel}>How far you travel</Text>
+                  <View style={[styles.inputBlur, styles.profileInputBox]}>
+                    <TextInput
+                      style={styles.textInput}
+                      value={providerData.travelRadius ?? ''}
+                      onChangeText={(text) =>
+                        setProviderData(prev => ({ ...prev, travelRadius: text }))
+                      }
+                      placeholder="e.g. 10 miles"
+                      placeholderTextColor={chrome.fg(0.4)}
+                      maxLength={40}
+                      onFocus={() => handleInputFocus('travelRadius', 'identity')}
+                    />
+                  </View>
+                  <Text style={styles.inputHint}>Shown on your profile as "Travels up to …". Leave blank to hide it (optional).</Text>
+                </View>
+              )}
 
               {/* Jump-to-next affordance at the foot of the section, once
                   there's nothing left to fill in above it — not a "confirm

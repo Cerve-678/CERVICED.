@@ -1,8 +1,10 @@
 // Major UK cities/towns offered as service-coverage options — the client's
 // sign-up LOCATION question (RegistrationContext.serviceLocations) and the
 // client-side Search "City" filter both draw from this single list. The
-// filter matches providers.service_locations, which no provider screen edits
-// any more (About You's "Where You're Based" card was removed).
+// filter matches where a provider is based (providers.location_text, read up
+// to its town via src/data/cityAreas.ts — see src/utils/providerCity.ts) and
+// any providers.service_locations saved before About You's cities card was
+// removed.
 //
 // Deliberately flat and UK-wide (not the London/Manchester/Birmingham ->
 // region -> area structure in src/data/cityAreas.ts, which answers a

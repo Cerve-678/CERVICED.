@@ -119,7 +119,7 @@ import {
   ProviderReviewPreviewSection,
   ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
-import { PAYMENT_OPTS } from "../../features/business-details/options";
+import { PAYMENT_OPTS, providerTravelsToClient } from "../../features/business-details/options";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -1826,7 +1826,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.veganCrueltyFree) {
       sentences.push("Products used are vegan and cruelty-free");
     }
-    if (provider.travelRadius.trim()) {
+    // Edited in InfoReg only when the provider travels to the client (the
+    // same providerTravelsToClient gate), so only they show it: a value left
+    // from before a business-type change would otherwise tell a salon's
+    // clients that it travels.
+    if (providerTravelsToClient(provider.businessType) && provider.travelRadius.trim()) {
       sentences.push(`Travels up to ${provider.travelRadius.trim()}`);
     }
     if (provider.productsUsed.trim()) {
