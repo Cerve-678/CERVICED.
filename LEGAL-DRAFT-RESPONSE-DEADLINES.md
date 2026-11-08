@@ -29,7 +29,7 @@ and it should be the same number in both places.
 | # | Deadline | Applies to | What happens when it passes | Enforced by | Told to the user? |
 |---|---|---|---|---|---|
 | 1 | **48 hours** from the booking request, or the appointment time, whichever first | A provider who hasn't accepted a booking request | Booking is **cancelled** | `process_expire_stale_pending_bookings()`, cron every 30 min | ❌ Nowhere |
-| 2 | The **provider's own reschedule-notice setting** (min 24h), capped at the start of the appointment day (min 4h, never past the appointment time) | A provider who hasn't answered a reschedule request | Request **expires**; booking stays as originally scheduled | `process_expire_stale_reschedule_requests()`, cron `:17`/`:47` | ⚠️ Only after the fact, by notification |
+| 2 | **45 minutes** from when it became their turn (never past the appointment time), since 2026-11-08 | Whoever hasn't answered a reschedule request or offer (provider or client) | Request **expires**; booking stays as originally scheduled; both sides notified | `process_expire_stale_reschedule_requests()` + `reschedule_reply_window()`, cron every minute | ✅ Stated in the notification and on both booking screens |
 | 3 | Same window as #2 | A client who hasn't picked from the dates their provider offered | Request **expires**; offered times released; both sides told | as #2 | ⚠️ Only after the fact |
 | 4 | **10 minutes** | A client at checkout, between reserving times and paying | Held times are released to everyone else | `hold_cart_booking_slots()` TTL + `expire_cart_holds()` | ⚠️ Partially — a countdown is shown at checkout |
 | 5 | **15 minutes** (was 3 hours until 2026-08-27) | A client offered a slot from a waitlist | Hold lapses, slot passes to the next person in the queue | `expire_waitlist_holds()`, cron every minute | ✅ In the offer notification |
@@ -77,6 +77,11 @@ refund path in the app today (see Part C).*
 
 *Describes #2. Deliberately doesn't quote a fixed number of hours, because the
 window is derived from each provider's own setting.*
+
+*⚠️ OUT OF DATE since 2026-11-08: the window is now a flat 45 minutes for
+whoever is waiting (provider or client), and both sides are told when it
+lapses. The wording above no longer describes the app and needs revisiting by
+whoever owns the Terms; it has deliberately not been redrafted here.*
 
 ### B3. Your response to dates a provider offers
 

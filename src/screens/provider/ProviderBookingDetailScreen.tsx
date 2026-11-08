@@ -93,6 +93,8 @@ import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings
 import { formatPickList } from '../../features/beauty-profile/pickList';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
+import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
+import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
@@ -2171,6 +2173,20 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <Text style={[styles.rescheduleNote, { color: P.sub }]}>
                       Requested {formatBookingDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at)}
                     </Text>
+                    {/* Whose turn it is and until when. updated_at moves when
+                        the provider offers times, which is when the client's
+                        window starts (same anchor the expiry cron uses). */}
+                    {(() => {
+                      const by = rescheduleReplyBy(dbReschedule.updated_at);
+                      if (!by) return null;
+                      return (
+                        <Text style={[styles.rescheduleNote, { color: '#FF9500', fontWeight: '600' }]}>
+                          {dbReschedule.status === 'pending'
+                            ? `Reply by ${by}, or the booking stays as it is.`
+                            : `${booking?.customerName ?? 'The client'} has until ${by} to choose, or the booking stays as it is.`}
+                        </Text>
+                      );
+                    })()}
                     {(dbReschedule.requested_dates ?? []).map((date: string, i: number) => {
                       const requestedTime = dbReschedule.requested_times?.[i];
                       return (
@@ -2457,7 +2473,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
                   {dbReschedule?.status === 'rejected'
                     ? 'The client has been notified. Their original appointment time stands.'
-                    : `${booking?.customerName ?? 'The client'} has been notified and can choose from your proposed times.`}
+                    : `${booking?.customerName ?? 'The client'} has been notified and has ${RESCHEDULE_REPLY_MINUTES} minutes to choose one of your times. If they don't, the booking stays as it is.`}
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
@@ -2791,7 +2807,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={styles.sentIcon}>✓</Text>
                 <Text style={[styles.sentTitle, { color: P.text }]}>Request Sent</Text>
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  {booking?.customerName ?? 'The client'} has been notified and can choose from your proposed dates for all {groupSiblings.length} services.
+                  {booking?.customerName ?? 'The client'} has been notified and has {RESCHEDULE_REPLY_MINUTES} minutes to choose from your proposed dates for all {groupSiblings.length} services. If they don't, the bookings stay as they are.
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
