@@ -183,7 +183,7 @@ the default, 24 hours.
 
 | When | What happens | Money |
 |---|---|---|
-| Checkout | Amy's slot is held for 10 minutes while she pays | — |
+| Checkout | Amy's slot is held for 5 minutes while she pays | — |
 | Amy pays | Her card is authorised, then captured | Amy pays **£63.40** (£60 + £3.40 fee) |
 | Booking confirmed | A **held payout** is created for Jo | CERVICED holds £60 |
 | The appointment ends, Tue 3pm | The hold clock starts | — |
@@ -200,7 +200,7 @@ that, putting it right means taking money back from Jo (section 2.8).
 | Word | Meaning |
 |---|---|
 | **Checkout batch** | One checkout. It can contain several bookings with several providers |
-| **Hold (slot)** | A time slot reserved for 10 minutes while the client pays |
+| **Hold (slot)** | A time slot reserved for 5 minutes while the client pays |
 | **Authorise / capture** | Authorise = the bank reserves the money on the card. Capture = the money is actually taken. CERVICED captures straight after authorising |
 | **Held payout** | The provider's share, waiting at CERVICED until its release time |
 | **Release / transfer** | CERVICED sending a held payout to the provider's Stripe account |
@@ -221,7 +221,7 @@ that, putting it right means taking money back from Jo (section 2.8).
 ### 2.1 Taking a booking payment (checkout)
 
 1. **Reserve and price.** The server checks the basket, holds each slot for
-   10 minutes and records the checkout. The server never trusts a price sent
+   5 minutes and records the checkout. The server never trusts a price sent
    by the app: every amount is recalculated from the database.
    Add-ons are priced from `service_add_ons`, the per-service copies of the
    provider's own add-on list (`provider_add_ons`, since 5 November; one
@@ -832,7 +832,7 @@ Keep the list short and review it monthly.
 | Job | Schedule (UTC) | What it does |
 |---|---|---|
 | `release-due-payouts` | Every 15 min | `process_due_payouts()` → `release-payouts`, only when something is due |
-| `expire-cart-holds` | Every 5 min | Frees unpaid 10-minute slot holds |
+| `expire-cart-holds` | Every minute | Frees unpaid 5-minute slot holds |
 | `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
 | `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them |
 | `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
@@ -843,7 +843,7 @@ Keep the list short and review it monthly.
 
 | Name | Kind | What it does |
 |---|---|---|
-| `prepare_checkout` | RPC | Validates the basket and places 10-minute holds |
+| `prepare_checkout` | RPC | Validates the basket and places 5-minute holds |
 | `record_checkout_outcome` | RPC (service role) | Records how a checkout ended without bookings, once (a real outcome can replace `abandoned`), and tells the client unless nothing was taken |
 | `notify_client_payment_received` | Trigger on `checkout_batches` | "Payment received" when a checkout is finalised |
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |

@@ -3817,7 +3817,7 @@ export async function claimCartBookingSlots(
 /** Best-effort immediate release when the user backs out of payment
  *  (close button, booking failure, Stripe Payment Sheet 'Canceled'). Not
  *  the source of truth for cleanup — expire_cart_holds() cron sweep is —
- *  this just frees the slot sooner than the 10-minute TTL. Callers should
+ *  this just frees the slot sooner than the 5-minute TTL. Callers should
  *  catch-and-log, never let a release failure surface as a user error. */
 export async function releaseCartBookingSlots(
   holdBatchId: string,
