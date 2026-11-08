@@ -8,7 +8,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -25,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { LogoCircle } from '../../components/FramedLogo';
 import type { LogoFraming } from '../../types/database';
 import { isDarkColor } from '../../constants/providerThemes';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import {
   DAY_NAMES_ABBREV,
@@ -178,10 +178,10 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={step === 'ask' ? onClose : undefined}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoidingView}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        {/* KeyboardDismissView, not a bare KeyboardAvoidingView: this used
+            no avoidance at all on Android, and the app is edge-to-edge there,
+            so the keyboard sat over the "Something else" field. */}
+        <KeyboardDismissView style={styles.keyboardAvoidingView}>
           <Pressable
             style={[
               styles.sheet,
@@ -345,7 +345,7 @@ export const DidYouBookSheet: React.FC<DidYouBookSheetProps> = ({
               </ScrollView>
             )}
           </Pressable>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </Pressable>
     </Modal>
   );
