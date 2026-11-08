@@ -78,7 +78,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <Text style={[styles.title, { color: P.text }]}>Business Profile</Text>
-          <Text style={[styles.subtitle, { color: P.sub }]}>Change what clients see about your business on CERVICED</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>Manage how your business appears on Cerviced</Text>
 
           {/* Profile */}
           <View style={[styles.section, { backgroundColor: P.section }]}>
