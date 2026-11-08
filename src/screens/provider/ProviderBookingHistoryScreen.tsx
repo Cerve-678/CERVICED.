@@ -113,6 +113,7 @@ function fmtMoney(n: number): string {
 const TABS = [
   { key: 'history', label: 'History' },
   { key: 'todo',    label: 'To Do' },
+  { key: 'activity', label: 'Activity' },
 ] as const;
 
 type TabKey = typeof TABS[number]['key'];
@@ -174,6 +175,9 @@ function filterBookings(bookings: BookingWithAddOns[], tab: TabKey, historyFilte
   if (tab === 'todo') {
     return agendaSort(bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING));
   }
+  if (tab === 'activity') {
+    return [...bookings].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
   // History: agenda-sorted (soonest upcoming first) down to most-recent-past —
   // completed/cancelled bookings dominate this list day to day, so lead with
   // recency rather than the live-tabs' future-first ordering.
@@ -183,8 +187,8 @@ function filterBookings(bookings: BookingWithAddOns[], tab: TabKey, historyFilte
 
 // ─── Booking card ─────────────────────────────────────────────────────────────
 
-function BookingCard({ booking, siblingCount, total, dark, P, onPress }: {
-  booking: BookingWithAddOns; siblingCount: number; total: number; dark: boolean; P: Palette; onPress: () => void;
+function BookingCard({ booking, siblingCount, total, dark, P, onPress, showActivity = false }: {
+  booking: BookingWithAddOns; siblingCount: number; total: number; dark: boolean; P: Palette; onPress: () => void; showActivity?: boolean;
 }) {
   const st    = statusFor(booking.status);
   const mappedStatus = mapDbBookingStatus(booking.status);
@@ -219,6 +223,9 @@ function BookingCard({ booking, siblingCount, total, dark, P, onPress }: {
           {isGroup ? `${booking.service_name_snapshot} + ${siblingCount - 1} more` : booking.service_name_snapshot}
         </Text>
         <Text style={[bc.time, { color: P.faint }]}>{fmtDayLabel(booking.booking_date)} · {timeStr}</Text>
+        {showActivity && <Text style={[bc.time, { color: P.sub }]}>
+          {st.label} · updated {new Date(booking.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+        </Text>}
       </View>
 
       {/* Right side */}
@@ -446,6 +453,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   const counts = useMemo(() => ({
     todo:    pendingCount + waitlistCount + unreadMessages + rescheduleRequestCount,
     history: bookings.filter(b => isHistoryStatus(b.status)).length,
+    activity: bookings.length,
   }), [pendingCount, waitlistCount, unreadMessages, rescheduleRequestCount, bookings]);
 
   // Collapse group-booking siblings (same client, same group_booking_id,
@@ -491,6 +499,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   const tabEmptyText: Record<TabKey, string> = {
     todo:    'No pending bookings',
     history: 'No bookings yet',
+    activity: 'No booking activity yet',
   };
 
   // ── Complete (pending → confirmed) ───────────────────────────────────────
@@ -836,7 +845,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
           </ScrollView>
         ) : (
           <>
-            <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
+            {activeTab === 'history' && <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
               <SlidingTabs
                 tabs={HISTORY_FILTERS}
                 activeKey={historyFilter}
@@ -847,7 +856,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                 height={30}
                 gap={8}
               />
-            </View>
+            </View>}
             <FlatList
               ref={listRef}
               data={items}
@@ -863,6 +872,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   total={group.siblings.reduce((sum: number, b: BookingWithAddOns) => sum + (b.base_price ?? 0) + (b.add_ons_total ?? 0), 0)}
                   dark={dark}
                   P={P}
+                  showActivity={activeTab === 'activity'}
                   onPress={() => navigation.navigate('BookingDetail', {
                     bookingId: group.booking.id,
                     booking: mapDbBookingToConfirmed(group.booking),
@@ -875,7 +885,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   <Ionicons name="calendar-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
                   <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
-                    {historyFilter === 'all' ? tabEmptyText[activeTab] : `No ${HISTORY_FILTERS.find(f => f.key === historyFilter)?.label.toLowerCase()} bookings`}
+                    {activeTab !== 'history' || historyFilter === 'all' ? tabEmptyText[activeTab] : `No ${HISTORY_FILTERS.find(f => f.key === historyFilter)?.label.toLowerCase()} bookings`}
                   </Text>
                 </View>
               }

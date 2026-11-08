@@ -19,6 +19,7 @@ import {
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { canAutoCloseWhenFull } from '../../features/providers/scheduleClosure';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C_DARK = {
@@ -62,6 +63,7 @@ interface ProviderAutomations {
   autoConfirmBookings:    boolean;
   waitlistEnabled:        boolean;
   autoAcceptWaitlist:     boolean;
+  autoCloseWhenFull:      boolean;
   // Not here on purpose: scheduleReleaseDay (SchedulingScreen, InfoRegScreen) and
   // depositRequiredNew (PaymentsScreen) share automation_settings but belong
   // to those screens. The cancellation notice window is set on Policies,
@@ -77,8 +79,9 @@ const DEFAULTS: ProviderAutomations = {
   birthdayGreeting:        false,
   newBookingRecap:         true,
   autoConfirmBookings:     true,  // matches providers.auto_accept_bookings DB default
-  waitlistEnabled:         false,
+  waitlistEnabled:         true,  // matches the database's missing-key default
   autoAcceptWaitlist:      false,
+  autoCloseWhenFull:       false,
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -191,10 +194,12 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           pa_auto_confirm_bookings?: boolean;
           pa_waitlist_enabled?: boolean;
           pa_auto_accept_waitlist?: boolean;
+          pa_auto_close_when_full?: boolean;
         };
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
         const a = (profile as any)?.automation_settings ?? {};
+        const waitlistEnabled = a.waitlistEnabled ?? DEFAULTS.waitlistEnabled;
         setD({
           clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
@@ -206,8 +211,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           // and the booking flow read them from there, not user_metadata) —
           // the row is the real answer, not just a fallback.
           autoConfirmBookings:     profile?.auto_accept_bookings ?? m['pa_auto_confirm_bookings'] ?? DEFAULTS.autoConfirmBookings,
-          waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
+          waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
+          autoCloseWhenFull:       !waitlistEnabled && a.autoCloseWhenFull === true,
         });
       } finally {
         setLoading(false);
@@ -230,6 +236,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             pa_auto_confirm_bookings:     d.autoConfirmBookings,
             pa_waitlist_enabled:          d.waitlistEnabled,
             pa_auto_accept_waitlist:      d.autoAcceptWaitlist,
+            pa_auto_close_when_full:       d.autoCloseWhenFull,
             // pa_buffer_mins / pa_max_bookings_per_day /
             // pa_min_booking_notice_hrs / pa_booking_window_days /
             // pa_slot_interval_mins / pa_deposit_required_new are owned by
@@ -254,6 +261,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           birthdayGreeting:     d.birthdayGreeting,
           waitlistEnabled:      d.waitlistEnabled,
           autoAcceptWaitlist:   d.autoAcceptWaitlist,
+          autoCloseWhenFull:    d.autoCloseWhenFull,
           // Must be mirrored here, not just to user_metadata: the
           // provider-daily-recap cron job reads this key off the providers
           // row and its COALESCE(..., TRUE) treats a missing key as "send",
@@ -273,7 +281,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   }, [d, providerId, navigation]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
-    setD(prev => ({ ...prev, [key]: val }));
+    setD(prev => key === 'waitlistEnabled' && val === true
+      ? { ...prev, waitlistEnabled: true, autoCloseWhenFull: false }
+      : { ...prev, [key]: val });
   }, []);
 
   const toggleReminder = useCallback((v: string) => {
@@ -428,9 +438,16 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         {/* "Require deposit from new clients" moved to PaymentsScreen,
             alongside the payment-type preferences it belongs with. */}
 
+        <SectionHeader
+          icon="calendar-outline"
+          label="WHEN YOU'RE FULLY BOOKED"
+          sub="Choose what happens if a space becomes available again."
+          C={C}
+        />
+
         <AutoCard
           title="Enable waitlist"
-          description="When your day is fully booked, clients can join a waitlist. Cerviced notifies them if a slot opens up."
+          description="Clients can join when your slots are full. If a matching space opens, the next person gets first access."
           value={d.waitlistEnabled}
           onToggle={v => set('waitlistEnabled', v)}
           C={C}
@@ -438,12 +455,29 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         {d.waitlistEnabled && (
           <AutoCard
-            title="Auto-invite from waitlist"
-            description="When a booking is cancelled, automatically invite and schedule the next person in the queue."
+            title="Auto-fill from waitlist"
+            description="When a matching slot opens, create a pending booking for the next waitlist client. With this off, they get a 15-minute hold to confirm it themselves."
             value={d.autoAcceptWaitlist}
             onToggle={v => set('autoAcceptWaitlist', v)}
             C={C}
           />
+        )}
+
+        {!d.waitlistEnabled && (
+          <>
+            <AutoCard
+              title="Close my schedule when fully booked"
+              description="When every open slot fills, stop new bookings until you reopen your schedule or your next release day. A cancelled slot stays unavailable while closed."
+              value={d.autoCloseWhenFull && canAutoCloseWhenFull(d.waitlistEnabled)}
+              onToggle={v => set('autoCloseWhenFull', v)}
+              C={C}
+            />
+            {!d.autoCloseWhenFull && (
+              <Text style={[st.sectionSub, { color: C.sub, marginBottom: 8 }]}>
+                With no waitlist or automatic closure, a freed slot becomes bookable for anyone.
+              </Text>
+            )}
+          </>
         )}
 
         {/* Buffer time, max bookings per day, booking window, minimum notice

@@ -44,6 +44,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { FullImageViewer } from "../../components/FullImageViewer";
+import { LogoZoomViewer } from "../../components/LogoZoomViewer";
 import { policyImageUrls } from "../../features/providers/policyImages";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
@@ -4395,12 +4396,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           label="Policy document"
         />
 
-        {/* The whole logo, uncropped, from a tap on the profile circle. */}
-        <FullImageViewer
-          uris={provider.providerLogo?.uri ? [provider.providerLogo.uri] : []}
+        {/* A tap on the profile circle zooms the logo in over the page. */}
+        <LogoZoomViewer
+          uri={provider.providerLogo?.uri}
+          framing={provider.providerLogoFraming}
           visible={showFullLogo}
           onClose={() => setShowFullLogo(false)}
-          label="Logo"
+          accessibilityName={provider.displayName}
         />
 
         {/* Fullscreen service image carousel modal — hidden whenever the "All
@@ -5007,7 +5009,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         setShowFullLogo(true);
                       }}
                       accessibilityRole="imagebutton"
-                      accessibilityLabel={`${provider.displayName} logo. Tap to see it in full`}
+                      accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
                     >
                       <LogoCircle
                         uri={provider.providerLogo.uri}
