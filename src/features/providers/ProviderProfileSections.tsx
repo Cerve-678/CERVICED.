@@ -336,36 +336,6 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   );
 });
 
-/** "I work with" under the bio in the About card: clients, skin tones and
- *  hair types, each as a short labelled chip row. Renders nothing when the
- *  provider hasn't said. */
-export const ProviderWorkWithBlock = React.memo(function ProviderWorkWithBlock({
-  groups,
-  palette,
-}: {
-  groups: { label: string; chips: string[] }[];
-  palette: SectionPalette;
-}) {
-  if (groups.length === 0) return null;
-  return (
-    <View style={[styles.workWith, { borderTopColor: palette.separator }]}>
-      <Text style={[styles.infoLabel, { color: palette.text }]}>I work with</Text>
-      {groups.map(group => (
-        <View key={group.label} style={styles.workWithRow}>
-          <Text style={[styles.workWithLabel, { color: palette.sub }]}>{group.label}</Text>
-          <View style={styles.chipRow}>
-            {group.chips.map(chip => (
-              <View key={chip} style={[styles.chip, { borderColor: `${palette.accent}55`, backgroundColor: `${palette.accent}18` }]}>
-                <Text style={[styles.chipText, { color: palette.text }]}>{chip}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-});
-
 type PortfolioTile = DbPortfolioItem & { tileHeight: number; globalIndex: number };
 
 function tileHeight(item: DbPortfolioItem, width: number): number {
@@ -564,9 +534,6 @@ const styles = StyleSheet.create({
   contactButtonText: { color: "#fff", fontFamily: "BakbakOne-Regular", fontSize: 13 },
   infoBlock: { marginTop: 16 },
   infoBlockFirst: { marginTop: 0 },
-  workWith: { marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
-  workWithRow: { marginTop: 8 },
-  workWithLabel: { fontFamily: "Jura-VariableFont_wght", fontWeight: "600", fontSize: 12, marginBottom: 6 },
   infoLabel: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, marginBottom: 7, textTransform: "uppercase", letterSpacing: 0.5 },
   infoText: { fontFamily: "Jura-VariableFont_wght", fontSize: 13, lineHeight: 19 },
   venueStrip: { gap: 10, paddingRight: 8 },

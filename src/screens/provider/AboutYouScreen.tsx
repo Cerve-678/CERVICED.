@@ -9,7 +9,7 @@
  *
  * "I Work With" is the only editor of clientele, skin_tones_catered and
  * hair_types_catered (it moved here from Services & Pricing). Clients see it
- * under the bio in the About section of the profile. hair_types_catered is
+ * in Additional Information on the profile. hair_types_catered is
  * also what the client Search "Hair Type" filter matches on.
  *
  * "Areas you cover" writes providers.service_locations, which Search's City
@@ -244,7 +244,7 @@ export default function AboutYouScreen({ navigation }: any) {
               </Card>
             )}
 
-            <Card title="I Work With" sub="Shown under your bio, so clients can see you work with people like them.">
+            <Card title="I Work With" sub="Shown in Additional Information on your profile, so clients can see you work with people like them.">
               <SectionLabel text="Clients" />
               <ChipGroup options={CLIENTELE_OPTS} selected={clientele} onToggle={v => toggleChip(clientele, setClientele, v)} />
 

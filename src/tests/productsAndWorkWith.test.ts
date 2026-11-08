@@ -1,6 +1,7 @@
 // "Products I work with" is its own card (brand chips by category) and its
 // own section in Additional Information; "I work with" (clients, skin tones,
-// hair types) is edited in About You and shown under the bio.
+// hair types) is edited in About You and also shown in Additional
+// Information, never in the About/Policy card.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -57,7 +58,7 @@ describe('what the client sees', () => {
     expect(workWithGroups({ clientele: [], skinTonesCatered: [], hairTypesCatered: [] })).toEqual([]);
     expect(workWithGroups({ clientele: ['Women', 'Men'], skinTonesCatered: ['Rich', 'Deep'], hairTypesCatered: [] }))
       .toEqual([
-        { label: 'Clients', chips: ['Women', 'Men'] },
+        { label: 'Works with', chips: ['Women', 'Men'] },
         { label: 'Skin tones', chips: ['Deep', 'Rich'] },
       ]);
   });
@@ -77,7 +78,8 @@ describe('what the client sees', () => {
     const src = read('screens', 'client', 'ProviderProfileScreen.tsx');
     expect(src).not.toContain('Works with ${');
     expect(src).toContain('productsGroup(provider)');
-    expect(src).toContain('<ProviderWorkWithBlock');
+    expect(src).toContain('groups.push(...workWithGroups(provider))');
+    expect(src).not.toContain('WorkWithBlock');
   });
 });
 
