@@ -9312,7 +9312,7 @@ export interface UserBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[];
   treatment_history: string[];
-  /** text[] once 20261108150000 is applied; a single string on rows before it. Read through toPickList. */
+  /** text[] once 20261108170000 is applied; a single string on rows before it. Read through toPickList. */
   skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[];
