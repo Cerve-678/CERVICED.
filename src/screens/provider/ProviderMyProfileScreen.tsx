@@ -1209,9 +1209,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     [navigation],
   );
 
+  // See all is booking history's History tab, whose filter starts on All —
+  // not a separate recent-activity list.
   const handleOpenRecentActivity = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
-    navigation.navigate('RecentActivity');
+    navigation.navigate('BookingHistory', { initialTab: 'history' });
   }, [navigation]);
 
   const handleOpenAnalytics = useCallback(() => {
