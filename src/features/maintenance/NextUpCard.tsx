@@ -83,10 +83,10 @@ export function NextUpCard({ nextUp, P, t, compact, onOpenAll, onBook, onDone, o
   );
 
   const shell = (children: React.ReactNode) => (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, compact && styles.wrapCompact]}>
       {/* The second card peeking out underneath: the next item waiting. */}
       <View pointerEvents="none" style={[styles.under, { backgroundColor: P.accent }]} />
-      <View style={[styles.card, { backgroundColor: P.accent }]}>{children}</View>
+      <View style={[styles.card, compact && styles.cardCompact, { backgroundColor: P.accent }]}>{children}</View>
     </View>
   );
 
@@ -156,7 +156,7 @@ function DueBody({
       </View>
       <Text style={[styles.title, on]} numberOfLines={2}>{item.title}</Text>
       {interval ? <Text style={[styles.line, soft]}>{interval}</Text> : null}
-      <View style={styles.actions}>
+      <View style={[styles.actions, compact && styles.actionsCompact]}>
         {busy ? <ActivityIndicator color={P.onAccent} style={styles.busy} /> : null}
         {solid(t('maintenance.action.book'), () => onBook(item))}
         {solid(t('maintenance.action.doneIt'), () => onDone(item))}
@@ -179,6 +179,10 @@ function DueBody({
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 10 },
+  // The mockup's compact card (.focus.cp) is tighter so the map stays near the top.
+  wrapCompact: { marginTop: 4, marginBottom: 14 },
+  cardCompact: { borderRadius: 24, paddingVertical: 14, paddingHorizontal: 16 },
+  actionsCompact: { marginTop: 10 },
   under: { position: 'absolute', left: 14, right: 14, bottom: -9, height: 24, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, opacity: 0.45 },
   card: {
     borderRadius: 28,
@@ -193,7 +197,7 @@ const styles = StyleSheet.create({
   kicker: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.5 },
   bigRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 10 },
   big: { fontFamily: FONT_DISPLAY, fontSize: 64, lineHeight: 68 },
-  bigCompact: { fontSize: 52, lineHeight: 56 },
+  bigCompact: { fontSize: 44, lineHeight: 48 },
   unit: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 1.4 },
   unitAlone: { fontFamily: FONT_DISPLAY, fontSize: 30, letterSpacing: 1.2, lineHeight: 36 },
   title: { fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: 0.8, lineHeight: 26, marginTop: 6 },

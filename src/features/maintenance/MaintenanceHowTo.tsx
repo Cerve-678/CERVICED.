@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { AppTheme } from '../../constants/theme';
 import type { TranslationKey, TranslationParams } from '../../i18n';
+import { ThemedBackground } from '../../components/ThemedBackground';
 import { FONT_BODY, FONT_DISPLAY, hapticLight, type SemanticColors } from './ui';
 
 type T = (key: TranslationKey, params?: TranslationParams) => string;
@@ -261,7 +262,7 @@ export function MaintenanceHowTo({ visible, onClose, P, S, t }: Props) {
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <View style={[styles.screen, { backgroundColor: P.bg, paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
+      <ThemedBackground style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: P.text }]}>{t('maintenance.title')}</Text>
           <Text style={[styles.headSub, { color: P.sub }]}>{t('maintenance.howto.link')}</Text>
@@ -315,7 +316,7 @@ export function MaintenanceHowTo({ visible, onClose, P, S, t }: Props) {
         >
           <Text style={[styles.doneText, { color: P.onAccent }]}>{t('maintenance.howto.gotIt').toUpperCase()}</Text>
         </TouchableOpacity>
-      </View>
+      </ThemedBackground>
     </Modal>
   );
 }
