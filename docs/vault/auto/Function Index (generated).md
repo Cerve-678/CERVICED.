@@ -5,7 +5,7 @@
 
 #generated
 
-**3333 functions** across **467 files**.
+**3336 functions** across **467 files**.
 
 ### `src/components/` (61)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -75,7 +75,7 @@
 
 ### `src/components/signup/` (2)
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
-- `useRevealNext.ts` — onScroll · onViewportLayout · reveal · **revealOffset** · **useRevealNext**
+- `useRevealNext.ts` — onScroll · onViewportLayout · reveal · **revealEase** · **revealOffset** · step · stopGlide · **useRevealNext**
 
 ### `src/constants/` (9)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
