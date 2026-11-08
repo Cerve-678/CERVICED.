@@ -8629,6 +8629,26 @@ export async function getProviderSchedulingConstraints(
   };
 }
 
+/**
+ * The signed-in provider's own monthly release day (null = rolling window).
+ * Lets a screen that edits it (Edit Profile) pick up a change made on the
+ * other one (Scheduling & Availability) when it comes back into view.
+ * Own record, so no has_gone_live filter. Same duplicate-row tie-break as
+ * the provider lookup by user id above.
+ */
+export async function getMyProviderReleaseDay(userId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("schedule_release_day:automation_settings->scheduleReleaseDay")
+    .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return toReleaseDay((data as { schedule_release_day?: unknown } | null)?.schedule_release_day);
+}
+
 // ─────────────────────────────────────────────────────────
 // USERS — profile reads
 // ─────────────────────────────────────────────────────────

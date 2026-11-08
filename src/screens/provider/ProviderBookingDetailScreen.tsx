@@ -81,7 +81,7 @@ import {
 import { formatTipAmount, providerTipNote, type ProviderBookingTip } from '../../features/provider-bookings/tipPresentation';
 import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
-import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate } from '../../utils/dateUtils';
+import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, formatShortDayDate, formatDayOrdinalShortMonth } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
@@ -1262,6 +1262,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const timeRange = booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime
     ? `${booking.bookingTime} – ${booking.endTime}`
     : booking.bookingTime || '—';
+  // The receipt's headline: "Thursday 3rd Oct · 2:00 PM – 4:00 PM".
+  const receiptWhen = booking.bookingDate
+    ? `${formatDayOrdinalShortMonth(booking.bookingDate)} · ${timeRange}`
+    : timeRange;
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -1335,7 +1339,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <View style={styles.receiptHeader}>
                 <Text style={[styles.receiptBrand, { color: P.text }]}>CERVICED</Text>
                 <Text style={[styles.receiptSubBrand, { color: P.sub }]}>Booking Receipt</Text>
-                <Text style={[styles.receiptTime, { color: P.sub }]}>{timeRange}</Text>
+                <Text style={[styles.receiptTime, { color: P.sub }]}>{receiptWhen}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusBadgeText, { color: statusColor }]}>
@@ -2049,7 +2053,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     )}
 
                     {/* Nothing covers this service at all */}
-                    {formsState === 'ready' && libraryState === 'ready' && canSendForms && intakeForms.length === 0 && !hasFormForService && (
+                    {/* Shown as long as the pack line is (canSendPacks), not only
+                        while forms can still be sent: it tells the provider no
+                        form covers this service, which stays true after the day. */}
+                    {formsState === 'ready' && libraryState === 'ready' && canSendPacks && intakeForms.length === 0 && !hasFormForService && (
                       <View style={[styles.suggestRow, styles.suggestRowEmpty, { borderColor: P.border }]}>
                         <Ionicons name="clipboard-outline" size={15} color={P.sub} />
                         <Text style={[styles.intakeFormSub, { color: P.sub, flex: 1 }]}>No form covers {service} yet.</Text>

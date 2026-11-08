@@ -85,6 +85,13 @@ export function formatLongDateNoYear(input: string | Date): string {
   return `${weekday} ${day} ${month}`;
 }
 
+/** "Thursday 3rd Oct" — the full day with a short month, for a booking's
+ *  headline where the weekday matters and the year is noise. */
+export function formatDayOrdinalShortMonth(input: string | Date): string {
+  const date = toLocalDate(input);
+  return `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())} ${MONTH_NAMES_ABBREV[date.getMonth()]}`;
+}
+
 /** "Sat 3 Oct" — compact weekday + date for dense card headers. */
 export function formatShortDayDate(input: string | Date): string {
   const date = toLocalDate(input);
