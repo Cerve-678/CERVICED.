@@ -1,4 +1,4 @@
-import type { BusinessType } from '../../types/database';
+import type { BusinessType, LogoFraming } from '../../types/database';
 
 export interface ProviderProfileAddOn {
   id: string | number;
@@ -33,6 +33,8 @@ export interface ProviderProfileData {
   providerName: string;
   providerService: string;
   providerLogo: any;
+  /** How the provider framed their logo in Info Reg (the circle, here). */
+  providerLogoFraming: LogoFraming | null;
   location: string;
   /** Public "How to get there", shown in Additional Information. */
   publicDirections: string;

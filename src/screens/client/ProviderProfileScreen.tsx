@@ -35,6 +35,7 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
+import { LogoCircle } from "../../components/FramedLogo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -42,7 +43,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
-import { PolicyImageViewer } from "../../components/PolicyImageViewer";
+import { FullImageViewer } from "../../components/FullImageViewer";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -2106,6 +2107,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // wherever the list last scrolled to. Bumping `key` on every open forces a
   // fresh FlatList each time so it lands on the right image.
   const [showPolicyImage, setShowPolicyImage] = useState(false);
+  const [showFullLogo, setShowFullLogo] = useState(false);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
       visible: true,
@@ -4240,6 +4242,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             visible={didYouBookVisible}
             providerName={provider.displayName}
             logoUrl={provider.providerLogo?.uri ?? null}
+            logoFraming={provider.providerLogoFraming}
             services={provider.specialties}
             accentColor={adaptiveAccentColor}
             tokens={{ text: OP.text, sub: OP.sub, border: OP.border, surface: OP.surface, bg: OP.bg }}
@@ -4370,10 +4373,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
         {/* The provider's detailed policy document, scrollable when it's
             long — the same viewer the client's booking detail opens. */}
-        <PolicyImageViewer
+        <FullImageViewer
           uri={provider.bookingPolicies?.policyImageUrl || null}
           visible={showPolicyImage}
           onClose={() => setShowPolicyImage(false)}
+          label="Policy document"
+        />
+
+        {/* The whole logo, uncropped, from a tap on the profile circle. */}
+        <FullImageViewer
+          uri={provider.providerLogo?.uri ?? null}
+          visible={showFullLogo}
+          onClose={() => setShowFullLogo(false)}
+          label="Logo"
         />
 
         {/* Fullscreen service image carousel modal — hidden whenever the "All
@@ -4972,13 +4984,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               {/* Provider Logo - Bigger */}
               <View style={styles.logoContainer}>
                 <View style={styles.logoWrapper}>
-                  {provider.providerLogo ? (
-                    <Image
-                      source={provider.providerLogo}
-                      style={styles.providerLogo}
-                      contentFit="cover"
-                      transition={0}
-                    />
+                  {provider.providerLogo?.uri ? (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setShowFullLogo(true);
+                      }}
+                      accessibilityRole="imagebutton"
+                      accessibilityLabel={`${provider.displayName} logo. Tap to see it in full`}
+                    >
+                      <LogoCircle
+                        uri={provider.providerLogo.uri}
+                        framing={provider.providerLogoFraming}
+                        style={styles.providerLogo}
+                      />
+                    </TouchableOpacity>
                   ) : (
                     <View
                       style={[

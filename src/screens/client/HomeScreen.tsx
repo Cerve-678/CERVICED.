@@ -31,6 +31,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import userLearningService from '../../services/userLearningService';
 import { HairTypeSelector } from '../../components/HairTypeSelector';
 import { ProviderCard } from '../../features/home/ProviderCard';
+import { LogoCircle } from '../../components/FramedLogo';
 import { ServiceButton } from '../../features/home/ServiceButton';
 import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
@@ -86,6 +87,7 @@ interface Offer {
   validUntil: string;
   providerName: string;
   logo: any;
+  logoFraming: LogoFraming | null;
   service?: string;
 }
 
@@ -185,7 +187,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
       renderItem={({ item }) => (
         <TouchableOpacity style={styles.roundCard} onPress={() => onProviderPress(item)} activeOpacity={0.7}>
           <View style={[styles.roundCardBlur, { backgroundColor: surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }]}>
-            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} contentFit="cover" transition={0} /> : null}
+            {item.logo?.uri ? <LogoCircle uri={item.logo.uri} framing={item.logoFraming} style={styles.roundCardImage} /> : null}
           </View>
           <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
           {sub && item.distanceKm != null ? (
@@ -362,6 +364,7 @@ export default function HomeScreen() {
       validUntil: p.valid_until,
       providerName: p.providers?.display_name ?? 'Provider',
       logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
+      logoFraming: p.providers?.logo_framing ?? null,
       ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
     })),
   [rawPromotions]);
@@ -519,7 +522,7 @@ export default function HomeScreen() {
         providerReviewCount: p.review_count,
         kind: 'service' as const,
         serviceId: s.id,
-        ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+        ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
       };
     };
 
@@ -1987,7 +1990,7 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} contentFit="cover" transition={0} /> : <View style={styles.offerLogo} />}
+                      {offer.logo?.uri ? <LogoCircle uri={offer.logo.uri} framing={offer.logoFraming} style={styles.offerLogo} /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
                         {/* In normal flow (not floating over the title) so a
                             long custom label — a provider can type anything

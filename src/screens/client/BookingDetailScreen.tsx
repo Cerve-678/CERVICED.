@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
@@ -53,7 +54,7 @@ import {
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { clientRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
-import { PolicyImageViewer } from '../../components/PolicyImageViewer';
+import { FullImageViewer } from '../../components/FullImageViewer';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
@@ -876,8 +877,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         >
           {/* Header */}
           <View style={st.header}>
-            {booking.providerImage ? (
-              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={st.providerImg} contentFit="cover" />
+            {(typeof booking.providerImage === 'string' ? booking.providerImage : booking.providerImage?.uri) ? (
+              <ProviderLogoCircle
+                providerId={booking.providerId}
+                uri={typeof booking.providerImage === 'string' ? booking.providerImage : booking.providerImage.uri}
+                style={st.providerImg}
+              />
+            ) : booking.providerImage ? (
+              <Image source={booking.providerImage} style={st.providerImg} contentFit="cover" />
             ) : (
               <View style={[st.providerImg, { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }]}>
                 <Text style={{ color: C.onAccent, fontSize: 22, fontWeight: '800' }}>
@@ -1478,7 +1485,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Policy Image ─── the provider's detailed policy document,
             scrollable when it's long; the same viewer as their profile. */}
-        <PolicyImageViewer uri={policyImageUrl} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} />
+        <FullImageViewer uri={policyImageUrl} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} label="Policy document" />
 
         {/* ─── Cancel Modal ───────────────────────────────────────────────
             Same modal handles both states: the normal "are you sure" ask,

@@ -108,14 +108,14 @@ Curated: [[Payments]] · **157 files**
 - … +127 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **331 files**
-- `src/services/databaseService.ts` _(1015)_
+Curated: [[Booking Flow]] · **333 files**
+- `src/services/databaseService.ts` _(1016)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(698)_
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/services/becca/capabilities/client.ts` _(585)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(572)_
-- `src/screens/client/BookingDetailScreen.tsx` _(472)_
+- `src/screens/client/BookingDetailScreen.tsx` _(477)_
 - `src/screens/client/BookingsScreen.tsx` _(395)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(248)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **331 files**
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- … +301 more
+- … +303 more
 
 ## Notifications
 Curated: [[Notifications]] · **181 files**
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **181 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **85 files**
-- `src/services/databaseService.ts` _(91)_
+- `src/services/databaseService.ts` _(92)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -346,9 +346,9 @@ Curated: [[Services]] · **52 files**
 - … +22 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **83 files**
+Curated: [[Payments]] · **85 files**
 - `src/screens/client/CartScreen.tsx` _(441)_
-- `src/services/databaseService.ts` _(106)_
+- `src/services/databaseService.ts` _(107)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/components/BookingSheet.tsx` _(34)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **83 files**
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/constants/feeTerms.ts` _(4)_
 - `src/features/bookings/addOnTime.ts` _(4)_
-- … +53 more
+- … +55 more

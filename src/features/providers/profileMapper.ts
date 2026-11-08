@@ -86,6 +86,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     providerName: provider.display_name.toUpperCase(),
     providerService: provider.service_category,
     providerLogo: provider.logo_url ? { uri: provider.logo_url } : null,
+    providerLogoFraming: provider.logo_framing ?? null,
     location: provider.location_text ?? '',
     publicDirections: provider.public_directions?.trim() ?? '',
     businessType: provider.business_type ?? null,

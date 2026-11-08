@@ -18,6 +18,7 @@ import type { ScrollViewInstance } from 'react-native';
 // expo-image instead of RN's Image — see PortfolioCard.tsx for why (Explore's
 // masonry grid is unvirtualized, so caching matters more here than elsewhere).
 import { Image } from 'expo-image';
+import { LogoCircle } from './FramedLogo';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -751,14 +752,13 @@ function ModalBody({
               activeOpacity={0.5}
             >
               {item.providerLogoUri ? (
-                <Image
-                  source={{ uri: item.providerLogoUri }}
+                <LogoCircle
+                  uri={item.providerLogoUri}
+                  framing={item.providerLogoFraming}
                   style={[
                     styles.providerLogo,
                     { backgroundColor: P.surface },
                   ]}
-                  contentFit="cover"
-                  transition={0}
                 />
               ) : (
                 <View

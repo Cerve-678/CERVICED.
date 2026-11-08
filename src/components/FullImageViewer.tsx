@@ -5,14 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-interface PolicyImageViewerProps {
+interface FullImageViewerProps {
   uri: string | null;
   visible: boolean;
   onClose: () => void;
+  /** What the image is, for screen readers: "Policy document", "Logo". */
+  label: string;
 }
 
 /**
- * Full-screen view of a provider's detailed policy image.
+ * Full-screen view of one image: a provider's detailed policy document, or
+ * their whole logo (tapped from the circle on their profile).
  *
  * Shown at the screen's full width and as tall as the photo really is, inside
  * a scroll view, so a long policy document reads top to bottom instead of
@@ -20,7 +23,7 @@ interface PolicyImageViewerProps {
  * Used by the provider profile and the client's booking detail, so both open
  * the same document the same way.
  */
-export function PolicyImageViewer({ uri, visible, onClose }: PolicyImageViewerProps) {
+export function FullImageViewer({ uri, visible, onClose, label }: FullImageViewerProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   // Height over width, from the image itself once it loads.
@@ -64,7 +67,7 @@ export function PolicyImageViewer({ uri, visible, onClose }: PolicyImageViewerPr
                 const { width: w, height: h } = event.source;
                 if (w > 0 && h > 0) setRatio({ uri, value: h / w });
               }}
-              accessibilityLabel="Policy document"
+              accessibilityLabel={label}
             />
           )}
         </ScrollView>
@@ -74,7 +77,7 @@ export function PolicyImageViewer({ uri, visible, onClose }: PolicyImageViewerPr
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel="Close policy document"
+          accessibilityLabel={`Close ${label.toLowerCase()}`}
         >
           <Ionicons name="close" size={26} color="#FFF" />
         </TouchableOpacity>

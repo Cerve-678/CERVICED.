@@ -460,7 +460,7 @@ const ExploreScreen = memo(() => {
       providerReviewCount: p.review_count,
       kind: 'portfolio',
       ...(item.price != null ? { price: `£${item.price}` } : {}),
-      ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+      ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
     };
   }, []);
 
@@ -509,7 +509,7 @@ const ExploreScreen = memo(() => {
       providerReviewCount: p.review_count,
       kind: 'service' as const,
       serviceId: s.id,
-      ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+      ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
     }));
   }, []);
 
