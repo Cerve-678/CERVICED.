@@ -83,9 +83,9 @@ Curated: [[Payments]] · **161 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/services/bookingService.ts` _(101)_
+- `src/screens/client/BookingDetailScreen.tsx` _(98)_
+- `src/features/bookings/receipt.ts` _(93)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
-- `src/screens/client/BookingDetailScreen.tsx` _(91)_
-- `src/features/bookings/receipt.ts` _(88)_
 - `src/types/database.ts` _(59)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(58)_
 - `src/features/bookings/paymentPresentation.ts` _(53)_
@@ -115,11 +115,11 @@ Curated: [[Booking Flow]] · **347 files**
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(588)_
 - `src/services/becca/capabilities/client.ts` _(585)_
-- `src/screens/client/BookingDetailScreen.tsx` _(498)_
+- `src/screens/client/BookingDetailScreen.tsx` _(499)_
 - `src/screens/client/BookingsScreen.tsx` _(399)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(252)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(196)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
 - `src/screens/client/RescheduleScreen.tsx` _(189)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
@@ -230,17 +230,17 @@ Curated: [[Booking Flow]] · **66 files**
 - `src/screens/provider/InfoRegScreen.tsx` _(10)_
 - `src/types/database.ts` _(9)_
 - `src/constants/waitlist.ts` _(7)_
-- `src/features/bookings/activityCentre.ts` _(6)_
+- `src/features/bookings/activityCentre.ts` _(7)_
 - `src/i18n/catalogs/en.ts` _(6)_
 - `src/screens/shared/NotificationsScreen.tsx` _(6)_
 - `supabase/fix_reschedule_flow_completion.sql` _(6)_
 - `src/features/achievements/achievementPresentation.ts` _(5)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(5)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(5)_
-- `src/screens/client/ActivityCentreScreen.tsx` _(4)_
 - `supabase/fix_backfill_null_booking_end_time.sql` _(4)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
 - `supabase/fix_handle_booking_status_change_on_hold_notification.sql` _(4)_
+- `supabase/fix_provider_status_transition_guard.sql` _(4)_
 - … +36 more
 
 ## Reschedule / cancel

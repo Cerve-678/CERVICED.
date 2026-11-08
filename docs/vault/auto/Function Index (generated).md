@@ -5,7 +5,7 @@
 
 #generated
 
-**3361 functions** across **476 files**.
+**3374 functions** across **476 files**.
 
 ### `src/components/` (63)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -123,8 +123,9 @@
 - `profileRow.ts` — **beautyDataFromRow**
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
 
-### `src/features/bookings/` (25)
-- `activityCentre.ts` — appointmentMs · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · names · pounds · shortDay · when
+### `src/features/bookings/` (26)
+- `activityCentre.ts` — **activityTimeline** · appointmentMs · beforeDay · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · localDayKey · names · needsYouPulse · pounds · shortDay · when
+- `ActivityLive.tsx` — **ActivityTile** · **LiveDot** · remember · **StatusPill** · **TimelineGroup** · **TimelineRail** · useEntrance · **useReduceMotion**
 - `addOnTime.ts` — **addOnExtraMinutes** · **durationWithAddOns** · **formatAddOnExtraTime**
 - `AnonymousReviewToggle.tsx` — **AnonymousReviewToggle**
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
@@ -323,7 +324,7 @@
 - `WelcomeScreen.tsx` — handleAppleLogin · handleGoogleLogin · rise · rowStyle · WelcomeScreen
 
 ### `src/screens/client/` (23)
-- `ActivityCentreScreen.tsx` — ActivityCentreScreen · onRefresh · openItem · renderRow
+- `ActivityCentreScreen.tsx` — ActivityCentreScreen · onRefresh · openItem · pillMessages · renderList · sectionHead · tile · timeline
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
 - `BeautyProfileScreen.tsx` — BeautyProfileScreen · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openSetup · openTodoField · pickedCount · stats · todo · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · tick
@@ -347,7 +348,7 @@
 - `SubscriptionScreen.tsx` — SubscriptionScreen
 - `UserProfileScreen.tsx` — handleBiometricToggle · handleLogout · UserProfileScreen
 
-### `src/screens/provider/` (34)
+### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
 - `BrandingScreen.tsx` — BrandingScreen · handleImageCropped · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
@@ -378,7 +379,6 @@
 - `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeCertificate · closeEditor · DashCard · DashEmpty · FindabilityCard · findabilityGaps · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handleOpenBooking · handleOpenPayments · handleOpenRecentActivity · handleOpenRelease · handleOpenTodayDay · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hidden · live · load · needing · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ProviderProfileLoadingShell · releaseQuickView · renderRow · row · ServiceCategoryCard · ServiceRow · serviceType · setup · startLowerSections
 - `ProviderNotificationSettingsScreen.tsx` — ProviderNotificationSettingsScreen
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
-- `ProviderRecentActivityScreen.tsx` — openBooking · ProviderRecentActivityScreen · renderBody
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
 - `SchedulingScreen.tsx` — chooseHorizonMode · flash · handleSave · releaseStatus · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
