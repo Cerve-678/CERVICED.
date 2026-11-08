@@ -36,18 +36,13 @@ describe('describeReleaseQuickView', () => {
 
   it('gives the release day, how far clients can book and when the next month opens', () => {
     const view = describeReleaseQuickView({ schedule_release_day: 1, booking_window_days: 60 }, now);
+    if (!view) throw new Error('expected a quick view for a provider with a release day');
     expect(view.title).toBe('Release day: the 1st of every month');
     expect(view.lines).toEqual(['Clients can book up to Thu 31 Dec', 'Next month opens Tue 1 Dec at 09:00am']);
   });
 
-  it('says plainly when there is no release day', () => {
-    expect(describeReleaseQuickView({ schedule_release_day: null, booking_window_days: 30 }, now)).toEqual({
-      title: 'No release day: 30 days ahead',
-      lines: ['Clients can book up to Tue 8 Dec', 'This moves forward one day every day'],
-    });
-    expect(describeReleaseQuickView({ schedule_release_day: null, booking_window_days: 0 }, now)).toEqual({
-      title: 'No release day',
-      lines: ['Clients can book any date in the future'],
-    });
+  it('has nothing to show a provider with no release day, so the row is left out', () => {
+    expect(describeReleaseQuickView({ schedule_release_day: null, booking_window_days: 30 }, now)).toBeNull();
+    expect(describeReleaseQuickView({ schedule_release_day: null, booking_window_days: 0 }, now)).toBeNull();
   });
 });
