@@ -12369,7 +12369,7 @@ export async function applyCancellationRefund(
 // ─────────────────────────────────────────────────────────
 // Every rule (approval, under-18 defaults, blocks, who shows on a card) is
 // enforced by the SECURITY DEFINER functions in migration
-// 20261108190000_follow_people_and_recommend.sql. The tables have no RLS
+// 20261108220000_follow_people_and_recommend.sql. The tables have no RLS
 // policies, so these RPCs are the only way in.
 
 interface SocialSettingsRow {

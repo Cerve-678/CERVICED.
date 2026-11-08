@@ -1,7 +1,7 @@
 // src/utils/phoneMatching.ts
 //
 // Normalises a phone number the same way the server's
-// social_normalise_phone() does (migration 20261108190000), so a contact's
+// social_normalise_phone() does (migration 20261108220000), so a contact's
 // number and an account's number hash to the same value. UK-first: a
 // national "07…" number becomes "447…". Returns E.164 digits without '+',
 // or null when it can't be a phone number. Keep in step with the SQL —
