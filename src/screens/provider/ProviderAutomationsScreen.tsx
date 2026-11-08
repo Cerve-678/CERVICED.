@@ -19,7 +19,7 @@ import {
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { canAutoCloseWhenFull } from '../../features/providers/scheduleClosure';
+import { chooseFullyBookedResponse } from '../../features/providers/scheduleClosure';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C_DARK = {
@@ -281,8 +281,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   }, [d, providerId, navigation]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
-    setD(prev => key === 'waitlistEnabled' && val === true
-      ? { ...prev, waitlistEnabled: true, autoCloseWhenFull: false }
+    setD(prev => key === 'waitlistEnabled' || key === 'autoCloseWhenFull'
+      ? chooseFullyBookedResponse(prev, key, val as boolean)
       : { ...prev, [key]: val });
   }, []);
 
@@ -441,7 +441,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         <SectionHeader
           icon="calendar-outline"
           label="WHEN YOU'RE FULLY BOOKED"
-          sub="Choose what happens if a space becomes available again."
+          sub="Choose how new spaces are handled. Turning on waitlist or automatic closure turns the other off."
           C={C}
         />
 
@@ -463,21 +463,17 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           />
         )}
 
-        {!d.waitlistEnabled && (
-          <>
-            <AutoCard
-              title="Close my schedule when fully booked"
-              description="When every open slot fills, stop new bookings until you reopen your schedule or your next release day. A cancelled slot stays unavailable while closed."
-              value={d.autoCloseWhenFull && canAutoCloseWhenFull(d.waitlistEnabled)}
-              onToggle={v => set('autoCloseWhenFull', v)}
-              C={C}
-            />
-            {!d.autoCloseWhenFull && (
-              <Text style={[st.sectionSub, { color: C.sub, marginBottom: 8 }]}>
-                With no waitlist or automatic closure, a freed slot becomes bookable for anyone.
-              </Text>
-            )}
-          </>
+        <AutoCard
+          title="Close my schedule when fully booked"
+          description="When every open slot fills, stop new bookings until you reopen your schedule or your next release day. Turning this on switches off waitlist; a cancelled slot stays unavailable while closed."
+          value={d.autoCloseWhenFull}
+          onToggle={v => set('autoCloseWhenFull', v)}
+          C={C}
+        />
+        {!d.waitlistEnabled && !d.autoCloseWhenFull && (
+          <Text style={[st.sectionSub, { color: C.sub, marginBottom: 8 }]}>
+            With both options off, a freed slot becomes bookable for anyone.
+          </Text>
         )}
 
         {/* Buffer time, max bookings per day, booking window, minimum notice

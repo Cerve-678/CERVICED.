@@ -218,7 +218,7 @@ Curated: [[Booking Flow]] · **66 files**
 - `src/services/databaseService.ts` _(59)_
 - `src/services/becca/capabilities/client.ts` _(45)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(39)_
-- `src/screens/provider/ProviderAutomationsScreen.tsx` _(36)_
+- `src/screens/provider/ProviderAutomationsScreen.tsx` _(35)_
 - `src/services/becca/capabilities/provider.ts` _(35)_
 - `supabase/fix_waitlist_selection_method_hook.sql` _(35)_
 - `supabase/waitlist_automation_settings.sql` _(32)_
@@ -226,6 +226,7 @@ Curated: [[Booking Flow]] · **66 files**
 - `supabase/booking_flow_fixes.sql` _(19)_
 - `supabase/booking_cancellation_actor_aware_fix.sql` _(13)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(12)_
+- `src/features/providers/scheduleClosure.ts` _(10)_
 - `src/screens/provider/InfoRegScreen.tsx` _(10)_
 - `src/types/database.ts` _(9)_
 - `src/constants/waitlist.ts` _(7)_
@@ -236,7 +237,6 @@ Curated: [[Booking Flow]] · **66 files**
 - `src/features/achievements/achievementPresentation.ts` _(5)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(5)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(5)_
-- `src/features/providers/scheduleClosure.ts` _(4)_
 - `src/screens/client/ActivityCentreScreen.tsx` _(4)_
 - `supabase/fix_backfill_null_booking_end_time.sql` _(4)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
