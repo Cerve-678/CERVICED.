@@ -127,10 +127,12 @@ export function providerFromDb(
   p: Pick<
     DbProvider,
     'slug' | 'display_name' | 'service_category' | 'logo_url' | 'location_text'
-  > & Partial<Pick<DbProvider, 'logo_framing'>>,
+  > & Partial<Pick<DbProvider, 'logo_framing' | 'id'>>,
 ): Provider {
   return {
     id: p.slug,
+    // The real providers.id, for the "people you follow" faces on the card.
+    ...(p.id ? { providerId: p.id } : {}),
     name: p.display_name,
     service: p.service_category as Provider["service"],
     logo: p.logo_url ? { uri: p.logo_url } : null,
