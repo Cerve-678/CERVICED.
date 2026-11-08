@@ -5,9 +5,9 @@
 
 #generated
 
-**3349 functions** across **471 files**.
+**3350 functions** across **472 files**.
 
-### `src/components/` (62)
+### `src/components/` (63)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -64,6 +64,7 @@
 - `SpecialityMultiSelect.tsx` — addCustom · close · customCandidate · filtered · **SpecialityMultiSelect** · toggle
 - `StatusBarBlur.tsx` — StatusBarBlur
 - `TabIcon.tsx` — renderIcon · TabIcon
+- `TapToEditTextInput.tsx` — **TapToEditTextInput**
 - `ThemedBackground.tsx` — **ThemedBackground**
 - `ThemedText.tsx` — **ThemedText**
 - `ThemedView.tsx` — **ThemedCard** · **ThemedView**

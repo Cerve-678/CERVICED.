@@ -23,6 +23,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { TapToEditTextInput } from '../../components/TapToEditTextInput';
 import type { ViewInstance } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -4816,7 +4817,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               >
                 <Text style={styles.inputLabel}>Description</Text>
                 <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
-                  <TextInput
+                  {/* Opens the keyboard on a real tap only, not when a scroll
+                      down the page happens to start on top of it. */}
+                  <TapToEditTextInput
                     style={[styles.textInput, styles.textInputMultiline]}
                     value={providerData.aboutText}
                     onChangeText={(text) =>
