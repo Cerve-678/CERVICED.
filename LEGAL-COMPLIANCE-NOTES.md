@@ -749,7 +749,7 @@ a late cancellation.
 
 ## 23. Following people and "Show where I go" (2026-11-08)
 
-Being built on `feat/follow-people-backend` (migration `20261108190000`, not yet
+Being built on `feat/follow-people-backend` (migration `20261108220000`, not yet
 applied). Clients can follow other clients. People who follow you and are
 approved see your face on the cards of providers you've recommended or
 booked with. Raised by `cerviced-legal-flagger` on 2026-11-08. These are the

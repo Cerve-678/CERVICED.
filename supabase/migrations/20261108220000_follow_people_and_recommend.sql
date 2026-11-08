@@ -876,7 +876,7 @@ END;
 $$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261108190000', 'follow_people_and_recommend')
+VALUES ('20261108220000', 'follow_people_and_recommend')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

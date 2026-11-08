@@ -1,7 +1,7 @@
 // src/features/social/types.ts
 //
 // Shapes for following people, Recommend and "Show where I go". The server
-// (migration 20261108190000_follow_people_and_recommend.sql) owns every rule:
+// (migration 20261108220000_follow_people_and_recommend.sql) owns every rule:
 // who is private, who shows on a card, under-18 defaults, blocks. These types
 // only describe what its functions return.
 
