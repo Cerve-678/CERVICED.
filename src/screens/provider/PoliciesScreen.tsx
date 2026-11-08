@@ -315,7 +315,9 @@ export default function PoliciesScreen({ navigation }: any) {
     try {
       const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
       const path = `${userId}/policy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const publicUrl = await uploadToStorage('portfolio', path, uri);
+      // 'document': kept at full width however long it is, so it reads
+      // sharp in the scrolling viewer instead of shrinking by its height.
+      const publicUrl = await uploadToStorage('portfolio', path, uri, 'document');
       setPolicies(prev => ({ ...prev, policyImageUrls: [...prev.policyImageUrls, publicUrl].slice(0, MAX_POLICY_IMAGES) }));
     } catch (e: any) {
       Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));

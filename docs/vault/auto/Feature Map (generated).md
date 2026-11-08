@@ -108,15 +108,15 @@ Curated: [[Payments]] · **159 files**
 - … +129 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **341 files**
-- `src/services/databaseService.ts` _(1070)_
+Curated: [[Booking Flow]] · **343 files**
+- `src/services/databaseService.ts` _(1072)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(699)_
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/services/becca/capabilities/client.ts` _(585)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(575)_
-- `src/screens/client/BookingDetailScreen.tsx` _(477)_
-- `src/screens/client/BookingsScreen.tsx` _(407)_
+- `src/screens/client/BookingDetailScreen.tsx` _(478)_
+- `src/screens/client/BookingsScreen.tsx` _(408)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(249)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
@@ -134,12 +134,12 @@ Curated: [[Booking Flow]] · **341 files**
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/types/booking.ts` _(107)_
 - `supabase/automation_jobs.sql` _(107)_
+- `src/types/database.ts` _(102)_
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
-- `src/types/database.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/utils/scheduleIssues.ts` _(94)_
-- … +311 more
+- … +313 more
 
 ## Notifications
 Curated: [[Notifications]] · **182 files**
