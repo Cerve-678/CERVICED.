@@ -5351,6 +5351,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   style={[
                     styles.aboutCard,
                     { backgroundColor: cardBg, borderColor: OP.border },
+                    // Room under the last line for the policy button, so it
+                    // never sits on top of the text.
+                    policyPages.length > 0 && styles.aboutCardWithPolicyFab,
                   ]}
                 >
                   <LinearGradient
@@ -6253,6 +6256,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
+  // The policy button's height plus its bottom offset (policyImageFab), so the
+  // card's last line ends above the button instead of under it.
+  aboutCardWithPolicyFab: {
+    paddingBottom: 10 + 44,
+  },
   cardHighlight: {
     position: "absolute",
     top: 0,
@@ -6747,7 +6755,7 @@ const styles = StyleSheet.create({
   // structured policy fields at all, in which case it's the only way in).
   policyImageFab: {
     position: "absolute",
-    bottom: 14,
+    bottom: 10,
     right: 14,
     width: 44,
     height: 44,
