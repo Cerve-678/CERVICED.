@@ -749,8 +749,8 @@ a late cancellation.
 
 ## 23. Following people and "Show where I go" (2026-11-08)
 
-Being built on `feat/follow-people-backend` (migration `20261108220000`, not yet
-applied). Clients can follow other clients. People who follow you and are
+Being built on `feat/follow-people-backend` (migration `20261108220000`, applied
+live 2026-11-08), with the client screens on `feat/follow-people-find`. Clients can follow other clients. People who follow you and are
 approved see your face on the cards of providers you've recommended or
 booked with. Raised by `cerviced-legal-flagger` on 2026-11-08. These are the
 user's decisions:
@@ -828,3 +828,27 @@ user's decisions:
   they're already connected with. Open question: should "findable by phone
   number" default to off? Both the security review and the legal flagger
   suggest it. It is on now so the feature works.
+- **Raised on the client screens (`feat/follow-people-find`, 2026-11-08).**
+  These are not resolved:
+  - **Past bookings count straight away.** Once the notice is seen, the server
+    counts every completed booking the client has ever had, not just ones from
+    then on. The notice and the switch now say "including appointments you've
+    already had". A client with past bookings at launch will see the notice on
+    their next Home visit. Decide whether visits should count only from the
+    notice date instead.
+  - **"Never which service you had" is literally true, but the provider's name
+    can still say a lot** (see Special-category inference above). The copy
+    used to say "never what you had done", which claimed more than this.
+  - **Turning the switch on counts as the notice.** If someone turns Show where
+    I go on in Your circle, that marks the notice seen, so their visits count.
+    Without this, an under-18 who opts in later would never have visits shown.
+    Open questions: is the switch's own subtitle enough, and should a minor
+    turning it on get a confirm or the full notice first?
+  - **Blocks can't be undone in the app.** There is no blocked list yet
+    (`unblock_person` exists but nothing calls it). The block confirm now says
+    so. It needs either a Blocked list or a support route.
+  - **Dismissing the notice.** It is marked seen only when the client taps
+    "Got it" or "Turn it off". Swiping it away hides it for that session.
+  - **The "Findable by phone number" switch is hidden** until finding people
+    from contacts is built, because nothing in the app uses it yet. The
+    server default (on for adults) still applies.

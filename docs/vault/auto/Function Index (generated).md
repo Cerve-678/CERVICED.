@@ -5,9 +5,9 @@
 
 #generated
 
-**3291 functions** across **458 files**.
+**3335 functions** across **466 files**.
 
-### `src/components/` (60)
+### `src/components/` (61)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -20,6 +20,7 @@
 - `CartTabBadge.tsx` — **useCartBadge**
 - `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
 - `ChatComponents.tsx` — ActionCard · along · **AmbientMark** · animatedStyle · **AnswerAfter** · **AnswerBefore** · **answerListsProviders** · **answerRevealStart** · Appear · CardView · **ChatBubble** · **ChatInput** · content · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · HeadlineView · **InspirationGallery** · **Mark** · PillChip · press · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator** · toggle · WorkFold · WorkSteps
+- `CircleStack.tsx` — CircleSheet · CircleStackInner · Face · label · layout · onClose · onOpen
 - `CityMultiSelect.tsx` — add · addArea · addCounty · addOther · **CityMultiSelect** · close · filtered · placeMatches · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
@@ -251,8 +252,12 @@
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 
-### `src/features/social/` (1)
+### `src/features/social/` (5)
+- `circleMoments.ts` — dayStart · isCompleted · **nextCircleMoment** · **pickRecommendPromptBooking** · **shouldShowWhereIGoNotice**
+- `CircleMomentsHost.tsx` — addPrompted · **CircleMomentsHost** · close · finishNotice · readPrompted · recommend
+- `people.ts` — **personAction** · **withMyStatus** · **withoutPerson** · **withPersonFirst**
 - `presentation.ts` — **circleLine** · **compareCirclePeople** · **firstName** · **groupCircleRows** · **initialsFor** · **stackAccessibilityLabel** · **stackLayout**
+- `ProviderSharingRow.tsx` — **ProviderSharingRow** · toggleHidden · toggleRecommend
 
 ### `src/i18n/` (3)
 - `translate.ts` — **interpolate** · **isTranslationKey** · **resolveTranslation** · **translate**
@@ -309,13 +314,14 @@
 - `SignUpStep5Screen.tsx` — curatedSpecialtyOptions · finishHatSwitch · handleComplete · onLayoutFor · renderSection · scrollTo · selectFrequency · selectReferral · SignUpStep5Screen · submitSignUp · toggleAccessibility · toggleInterest · toggleLanguage
 - `WelcomeScreen.tsx` — handleAppleLogin · handleGoogleLogin · rise · rowStyle · WelcomeScreen
 
-### `src/screens/client/` (22)
+### `src/screens/client/` (23)
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
 - `BeautyProfileScreen.tsx` — BeautyProfileScreen · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openSetup · openTodoField · pickedCount · stats · todo · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · tick
 - `BookingsScreen.tsx` — applyLocation · bookingIdsForReviewState · bookingListKeyExtractor · BookingsScreen · confirmRebook · createStyles · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handleBookWaitlistEntry · handleConfirmWaitlistHold · handleDeclineWaitlistHold · handleExternalBookingPress · handleLeaveWaitlistEntry · handleRatingSubmit · handleRebook · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · isMessagingAvailable · isTipClosed · listItems · mapBookings · onRefresh · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · pastBookingsFiltered · pastCategories · refreshBookingActionItems · refreshUserLocation · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · resolveMissingPins · retryLoadBookings · routeCoordinates · startLocationUpdates · styles · to · toggleFilter · virtualizedListRows · WaitlistCard
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · filteredProviders · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · renderEmptyState · SkeletonProviderCard
 - `CartScreen.tsx` — abandonOutstandingCheckout · addOnsSummary · backFromSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartCheckoutFooter · cartProviderRows · CartProviderSection · CartScreen · checkoutProviderSections · checkoutRenderUnits · checkoutTotalsFrom · clearItemIssue · depositPolicyArg · displayedItemIssues · dynamicStyles · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · flagged · flaggedProviderKeys · flaggedProvidersKey · formatCardNumber · formatExpiry · formatNameList · frozenCheckoutTotals · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleClose · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveFromCart · handleRemoveOne · handleReviewConfirm · handleScrollTargetLaidOut · handleScrollToIndexFailed · hasDeposit · hasUnscheduledItems · identifyCartConflicts · itemPromoDiscounts · itemsByProvider · jumpToRow · localItemIssues · navigateToProvider · onRefresh · openAddressSettings · outside · paymentSheetCartItems · platformFee · pricedCheckoutItems · priceOf · priceOfItem · promoSavingsShown · providerNamesKey · renderAddOns · renderCartProviderRow · renderCheckoutUnit · reportTargetOffset · showCards · SummaryShell · timestamp · toCartIssue · toggleProviderCollapsed · totalPrice
+- `CircleScreen.tsx` — afterFollowChange · CircleScreen · confirmBlock · confirmRemoveFollower · confirmUnfollow · Face · follow · loadLists · loadSettings · moreButton · onPrivateChange · personRow · renderItem · renderSharing · respond · runForRow · saveSetting
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
 - `ExploreScreen.tsx` — backToTopOpacity · backToTopTranslateY · columnWidth · dedupeByImageUri · filters · filterTabs · finishTour · getItemHeight · handleBackToTop · handleBookNow · handleCloseDetail · handleDiscoverScrollSettled · handleFavouritesScrollSettled · handleImagePress · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · prepareDetailItem · renderPortfolioCard · SkeletonMasonryGrid · tourCardId · updateBackToTop · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
 - `ExternalBookingDetailScreen.tsx` — createStyles · ExternalBookingDetailScreen · handleAddToCalendar · handleMessage · handleOpenPage · handleRemove · load · retry
@@ -420,6 +426,9 @@
 - `client.ts` — addToCartAndSay · availabilityThinking · bookingChoiceMessage · bookingChoices · bookingTicket · categoryWords · providerRow · soleUpcoming · sortUpcoming · ticketStamp
 - `provider.ts` — cutoff · inRange
 - `shared.ts` — **askChip** · **chip** · **dayLabel** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
+
+### `src/stores/` (1)
+- `useCircleStore.ts` — **useCircleEnabledSync** · **useCircleFor**
 
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles

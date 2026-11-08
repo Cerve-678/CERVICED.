@@ -52,6 +52,7 @@ Curated overview: [[Screens & Navigation]].
 - `ProfileMain`
 - `ProfileInfo`
 - `BeautyProfile`
+- `Circle`
 - `ChangePassword`
 - `NotificationsSettings`
 - `PaymentMethods`

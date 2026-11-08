@@ -181,6 +181,9 @@ export type ProfileStackParamList = {
   /** `openMaintenance` lands on the Maintenance view (a maintenance push or
    *  in-app notification); `focusItemId` scrolls to that item. */
   BeautyProfile: { openMaintenance?: boolean; focusItemId?: string } | undefined;
+  /** Your circle: find people, follow requests, followers/following and the
+   *  sharing switches. Reached from Beauty Profile. */
+  Circle: undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;
   PaymentMethods: undefined;

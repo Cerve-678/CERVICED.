@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../i18n';
@@ -34,6 +35,7 @@ import { SetupFlow, type Step } from '../../features/maintenance/SetupFlow';
 import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS } from '../../utils/maintenanceSuggestions';
 import { useMaintenance } from '../../features/maintenance/useMaintenance';
 import type { ItemAction } from '../../features/maintenance/MaintenanceItemCard';
+import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 
 type BeautyView = 'landing' | 'maintenance' | 'setup' | 'profile';
 
@@ -70,6 +72,21 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   const [view, setView] = useState<BeautyView>(route.params?.openMaintenance ? 'maintenance' : 'landing');
   const focusItemId = route.params?.focusItemId;
   const maintenance = useMaintenance(user?.id ?? null);
+
+  // Follow requests waiting, for the Your circle strip. Refetched on each
+  // return so a request answered in Your circle clears the dot. A failure only
+  // loses the hint, so it's logged rather than shown.
+  const circleRequests = useSocialSettingsStore(s =>
+    s.ownerId === user?.id && s.settings ? s.settings.requests : 0,
+  );
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      useSocialSettingsStore.getState().load(user.id, true).catch((err: unknown) => {
+        logger.warn('[beauty-profile] could not load circle settings', err);
+      });
+    }, [user?.id]),
+  );
   const [rebookingId, setRebookingId] = useState<string | null>(null);
   // Setup opens on step 1, or straight on the suggestions from "Picked for you".
   const [setupStart, setSetupStart] = useState<Step>(1);
@@ -381,6 +398,8 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           todo={todo}
           onOpenTodoField={openTodoField}
           onOpenAccountDetails={() => navigation.navigate('ProfileInfo')}
+          onOpenCircle={() => navigation.navigate('Circle')}
+          circleRequests={circleRequests}
         />
       );
   }

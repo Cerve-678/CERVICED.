@@ -5,7 +5,7 @@
 
 #generated
 
-**160 edges** across **48 screens**. Node-graph version: [[Screen Flow (generated)]].
+**161 edges** across **48 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -18,6 +18,7 @@ graph LR
   BeautyBillingScreen --> PaymentMethodsScreen
   BeautyBillingScreen --> SubscriptionScreen
   BeautyProfileScreen --> BookingsScreen
+  BeautyProfileScreen --> CircleScreen
   BeautyProfileScreen --> MessagesScreen
   BeautyProfileScreen --> ProfileInfoScreen
   BeautyProfileScreen --> ProviderProfileScreen
@@ -188,7 +189,7 @@ graph LR
 - `auth/SignUpStep5Screen` → `EmailVerification`, `Login`
 - `auth/WelcomeScreen` → `ClaimProvider`, `Login`, `SignUpStep1`
 - `client/BeautyBillingScreen` → `client/BeautyProfileScreen`, `client/PaymentMethodsScreen`, `client/SubscriptionScreen`
-- `client/BeautyProfileScreen` → `client/BookingsScreen`, `client/MessagesScreen`, `client/ProfileInfoScreen`, `client/ProviderProfileScreen`
+- `client/BeautyProfileScreen` → `client/BookingsScreen`, `client/CircleScreen`, `client/MessagesScreen`, `client/ProfileInfoScreen`, `client/ProviderProfileScreen`
 - `client/BookingDetailScreen` → `Cart`, `client/ClientIntakeFormScreen`, `client/ProviderChatScreen`, `client/RescheduleScreen`
 - `client/BookingsScreen` → `Cart`, `client/BookingDetailScreen`, `client/ExternalBookingDetailScreen`, `client/ProviderChatScreen`, `client/ProviderProfileScreen`, `client/RescheduleScreen`
 - `client/BookmarkedProvidersScreen` → `client/ProviderProfileScreen`

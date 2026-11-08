@@ -24,6 +24,8 @@ import {
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
+import { recommendPromptedStorageKey } from '../features/social/circleMoments';
+import { useSocialSettingsStore } from '../stores/useSocialSettingsStore';
 import { withTimeout } from '../utils/withTimeout';
 import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnapshot } from '../services/authProfileSnapshot';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
@@ -944,6 +946,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       '@app_notifications',
       '@user_learning_data',
       ...(loggedOutUserId ? [`@provider_reg_data_${loggedOutUserId}`] : []),
+      // Which providers this account was asked to recommend — a list of
+      // places they've booked, so it doesn't stay on a handed-on phone.
+      ...(loggedOutUserId ? [recommendPromptedStorageKey(loggedOutUserId)] : []),
       'bookmarked_videos',
       'saved_portfolio_items',
       'planner_events',
@@ -954,6 +959,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
     ]).catch(() => {});
+    useSocialSettingsStore.getState().reset();
     await clearAuthProfileSnapshot();
     await unregisterPushToken().catch(() => {});
     // Biometric enrollment intentionally survives logout — the entire point
