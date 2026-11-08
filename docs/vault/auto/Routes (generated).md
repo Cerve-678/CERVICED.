@@ -77,6 +77,7 @@ Curated overview: [[Screens & Navigation]].
 - `Branding`
 - `BusinessInfo`
 - `ProviderServicesMain`
+- `RecentActivity`
 - `ProviderAccountMain`
 - `MyPublicProfile`
 - `PublicProviderProfile`

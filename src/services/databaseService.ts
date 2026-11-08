@@ -4484,6 +4484,33 @@ export async function getProviderUpcomingBookings(
   return (data ?? []) as BookingWithAddOns[];
 }
 
+/** A provider's bookings by when they were made, newest first, for the
+ *  Recent activity card on My Profile and its See all list. A provider
+ *  reading their own diary, so no has_gone_live filter. Unclaimed waitlist
+ *  holds aren't bookings yet, so they're left out (as getProviderBookings). */
+export async function getProviderRecentBookings(
+  providerId: string,
+  limit: number,
+): Promise<BookingWithAddOns[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(
+      `
+      *,
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates ),
+      booking_client_addresses ( address )
+    `,
+    )
+    .eq("provider_id", providerId)
+    .neq("status", "on_hold")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as BookingWithAddOns[];
+}
+
 // ─────────────────────────────────────────────────────────
 // WAITLIST
 // ─────────────────────────────────────────────────────────

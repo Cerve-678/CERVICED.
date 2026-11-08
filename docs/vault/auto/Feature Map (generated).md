@@ -7,7 +7,7 @@
 
 ## Address release
 Curated: [[Address Release]] · **101 files**
-- `src/services/databaseService.ts` _(195)_
+- `src/services/databaseService.ts` _(198)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/provider/InfoRegScreen.tsx` _(92)_
@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **195 files**
 - … +165 more
 
 ## Payments
-Curated: [[Payments]] · **160 files**
+Curated: [[Payments]] · **161 files**
 - `src/screens/client/CartScreen.tsx` _(530)_
 - `src/services/databaseService.ts` _(227)_
 - `src/screens/provider/PaymentsScreen.tsx` _(173)_
@@ -105,11 +105,11 @@ Curated: [[Payments]] · **160 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
-- … +130 more
+- … +131 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **343 files**
-- `src/services/databaseService.ts` _(1075)_
+Curated: [[Booking Flow]] · **346 files**
+- `src/services/databaseService.ts` _(1083)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **343 files**
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/utils/scheduleIssues.ts` _(94)_
-- … +313 more
+- … +316 more
 
 ## Notifications
 Curated: [[Notifications]] · **183 files**
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **183 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **85 files**
-- `src/services/databaseService.ts` _(91)_
+- `src/services/databaseService.ts` _(92)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -215,7 +215,7 @@ Curated: [[Booking Flow]] · **66 files**
 - `src/screens/client/BookingsScreen.tsx` _(84)_
 - `supabase/waitlist_holds.sql` _(75)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(67)_
-- `src/services/databaseService.ts` _(58)_
+- `src/services/databaseService.ts` _(59)_
 - `src/services/becca/capabilities/client.ts` _(45)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(39)_
 - `src/screens/provider/ProviderAutomationsScreen.tsx` _(36)_
