@@ -124,7 +124,7 @@ interface AuthContextType {
    *  succeeded. Unmounts every link-only screen, including its caller. */
   enterFullMemberMode: () => void;
   switchMode: () => Promise<void>;
-  upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
+  upgradeToProvider: (businessName: string, businessEmail: string | null, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
     dobDay?: string; dobMonth?: string; dobYear?: string;
     serviceInterests?: string[]; serviceLocations?: string[];
@@ -796,7 +796,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Updates the DB role, local state, and activeMode all in one call.
   const upgradeToProvider = useCallback(async (
     businessName: string,
-    businessEmail: string,
+    businessEmail: string | null,
     extras?: {
       businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
       dobDay?: string; dobMonth?: string; dobYear?: string;
@@ -814,7 +814,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...user,
       accountType: 'provider',
       businessName,
-      businessEmail,
+      ...(businessEmail ? { businessEmail } : {}),
     };
     setUser(upgraded);
     setActiveMode('provider');

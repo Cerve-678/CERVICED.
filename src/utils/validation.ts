@@ -3,6 +3,14 @@
 export const validateEmail = (v: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
+/** For an email field that may be left blank: blank (or only spaces) is
+ *  fine, but anything typed has to look like an email. */
+export const validateOptionalEmail = (v: string): string | null => {
+  const trimmed = v.trim();
+  if (!trimmed) return null;
+  return validateEmail(trimmed) ? null : 'Enter a valid email';
+};
+
 export const validatePassword = (v: string): string | null => {
   if (v.length < 8) return 'Must be at least 8 characters';
   if (!/[A-Z]/.test(v)) return 'Must include an uppercase letter';

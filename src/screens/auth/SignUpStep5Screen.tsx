@@ -238,7 +238,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
     if (data.fromProviderSwitch) {
       try {
-        await upgradeToProvider(data.businessName.trim(), data.businessEmail.trim(), {
+        await upgradeToProvider(data.businessName.trim(), data.businessEmail.trim() || null, {
           businessPhone: data.businessPhone, instagram: data.instagram, tiktok: data.tiktok, website: data.website,
           businessType: data.businessType,
           dobDay: data.dobDay, dobMonth: data.dobMonth, dobYear: data.dobYear,
