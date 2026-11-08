@@ -8858,7 +8858,8 @@ export async function getUserDisplayName(
 export async function upgradeUserToProvider(
   userId: string,
   businessName: string,
-  businessEmail: string,
+  // Optional at sign-up — null when left blank, never ''.
+  businessEmail: string | null,
   extras?: {
     businessPhone?: string;
     instagram?: string;
