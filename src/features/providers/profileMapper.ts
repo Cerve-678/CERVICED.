@@ -129,7 +129,6 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     walkInsWelcome: provider.walk_ins_welcome ?? false,
     groupBookingsAvailable: provider.group_bookings_available ?? false,
     veganCrueltyFree: provider.vegan_cruelty_free ?? false,
-    travelRadius: provider.travel_radius ?? '',
     productsUsed: provider.products_used ?? '',
     bookingPolicies: provider.booking_policies ?? null,
     cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,

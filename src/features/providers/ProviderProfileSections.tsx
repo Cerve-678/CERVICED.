@@ -18,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import TabIcon from "../../components/TabIcon";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
-import type { ProviderReviewItem } from "./useProviderProfileData";
+import type { ProviderReviewItem } from "./reviewPresentation";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;

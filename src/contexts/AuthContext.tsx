@@ -23,10 +23,12 @@ import {
   becomeFullMember as becomeFullMemberRpc,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { STORAGE_KEYS as LOCATION_STORAGE_KEYS } from '../utils/storage';
 import { logger } from '../utils/logger';
 import { recommendPromptedStorageKey } from '../features/social/circleMoments';
 import { useSocialSettingsStore } from '../stores/useSocialSettingsStore';
 import { withTimeout } from '../utils/withTimeout';
+import { toPickColumn } from '../features/beauty-profile/pickList';
 import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnapshot } from '../services/authProfileSnapshot';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 import type { ProviderBookingMode } from '../types/database';
@@ -78,15 +80,18 @@ export interface ClientProfileData {
   dobMonth: string;
   dobYear: string;
   hairType: string;
-  skinType: string;
+  skinType: string[];
   skinConcerns: string[];
-  styleVibe: string;
+  styleVibe: string[];
   allergies: string[];
   treatmentHistory: string[];
   medicalNotes: string;
   photographyConsent: boolean;
   serviceInterests: string[];
   serviceLocations: string[];
+  /** "Where are you based?" from sign-up — users.client_area, the same column
+   *  Account > Your area edits. Omitted or blank leaves the column alone. */
+  clientArea?: string;
   maintenanceFrequency: string;
   referralSource: string;
   gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
@@ -834,19 +839,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const dob = profileData.dobYear && profileData.dobMonth && profileData.dobDay
       ? `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`
       : null;
+    // Only written when answered, so a skipped question can't blank an area
+    // the account already saved from Account > Your area.
+    const clientArea = profileData.clientArea?.trim() || null;
     try {
       await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
       hair_type: profileData.hairType || null,
-      skin_type: profileData.skinType || null,
+      skin_type: toPickColumn(profileData.skinType),
       skin_concerns: profileData.skinConcerns,
-      style_vibe: profileData.styleVibe || null,
+      style_vibe: toPickColumn(profileData.styleVibe),
       allergies: profileData.allergies,
       treatment_history: profileData.treatmentHistory,
       medical_notes: profileData.medicalNotes || null,
       photography_consent: profileData.photographyConsent,
       service_interests: profileData.serviceInterests,
       service_locations: profileData.serviceLocations,
+      ...(clientArea ? { client_area: clientArea } : {}),
       maintenance_frequency: profileData.maintenanceFrequency || null,
       referral_source: profileData.referralSource || null,
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
@@ -857,7 +866,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Keep the user-facing copy friendly, but record the real Postgres reason
     // (Metro/console only) so any future failure here is diagnosable at a glance.
     } catch (error) { logger.error('addClientProfile failed:', error); throw error; }
-    setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
+    setUser({ ...user, ...(dob ? { dob } : {}), ...(clientArea ? { clientArea } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
   }, [user]);
@@ -958,6 +967,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // next account that logs in on this device.
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
+      // Home's Near You choice on this phone. It outranks the account's Your
+      // area, so leaving it would measure the next account from this one's
+      // pick (see planClientLocation).
+      LOCATION_STORAGE_KEYS.MANUAL_LOCATION,
+      LOCATION_STORAGE_KEYS.NEAR_YOU_USE_DEVICE,
     ]).catch(() => {});
     useSocialSettingsStore.getState().reset();
     await clearAuthProfileSnapshot();

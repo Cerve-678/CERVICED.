@@ -21,31 +21,10 @@ import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
 import { mapProviderProfileData } from "./profileMapper";
 import type { ProviderProfileData } from "./profileTypes";
-
-export interface ProviderReviewItem {
-  id: number | string;
-  name: string;
-  rating: number;
-  comment: string;
-  date: string;
-}
+import { mapProviderReviews } from "./reviewPresentation";
+import type { ProviderReviewItem } from "./reviewPresentation";
 
 const PROFILE_REVIEWS_LIMIT = 10;
-
-export const mapProviderReviews = (
-  rows: Awaited<ReturnType<typeof getProviderReviews>>,
-): ProviderReviewItem[] =>
-  rows.map((review) => ({
-    id: review.id,
-    name: review.user?.name?.trim() || "Anonymous",
-    rating: review.rating,
-    comment: review.comment ?? "",
-    date: new Date(review.created_at).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }),
-  }));
 
 export interface ProviderProfileDataState {
   provider: ProviderProfileData | null;

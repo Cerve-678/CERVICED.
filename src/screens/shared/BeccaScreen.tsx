@@ -571,6 +571,8 @@ export default function BeccaScreen({
         // puts the service straight into the cart.
         ...(requestIsProvider ? {} : { addToCart }),
         ...(user?.id ? { userId: user.id } : {}),
+        // Client hat only: "near me" falls back to it, like Home's Near You.
+        ...(!requestIsProvider && user?.clientArea ? { clientArea: user.clientArea } : {}),
         // What the last turn established. Without this every follow-up
         // ("what about Saturday?", "the first one", "are they any good?")
         // arrives with no idea what came before and matches nothing.

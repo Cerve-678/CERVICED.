@@ -45,6 +45,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { FullImageViewer } from "../../components/FullImageViewer";
+import { policyImageUrls } from "../../features/providers/policyImages";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -1827,9 +1828,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.veganCrueltyFree) {
       sentences.push("Products used are vegan and cruelty-free");
     }
-    if (provider.travelRadius.trim()) {
-      sentences.push(`Travels up to ${provider.travelRadius.trim()}`);
-    }
     if (provider.productsUsed.trim()) {
       sentences.push(`Works with ${provider.productsUsed.trim()}`);
     }
@@ -2122,6 +2120,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // wherever the list last scrolled to. Bumping `key` on every open forces a
   // fresh FlatList each time so it lands on the right image.
   const [showPolicyImage, setShowPolicyImage] = useState(false);
+  // Every page of the detailed policy, in order (the old single image too).
+  const policyPages = useMemo(() => policyImageUrls(provider?.bookingPolicies), [provider?.bookingPolicies]);
   const [showFullLogo, setShowFullLogo] = useState(false);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
@@ -4390,7 +4390,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* The provider's detailed policy document, scrollable when it's
             long — the same viewer the client's booking detail opens. */}
         <FullImageViewer
-          uri={provider.bookingPolicies?.policyImageUrl || null}
+          uris={policyPages}
           visible={showPolicyImage}
           onClose={() => setShowPolicyImage(false)}
           label="Policy document"
@@ -4398,7 +4398,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
         {/* The whole logo, uncropped, from a tap on the profile circle. */}
         <FullImageViewer
-          uri={provider.providerLogo?.uri ?? null}
+          uris={provider.providerLogo?.uri ? [provider.providerLogo.uri] : []}
           visible={showFullLogo}
           onClose={() => setShowFullLogo(false)}
           label="Logo"
@@ -5043,6 +5043,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </Text>
                     </View>
                   )}
+                  {/* Sits on top of the logo, so it must let taps through
+                      to the logo's tap-to-see-it-in-full. */}
                   <LinearGradient
                     colors={
                       ["rgba(255,255,255,0.3)", "transparent"] as [
@@ -5052,6 +5054,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       ]
                     }
                     style={styles.logoGloss}
+                    pointerEvents="none"
                   />
                 </View>
               </View>
@@ -5524,7 +5527,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       is the only way in for a provider who uploaded this photo
                       but filled in none of the structured fields above (which
                       is why the tab switcher itself doesn't gate on it). */}
-                  {provider.bookingPolicies?.policyImageUrl ? (
+                  {policyPages.length > 0 ? (
                     <TouchableOpacity
                       activeOpacity={0.85}
                       onPress={() => setShowPolicyImage(true)}
@@ -5532,7 +5535,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         styles.policyImageFab,
                         { backgroundColor: adaptiveAccentColor },
                       ]}
-                      accessibilityLabel="View full policy details"
+                      accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
                       accessibilityRole="button"
                     >
                       <Ionicons
@@ -6472,6 +6475,7 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
     fontWeight: "800",
+    textDecorationLine: "underline",
     marginBottom: 6,
   },
   serviceSafetyInline: {
