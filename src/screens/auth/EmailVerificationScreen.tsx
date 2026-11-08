@@ -147,6 +147,9 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         medical_notes:         meta['medical_notes']         ?? null,
         photography_consent:   meta['photography_consent']   ?? true,
         service_locations:     meta['service_locations']     ?? [],
+        // A client's "Where are you based?" — the column Account > Your area
+        // edits, so checkout's mobile-provider area is filled from day one.
+        client_area:           meta['client_area']           ?? null,
         location_text:         meta['location']              ?? null,
         maintenance_frequency: meta['maintenance_frequency'] ?? null,
         referral_source:       meta['referral_source']       ?? null,
@@ -214,6 +217,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
           gender: profilePayload.gender,
           has_kids: profilePayload.has_kids,
           service_interests: profilePayload.service_interests,
+          clientArea: profilePayload.client_area,
         }, session.authSession);
       } else {
         // The session is valid, but the row isn't confirmed (or needs the

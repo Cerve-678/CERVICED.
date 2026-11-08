@@ -134,9 +134,8 @@ interface FilterOptions {
   // before About You's cities card was removed — see matchesCityFilter in
   // src/utils/providerCity.ts. A provider matching ANY selected place is a
   // match (OR, not AND), independent of the GPS-based Distance filter above.
-  // CityMultiSelect is the shared picker (also used by the client's sign-up
-  // LOCATION question) so this stays a multi-select, not the single-city pill
-  // it used to be.
+  // CityMultiSelect is the picker, so this stays a multi-select, not the
+  // single-city pill it used to be.
   city?: string[];
   // Matches against the provider-level providers.hair_types_catered, folded
   // into the same batched getProvidersAvailability() RPC call as the

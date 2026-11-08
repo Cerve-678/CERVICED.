@@ -19,6 +19,7 @@ import { useSystemBottomInset } from '../utils/bottomSafeGap';
  *
  * Used by BOTH hats for the coarse-location question:
  *   - client Account "Your area"       -> users.client_area
+ *   - client sign-up "Where are you based?" (Step 5) -> users.client_area
  *   - provider InfoReg "Where you're based" -> providers.location_text (geocoded)
  *
  * It is deliberately the ONE component for this — a client's "Camden, London"
