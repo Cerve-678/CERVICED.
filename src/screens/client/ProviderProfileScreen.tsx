@@ -66,7 +66,6 @@ import { navigationRef } from "../../navigation/navigationRef";
 import { useTheme } from "../../contexts/ThemeContext";
 import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
-import { DynamicText } from "../../components/DynamicText";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
@@ -108,6 +107,7 @@ import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
+import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
@@ -1556,7 +1556,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // imperatively via setOptions in handleScroll.
   const isScrolledRef = useRef(false);
   const setStatusBarScrolledRef = useRef<((scrolled: boolean) => void) | null>(null);
-  const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
   // Ownership and viewer identity come from the hook's authenticated,
   // non-cacheable viewer request. viewerChecked remains a separate gate so
@@ -1640,6 +1639,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
   const scrollRef = useRef<ScrollViewInstance>(null);
   const servicesSectionRef = useRef<ViewInstance>(null);
+  // Where the About/Policy card sits, and how far down the reader is, so
+  // collapsing a long About from its bottom can bring the card back into view
+  // instead of leaving them stranded further down the page. A ref, like
+  // isScrolledRef, so tracking it never re-renders this screen.
+  const aboutCardRef = useRef<ViewInstance>(null);
+  const scrollYRef = useRef(0);
+  const handleAboutCollapse = useCallback(() => {
+    revealIfScrolledPast({
+      scroll: scrollRef.current,
+      target: aboutCardRef.current,
+      scrollY: scrollYRef.current,
+      // Same clearance the Services jump uses for the floating header.
+      topInset: 90,
+    });
+  }, []);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -2607,6 +2621,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   ]);
   const handleScroll = useCallback(
     (event: any) => {
+      scrollYRef.current = event.nativeEvent.contentOffset.y;
       const scrolled = event.nativeEvent.contentOffset.y > 100;
       if (scrolled === isScrolledRef.current) return; // only act on threshold cross
       isScrolledRef.current = scrolled;
@@ -5324,7 +5339,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               ]}
             >
               {/* About / Policy tabbed card */}
-              <View style={styles.aboutCardShadowWrap}>
+              <View ref={aboutCardRef} style={styles.aboutCardShadowWrap}>
                 <BlurView
                   intensity={cardBlurIntensity}
                   tint={cardBlurTint}
@@ -5400,28 +5415,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           Relevant Information
                         </Text>
                       )}
-                      {/* Provider-WRITTEN bio: rendered via DynamicText so it
+                      {/* Provider-WRITTEN bio: `translate` renders it via DynamicText so it
                           translates live to the active language when the paid
                           translation feature is enabled, and shows the original
                           English otherwise (the default in every current
                           build). Not legal/health copy, so routing it through
                           the dynamic path is safe. */}
-                      <DynamicText
-                        style={[styles.aboutText, { color: OP.sub }]}
-                        text={showFullAbout
-                          ? provider.aboutText
-                          : `${provider.aboutText.substring(0, 150)}...`}
+                      <ExpandableAboutText
+                        text={provider.aboutText}
+                        translate
+                        textStyle={[styles.aboutText, { color: OP.sub }]}
+                        linkStyle={styles.moreButton}
+                        linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
+                        onCollapse={handleAboutCollapse}
                       />
-
-                      <TouchableOpacity
-                        onPress={() => setShowFullAbout(!showFullAbout)}
-                        style={styles.moreButton}
-                        activeOpacity={0.6}
-                      >
-                        <Text style={[styles.moreButtonText, { color: OP.text }]}>
-                          {showFullAbout ? "Show Less" : "More"}
-                        </Text>
-                      </TouchableOpacity>
                     </>
                   ) : (
                     /* Policy tab content */

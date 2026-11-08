@@ -58,6 +58,7 @@ import { useAppDialog } from '../../components/AppDialog';
 import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage, ServiceDescriptionVerificationError } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
+import { ExpandableAboutText, revealIfScrolledPast } from '../../features/providers/ExpandableAboutText';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderReleaseDay } from '../../services/databaseService';
@@ -2169,7 +2170,24 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const [selectedPreviewCategory, setSelectedPreviewCategory] = useState<string>(
     categoryNames[0] || ''
   );
-  const [showFullAbout, setShowFullAbout] = useState(false);
+  // Collapsing a long About from its bottom brings the card back into view
+  // rather than leaving the provider below it — same as the live profile.
+  const previewScrollRef = useRef<ScrollViewInstance>(null);
+  const previewAboutCardRef = useRef<ViewInstance>(null);
+  const previewScrollYRef = useRef(0);
+  const handlePreviewScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    previewScrollYRef.current = e.nativeEvent.contentOffset.y;
+  }, []);
+  const handlePreviewAboutCollapse = useCallback(() => {
+    revealIfScrolledPast({
+      scroll: previewScrollRef.current,
+      target: previewAboutCardRef.current,
+      scrollY: previewScrollYRef.current,
+      // The PREVIEW header sits above this ScrollView, not over it, so only a
+      // little breathing room is needed.
+      topInset: 12,
+    });
+  }, []);
 
   // Update selected category when categories change
   React.useEffect(() => {
@@ -2257,9 +2275,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           </View>
 
           <ScrollView
+            ref={previewScrollRef}
             style={styles.previewScrollContent}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.previewScrollContentContainer}
+            onScroll={handlePreviewScroll}
+            scrollEventThrottle={32}
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
             <View style={styles.previewLogoContainer}>
@@ -2382,33 +2403,31 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             <View style={[styles.previewContentSheetClip, { backgroundColor: PP.bg }]}>
               {/* About card — the Policy tab that used to live here moved out
                   to Business Profile → Policies along with editing, so this
-                  preview no longer shows or depends on any policy state. */}
-              <BlurView
-                intensity={cardBlurIntensity}
-                tint={cardBlurTint}
-                style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-              >
-                <LinearGradient
-                  colors={cardHighlightColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.previewCardHighlight}
-                />
-                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
-                <Text style={[styles.previewAboutText, { color: PP.sub }]}>
-                  {showFullAbout
-                    ? providerData.aboutText || 'Your business description will appear here...'
-                    : `${(providerData.aboutText || 'Your business description will appear here...').substring(0, 150)}...`}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => { tapSelect(); setShowFullAbout(!showFullAbout); }}
-                  style={styles.previewMoreButton}
+                  preview no longer shows or depends on any policy state.
+                  The unstyled wrapper is only there to be measured — see
+                  handlePreviewAboutCollapse. */}
+              <View ref={previewAboutCardRef}>
+                <BlurView
+                  intensity={cardBlurIntensity}
+                  tint={cardBlurTint}
+                  style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
                 >
-                  <Text style={[styles.previewMoreButtonText, { color: PP.text }]}>
-                    {showFullAbout ? 'Show Less' : 'More'}
-                  </Text>
-                </TouchableOpacity>
-              </BlurView>
+                  <LinearGradient
+                    colors={cardHighlightColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.previewCardHighlight}
+                  />
+                  <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
+                  <ExpandableAboutText
+                    text={providerData.aboutText || 'Your business description will appear here...'}
+                    textStyle={[styles.previewAboutText, { color: PP.sub }]}
+                    linkStyle={styles.previewMoreButton}
+                    linkTextStyle={[styles.previewMoreButtonText, { color: PP.text }]}
+                    onCollapse={handlePreviewAboutCollapse}
+                  />
+                </BlurView>
+              </View>
 
               {/* Link-only clients see specialities where the price list
                   would be; their prices live on their own booking page. */}
