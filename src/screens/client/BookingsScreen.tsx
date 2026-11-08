@@ -36,7 +36,7 @@ import { hasDirectionsDestination, hasMapDestination, isMobileBooking, type Book
 import { directionsUrlFor } from '../../utils/mapsLink';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getMyActivity, type ClientActivityRemote, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -44,7 +44,8 @@ import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
-import { bookingTodoCounts, buildClientActivity, type ActivityItem } from '../../features/bookings/activityCentre';
+import { bookingTodoCounts, type ActivityItem } from '../../features/bookings/activityCentre';
+import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { ActivityCentreSheet } from '../../features/bookings/ActivityCentreSheet';
 import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
@@ -118,9 +119,6 @@ const CATEGORY_TABS = [
 const PAST_BOOKINGS_VISIBLE_DAYS = 30;
 /** Long enough for the Activity Centre's fade-out before another Modal opens. */
 const ACTIVITY_SHEET_FADE_MS = 350;
-const EMPTY_ACTIVITY: ClientActivityRemote = {
-  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [],
-};
 
 const WaitlistCard = React.memo(function WaitlistCard({
   entry,
@@ -364,46 +362,16 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setWaitlistHoldBusy(false);
   }, [waitlistHold]);
 
-  const [activityRemote, setActivityRemote] = useState<ClientActivityRemote>(EMPTY_ACTIVITY);
-  const [activityLoaded, setActivityLoaded] = useState(false);
-  const [activityLoadFailed, setActivityLoadFailed] = useState(false);
+  // Shared with the client Settings card, so both count the same things.
+  const {
+    activity,
+    remote: activityRemote,
+    loaded: activityLoaded,
+    failed: activityLoadFailed,
+    refresh: refreshActivity,
+  } = useClientActivity();
   const [activityCentreVisible, setActivityCentreVisible] = useState(false);
-
-  // Activity Centre reads (forms, info packs, refund requests, fees to pay,
-  // waitlist holds). The forms + packs also drive each booking row's "!".
-  const refreshActivity = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      setActivityRemote(await getMyActivity());
-      setActivityLoadFailed(false);
-    } catch (error: unknown) {
-      logger.warn('[Bookings] activity centre failed to load', error);
-      setActivityLoadFailed(true);
-    } finally {
-      setActivityLoaded(true);
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    void refreshActivity();
-  }, [refreshActivity, upcomingBookings.length, pastBookings.length]);
-
-  // Re-check when returning to this screen (e.g. after filling an intake form)
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => { void refreshActivity(); });
-    return unsubscribe;
-  }, [navigation, refreshActivity]);
-
   const bookingActionItems = useMemo(() => bookingTodoCounts(activityRemote), [activityRemote]);
-  const activity = useMemo(() => {
-    const seen = new Set<string>();
-    const all = [...todayBookings, ...upcomingBookings, ...pastBookings].filter(b => {
-      if (seen.has(b.id)) return false;
-      seen.add(b.id);
-      return true;
-    });
-    return buildClientActivity(all, activityRemote);
-  }, [todayBookings, upcomingBookings, pastBookings, activityRemote]);
   const activityNeedsYouCount = activity.needsYou.length;
 
   // The waitlist popup and the dialog are Modals of their own: open them once
@@ -437,6 +405,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         setTimeout(() => showAlert("Couldn't open this", 'Please try again in a moment.'), ACTIVITY_SHEET_FADE_MS);
       });
   }, [navigation, showAlert, refreshActivity]);
+
+  // The client Settings screen's Activity Centre card lands here with this.
+  useEffect(() => {
+    if (!route?.params?.openActivityCentre) return;
+    setActivityCentreVisible(true);
+    navigation.setParams({ openActivityCentre: undefined } as any);
+  }, [route?.params?.openActivityCentre, navigation]);
 
   const openActivityCentre = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});

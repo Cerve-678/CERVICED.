@@ -108,7 +108,7 @@ Curated: [[Payments]] · **159 files**
 - … +129 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **340 files**
+Curated: [[Booking Flow]] · **341 files**
 - `src/services/databaseService.ts` _(1070)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(699)_
@@ -116,7 +116,7 @@ Curated: [[Booking Flow]] · **340 files**
 - `src/services/becca/capabilities/client.ts` _(585)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(575)_
 - `src/screens/client/BookingDetailScreen.tsx` _(477)_
-- `src/screens/client/BookingsScreen.tsx` _(408)_
+- `src/screens/client/BookingsScreen.tsx` _(407)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(249)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **340 files**
 - `src/types/database.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/utils/scheduleIssues.ts` _(94)_
-- … +310 more
+- … +311 more
 
 ## Notifications
 Curated: [[Notifications]] · **182 files**
@@ -210,9 +210,9 @@ Curated: [[Provider Onboarding & Go-Live]] · **85 files**
 - … +55 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **66 files**
+Curated: [[Booking Flow]] · **67 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(207)_
-- `src/screens/client/BookingsScreen.tsx` _(89)_
+- `src/screens/client/BookingsScreen.tsx` _(87)_
 - `supabase/waitlist_holds.sql` _(75)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(67)_
 - `src/services/databaseService.ts` _(58)_
@@ -241,7 +241,7 @@ Curated: [[Booking Flow]] · **66 files**
 - `supabase/fix_backfill_null_booking_end_time.sql` _(4)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
 - `supabase/fix_handle_booking_status_change_on_hold_notification.sql` _(4)_
-- … +36 more
+- … +37 more
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **200 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **200 files**
 - … +170 more
 
 ## Auth
-Curated: [[Contexts]] · **204 files**
+Curated: [[Contexts]] · **205 files**
 - `src/services/databaseService.ts` _(315)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **204 files**
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- … +174 more
+- … +175 more
 
 ## Becca / AI
 Curated: [[Services]] · **53 files**

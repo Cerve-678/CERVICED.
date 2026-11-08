@@ -36,6 +36,7 @@ import { openLegalPage } from '../../utils/legalPage';
 import { useMaintenanceDueCount } from '../../features/maintenance/useMaintenanceDueCount';
 import { useBeautyProfileTodo } from '../../features/beauty-profile/useBeautyProfileTodo';
 import { TodoMark } from '../../components/TodoMark';
+import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 
 // ── Settings row ────────────────────────────────────────────────────────────
@@ -99,6 +100,8 @@ export default function UserProfileScreen({ navigation }: any) {
   const [providerUnread, setProviderUnread] = useState(0);
   const maintenanceDue = useMaintenanceDueCount(isLoggedIn);
   const beautyTodo = useBeautyProfileTodo(isLoggedIn);
+  // Same list as the Activity Centre on Bookings, so the two never disagree.
+  const activityNeedsYou = useClientActivity().activity.needsYou.length;
 
   useFocusEffect(useCallback(() => {
     if (!hatState.owned.provider) { setProviderUnread(0); return; }
@@ -203,6 +206,15 @@ export default function UserProfileScreen({ navigation }: any) {
               palette={P}
               badge={maintenanceDue > 0 ? t('profile.forYou.beauty.due', { count: maintenanceDue > 99 ? '99+' : maintenanceDue }) : undefined}
               todoLabel={beautyTodo.length > 0 ? t('profile.forYou.beauty.todo') : undefined}
+            />
+            <SettingsOption
+              icon="calendar-today"
+              title={t('profile.forYou.activity.title')}
+              subtitle={t('profile.forYou.activity.sub')}
+              onPress={() => navigation.navigate('Bookings', { openActivityCentre: true })}
+              palette={P}
+              badge={activityNeedsYou > 0 ? t('profile.forYou.activity.count', { count: activityNeedsYou > 99 ? '99+' : activityNeedsYou }) : undefined}
+              todoLabel={activityNeedsYou > 0 ? t('profile.forYou.activity.todo') : undefined}
             />
             <SettingsOption icon="chat-dots" title={t('profile.forYou.messages.title')} subtitle={t('profile.forYou.messages.sub')} onPress={() => navigation.navigate('Messages')} palette={P} />
           </View>
