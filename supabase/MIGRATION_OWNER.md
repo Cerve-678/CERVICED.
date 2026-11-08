@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  follow-people (Claude, applying 20261108220000 on the user's go-ahead, 2026-11-08)
 ```
 
 ### Written 2026-11-08, NOT applied (following people + Recommend)
