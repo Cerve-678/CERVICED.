@@ -60,10 +60,10 @@ describe('useProviderLogoFraming', () => {
   });
 });
 
-describe('the profile circle opens the whole logo', () => {
-  it('Provider Profile wraps the circle in a tap that shows it in full', () => {
+describe('the profile circle zooms the logo in', () => {
+  it('Provider Profile wraps the circle in a tap that zooms it in over the page', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'screens', 'client', 'ProviderProfileScreen.tsx'), 'utf8');
     expect(src).toContain('setShowFullLogo(true)');
-    expect(src).toMatch(/<FullImageViewer\s+uris=\{provider\.providerLogo\?\.uri \? \[provider\.providerLogo\.uri\] : \[\]\}/);
+    expect(src).toMatch(/<LogoZoomViewer\s+uri=\{provider\.providerLogo\?\.uri\}\s+framing=\{provider\.providerLogoFraming\}/);
   });
 });
