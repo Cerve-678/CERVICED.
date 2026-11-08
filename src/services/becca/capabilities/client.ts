@@ -21,7 +21,6 @@ import {
   getActivePromotions,
   getActiveRescheduleRequest,
   getBookmarkedProviders,
-  getClientBeautyProfile,
   getDiscoverServices,
   getMyEventPlans,
   getNotificationPreferences,
@@ -31,6 +30,7 @@ import {
   getBookedClientContact,
   getProviderReschedulePolicyByDisplayName,
   getSavedPortfolioIds,
+  getUserBeautyProfile,
   validatePromoCode,
   hasReviewedBooking,
   isProviderBookmarked,
@@ -3448,18 +3448,20 @@ const beautyProfile: Capability = {
   ],
   async run({ userId }): Promise<CapabilityResult> {
     if (!userId) return { text: "I couldn't load your profile — try signing in again." };
-    const profile = await getClientBeautyProfile(userId);
+    // The client's own row. This used to call the provider-only lookup, which
+    // answers nobody but a booked provider, so it always read as empty here.
+    const profile = await getUserBeautyProfile(userId);
 
     // Preference/style fields ONLY. `allergies` and `medicalNotes` live on
     // this same object — they are for the provider treating you, and Becca
     // neither recites nor interprets them (see BECCA_CAPABILITIES.md §2.1).
     const fields: { title: string; detail: string }[] = [];
-    if (profile.hairType) fields.push({ title: "Hair type", detail: profile.hairType });
-    if (profile.skinType) fields.push({ title: "Skin type", detail: profile.skinType });
-    if (profile.nailShape) fields.push({ title: "Nail shape", detail: profile.nailShape });
-    if (profile.lashStyle) fields.push({ title: "Lash style", detail: profile.lashStyle });
-    if (profile.browStyle) fields.push({ title: "Brow style", detail: profile.browStyle });
-    if (profile.styleVibe) fields.push({ title: "Style", detail: profile.styleVibe });
+    if (profile?.hair_type) fields.push({ title: "Hair type", detail: profile.hair_type });
+    if (profile?.skin_type) fields.push({ title: "Skin type", detail: profile.skin_type });
+    if (profile?.nail_shape) fields.push({ title: "Nail shape", detail: profile.nail_shape });
+    if (profile?.lash_style) fields.push({ title: "Lash style", detail: profile.lash_style });
+    if (profile?.brow_style) fields.push({ title: "Brow style", detail: profile.brow_style });
+    if (profile?.style_vibe) fields.push({ title: "Style", detail: profile.style_vibe });
     const bits = fields.map((f) => `- **${f.title}:** ${f.detail}`);
 
     if (bits.length === 0) {

@@ -25,7 +25,7 @@ The remaining problem is boundary design, not an absent policy: the app directly
 1. Create `client_private_details` keyed by user ID and migrate allergies, medical notes, treatment history and other sensitive beauty/health attributes from `users`.
 2. Retain explicit self-only `users` select/insert/update policies. Prevent role, account-state and other server-owned fields from being client writable; use typed RPCs or a separate client-editable profile table where column-level control is required.
 3. Expose `public_user_profiles` with only identity fields required by discovery/chat.
-4. Replace provider direct `users` reads with an authorized booking-scoped function. The current `get_client_beauty_profile_for_provider` is a starting point but must enforce `authenticated` execution and define eligible booking states/time window.
+4. Replace provider direct `users` reads with an authorized booking-scoped function. Done in part by `get_client_beauty_profile_for_booking` (20261108190000): authenticated only, answers only that booking's provider, and returns only the fields the booked service's category gets. Eligible booking states and a time window are still undecided: cancelled, declined and old bookings still unlock it.
 5. Update app services so client profile forms write the self route, provider booking pages use the booking-scoped route, and chat/discovery use the minimal public route.
 6. Backfill, compare counts/checksums, then remove sensitive columns and broad direct callers only after a staged rollout.
 

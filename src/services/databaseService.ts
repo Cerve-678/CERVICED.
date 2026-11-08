@@ -6286,8 +6286,36 @@ export interface ClientBeautyProfile {
   photographyConsent: boolean;
 }
 
-export async function getClientBeautyProfile(
-  userId: string,
+/** One row of get_client_beauty_profile_for_booking. Every field the booked
+ *  service's category doesn't get comes back null. */
+interface BookingBeautyProfileRow {
+  service_category: string | null;
+  hair_type: string | null;
+  scalp_condition: string | null;
+  hair_goals: string[] | null;
+  treatment_history: string[] | null;
+  skin_type: string | null;
+  skin_tone: string | null;
+  skin_concerns: string[] | null;
+  sensitive_areas: string[] | null;
+  nail_length: string | null;
+  nail_shape: string | null;
+  lash_style: string | null;
+  lash_status: string | null;
+  brow_style: string | null;
+  brow_condition: string | null;
+  makeup_coverage: string | null;
+  makeup_finish: string | null;
+  makeup_eyes: string | null;
+  makeup_lips: string | null;
+  style_vibe: string | null;
+  allergies: string[] | null;
+  medical_notes: string | null;
+  photography_consent: boolean | null;
+}
+
+export async function getClientBeautyProfileForBooking(
+  bookingId: string,
 ): Promise<ClientBeautyProfile> {
   const EMPTY_PROFILE: ClientBeautyProfile = {
     hairType: null,
@@ -6311,16 +6339,18 @@ export async function getClientBeautyProfile(
     styleVibe: null,
     allergies: [],
     medicalNotes: null,
-    photographyConsent: true,
+    // No answer is not a yes: unknown consent reads as "no photos".
+    photographyConsent: false,
   };
 
-  // Goes through a SECURITY DEFINER RPC (not a direct table select) — it
-  // only returns a row when the caller is the provider on an actual
-  // booking with this client. See fix_users_table_pii_leak.sql: the users
-  // table used to have a blanket USING(true) read policy that let anyone
-  // pull any user's health data straight off the table.
+  // Goes through a SECURITY DEFINER RPC (not a direct table select). It
+  // only answers the provider on this booking, and returns null for every
+  // field the booked service's category doesn't get, so a nail booking never
+  // brings the client's hair, skin or makeup details onto the provider's
+  // phone. Allergies, medical notes and photography consent always come back.
+  // See 20261108190000_beauty_profile_shared_by_booked_service.sql.
   const { data, error } = await supabase
-    .rpc("get_client_beauty_profile_for_provider", { p_client_user_id: userId })
+    .rpc("get_client_beauty_profile_for_booking", { p_booking_id: bookingId })
     .maybeSingle();
 
   // A genuine RPC failure must not be indistinguishable from "no allergies on
@@ -6334,7 +6364,7 @@ export async function getClientBeautyProfile(
     return EMPTY_PROFILE;
   }
 
-  const d = data as any;
+  const d = data as BookingBeautyProfileRow;
   return {
     hairType: d.hair_type ?? null,
     scalpCondition: d.scalp_condition ?? null,
@@ -6357,7 +6387,7 @@ export async function getClientBeautyProfile(
     styleVibe: d.style_vibe ?? null,
     allergies: d.allergies ?? [],
     medicalNotes: d.medical_notes ?? null,
-    photographyConsent: d.photography_consent ?? true,
+    photographyConsent: d.photography_consent ?? false,
   };
 }
 
@@ -9871,22 +9901,6 @@ export async function getProviderUserIdById(
     .eq("id", providerId)
     .maybeSingle();
   return (data as any)?.user_id ?? null;
-}
-
-/** Fetch service_category for the provider owned by a given user.
- * No has_gone_live filter — provider reading their own record. */
-export async function getProviderServiceCategoryByUserId(
-  userId: string,
-): Promise<string | null> {
-  const { data } = await supabase
-    .from("providers")
-    .select("service_category")
-    .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return (data as any)?.service_category ?? null;
 }
 
 /** A provider's current logo and how they framed it, for screens whose logo
