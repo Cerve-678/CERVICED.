@@ -5042,6 +5042,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </Text>
                     </View>
                   )}
+                  {/* Sits on top of the logo, so it must let taps through
+                      to the logo's tap-to-see-it-in-full. */}
                   <LinearGradient
                     colors={
                       ["rgba(255,255,255,0.3)", "transparent"] as [
@@ -5051,6 +5053,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       ]
                     }
                     style={styles.logoGloss}
+                    pointerEvents="none"
                   />
                 </View>
               </View>
