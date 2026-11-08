@@ -25,6 +25,7 @@ import { invokeSendAccountEmail, signUpWithEmail } from '../../services/database
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS, ALL_SPECIALTIES, SPECIALTIES_MAP } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
@@ -161,12 +162,12 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       ? selectedInterests.filter(c => c !== category)
       : [...selectedInterests, category];
     setSelectedInterests(next);
-    if (!selectedInterests.length && next.length === 1) setTimeout(() => scrollTo(locationY), 150);
   };
 
+  // Picking an answer never moves the page (same rule as Step 4) — only
+  // GET STARTED scrolls, to the first missed question.
   const selectFrequency = (freq: string) => {
     setSelectedFrequency(freq);
-    setTimeout(() => scrollTo(referralY), 150);
   };
 
   const selectReferral = (source: string) => {
@@ -369,10 +370,13 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     <ThemedBackground style={{ flex: 1 }}>
       <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
+      <KeyboardDismissView style={{ flex: 1 }}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
       >
         <SignUpHeader onBack={() => navigation.goBack()} currentStep={5} totalSteps={totalSteps} />
 
@@ -474,6 +478,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           </TouchableOpacity>
         )}
       </ScrollView>
+      </KeyboardDismissView>
 
       {/* Second-hat celebration. Dismissing it is what completes the switch. */}
       <Modal

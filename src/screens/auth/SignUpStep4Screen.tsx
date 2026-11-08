@@ -75,8 +75,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const styleVibeY      = React.useRef(0);
   const allergyY        = React.useRef(0);
   const treatmentY      = React.useRef(0);
-  const medicalY        = React.useRef(0);
-  const consentY        = React.useRef(0);
   const businessTypeY     = React.useRef(0);
   const servicesY         = React.useRef(0);
   const locationY        = React.useRef(0);
@@ -123,41 +121,35 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   );
   const plain = (items: string[]) => items.map(i => ({ v: i, l: i }));
 
+  // Picking an answer never moves the page. These used to auto-scroll to the
+  // next question on every single-pick tap (and on the first multi-pick tap),
+  // which threw the card the client was looking at off screen mid-answer.
+  // The only scroll left is Continue jumping to the first missed question.
   const pickHair = (type: string) => {
-    const next = selectedHairType === type ? '' : type;
-    setSelectedHairType(next);
-    if (next) setTimeout(() => scrollTo(skinY), 150);
+    setSelectedHairType(prev => (prev === type ? '' : type));
   };
 
   const pickSkin = (type: string) => {
-    const next = selectedSkinType === type ? '' : type;
-    setSelectedSkinType(next);
-    if (next) setTimeout(() => scrollTo(skinConcernsY), 150);
+    setSelectedSkinType(prev => (prev === type ? '' : type));
   };
 
   const toggleConcern = (item: string) => {
     setSelectedConcerns(prev => {
       if (item === 'None') return prev.includes('None') ? [] : ['None'];
       const without = prev.filter(c => c !== 'None');
-      const next = without.includes(item) ? without.filter(c => c !== item) : [...without, item];
-      if (!prev.length && next.length === 1) setTimeout(() => scrollTo(styleVibeY), 150);
-      return next;
+      return without.includes(item) ? without.filter(c => c !== item) : [...without, item];
     });
   };
 
   const pickStyleVibe = (vibe: string) => {
-    const next = selectedStyleVibe === vibe ? '' : vibe;
-    setSelectedStyleVibe(next);
-    if (next) setTimeout(() => scrollTo(allergyY), 150);
+    setSelectedStyleVibe(prev => (prev === vibe ? '' : vibe));
   };
 
   const toggleAllergen = (item: string) => {
     setSelectedAllergens(prev => {
       if (item === 'None known') return prev.includes('None known') ? [] : ['None known'];
       const without = prev.filter(a => a !== 'None known');
-      const next = without.includes(item) ? without.filter(a => a !== item) : [...without, item];
-      if (!prev.length && next.length === 1) setTimeout(() => scrollTo(treatmentY), 150);
-      return next;
+      return without.includes(item) ? without.filter(a => a !== item) : [...without, item];
     });
   };
 
@@ -165,9 +157,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     setSelectedTreatments(prev => {
       if (item === 'None') return prev.includes('None') ? [] : ['None'];
       const without = prev.filter(tr => tr !== 'None');
-      const next = without.includes(item) ? without.filter(tr => tr !== item) : [...without, item];
-      if (!prev.length && next.length === 1) setTimeout(() => scrollTo(medicalY), 150);
-      return next;
+      return without.includes(item) ? without.filter(tr => tr !== item) : [...without, item];
     });
   };
 
@@ -312,7 +302,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               {chips(plain(TREATMENT_HISTORY), v => selectedTreatments.includes(v), toggleTreatment)}
             </QuestionCard>
 
-            <QuestionCard title="MEDICAL NOTES" hint="Optional" prompt="Any conditions your provider should know about?" onLayout={onLayoutFor(medicalY)}>
+            <QuestionCard title="MEDICAL NOTES" hint="Optional" prompt="Any conditions your provider should know about?">
               <TextInput
                 style={[inputStyle, styles.textArea]}
                 value={medicalNotes}
@@ -325,7 +315,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               />
             </QuestionCard>
 
-            <View onLayout={onLayoutFor(consentY)} style={styles.question}>
+            <View style={styles.question}>
               <SectionLabel title="PHOTOS" />
               <FormCard>
                 <SwitchRow
