@@ -99,6 +99,19 @@ export function formatShortDayDate(input: string | Date): string {
 }
 
 /**
+ * "9 – 15 Nov", or "30 Nov – 6 Dec" when the range crosses a month — the
+ * week view's title. The year is left out: the screen header already shows it.
+ */
+export function formatDayRangeShortMonth(start: string | Date, end: string | Date): string {
+  const a = toLocalDate(start);
+  const b = toLocalDate(end);
+  const endPart = `${b.getDate()} ${MONTH_NAMES_ABBREV[b.getMonth()]}`;
+  return a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
+    ? `${a.getDate()} – ${endPart}`
+    : `${a.getDate()} ${MONTH_NAMES_ABBREV[a.getMonth()]} – ${endPart}`;
+}
+
+/**
  * Numeric short date. Order follows the region: "14/10/2026" for DMY regions
  * (UK/IE/AU/CA), "10/14/2026" for MDY (US). Region defaults to the stored one;
  * pass `regionCode` to format for a specific region regardless of what's stored.

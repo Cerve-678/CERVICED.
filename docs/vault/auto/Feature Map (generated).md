@@ -118,7 +118,7 @@ Curated: [[Booking Flow]] · **343 files**
 - `src/screens/client/BookingDetailScreen.tsx` _(478)_
 - `src/screens/client/BookingsScreen.tsx` _(408)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(249)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(252)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
