@@ -1439,6 +1439,8 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   group_bookings_available,
   vegan_cruelty_free,
   products_used,
+  clientele,
+  skin_tones_catered,
   preferred_payment_methods
 `;
 
@@ -10136,6 +10138,7 @@ export async function updateProviderContactDetails(
     // = caters to all, same semantics as services.hair_types_suitable, so an
     // untouched value is a valid answer rather than an incomplete profile.
     hair_types_catered?: string[] | null;
+    skin_tones_catered?: string[] | null;
     availability_windows?: string[] | null;
     accepts_new_clients?: "yes" | "waitlist" | "no" | null;
     walk_ins_welcome?: boolean;
