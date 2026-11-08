@@ -9,9 +9,12 @@
 // CITY_AREAS, the same data both pickers draw from, so a place a provider can
 // pick is always one the filter can place.
 //
-// providers.service_locations (the old cities-covered list, which no screen
-// edits any more) is still matched too, so a provider who saved cities there
-// doesn't drop out of the filter.
+// providers.service_locations is the "Areas you cover" list a mobile
+// provider keeps in InfoReg (picked with the same AreaPicker), plus whole
+// cities saved by About You's old cities card. Each entry is read the same
+// way: "Shoreditch, London" matches Shoreditch and London, and a whole town
+// ("London") matches the town and every area in it, because a provider who
+// travels across all of London does travel to Shoreditch.
 
 import { UK_CITIES } from '../constants/ukCities';
 import { CITY_AREAS } from '../data/cityAreas';
@@ -47,6 +50,11 @@ for (const { city, regions } of CITY_AREAS) {
   }
 }
 
+/** Marks a town a provider covers whole (a service_locations entry naming a
+ *  town and no area), so an area pick inside it matches. Prefixed so it can
+ *  never equal a normalised place name. */
+const WHOLE_TOWN_PREFIX = '*';
+
 export interface ProviderPlace {
   /** The town, as UK_CITIES / CITY_AREAS write it. */
   town: string;
@@ -76,10 +84,24 @@ export function placeForLocation(locationText: string | null | undefined): Provi
   return null;
 }
 
+/** A place as typed, its town, and "<area>, <town>" — the keys one place
+ *  can be matched on. */
+function addPlaceKeys(keys: Set<string>, text: string): ProviderPlace | null {
+  const whole = normalisePlace(text);
+  if (whole) keys.add(whole);
+  const place = placeForLocation(text);
+  if (place) {
+    keys.add(normalisePlace(place.town));
+    if (place.area) keys.add(normalisePlace(`${place.area}, ${place.town}`));
+  }
+  return place;
+}
+
 /**
- * Everything the City filter can match a provider on, normalised: their
- * location as typed, its town, "<area>, <town>", and each saved
- * service_locations entry. Built once per provider, not per filter pass.
+ * Everything the City filter can match a provider on, normalised: where
+ * they're based and each place they cover, each as typed, its town and
+ * "<area>, <town>", plus a marker for every town they cover whole. Built once
+ * per provider, not per filter pass.
  */
 export function cityFilterKeys(
   locationText: string | null | undefined,
@@ -87,24 +109,68 @@ export function cityFilterKeys(
 ): ReadonlySet<string> {
   const keys = new Set<string>();
   for (const entry of serviceLocations ?? []) {
-    const key = normalisePlace(entry);
-    if (key) keys.add(key);
+    const place = addPlaceKeys(keys, entry);
+    if (place && !place.area) keys.add(WHOLE_TOWN_PREFIX + normalisePlace(place.town));
   }
-  if (locationText) {
-    const whole = normalisePlace(locationText);
-    if (whole) keys.add(whole);
-    const place = placeForLocation(locationText);
-    if (place) {
-      keys.add(normalisePlace(place.town));
-      if (place.area) keys.add(normalisePlace(`${place.area}, ${place.town}`));
-    }
-  }
+  // Where they're based never marks a whole town: "London" there says where
+  // the business is, not that it reaches every area of London.
+  if (locationText) addPlaceKeys(keys, locationText);
   return keys;
 }
 
 /** A provider matches when ANY picked place is one of their keys (OR, not AND).
- *  A picked town matches every area in it; a picked "<Area>, <Town>" matches
- *  only that area, never a provider who gave the town alone. */
+ *  A picked town matches every area in it. A picked "<Area>, <Town>" matches
+ *  that area, or a provider who covers the whole town, but never one who is
+ *  merely based somewhere in the town. */
 export function matchesCityFilter(picked: readonly string[], keys: ReadonlySet<string>): boolean {
-  return picked.some(place => keys.has(normalisePlace(place)));
+  return picked.some(place => {
+    if (keys.has(normalisePlace(place))) return true;
+    const town = placeForLocation(place);
+    return !!town?.area && keys.has(WHOLE_TOWN_PREFIX + normalisePlace(town.town));
+  });
+}
+
+// ── "Areas you cover" (providers.service_locations) ─────────────────────────
+
+/** Most places a provider can list. Enough for a borough-by-borough mobile
+ *  round; past it a whole town is the better answer. */
+export const MAX_COVERED_AREAS = 15;
+
+/** True when two place strings name the same place ("hackney,london" and
+ *  "Hackney, London"). */
+export function samePlace(a: string, b: string): boolean {
+  return normalisePlace(a) === normalisePlace(b);
+}
+
+export type AddCoveredAreaResult =
+  | { outcome: 'added'; next: string[] }
+  | { outcome: 'duplicate' | 'full' | 'empty'; next: readonly string[] };
+
+/** Adds one picked place to the list unless it's blank, already there, or the
+ *  list is full. Never reorders or rewrites what was saved before. */
+export function addCoveredArea(list: readonly string[], entry: string): AddCoveredAreaResult {
+  const trimmed = entry.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return { outcome: 'empty', next: list };
+  if (list.some(existing => samePlace(existing, trimmed))) return { outcome: 'duplicate', next: list };
+  if (list.length >= MAX_COVERED_AREAS) return { outcome: 'full', next: list };
+  return { outcome: 'added', next: [...list, trimmed] };
+}
+
+/** How a covered place reads on its chip: a town on its own is "All of
+ *  London"; an area, or anything the pickers don't know, reads as saved. */
+export function coveredAreaLabel(entry: string): string {
+  const place = placeForLocation(entry);
+  if (place && !place.area && samePlace(place.town, entry)) return `All of ${place.town}`;
+  return entry;
+}
+
+/** The town a provider is based in, offered as a one-tap first entry — or
+ *  null when it's unknown or already on the list. */
+export function suggestedCoverTown(
+  locationText: string | null | undefined,
+  list: readonly string[],
+): string | null {
+  const town = placeForLocation(locationText)?.town;
+  if (!town) return null;
+  return list.some(existing => samePlace(existing, town)) ? null : town;
 }
