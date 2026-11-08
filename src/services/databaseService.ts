@@ -6918,6 +6918,130 @@ export async function getMyBookingActionItems(): Promise<
   return counts;
 }
 
+/** Everything the client's Activity Centre needs that isn't already on the
+ *  bookings in BookingContext — one round of parallel reads, each capped.
+ *  features/bookings/activityCentre.ts turns this plus the bookings into the
+ *  list; this only fetches. */
+export interface ClientActivityRemote {
+  /** Bookings with an intake form still to fill in. */
+  pendingFormBookingIds: string[];
+  /** Bookings with an info pack the client hasn't opened. */
+  unreadPackBookingIds: string[];
+  /** Refund requests still waiting on the provider or on Cerviced. */
+  openRefundRequests: {
+    id: string;
+    bookingId: string;
+    status: 'with_provider' | 'under_review';
+    createdAt: string;
+    passedAutomatically: boolean;
+  }[];
+  /** Late/no-show fees the saved card couldn't cover, so the client is asked to pay. */
+  feesToPay: {
+    id: string;
+    bookingId: string;
+    kind: BookingFeeKind;
+    amountPence: number;
+    payBy: string | null;
+  }[];
+  /** Waitlist slots held for the client, not yet confirmed. Holds are left out
+   *  of client_bookings, so this reads the base table — snapshot names and
+   *  times only, never an address column. */
+  waitlistHolds: {
+    bookingId: string;
+    serviceName: string;
+    providerName: string;
+    bookingDate: string;
+    bookingTime: string;
+    holdExpiresAt: string;
+  }[];
+}
+
+const ACTIVITY_QUERY_LIMIT = 50;
+
+export async function getMyActivity(): Promise<ClientActivityRemote> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) {
+    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [] };
+  }
+
+  const [forms, packs, refunds, fees, holds] = await Promise.all([
+    supabase
+      .from("booking_intake_forms")
+      .select("booking_id")
+      .eq("client_user_id", user.id)
+      .eq("status", "pending")
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_info_packs")
+      .select("booking_id")
+      .eq("client_user_id", user.id)
+      .is("viewed_at", null)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("refund_requests")
+      .select("id, booking_id, status, created_at, passed_automatically")
+      .eq("client_id", user.id)
+      .in("status", ["with_provider", "under_review"])
+      .order("created_at", { ascending: false })
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_fee_charges")
+      .select("id, booking_id, kind, amount_pence, pay_by")
+      .eq("client_user_id", user.id)
+      .eq("status", "awaiting_client")
+      .order("created_at", { ascending: false })
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("bookings")
+      .select("id, service_name_snapshot, provider_name_snapshot, booking_date, booking_time, hold_expires_at")
+      .eq("user_id", user.id)
+      .eq("status", "on_hold")
+      .gt("hold_expires_at", new Date().toISOString())
+      .limit(ACTIVITY_QUERY_LIMIT),
+  ]);
+  if (forms.error) throw forms.error;
+  if (packs.error) throw packs.error;
+  if (refunds.error) throw refunds.error;
+  if (fees.error) throw fees.error;
+  if (holds.error) throw holds.error;
+
+  type RefundRow = { id: string; booking_id: string; status: 'with_provider' | 'under_review'; created_at: string; passed_automatically: boolean | null };
+  type FeeRow = { id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; pay_by: string | null };
+  type HoldRow = {
+    id: string; service_name_snapshot: string | null; provider_name_snapshot: string | null;
+    booking_date: string; booking_time: string; hold_expires_at: string;
+  };
+
+  return {
+    pendingFormBookingIds: ((forms.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
+    unreadPackBookingIds: ((packs.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
+    openRefundRequests: ((refunds.data ?? []) as RefundRow[]).map(r => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      status: r.status,
+      createdAt: r.created_at,
+      passedAutomatically: !!r.passed_automatically,
+    })),
+    feesToPay: ((fees.data ?? []) as FeeRow[]).map(r => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      kind: r.kind,
+      amountPence: r.amount_pence,
+      payBy: r.pay_by,
+    })),
+    waitlistHolds: ((holds.data ?? []) as HoldRow[]).map(r => ({
+      bookingId: r.id,
+      serviceName: r.service_name_snapshot ?? '',
+      providerName: r.provider_name_snapshot ?? '',
+      bookingDate: r.booking_date,
+      bookingTime: r.booking_time,
+      holdExpiresAt: r.hold_expires_at,
+    })),
+  };
+}
+
 // ─────────────────────────────────────────────────────────
 // PROMO CODES (client redemption at checkout)
 // ─────────────────────────────────────────────────────────
