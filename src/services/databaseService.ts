@@ -1431,7 +1431,6 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   walk_ins_welcome,
   group_bookings_available,
   vegan_cruelty_free,
-  travel_radius,
   products_used,
   preferred_payment_methods
 `;

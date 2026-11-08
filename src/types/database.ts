@@ -408,7 +408,6 @@ export interface DbProvider {
   qualifications: string | null;
   is_insured_self_declared: boolean;
   dbs_checked_self_declared: boolean;
-  travel_radius: string | null;
   clientele: string[] | null;
   // Provider-level hair types catered to (HAIR_TYPES vocabulary — Straight,
   // Wavy, Curly, Coily, 4A, 4B, 4C). NULL/empty = caters to all. This is what
@@ -1023,7 +1022,6 @@ export type ProviderWithServices = Pick<
   | "walk_ins_welcome"
   | "group_bookings_available"
   | "vegan_cruelty_free"
-  | "travel_radius"
   | "products_used"
   | "hair_types_catered"
   | "preferred_payment_methods"
