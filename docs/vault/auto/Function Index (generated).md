@@ -5,7 +5,7 @@
 
 #generated
 
-**3377 functions** across **477 files**.
+**3377 functions** across **478 files**.
 
 ### `src/components/` (63)
 - `AchievementSeal.tsx` — AchievementSeal
