@@ -245,7 +245,7 @@ END;
 $function$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261108140000', 'anonymous_reviews')
+VALUES ('20261108160000', 'anonymous_reviews')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
