@@ -5,7 +5,7 @@
 
 #generated
 
-**3442 functions** across **484 files**.
+**3452 functions** across **485 files**.
 
 ### `src/components/` (62)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -268,9 +268,10 @@
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 
-### `src/features/social/` (5)
+### `src/features/social/` (6)
 - `circleMoments.ts` — dayStart · isCompleted · **nextCircleMoment** · **pickRecommendPromptBooking** · **shouldShowWhereIGoNotice**
 - `CircleMomentsHost.tsx` — addPrompted · **CircleMomentsHost** · close · finishNotice · readPrompted · recommend
+- `contacts.ts` — **cachedContactMatches** · **collectContactNumbers** · **findContactsOnCerviced** · **getContactsAccess** · **hashNormalisedNumber** · **isContactsLimitError** · **rememberContactMatches** · **requestContactsAccess**
 - `people.ts` — **personAction** · **withMyStatus** · **withoutPerson** · **withPersonFirst**
 - `presentation.ts` — **circleLine** · **compareCirclePeople** · **firstName** · **groupCircleRows** · **initialsFor** · **stackAccessibilityLabel** · **stackLayout**
 - `ProviderSharingRow.tsx` — **ProviderSharingRow** · toggleHidden · toggleRecommend
@@ -337,7 +338,7 @@
 - `BookingsScreen.tsx` — applyLocation · bookingActionItems · bookingIdsForReviewState · bookingListKeyExtractor · BookingsScreen · confirmRebook · createStyles · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handleBookWaitlistEntry · handleConfirmWaitlistHold · handleDeclineWaitlistHold · handleExternalBookingPress · handleLeaveWaitlistEntry · handleOpenActivityItem · handleRatingSubmit · handleRebook · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · isMessagingAvailable · isTipClosed · listItems · mapBookings · onRefresh · openActivityCentre · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · pastBookingsFiltered · pastCategories · refreshUserLocation · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · resolveMissingPins · retryLoadBookings · routeCoordinates · startLocationUpdates · styles · to · toggleFilter · virtualizedListRows · WaitlistCard
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · filteredProviders · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · renderEmptyState · SkeletonProviderCard
 - `CartScreen.tsx` — abandonOutstandingCheckout · addOnsSummary · backFromSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartCheckoutFooter · cartProviderRows · CartProviderSection · CartScreen · checkoutProviderSections · checkoutRenderUnits · checkoutTotalsFrom · clearItemIssue · depositPolicyArg · displayedItemIssues · dynamicStyles · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · flagged · flaggedProviderKeys · flaggedProvidersKey · formatCardNumber · formatExpiry · formatNameList · frozenCheckoutTotals · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleClose · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveFromCart · handleRemoveOne · handleReviewConfirm · handleScrollTargetLaidOut · handleScrollToIndexFailed · hasDeposit · hasUnscheduledItems · identifyCartConflicts · itemPromoDiscounts · itemsByProvider · jumpToRow · localItemIssues · navigateToProvider · onRefresh · openAddressSettings · outside · paymentSheetCartItems · platformFee · pricedCheckoutItems · priceOf · priceOfItem · promoSavingsShown · providerNamesKey · renderAddOns · renderCartProviderRow · renderCheckoutUnit · reportTargetOffset · showCards · SummaryShell · timestamp · toCartIssue · toggleProviderCollapsed · totalPrice
-- `CircleScreen.tsx` — afterFollowChange · CircleScreen · confirmBlock · confirmRemoveFollower · confirmUnfollow · Face · follow · loadLists · loadSettings · moreButton · onPrivateChange · personRow · renderItem · renderSharing · respond · runForRow · saveSetting
+- `CircleScreen.tsx` — afterFollowChange · checkContacts · CircleScreen · confirmBlock · confirmRemoveFollower · confirmUnfollow · Face · follow · loadLists · loadSettings · moreButton · onPrivateChange · personRow · renderContactsCard · renderItem · renderSharing · respond · runForRow · saveSetting
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
 - `ExploreScreen.tsx` — backToTopOpacity · backToTopTranslateY · columnWidth · dedupeByImageUri · filters · filterTabs · finishTour · getItemHeight · handleBackToTop · handleBookNow · handleCloseDetail · handleDiscoverScrollSettled · handleFavouritesScrollSettled · handleImagePress · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · prepareDetailItem · renderPortfolioCard · SkeletonMasonryGrid · tourCardId · updateBackToTop · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
 - `ExternalBookingDetailScreen.tsx` — createStyles · ExternalBookingDetailScreen · handleAddToCalendar · handleMessage · handleOpenPage · handleRemove · load · retry

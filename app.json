@@ -36,7 +36,11 @@
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "READ_CONTACTS"
+      ],
+      "blockedPermissions": [
+        "android.permission.WRITE_CONTACTS"
       ],
       "config": {
         "googleMaps": {
@@ -63,6 +67,12 @@
         "expo-calendar",
         {
           "calendarPermission": "CERVICED uses your calendar to show your appointments in the app, and to add a booking to it when you ask. Nothing from your calendar is sent to CERVICED."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "CERVICED scrambles phone numbers on your phone before comparing them. Your address book is never saved."
         }
       ],
       [

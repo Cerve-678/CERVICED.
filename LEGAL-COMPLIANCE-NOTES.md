@@ -849,6 +849,32 @@ user's decisions:
     so. It needs either a Blocked list or a support route.
   - **Dismissing the notice.** It is marked seen only when the client taps
     "Got it" or "Turn it off". Swiping it away hides it for that session.
-  - **The "Findable by phone number" switch is hidden** until finding people
-    from contacts is built, because nothing in the app uses it yet. The
-    server default (on for adults) still applies.
+  - **The "Findable by phone number" switch was hidden** until contacts
+    matching was built. It is back on `feat/follow-people-contacts`, where
+    contacts matching now exists. The server default is still on for adults.
+- **Contacts matching built (`feat/follow-people-contacts`, 2026-11-08).**
+  - iOS `NSContactsUsageDescription` uses the user's approved wording: "CERVICED
+    scrambles phone numbers on your phone before comparing them. Your address
+    book is never saved." It says how numbers are handled but not why the app
+    wants them (to find people you know). App Store review (guideline 5.1.1)
+    usually expects the purpose, so the user may want to add it.
+  - Android requests `READ_CONTACTS` only; `WRITE_CONTACTS` is blocked.
+  - The permission is asked only when the client taps "Allow contacts" in Your
+    circle.
+  - Only hashes leave the phone. At most 3000 numbers are checked per day.
+    Nothing is kept on the device or logged.
+  - A match shows the account's own name, with "In your contacts as …"
+    underneath, because numbers aren't verified.
+  - **"Scrambles" may claim more than it should.** The numbers are hashed
+    without a salt. Phone numbers are a small space, so the hashes can be
+    reversed by brute force, and the server keeps the same hashes for every
+    account's own number (see "Hashing is not anonymisation" above). The
+    wording is the user's; this is flagged, not changed.
+  - **Matches show the contact's name.** "In your contacts as <name>"
+    repeats the name the client saved, and the account's name is free text.
+    So a fake account using a number from the client's address book could
+    look confirmed. A follow from the client still only lets them see where
+    that account goes. Open question: keep the name or say "Has a number in
+    your contacts".
+  - Still open: the App Store privacy label (Contacts), the Play Data safety
+    form, and the Privacy text above.
