@@ -839,7 +839,7 @@ export interface DbReview {
   created_at: string;
   /** The client chose to review anonymously. The database then hides who
    *  wrote it from everyone but the client themself, the provider included:
-   *  see supabase/migrations/20261108160000_anonymous_reviews.sql. */
+   *  see supabase/migrations/20261108200000_anonymous_reviews.sql. */
   is_anonymous: boolean;
 }
 
