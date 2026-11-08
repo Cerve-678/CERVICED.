@@ -5,9 +5,9 @@
 
 #generated
 
-**3336 functions** across **467 files**.
+**3338 functions** across **468 files**.
 
-### `src/components/` (61)
+### `src/components/` (62)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -39,6 +39,7 @@
 - `KeyboardDismissView.tsx` — **KeyboardDismissView**
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — LocationModal · matches
+- `LogoZoomViewer.tsx` — close · **LogoZoomViewer**
 - `MasonryGrid.tsx` — and · columns · component · **masonryColumnsForWidth** · MasonryGridInner · type
 - `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handlePanelPickTime · handleRequestDateChange · handleTimeClick · maxDate · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · releaseNote · renderGroup · requestPanel · requestTimesForDate · selectDateFromTap · tooFarAheadNote
 - `MultiBookingSheet.tsx` — cancelSeparateEmergency · confirmSeparateEmergency · depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSeparateDate · handleSeparateTime · handleSubmit · lengthOf · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
