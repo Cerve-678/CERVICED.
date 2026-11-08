@@ -63,7 +63,11 @@ BEGIN
     AND p.proname NOT IN (
       'get_client_beauty_profile_for_booking',
       'get_client_beauty_profile_for_provider',
-      'delete_client_profile'
+      'delete_client_profile',
+      -- #342's category → field-name map. It only names 'skin_type' /
+      -- 'style_vibe' as text labels in an ARRAY literal; it never reads the
+      -- columns, so their type doesn't matter to it.
+      'beauty_profile_fields_for_category'
     );
   IF v_unknown IS NOT NULL THEN
     RAISE EXCEPTION 'skin_type/style_vibe are read by functions this migration does not rebuild: %. Check each one handles text[] first.', v_unknown;
