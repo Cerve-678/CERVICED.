@@ -10,7 +10,7 @@
 // pick is always one the filter can place.
 //
 // providers.service_locations is the "Areas you cover" list a mobile
-// provider keeps in InfoReg (picked with the same AreaPicker), plus whole
+// provider keeps in About You (picked with the same AreaPicker), plus whole
 // cities saved by About You's old cities card. Each entry is read the same
 // way: "Shoreditch, London" matches Shoreditch and London, and a whole town
 // ("London") matches the town and every area in it, because a provider who
