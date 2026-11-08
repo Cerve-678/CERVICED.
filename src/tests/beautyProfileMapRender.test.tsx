@@ -12,6 +12,9 @@ import type { AppTheme } from '../constants/theme';
 import type { MaintenanceItem } from '../types/maintenance';
 import { dateToYMD } from '../utils/dateUtils';
 
+jest.mock('../contexts/ThemeContext', () => ({
+  useTheme: () => ({ isDarkMode: false, palette: jest.requireActual('../constants/theme').clientLightTheme, theme: {} }),
+}));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),

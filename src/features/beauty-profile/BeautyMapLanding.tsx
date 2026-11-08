@@ -338,17 +338,18 @@ const styles = StyleSheet.create({
   kicker: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.6 },
 
   strips: { gap: 6 },
-  strip: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 100, paddingVertical: 11, paddingHorizontal: 16 },
+  strip: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 100, paddingVertical: 9, paddingHorizontal: 14 },
   stripTitle: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 0.6 },
   stripEnd: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, minWidth: 0 },
-  stripRight: { fontFamily: FONT_BODY, fontSize: 12.5, flexShrink: 1, textAlign: 'right' },
+  stripRight: { fontFamily: FONT_BODY, fontSize: 12, flexShrink: 1, textAlign: 'right' },
   reqDot: { width: 8, height: 8, borderRadius: 4 },
 
   nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16 },
   nudgeTitle: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
   nudgeSub: { fontFamily: FONT_BODY, fontSize: 12, lineHeight: 16, marginTop: 2 },
 
-  panel: { borderRadius: 20, padding: 16 },
+  // A touch more lift than ui.card, as in the mockup's .zp.
+  panel: { borderRadius: 20, padding: 16, shadowOpacity: 0.1, shadowRadius: 14, shadowOffset: { width: 0, height: 4 } },
   lead: { fontFamily: FONT_DISPLAY, fontSize: 28, lineHeight: 31, letterSpacing: 0.5, marginTop: 4, marginBottom: 8 },
   leadSm: { fontSize: 21, lineHeight: 25 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 11 },
