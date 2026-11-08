@@ -3,6 +3,10 @@
 // The Beauty Profile's chip vocabularies. Moved verbatim out of
 // BeautyProfileScreen.tsx when it was split; the values are what's stored in
 // the users row, so changing a string here changes what providers read.
+//
+// Skin concerns and treatment history end in 'None' — the same value sign-up
+// stores — because both are required (utils/beautyProfileTodo.ts): without it
+// a client with nothing to declare couldn't finish the profile honestly.
 
 import type { Gender } from '../../types/beautyProfile';
 
@@ -12,7 +16,7 @@ export const SKIN_TYPES       = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensit
 
 export const SKIN_CONCERNS    = [
   'Acne prone', 'Hyperpigmentation', 'Rosacea', 'Eczema',
-  'Psoriasis', 'Fine lines', 'Dark circles', 'Dry patches', 'Oiliness',
+  'Psoriasis', 'Fine lines', 'Dark circles', 'Dry patches', 'Oiliness', 'None',
 ];
 export const SENSITIVE_AREAS  = ['Face', 'Arms', 'Legs', 'Back', 'Chest', 'Bikini / Brazilian', 'None'];
 export const ALLERGENS        = [
@@ -32,7 +36,7 @@ export const MAKEUP_LIPS      = ['Nude', 'Berry / wine', 'Coral / peach', 'Class
 export const STYLE_VIBES      = ['Natural', 'Glam', 'Bold', 'Classic', 'Editorial', 'Low-maintenance', 'Experimental'];
 export const TREATMENT_HISTORY = [
   'Virgin hair', 'Coloured', 'Bleached / lightened', 'Relaxed / permed',
-  'Hair extensions', 'Lash extensions', 'Microblading', 'Fillers / Botox', 'Chemical peels',
+  'Hair extensions', 'Lash extensions', 'Microblading', 'Fillers / Botox', 'Chemical peels', 'None',
 ];
 
 export const GENDER_LABELS: Record<Gender, string> = {
