@@ -11,7 +11,7 @@ import { getRefundRequestsForBooking } from '../services/databaseService';
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../features/bookings/refundRequestTimeline';
 import type { RefundRequest } from '../types/booking';
 import RefundRequestTimeline from './RefundRequestTimeline';
-import { describeSettlementTiming, previewProviderRefund } from '../features/bookings/paymentPresentation';
+import { cancelsWithRefund, describeSettlementTiming, previewProviderRefund } from '../features/bookings/paymentPresentation';
 import { newRequestId } from '../utils/requestId';
 import { logger } from '../utils/logger';
 import { toUserMessage } from '../utils/userFacingError';
@@ -23,8 +23,10 @@ import { isDarkColor } from '../constants/providerThemes';
 // platform fee is never shown (it isn't theirs). When the client's late
 // cancellation was already settled by the provider's policy, that is shown as
 // done and the only choice is refunding MORE on top: never "apply the policy"
-// again. A reason is required before money moves. A full refund can also
-// cancel the appointment when the provider selects that option. When the client
+// again. A reason is required before money moves. A full refund of an upcoming
+// booking also cancels the appointment unless the provider unticks that box;
+// the cancel's own full refund then finds nothing left and moves no money
+// (refund-payment counts every refund already made). When the client
 // has an open refund request, it sits at the top with its timeline, so the
 // provider can see what they're answering while they choose the amount.
 
@@ -142,9 +144,18 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
     [state, mode, amountText],
   );
 
+  // Ticked by default on a full refund (see cancelsWithRefund); the provider's
+  // own choice is remembered if they switch to partial and back.
+  const cancelChoice = useRef<boolean | null>(null);
+  const canCancel = !!onCancelAppointment;
   useEffect(() => {
-    if (!preview.isFull) setCancelAfterRefund(false);
-  }, [preview.isFull]);
+    setCancelAfterRefund(cancelsWithRefund(preview.isFull, canCancel, cancelChoice.current));
+  }, [preview.isFull, canCancel]);
+  const toggleCancelAfterRefund = useCallback(() => {
+    const next = !cancelAfterRefund;
+    cancelChoice.current = next;
+    setCancelAfterRefund(next);
+  }, [cancelAfterRefund]);
 
   const submit = useCallback(async () => {
     if (!reason || busy || !state) return;
@@ -443,12 +454,16 @@ export default function IssueRefundSheet({ booking, palette: P, isDarkMode, onCl
                             />
                             {onCancelAppointment && (
                               <TouchableOpacity accessibilityRole="switch" accessibilityState={{ checked: cancelAfterRefund && preview.isFull, disabled: busy || !preview.isFull }}
-                                disabled={busy || !preview.isFull} onPress={() => setCancelAfterRefund(v => !v)}
+                                disabled={busy || !preview.isFull} onPress={toggleCancelAfterRefund}
                                 style={[styles.optionRow, { backgroundColor: P.card, borderColor: P.border, marginTop: 8, opacity: preview.isFull ? 1 : 0.5 }]}>
                                 <Ionicons name={cancelAfterRefund ? 'checkbox' : 'square-outline'} size={22} color={cancelAfterRefund ? P.accent : P.sub} />
                                 <View style={styles.optionText}>
                                   <Text style={[styles.optionLabel, { color: P.text }]}>Cancel appointment too</Text>
-                                  <Text style={[styles.optionSub, { color: P.sub }]}>{preview.isFull ? 'The client will be told the appointment is cancelled.' : 'Choose a full refund to cancel the appointment.'}</Text>
+                                  <Text style={[styles.optionSub, { color: P.sub }]}>{!preview.isFull
+                                    ? 'Choose a full refund to cancel the appointment.'
+                                    : cancelAfterRefund
+                                    ? 'The client will be told the appointment is cancelled.'
+                                    : 'The appointment stays booked, and the client has nothing left to pay.'}</Text>
                                 </View>
                               </TouchableOpacity>
                             )}
