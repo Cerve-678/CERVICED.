@@ -64,6 +64,6 @@ describe('the profile circle opens the whole logo', () => {
   it('Provider Profile wraps the circle in a tap that shows it in full', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'screens', 'client', 'ProviderProfileScreen.tsx'), 'utf8');
     expect(src).toContain('setShowFullLogo(true)');
-    expect(src).toMatch(/<FullImageViewer\s+uri=\{provider\.providerLogo\?\.uri \?\? null\}/);
+    expect(src).toMatch(/<FullImageViewer\s+uris=\{provider\.providerLogo\?\.uri \? \[provider\.providerLogo\.uri\] : \[\]\}/);
   });
 });
