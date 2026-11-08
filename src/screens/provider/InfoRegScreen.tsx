@@ -106,6 +106,7 @@ import {
   removeAddOnFromServices,
   removeCategoryFromLibrary,
   renameCategoryInLibrary,
+  MAX_ADD_ONS,
   type AddOnLibraryItem,
 } from '../../features/provider-registration/addOnLibrary';
 import { AddOnLibrarySection } from '../../features/provider-registration/AddOnLibrarySection';
@@ -5155,12 +5156,26 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <View style={styles.servicesSection}>
                 <View style={styles.servicesSectionHeader}>
                   <Text style={styles.sectionTitleNoCard}>Your Services</Text>
-                  <TouchableOpacity
-                    style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
-                    onPress={() => { tapLight(); setShowCategoryModal(true); }}
-                  >
-                    <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
-                  </TouchableOpacity>
+                  <View style={styles.servicesHeaderButtons}>
+                    {/* New add-ons start here, beside + Add Category. Hidden
+                        when the add-on list didn't load (a save mustn't
+                        replace it with nothing) or is already full. */}
+                    {providerData.addOnLibrary && providerData.addOnLibrary.length < MAX_ADD_ONS ? (
+                      <TouchableOpacity
+                        style={[styles.addAddOnHeaderButton, { borderColor: adaptiveAccentColor }]}
+                        onPress={() => { tapLight(); openAddOnEditor(null); }}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.addCategoryText, { color: adaptiveAccentColor }]}>+ Add-on</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => { tapLight(); setShowCategoryModal(true); }}
+                    >
+                      <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                   {/* Service-type switch — plain underline, the same
@@ -6810,10 +6825,23 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 15,
     paddingHorizontal: 5,
   },
+  servicesHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   addCategoryButton: {
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
+  },
+  // Outlined, so it reads as the smaller of the two next to + Add Category.
+  // 1.5px border, 1.5px less padding: same height as the filled button.
+  addAddOnHeaderButton: {
+    paddingHorizontal: 13.5,
+    paddingVertical: 6.5,
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
   addCategoryText: {
     fontFamily: 'BakbakOne-Regular',
