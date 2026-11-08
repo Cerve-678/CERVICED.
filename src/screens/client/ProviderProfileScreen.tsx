@@ -6459,6 +6459,7 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
     fontWeight: "800",
+    textDecorationLine: "underline",
     marginBottom: 6,
   },
   serviceSafetyInline: {
