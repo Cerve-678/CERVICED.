@@ -9,7 +9,7 @@ import * as Haptics from 'expo-haptics';
  * The promise in the subtitle is kept by the database, not this screen: an
  * anonymous review is hidden from the provider's direct reads, and every
  * reader returns it with no reviewer and no booking link
- * (supabase/migrations/20261108200000_anonymous_reviews.sql).
+ * (supabase/migrations/20261108230000_anonymous_reviews.sql).
  */
 export function AnonymousReviewToggle({
   value,
