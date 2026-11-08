@@ -207,6 +207,45 @@ export function snoozedDueOn(item: MaintenanceItem, todayYMD: string): string {
   return dateToYMD(d);
 }
 
+export function addWeeksYMD(fromYMD: string, weeks: number): string {
+  const d = toLocalDate(fromYMD);
+  d.setDate(d.getDate() + weeks * 7);
+  return dateToYMD(d);
+}
+
+/** What "Done it" does. A repeating item starts its next countdown from
+ *  today; a one-off (or an event) has nothing left to remind about, so it goes. */
+export type DoneOutcome =
+  | { kind: 'update'; patch: { lastDoneOn: string; dueOn: string } }
+  | { kind: 'delete' };
+
+export function doneOutcome(item: MaintenanceItem, todayYMD: string): DoneOutcome {
+  if (item.repeatWeeks !== null && item.kind !== 'event') {
+    return { kind: 'update', patch: { lastDoneOn: todayYMD, dueOn: addWeeksYMD(todayYMD, item.repeatWeeks) } };
+  }
+  return { kind: 'delete' };
+}
+
+/** Whether Snooze +7 days is offered: not for events, booked or paused items. */
+export function canSnoozeItem({ item, view }: PresentedItem): boolean {
+  return item.kind !== 'event' && view.state !== 'booked' && view.state !== 'paused';
+}
+
+/** The big Maintenance card: what needs the client now, else the soonest
+ *  thing coming up (for the "All clear · next up" line). Booked items never
+ *  lead it — there's nothing to do about them. */
+export interface NextUp {
+  due: PresentedItem | null;
+  upcoming: PresentedItem | null;
+}
+
+export function nextUpFrom(groups: MaintenanceGroups): NextUp {
+  return {
+    due: groups.next,
+    upcoming: groups.next ? null : groups.comingUp.find((p) => p.view.state === 'on_track') ?? null,
+  };
+}
+
 /** What the "Next up" card says about an item's interval. Never claims a
  *  habit next to a provider's recommendation: when the provider's figure is
  *  the one in use, that's what's shown. */

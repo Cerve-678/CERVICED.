@@ -1,7 +1,7 @@
 // src/features/beauty-profile/highlights.ts
 //
-// Pure derivation of what the Beauty Card shows: each category's headline
-// answer (the big word on its tile) and the smaller answers under it. The
+// Pure derivation of each category's headline answer (the big word on the
+// body map's panel and on its My Profile tile) and the smaller answers under it. The
 // completeness numbers still come from src/utils/beautyProfileStats.ts; this file only
 // decides which of the client's own answers lead.
 //
@@ -29,9 +29,6 @@ export interface CategoryHighlight {
   /** The remaining answers, in field order. */
   details: string[];
 }
-
-/** The four traits on the landing card, in reading order. */
-export const CARD_TRAITS: readonly CategoryKey[] = ['hair', 'skin', 'nails', 'general'] as const;
 
 const nonEmpty = (values: (string | string[] | null | undefined)[]): string[] =>
   values.flatMap(v => (Array.isArray(v) ? v : v ? [v] : [])).map(v => v.trim()).filter(Boolean);

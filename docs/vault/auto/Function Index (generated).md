@@ -5,7 +5,7 @@
 
 #generated
 
-**3403 functions** across **478 files**.
+**3442 functions** across **484 files**.
 
 ### `src/components/` (62)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -112,14 +112,18 @@
 - `moneyPresentation.ts` — day · **describeFailedPayout** · **describeOwed** · **describeRefundRequest** · **formatPence** · **parsePounds**
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 
-### `src/features/beauty-profile/` (7)
-- `BeautyLanding.tsx` — **BeautyLanding** · go · groups · maintenanceBody · S · stubs · traits
+### `src/features/beauty-profile/` (11)
+- `BeautyMapLanding.tsx` — **BeautyMapLanding** · go · maintenanceStrip · nextUp · visibleItems
+- `BodyFigure.tsx` — **BodyMap** · **FigureThumb** · LineFigure · onLayout · PortraitFigure · SegmentsFigure · zone · ZonesFigure
+- `bodyMap.ts` — **areaForMaintenanceItem** · **areaRows** · **dueDotsByArea** · **maintenanceForMap** · **parseFigurePrefs**
 - `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
+- `FigureSheet.tsx` — **FigureSheet**
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 - `pickList.ts` — **formatPickList** · parseJsonArray · **toPickColumn** · **toPickList**
 - `profileRow.ts` — **beautyDataFromRow**
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
+- `useFigurePrefs.ts` — save · **useFigurePrefs**
 
 ### `src/features/bookings/` (26)
 - `activityCentre.ts` — appointmentMs · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · names · pounds · shortDay · when
@@ -178,12 +182,14 @@
 - `FormsWelcome.tsx` — answers · **FormsWelcome** · renderStage · writeIn
 - `formTemplates.ts` — **declaredCategories** · **detectTemplate** · **getRelevantTemplates** · mentions · scoreAgainst
 
-### `src/features/maintenance/` (9)
+### `src/features/maintenance/` (11)
 - `AddReminderSheet.tsx` — **AddReminderSheet** · addWeeksFromToday · chipFor · datePill · onPickDate · pick · submit
-- `ItemMenuSheet.tsx` — addWeeksYMD · **ItemMenuSheet** · markDone · onPickDate · run · saveChanges
+- `ItemMenuSheet.tsx` — **ItemMenuSheet** · markDone · onPickDate · run · saveChanges
+- `MaintenanceHowTo.tsx` — Appear · btn · demoCountdown · FrameAdd · FrameBooked · FrameCard · FrameCountdown · goTo · **MaintenanceHowTo** · Pressed · Ticket · useBeats
 - `MaintenanceItemCard.tsx` — iconFor · **itemPill** · MaintenanceItemCardImpl · **primaryActionFor** · subline
-- `MaintenanceView.tsx` — filterCounts · groups · **MaintenanceView** · nextUp · onPickPatch · openMenu · renderItems · renderNextUp · renderNote · S · snooze · tryScroll · turnOnReminders · visibleItems · weeksText
-- `presentation.ts` — byDue · **categoryOf** · **countdownFor** · **countDueItems** · dayDiff · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **learnedWeeks** · **needsAttention** · **presentMaintenanceItem** · **rhythmLineFor** · **snoozedDueOn**
+- `MaintenanceView.tsx` — book · filterCounts · groups · **MaintenanceView** · markDone · nextUp · onPickPatch · openMenu · renderItems · renderNote · S · snooze · tryScroll · turnOnReminders · visibleItems
+- `NextUpCard.tsx` — DueBody · header · **intervalText** · **NextUpCard** · shell · solid · weeksText
+- `presentation.ts` — **addWeeksYMD** · byDue · **canSnoozeItem** · **categoryOf** · **countdownFor** · **countDueItems** · dayDiff · **doneOutcome** · due · **groupMaintenanceItems** · **isCoveredByUpcomingBooking** · **landingStubs** · **learnedWeeks** · **needsAttention** · **nextUpFrom** · **presentMaintenanceItem** · **rhythmLineFor** · **snoozedDueOn**
 - `SetupFlow.tsx` — datePill · finish · header · onPickEvent · onPickPatch · profileAnswers · question · S · **SetupFlow** · suggestions · today · toggle
 - `ui.tsx` — **Chip** · **GhostButton** · **hapticError** · **hapticLight** · **hapticMedium** · **hapticSelection** · **hapticSuccess** · **Note** · **Pill** · **PrimaryButton** · **ProgressBar** · **SectionLabel** · **semanticColors** · **Sheet** · step · **SwitchRow** · **WeekStepper**
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
@@ -326,7 +332,7 @@
 
 ### `src/screens/client/` (23)
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
-- `BeautyProfileScreen.tsx` — BeautyProfileScreen · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openSetup · openTodoField · pickedCount · stats · todo · toggleEdit
+- `BeautyProfileScreen.tsx` — BeautyProfileScreen · circle · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openCategoryFromMap · openSetup · openTodoField · pickedCount · runCardAction · stats · todo · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · tick
 - `BookingsScreen.tsx` — applyLocation · bookingActionItems · bookingIdsForReviewState · bookingListKeyExtractor · BookingsScreen · confirmRebook · createStyles · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handleBookWaitlistEntry · handleConfirmWaitlistHold · handleDeclineWaitlistHold · handleExternalBookingPress · handleLeaveWaitlistEntry · handleOpenActivityItem · handleRatingSubmit · handleRebook · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · isMessagingAvailable · isTipClosed · listItems · mapBookings · onRefresh · openActivityCentre · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · pastBookingsFiltered · pastCategories · refreshUserLocation · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · resolveMissingPins · retryLoadBookings · routeCoordinates · startLocationUpdates · styles · to · toggleFilter · virtualizedListRows · WaitlistCard
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · filteredProviders · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · renderEmptyState · SkeletonProviderCard

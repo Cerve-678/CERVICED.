@@ -65,6 +65,8 @@ export const TOUR_SEEN_PREFIXES = {
   PROVIDER_INFO_PACKS: '@provider_info_packs_welcome_seen_',
   /** ProviderIntakeFormScreen — the Forms welcome */
   PROVIDER_FORMS: '@provider_forms_welcome_seen_',
+  /** Beauty Profile → Maintenance — "How Maintenance works" */
+  CLIENT_MAINTENANCE_HOWTO: '@client_maintenance_howto_seen_',
 } as const;
 
 export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];
