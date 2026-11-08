@@ -42,5 +42,5 @@ GRANT EXECUTE ON FUNCTION public.get_user_public_profiles(uuid[]) TO authenticat
 -- used to be defined here (get_client_beauty_profile_for_provider, the whole
 -- profile) was replaced by get_client_beauty_profile_for_booking, which only
 -- returns what the booked service needs. See
--- migrations/20261108110000_beauty_profile_shared_by_booked_service.sql.
+-- migrations/20261108180000_beauty_profile_shared_by_booked_service.sql.
 -- Don't recreate it here.

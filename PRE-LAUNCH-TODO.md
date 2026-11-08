@@ -1422,7 +1422,7 @@ the client's address at checkout.
 
 ## 32. Review later — which bookings still unlock a client's beauty profile (2026-11-08)
 
-Since `get_client_beauty_profile_for_booking` (migration 20261108110000, PR
+Since `get_client_beauty_profile_for_booking` (migration 20261108180000, PR
 #342), a provider only gets the part of a client's Beauty Profile that fits the
 booked service, plus allergies, medical notes and photography consent.
 

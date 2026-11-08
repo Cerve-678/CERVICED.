@@ -31,9 +31,24 @@
 --
 -- NOT applied. Before applying: take the lock in MIGRATION_OWNER.md, and
 -- renumber above live max(version) and above any unapplied migration on an
--- open PR branch.
+-- open PR branch. Renumbered twice on 2026-11-08 (100000 → 110000 → 180000):
+-- #340 took 100000, then 20261108141616 went live and #350/#352 moved to
+-- 160000/170000.
 
 BEGIN;
+
+-- PR #352 (multi-pick) may turn users.skin_type and users.style_vibe into
+-- text[]. This function returns them as text, so applied after that it would
+-- fail at runtime instead of here. Refuse, and switch both to text[] first.
+DO $$
+BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'skin_type') <> 'text'
+     OR (SELECT data_type FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'style_vibe') <> 'text' THEN
+    RAISE EXCEPTION 'users.skin_type / style_vibe are no longer text (multi-pick applied?). Return them as text[] in get_client_beauty_profile_for_booking before applying.';
+  END IF;
+END $$;
 
 -- Which profile fields a booked service's category gets. Internal helper: only
 -- the SECURITY DEFINER function below calls it.
@@ -155,7 +170,7 @@ GRANT EXECUTE ON FUNCTION public.get_client_beauty_profile_for_booking(uuid)
 DROP FUNCTION IF EXISTS public.get_client_beauty_profile_for_provider(uuid);
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261108110000', 'beauty_profile_shared_by_booked_service')
+VALUES ('20261108180000', 'beauty_profile_shared_by_booked_service')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

@@ -396,7 +396,7 @@ WITH CHECK (
 );
 
 -- get_client_beauty_profile_for_provider was dropped in
--- 20261108110000_beauty_profile_shared_by_booked_service.sql, which sets the
+-- 20261108180000_beauty_profile_shared_by_booked_service.sql, which sets the
 -- grants on its replacement, get_client_beauty_profile_for_booking.
 
 REVOKE ALL ON FUNCTION public.expire_cart_holds() FROM PUBLIC;
