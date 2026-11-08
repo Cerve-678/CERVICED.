@@ -178,11 +178,11 @@ export interface ProviderRegistrationData {
   // first writer.
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
   priceBands: string[];
-  // providers.service_locations — "Areas you cover" in InfoReg, asked of a
-  // mobile provider only: towns ("London") and areas ("Shoreditch, London")
-  // as AreaPicker writes them, matched by the client Search "City" filter
-  // alongside `location` (see src/utils/providerCity.ts). Other business
-  // types don't see it but still round-trip it, so nothing saved is wiped.
+  // providers.service_locations — "Areas you cover", edited in About You
+  // (mobile providers only): towns ("London") and areas ("Shoreditch,
+  // London") as AreaPicker writes them, matched by the client Search "City"
+  // filter alongside `location` (see src/utils/providerCity.ts). Only the
+  // first insert writes it from here; updates leave it to About You.
   serviceLocations: string[];
   fullAddress: string;
   /** Private arrival/access instructions, released to a booked client only
@@ -684,7 +684,9 @@ export async function saveProviderToSupabase(
         price_tier: data.priceRange || null,
         price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
-        service_locations: data.serviceLocations,
+        // No service_locations here: an existing provider edits "Areas you
+        // cover" in About You only. Writing back this form's loaded copy
+        // would undo a change made there since Edit Profile opened.
         preferred_payment_methods: data.preferredPaymentMethods,
         // reconcile, not `|| 'on_confirmation'`: the old fallback silently
         // turned "never share" into "share on confirmation" for any provider
