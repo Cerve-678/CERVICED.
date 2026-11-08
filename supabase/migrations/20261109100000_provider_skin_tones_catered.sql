@@ -18,4 +18,8 @@ ALTER TABLE public.providers
 COMMENT ON COLUMN public.providers.skin_tones_catered IS
   'Skin tones the provider says they work with (SKIN_TONES vocabulary). NULL = not stated.';
 
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261109100000', 'provider_skin_tones_catered')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
