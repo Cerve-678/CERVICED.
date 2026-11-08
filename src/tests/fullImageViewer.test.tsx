@@ -3,7 +3,7 @@ import path from 'path';
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { PolicyImageViewer } from '../components/PolicyImageViewer';
+import { FullImageViewer } from '../components/FullImageViewer';
 
 const metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -14,10 +14,10 @@ const withInsets = (ui: React.ReactElement) =>
 
 const policy = 'https://example.com/policy.png';
 
-describe('PolicyImageViewer', () => {
+describe('FullImageViewer', () => {
   it('shows a long policy at full width and its real height, inside a scroll view', () => {
     const { getByLabelText } = withInsets(
-      <PolicyImageViewer uri={policy} visible onClose={() => {}} />,
+      <FullImageViewer uri={policy} visible onClose={() => {}} label="Policy document" />,
     );
     const image = getByLabelText('Policy document');
     // A 1000 x 4000 photo is drawn four times as tall as it is wide, not squeezed into one screen.
@@ -29,7 +29,7 @@ describe('PolicyImageViewer', () => {
   it('closes from its close button', () => {
     const onClose = jest.fn();
     const { getByLabelText } = withInsets(
-      <PolicyImageViewer uri={policy} visible onClose={onClose} />,
+      <FullImageViewer uri={policy} visible onClose={onClose} label="Policy document" />,
     );
     fireEvent.press(getByLabelText('Close policy document'));
     expect(onClose).toHaveBeenCalled();
@@ -41,7 +41,8 @@ describe('both places a client opens the policy image', () => {
     fs.readFileSync(path.join(__dirname, '..', 'screens', 'client', file), 'utf8');
 
   it.each(['ProviderProfileScreen.tsx', 'BookingDetailScreen.tsx'])('%s uses the scrolling viewer', file => {
-    expect(read(file)).toContain('<PolicyImageViewer');
+    expect(read(file)).toContain('<FullImageViewer');
+    expect(read(file)).toContain('label="Policy document"');
   });
 
   it('no longer opens it in the photo carousel, which fits it to one screen', () => {

@@ -3,8 +3,15 @@
  * third of what used to be the single 671-line Business Details screen.
  *
  * Scope: credentials & policies (qualifications, insurance, DBS, patch test,
- * online consultations), where you're based (cities covered + travel radius),
- * languages, and accessibility.
+ * online consultations), languages, and accessibility.
+ *
+ * The "Where You're Based" card (cities covered → providers.service_locations,
+ * travel radius → providers.travel_radius) was removed from here on purpose.
+ * Location lives in Edit Profile (InfoRegScreen) now: "Where you're based"
+ * writes location_text, which is what Search's City filter goes by
+ * (src/utils/providerCity.ts, still also matching any saved
+ * service_locations), and "How far you travel" beside it writes travel_radius
+ * for a mobile provider. Nothing edits service_locations any more.
  *
  * Two things worth knowing before editing:
  *
@@ -24,7 +31,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
-import { CityMultiSelect } from '../../components/CityMultiSelect';
 import {
   getMyProviderProfile,
   updateProviderContactDetails,
@@ -52,8 +58,6 @@ export default function AboutYouScreen({ navigation }: any) {
   const [onlineConsult, setOnlineConsult]   = useState(false);
   const [patchTest, setPatchTest]           = useState('');
 
-  const [citiesCovered, setCitiesCovered]   = useState<string[]>([]);
-  const [travelRadius, setTravelRadius]     = useState('');
   const [languages, setLanguages]           = useState<string[]>([]);
   const [languagesOther, setLanguagesOther] = useState('');
   const [accessibility, setAccessibility]   = useState<string[]>([]);
@@ -90,8 +94,6 @@ export default function AboutYouScreen({ navigation }: any) {
           setDbsChecked(providerData.dbs_checked_self_declared ?? false);
           setOnlineConsult(providerData.online_consultations_available ?? false);
           setPatchTest(providerData.patch_test_policy ?? '');
-          setCitiesCovered(providerData.service_locations ?? []);
-          setTravelRadius(providerData.travel_radius ?? '');
           setLanguages(providerData.languages_spoken ?? []);
           // accessibility_notes is a single TEXT column, so the chip list is
           // joined/split with '|' at the save/load boundary rather than
@@ -140,8 +142,6 @@ export default function AboutYouScreen({ navigation }: any) {
         online_consultations_available: onlineConsult,
         // '' would violate providers_patch_test_policy_check — clear with null.
         patch_test_policy: (patchTest as 'always' | 'new_clients' | 'optional' | 'not_needed') || null,
-        service_locations: citiesCovered,
-        travel_radius: travelRadius.trim() || null,
         languages_spoken: finalLanguages,
         accessibility_notes: accessibility.length ? accessibility.join('|') : null,
       });
@@ -200,26 +200,6 @@ export default function AboutYouScreen({ navigation }: any) {
                 Shown to clients before they book, so they know if a patch test is needed in advance.
               </Text>
               <RadioGroup options={PATCH_OPTS} value={patchTest} onChange={setPatchTest} />
-            </Card>
-
-            {/* Cities covered, not a single base location — this writes
-                service_locations, the same list the client Search "City"
-                filter reads, so every city selected here is one a client can
-                actually filter by. */}
-            <Card title="Where You're Based" sub="Select every city you cover. Clients filter search by these, so add anywhere you'll travel to.">
-              {/* The shared searchable city finder — same component signup
-                  (Step 4), InfoRegScreen and the client Search "City" filter
-                  all use, so a city always means the same thing on both
-                  sides. A flat 60-chip grid was the wrong shape for a list
-                  this long. */}
-              <CityMultiSelect
-                selected={citiesCovered}
-                onChange={setCitiesCovered}
-                palette={C}
-                placeholder="Select the cities you cover"
-              />
-              <View style={{ height: 18 }} />
-              <Field label="Travel Radius" value={travelRadius} onChange={setTravelRadius} placeholder="e.g. 10 miles" note="Optional — how far you're willing to travel within those areas." />
             </Card>
 
             <Card title="Languages Spoken" sub="Clients often search for providers who speak their language.">

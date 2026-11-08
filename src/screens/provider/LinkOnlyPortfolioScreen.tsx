@@ -18,6 +18,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -230,7 +231,7 @@ export default function LinkOnlyPortfolioScreen() {
               >
                 <View style={styles.previewTop}>
                   {profile.logo_url ? (
-                    <Image source={{ uri: profile.logo_url }} style={styles.previewLogo} contentFit="cover" transition={0} />
+                    <LogoCircle uri={profile.logo_url} framing={profile.logo_framing} style={styles.previewLogo} />
                   ) : (
                     <View style={[styles.previewLogo, styles.previewLogoEmpty]}>
                       <Text style={styles.previewInitials}>{initials}</Text>

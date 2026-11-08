@@ -112,7 +112,7 @@ Beauty services marketplace. Two user types: **Consumers** (browse, book, review
 - `payment_method` (text), `payment_intent_id` (text — Stripe reference)
 - `is_group_booking` (boolean), `group_booking_id` (uuid), `group_booking_count` (int)
 - `provider_name_snapshot`, `service_name_snapshot` (denormalized, frozen at booking time)
-- `provider_address_snapshot`, `provider_phone_snapshot`, `provider_coordinates` (jsonb)
+- `provider_phone_snapshot` (the private venue — address, directions, coordinates — lives in `booking_venue_details`, see `docs/vault/Address Release.md`)
 - `confirmed_at`, `created_at`, `updated_at`
 
 **`booking_add_ons`**

@@ -165,17 +165,19 @@ export interface LogoCardFrame {
   y: number;
 }
 
-/** The provider's per-card logo framing (`providers.logo_framing`).
+/** The provider's per-shape logo framing (`providers.logo_framing`).
  *  `imageRatio` is the logo image's width ÷ height, which the frames are
- *  relative to. A missing card means "fill and centre", the default. */
+ *  relative to. A missing shape means "fill and centre", the default. */
 export interface LogoFraming {
   imageRatio: number;
   small?: LogoCardFrame;
   large?: LogoCardFrame;
+  /** The round profile logo, wherever the app draws the logo as a circle. */
+  circle?: LogoCardFrame;
 }
 
-/** The two Home card shapes a logo is framed for. */
-export type LogoCardSlot = 'small' | 'large';
+/** The shapes a logo is framed for: the two Home cards and the circle. */
+export type LogoCardSlot = 'small' | 'large' | 'circle';
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -665,6 +667,15 @@ export interface DbPortfolioItem {
   skin_tone_shown: "fair" | "light" | "medium" | "tan" | "deep" | "rich" | null;
 }
 
+/** booking_venue_details: the provider's private venue for one booking.
+ *  Readable only by that booking's provider (RLS); clients get it through
+ *  client_bookings once released. */
+export interface DbBookingVenue {
+  address: string | null;
+  directions: string | null;
+  coordinates: { lat: number; lng: number } | null;
+}
+
 export interface DbBooking {
   id: string;
   user_id: string;
@@ -704,12 +715,19 @@ export interface DbBooking {
   service_name_snapshot: string;
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
-  provider_address_snapshot: string | null;
-  /** Private venue access instructions snapshotted at booking. The
-   * client_bookings view release-gates this with the address. */
+  // The provider's private venue is NOT on the bookings table (migration
+  // 20261108180000): it lives in booking_venue_details, which clients can't
+  // read. These three are client_bookings VIEW columns, null until the
+  // address is released. A provider's own read embeds booking_venue_details
+  // instead; mapDbBookingToConfirmed reads whichever is present.
+  provider_address_snapshot?: string | null;
+  /** Private venue access instructions, release-gated with the address. */
   provider_directions_snapshot?: string | null;
+  provider_coordinates?: { lat: number; lng: number } | null;
+  /** Provider-side embed of the booking's venue. To-one, but read defensively
+   *  as either shape, like booking_client_addresses. */
+  booking_venue_details?: DbBookingVenue | DbBookingVenue[] | null;
   provider_phone_snapshot: string | null;
-  provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
@@ -884,6 +902,7 @@ export interface PublicPromotionWithProvider extends ClientPromotion {
   providers?: {
     display_name: string | null;
     logo_url: string | null;
+    logo_framing?: LogoFraming | null;
     slug: string | null;
   } | null;
 }
@@ -973,6 +992,7 @@ export type ProviderWithServices = Pick<
   | "public_directions"
   | "about_text"
   | "logo_url"
+  | "logo_framing"
   | "gradient"
   | "accent_color"
   | "background_image_url"
@@ -1114,6 +1134,7 @@ export interface PortfolioItemWithProvider extends DbPortfolioItem {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;
@@ -1138,6 +1159,7 @@ export interface DiscoverServiceWithProvider {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;

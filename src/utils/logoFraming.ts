@@ -1,11 +1,13 @@
 import type { LogoCardFrame, LogoCardSlot } from '../types/database';
 
-/** The two Home card shapes, copied from HomeScreen's `brandCardBlur`
- *  (small) and `providerBlur` (large). If those change, change these too, or
- *  the framer frames a shape clients never see. */
+/** The shapes a logo is framed for. The two Home cards are copied from
+ *  HomeScreen's `brandCardBlur` (small) and `providerBlur` (large); if those
+ *  change, change these too, or the framer frames a shape clients never see.
+ *  The circle is drawn at many sizes, so only its shape matters here. */
 export const LOGO_CARD_SIZES: Record<LogoCardSlot, { width: number; height: number; radius: number }> = {
   small: { width: 160, height: 70, radius: 12 },
   large: { width: 282, height: 147, radius: 16 },
+  circle: { width: 100, height: 100, radius: 50 },
 };
 
 /** Fills the card and centres the logo: how a card looks with no framing. */

@@ -22,6 +22,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { useRevealNext, type CardLayout } from '../../components/signup/useRevealNext';
 import AreaPicker from '../../components/AreaPicker';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import { PRICE_BANDS, tierForBands } from '../../constants/priceBands';
@@ -39,10 +40,11 @@ const ALLERGENS         = ['Latex', 'Fragrances', 'Dyes / PPD', 'Nuts', 'Nickel'
 const TREATMENT_HISTORY = ['Facials', 'Lash extensions', 'Brow tinting', 'Hair colour', 'Nails', 'Waxing', 'Dermaplaning', 'Microneedling', 'Chemical peels', 'None'];
 
 // Provider "About your business" — logistics needed for booking + the
-// business profile (see supabase/provider_signup_business_fields.sql for
-// where each of these lands: price range reuses providers.price_tier,
-// team size/contact prefs are staged on `users` then copied across by
-// InfoRegScreen's first-save prefill).
+// business profile. Each answer is staged on `users` (price as price_bands +
+// the price_tier derived from them) and copied onto the providers row by
+// InfoRegScreen — see features/provider-registration/signupAnswers.ts.
+// Team size is not asked here: it was dropped in the sign-up redesign (#67)
+// because teams aren't supported yet, and is set in Services & Pricing.
 // Signup offers exactly the types BUSINESS_TYPE_OPTS defines, with its labels
 // — a provider must not be able to pick a type at signup that Business Details
 // then can't render, or vice versa.
@@ -69,20 +71,18 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
 
   const scrollRef = React.useRef<ScrollViewInstance>(null);
-  const hairY           = React.useRef(0);
-  const skinY           = React.useRef(0);
-  const skinConcernsY   = React.useRef(0);
-  const styleVibeY      = React.useRef(0);
-  const allergyY        = React.useRef(0);
-  const treatmentY      = React.useRef(0);
-  const medicalY        = React.useRef(0);
-  const consentY        = React.useRef(0);
-  const businessTypeY     = React.useRef(0);
-  const servicesY         = React.useRef(0);
-  const locationY        = React.useRef(0);
-  const priceRangeY      = React.useRef(0);
-  const contactMethodsY  = React.useRef(0);
-  const paymentMethodsY   = React.useRef(0);
+  const hairY           = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const skinY           = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const skinConcernsY   = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const styleVibeY      = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const allergyY        = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const treatmentY      = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const businessTypeY     = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const servicesY         = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const locationY        = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const priceRangeY      = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const contactMethodsY  = React.useRef<CardLayout>({ y: 0, height: 0 });
+  const paymentMethodsY   = React.useRef<CardLayout>({ y: 0, height: 0 });
 
   const [selectedHairType,   setSelectedHairType]   = useState<string>(data.hairType);
   const [selectedSkinType,   setSelectedSkinType]   = useState<string>(data.skinType);
@@ -109,11 +109,13 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const isProvider = data.accountType === 'provider';
   const usesOwnLink = data.externalBookingUrl !== '';
 
-  const scrollTo = (yRef: React.MutableRefObject<number>) =>
-    scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current - 24), animated: true });
+  const scrollTo = (yRef: React.MutableRefObject<CardLayout>) =>
+    scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current.y - 24), animated: true });
 
-  const onLayoutFor = (yRef: React.MutableRefObject<number>) =>
-    (e: LayoutChangeEvent) => { yRef.current = e.nativeEvent.layout.y; };
+  const onLayoutFor = (yRef: React.MutableRefObject<CardLayout>) =>
+    (e: LayoutChangeEvent) => { yRef.current = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height }; };
+
+  const { onScroll, onViewportLayout, reveal } = useRevealNext(scrollRef);
 
   // Chip already gives the selection haptic, so the handlers below don't.
   const chips = <T extends string>(items: { v: T; l: string }[], isOn: (v: T) => boolean, onPress: (v: T) => void) => (
@@ -123,41 +125,41 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   );
   const plain = (items: string[]) => items.map(i => ({ v: i, l: i }));
 
+  // A single-pick answer moves on gently: only if the next question is still
+  // unanswered and below the visible area, and only far enough to bring its
+  // card into view at the bottom (useRevealNext). Un-picking, and every
+  // multi-pick toggle, leaves the page where it is.
   const pickHair = (type: string) => {
     const next = selectedHairType === type ? '' : type;
     setSelectedHairType(next);
-    if (next) setTimeout(() => scrollTo(skinY), 150);
+    if (next && !selectedSkinType) reveal(skinY.current);
   };
 
   const pickSkin = (type: string) => {
     const next = selectedSkinType === type ? '' : type;
     setSelectedSkinType(next);
-    if (next) setTimeout(() => scrollTo(skinConcernsY), 150);
+    if (next && !selectedConcerns.length) reveal(skinConcernsY.current);
   };
 
   const toggleConcern = (item: string) => {
     setSelectedConcerns(prev => {
       if (item === 'None') return prev.includes('None') ? [] : ['None'];
       const without = prev.filter(c => c !== 'None');
-      const next = without.includes(item) ? without.filter(c => c !== item) : [...without, item];
-      if (!prev.length && next.length === 1) setTimeout(() => scrollTo(styleVibeY), 150);
-      return next;
+      return without.includes(item) ? without.filter(c => c !== item) : [...without, item];
     });
   };
 
   const pickStyleVibe = (vibe: string) => {
     const next = selectedStyleVibe === vibe ? '' : vibe;
     setSelectedStyleVibe(next);
-    if (next) setTimeout(() => scrollTo(allergyY), 150);
+    if (next && !selectedAllergens.length) reveal(allergyY.current);
   };
 
   const toggleAllergen = (item: string) => {
     setSelectedAllergens(prev => {
       if (item === 'None known') return prev.includes('None known') ? [] : ['None known'];
       const without = prev.filter(a => a !== 'None known');
-      const next = without.includes(item) ? without.filter(a => a !== item) : [...without, item];
-      if (!prev.length && next.length === 1) setTimeout(() => scrollTo(treatmentY), 150);
-      return next;
+      return without.includes(item) ? without.filter(a => a !== item) : [...without, item];
     });
   };
 
@@ -165,14 +167,14 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     setSelectedTreatments(prev => {
       if (item === 'None') return prev.includes('None') ? [] : ['None'];
       const without = prev.filter(tr => tr !== 'None');
-      const next = without.includes(item) ? without.filter(tr => tr !== item) : [...without, item];
-      if (!prev.length && next.length === 1) setTimeout(() => scrollTo(medicalY), 150);
-      return next;
+      return without.includes(item) ? without.filter(tr => tr !== item) : [...without, item];
     });
   };
 
   const pickBusinessType = (type: NonNullable<typeof data.businessType> | '') => {
+    const changed = type !== selectedBusinessType;
     setSelectedBusinessType(type);
+    if (changed && type && !selectedLocation.trim()) reveal(locationY.current);
   };
 
   const toggleService = (category: string) => {
@@ -270,6 +272,9 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
+          onScroll={onScroll}
+          scrollEventThrottle={32}
+          onLayout={onViewportLayout}
         >
         <SignUpHeader onBack={() => navigation.goBack()} currentStep={4} totalSteps={totalSteps} />
 
@@ -312,7 +317,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               {chips(plain(TREATMENT_HISTORY), v => selectedTreatments.includes(v), toggleTreatment)}
             </QuestionCard>
 
-            <QuestionCard title="MEDICAL NOTES" hint="Optional" prompt="Any conditions your provider should know about?" onLayout={onLayoutFor(medicalY)}>
+            <QuestionCard title="MEDICAL NOTES" hint="Optional" prompt="Any conditions your provider should know about?">
               <TextInput
                 style={[inputStyle, styles.textArea]}
                 value={medicalNotes}
@@ -325,7 +330,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
               />
             </QuestionCard>
 
-            <View onLayout={onLayoutFor(consentY)} style={styles.question}>
+            <View style={styles.question}>
               <SectionLabel title="PHOTOS" />
               <FormCard>
                 <SwitchRow

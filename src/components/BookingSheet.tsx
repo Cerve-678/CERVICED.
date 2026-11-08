@@ -19,7 +19,7 @@ import {
   Keyboard,
   Platform,
 } from 'react-native';
-import type { ScrollViewInstance } from 'react-native';
+import type { ScrollViewInstance, TextInputInstance } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from './SafeArea';
@@ -324,18 +324,48 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
   }, []);
 
+  // Notes sits closest to the pinned footer, so the keyboard can land on top
+  // of it. The nudge used to be a flat 80pt, which wasn't enough when Notes was
+  // low on screen — the client typed blind. Measure where the box actually is
+  // against where the keyboard actually starts, and scroll by the overlap.
+  const notesInputRef = useRef<TextInputInstance>(null);
+  const notesFocused = useRef(false);
+  const keyboardTop = useRef<number | null>(null);
+  const nudgeNotesAboveKeyboard = useCallback(() => {
+    if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
+    notesScrollTimer.current = setTimeout(() => {
+      const top = keyboardTop.current;
+      if (!notesFocused.current || top == null) return;
+      notesInputRef.current?.measureInWindow((_x, y, _width, height) => {
+        // The character count under the box should stay readable too.
+        const overlap = y + height + 32 - top;
+        if (overlap > 0) {
+          scrollRef.current?.scrollTo({
+            y: scrollOffsetY.current + overlap,
+            animated: true,
+          });
+        }
+      });
+    }, 100);
+  }, []);
+
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const showSubscription = Keyboard.addListener(showEvent, (event) => {
       setKeyboardHeight(event.endCoordinates.height);
+      keyboardTop.current = event.endCoordinates.screenY;
+      nudgeNotesAboveKeyboard();
     });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      keyboardTop.current = null;
+    });
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, []);
+  }, [nudgeNotesAboveKeyboard]);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
   useEffect(() => {
@@ -965,6 +995,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add notes</Text>
                 <TextInput
+                  ref={notesInputRef}
                   style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
                   value={notes}
                   onChangeText={setNotes}
@@ -974,16 +1005,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   numberOfLines={4}
                   maxLength={500}
                   onFocus={() => {
-                    // Notes sits closest to the payment summary. Give it a
-                    // small nudge when typing starts, without moving promo
-                    // code or avoiding the keyboard across the whole sheet.
-                    if (notesScrollTimer.current) clearTimeout(notesScrollTimer.current);
-                    notesScrollTimer.current = setTimeout(() => {
-                      scrollRef.current?.scrollTo({
-                        y: scrollOffsetY.current + 80,
-                        animated: true,
-                      });
-                    }, 100);
+                    // Notes sits closest to the payment summary. Lift just
+                    // this box clear of the keyboard when typing starts,
+                    // without moving promo code or avoiding the keyboard
+                    // across the whole sheet. When the keyboard is already up
+                    // (coming from another field) no show event follows, so
+                    // nudge from here; otherwise the show event does it.
+                    notesFocused.current = true;
+                    nudgeNotesAboveKeyboard();
+                  }}
+                  onBlur={() => {
+                    notesFocused.current = false;
                   }}
                 />
                 <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>

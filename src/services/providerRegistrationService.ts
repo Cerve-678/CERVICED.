@@ -97,11 +97,15 @@ export interface ProviderRegistrationData {
   location: string;
   aboutText: string;
   /** Monthly release day (1-31): next month opens for booking on this day
-   *  (utils/bookingHorizon) and bell followers are told. InfoReg (Edit
-   *  Profile) is its ONLY editor — one change, and the booking limit, the
-   *  profile pill and the release message all follow. Saved by merging just
-   *  this key into automation_settings. null = rolling window instead. */
+   *  (utils/bookingHorizon) and bell followers are told. null = rolling
+   *  window instead. Edited here (Edit Profile) AND in Scheduling &
+   *  Availability; both write the same automation_settings key, so a change
+   *  on one shows on the other. */
   scheduleReleaseDay: number | null;
+  /** True only when the provider changed the release day on this screen
+   *  since it loaded. The save writes the day only then, so saving Edit
+   *  Profile never puts back an older day over one just set in Scheduling. */
+  scheduleReleaseDayEdited?: boolean;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
   // computed BEFORE the `gradient` field above gets its hardcoded fallback
@@ -159,8 +163,8 @@ export interface ProviderRegistrationData {
   // '' is this form's "not answered yet"; the four real values are the
   // canonical BusinessType union.
   businessType: BusinessType | '';
-  // Collected at signup (Step 4's "Who you work with" / "Tell me more" —
-  // see supabase/provider_signup_business_fields.sql), editable here too.
+  // Edited in Services & Pricing. No longer asked at sign-up (removed in #67);
+  // only accounts that signed up before then have one staged on `users`.
   teamSize: 'solo' | 'small_team' | 'large_team' | '';
   accessibilityNotes: string;
   /** providers.terms_accepted_at — stamped once, on first publish. Read-only
@@ -174,9 +178,17 @@ export interface ProviderRegistrationData {
   // first writer.
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
   priceBands: string[];
-  // Service-coverage cities — drives providers.service_locations, read by
-  // the client Search "City" filter. See src/constants/ukCities.ts.
+  // Service-coverage cities — providers.service_locations. Nothing edits it
+  // any more; it's round-tripped so old values keep matching the client
+  // Search "City" filter, which now goes by `location` first (see
+  // src/utils/providerCity.ts).
   serviceLocations: string[];
+  /** providers.travel_radius, free text ("10 miles"). Asked in InfoReg under
+   *  "Where you're based", only for a mobile business type; shown on the
+   *  client profile as "Travels up to …" for a mobile provider only. Optional
+   *  so a form cached before this field existed saves without wiping it —
+   *  see the payload's spread below. */
+  travelRadius?: string;
   fullAddress: string;
   /** Private arrival/access instructions, released to a booked client only
    * when their appointment location has been released. */
@@ -399,6 +411,16 @@ function minutesToDuration(minutes: number): string {
   return `${hrs} hr ${mins} mins`;
 }
 
+/** travel_radius for the providers write. A blank answer clears the column;
+ *  a form with no travelRadius at all (cached before the field existed)
+ *  leaves it alone rather than wiping a value the provider never saw. */
+export function travelRadiusPatch(
+  data: Pick<ProviderRegistrationData, 'travelRadius'>,
+): { travel_radius?: string | null } {
+  if (typeof data.travelRadius !== 'string') return {};
+  return { travel_radius: data.travelRadius.trim() || null };
+}
+
 function generateSlug(name: string): string {
   return (
     name
@@ -596,9 +618,9 @@ export async function saveProviderToSupabase(
   // edits silently split across rows. Fail loudly instead.
   let providerId: string;
 
-  // automation_settings: only scheduleReleaseDay belongs to this screen, and
-  // it's merged in after the row is saved (below). The other keys belong to
-  // Automations and Payments, which merge their own.
+  // automation_settings: only scheduleReleaseDay is written here, merged in
+  // after the row is saved (below). The other keys belong to Automations and
+  // Payments, which merge their own.
 
   if (existingProvider) {
     try {
@@ -654,6 +676,7 @@ export async function saveProviderToSupabase(
         price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
+        ...travelRadiusPatch(data),
         preferred_payment_methods: data.preferredPaymentMethods,
         // reconcile, not `|| 'on_confirmation'`: the old fallback silently
         // turned "never share" into "share on confirmation" for any provider
@@ -715,6 +738,7 @@ export async function saveProviderToSupabase(
         price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
+        ...travelRadiusPatch(data),
         preferred_payment_methods: data.preferredPaymentMethods,
         // reconcile, not `|| 'on_confirmation'`: the old fallback silently
         // turned "never share" into "share on confirmation" for any provider
@@ -732,11 +756,14 @@ export async function saveProviderToSupabase(
     }
   }
 
-  // The release day — merged server-side so no other key in
+  // The release day, only if it was changed on this screen (see
+  // scheduleReleaseDayEdited). Merged server-side so no other key in
   // automation_settings is touched.
-  await (data.scheduleReleaseDay != null
-    ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
-    : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
+  if (data.scheduleReleaseDayEdited) {
+    await (data.scheduleReleaseDay != null
+      ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
+      : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
+  }
 
   // Now that the new logo_url is durably saved, remove the old versioned
   // object it replaced — best-effort, never blocks the save. Without this,
@@ -1009,6 +1036,7 @@ export function providerRowToRegistrationData(
     priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
     priceBands: provider.price_bands ?? [],
     serviceLocations: provider.service_locations || [],
+    travelRadius: provider.travel_radius ?? '',
     preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress: catalogue.fullAddress,
     howToGetThere: catalogue.howToGetThere,

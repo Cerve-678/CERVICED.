@@ -32,6 +32,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -354,7 +355,7 @@ export default function LinkOnlyHomeScreen() {
               <Ionicons name="notifications-outline" size={18} color={P.sub} />
             </TouchableOpacity>
             {logoUrl ? (
-              <Image source={{ uri: logoUrl }} style={styles.avatar} contentFit="cover" transition={0} />
+              <LogoCircle uri={logoUrl} framing={profile?.logo_framing} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, styles.avatarEmpty]}>
                 <Text style={styles.avatarText}>{initials}</Text>

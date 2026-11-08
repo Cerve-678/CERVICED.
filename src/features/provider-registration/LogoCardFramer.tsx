@@ -22,26 +22,36 @@ interface LogoCardFramerProps {
   initial: LogoCardFrame | undefined;
   onDone: (slot: LogoCardSlot, frame: LogoCardFrame) => void;
   onCancel: () => void;
+  /** Picks a different photo without leaving the framer. Shown when given. */
+  onReplace?: (() => void) | undefined;
   palette: { bg: string; card: string; text: string; sub: string; accent: string; onAccent: string };
 }
 
 const TITLES: Record<LogoCardSlot, string> = {
   small: 'Small Home card',
   large: 'Large Home card',
+  circle: 'Profile logo',
+};
+
+const FILL_LABELS: Record<LogoCardSlot, string> = {
+  small: 'Fill card',
+  large: 'Fill card',
+  circle: 'Fill circle',
 };
 
 /**
- * Frames the logo for one Home card, in that card's exact shape: pinch to
- * zoom (out until the whole logo fits, or in), drag to move. Saves only a
- * zoom and an offset; the logo image itself is never re-cut, so each card
- * can frame it differently.
+ * Frames the logo for one shape (a Home card or the profile circle), in that
+ * shape: pinch to zoom (out until the whole logo fits, or in), drag to move.
+ * Saves only a zoom and an offset; the logo image itself is never re-cut, so
+ * each shape can frame it differently.
  */
-export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCancel, palette }: LogoCardFramerProps) {
+export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCancel, onReplace, palette }: LogoCardFramerProps) {
   const { width: screenWidth } = useWindowDimensions();
   const card = LOGO_CARD_SIZES[slot ?? 'large'];
   const cardRatio = card.width / card.height;
-  // Shown bigger than on Home so it's easy to work with, but the same shape.
-  const frameW = Math.min(screenWidth - 48, 340);
+  // Shown bigger than on screen so it's easy to work with, but the same
+  // shape. A circle as wide as a card would be taller than most phones allow.
+  const frameW = Math.min(screenWidth - 48, slot === 'circle' ? 280 : 340);
   const frameH = frameW / cardRatio;
 
   const zoom = useSharedValue(1);
@@ -121,7 +131,7 @@ export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCance
               styles.frame,
               { width: frameW, height: frameH, borderRadius: card.radius * (frameW / card.width), backgroundColor: palette.card },
             ]}
-            accessibilityLabel={`Your logo on the ${TITLES[slot].toLowerCase()}. Pinch to zoom, drag to move.`}
+            accessibilityLabel={`Your ${slot === 'circle' ? 'profile logo' : `logo on the ${TITLES[slot].toLowerCase()}`}. Pinch to zoom, drag to move.`}
           >
             <ReAnimated.Image source={{ uri }} style={[styles.image, imageStyle]} resizeMode="cover" fadeDuration={0} />
           </View>
@@ -142,9 +152,14 @@ export function LogoCardFramer({ slot, uri, imageRatio, initial, onDone, onCance
             accessibilityRole="button"
             style={[styles.preset, { backgroundColor: palette.card }]}
           >
-            <Text style={[styles.presetText, { color: palette.text }]}>Fill card</Text>
+            <Text style={[styles.presetText, { color: palette.text }]}>{FILL_LABELS[slot]}</Text>
           </TouchableOpacity>
         </View>
+        {onReplace && (
+          <TouchableOpacity onPress={onReplace} activeOpacity={0.7} accessibilityRole="button" style={styles.replace}>
+            <Text style={[styles.replaceText, { color: palette.sub }]}>Choose a different photo</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           onPress={() => {
@@ -180,6 +195,8 @@ const styles = StyleSheet.create({
   presets: { flexDirection: 'row', gap: 10, marginTop: 18 },
   preset: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10 },
   presetText: { fontSize: 13, fontWeight: '700' },
+  replace: { marginTop: 14, paddingVertical: 6, paddingHorizontal: 10 },
+  replaceText: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   done: {
     marginTop: 22,
     paddingHorizontal: 34,
