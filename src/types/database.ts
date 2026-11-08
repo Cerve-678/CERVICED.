@@ -804,6 +804,7 @@ export interface DbBookingRescheduleRequest {
   // Optional decline reason — set by reject_reschedule_request (provider
   // decline) and surfaced to the client via the trigger-owned notification.
   response_note?: string | null;
+  cancel_if_declined?: boolean;
   // Set on every sibling row a provider_initiate_group_reschedule() call
   // wrote together — see supabase/fix_group_booking_reschedule.sql. Absent
   // (null) for an ordinary single-booking reschedule request.

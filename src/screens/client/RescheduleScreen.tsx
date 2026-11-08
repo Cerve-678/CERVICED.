@@ -465,9 +465,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   const handleDecline = useCallback(() => {
     if (!booking) return;
     const groupSuffix = isGroupReschedule ? ` This applies to all ${groupSiblings.length} of your services with them.` : '';
+    const cancelsBooking = !isGroupReschedule && booking.rescheduleRequest?.cancelIfDeclined === true;
     showConfirm(
       'Decline These Times?',
-      `None of these will work? ${booking.providerName} will be notified and your original appointment time stays as-is.${groupSuffix}`,
+      cancelsBooking
+        ? `If you decline, this booking will be cancelled and any payment refunded in full. ${booking.providerName} will be notified.`
+        : `If you decline, your original appointment on ${formatDisplayDate(booking.bookingDate)} at ${formatTime12(booking.bookingTime)} stays booked. ${booking.providerName} will be notified.${groupSuffix}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -696,6 +699,16 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 </Text>
                 <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>
                   Pick one of these provider-offered slots to confirm your new appointment.
+                </Text>
+                {!!booking.rescheduleRequest?.providerNote && (
+                  <Text style={{ fontSize: 13, color: C.text, lineHeight: 19, marginTop: 8 }}>
+                    Note from {booking.providerName}: {booking.rescheduleRequest.providerNote}
+                  </Text>
+                )}
+                <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 8 }}>
+                  {booking.rescheduleRequest?.cancelIfDeclined
+                    ? 'If you decline, this booking will be cancelled and any payment refunded in full.'
+                    : 'If you decline, your original appointment stays booked.'}
                 </Text>
               </View>
             ) : (

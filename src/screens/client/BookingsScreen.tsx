@@ -1029,7 +1029,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 const dbReq = await getActiveRescheduleRequest(booking.id);
                 openRequest = dbReq?.status === 'pending' || dbReq?.status === 'provider_responded' ? dbReq.status : null;
                 if (dbReq?.status === 'provider_responded' && (dbReq.provider_available_slots ?? []).length > 0) {
-                  await providerRespondToReschedule(booking.id, dbReq.provider_available_slots!);
+                  await providerRespondToReschedule(booking.id, dbReq.provider_available_slots!, dbReq);
                 }
               } catch (err) {
                 // Can't tell whether the request is still open, so don't claim it isn't.
