@@ -106,7 +106,7 @@ export interface BookingContextType {
   createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], mobileClientAddress?: MobileClientAddress, holdBatchId?: string) => Promise<void>;
   validateBookingsBeforeCheckout: (cartItems: CartItem[], appointmentData: AppointmentData[]) => Promise<BookingConflictResult>;
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
-  // for the 10-minute window while the user is on the payment screen —
+  // for the 5-minute window while the user is on the payment screen —
   // closes the gap between "committed to paying" and "booking actually
   // inserted" that the claim RPC's insert-time-only conflict check can't
   // cover on its own. Only needs date/time per item (not full
@@ -126,7 +126,7 @@ export interface BookingContextType {
   ) => Promise<string>;
   // Best-effort release of a hold batch when the user backs out of payment
   // before claiming it (close button, payment failure/cancel). Never throws
-  // — the 10-minute TTL cron sweep is the real backstop, this just frees the
+  // — the 5-minute TTL cron sweep is the real backstop, this just frees the
   // slot sooner. Safe to call on an already-claimed or already-expired batch.
   releaseCartCheckoutSlots: (holdBatchId: string) => Promise<void>;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => Promise<void>;
@@ -2201,7 +2201,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // Best-effort release when the user backs out of payment before claiming
-  // a hold batch. Never throws — the 10-minute TTL cron sweep
+  // a hold batch. Never throws — the 5-minute TTL cron sweep
   // (expire_cart_holds) is the real backstop, since no reliable
   // client-side "abandoned checkout" signal exists (see design notes in
   // fix_cart_checkout_slot_hold.sql). This just frees the slot sooner.
