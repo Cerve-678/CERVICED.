@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-08 (cart checkout holds slots for 5 minutes)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109110000 | `cart_hold_five_minutes` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Frontier before applying: live max `20261109100000`; lock `(none)`; md5 guards matched (`prepare_checkout` `31bcc5e0…`, `hold_cart_booking_slots` `2e5b099f…`). Forced-rollback dry run first. `prepare_checkout()` and `hold_cart_booking_slots()` copied from live with only the hold interval changed 10 → 5 minutes; `checkout_batches.expires_at` default 5 minutes; cron `expire-cart-holds` `*/5` → every minute. Verified live: version present; both functions say 5 minutes (new md5s `b781dde0…` / `fac4fd25…`); default `now() + 00:05:00`; anon can't execute `prepare_checkout`, authenticated can. Written on `fix/cart-hold-five-minutes` (#386). |
+
 ### Applied 2026-11-08 (provider "I work with" skin tones)
 
 | Authored version | Name | Status |
