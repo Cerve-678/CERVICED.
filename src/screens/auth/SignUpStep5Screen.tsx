@@ -26,6 +26,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { useRevealNext, type CardLayout } from '../../components/signup/useRevealNext';
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS, ALL_SPECIALTIES, SPECIALTIES_MAP } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
@@ -82,13 +83,13 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const { user, upgradeToProvider, addClientProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance>(null);
-  const servicesY  = useRef(0);
-  const locationY  = useRef(0);
-  const frequencyY = useRef(0);
-  const referralY  = useRef(0);
-  const accessibilityY = useRef(0);
-  const languagesY     = useRef(0);
-  const specialtiesY   = useRef(0);
+  const servicesY  = useRef<CardLayout>({ y: 0, height: 0 });
+  const locationY  = useRef<CardLayout>({ y: 0, height: 0 });
+  const frequencyY = useRef<CardLayout>({ y: 0, height: 0 });
+  const referralY  = useRef<CardLayout>({ y: 0, height: 0 });
+  const accessibilityY = useRef<CardLayout>({ y: 0, height: 0 });
+  const languagesY     = useRef<CardLayout>({ y: 0, height: 0 });
+  const specialtiesY   = useRef<CardLayout>({ y: 0, height: 0 });
   const [isLoading,  setIsLoading]  = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   // Which hat was just added, or null for "not celebrating". Doubles as the
@@ -150,11 +151,13 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
   const [hasKids,           setHasKids]           = useState<boolean>(data.has_kids ?? false);
 
-  const onLayoutFor = (yRef: React.MutableRefObject<number>) =>
-    (e: LayoutChangeEvent) => { yRef.current = e.nativeEvent.layout.y; };
+  const onLayoutFor = (yRef: React.MutableRefObject<CardLayout>) =>
+    (e: LayoutChangeEvent) => { yRef.current = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height }; };
 
-  const scrollTo = (yRef: React.MutableRefObject<number>) => {
-    scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current - 24), animated: true });
+  const { onScroll, onViewportLayout, reveal } = useRevealNext(scrollRef);
+
+  const scrollTo = (yRef: React.MutableRefObject<CardLayout>) => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current.y - 24), animated: true });
   };
 
   const toggleInterest = (category: string) => {
@@ -164,10 +167,13 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     setSelectedInterests(next);
   };
 
-  // Picking an answer never moves the page (same rule as Step 4) — only
-  // GET STARTED scrolls, to the first missed question.
+  // A single-pick answer moves on gently, as on Step 4 (useRevealNext):
+  // only when the next question is unanswered and off screen. Multi-pick
+  // toggles (services, accessibility, languages) never move the page.
   const selectFrequency = (freq: string) => {
+    const changed = freq !== selectedFrequency;
     setSelectedFrequency(freq);
+    if (changed && !selectedReferral) reveal(referralY.current);
   };
 
   const selectReferral = (source: string) => {
@@ -344,7 +350,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   };
 
   const renderSection = (
-    yRef: React.MutableRefObject<number>,
+    yRef: React.MutableRefObject<CardLayout>,
     label: string,
     prompt: string,
     items: readonly string[],
@@ -377,6 +383,9 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        onScroll={onScroll}
+        scrollEventThrottle={32}
+        onLayout={onViewportLayout}
       >
         <SignUpHeader onBack={() => navigation.goBack()} currentStep={5} totalSteps={totalSteps} />
 
