@@ -1,8 +1,8 @@
 // src/features/providers/recentBookingActivity.ts
 //
 // What one row of a provider's Recent activity says: the newest bookings by
-// when they were made (My Profile shows the latest RECENT_ACTIVITY_PREVIEW;
-// See all shows up to RECENT_ACTIVITY_SEE_ALL_LIMIT).
+// when they were made. My Profile shows the latest RECENT_ACTIVITY_PREVIEW;
+// See all opens booking history's History → All.
 
 import type { BookingWithAddOns } from '../../types/database';
 import { mapDbBookingStatus } from '../../types/booking';
@@ -11,8 +11,6 @@ import { formatShortDayDate, formatTime12Safe } from '../../utils/dateUtils';
 
 /** How many bookings the card on My Profile shows. */
 export const RECENT_ACTIVITY_PREVIEW = 3;
-/** How far back See all goes, in bookings. */
-export const RECENT_ACTIVITY_SEE_ALL_LIMIT = 50;
 
 export interface RecentBookingRowText {
   service: string;
