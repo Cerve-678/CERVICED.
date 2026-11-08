@@ -29,6 +29,7 @@
  * Product rules: docs/vault/Link-Only Providers.md. Design B (chosen
  * 2026-10-19): https://claude.ai/artifact/MJfLyQ2BLudDpneHpqbVMx
  */
+import { policyImageUrls } from '../../features/providers/policyImages';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -260,7 +261,7 @@ export default function LinkOnlyHomeScreen() {
       instagram: profile.instagram,
       policiesSet:
         buildPolicyDisplayRows(profile.booking_policies, profile.cancellation_notice_hours, { linkOnly: true }).length > 0 ||
-        !!profile.booking_policies?.policyImageUrl,
+        policyImageUrls(profile.booking_policies).length > 0,
       accessibilityNotes: profile.accessibility_notes,
       paymentMethods: profile.preferred_payment_methods,
     });

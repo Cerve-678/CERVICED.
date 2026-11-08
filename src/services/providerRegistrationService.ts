@@ -224,6 +224,7 @@ export interface ProviderRegistrationData {
     depositAmount?: string;
     noShowAction?: string;
     policyImageUrl?: string;
+    policyImageUrls?: string[];
   } | null;
   // Enforced cancellation window (providers.cancellation_notice_hours) — set
   // via the separate Automations screen, not this form, but the client-facing
