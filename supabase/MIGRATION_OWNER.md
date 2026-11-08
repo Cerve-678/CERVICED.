@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-08 (reschedule: 45 minutes to answer, both people told)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109120000 | `reschedule_reply_45_minutes` | **APPLIED 2026-11-08** on the user's go-ahead, straight after 20261109110000, via `supabase db query --linked -f` from the main folder; version recorded by the file. Frontier before applying: live max `20261109110000`; lock `(none)`; md5 guards matched (`handle_reschedule_request_change` `63a4aaa1…`, `process_expire_stale_reschedule_requests` `717bdca9…`); 0 open reschedule requests. Forced-rollback dry run first. Adds `reschedule_reply_window()` (45 minutes; anon can't execute); expiry = LEAST(appointment start, updated_at + window), both sides notified, one pair per group; "your turn" notifications quote the window; cron `reschedule-request-expiry` every minute; cron `provider-stale-reschedule-reminders` unscheduled and `process_provider_stale_reschedule_reminders()` dropped. Verified live: version present; window `00:45:00`; new md5s trigger `ffe7e1f7…` / expiry `af9f271a…`; expiry still SECURITY DEFINER; trigger still attached. Written on `feat/reschedule-reply-45-minutes` (#387). |
+
 ### Applied 2026-11-08 (cart checkout holds slots for 5 minutes)
 
 | Authored version | Name | Status |
