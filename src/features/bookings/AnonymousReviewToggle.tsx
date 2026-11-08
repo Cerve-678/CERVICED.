@@ -27,7 +27,7 @@ export function AnonymousReviewToggle({
       <View style={styles.copy}>
         <Text style={[styles.title, { color: palette.text }]}>Post anonymously</Text>
         <Text style={[styles.sub, { color: palette.sub }]}>
-          Your name won't be shown to anyone, including the provider.
+          Your name won't be shown on the review.
         </Text>
       </View>
       <Switch
