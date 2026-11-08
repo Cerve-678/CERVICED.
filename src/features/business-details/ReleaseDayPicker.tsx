@@ -18,16 +18,18 @@ interface ReleaseDayPickerProps {
   borderColor: string;
   onSelect: (day: number) => void;
   onClose: () => void;
-  /** Show an action that unsets the day (back to a rolling window). The
-   *  picker IS the control in InfoReg, so without it there's no way back to
-   *  "no release day" once a day has been chosen. */
+  /** Show an action that unsets the day (back to a rolling window). Edit
+   *  Profile uses it, because there the picker IS the control. Scheduling
+   *  doesn't: its rolling / monthly choice already does this. */
   allowClear?: boolean;
   onClear?: () => void;
 }
 
 /** Chooses the monthly release day: next month opens for booking on this day
- *  (utils/bookingHorizon), and followers with the bell on are told. Its one
- *  caller is InfoRegScreen (Edit Profile) — the release day's only editor.
+ *  (utils/bookingHorizon), and followers with the bell on are told. Used by
+ *  both screens that edit it: SchedulingScreen and InfoRegScreen (Edit
+ *  Profile). They save the same stored value, so a change on either shows
+ *  on the other.
  *
  *  A native single-column wheel (UIPickerView on iOS, Spinner on Android) with
  *  our own labels, rather than a date picker. The value is a monthly
@@ -88,7 +90,7 @@ export function ReleaseDayPicker({
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClear(); onClose(); }}
               activeOpacity={0.7}
             >
-              <Text style={[styles.releasePickerClearText, { color: subColor }]}>No release day — use a rolling window</Text>
+              <Text style={[styles.releasePickerClearText, { color: subColor }]}>No release day, use a rolling window</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClose(); }}>
