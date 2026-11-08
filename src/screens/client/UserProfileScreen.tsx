@@ -33,6 +33,7 @@ import { getCurrentRefreshToken, getUnreadNotificationCount } from '../../servic
 import { useFocusEffect } from '@react-navigation/native';
 import { dobToParts } from '../../utils/dateUtils';
 import { openLegalPage } from '../../utils/legalPage';
+import { openAboutPage } from '../../utils/aboutPage';
 import { useMaintenanceDueCount } from '../../features/maintenance/useMaintenanceDueCount';
 import { useBeautyProfileTodo } from '../../features/beauty-profile/useBeautyProfileTodo';
 import { TodoMark } from '../../components/TodoMark';
@@ -337,7 +338,7 @@ export default function UserProfileScreen({ navigation }: any) {
           {/* App Info & Legal */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: P.sub }]}>{t('profile.section.appInfo')}</Text>
-            <SettingsOption icon="info" title={t('profile.appInfo.about.title')} subtitle={t('profile.appInfo.about.sub')} onPress={() => navigation.navigate('About')} palette={P} />
+            <SettingsOption icon="info" title={t('profile.appInfo.about.title')} subtitle={t('profile.appInfo.about.sub')} onPress={openAboutPage} palette={P} />
             {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
             <SettingsOption icon="gavel" title={t('profile.appInfo.terms.title')} subtitle={t('profile.appInfo.terms.sub')} onPress={() => openLegalPage('terms')} palette={P} />
             <SettingsOption icon="bug-report" title={t('profile.appInfo.report.title')} subtitle={t('profile.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} palette={P} />

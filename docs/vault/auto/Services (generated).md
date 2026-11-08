@@ -50,7 +50,7 @@ _no named exports_
 `understand`
 
 ### `src/services/becca/navigationContract.ts`
-`CLIENT_BECCA_SCREENS` · `CLIENT_PROFILE_SCREENS` · `isBeccaNavigationSuggestion` · `LINK_ONLY_PROVIDER_NAV` · `PROVIDER_PUSH_NAV` · `PROVIDER_TAB_NAV`
+`CLIENT_BECCA_SCREENS` · `CLIENT_PROFILE_SCREENS` · `CLIENT_WEBSITE_PAGES` · `isBeccaNavigationSuggestion` · `LINK_ONLY_PROVIDER_NAV` · `PROVIDER_PUSH_NAV` · `PROVIDER_TAB_NAV`
 
 ### `src/services/becca/nvidiaInterpreter.ts`
 `nvidiaBeccaInterpreter`
