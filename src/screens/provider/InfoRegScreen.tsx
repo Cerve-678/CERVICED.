@@ -102,6 +102,7 @@ import {
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import { fillProfileFromSignup } from '../../features/provider-registration/signupAnswers';
 import {
   applyRuleToServices,
   defaultAddOnKeysForCategory,
@@ -146,7 +147,6 @@ import { toUserMessage } from '../../utils/userFacingError';
 
 import {
   ADDRESS_RELEASE_OPTS,
-  BUSINESS_TYPE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
   ALL_SERVICE_TYPE_OPTS,
@@ -3041,10 +3041,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // call picks up every scraped field (services included) for free, no
     // separate prefill path needed. Best-effort: an expired/already-used
     // code just means the provider sets up their profile from scratch.
+    // Set when this load attaches a listing — see the claimed-row prefill below.
+    let claimedListing = false;
     getPendingClaim()
       .then(pending => {
         if (!pending) return;
         return claimProviderProfile(pending.providerId, pending.code)
+          .then(() => { claimedListing = true; })
           .catch(err => {
             logger.warn('claimProviderProfile failed:', err?.message ?? err);
             setClaimError(
@@ -3077,6 +3080,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // The signup prefill below only runs on the very first save, so
               // an existing provider who never set an enquiry address saw an
               // empty field even though their business email was on file.
+              // A just-claimed listing already has a providers row, so the
+              // first-save prefill below never runs for it — and everything
+              // the owner answered at sign-up (price ranges, years, where
+              // they work, payment methods) would stay stranded on `users`.
+              // Fill the listing's blanks from it instead; it lands on the
+              // next save, which a claimed listing needs before going live.
+              if (claimedListing) {
+                getUserSignupPrefillInfo(userId)
+                  .then(prefill => {
+                    if (!prefill || cancelled) return;
+                    setProviderData(prev => fillProfileFromSignup(prev, prefill));
+                  })
+                  .catch(err => logger.warn('InfoReg: sign-up answers for claimed listing failed to load:', err?.message ?? err));
+              }
               if (!data.email) {
                 getUserBusinessInfo(userId)
                   .then(info => {
@@ -3095,12 +3112,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             return getUserSignupPrefillInfo(userId)
               .then(prefill => {
                 if (!prefill) return;
-                const validBusinessTypes: ProviderRegistrationData['businessType'][] = BUSINESS_TYPE_OPTS.map(o => o.value);
-                const prefilledBusinessType = validBusinessTypes.find(v => v === prefill.business_type);
-                const validTeamSizes: ProviderRegistrationData['teamSize'][] = ['solo', 'small_team', 'large_team'];
-                const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
-                const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
-                const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
                 // "Services you offer" on SignUpStep4 is already a
                 // multi-select, and its answer already lands in
                 // users.service_interests — it just never reached the
@@ -3119,7 +3130,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ),
                 );
                 setProviderData(prev => ({
-                  ...prev,
+                  ...fillProfileFromSignup(prev, prefill),
                   ...(prefilledServiceTypes.length
                     ? {
                         serviceCategories: prefilledServiceTypes,
@@ -3128,37 +3139,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         providerService: prefilledServiceTypes[0] as string,
                       }
                     : {}),
-                  providerName: prev.providerName || prefill.business_name || prefill.name || '',
-                  phone: prev.phone || prefill.business_phone || prefill.phone || '',
-                  email: prev.email || prefill.business_email || '',
-                  instagram: prev.instagram || prefill.instagram || '',
-                  website: prev.website || prefill.website || '',
-                  // Asked on SignUpStep1 ("I use my own booking link").
-                  externalBookingUrl: prev.externalBookingUrl || prefill.external_booking_url || '',
-                  tiktok: prev.tiktok || prefill.tiktok || '',
-                  businessType: prev.businessType || prefilledBusinessType || '',
-                  teamSize: prev.teamSize || prefilledTeamSize || '',
-                  // Optional at signup, staged on users.years_experience. Carried
-                  // through so the first save writes it to providers; edited
-                  // afterwards in Business Info. String form because the field
-                  // (and the hero preview) are string-typed.
-                  yearsExperience: prev.yearsExperience || (prefill.years_experience != null ? String(prefill.years_experience) : ''),
-                  location: prev.location || prefill.location_text || '',
-                  accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
-                  languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
-                  priceRange: prev.priceRange || prefilledPriceRange || '',
-                  priceBands: prev.priceBands.length ? prev.priceBands : (prefill.price_bands ?? []),
-                  // Round-trip only — this screen neither shows nor owns contact
-                  // channels (Communications does). It's carried purely because
-                  // saveProviderToSupabase writes preferred_contact_methods on
-                  // every save, so dropping it here would reset the provider's
-                  // Communications toggles to ['in_app'] whenever they edit
-                  // anything in InfoReg.
-                  preferredContactMethods: (prev.preferredContactMethods.length && prev.preferredContactMethods[0] !== 'in_app')
-                    ? prev.preferredContactMethods
-                    : (prefill.preferred_contact_methods?.length ? prefill.preferred_contact_methods : prev.preferredContactMethods),
-                  serviceLocations: prev.serviceLocations.length ? prev.serviceLocations : (prefill.service_locations ?? []),
-                  preferredPaymentMethods: prev.preferredPaymentMethods.length ? prev.preferredPaymentMethods : (prefill.preferred_payment_methods ?? []),
                 }));
               })
               .catch(() => {});

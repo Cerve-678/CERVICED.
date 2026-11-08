@@ -163,8 +163,8 @@ export interface ProviderRegistrationData {
   // '' is this form's "not answered yet"; the four real values are the
   // canonical BusinessType union.
   businessType: BusinessType | '';
-  // Collected at signup (Step 4's "Who you work with" / "Tell me more" —
-  // see supabase/provider_signup_business_fields.sql), editable here too.
+  // Edited in Services & Pricing. No longer asked at sign-up (removed in #67);
+  // only accounts that signed up before then have one staged on `users`.
   teamSize: 'solo' | 'small_team' | 'large_team' | '';
   accessibilityNotes: string;
   /** providers.terms_accepted_at — stamped once, on first publish. Read-only

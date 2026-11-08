@@ -39,10 +39,11 @@ const ALLERGENS         = ['Latex', 'Fragrances', 'Dyes / PPD', 'Nuts', 'Nickel'
 const TREATMENT_HISTORY = ['Facials', 'Lash extensions', 'Brow tinting', 'Hair colour', 'Nails', 'Waxing', 'Dermaplaning', 'Microneedling', 'Chemical peels', 'None'];
 
 // Provider "About your business" — logistics needed for booking + the
-// business profile (see supabase/provider_signup_business_fields.sql for
-// where each of these lands: price range reuses providers.price_tier,
-// team size/contact prefs are staged on `users` then copied across by
-// InfoRegScreen's first-save prefill).
+// business profile. Each answer is staged on `users` (price as price_bands +
+// the price_tier derived from them) and copied onto the providers row by
+// InfoRegScreen — see features/provider-registration/signupAnswers.ts.
+// Team size is not asked here: it was dropped in the sign-up redesign (#67)
+// because teams aren't supported yet, and is set in Services & Pricing.
 // Signup offers exactly the types BUSINESS_TYPE_OPTS defines, with its labels
 // — a provider must not be able to pick a type at signup that Business Details
 // then can't render, or vice versa.
