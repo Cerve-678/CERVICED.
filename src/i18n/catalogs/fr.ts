@@ -59,6 +59,10 @@ export const fr: Catalog = {
   'profile.card.points.sub': 'Vos récompenses',
 
   'profile.section.account': 'Gestion du compte',
+  'profile.forYou.activity.title': "Centre d'activité",
+  'profile.forYou.activity.sub': 'Remboursements, reports et tout ce que vous avez à faire',
+  'profile.forYou.activity.count': '{count} à faire',
+  'profile.forYou.activity.todo': 'Quelque chose vous attend',
   'profile.forYou.messages.title': 'Messages',
   'profile.forYou.messages.sub': 'Discussions avec vos professionnels',
   'profile.account.account.title': 'Compte',

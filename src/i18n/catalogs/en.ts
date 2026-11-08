@@ -105,6 +105,10 @@ export const en = {
   'profile.forYou.beauty.sub': 'Maintenance reminders, hair, skin and more',
   'profile.forYou.beauty.due': '{count} due',
   'profile.forYou.beauty.todo': 'Something left to fill in',
+  'profile.forYou.activity.title': 'Activity Centre',
+  'profile.forYou.activity.sub': 'Refunds, reschedules and anything you need to do',
+  'profile.forYou.activity.count': '{count} to do',
+  'profile.forYou.activity.todo': 'Something needs you',
   'profile.forYou.messages.title': 'Messages',
   'profile.forYou.messages.sub': 'Chats with your providers',
 

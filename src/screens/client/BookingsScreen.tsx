@@ -36,7 +36,7 @@ import { hasDirectionsDestination, hasMapDestination, isMobileBooking, type Book
 import { directionsUrlFor } from '../../utils/mapsLink';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getMyActivity, type ClientActivityRemote, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -44,7 +44,8 @@ import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
-import { bookingTodoCounts, buildClientActivity, type ActivityItem } from '../../features/bookings/activityCentre';
+import { bookingTodoCounts, type ActivityItem } from '../../features/bookings/activityCentre';
+import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { ActivityCentreSheet } from '../../features/bookings/ActivityCentreSheet';
 import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
@@ -54,6 +55,7 @@ import type { GroupedListItem } from '../../features/bookings/presentationTypes'
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { ExternalBookingCard } from '../../features/bookings/ExternalBookingCard';
+import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import { externalBookingStart, splitExternalBookings } from '../../features/bookings/externalBookings';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
@@ -117,9 +119,6 @@ const CATEGORY_TABS = [
 const PAST_BOOKINGS_VISIBLE_DAYS = 30;
 /** Long enough for the Activity Centre's fade-out before another Modal opens. */
 const ACTIVITY_SHEET_FADE_MS = 350;
-const EMPTY_ACTIVITY: ClientActivityRemote = {
-  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [],
-};
 
 const WaitlistCard = React.memo(function WaitlistCard({
   entry,
@@ -363,46 +362,16 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setWaitlistHoldBusy(false);
   }, [waitlistHold]);
 
-  const [activityRemote, setActivityRemote] = useState<ClientActivityRemote>(EMPTY_ACTIVITY);
-  const [activityLoaded, setActivityLoaded] = useState(false);
-  const [activityLoadFailed, setActivityLoadFailed] = useState(false);
+  // Shared with the client Settings card, so both count the same things.
+  const {
+    activity,
+    remote: activityRemote,
+    loaded: activityLoaded,
+    failed: activityLoadFailed,
+    refresh: refreshActivity,
+  } = useClientActivity();
   const [activityCentreVisible, setActivityCentreVisible] = useState(false);
-
-  // Activity Centre reads (forms, info packs, refund requests, fees to pay,
-  // waitlist holds). The forms + packs also drive each booking row's "!".
-  const refreshActivity = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      setActivityRemote(await getMyActivity());
-      setActivityLoadFailed(false);
-    } catch (error: unknown) {
-      logger.warn('[Bookings] activity centre failed to load', error);
-      setActivityLoadFailed(true);
-    } finally {
-      setActivityLoaded(true);
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    void refreshActivity();
-  }, [refreshActivity, upcomingBookings.length, pastBookings.length]);
-
-  // Re-check when returning to this screen (e.g. after filling an intake form)
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => { void refreshActivity(); });
-    return unsubscribe;
-  }, [navigation, refreshActivity]);
-
   const bookingActionItems = useMemo(() => bookingTodoCounts(activityRemote), [activityRemote]);
-  const activity = useMemo(() => {
-    const seen = new Set<string>();
-    const all = [...todayBookings, ...upcomingBookings, ...pastBookings].filter(b => {
-      if (seen.has(b.id)) return false;
-      seen.add(b.id);
-      return true;
-    });
-    return buildClientActivity(all, activityRemote);
-  }, [todayBookings, upcomingBookings, pastBookings, activityRemote]);
   const activityNeedsYouCount = activity.needsYou.length;
 
   // The waitlist popup and the dialog are Modals of their own: open them once
@@ -437,6 +406,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       });
   }, [navigation, showAlert, refreshActivity]);
 
+  // The client Settings screen's Activity Centre card lands here with this.
+  useEffect(() => {
+    if (!route?.params?.openActivityCentre) return;
+    setActivityCentreVisible(true);
+    navigation.setParams({ openActivityCentre: undefined } as any);
+  }, [route?.params?.openActivityCentre, navigation]);
+
   const openActivityCentre = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setActivityCentreVisible(true);
@@ -468,6 +444,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+  // Off by default: a review is named unless the client chooses otherwise.
+  const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [showRebookAddOnsModal, setShowRebookAddOnsModal] = useState(false);
   const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
@@ -734,6 +712,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           service_id: null,
           user_id: user.id,
           rating,
+          is_anonymous: reviewAnonymous,
           ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
         });
       }
@@ -747,6 +726,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         setShowRatingModal(false);
         setRating(0);
         setReviewText('');
+        setReviewAnonymous(false);
         setTimeout(() => {
           mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
           modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -756,7 +736,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert('Error', 'Failed to submit rating.');
       setIsLoading(false);
     }
-  }, [selectedBooking, rating, reviewText, user]);
+  }, [selectedBooking, rating, reviewText, reviewAnonymous, user]);
 
   // A tip is a distinct Stripe payment, not a number attached to a review.
   const handleTipSubmit = useCallback(async () => {
@@ -1145,6 +1125,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             logger.log('Opening rating modal for booking:', booking.id);
             setRating(0);
             setReviewText('');
+            setReviewAnonymous(false);
             setShowRatingModal(true);
           } else if (route.params?.openBookingId) {
             logger.log('Navigating to BookingDetail screen');
@@ -2263,7 +2244,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             showRatingModal/rating/reviewText but nothing rendered a modal, so
             tapping Rate did nothing visible. handleRatingSubmit already wired
             up a real submitReview() call; only the UI was missing. ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 {!hasRated ? (
@@ -2288,8 +2269,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       />
                       <Text style={styles.characterCount}>{reviewText.length}/500</Text>
                     </View>
+                    <AnonymousReviewToggle
+                      value={reviewAnonymous}
+                      onValueChange={setReviewAnonymous}
+                      palette={{ text: P.text, sub: P.sub, accent: P.accent, border: P.border }}
+                      disabled={isLoading}
+                    />
                     <View style={popSt.sheetBtns}>
-                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }} activeOpacity={0.7}>
                         <Text style={{ color: P.text }}>Skip</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : P.accent }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
