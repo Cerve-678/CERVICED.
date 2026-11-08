@@ -408,7 +408,6 @@ export interface DbProvider {
   qualifications: string | null;
   is_insured_self_declared: boolean;
   dbs_checked_self_declared: boolean;
-  travel_radius: string | null;
   clientele: string[] | null;
   // Provider-level hair types catered to (HAIR_TYPES vocabulary — Straight,
   // Wavy, Curly, Coily, 4A, 4B, 4C). NULL/empty = caters to all. This is what
@@ -667,6 +666,15 @@ export interface DbPortfolioItem {
   skin_tone_shown: "fair" | "light" | "medium" | "tan" | "deep" | "rich" | null;
 }
 
+/** booking_venue_details: the provider's private venue for one booking.
+ *  Readable only by that booking's provider (RLS); clients get it through
+ *  client_bookings once released. */
+export interface DbBookingVenue {
+  address: string | null;
+  directions: string | null;
+  coordinates: { lat: number; lng: number } | null;
+}
+
 export interface DbBooking {
   id: string;
   user_id: string;
@@ -706,12 +714,19 @@ export interface DbBooking {
   service_name_snapshot: string;
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
-  provider_address_snapshot: string | null;
-  /** Private venue access instructions snapshotted at booking. The
-   * client_bookings view release-gates this with the address. */
+  // The provider's private venue is NOT on the bookings table (migration
+  // 20261108180000): it lives in booking_venue_details, which clients can't
+  // read. These three are client_bookings VIEW columns, null until the
+  // address is released. A provider's own read embeds booking_venue_details
+  // instead; mapDbBookingToConfirmed reads whichever is present.
+  provider_address_snapshot?: string | null;
+  /** Private venue access instructions, release-gated with the address. */
   provider_directions_snapshot?: string | null;
+  provider_coordinates?: { lat: number; lng: number } | null;
+  /** Provider-side embed of the booking's venue. To-one, but read defensively
+   *  as either shape, like booking_client_addresses. */
+  booking_venue_details?: DbBookingVenue | DbBookingVenue[] | null;
   provider_phone_snapshot: string | null;
-  provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
@@ -822,6 +837,10 @@ export interface DbReview {
   comment: string | null;
   tip_amount: number | null;
   created_at: string;
+  /** The client chose to review anonymously. The database then hides who
+   *  wrote it from everyone but the client themself, the provider included:
+   *  see supabase/migrations/20261108230000_anonymous_reviews.sql. */
+  is_anonymous: boolean;
 }
 
 export interface DbNotification {
@@ -1007,7 +1026,6 @@ export type ProviderWithServices = Pick<
   | "walk_ins_welcome"
   | "group_bookings_available"
   | "vegan_cruelty_free"
-  | "travel_radius"
   | "products_used"
   | "hair_types_catered"
   | "preferred_payment_methods"
@@ -1157,16 +1175,31 @@ export interface BookingWithAddOns extends DbBooking {
 }
 
 /** Review with user name — used by ProviderProfileScreen */
-export interface ReviewWithUser extends DbReview {
+/**
+ * A review as the provider it is about sees it. On an anonymous review the
+ * database blanks everything that leads back to the client: who wrote it, and
+ * the booking, service and tip that would name them.
+ */
+export interface ReviewWithUser
+  extends Omit<DbReview, "user_id" | "booking_id" | "service_id" | "tip_amount"> {
+  user_id: string | null;
+  booking_id: string | null;
+  service_id: string | null;
+  tip_amount: number | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 
-/** Public review payload: deliberately excludes booking and payment linkage. */
+/** Public review payload: deliberately excludes booking and payment linkage,
+ *  and the reviewer entirely on an anonymous review. */
 export interface PublicReviewWithUser
   extends Pick<
     DbReview,
-    "id" | "user_id" | "provider_id" | "rating" | "comment" | "created_at"
+    "id" | "provider_id" | "rating" | "comment" | "created_at" | "is_anonymous"
   > {
+  /** null on an anonymous review. */
+  user_id: string | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 

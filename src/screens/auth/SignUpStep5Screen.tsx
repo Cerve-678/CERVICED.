@@ -30,9 +30,11 @@ import { useRevealNext, type CardLayout } from '../../components/signup/useRevea
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS, ALL_SPECIALTIES, SPECIALTIES_MAP } from '../../features/business-details/options';
 import { SpecialityMultiSelect } from '../../components/SpecialityMultiSelect';
 import { useSpecialityOptionsWithLearned } from '../../features/business-details/useLearnedSpecialities';
-import { CityMultiSelect } from '../../components/CityMultiSelect';
+import AreaPicker from '../../components/AreaPicker';
+import { serviceLocationsFromArea } from '../../utils/clientArea';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 import { logger } from '../../utils/logger';
 import {
   Chip, ChipWrap, FormCard, PrimaryButton, QuestionCard, ScreenTitle, SectionLabel, SwitchRow, useFieldInputStyle,
@@ -129,7 +131,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
   // Client-only (services/location moved to Step 4 for providers)
   const [selectedInterests, setSelectedInterests] = useState<string[]>(data.serviceInterests);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>(data.serviceLocations);
+  // One area, picked the same way as Account > Your area (users.client_area).
+  // service_locations is kept filled with its town — see utils/clientArea.
+  const [selectedArea, setSelectedArea] = useState<string>(data.clientArea);
+  const selectedLocations = serviceLocationsFromArea(selectedArea);
   const [selectedFrequency, setSelectedFrequency] = useState<string>(data.maintenanceFrequency);
   const [selectedReferral,  setSelectedReferral]  = useState<string>(data.referralSource);
   // Provider-only "Tell me more"
@@ -176,6 +181,12 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     if (changed && !selectedReferral) reveal(referralY.current);
   };
 
+  const selectArea = (area: string) => {
+    const changed = area !== selectedArea;
+    setSelectedArea(area);
+    if (changed && !selectedFrequency) reveal(frequencyY.current);
+  };
+
   const selectReferral = (source: string) => {
     setSelectedReferral(source);
   };
@@ -205,6 +216,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     } : {
       serviceInterests: selectedInterests,
       serviceLocations: selectedLocations,
+      clientArea: selectedArea,
       maintenanceFrequency: selectedFrequency,
       referralSource: selectedReferral,
       gender: selectedGender,
@@ -221,6 +233,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           styleVibe: data.styleVibe, allergies: data.allergies, treatmentHistory: data.treatmentHistory,
           medicalNotes: data.medicalNotes, photographyConsent: data.photographyConsent,
           serviceInterests: selectedInterests, serviceLocations: selectedLocations,
+          clientArea: selectedArea,
           maintenanceFrequency: selectedFrequency, referralSource: selectedReferral,
           gender: selectedGender,
           has_kids: hasKids,
@@ -294,12 +307,13 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             business_type: data.businessType || null,
             business_phone: data.businessPhone || null, instagram: data.instagram || null,
             tiktok: data.tiktok || null, website: data.website || null,
-            hair_type: data.hairType || null, skin_type: data.skinType || null,
+            hair_type: data.hairType || null, skin_type: toPickColumn(data.skinType),
             allergies: data.allergies, skin_concerns: data.skinConcerns,
-            style_vibe: data.styleVibe || null, treatment_history: data.treatmentHistory,
+            style_vibe: toPickColumn(data.styleVibe), treatment_history: data.treatmentHistory,
             medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
             service_interests: isProvider ? data.serviceInterests : selectedInterests,
             service_locations: isProvider ? data.serviceLocations : selectedLocations,
+            client_area: isProvider ? null : (selectedArea.trim() || null),
             location: isProvider ? (data.location || null) : null,
             years_experience: isProvider ? (data.yearsExperience || null) : null,
             maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
@@ -338,7 +352,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     // Step 5's required fields before submitting. (Switches used to skip this.)
     const firstEmptyY = isProvider
       ? (!selectedAccessibility.length ? accessibilityY : !selectedLanguages.length ? languagesY : !selectedSpecialties.length ? specialtiesY : !selectedReferral ? referralY : null)
-      : (!selectedInterests.length ? servicesY : !selectedLocations.length ? locationY : !selectedFrequency ? frequencyY : !selectedReferral ? referralY : null);
+      : (!selectedInterests.length ? servicesY : !selectedArea.trim() ? locationY : !selectedFrequency ? frequencyY : !selectedReferral ? referralY : null);
 
     if (firstEmptyY) {
       setShowErrors(true);
@@ -445,17 +459,17 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         ) : (
           <>
             {renderSection(servicesY, 'SERVICES', "Select all services you're interested in.", SERVICE_CATEGORIES, item => selectedInterests.includes(item), toggleInterest)}
+            {/* Same picker and column as Account > Your area. */}
             <QuestionCard
-              title="LOCATION"
-              prompt="Where are you willing to get services from?"
-              error={showErrors && !selectedLocations.length}
+              title="YOUR AREA"
+              prompt="Where are you based?"
+              error={showErrors && !selectedArea.trim()}
               onLayout={onLayoutFor(locationY)}
             >
-              <CityMultiSelect
-                selected={selectedLocations}
-                onChange={setSelectedLocations}
-                palette={t}
-                placeholder="Search a town, county or area"
+              <AreaPicker
+                value={selectedArea}
+                onChange={selectArea}
+                accentColor={t.accent}
               />
             </QuestionCard>
             {renderSection(frequencyY, 'FREQUENCY', 'How often do you get your maintenance done?', FREQUENCIES, item => selectedFrequency === item, selectFrequency)}

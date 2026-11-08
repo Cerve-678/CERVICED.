@@ -21,7 +21,6 @@ import {
   getActivePromotions,
   getActiveRescheduleRequest,
   getBookmarkedProviders,
-  getClientBeautyProfile,
   getDiscoverServices,
   getMyEventPlans,
   getNotificationPreferences,
@@ -31,6 +30,7 @@ import {
   getBookedClientContact,
   getProviderReschedulePolicyByDisplayName,
   getSavedPortfolioIds,
+  getUserBeautyProfile,
   validatePromoCode,
   hasReviewedBooking,
   isProviderBookmarked,
@@ -64,6 +64,7 @@ import { hasUsefulHistory, type Capability, type CapabilityResult, type PendingA
 import { buildRebookCartItem, rebookAddOns } from "../../../features/bookings/rebook";
 import { CATEGORY_LABELS, SERVICE_CATALOGUE } from "../serviceCatalogue";
 import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
+import { formatPickList, toPickList } from "../../../features/beauty-profile/pickList";
 import {
   chip,
   navChip,
@@ -1081,7 +1082,7 @@ const findProviders: Capability = {
     if (steps.length < 3) steps.push("Putting the list together…");
     return steps;
   },
-  async run({ entities, rawMessage }): Promise<CapabilityResult> {
+  async run({ entities, rawMessage, clientArea }): Promise<CapabilityResult> {
     const service = entities.service!.value;
     const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
     const priceFilter = entities.money?.value;
@@ -1149,7 +1150,7 @@ const findProviders: Capability = {
     const wantsNearby = NEAR_ME_RE.test(rawMessage);
     let proximityNote = "";
     if (wantsNearby && dbProviders.length > 0) {
-      const nearest = await sortByProximity(dbProviders);
+      const nearest = await sortByProximity(dbProviders, clientArea);
       dbProviders = nearest.providers;
       proximityNote = `\n\n${nearest.note}`;
       if (nearest.ranked) work.push("Sorted them by distance from you");
@@ -2828,7 +2829,7 @@ const topRated: Capability = {
     "whos the best", "the best", "any good", "new providers", "newest",
     "just joined", "trending", "popular", "well reviewed", "good reviews",
   ],
-  async run({ rawMessage }): Promise<CapabilityResult> {
+  async run({ rawMessage, clientArea }): Promise<CapabilityResult> {
     const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
     let rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
 
@@ -2839,7 +2840,7 @@ const topRated: Capability = {
     const wantsNearby = NEAR_ME_RE.test(rawMessage);
     let proximityNote = "";
     if (wantsNearby && rows.length > 0) {
-      const nearest = await sortByProximity(rows);
+      const nearest = await sortByProximity(rows, clientArea);
       rows = nearest.providers;
       proximityNote = `\n\n${nearest.note}`;
     }
@@ -2950,7 +2951,7 @@ const nearbyProviders: Capability = {
   // close rivals here, one of them is plainly wrong for the sentence.
   excludeWhen:
     /\b(?:top[\s-]?rated|best[\s-]?rated|highest[\s-]?rated|best|well[\s-]?reviewed|good reviews|trending|popular|newest|new providers|just joined)\b/i,
-  async run(): Promise<CapabilityResult> {
+  async run({ clientArea }): Promise<CapabilityResult> {
     const rows = await getProviders();
     if (rows.length === 0) {
       return {
@@ -2959,7 +2960,7 @@ const nearbyProviders: Capability = {
       };
     }
 
-    const nearest = await sortByProximity(rows);
+    const nearest = await sortByProximity(rows, clientArea);
 
     // Location refused or unknown: say so instead of presenting the default
     // rating order as "nearest", which is the one thing this answer must
@@ -3448,18 +3449,22 @@ const beautyProfile: Capability = {
   ],
   async run({ userId }): Promise<CapabilityResult> {
     if (!userId) return { text: "I couldn't load your profile — try signing in again." };
-    const profile = await getClientBeautyProfile(userId);
+    // The client's own row. This used to call the provider-only lookup, which
+    // answers nobody but a booked provider, so it always read as empty here.
+    const profile = await getUserBeautyProfile(userId);
 
     // Preference/style fields ONLY. `allergies` and `medicalNotes` live on
     // this same object — they are for the provider treating you, and Becca
     // neither recites nor interprets them (see BECCA_CAPABILITIES.md §2.1).
     const fields: { title: string; detail: string }[] = [];
-    if (profile.hairType) fields.push({ title: "Hair type", detail: profile.hairType });
-    if (profile.skinType) fields.push({ title: "Skin type", detail: profile.skinType });
-    if (profile.nailShape) fields.push({ title: "Nail shape", detail: profile.nailShape });
-    if (profile.lashStyle) fields.push({ title: "Lash style", detail: profile.lashStyle });
-    if (profile.browStyle) fields.push({ title: "Brow style", detail: profile.browStyle });
-    if (profile.styleVibe) fields.push({ title: "Style", detail: profile.styleVibe });
+    if (profile?.hair_type) fields.push({ title: "Hair type", detail: profile.hair_type });
+    const skinTypes = toPickList(profile?.skin_type);
+    if (skinTypes.length) fields.push({ title: "Skin type", detail: formatPickList(skinTypes) });
+    if (profile?.nail_shape) fields.push({ title: "Nail shape", detail: profile.nail_shape });
+    if (profile?.lash_style) fields.push({ title: "Lash style", detail: profile.lash_style });
+    if (profile?.brow_style) fields.push({ title: "Brow style", detail: profile.brow_style });
+    const styleVibes = toPickList(profile?.style_vibe);
+    if (styleVibes.length) fields.push({ title: "Style", detail: formatPickList(styleVibes) });
     const bits = fields.map((f) => `- **${f.title}:** ${f.detail}`);
 
     if (bits.length === 0) {

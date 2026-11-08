@@ -395,10 +395,9 @@ WITH CHECK (
   ))
 );
 
--- Its body already scopes profile data to a booking relationship; make the
--- signed-in caller requirement explicit in the execute contract too.
-REVOKE ALL ON FUNCTION public.get_client_beauty_profile_for_provider(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_client_beauty_profile_for_provider(uuid) TO authenticated;
+-- get_client_beauty_profile_for_provider was dropped in
+-- 20261108190000_beauty_profile_shared_by_booked_service.sql, which sets the
+-- grants on its replacement, get_client_beauty_profile_for_booking.
 
 REVOKE ALL ON FUNCTION public.expire_cart_holds() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.expire_cart_holds() FROM anon, authenticated;

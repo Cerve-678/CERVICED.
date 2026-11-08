@@ -33,6 +33,7 @@ import {
   ConfirmedBooking,
 } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { DEFAULT_CALENDAR_VIEW, nextCalendarView, useCalendarViewPreference, type CalendarView } from '../../features/provider-bookings/calendarViewPreference';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { storage } from '../../utils/storage';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
@@ -1120,8 +1121,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // Expansion states per booking
   const [expansionStates, setExpansionStates] = useState<Record<string, ExpansionState>>({});
 
-  // View mode: list, timeline, or full week (timeline is default — Apple Calendar style)
-  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'week'>('timeline');
+  // View mode: list, timeline (full day), or week. Opens in the provider's
+  // saved choice (My Profile → Manage → Calendar view); the view button below
+  // changes that same saved choice, so the two never disagree.
+  const [viewMode, setViewMode] = useState<CalendarView>(DEFAULT_CALENDAR_VIEW);
 
   // Month calendar toggle
   const [showMonth, setShowMonth]   = useState(false);
@@ -1226,7 +1229,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       {
         key: 'view-mode',
         title: 'Three ways to see your bookings',
-        body: 'Switch between the hour-by-hour timeline for one day, a plain list, and the full week at a glance.',
+        body: 'Switch between the hour-by-hour timeline for one day, a plain list, and the full week at a glance. It opens in the last one you picked, which you can also set in My Profile under Manage.',
         target: { ref: viewModeBtnRef },
         radius: 17,
         icon: 'list',
@@ -1388,12 +1391,28 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // The daily-recap notification ("Today's Schedule") lands here in list view:
   // it summarises the day as a list, so the timeline would answer a different
   // question. Cleared after use so a later re-focus doesn't force the mode again.
+  // A one-off: it doesn't change the saved view, and the saved view loading
+  // late doesn't undo it.
+  const viewModeForcedRef = useRef(false);
   useEffect(() => {
     const requested = route.params?.viewMode;
     if (!requested) return;
+    viewModeForcedRef.current = true;
     setViewMode(requested);
     navigation.setParams({ viewMode: undefined });
   }, [route.params?.viewMode, navigation]);
+
+  const [savedViewMode, saveViewMode] = useCalendarViewPreference(user?.id);
+  const lastSavedViewModeRef = useRef<CalendarView | null>(null);
+  useEffect(() => {
+    if (!savedViewMode) return;
+    // The first load yields to a notification's forced view; a later change
+    // (made in My Profile) always applies.
+    const isFirstLoad = lastSavedViewModeRef.current === null;
+    lastSavedViewModeRef.current = savedViewMode;
+    if (isFirstLoad && viewModeForcedRef.current) return;
+    setViewMode(savedViewMode);
+  }, [savedViewMode]);
 
   // Fetch bookings. `providerId`, when the caller already has it (the
   // combined focus effect below fetches the profile once for both this and
@@ -1834,7 +1853,12 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             <TouchableOpacity
               ref={viewModeBtnRef}
               // Tap order: timeline (the default) → list → week → back to timeline.
-              onPress={() => { tap(); setViewMode(v => v === 'timeline' ? 'list' : v === 'list' ? 'week' : 'timeline'); }}
+              onPress={() => {
+                tap();
+                const next = nextCalendarView(viewMode);
+                setViewMode(next);
+                saveViewMode(next);
+              }}
               style={[s.iconBtn, { backgroundColor: P.accent }]}
             >
               <Ionicons

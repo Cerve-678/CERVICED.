@@ -38,35 +38,9 @@ AS $$
 $$;
 GRANT EXECUTE ON FUNCTION public.get_user_public_profiles(uuid[]) TO authenticated, anon;
 
--- Booking-gated: a provider may read a client's beauty/health profile only
--- if that client has an actual booking with them.
-CREATE OR REPLACE FUNCTION public.get_client_beauty_profile_for_provider(p_client_user_id uuid)
-RETURNS TABLE(
-  hair_type text, scalp_condition text, hair_goals text[], treatment_history text[],
-  skin_type text, skin_tone text, skin_concerns text[], sensitive_areas text[],
-  nail_length text, nail_shape text,
-  lash_style text, lash_status text, brow_style text, brow_condition text,
-  makeup_coverage text, makeup_finish text, makeup_eyes text, makeup_lips text,
-  style_vibe text, allergies text[], medical_notes text, photography_consent boolean
-)
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT u.hair_type, u.scalp_condition, u.hair_goals, u.treatment_history,
-         u.skin_type, u.skin_tone, u.skin_concerns, u.sensitive_areas,
-         u.nail_length, u.nail_shape,
-         u.lash_style, u.lash_status, u.brow_style, u.brow_condition,
-         u.makeup_coverage, u.makeup_finish, u.makeup_eyes, u.makeup_lips,
-         u.style_vibe, u.allergies, u.medical_notes, u.photography_consent
-  FROM public.users u
-  WHERE u.id = p_client_user_id
-    AND EXISTS (
-      SELECT 1
-      FROM public.bookings b
-      JOIN public.providers p ON p.id = b.provider_id
-      WHERE b.user_id = p_client_user_id
-        AND p.user_id = auth.uid()
-    );
-$$;
-GRANT EXECUTE ON FUNCTION public.get_client_beauty_profile_for_provider(uuid) TO authenticated;
+-- The booking-gated provider read of a client's beauty/health profile that
+-- used to be defined here (get_client_beauty_profile_for_provider, the whole
+-- profile) was replaced by get_client_beauty_profile_for_booking, which only
+-- returns what the booked service needs. See
+-- migrations/20261108190000_beauty_profile_shared_by_booked_service.sql.
+-- Don't recreate it here.
