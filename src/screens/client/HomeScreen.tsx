@@ -87,6 +87,7 @@ interface Offer {
   validUntil: string;
   providerName: string;
   logo: any;
+  logoFraming: LogoFraming | null;
   service?: string;
 }
 
@@ -363,6 +364,7 @@ export default function HomeScreen() {
       validUntil: p.valid_until,
       providerName: p.providers?.display_name ?? 'Provider',
       logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
+      logoFraming: p.providers?.logo_framing ?? null,
       ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
     })),
   [rawPromotions]);
@@ -1988,7 +1990,7 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} contentFit="cover" transition={0} /> : <View style={styles.offerLogo} />}
+                      {offer.logo?.uri ? <LogoCircle uri={offer.logo.uri} framing={offer.logoFraming} style={styles.offerLogo} /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
                         {/* In normal flow (not floating over the title) so a
                             long custom label — a provider can type anything

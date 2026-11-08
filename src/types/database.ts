@@ -886,6 +886,7 @@ export interface PublicPromotionWithProvider extends ClientPromotion {
   providers?: {
     display_name: string | null;
     logo_url: string | null;
+    logo_framing?: LogoFraming | null;
     slug: string | null;
   } | null;
 }

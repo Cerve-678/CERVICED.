@@ -2305,7 +2305,7 @@ export async function getActivePromotions(
   let query = supabase
     .from("promotions")
     .select(
-      "id, provider_id, title, description, discount_text, discount_percent, discount_amount, service_category, service_ids, promo_code, valid_from, valid_until, is_active, image_url, created_at, providers!inner(display_name, logo_url, slug)",
+      "id, provider_id, title, description, discount_text, discount_percent, discount_amount, service_category, service_ids, promo_code, valid_from, valid_until, is_active, image_url, created_at, providers!inner(display_name, logo_url, logo_framing, slug)",
     )
     .eq("providers.is_active", true)
     .eq("providers.has_gone_live", true)
@@ -9871,6 +9871,39 @@ export async function getProviderServiceCategoryByUserId(
     .limit(1)
     .maybeSingle();
   return (data as any)?.service_category ?? null;
+}
+
+/** A provider's current logo and how they framed it, for screens whose logo
+ *  arrives without the framing (a booking's logo snapshot, a search RPC row,
+ *  a cart item). */
+export interface ProviderLogoFramingEntry {
+  logoUrl: string | null;
+  framing: LogoFraming | null;
+}
+
+/**
+ * Current logo + framing for many providers in one query. Client-facing, so
+ * live providers only; a provider who isn't live just gets no entry and the
+ * caller draws its logo unframed.
+ */
+export async function getProviderLogoFramings(
+  providerIds: string[],
+): Promise<Record<string, ProviderLogoFramingEntry>> {
+  const ids = [...new Set(providerIds)].filter(Boolean);
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id, logo_url, logo_framing")
+    .in("id", ids)
+    .eq("has_gone_live", true)
+    .eq("is_active", true)
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
+  const out: Record<string, ProviderLogoFramingEntry> = {};
+  for (const row of (data ?? []) as { id: string; logo_url: string | null; logo_framing: LogoFraming | null }[]) {
+    out[row.id] = { logoUrl: row.logo_url, framing: row.logo_framing ?? null };
+  }
+  return out;
 }
 
 /** Fetch id, slug, and display_name for a provider by their DB id.

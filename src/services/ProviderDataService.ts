@@ -1,4 +1,5 @@
 // Updated provider data using business names as IDs (like Uber)
+import type { LogoFraming } from '../types/database';
 
 // Define the Provider type if not imported
 export type Provider = {
@@ -6,6 +7,8 @@ export type Provider = {
   name: string;
   service: string;
   logo: any;
+  /** How the provider framed their circle logo, when the row carried it. */
+  logoFraming?: LogoFraming | null;
   location?: string;
   // Min/max price across the provider's active services — populated
   // separately from the base provider row (see databaseService's

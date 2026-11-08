@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -23,7 +24,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { HomeStackParamList } from '../../navigation/types';
 import { forgetCachedReads, getActivePromotions } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import type { PublicPromotionWithProvider } from '../../types/database';
+import type { LogoFraming, PublicPromotionWithProvider } from '../../types/database';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 interface Offer {
@@ -38,6 +39,7 @@ interface Offer {
   providerName: string;
   providerSlug: string | null;
   logo: any;
+  logoFraming: LogoFraming | null;
   service?: string;
 }
 
@@ -54,6 +56,7 @@ function mapPromotion(p: PublicPromotionWithProvider): Offer {
     providerName: p.providers?.display_name ?? 'Provider',
     providerSlug: p.providers?.slug ?? null,
     logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
+    logoFraming: p.providers?.logo_framing ?? null,
     ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
   };
 }
@@ -99,7 +102,10 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
         disabled={!offer.providerSlug}
       >
         {/* Provider logo */}
-        {offer.logo ? (
+        {/* Square, the same 1:1 shape as the circle, so its framing fits. */}
+        {offer.logo?.uri ? (
+          <LogoCircle uri={offer.logo.uri} framing={offer.logoFraming} style={styles.logo} />
+        ) : offer.logo ? (
           <Image source={offer.logo} style={styles.logo} contentFit="cover" />
         ) : (
           <View style={[styles.logo, styles.logoPlaceholder, { backgroundColor: P.surface }]}>

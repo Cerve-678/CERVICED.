@@ -43,7 +43,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
-import { PolicyImageViewer } from "../../components/PolicyImageViewer";
+import { FullImageViewer } from "../../components/FullImageViewer";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -2107,6 +2107,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // wherever the list last scrolled to. Bumping `key` on every open forces a
   // fresh FlatList each time so it lands on the right image.
   const [showPolicyImage, setShowPolicyImage] = useState(false);
+  const [showFullLogo, setShowFullLogo] = useState(false);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
       visible: true,
@@ -4372,10 +4373,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
         {/* The provider's detailed policy document, scrollable when it's
             long — the same viewer the client's booking detail opens. */}
-        <PolicyImageViewer
+        <FullImageViewer
           uri={provider.bookingPolicies?.policyImageUrl || null}
           visible={showPolicyImage}
           onClose={() => setShowPolicyImage(false)}
+          label="Policy document"
+        />
+
+        {/* The whole logo, uncropped, from a tap on the profile circle. */}
+        <FullImageViewer
+          uri={provider.providerLogo?.uri ?? null}
+          visible={showFullLogo}
+          onClose={() => setShowFullLogo(false)}
+          label="Logo"
         />
 
         {/* Fullscreen service image carousel modal — hidden whenever the "All
@@ -4975,11 +4985,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               <View style={styles.logoContainer}>
                 <View style={styles.logoWrapper}>
                   {provider.providerLogo?.uri ? (
-                    <LogoCircle
-                      uri={provider.providerLogo.uri}
-                      framing={provider.providerLogoFraming}
-                      style={styles.providerLogo}
-                    />
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setShowFullLogo(true);
+                      }}
+                      accessibilityRole="imagebutton"
+                      accessibilityLabel={`${provider.displayName} logo. Tap to see it in full`}
+                    >
+                      <LogoCircle
+                        uri={provider.providerLogo.uri}
+                        framing={provider.providerLogoFraming}
+                        style={styles.providerLogo}
+                      />
+                    </TouchableOpacity>
                   ) : (
                     <View
                       style={[

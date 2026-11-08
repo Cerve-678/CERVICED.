@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -489,12 +490,11 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
           accessibilityRole="button"
           accessibilityLabel={`View ${service.providerName}`}
         >
-          <Image
-            source={service.providerLogoUrl ? { uri: service.providerLogoUrl } : require('../../../assets/icon.png')}
-            style={styles.serviceCardLogo}
-            contentFit="cover"
-            transition={0}
-          />
+          {service.providerLogoUrl ? (
+            <ProviderLogoCircle providerId={service.providerId} uri={service.providerLogoUrl} style={styles.serviceCardLogo} />
+          ) : (
+            <Image source={require('../../../assets/icon.png')} style={styles.serviceCardLogo} contentFit="cover" transition={0} />
+          )}
           <Text style={[styles.serviceCardProviderName, { color: P.text }]} numberOfLines={1}>
             {service.providerName}
             {!service.isLinkOnly && rating ? (
