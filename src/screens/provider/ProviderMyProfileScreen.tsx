@@ -961,7 +961,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 // anonymous review reads "Anonymous" here too.
                 setReviews(mapProviderReviews(dbReviews));
               })
-              .catch(() => {}),
+              .catch(err => {
+                logger.error('[MyServices] reviews load failed:', err);
+              }),
 
             // Passed the profile we already hold, so this costs the three
             // status reads and not a fourth lookup of the same row.

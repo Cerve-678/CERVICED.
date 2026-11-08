@@ -32,10 +32,15 @@
 --      anonymous review and says "an anonymous review", so neither the notice
 --      nor its push payload points at the booking.
 --
--- What is NOT hidden, and can't be by the database: timing. A provider with
--- one appointment that day can still guess. The rating aggregates
--- (update_provider_rating, get_my_provider_achievements) only count and
--- average, so they reveal nothing per reviewer and are left alone.
+-- What is NOT hidden, and can't be by the database alone: inference. A
+-- provider with one appointment that day can still guess from timing; named
+-- reviews keep their booking link, so "completed bookings minus named
+-- reviews" narrows who wrote an anonymous one; a tip (booking_tips, which the
+-- provider sees per booking) paid around the same time points at its author;
+-- the comment text itself may give it away; and with very few reviews the
+-- rating aggregates (update_provider_rating, get_my_provider_achievements)
+-- move by exactly that review. Those are left alone: this migration removes
+-- every direct link, not every possible guess.
 --
 -- Turning is_anonymous on with an UPDATE after the fact hides the review from
 -- here on, but a notification already sent for it keeps its booking link. The
