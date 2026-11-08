@@ -34,6 +34,7 @@ import {
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
 } from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
+import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1365,6 +1366,21 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                         : `${booking.providerName} has responded with available times. Tap Reschedule Now to confirm.`)
                     : `Waiting for ${booking.providerName} to respond with available dates.`}
                 </Text>
+                {/* Until when. The client's window starts when the provider
+                    offers times (updated_at); the provider's when the client
+                    asked. Same anchors the expiry cron uses. */}
+                {(() => {
+                  const offered = !!booking.rescheduleRequest?.providerAvailableDates;
+                  const by = rescheduleReplyBy(offered ? booking.rescheduleRequest?.providerRespondedAt : booking.rescheduleRequest?.requestedAt);
+                  if (!by) return null;
+                  return (
+                    <Text style={{ fontSize: 13, color: C.text, fontWeight: '600', marginTop: 6 }}>
+                      {offered
+                        ? `You have until ${by} to choose, or your booking stays as it is.`
+                        : `${booking.providerName} has until ${by} to reply, or your booking stays as it is.`}
+                    </Text>
+                  );
+                })()}
                 {booking.rescheduleRequest?.providerAvailableDates && !!booking.rescheduleRequest.providerNote && (
                   <Text style={{ fontSize: 13, color: C.text, marginTop: 8, lineHeight: 19 }}>
                     Note from {booking.providerName}: {booking.rescheduleRequest.providerNote}

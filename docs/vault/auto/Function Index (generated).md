@@ -5,7 +5,7 @@
 
 #generated
 
-**3353 functions** across **472 files**.
+**3355 functions** across **474 files**.
 
 ### `src/components/` (63)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -79,13 +79,14 @@
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
 - `useRevealNext.ts` — onScroll · onViewportLayout · reveal · **revealEase** · **revealOffset** · step · stopGlide · **useRevealNext**
 
-### `src/constants/` (9)
+### `src/constants/` (10)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
 - `payoutTiming.ts` — **isPayoutHoldDays** · **payoutHoldLabel** · **payoutHoldSentence**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
 - `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · isHeroFinish · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
+- `reschedule.ts` — changes
 - `skinTones.ts` — **matchesSkinTone**
 - `support.ts` — **supportMailtoUrl**
 - `waitlist.ts` — changes
@@ -441,7 +442,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (59)
+### `src/utils/` (60)
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
@@ -485,6 +486,7 @@
 - `requestId.ts` — **newRequestId**
 - `requestTiming.ts` — **createCoalescingFetch** · **createTimedFetch** · **formatTimingLine** · **labelSupabaseRequest** · name
 - `rescheduleBlockedReason.ts` — **getRescheduleBlock** · **getStaleRequestBlock** · **hasBookingDatePassed**
+- `rescheduleReplyBy.ts` — **rescheduleReplyBy**
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes

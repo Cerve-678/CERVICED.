@@ -22,6 +22,7 @@ import {
 } from '../../services/databaseService';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import { formatLongDate, formatTime12, formatTime12Safe, dateToYMD } from '../../utils/dateUtils';
+import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
 import {
   rescheduleProbeStart, rescheduleCandidateDates, rescheduleWindowLabel, rescheduleRequestToken,
   RESCHEDULE_MAX_DATES,
@@ -553,7 +554,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               ? `All ${groupSiblings.length} of your services with ${booking.providerName} have been rescheduled to ${formatDisplayDate(selectedDate!)}.`
               : hasProviderResponse
               ? `Your appointment with ${booking.providerName} has been rescheduled to ${formatDisplayDate(selectedDate!)} at ${formatTime12(selectedTime!)}.`
-              : `Your reschedule request has been sent to ${booking.providerName}. You'll be notified when they respond with available times.`}
+              : `Your reschedule request has been sent to ${booking.providerName}. They have ${RESCHEDULE_REPLY_MINUTES} minutes to reply with available times. If they don't, your booking stays as it is.`}
           </Text>
           <TouchableOpacity style={[st.primaryBtn, { backgroundColor: C.accent, width: '100%' }]} onPress={() => {
             // popTo targets the Bookings route directly. This used to be two
