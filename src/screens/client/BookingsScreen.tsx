@@ -44,9 +44,8 @@ import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
-import { bookingTodoCounts, type ActivityItem } from '../../features/bookings/activityCentre';
+import { bookingTodoCounts } from '../../features/bookings/activityCentre';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
-import { ActivityCentreSheet } from '../../features/bookings/ActivityCentreSheet';
 import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
@@ -118,7 +117,6 @@ const CATEGORY_TABS = [
 // Display-only — the underlying booking rows are never touched by this.
 const PAST_BOOKINGS_VISIBLE_DAYS = 30;
 /** Long enough for the Activity Centre's fade-out before another Modal opens. */
-const ACTIVITY_SHEET_FADE_MS = 350;
 
 const WaitlistCard = React.memo(function WaitlistCard({
   entry,
@@ -366,58 +364,15 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const {
     activity,
     remote: activityRemote,
-    loaded: activityLoaded,
-    failed: activityLoadFailed,
     refresh: refreshActivity,
   } = useClientActivity();
-  const [activityCentreVisible, setActivityCentreVisible] = useState(false);
   const bookingActionItems = useMemo(() => bookingTodoCounts(activityRemote), [activityRemote]);
   const activityNeedsYouCount = activity.needsYou.length;
 
-  // The waitlist popup and the dialog are Modals of their own: open them once
-  // this sheet has faded out, or iOS drops the second presentation.
-  const handleOpenActivityItem = useCallback((item: ActivityItem) => {
-    setActivityCentreVisible(false);
-    const { target } = item;
-    if (target.type === 'booking') {
-      navigation.navigate('BookingDetail', { bookingId: target.bookingId });
-      return;
-    }
-    if (target.type === 'reschedule') {
-      // Same path a reschedule notification takes: it re-reads the request
-      // and checks the reschedule is still allowed before opening the picker.
-      navigation.setParams({ openBookingId: target.bookingId, openReschedule: true } as any);
-      return;
-    }
-    getBookingById(target.bookingId)
-      .then(direct => {
-        setTimeout(() => {
-          if (direct?.status === 'on_hold') {
-            setWaitlistHold(direct);
-          } else {
-            showAlert('This slot has gone', "The hold ran out before it was confirmed, so it's been offered to someone else.");
-            void refreshActivity();
-          }
-        }, ACTIVITY_SHEET_FADE_MS);
-      })
-      .catch((error: unknown) => {
-        logger.error('[Bookings] waitlist hold lookup failed', error);
-        setTimeout(() => showAlert("Couldn't open this", 'Please try again in a moment.'), ACTIVITY_SHEET_FADE_MS);
-      });
-  }, [navigation, showAlert, refreshActivity]);
-
-  // The client Settings screen's Activity Centre card lands here with this.
-  useEffect(() => {
-    if (!route?.params?.openActivityCentre) return;
-    setActivityCentreVisible(true);
-    navigation.setParams({ openActivityCentre: undefined } as any);
-  }, [route?.params?.openActivityCentre, navigation]);
-
   const openActivityCentre = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setActivityCentreVisible(true);
-    void refreshActivity();
-  }, [refreshActivity]);
+    navigation.navigate('ActivityCentre');
+  }, [navigation]);
 
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -2060,17 +2015,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         />
 
-        <ActivityCentreSheet
-          visible={activityCentreVisible}
-          onClose={() => setActivityCentreVisible(false)}
-          activity={activity}
-          loading={!activityLoaded}
-          failed={activityLoadFailed}
-          onOpenItem={handleOpenActivityItem}
-          P={P}
-          isDarkMode={isDarkMode}
-          bottomGap={modalBottomGap}
-        />
 
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setContactSheetVisible(false)}>
