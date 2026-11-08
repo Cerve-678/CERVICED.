@@ -5,7 +5,7 @@
 
 #generated
 
-**166 edges** across **50 screens**. Node-graph version: [[Screen Flow (generated)]].
+**165 edges** across **49 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -131,10 +131,10 @@ graph LR
   ProviderMyProfileScreen --> PoliciesScreen
   ProviderMyProfileScreen --> ProviderAnalyticsScreen
   ProviderMyProfileScreen --> ProviderBookingDetailScreen
+  ProviderMyProfileScreen --> ProviderBookingHistoryScreen
   ProviderMyProfileScreen --> ProviderClienteleScreen
   ProviderMyProfileScreen --> ProviderHome
   ProviderMyProfileScreen --> ProviderInfoPackScreen
-  ProviderMyProfileScreen --> ProviderRecentActivityScreen
   ProviderMyProfileScreen --> ProviderScheduleScreen
   ProviderMyProfileScreen --> SchedulingScreen
   ProviderProfileScreen --> BookingsScreen
@@ -143,7 +143,6 @@ graph LR
   ProviderProfileScreen --> ClaimProvider
   ProviderProfileScreen --> ProviderChatScreen
   ProviderPromotionsScreen --> ProviderClienteleScreen
-  ProviderRecentActivityScreen --> ProviderBookingDetailScreen
   ResetPasswordOTPScreen --> Login
   ResetPasswordOTPScreen --> NewPassword
   SchedulingScreen --> ProviderScheduleScreen
@@ -224,9 +223,8 @@ graph LR
 - `provider/ProviderClienteleScreen` → `provider/ProviderConversationScreen`
 - `provider/ProviderHomeScreen` → `provider/InfoRegScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`, `shared/NotificationsScreen`
 - `provider/ProviderInboxScreen` → `provider/ProviderConversationScreen`
-- `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderRecentActivityScreen`, `provider/ProviderScheduleScreen`, `provider/SchedulingScreen`, `ProviderHome`
+- `provider/ProviderMyProfileScreen` → `provider/BrandingScreen`, `provider/BusinessInfoScreen`, `provider/InfoRegScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingDetailScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInfoPackScreen`, `provider/ProviderScheduleScreen`, `provider/SchedulingScreen`, `ProviderHome`
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`
-- `provider/ProviderRecentActivityScreen` → `provider/ProviderBookingDetailScreen`
 - `provider/SchedulingScreen` → `provider/ProviderScheduleScreen`
 - `provider/ServicesPricingScreen` → `provider/BusinessInfoScreen`
 - `shared/BeccaScreen` → `client/ProviderProfileScreen`, `Explore`, `Profile`
