@@ -11,6 +11,7 @@ import ProviderInboxScreen from "../../../screens/provider/ProviderInboxScreen";
 import ProviderConversationScreen from "../../../screens/provider/ProviderConversationScreen";
 import ProviderPromotionsScreen from "../../../screens/provider/ProviderPromotionsScreen";
 import ProviderInfoPackScreen from "../../../screens/provider/ProviderInfoPackScreen";
+import ProviderIntakeFormScreen from "../../../screens/provider/ProviderIntakeFormScreen";
 import ProviderAnalyticsScreen from "../../../screens/provider/ProviderAnalyticsScreen";
 import ProviderBookingHistoryScreen from "../../../screens/provider/ProviderBookingHistoryScreen";
 import ProviderAutomationsScreen from "../../../screens/provider/ProviderAutomationsScreen";
@@ -111,6 +112,14 @@ export default function ProviderBeccaNavigator() {
       <ProviderBeccaStack.Screen
         name="InfoPacks"
         component={ProviderInfoPackScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      {/* BookingDetail (above) opens a booking's forms and offers to create
+          one; without this route those taps had nowhere to go from Becca. */}
+      <ProviderBeccaStack.Screen
+        name="ProviderIntakeForm"
+        component={ProviderIntakeFormScreen}
         options={{ headerShown: false, presentation: "card" }}
       />
 

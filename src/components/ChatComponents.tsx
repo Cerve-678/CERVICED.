@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from './FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { AnswerCard, AnswerHeadline, BeccaAnswer, BeccaInspiration, ChatMessage, ChatSuggestion } from '../services/becca/types';
@@ -564,7 +565,9 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
                 // `cover`, not `contain` — the image now fills the circle
                 // edge-to-edge, and `contain` would letterbox any non-square
                 // logo with bands of container colour inside the round crop.
-                <Image source={provider.logo} style={styles.providerLogo} contentFit="cover" transition={0} />
+                provider.logo.uri
+                  ? <LogoCircle uri={provider.logo.uri} framing={provider.logoFraming} style={styles.providerLogo} />
+                  : <Image source={provider.logo} style={styles.providerLogo} contentFit="cover" transition={0} />
               ) : (
                 <Text style={[styles.providerLogoFallback, { color: P.accentText }]}>
                   {provider.name?.trim().charAt(0).toUpperCase() || '?'}
@@ -730,7 +733,9 @@ function CardView({
             {row.provider && (
               <View style={[answerStyles.rowLogo, { backgroundColor: P.iconBg }]}>
                 {row.provider.logo ? (
-                  <Image source={row.provider.logo} style={answerStyles.rowLogoImage} contentFit="cover" transition={0} />
+                  row.provider.logo.uri
+                    ? <LogoCircle uri={row.provider.logo.uri} framing={row.provider.logoFraming} style={answerStyles.rowLogoImage} />
+                    : <Image source={row.provider.logo} style={answerStyles.rowLogoImage} contentFit="cover" transition={0} />
                 ) : (
                   <Text style={[answerStyles.rowLogoText, { color: P.accentText }]}>
                     {row.title.trim().charAt(0).toUpperCase() || '?'}

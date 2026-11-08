@@ -21,7 +21,7 @@ one row per appointment. Key columns:
 | `effective_start` / `effective_end` | `TIMESTAMP`, computed by a trigger — the buffer-padded span actually used for conflict detection (see §5) |
 | `payment_intent_id` | The Stripe PaymentIntent covering this booking — shared across every booking from the same multi-service checkout |
 | `is_group_booking` / `group_booking_id` / `group_booking_count` | Set at creation from the cart size; corrected after the fact if a multi-service checkout partially fails (§4) |
-| `provider_name_snapshot`, `service_name_snapshot`, `provider_address_snapshot`, etc. | Frozen at booking time — a later provider rename/address change doesn't retroactively alter past bookings |
+| `provider_name_snapshot`, `service_name_snapshot`, the venue in `booking_venue_details`, etc. | Frozen at booking time — a later provider rename/address change doesn't retroactively alter past bookings |
 | `waitlist_entry_id`, `hold_expires_at` | Only meaningful for `on_hold` rows — see [WAITLIST.md](WAITLIST.md) |
 
 **Client reads never hit `bookings` directly** — `getMyBookings`/`getOlderBookings`

@@ -20,11 +20,12 @@ import { navigateNested } from '../../navigation/rootNavigate';
 import {
   type BeautyData,
   type CategoryKey,
-  type Gender,
   EMPTY_BEAUTY_DATA,
 } from '../../types/beautyProfile';
 import type { MaintenanceItem } from '../../types/maintenance';
 import { computeBeautyProfileStats } from '../../utils/beautyProfileStats';
+import { beautyProfileTodo, TODO_FIELD_CATEGORY, type BeautyTodoField } from '../../utils/beautyProfileTodo';
+import { beautyDataFromRow } from '../../features/beauty-profile/profileRow';
 import { getMaintenanceServiceType } from '../../constants/maintenanceServiceTypes';
 import { BeautyLanding } from '../../features/beauty-profile/BeautyLanding';
 import { MyProfileView } from '../../features/beauty-profile/MyProfileView';
@@ -33,6 +34,7 @@ import { SetupFlow, type Step } from '../../features/maintenance/SetupFlow';
 import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS } from '../../utils/maintenanceSuggestions';
 import { useMaintenance } from '../../features/maintenance/useMaintenance';
 import type { ItemAction } from '../../features/maintenance/MaintenanceItemCard';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 
 type BeautyView = 'landing' | 'maintenance' | 'setup' | 'profile';
 
@@ -116,21 +118,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     try {
       const m = await getUserBeautyProfile(userId);
       if (requestId !== loadRequestRef.current || activeUserIdRef.current !== userId) return;
-      const profile: BeautyData = {
-        hairType: m?.hair_type ?? '', scalpCondition: m?.scalp_condition ?? '',
-        hairGoals: m?.hair_goals ?? [], treatmentHistory: m?.treatment_history ?? [],
-        skinType: m?.skin_type ?? '', skinTone: m?.skin_tone ?? '',
-        skinConcerns: m?.skin_concerns ?? [], sensitiveAreas: m?.sensitive_areas ?? [],
-        nailLength: m?.nail_length ?? '', nailShape: m?.nail_shape ?? '',
-        lashStyle: m?.lash_style ?? '', lashStatus: m?.lash_status ?? '',
-        browStyle: m?.brow_style ?? '', browCondition: m?.brow_condition ?? '',
-        makeupCoverage: m?.makeup_coverage ?? '', makeupFinish: m?.makeup_finish ?? '',
-        makeupEyes: m?.makeup_eyes ?? '', makeupLips: m?.makeup_lips ?? '',
-        styleVibe: m?.style_vibe ?? '', serviceInterests: m?.service_interests ?? [],
-        gender: (m?.gender as Gender | null) ?? null, has_kids: m?.has_kids ?? false,
-        allergies: m?.allergies ?? [], medicalNotes: m?.medical_notes ?? '',
-        photographyConsent: m?.photography_consent ?? true,
-      };
+      const profile = beautyDataFromRow(m);
       setProfileOwnerId(userId);
       setSaved(profile);
       setDraft(profile);
@@ -183,7 +171,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           hair_type:           draftSnapshot.hairType            || null,
           scalp_condition:     draftSnapshot.scalpCondition      || null,
           hair_goals:          draftSnapshot.hairGoals,
-          skin_type:           draftSnapshot.skinType            || null,
+          skin_type:           toPickColumn(draftSnapshot.skinType),
           skin_tone:           draftSnapshot.skinTone            || null,
           skin_concerns:       draftSnapshot.skinConcerns,
           sensitive_areas:     draftSnapshot.sensitiveAreas,
@@ -198,7 +186,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           makeup_eyes:         draftSnapshot.makeupEyes          || null,
           makeup_lips:         draftSnapshot.makeupLips          || null,
           allergies:           draftSnapshot.allergies,
-          style_vibe:          draftSnapshot.styleVibe           || null,
+          style_vibe:          toPickColumn(draftSnapshot.styleVibe),
           medical_notes:       draftSnapshot.medicalNotes        || null,
           photography_consent: draftSnapshot.photographyConsent,
           treatment_history:   draftSnapshot.treatmentHistory,
@@ -240,6 +228,20 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   // Every number on My Profile comes from here; recomputed only when the
   // draft changes.
   const stats = useMemo(() => computeBeautyProfileStats(draft), [draft]);
+
+  // What's still to do, from what is actually SAVED (not the draft) — the same
+  // rule as the red "!" on the Settings row, so the two always agree.
+  const todo = useMemo(
+    () => beautyProfileTodo(saved, { dob: user?.dob, hasClientProfile: user?.hasClientProfile }),
+    [saved, user?.dob, user?.hasClientProfile],
+  );
+  // Opens ready to answer — the card promises a fix, not a read-only view.
+  const openTodoField = (field: BeautyTodoField) => {
+    setDraft(saved);
+    setEditing(true);
+    setView('profile');
+    setSelectedCategory(TODO_FIELD_CATEGORY[field]);
+  };
 
   // ── Maintenance actions ───────────────────────────────────────────────────
 
@@ -377,6 +379,9 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           onOpenSetup={() => openSetup(1)}
           onOpenProfile={() => { setSelectedCategory(null); setView('profile'); }}
           onOpenHealth={() => { setView('profile'); setSelectedCategory('health'); }}
+          todo={todo}
+          onOpenTodoField={openTodoField}
+          onOpenAccountDetails={() => navigation.navigate('ProfileInfo')}
         />
       );
   }

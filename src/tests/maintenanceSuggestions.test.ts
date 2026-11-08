@@ -55,9 +55,9 @@ describe('buildMaintenanceSuggestions', () => {
   });
 
   it('ignores skin tone and skin concerns entirely', () => {
-    const base = buildMaintenanceSuggestions(profile({ skinType: 'Dry' }), NO_ANSWERS, [], TODAY);
+    const base = buildMaintenanceSuggestions(profile({ skinType: ['Dry'] }), NO_ANSWERS, [], TODAY);
     const withSensitive = buildMaintenanceSuggestions(
-      profile({ skinType: 'Dry', skinTone: 'Deep', skinConcerns: ['Eczema', 'Rosacea'] }), NO_ANSWERS, [], TODAY);
+      profile({ skinType: ['Dry'], skinTone: 'Deep', skinConcerns: ['Eczema', 'Rosacea'] }), NO_ANSWERS, [], TODAY);
     expect(withSensitive).toEqual(base);
   });
 
@@ -129,9 +129,9 @@ describe('buildMaintenanceSuggestions', () => {
 
   it('never suggests waxing, whatever the sensitive areas say', () => {
     const s = buildMaintenanceSuggestions(
-      profile({ sensitiveAreas: ['Legs', 'Bikini / Brazilian'], skinType: 'Dry' }), NO_ANSWERS, [], TODAY);
+      profile({ sensitiveAreas: ['Legs', 'Bikini / Brazilian'], skinType: ['Dry'] }), NO_ANSWERS, [], TODAY);
     expect(s.map(x => x.typeKey)).not.toContain('waxing');
-    expect(s).toEqual(buildMaintenanceSuggestions(profile({ skinType: 'Dry' }), NO_ANSWERS, [], TODAY));
+    expect(s).toEqual(buildMaintenanceSuggestions(profile({ skinType: ['Dry'] }), NO_ANSWERS, [], TODAY));
   });
 
   it('never suggests a patch test', () => {

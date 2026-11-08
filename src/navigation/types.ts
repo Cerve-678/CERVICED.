@@ -46,6 +46,8 @@ export type HomeStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
+        /** Opens the Activity Centre sheet (from the Settings card). */
+        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };
@@ -92,6 +94,8 @@ export type BeccaStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
+        /** Opens the Activity Centre sheet (from the Settings card). */
+        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };
@@ -132,6 +136,10 @@ export type ProviderBeccaStackParamList = {
   };
   Promotions: undefined;
   InfoPacks: undefined;
+  ProviderIntakeForm:
+    | { bookingId: string; clientUserId: string; serviceName: string; formId?: string }
+    | { openTerms: true }
+    | undefined;
   Analytics: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Automations: undefined;
@@ -156,6 +164,8 @@ export type CartStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
+        /** Opens the Activity Centre sheet (from the Settings card). */
+        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };
@@ -206,6 +216,8 @@ export type ProfileStackParamList = {
         openReview?: boolean;
         highlightBookingId?: string;
         initialTab?: "all" | "past";
+        /** Opens the Activity Centre sheet (from the Settings card). */
+        openActivityCentre?: boolean;
       }
     | undefined;
   BookingDetail: { bookingId: string };

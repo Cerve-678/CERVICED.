@@ -35,6 +35,7 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
+import { LogoCircle } from "../../components/FramedLogo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -42,7 +43,8 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
-import { PolicyImageViewer } from "../../components/PolicyImageViewer";
+import { FullImageViewer } from "../../components/FullImageViewer";
+import { policyImageUrls } from "../../features/providers/policyImages";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -65,7 +67,6 @@ import { navigationRef } from "../../navigation/navigationRef";
 import { useTheme } from "../../contexts/ThemeContext";
 import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
-import { DynamicText } from "../../components/DynamicText";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
@@ -107,6 +108,7 @@ import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
+import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
@@ -1555,7 +1557,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // imperatively via setOptions in handleScroll.
   const isScrolledRef = useRef(false);
   const setStatusBarScrolledRef = useRef<((scrolled: boolean) => void) | null>(null);
-  const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
   // Ownership and viewer identity come from the hook's authenticated,
   // non-cacheable viewer request. viewerChecked remains a separate gate so
@@ -1639,6 +1640,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
   const scrollRef = useRef<ScrollViewInstance>(null);
   const servicesSectionRef = useRef<ViewInstance>(null);
+  // Where the About/Policy card sits, and how far down the reader is, so
+  // collapsing a long About from its bottom can bring the card back into view
+  // instead of leaving them stranded further down the page. A ref, like
+  // isScrolledRef, so tracking it never re-renders this screen.
+  const aboutCardRef = useRef<ViewInstance>(null);
+  const scrollYRef = useRef(0);
+  const handleAboutCollapse = useCallback(() => {
+    revealIfScrolledPast({
+      scroll: scrollRef.current,
+      target: aboutCardRef.current,
+      scrollY: scrollYRef.current,
+      // Same clearance the Services jump uses for the floating header.
+      topInset: 90,
+    });
+  }, []);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -1810,9 +1826,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     if (provider.veganCrueltyFree) {
       sentences.push("Products used are vegan and cruelty-free");
-    }
-    if (provider.travelRadius.trim()) {
-      sentences.push(`Travels up to ${provider.travelRadius.trim()}`);
     }
     if (provider.productsUsed.trim()) {
       sentences.push(`Works with ${provider.productsUsed.trim()}`);
@@ -2106,6 +2119,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // wherever the list last scrolled to. Bumping `key` on every open forces a
   // fresh FlatList each time so it lands on the right image.
   const [showPolicyImage, setShowPolicyImage] = useState(false);
+  // Every page of the detailed policy, in order (the old single image too).
+  const policyPages = useMemo(() => policyImageUrls(provider?.bookingPolicies), [provider?.bookingPolicies]);
+  const [showFullLogo, setShowFullLogo] = useState(false);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
       visible: true,
@@ -2605,6 +2621,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   ]);
   const handleScroll = useCallback(
     (event: any) => {
+      scrollYRef.current = event.nativeEvent.contentOffset.y;
       const scrolled = event.nativeEvent.contentOffset.y > 100;
       if (scrolled === isScrolledRef.current) return; // only act on threshold cross
       isScrolledRef.current = scrolled;
@@ -4240,6 +4257,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             visible={didYouBookVisible}
             providerName={provider.displayName}
             logoUrl={provider.providerLogo?.uri ?? null}
+            logoFraming={provider.providerLogoFraming}
             services={provider.specialties}
             accentColor={adaptiveAccentColor}
             tokens={{ text: OP.text, sub: OP.sub, border: OP.border, surface: OP.surface, bg: OP.bg }}
@@ -4370,10 +4388,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
         {/* The provider's detailed policy document, scrollable when it's
             long — the same viewer the client's booking detail opens. */}
-        <PolicyImageViewer
-          uri={provider.bookingPolicies?.policyImageUrl || null}
+        <FullImageViewer
+          uris={policyPages}
           visible={showPolicyImage}
           onClose={() => setShowPolicyImage(false)}
+          label="Policy document"
+        />
+
+        {/* The whole logo, uncropped, from a tap on the profile circle. */}
+        <FullImageViewer
+          uris={provider.providerLogo?.uri ? [provider.providerLogo.uri] : []}
+          visible={showFullLogo}
+          onClose={() => setShowFullLogo(false)}
+          label="Logo"
         />
 
         {/* Fullscreen service image carousel modal — hidden whenever the "All
@@ -4972,13 +4999,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               {/* Provider Logo - Bigger */}
               <View style={styles.logoContainer}>
                 <View style={styles.logoWrapper}>
-                  {provider.providerLogo ? (
-                    <Image
-                      source={provider.providerLogo}
-                      style={styles.providerLogo}
-                      contentFit="cover"
-                      transition={0}
-                    />
+                  {provider.providerLogo?.uri ? (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setShowFullLogo(true);
+                      }}
+                      accessibilityRole="imagebutton"
+                      accessibilityLabel={`${provider.displayName} logo. Tap to see it in full`}
+                    >
+                      <LogoCircle
+                        uri={provider.providerLogo.uri}
+                        framing={provider.providerLogoFraming}
+                        style={styles.providerLogo}
+                      />
+                    </TouchableOpacity>
                   ) : (
                     <View
                       style={[
@@ -5303,7 +5339,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               ]}
             >
               {/* About / Policy tabbed card */}
-              <View style={styles.aboutCardShadowWrap}>
+              <View ref={aboutCardRef} style={styles.aboutCardShadowWrap}>
                 <BlurView
                   intensity={cardBlurIntensity}
                   tint={cardBlurTint}
@@ -5379,28 +5415,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           Relevant Information
                         </Text>
                       )}
-                      {/* Provider-WRITTEN bio: rendered via DynamicText so it
+                      {/* Provider-WRITTEN bio: `translate` renders it via DynamicText so it
                           translates live to the active language when the paid
                           translation feature is enabled, and shows the original
                           English otherwise (the default in every current
                           build). Not legal/health copy, so routing it through
                           the dynamic path is safe. */}
-                      <DynamicText
-                        style={[styles.aboutText, { color: OP.sub }]}
-                        text={showFullAbout
-                          ? provider.aboutText
-                          : `${provider.aboutText.substring(0, 150)}...`}
+                      <ExpandableAboutText
+                        text={provider.aboutText}
+                        translate
+                        textStyle={[styles.aboutText, { color: OP.sub }]}
+                        linkStyle={styles.moreButton}
+                        linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
+                        onCollapse={handleAboutCollapse}
                       />
-
-                      <TouchableOpacity
-                        onPress={() => setShowFullAbout(!showFullAbout)}
-                        style={styles.moreButton}
-                        activeOpacity={0.6}
-                      >
-                        <Text style={[styles.moreButtonText, { color: OP.text }]}>
-                          {showFullAbout ? "Show Less" : "More"}
-                        </Text>
-                      </TouchableOpacity>
                     </>
                   ) : (
                     /* Policy tab content */
@@ -5483,7 +5511,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       is the only way in for a provider who uploaded this photo
                       but filled in none of the structured fields above (which
                       is why the tab switcher itself doesn't gate on it). */}
-                  {provider.bookingPolicies?.policyImageUrl ? (
+                  {policyPages.length > 0 ? (
                     <TouchableOpacity
                       activeOpacity={0.85}
                       onPress={() => setShowPolicyImage(true)}
@@ -5491,7 +5519,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         styles.policyImageFab,
                         { backgroundColor: adaptiveAccentColor },
                       ]}
-                      accessibilityLabel="View full policy details"
+                      accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
                       accessibilityRole="button"
                     >
                       <Ionicons
@@ -6431,6 +6459,7 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
     fontWeight: "800",
+    textDecorationLine: "underline",
     marginBottom: 6,
   },
   serviceSafetyInline: {

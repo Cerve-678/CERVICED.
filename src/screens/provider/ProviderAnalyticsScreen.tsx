@@ -499,6 +499,10 @@ function RatingAnalytics({
   const serviceRatings = useMemo(() => {
     const map = new Map<string, { sum: number; count: number }>();
     for (const r of reviews) {
+      // An anonymous review carries no booking, so it counts towards the
+      // overall rating but not towards any one service: a per-service figure
+      // could point at the only client who booked that service.
+      if (!r.booking_id) continue;
       const name = bookingServiceMap.get(r.booking_id);
       if (!name) continue;
       const cur = map.get(name) ?? { sum: 0, count: 0 };

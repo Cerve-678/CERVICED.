@@ -32,10 +32,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useFont } from '../../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { hasMapDestination, isMobileBooking } from '../../types/booking';
+import { hasDirectionsDestination, hasMapDestination, isMobileBooking, type BookingCoordinates } from '../../types/booking';
+import { directionsUrlFor } from '../../utils/mapsLink';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -43,6 +44,10 @@ import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
+import { bookingTodoCounts, type ActivityItem } from '../../features/bookings/activityCentre';
+import { useClientActivity } from '../../features/bookings/useClientActivity';
+import { ActivityCentreSheet } from '../../features/bookings/ActivityCentreSheet';
+import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
@@ -50,6 +55,7 @@ import type { GroupedListItem } from '../../features/bookings/presentationTypes'
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
 import { ExternalBookingCard } from '../../features/bookings/ExternalBookingCard';
+import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import { externalBookingStart, splitExternalBookings } from '../../features/bookings/externalBookings';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
@@ -111,6 +117,8 @@ const CATEGORY_TABS = [
 // How far back the Past Bookings list (and its category filter) looks.
 // Display-only — the underlying booking rows are never touched by this.
 const PAST_BOOKINGS_VISIBLE_DAYS = 30;
+/** Long enough for the Activity Centre's fade-out before another Modal opens. */
+const ACTIVITY_SHEET_FADE_MS = 350;
 
 const WaitlistCard = React.memo(function WaitlistCard({
   entry,
@@ -354,23 +362,62 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setWaitlistHoldBusy(false);
   }, [waitlistHold]);
 
-  // Pending intake forms + unread info packs per booking — drives the "!" badge
-  const refreshBookingActionItems = useCallback(() => {
-    if (!user?.id) return;
-    getMyBookingActionItems()
-      .then(setBookingActionItems)
-      .catch(() => {});
-  }, [user?.id]);
+  // Shared with the client Settings card, so both count the same things.
+  const {
+    activity,
+    remote: activityRemote,
+    loaded: activityLoaded,
+    failed: activityLoadFailed,
+    refresh: refreshActivity,
+  } = useClientActivity();
+  const [activityCentreVisible, setActivityCentreVisible] = useState(false);
+  const bookingActionItems = useMemo(() => bookingTodoCounts(activityRemote), [activityRemote]);
+  const activityNeedsYouCount = activity.needsYou.length;
 
-  useEffect(() => {
-    refreshBookingActionItems();
-  }, [refreshBookingActionItems, upcomingBookings.length]);
+  // The waitlist popup and the dialog are Modals of their own: open them once
+  // this sheet has faded out, or iOS drops the second presentation.
+  const handleOpenActivityItem = useCallback((item: ActivityItem) => {
+    setActivityCentreVisible(false);
+    const { target } = item;
+    if (target.type === 'booking') {
+      navigation.navigate('BookingDetail', { bookingId: target.bookingId });
+      return;
+    }
+    if (target.type === 'reschedule') {
+      // Same path a reschedule notification takes: it re-reads the request
+      // and checks the reschedule is still allowed before opening the picker.
+      navigation.setParams({ openBookingId: target.bookingId, openReschedule: true } as any);
+      return;
+    }
+    getBookingById(target.bookingId)
+      .then(direct => {
+        setTimeout(() => {
+          if (direct?.status === 'on_hold') {
+            setWaitlistHold(direct);
+          } else {
+            showAlert('This slot has gone', "The hold ran out before it was confirmed, so it's been offered to someone else.");
+            void refreshActivity();
+          }
+        }, ACTIVITY_SHEET_FADE_MS);
+      })
+      .catch((error: unknown) => {
+        logger.error('[Bookings] waitlist hold lookup failed', error);
+        setTimeout(() => showAlert("Couldn't open this", 'Please try again in a moment.'), ACTIVITY_SHEET_FADE_MS);
+      });
+  }, [navigation, showAlert, refreshActivity]);
 
-  // Re-check when returning to this screen (e.g. after filling an intake form)
+  // The client Settings screen's Activity Centre card lands here with this.
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', refreshBookingActionItems);
-    return unsubscribe;
-  }, [navigation, refreshBookingActionItems]);
+    if (!route?.params?.openActivityCentre) return;
+    setActivityCentreVisible(true);
+    navigation.setParams({ openActivityCentre: undefined } as any);
+  }, [route?.params?.openActivityCentre, navigation]);
+
+  const openActivityCentre = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setActivityCentreVisible(true);
+    void refreshActivity();
+  }, [refreshActivity]);
 
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -397,6 +444,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+  // Off by default: a review is named unless the client chooses otherwise.
+  const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [showRebookAddOnsModal, setShowRebookAddOnsModal] = useState(false);
   const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
@@ -411,8 +460,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [showTipModal, setShowTipModal] = useState(false);
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
-  const [bookingActionItems, setBookingActionItems] = useState<Record<string, number>>({});
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapFocused, setMapFocused] = useState(false);
+  const [canGeocodeOnAndroid, setCanGeocodeOnAndroid] = useState(false);
+  const [addressPins, setAddressPins] = useState<Record<string, { address: string; coordinates: BookingCoordinates }>>({});
+  const attemptedAddressGeocodes = useRef(new Set<string>());
+  const mapBookings = useMemo(() => todayBookings.flatMap(booking => {
+    if (booking.status === BookingStatus.PENDING || !hasDirectionsDestination(booking)) return [];
+    const resolvedPin = addressPins[booking.id];
+    const coordinates = resolvedPin?.address === booking.address
+      ? resolvedPin.coordinates
+      : hasMapDestination(booking) ? booking.coordinates : null;
+    return coordinates ? [{ booking, coordinates }] : [];
+  }), [todayBookings, addressPins]);
 
   // ✅ Track rated bookings and tips
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
@@ -462,22 +522,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const openInMaps = useCallback(async (booking: ConfirmedBooking) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const { coordinates, address } = booking;
-      const label = encodeURIComponent(address);
-      const url = Platform.select({
-        ios: `maps:${coordinates.latitude},${coordinates.longitude}?q=${label}`,
-        android: `geo:${coordinates.latitude},${coordinates.longitude}?q=${label}`,
-      });
-      if (url) {
-        const canOpen = await Linking.canOpenURL(url);
-        if (canOpen) {
-          await Linking.openURL(url);
-        } else {
-          await Linking.openURL(
-            `https://www.google.com/maps/search/?api=1&query=${coordinates.latitude},${coordinates.longitude}`
-          );
-        }
-      }
+      if (!hasDirectionsDestination(booking)) return;
+      await Linking.openURL(directionsUrlFor({
+        fullAddress: booking.address,
+      }));
     } catch {
       Alert.alert('Error', 'Unable to open maps');
     }
@@ -664,6 +712,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           service_id: null,
           user_id: user.id,
           rating,
+          is_anonymous: reviewAnonymous,
           ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
         });
       }
@@ -677,6 +726,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         setShowRatingModal(false);
         setRating(0);
         setReviewText('');
+        setReviewAnonymous(false);
         setTimeout(() => {
           mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
           modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -686,7 +736,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert('Error', 'Failed to submit rating.');
       setIsLoading(false);
     }
-  }, [selectedBooking, rating, reviewText, user]);
+  }, [selectedBooking, rating, reviewText, reviewAnonymous, user]);
 
   // A tip is a distinct Stripe payment, not a number attached to a review.
   const handleTipSubmit = useCallback(async () => {
@@ -780,6 +830,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     const [bookingsResult] = await Promise.allSettled([
       reloadBookings(),
       refreshUserLocation(),
+      refreshActivity(),
     ]);
 
     if (bookingsResult.status === 'rejected') {
@@ -788,7 +839,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
 
     setRefreshing(false);
-  }, [reloadBookings, refreshUserLocation]);
+  }, [reloadBookings, refreshUserLocation, refreshActivity]);
 
   // ==================== HEADER OPTIONS ====================
 
@@ -808,8 +859,26 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         color: P.text,
       },
       headerTintColor: P.text,
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.activityButton}
+          onPress={openActivityCentre}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={activityNeedsYouCount > 0
+            ? `Activity Centre, ${activityNeedsYouCount} ${activityNeedsYouCount === 1 ? 'thing needs' : 'things need'} you`
+            : 'Activity Centre'}
+        >
+          <Ionicons name="file-tray-full-outline" size={22} color={P.text} />
+          {activityNeedsYouCount > 0 && (
+            <View style={styles.activityBadge}>
+              <TodoMark size={14} />
+            </View>
+          )}
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, isFilterView, isDarkMode, P]);
+  }, [navigation, isFilterView, isDarkMode, P, styles.activityButton, styles.activityBadge, openActivityCentre, activityNeedsYouCount]);
 
   // ==================== EFFECTS ====================
 
@@ -826,18 +895,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [reloadBookingsIfStale]);
 
   useEffect(() => {
-    if (currentBooking?.coordinates && mapRef.current) {
+    const activePin = mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates;
+    if (activePin && mapRef.current) {
       mapRef.current.animateToRegion(
         {
-          latitude: currentBooking.coordinates.latitude,
-          longitude: currentBooking.coordinates.longitude,
+          latitude: activePin.latitude,
+          longitude: activePin.longitude,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         },
         1000
       );
     }
-  }, [currentBooking]);
+  }, [currentBooking?.id, mapBookings]);
 
   // Keep map location current only while this tab is visible. Tab screens
   // remain mounted, so a permanent timer otherwise polls GPS while the
@@ -848,10 +918,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   useFocusEffect(useCallback(() => {
     let active = true;
     let subscription: Location.LocationSubscription | null = null;
+    setMapFocused(true);
 
     const startLocationUpdates = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (active && Platform.OS === 'android') setCanGeocodeOnAndroid(status === 'granted');
         if (status === 'granted' && active) {
           const applyLocation = (location: Location.LocationObject) => {
             if (!active) return;
@@ -893,9 +965,42 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     return () => {
       active = false;
+      setMapFocused(false);
       subscription?.remove();
     };
   }, []));
+
+  // Older bookings can expose the released street address while their
+  // coordinate snapshot is null. Resolve only those missing pins while this
+  // screen is visible. Never geocode a masked address or a mobile base.
+  useEffect(() => {
+    if (!mapFocused || isFilterView || allTodayBookingsCompleted ||
+        (Platform.OS === 'android' && !canGeocodeOnAndroid)) return;
+    let cancelled = false;
+    const resolveMissingPins = async () => {
+      for (const booking of todayBookings) {
+        if (cancelled) break;
+        if (booking.status === BookingStatus.PENDING || !hasDirectionsDestination(booking) || hasMapDestination(booking)) continue;
+        const key = `${booking.id}:${booking.address}`;
+        if (attemptedAddressGeocodes.current.has(key)) continue;
+        attemptedAddressGeocodes.current.add(key);
+        try {
+          const [match] = await Location.geocodeAsync(booking.address);
+          if (!cancelled && match && Number.isFinite(match.latitude) && Number.isFinite(match.longitude)) {
+            setAddressPins(previous => ({
+              ...previous,
+              [booking.id]: { address: booking.address, coordinates: { latitude: match.latitude, longitude: match.longitude } },
+            }));
+          }
+        } catch (error) {
+          logger.error('[Bookings] released address geocoding failed:', error);
+        }
+        if (cancelled) attemptedAddressGeocodes.current.delete(key);
+      }
+    };
+    void resolveMissingPins();
+    return () => { cancelled = true; };
+  }, [mapFocused, isFilterView, allTodayBookingsCompleted, canGeocodeOnAndroid, todayBookings]);
 
   // ✅ Reset map to user area when all bookings are completed
   useEffect(() => {
@@ -1020,6 +1125,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             logger.log('Opening rating modal for booking:', booking.id);
             setRating(0);
             setReviewText('');
+            setReviewAnonymous(false);
             setShowRatingModal(true);
           } else if (route.params?.openBookingId) {
             logger.log('Navigating to BookingDetail screen');
@@ -1141,8 +1247,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ==================== COMPUTED VALUES ====================
 
   const routeCoordinates = useMemo(
-    () => todayBookings.map(b => b.coordinates).filter(Boolean) as { latitude: number; longitude: number }[],
-    [todayBookings]
+    () => mapBookings.map(({ coordinates }) => coordinates),
+    [mapBookings]
   );
 
   const listItems = useMemo((): GroupedListItem[] => {
@@ -1411,8 +1517,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     ref={mapRef}
                     style={styles.map}
                     initialRegion={{
-                      latitude: currentBooking?.coordinates?.latitude ?? userLocation?.latitude ?? 51.5074,
-                      longitude: currentBooking?.coordinates?.longitude ?? userLocation?.longitude ?? -0.1278,
+                      latitude: mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates.latitude ?? userLocation?.latitude ?? 51.5074,
+                      longitude: mapBookings.find(({ booking }) => booking.id === currentBooking?.id)?.coordinates.longitude ?? userLocation?.longitude ?? -0.1278,
                       latitudeDelta: 0.15,
                       longitudeDelta: 0.15,
                     }}
@@ -1427,13 +1533,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     {todayBookings.length > 0 && !allTodayBookingsCompleted ? (
                       <>
-                        {todayBookings.filter(hasMapDestination).map(booking => (
+                        {mapBookings.map(({ booking, coordinates }) => (
                           <Marker
                             key={booking.id}
-                            coordinate={booking.coordinates}
+                            coordinate={coordinates}
                             title={booking.serviceName}
                             description={booking.providerName}
-                            onPress={() => focusMapOnLocation(booking.coordinates)}
+                            onPress={() => focusMapOnLocation(coordinates)}
                             tracksViewChanges
                           >
                             {/* collapsable={false} — Android's view-flattening
@@ -1678,7 +1784,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       </>
                                     ) : (
                                       <>
-                                        {hasMapDestination(currentBooking) && (
+                                        {currentBooking.status !== BookingStatus.PENDING && hasDirectionsDestination(currentBooking) && (
                                           <TouchableOpacity
                                             style={styles.directionsButton}
                                             onPress={() => openInMaps(currentBooking)}
@@ -1784,7 +1890,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           </>
                                         ) : (
                                           <>
-                                            {hasMapDestination(booking) && (
+                                            {booking.status !== BookingStatus.PENDING && hasDirectionsDestination(booking) && (
                                               <TouchableOpacity
                                                 style={styles.directionsButton}
                                                 onPress={() => openInMaps(booking)}
@@ -1952,6 +2058,18 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             )}
           </View>
           )}
+        />
+
+        <ActivityCentreSheet
+          visible={activityCentreVisible}
+          onClose={() => setActivityCentreVisible(false)}
+          activity={activity}
+          loading={!activityLoaded}
+          failed={activityLoadFailed}
+          onOpenItem={handleOpenActivityItem}
+          P={P}
+          isDarkMode={isDarkMode}
+          bottomGap={modalBottomGap}
         />
 
         {/* ─── Contact Sheet ─── */}
@@ -2126,7 +2244,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             showRatingModal/rating/reviewText but nothing rendered a modal, so
             tapping Rate did nothing visible. handleRatingSubmit already wired
             up a real submitReview() call; only the UI was missing. ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 {!hasRated ? (
@@ -2151,8 +2269,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       />
                       <Text style={styles.characterCount}>{reviewText.length}/500</Text>
                     </View>
+                    <AnonymousReviewToggle
+                      value={reviewAnonymous}
+                      onValueChange={setReviewAnonymous}
+                      palette={{ text: P.text, sub: P.sub, accent: P.accent, border: P.border }}
+                      disabled={isLoading}
+                    />
                     <View style={popSt.sheetBtns}>
-                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: P.surface, borderColor: P.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }} activeOpacity={0.7}>
                         <Text style={{ color: P.text }}>Skip</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : P.accent }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
@@ -2250,6 +2374,18 @@ const createStyles = (
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 1,
+  },
+  // Top-right Activity Centre button; the "!" sits on its corner.
+  activityButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 1,
   },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',

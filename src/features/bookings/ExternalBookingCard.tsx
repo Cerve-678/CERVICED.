@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -34,7 +34,7 @@ export const ExternalBookingCard = React.memo<ExternalBookingCardProps>(({ entry
     >
       <View style={styles.topRow}>
         {entry.provider?.logo_url ? (
-          <Image source={{ uri: entry.provider.logo_url }} style={styles.logo} contentFit="cover" transition={0} />
+          <LogoCircle uri={entry.provider.logo_url} framing={entry.provider.logo_framing} style={styles.logo} />
         ) : (
           <View style={[styles.logo, { backgroundColor: P.accent }]}>
             <Text style={[styles.initials, { color: P.onAccent }]}>{initials}</Text>

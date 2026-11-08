@@ -19,7 +19,7 @@ export interface BeautyData {
   hairGoals:          string[];
   treatmentHistory:   string[];
   // Skin
-  skinType:           string;
+  skinType:           string[];
   skinTone:           string;
   skinConcerns:       string[];
   sensitiveAreas:     string[];
@@ -37,7 +37,7 @@ export interface BeautyData {
   makeupEyes:         string;
   makeupLips:         string;
   // General
-  styleVibe:          string;
+  styleVibe:          string[];
   serviceInterests:   string[];
   // Personalisation
   gender:             Gender | null;
@@ -50,11 +50,11 @@ export interface BeautyData {
 
 export const EMPTY_BEAUTY_DATA: BeautyData = {
   hairType: '', scalpCondition: '', hairGoals: [], treatmentHistory: [],
-  skinType: '', skinTone: '', skinConcerns: [], sensitiveAreas: [],
+  skinType: [], skinTone: '', skinConcerns: [], sensitiveAreas: [],
   nailLength: '', nailShape: '',
   lashStyle: '', lashStatus: '', browStyle: '', browCondition: '',
   makeupCoverage: '', makeupFinish: '', makeupEyes: '', makeupLips: '',
-  styleVibe: '', serviceInterests: [],
+  styleVibe: [], serviceInterests: [],
   gender: null, has_kids: false,
   allergies: [], medicalNotes: '', photographyConsent: true,
 };

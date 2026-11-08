@@ -165,17 +165,19 @@ export interface LogoCardFrame {
   y: number;
 }
 
-/** The provider's per-card logo framing (`providers.logo_framing`).
+/** The provider's per-shape logo framing (`providers.logo_framing`).
  *  `imageRatio` is the logo image's width ÷ height, which the frames are
- *  relative to. A missing card means "fill and centre", the default. */
+ *  relative to. A missing shape means "fill and centre", the default. */
 export interface LogoFraming {
   imageRatio: number;
   small?: LogoCardFrame;
   large?: LogoCardFrame;
+  /** The round profile logo, wherever the app draws the logo as a circle. */
+  circle?: LogoCardFrame;
 }
 
-/** The two Home card shapes a logo is framed for. */
-export type LogoCardSlot = 'small' | 'large';
+/** The shapes a logo is framed for: the two Home cards and the circle. */
+export type LogoCardSlot = 'small' | 'large' | 'circle';
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -406,7 +408,6 @@ export interface DbProvider {
   qualifications: string | null;
   is_insured_self_declared: boolean;
   dbs_checked_self_declared: boolean;
-  travel_radius: string | null;
   clientele: string[] | null;
   // Provider-level hair types catered to (HAIR_TYPES vocabulary — Straight,
   // Wavy, Curly, Coily, 4A, 4B, 4C). NULL/empty = caters to all. This is what
@@ -564,6 +565,10 @@ export interface DbServiceImage {
   fit: 'cover' | 'contain';
 }
 
+/** One service's copy of a provider add-on. Since universal add-ons
+ *  (20261105223541) these rows are DERIVED from provider_add_ons by
+ *  sync_provider_add_on_links(): never write them directly. Their ids are
+ *  what carts, checkout and booking_add_ons reference. */
 export interface DbServiceAddOn {
   id: string;
   service_id: string;
@@ -571,6 +576,34 @@ export interface DbServiceAddOn {
   price: number;
   description: string | null;
   is_active: boolean;
+  /** Minutes this add-on adds to the appointment. 0 = no extra time. */
+  extra_minutes: number;
+  provider_add_on_id: string | null;
+}
+
+/** Which services a provider add-on goes on. 'services' = only the ones
+ *  ticked by hand (included_service_ids). */
+export type ProviderAddOnAppliesTo = 'all' | 'categories' | 'services';
+
+/** An add-on as the provider made it, once, for all their services. Read by
+ *  its owner only; saved through replace_provider_add_ons(). */
+export interface DbProviderAddOn {
+  id: string;
+  provider_id: string;
+  name: string;
+  price: number;
+  description: string | null;
+  extra_minutes: number;
+  /** false = paused: hidden from clients on every service. */
+  is_active: boolean;
+  applies_to: ProviderAddOnAppliesTo;
+  /** services.category_name values, for applies_to = 'categories'. */
+  category_names: string[];
+  /** Ticked on these services even though the rule doesn't cover them. */
+  included_service_ids: string[];
+  /** Unticked on these services even though the rule covers them. */
+  excluded_service_ids: string[];
+  sort_order: number;
 }
 
 export interface DbProviderAvailability {
@@ -633,6 +666,15 @@ export interface DbPortfolioItem {
   skin_tone_shown: "fair" | "light" | "medium" | "tan" | "deep" | "rich" | null;
 }
 
+/** booking_venue_details: the provider's private venue for one booking.
+ *  Readable only by that booking's provider (RLS); clients get it through
+ *  client_bookings once released. */
+export interface DbBookingVenue {
+  address: string | null;
+  directions: string | null;
+  coordinates: { lat: number; lng: number } | null;
+}
+
 export interface DbBooking {
   id: string;
   user_id: string;
@@ -672,12 +714,19 @@ export interface DbBooking {
   service_name_snapshot: string;
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
-  provider_address_snapshot: string | null;
-  /** Private venue access instructions snapshotted at booking. The
-   * client_bookings view release-gates this with the address. */
+  // The provider's private venue is NOT on the bookings table (migration
+  // 20261108180000): it lives in booking_venue_details, which clients can't
+  // read. These three are client_bookings VIEW columns, null until the
+  // address is released. A provider's own read embeds booking_venue_details
+  // instead; mapDbBookingToConfirmed reads whichever is present.
+  provider_address_snapshot?: string | null;
+  /** Private venue access instructions, release-gated with the address. */
   provider_directions_snapshot?: string | null;
+  provider_coordinates?: { lat: number; lng: number } | null;
+  /** Provider-side embed of the booking's venue. To-one, but read defensively
+   *  as either shape, like booking_client_addresses. */
+  booking_venue_details?: DbBookingVenue | DbBookingVenue[] | null;
   provider_phone_snapshot: string | null;
-  provider_coordinates: { lat: number; lng: number } | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
@@ -788,6 +837,10 @@ export interface DbReview {
   comment: string | null;
   tip_amount: number | null;
   created_at: string;
+  /** The client chose to review anonymously. The database then hides who
+   *  wrote it from everyone but the client themself, the provider included:
+   *  see supabase/migrations/20261108230000_anonymous_reviews.sql. */
+  is_anonymous: boolean;
 }
 
 export interface DbNotification {
@@ -852,6 +905,7 @@ export interface PublicPromotionWithProvider extends ClientPromotion {
   providers?: {
     display_name: string | null;
     logo_url: string | null;
+    logo_framing?: LogoFraming | null;
     slug: string | null;
   } | null;
 }
@@ -941,6 +995,7 @@ export type ProviderWithServices = Pick<
   | "public_directions"
   | "about_text"
   | "logo_url"
+  | "logo_framing"
   | "gradient"
   | "accent_color"
   | "background_image_url"
@@ -971,7 +1026,6 @@ export type ProviderWithServices = Pick<
   | "walk_ins_welcome"
   | "group_bookings_available"
   | "vegan_cruelty_free"
-  | "travel_radius"
   | "products_used"
   | "hair_types_catered"
   | "preferred_payment_methods"
@@ -1007,7 +1061,7 @@ export type ProviderWithServices = Pick<
     >[];
     add_ons: Pick<
       DbServiceAddOn,
-      "id" | "name" | "price" | "description" | "is_active"
+      "id" | "name" | "price" | "description" | "is_active" | "extra_minutes"
     >[];
   })[];
   specialties: Pick<DbProviderSpecialty, "specialty">[];
@@ -1082,6 +1136,7 @@ export interface PortfolioItemWithProvider extends DbPortfolioItem {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;
@@ -1106,6 +1161,7 @@ export interface DiscoverServiceWithProvider {
     | "display_name"
     | "service_category"
     | "logo_url"
+    | "logo_framing"
     | "rating"
     | "review_count"
   >;
@@ -1119,16 +1175,31 @@ export interface BookingWithAddOns extends DbBooking {
 }
 
 /** Review with user name — used by ProviderProfileScreen */
-export interface ReviewWithUser extends DbReview {
+/**
+ * A review as the provider it is about sees it. On an anonymous review the
+ * database blanks everything that leads back to the client: who wrote it, and
+ * the booking, service and tip that would name them.
+ */
+export interface ReviewWithUser
+  extends Omit<DbReview, "user_id" | "booking_id" | "service_id" | "tip_amount"> {
+  user_id: string | null;
+  booking_id: string | null;
+  service_id: string | null;
+  tip_amount: number | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 
-/** Public review payload: deliberately excludes booking and payment linkage. */
+/** Public review payload: deliberately excludes booking and payment linkage,
+ *  and the reviewer entirely on an anonymous review. */
 export interface PublicReviewWithUser
   extends Pick<
     DbReview,
-    "id" | "user_id" | "provider_id" | "rating" | "comment" | "created_at"
+    "id" | "provider_id" | "rating" | "comment" | "created_at" | "is_anonymous"
   > {
+  /** null on an anonymous review. */
+  user_id: string | null;
+  /** Empty name and null avatar on an anonymous review. */
   user: Pick<DbUser, "name" | "avatar_url">;
 }
 

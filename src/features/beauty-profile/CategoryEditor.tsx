@@ -42,15 +42,25 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     });
   };
 
-  const toggleAllergen = (item: string) => {
+  // A saved answer that isn't in today's chip list (sign-up offered a few
+  // style vibes this list doesn't) still shows, so it can be seen and
+  // un-picked rather than riding along invisibly in a multi-pick list.
+  const withSaved = (options: string[], saved: string[]) =>
+    [...options, ...saved.filter(v => !options.includes(v))];
+
+  // A "none" answer can't sit alongside real ones: picking it clears the rest,
+  // and picking anything else clears it.
+  const toggleExclusive = (field: 'allergies' | 'skinConcerns' | 'treatmentHistory', none: string, item: string) => {
     if (!editing) return;
     Haptics.selectionAsync().catch(() => {});
     setDraft(prev => {
-      if (item === 'None known') return { ...prev, allergies: prev.allergies.includes('None known') ? [] : ['None known'] };
-      const without = prev.allergies.filter(a => a !== 'None known');
-      return { ...prev, allergies: without.includes(item) ? without.filter(a => a !== item) : [...without, item] };
+      const current = prev[field];
+      if (item === none) return { ...prev, [field]: current.includes(none) ? [] : [none] };
+      const without = current.filter(v => v !== none);
+      return { ...prev, [field]: without.includes(item) ? without.filter(v => v !== item) : [...without, item] };
     });
   };
+  const toggleAllergen = (item: string) => toggleExclusive('allergies', 'None known', item);
 
   const chipStyle = (on: boolean) => [
     styles.chip,
@@ -123,17 +133,17 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     case 'skin':
       return (
         <>
-          {sectionHead('SKIN TYPE', { selected: draft.skinType ? 1 : 0, total: 1 })}
-          {sub('Your skin type')}
-          {renderChips(SKIN_TYPES, o => draft.skinType === o, o => setSingle('skinType', o))}
+          {sectionHead('SKIN TYPE', { selected: draft.skinType.length, total: SKIN_TYPES.length })}
+          {sub('Pick all that describe your skin')}
+          {renderChips(withSaved(SKIN_TYPES, draft.skinType), o => draft.skinType.includes(o), o => toggleMulti('skinType', o))}
 
           {sectionHead('SKIN TONE', { selected: draft.skinTone ? 1 : 0, total: 1 }, { optional: true })}
           {sub('Your complexion')}
           {renderChips(SKIN_TONES, o => draft.skinTone === o, o => setSingle('skinTone', o))}
 
-          {sectionHead('SKIN CONCERNS', { selected: draft.skinConcerns.length, total: SKIN_CONCERNS.length }, { optional: true })}
+          {sectionHead('SKIN CONCERNS', { selected: draft.skinConcerns.length, total: SKIN_CONCERNS.length })}
           {sub('Select all that apply')}
-          {renderChips(SKIN_CONCERNS, o => draft.skinConcerns.includes(o), o => toggleMulti('skinConcerns', o))}
+          {renderChips(SKIN_CONCERNS, o => draft.skinConcerns.includes(o), o => toggleExclusive('skinConcerns', 'None', o))}
 
           {sectionHead('SENSITIVE AREAS', { selected: draft.sensitiveAreas.length, total: SENSITIVE_AREAS.length }, { optional: true })}
           {sub('Areas of sensitivity for treatments like waxing or facial work')}
@@ -152,9 +162,9 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           {sub('Your scalp health')}
           {renderChips(SCALP_CONDITIONS, o => draft.scalpCondition === o, o => setSingle('scalpCondition', o))}
 
-          {sectionHead('COLOUR & TREATMENT HISTORY', { selected: draft.treatmentHistory.length, total: TREATMENT_HISTORY.length }, { optional: true })}
+          {sectionHead('COLOUR & TREATMENT HISTORY', { selected: draft.treatmentHistory.length, total: TREATMENT_HISTORY.length })}
           {sub('Previous professional treatments')}
-          {renderChips(TREATMENT_HISTORY, o => draft.treatmentHistory.includes(o), o => toggleMulti('treatmentHistory', o))}
+          {renderChips(TREATMENT_HISTORY, o => draft.treatmentHistory.includes(o), o => toggleExclusive('treatmentHistory', 'None', o))}
 
           {sectionHead('HAIR GOALS', { selected: draft.hairGoals.length, total: HAIR_GOALS.length }, { optional: true })}
           {sub("What you're looking to achieve")}
@@ -220,9 +230,9 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     case 'general':
       return (
         <>
-          {sectionHead('STYLE VIBE', { selected: draft.styleVibe ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('How would you describe your overall look?')}
-          {renderChips(STYLE_VIBES, o => draft.styleVibe === o, o => setSingle('styleVibe', o))}
+          {sectionHead('STYLE VIBE', { selected: draft.styleVibe.length, total: STYLE_VIBES.length })}
+          {sub('How would you describe your overall look? Pick as many as fit.')}
+          {renderChips(withSaved(STYLE_VIBES, draft.styleVibe), o => draft.styleVibe.includes(o), o => toggleMulti('styleVibe', o))}
         </>
       );
 

@@ -31,12 +31,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import userLearningService from '../../services/userLearningService';
 import { HairTypeSelector } from '../../components/HairTypeSelector';
 import { ProviderCard } from '../../features/home/ProviderCard';
+import { LogoCircle } from '../../components/FramedLogo';
 import { ServiceButton } from '../../features/home/ServiceButton';
 import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
-import { resolveClientLocation } from '../../services/clientLocationService';
+import { resolveClientLocation, savePhoneLocationChoice } from '../../services/clientLocationService';
 import { geocodeUkPlace } from '../../services/ukGeocode';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
@@ -51,6 +52,7 @@ import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import type { PortfolioItem, ServiceCategory } from '../../types/providers';
+import { toPickList } from '../../features/beauty-profile/pickList';
 
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
@@ -86,6 +88,7 @@ interface Offer {
   validUntil: string;
   providerName: string;
   logo: any;
+  logoFraming: LogoFraming | null;
   service?: string;
 }
 
@@ -185,7 +188,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
       renderItem={({ item }) => (
         <TouchableOpacity style={styles.roundCard} onPress={() => onProviderPress(item)} activeOpacity={0.7}>
           <View style={[styles.roundCardBlur, { backgroundColor: surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }]}>
-            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} contentFit="cover" transition={0} /> : null}
+            {item.logo?.uri ? <LogoCircle uri={item.logo.uri} framing={item.logoFraming} style={styles.roundCardImage} /> : null}
           </View>
           <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
           {sub && item.distanceKm != null ? (
@@ -309,13 +312,15 @@ export default function HomeScreen() {
   );
   const [providersLoading, setProvidersLoading] = useState(true);
 
-  // Where "Near You" measures from: a picked area, the device's position, or
-  // a picked city, in that order (resolveClientLocation). Null until one of
-  // those is known. A picked place is geocoded once and set here just like a
-  // GPS fix, so every downstream distance/sort/radius step is the same.
+  // Where "Near You" measures from: a place picked on this phone, the
+  // account's Your area, the device's position, or a town, in the order
+  // planClientLocation sets. Null until one of those is known. A chosen place
+  // is geocoded and set here just like a GPS fix, so every downstream
+  // distance/sort/radius step is the same.
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  // Set once the client has picked a place (as opposed to GPS) — drives the
-  // "· HAGGERSTON" label suffix and lets LocationModal show the current pick.
+  // Set when Near You measures from a chosen place (picked here, or Your
+  // area) rather than GPS — drives the "· HAGGERSTON" label suffix and lets
+  // LocationModal show the current pick.
   const [manualLocationLabel, setManualLocationLabel] = useState<string | null>(null);
   // The device gave a position, but too vague a one to call it "where you are"
   // — on iOS this is Precise Location switched off, which still reports as
@@ -362,6 +367,7 @@ export default function HomeScreen() {
       validUntil: p.valid_until,
       providerName: p.providers?.display_name ?? 'Provider',
       logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
+      logoFraming: p.providers?.logo_framing ?? null,
       ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
     })),
   [rawPromotions]);
@@ -423,6 +429,21 @@ export default function HomeScreen() {
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
+  // Trending is shuffled when Home loads, but Home stays mounted while the
+  // client moves between tabs, so coming back used to show the same order.
+  // Reshuffle the rail every time Home comes back into view (not on its
+  // first focus, which the load above already shuffled). No refetch: the
+  // same trending providers, just a fresh order.
+  const trendingFocusSeen = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!trendingFocusSeen.current) {
+        trendingFocusSeen.current = true;
+        return;
+      }
+      setTrending(current => (current.length > 1 ? shuffle(current) : current));
+    }, []),
+  );
   const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityInfo>>(new Map());
 
   // Per-service audience refinement (services.audience) for the Male/Kids
@@ -447,7 +468,7 @@ export default function HomeScreen() {
       userLearningService.setUserProfile({
         serviceInterests:    u.serviceInterests    || [],
         hairType:            u.hairType            || '',
-        styleVibe:           u.styleVibe           || '',
+        styleVibe:           toPickList(u.styleVibe),
         treatmentHistory:    u.treatmentHistory    || [],
         maintenanceFrequency: u.maintenanceFrequency || '',
       });
@@ -504,7 +525,7 @@ export default function HomeScreen() {
         providerReviewCount: p.review_count,
         kind: 'service' as const,
         serviceId: s.id,
-        ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+        ...(p.logo_url ? { providerLogoUri: p.logo_url, providerLogoFraming: p.logo_framing ?? null } : {}),
       };
     };
 
@@ -514,13 +535,16 @@ export default function HomeScreen() {
     // Start only after the main list has arrived and the navigation animation
     // has settled; a client can browse immediately, while the extra rails
     // progressively fill in behind it.
+    // Set by this effect's cleanup, so late rail results from a previous run
+    // don't land after a newer one.
+    let railsCancelled = false;
     let secondaryRailsTimer: ReturnType<typeof setTimeout> | null = null;
     const loadSecondaryRails = (hasMoreProviders: boolean) => {
       // getProviders() has just resolved and committed its cards. This delay
       // gives React Native a frame to render them before lower-priority work
       // starts, without relying on deprecated InteractionManager scheduling.
       secondaryRailsTimer = setTimeout(() => {
-        if (locationRunCancelled) return;
+        if (railsCancelled) return;
         void (async () => {
           // The primary rail is already visible. Extend it in the background
           // rather than holding the first Home render behind the full 200-row
@@ -528,7 +552,7 @@ export default function HomeScreen() {
           if (hasMoreProviders) {
             getProviders(undefined, HOME_REMAINING_PROVIDER_LIMIT, HOME_INITIAL_PROVIDER_LIMIT)
               .then(data => {
-                if (locationRunCancelled) return;
+                if (railsCancelled) return;
                 setLiveProviders(current => {
                   const seen = new Set(current.map(provider => provider.id));
                   return [...current, ...data.map(mapDbProvider).filter(provider => !seen.has(provider.id))];
@@ -553,7 +577,7 @@ export default function HomeScreen() {
             // first; every card shown is still genuinely trending.
             getTrendingProviders(15).then(data => setTrending(shuffle(data.map(mapDbProvider)))),
           ]);
-          if (locationRunCancelled) return;
+          if (railsCancelled) return;
 
           // Service-audience rails are optional enrichment. They come last
           // because neither is required for the Home screen to be useful.
@@ -590,33 +614,8 @@ export default function HomeScreen() {
       });
     getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
 
-    // Ask for location once on mount — same permission string already
-    // declared in app.json ("...show nearby beauty service providers").
-    // If GPS is denied/unavailable, fall back to a previously-picked city
-    // (never to the unsorted full provider list) — and if the user has never
-    // picked one either, Near You prompts them to instead of guessing.
-    // Guarded because this effect can run more than once: `user` is an object,
-    // and any of AuthContext's setUser calls hands back a fresh identity even
-    // when nothing about the person changed. Two overlapping runs each resolve
-    // location independently, and whichever finishes LAST wins — so a slow GPS
-    // fix from run one could land after run two's saved-place fallback and
-    // replace a precise position with a city centroid, or the reverse. Either
-    // way Near You visibly re-sorts under the client for no reason they can
-    // see. Same sequence-guard shape as the calendar's week paging.
-    let locationRunCancelled = false;
-    (async () => {
-      const location = await resolveClientLocation();
-      if (locationRunCancelled || !location.coords) return;
-      setUserCoords(location.coords);
-      // Only a picked place gets labelled — that label is the whole reason
-      // the client can tell "distances from Haggerston" from "distances from
-      // where you are".
-      setManualLocationLabel(location.source === 'saved-place' ? location.placeLabel : null);
-      setLocationIsCoarse(location.isCoarse);
-    })();
-
     return () => {
-      locationRunCancelled = true;
+      railsCancelled = true;
       if (secondaryRailsTimer) clearTimeout(secondaryRailsTimer);
     };
     // Keyed on the id, not the object — the rest of this screen's effects
@@ -624,6 +623,34 @@ export default function HomeScreen() {
     // re-ran this whole block, GPS prompt and every provider list included,
     // every time anything handed back a new user object.
   }, [loadBookmarks, user?.id]);
+
+  // Where Near You measures from (resolveClientLocation): a place picked on
+  // this phone, then the account's "Your area", then the device, then a town
+  // — see planClientLocation for the exact order. Re-run when Your area
+  // changes in Account, so a client with nothing picked on this phone follows
+  // the new value without restarting the app.
+  // Guarded because two overlapping runs each resolve independently, and
+  // whichever finishes LAST wins — so a slow GPS fix from run one could land
+  // after run two's answer and replace it. Either way Near You visibly
+  // re-sorts under the client for no reason they can see. Same
+  // sequence-guard shape as the calendar's week paging.
+  const accountArea = user?.clientArea ?? null;
+  useEffect(() => {
+    let locationRunCancelled = false;
+    (async () => {
+      const location = await resolveClientLocation({ accountArea });
+      if (locationRunCancelled) return;
+      // Set even when null: a re-run after Your area was cleared must not
+      // leave Near You measuring from the old one.
+      setUserCoords(location.coords);
+      // Only a chosen place gets labelled — that label is the whole reason
+      // the client can tell "distances from Haggerston" from "distances from
+      // where you are".
+      setManualLocationLabel(location.source === 'gps' ? null : location.placeLabel);
+      setLocationIsCoarse(location.isCoarse);
+    })();
+    return () => { locationRunCancelled = true; };
+  }, [user?.id, accountArea]);
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
@@ -721,16 +748,17 @@ export default function HomeScreen() {
       .sort((a, b) => a.distanceKm - b.distanceKm);
   }, [recommendationCandidates, userCoords, locationRadius]);
 
-  // The client picked a place in LocationModal, or chose their own location
-  // again (null). A picked place is saved, and resolveClientLocation reads it
-  // back on every tab, so Search and Becca measure from the same spot.
+  // The client picked a place in LocationModal, or chose "Use my location"
+  // (null). Either is saved on this phone only — never written to the
+  // account's Your area — and resolveClientLocation reads it back on every
+  // tab, so Search and Becca measure from the same spot.
   const handleSelectPlace = useCallback(async (place: string | null) => {
     try {
       if (place === null) {
-        await storage.removeItem(STORAGE_KEYS.MANUAL_LOCATION);
-        const location = await resolveClientLocation();
+        await savePhoneLocationChoice(null);
+        const location = await resolveClientLocation({ accountArea });
         setUserCoords(location.coords);
-        setManualLocationLabel(location.source === 'saved-place' ? location.placeLabel : null);
+        setManualLocationLabel(location.source === 'gps' ? null : location.placeLabel);
         setLocationIsCoarse(location.isCoarse);
         return;
       }
@@ -743,12 +771,12 @@ export default function HomeScreen() {
       setManualLocationLabel(place);
       // A hand-picked place supersedes whatever the device said, coarse or not.
       setLocationIsCoarse(false);
-      await storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, place);
+      await savePhoneLocationChoice(place);
     } catch (error) {
       // Keeps whatever location state existed before.
       logger.error('HomeScreen: could not change location', error);
     }
-  }, []);
+  }, [accountArea]);
 
   const allCategorizedProviders = useMemo(() => {
     if (!viewAllProviders) return {};
@@ -1972,7 +2000,7 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} contentFit="cover" transition={0} /> : <View style={styles.offerLogo} />}
+                      {offer.logo?.uri ? <LogoCircle uri={offer.logo.uri} framing={offer.logoFraming} style={styles.offerLogo} /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
                         {/* In normal flow (not floating over the title) so a
                             long custom label — a provider can type anything

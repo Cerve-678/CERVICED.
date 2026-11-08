@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
@@ -23,9 +24,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking, PaymentStatus, type RefundRequest } from '../../types/booking';
+import { canDisputeNoShow, hasDirectionsDestination, isAddressPending, isMobileBooking, PaymentStatus, type RefundRequest } from '../../types/booking';
+import { directionsUrlFor } from '../../utils/mapsLink';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import {
   describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
@@ -52,7 +55,8 @@ import {
 import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { clientRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
-import { PolicyImageViewer } from '../../components/PolicyImageViewer';
+import { FullImageViewer } from '../../components/FullImageViewer';
+import { policyImageUrls, type PolicyImageFields } from '../../features/providers/policyImages';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
@@ -172,7 +176,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   // The provider's "Detailed Policy Image" (optional) — their current one, read
   // live rather than from the snapshot: it's a reference document shown as a
   // pop-up (same as on their profile), not a term the client froze at checkout.
-  const [policyImageUrl, setPolicyImageUrl] = useState<string | null>(null);
+  // Every page of the provider's detailed policy, in order.
+  const [policyPages, setPolicyPages] = useState<string[]>([]);
 
   // UI state
   const [showReceipt, setShowReceipt] = useState(false);
@@ -181,6 +186,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
+  // Off by default: a review is named unless the client chooses otherwise.
+  const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [showTipModal, setShowTipModal] = useState(false);
@@ -330,10 +337,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         setLivePolicyFallback(
           booking.policySnapshot ? null : metadata.bookingPolicies,
         );
-        setPolicyImageUrl(
-          (metadata.bookingPolicies as { policyImageUrl?: string } | null)
-            ?.policyImageUrl ?? null,
-        );
+        setPolicyPages(policyImageUrls(metadata.bookingPolicies as PolicyImageFields | null));
         // Kept even for a booking that already has a client address: its
         // business_type is what says whose address is the venue. Dropping it
         // whenever a client address existed is what let a salon booking be
@@ -403,22 +407,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   }, [C.accent]);
 
   const openInMaps = useCallback(async (b: ConfirmedBooking) => {
-    // coordinates is typed non-null but is null whenever the release view masks
-    // it or the provider never geocoded, so reading .latitude straight off it
-    // threw a TypeError that the catch below reported as "Unable to open maps".
-    if (!hasMapDestination(b)) {
+    if (!hasDirectionsDestination(b)) {
       Alert.alert('Location Unavailable', 'This appointment does not have a mappable address yet.');
       return;
     }
-    const { latitude, longitude } = b.coordinates;
     try {
-      const label = encodeURIComponent(b.address);
-      const url = Platform.select({
-        ios: `maps:${latitude},${longitude}?q=${label}`,
-        android: `geo:${latitude},${longitude}?q=${label}`,
-      });
-      if (url && await Linking.canOpenURL(url)) await Linking.openURL(url);
-      else await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
+      await Linking.openURL(directionsUrlFor({
+        fullAddress: b.address,
+      }));
     } catch (err) { logger.error('[BookingDetail] open maps failed:', err); Alert.alert("Couldn't Open Maps", 'Please try again in a moment.'); }
   }, []);
 
@@ -757,14 +753,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       }
       const alreadyReviewed = await hasReviewedBooking(booking.id);
       if (!alreadyReviewed) {
-        await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
+        await submitReview({ booking_id: booking.id, provider_id: providerId, service_id: null, user_id: user.id, rating, is_anonymous: reviewAnonymous, ...(reviewText.trim() ? { comment: reviewText.trim() } : {}) });
       }
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);
-      setTimeout(() => { setShowRatingModal(false); setRating(0); setReviewText(''); }, 2000);
+      setTimeout(() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }, 2000);
     } catch (err) { logger.error('[BookingDetail] submit rating failed:', err); Alert.alert('Rating Not Saved', 'Please try again in a moment.'); }
     finally { setIsLoading(false); }
-  }, [booking, rating, reviewText, user]);
+  }, [booking, rating, reviewText, reviewAnonymous, user]);
 
   /**
    * Record a tip. This previously only set local component state, so the tip was
@@ -883,8 +879,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         >
           {/* Header */}
           <View style={st.header}>
-            {booking.providerImage ? (
-              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={st.providerImg} contentFit="cover" />
+            {(typeof booking.providerImage === 'string' ? booking.providerImage : booking.providerImage?.uri) ? (
+              <ProviderLogoCircle
+                providerId={booking.providerId}
+                uri={typeof booking.providerImage === 'string' ? booking.providerImage : booking.providerImage.uri}
+                style={st.providerImg}
+              />
+            ) : booking.providerImage ? (
+              <Image source={booking.providerImage} style={st.providerImg} contentFit="cover" />
             ) : (
               <View style={[st.providerImg, { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }]}>
                 <Text style={{ color: C.onAccent, fontSize: 22, fontWeight: '800' }}>
@@ -1011,7 +1013,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     setViewingPack(pack);
                     if (!pack.viewedAt) {
-                      markInfoPackViewed(pack.id).catch(() => {});
+                      markInfoPackViewed(pack.id).catch(error => logger.error('[BookingDetail] mark info pack read failed:', error));
                       setBookingInfoPacks(prev => prev.map(p => p.id === pack.id ? { ...p, viewedAt: new Date().toISOString() } : p));
                     }
                   }}>
@@ -1241,7 +1243,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               policy without going back to the profile. Live (not snapshotted):
               it's a document to read, not a term frozen at checkout. Hidden on
               past bookings, which have nothing left to act on. */}
-          {!isPast && policyImageUrl && (
+          {!isPast && policyPages.length > 0 && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>
                 {booking.providerName}'S FULL POLICY
@@ -1327,14 +1329,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     // A request isn't a booking yet, so there's no location
                     // to go to until the provider accepts it.
                     <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>TBA</Text>
-                  ) : hasMapDestination(booking) ? (
+                  ) : hasDirectionsDestination(booking) ? (
                     <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openInMaps(booking); }} activeOpacity={0.7} style={{ flex: 0.6 }}>
                       <Text style={[st.rowValue, { color: C.accent, flex: undefined }]}>{booking.address}</Text>
                     </TouchableOpacity>
-                  ) : !isAddressPending(booking.address) ? (
-                    // A real address the provider never geocoded — show it as
-                    // plain text rather than a Directions link that can't work.
-                    <Text style={[st.rowValue, { color: C.text }]}>{booking.address}</Text>
                   ) : (
                     <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>
                       {addrCountdown ? `Available in ${addrCountdown}` : 'Address to be confirmed'}
@@ -1489,7 +1487,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Policy Image ─── the provider's detailed policy document,
             scrollable when it's long; the same viewer as their profile. */}
-        <PolicyImageViewer uri={policyImageUrl} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} />
+        <FullImageViewer uris={policyPages} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} label="Policy document" />
 
         {/* ─── Cancel Modal ───────────────────────────────────────────────
             Same modal handles both states: the normal "are you sure" ask,
@@ -1860,7 +1858,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Rating Modal ─── */}
-        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 {!hasRated ? (
@@ -1879,8 +1877,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       multiline numberOfLines={3} placeholder="Share your experience (optional)"
                       placeholderTextColor={C.sub} value={reviewText} onChangeText={setReviewText} maxLength={500}
                     />
+                    <AnonymousReviewToggle
+                      value={reviewAnonymous}
+                      onValueChange={setReviewAnonymous}
+                      palette={{ text: C.text, sub: C.sub, accent: C.accent, border: C.border }}
+                      disabled={isLoading}
+                    />
                     <View style={st.sheetBtns}>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }} activeOpacity={0.7}>
                         <Text style={{ color: C.text }}>Skip</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: rating === 0 ? C.border : C.accent }]} disabled={rating === 0 || isLoading} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleRatingSubmit(); }} activeOpacity={0.7}>

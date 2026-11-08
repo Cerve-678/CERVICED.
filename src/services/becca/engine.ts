@@ -48,6 +48,8 @@ export interface EngineInput {
   /** Client hat: CartContext's addToCart. See CapabilityContext.addToCart. */
   addToCart?: (item: AddToCartParams) => void;
   userId?: string;
+  /** Client hat: Account → Your area (users.client_area). See CapabilityContext.clientArea. */
+  clientArea?: string | null;
   /** Injected so date logic is deterministic and testable. */
   now?: Date;
   /**
@@ -164,6 +166,12 @@ const CONFIRM_PREFIX = "__becca_confirm__:";
 
 export function confirmToken(id: string): string {
   return `${CONFIRM_PREFIX}${id}`;
+}
+
+/** A confirm token is an internal instruction, never something to show the
+ *  person as their own message — the chip they tapped says it in words. */
+export function isConfirmToken(message: string): boolean {
+  return message.startsWith(CONFIRM_PREFIX);
 }
 
 /** Backing out — of a pending write, or of the conversation generally. */
@@ -620,6 +628,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     now,
     ...(hat === "client" && input.addToCart ? { addToCart: input.addToCart } : {}),
     ...(userId ? { userId } : {}),
+    ...(hat === "client" && input.clientArea ? { clientArea: input.clientArea } : {}),
     ...(personal ? { personal } : {}),
   };
 

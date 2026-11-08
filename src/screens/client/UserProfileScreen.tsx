@@ -34,6 +34,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { dobToParts } from '../../utils/dateUtils';
 import { openLegalPage } from '../../utils/legalPage';
 import { useMaintenanceDueCount } from '../../features/maintenance/useMaintenanceDueCount';
+import { useBeautyProfileTodo } from '../../features/beauty-profile/useBeautyProfileTodo';
+import { TodoMark } from '../../components/TodoMark';
+import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 
 // ── Settings row ────────────────────────────────────────────────────────────
@@ -47,20 +50,25 @@ interface SettingsOptionProps {
   danger?: boolean;
   /** Small count pill before the chevron, e.g. "2 due". */
   badge?: string | undefined;
+  /** Red "!" after the title, with what it means for screen readers. */
+  todoLabel?: string | undefined;
 }
 
-const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P, danger, badge }: SettingsOptionProps) => (
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P, danger, badge, todoLabel }: SettingsOptionProps) => (
   <TouchableOpacity
     style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
     accessibilityRole="button"
-    accessibilityLabel={badge ? `${title}, ${badge}` : title}
+    accessibilityLabel={[title, todoLabel, badge].filter(Boolean).join(', ')}
   >
     <View style={styles.optionLeft}>
       <Icon name={icon} size={20} color={danger ? P.accentText : P.sub} style={{ marginRight: 12 }} />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.optionText, { color: danger ? P.accentText : P.text }]}>{title}</Text>
+        <View style={styles.optionTitleRow}>
+          <Text style={[styles.optionText, styles.optionTitleText, { color: danger ? P.accentText : P.text }]}>{title}</Text>
+          {todoLabel ? <TodoMark /> : null}
+        </View>
         <Text style={[styles.optionSubText, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
@@ -91,6 +99,9 @@ export default function UserProfileScreen({ navigation }: any) {
   // user sees a signal on the switch control instead of missing them silently.
   const [providerUnread, setProviderUnread] = useState(0);
   const maintenanceDue = useMaintenanceDueCount(isLoggedIn);
+  const beautyTodo = useBeautyProfileTodo(isLoggedIn);
+  // Same list as the Activity Centre on Bookings, so the two never disagree.
+  const activityNeedsYou = useClientActivity().activity.needsYou.length;
 
   useFocusEffect(useCallback(() => {
     if (!hatState.owned.provider) { setProviderUnread(0); return; }
@@ -194,6 +205,16 @@ export default function UserProfileScreen({ navigation }: any) {
               onPress={() => navigation.navigate('BeautyProfile')}
               palette={P}
               badge={maintenanceDue > 0 ? t('profile.forYou.beauty.due', { count: maintenanceDue > 99 ? '99+' : maintenanceDue }) : undefined}
+              todoLabel={beautyTodo.length > 0 ? t('profile.forYou.beauty.todo') : undefined}
+            />
+            <SettingsOption
+              icon="calendar-today"
+              title={t('profile.forYou.activity.title')}
+              subtitle={t('profile.forYou.activity.sub')}
+              onPress={() => navigation.navigate('Bookings', { openActivityCentre: true })}
+              palette={P}
+              badge={activityNeedsYou > 0 ? t('profile.forYou.activity.count', { count: activityNeedsYou > 99 ? '99+' : activityNeedsYou }) : undefined}
+              todoLabel={activityNeedsYou > 0 ? t('profile.forYou.activity.todo') : undefined}
             />
             <SettingsOption icon="chat-dots" title={t('profile.forYou.messages.title')} subtitle={t('profile.forYou.messages.sub')} onPress={() => navigation.navigate('Messages')} palette={P} />
           </View>
@@ -477,6 +498,8 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
   },
   optionLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  optionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  optionTitleText: { flexShrink: 1 },
   optionText: { fontSize: 15, fontWeight: '600' },
   optionSubText: { fontSize: 12, fontWeight: '400', marginTop: 1 },
 

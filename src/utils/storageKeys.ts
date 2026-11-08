@@ -30,6 +30,9 @@ export const STORAGE_KEYS = {
   /** Device calendar ids a link-only provider chose to show as their diary on
    *  Home. Device-only on purpose: the events never leave the phone. */
   DIARY_CALENDAR_IDS:  '@cerviced_diary_calendar_ids',
+  /** Prefix: the view a provider's Home calendar opens in, stored at
+   *  `<this>:<userId>` (features/provider-bookings/calendarViewPreference.ts). */
+  PROVIDER_CALENDAR_VIEW: '@cerviced_provider_calendar_view',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
@@ -58,6 +61,10 @@ export const TOUR_SEEN_PREFIXES = {
   CLIENT_EXPLORE: '@client_explore_tour_seen_',
   /** ProviderHomeScreen — the provider's first-run tour */
   PROVIDER_HOME:  '@provider_tour_seen_',
+  /** ProviderInfoPackScreen — the Info Packs welcome */
+  PROVIDER_INFO_PACKS: '@provider_info_packs_welcome_seen_',
+  /** ProviderIntakeFormScreen — the Forms welcome */
+  PROVIDER_FORMS: '@provider_forms_welcome_seen_',
 } as const;
 
 export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];

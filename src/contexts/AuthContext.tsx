@@ -23,8 +23,10 @@ import {
   becomeFullMember as becomeFullMemberRpc,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { STORAGE_KEYS as LOCATION_STORAGE_KEYS } from '../utils/storage';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/withTimeout';
+import { toPickColumn } from '../features/beauty-profile/pickList';
 import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnapshot } from '../services/authProfileSnapshot';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 import type { ProviderBookingMode } from '../types/database';
@@ -76,15 +78,18 @@ export interface ClientProfileData {
   dobMonth: string;
   dobYear: string;
   hairType: string;
-  skinType: string;
+  skinType: string[];
   skinConcerns: string[];
-  styleVibe: string;
+  styleVibe: string[];
   allergies: string[];
   treatmentHistory: string[];
   medicalNotes: string;
   photographyConsent: boolean;
   serviceInterests: string[];
   serviceLocations: string[];
+  /** "Where are you based?" from sign-up — users.client_area, the same column
+   *  Account > Your area edits. Omitted or blank leaves the column alone. */
+  clientArea?: string;
   maintenanceFrequency: string;
   referralSource: string;
   gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
@@ -115,12 +120,16 @@ interface AuthContextType {
    *  null for an account with no provider hat. Resolved with myProviderId,
    *  and from the sign-up answer before the providers row exists. */
   myBookingMode: ProviderBookingMode | null;
-  /** Link-only → full member, one way. Flips myBookingMode to 'cerviced' once
-   *  the server has, which swaps the provider tabs for the full set. Throws
-   *  on failure; the caller shows the error. */
+  /** Link-only → full member, one way, on the server only. Does NOT flip
+   *  myBookingMode: the conversion screen lives inside the link-only tabs and
+   *  would unmount mid-animation, so it calls enterFullMemberMode() when the
+   *  provider taps through. Throws on failure; the caller shows the error. */
   becomeFullMember: () => Promise<void>;
+  /** Swaps the provider tabs for the full set once becomeFullMember() has
+   *  succeeded. Unmounts every link-only screen, including its caller. */
+  enterFullMemberMode: () => void;
   switchMode: () => Promise<void>;
-  upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
+  upgradeToProvider: (businessName: string, businessEmail: string | null, extras?: {
     businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
     dobDay?: string; dobMonth?: string; dobYear?: string;
     serviceInterests?: string[]; serviceLocations?: string[];
@@ -236,7 +245,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id, user?.accountType]);
 
   const becomeFullMember = useCallback(async () => {
-    await becomeFullMemberRpc();
+    try {
+      await becomeFullMemberRpc();
+    } catch (error) {
+      // The RPC refuses when the account already takes bookings through
+      // CERVICED — which is what a second call sees after a first one landed
+      // server-side but never reached the app (a dropped response, a retry).
+      // That's the outcome they asked for, not a failure: ask the DB what's
+      // true and only rethrow if they really are still link-only.
+      if (!user?.id) throw error;
+      const { bookingMode } = await getProviderOwnershipForUserId(user.id);
+      if (bookingMode !== 'cerviced') throw error;
+    }
+  }, [user?.id]);
+
+  const enterFullMemberMode = useCallback(() => {
     setMyBookingMode('cerviced');
   }, []);
 
@@ -778,7 +801,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Updates the DB role, local state, and activeMode all in one call.
   const upgradeToProvider = useCallback(async (
     businessName: string,
-    businessEmail: string,
+    businessEmail: string | null,
     extras?: {
       businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
       dobDay?: string; dobMonth?: string; dobYear?: string;
@@ -796,7 +819,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...user,
       accountType: 'provider',
       businessName,
-      businessEmail,
+      ...(businessEmail ? { businessEmail } : {}),
     };
     setUser(upgraded);
     setActiveMode('provider');
@@ -814,19 +837,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const dob = profileData.dobYear && profileData.dobMonth && profileData.dobDay
       ? `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`
       : null;
+    // Only written when answered, so a skipped question can't blank an area
+    // the account already saved from Account > Your area.
+    const clientArea = profileData.clientArea?.trim() || null;
     try {
       await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
       hair_type: profileData.hairType || null,
-      skin_type: profileData.skinType || null,
+      skin_type: toPickColumn(profileData.skinType),
       skin_concerns: profileData.skinConcerns,
-      style_vibe: profileData.styleVibe || null,
+      style_vibe: toPickColumn(profileData.styleVibe),
       allergies: profileData.allergies,
       treatment_history: profileData.treatmentHistory,
       medical_notes: profileData.medicalNotes || null,
       photography_consent: profileData.photographyConsent,
       service_interests: profileData.serviceInterests,
       service_locations: profileData.serviceLocations,
+      ...(clientArea ? { client_area: clientArea } : {}),
       maintenance_frequency: profileData.maintenanceFrequency || null,
       referral_source: profileData.referralSource || null,
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
@@ -837,7 +864,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Keep the user-facing copy friendly, but record the real Postgres reason
     // (Metro/console only) so any future failure here is diagnosable at a glance.
     } catch (error) { logger.error('addClientProfile failed:', error); throw error; }
-    setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
+    setUser({ ...user, ...(dob ? { dob } : {}), ...(clientArea ? { clientArea } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
   }, [user]);
@@ -935,6 +962,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // next account that logs in on this device.
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
+      // Home's Near You choice on this phone. It outranks the account's Your
+      // area, so leaving it would measure the next account from this one's
+      // pick (see planClientLocation).
+      LOCATION_STORAGE_KEYS.MANUAL_LOCATION,
+      LOCATION_STORAGE_KEYS.NEAR_YOU_USE_DEVICE,
     ]).catch(() => {});
     await clearAuthProfileSnapshot();
     await unregisterPushToken().catch(() => {});
@@ -1030,14 +1062,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextType>(() => ({
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember,
+    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember, enterFullMemberMode,
     switchMode, upgradeToProvider, addClientProfile, login,
     beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,
     pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
   }), [
     isLoggedIn, isLoading, isSwitching, switchingTo, user, session, hatState,
-    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember,
+    myProviderId, myProviderIdStatus, myBookingMode, becomeFullMember, enterFullMemberMode,
     switchMode, upgradeToProvider, addClientProfile, login,
     beginSignupVerification, completeVerifiedSignup, cancelSignupVerification, logout,
     deleteClientProfile, deleteProviderProfile, updateUser,

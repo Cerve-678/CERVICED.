@@ -1,10 +1,12 @@
-import type { BusinessType } from '../../types/database';
+import type { BusinessType, LogoFraming } from '../../types/database';
 
 export interface ProviderProfileAddOn {
   id: string | number;
   name: string;
   price: number;
   description: string;
+  /** Minutes this add-on adds to the appointment. 0 = no extra time. */
+  extraMinutes: number;
 }
 
 export interface ProviderProfileService {
@@ -31,6 +33,8 @@ export interface ProviderProfileData {
   providerName: string;
   providerService: string;
   providerLogo: any;
+  /** How the provider framed their logo in Info Reg (the circle, here). */
+  providerLogoFraming: LogoFraming | null;
   location: string;
   /** Public "How to get there", shown in Additional Information. */
   publicDirections: string;
@@ -102,7 +106,6 @@ export interface ProviderProfileData {
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
-  travelRadius: string;
   productsUsed: string;
   bookingPolicies: {
     cancelNotice?: string;
@@ -118,6 +121,8 @@ export interface ProviderProfileData {
     depositAmount?: string;
     noShowAction?: string;
     policyImageUrl?: string;
+    /** Every page, in order. policyImageUrl is the first, for older builds. */
+    policyImageUrls?: string[];
     // Authored on PoliciesScreen, shown in the Policy tab. EmergencyBookingPrompt
     // also reads it while EMERGENCY_BOOKINGS_ENABLED is on.
     emergencyBookingPolicy?: string;

@@ -47,6 +47,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageCropModal } from '../../components/ImageCropModal';
+import { MAX_POLICY_IMAGES, policyImageFields, policyImageUrls } from '../../features/providers/policyImages';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -98,7 +99,8 @@ interface PolicyState {
   noShowFee:        string;
   refundPolicyNote: string;
   bookingInstructions: string;
-  policyImageUrl:   string;
+  /** Pages of the detailed policy, in order (see features/providers/policyImages). */
+  policyImageUrls:  string[];
   // Shown in the profile's Policy tab. Also read by the booking sheet's
   // "scheduling conflict" prompt if EMERGENCY_BOOKINGS_ENABLED returns. A
   // distinct document from the provider's Terms & Conditions.
@@ -136,7 +138,7 @@ const DEFAULT_POLICIES: PolicyState = {
   noShowFee:        '',
   refundPolicyNote: '',
   bookingInstructions: '',
-  policyImageUrl:   '',
+  policyImageUrls:  [],
   emergencyBookingPolicy: '',
   travelPolicy: '',
   depositNonRefundable: false,
@@ -204,8 +206,12 @@ export default function PoliciesScreen({ navigation }: any) {
   // column. Held separately and spread back on save, because the write is a
   // full REPLACE: a key that isn't carried through is a key that's deleted.
   const [carriedPolicies, setCarriedPolicies] = useState<Record<string, unknown>>({});
-  const [policyImageUploading, setPolicyImageUploading] = useState(false);
-  const [policyImageToCrop, setPolicyImageToCrop] = useState<string | null>(null);
+  // Uploads still in flight; a few photos picked at once upload one by one.
+  const [policyImageUploads, setPolicyImageUploads] = useState(0);
+  const policyImageUploading = policyImageUploads > 0;
+  // Photos picked together, waiting to be cropped in turn. The first is open.
+  const [policyImageCropQueue, setPolicyImageCropQueue] = useState<string[]>([]);
+  const policyImageToCrop = policyImageCropQueue[0] ?? null;
 
   // Re-affirmation only — first-publish acceptance is InfoRegScreen's
   // checkbox and is what actually gates being able to publish at all. This
@@ -239,6 +245,8 @@ export default function PoliciesScreen({ navigation }: any) {
         setProviderId(profile.id);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
+        // Reads the old single image too, so a provider's existing page stays.
+        merged.policyImageUrls = policyImageUrls(saved);
         // Saved before 'Full charge' became 'Half the price' (2026-11-01).
         if ((merged.cancelPenalty as string) === 'full') merged.cancelPenalty = 'half';
         if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
@@ -281,34 +289,46 @@ export default function PoliciesScreen({ navigation }: any) {
     }
     // No allowsEditing: iOS's editor only crops to a square, which cuts the
     // top and bottom off a full-length policy sheet. ImageCropModal does it.
+    const room = MAX_POLICY_IMAGES - policies.policyImageUrls.length;
+    if (room <= 0) return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.85,
+      allowsMultipleSelection: room > 1,
+      selectionLimit: room,
+      orderedSelection: true,
     });
-    const asset = result.assets?.[0];
-    if (result.canceled || !asset) return;
-    setPolicyImageToCrop(asset.uri);
-  }, [userId]);
+    if (result.canceled) return;
+    const picked = (result.assets ?? []).map(a => a.uri).slice(0, room);
+    if (picked.length > 0) setPolicyImageCropQueue(picked);
+  }, [userId, policies.policyImageUrls.length]);
+
+  // Cancelling one photo's crop skips just that photo.
+  const handlePolicyImageCropCancelled = useCallback(() => {
+    setPolicyImageCropQueue(queue => queue.slice(1));
+  }, []);
 
   const handlePolicyImageCropped = useCallback(async (uri: string) => {
-    setPolicyImageToCrop(null);
+    setPolicyImageCropQueue(queue => queue.slice(1));
     if (!userId) return;
-    setPolicyImageUploading(true);
+    setPolicyImageUploads(n => n + 1);
     try {
       const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const path = `${userId}/policy-${Date.now()}.${ext}`;
+      const path = `${userId}/policy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       // 'document': kept at full width however long it is, so it reads
       // sharp in the scrolling viewer instead of shrinking by its height.
       const publicUrl = await uploadToStorage('portfolio', path, uri, 'document');
-      setPolicy('policyImageUrl', publicUrl);
+      setPolicies(prev => ({ ...prev, policyImageUrls: [...prev.policyImageUrls, publicUrl].slice(0, MAX_POLICY_IMAGES) }));
     } catch (e: any) {
       Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
     } finally {
-      setPolicyImageUploading(false);
+      setPolicyImageUploads(n => n - 1);
     }
-  }, [userId, setPolicy]);
+  }, [userId]);
 
-  const handleRemovePolicyImage = useCallback(() => setPolicy('policyImageUrl', ''), [setPolicy]);
+  const handleRemovePolicyImage = useCallback((url: string) => {
+    setPolicies(prev => ({ ...prev, policyImageUrls: prev.policyImageUrls.filter(u => u !== url) }));
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (!userId) { flash('No provider profile found', 'error'); return; }
@@ -336,6 +356,7 @@ export default function PoliciesScreen({ navigation }: any) {
       await saveProviderPolicies(userId, {
         ...carriedPolicies,
         ...policies,
+        ...policyImageFields(policies.policyImageUrls),
         cancelCustomFee: policies.cancelPenalty === 'custom' ? policies.cancelCustomFee : '',
         noShowFee: policies.noShowAction === 'custom' ? policies.noShowFee : '',
         ...(isLinkOnly ? LINK_ONLY_CLEARED : {}),
@@ -373,7 +394,7 @@ export default function PoliciesScreen({ navigation }: any) {
         uri={policyImageToCrop}
         accent={C.accent}
         onAccent={C.onAccent}
-        onCancel={() => setPolicyImageToCrop(null)}
+        onCancel={handlePolicyImageCropCancelled}
         onDone={handlePolicyImageCropped}
       />
       <SafeAreaView style={s.safe} edges={['top']}>
@@ -576,6 +597,10 @@ export default function PoliciesScreen({ navigation }: any) {
                 stay away from money: a charge written here would be an
                 off-app charge the checkout knows nothing about (see the
                 deposit/balance liability boundary in CLAUDE.md). */}
+            {/* The one place a mobile provider says how far they travel —
+                there is no separate distance field elsewhere (Edit Profile's
+                "How far you travel" / providers.travel_radius was removed so
+                the distance is stated once). */}
             <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
               <Field
                 label="Your travel policy"
@@ -596,46 +621,48 @@ export default function PoliciesScreen({ navigation }: any) {
               />
             </Card>
 
-            <Card title="Detailed Policy Image" sub="A picture of your full policy, for anything too detailed for the fields above, like a house-rules sheet or consent form. Clients open it from your profile (optional).">
+            <Card title="Detailed Policy Images" sub={`Pictures of your full policy, for anything too detailed for the fields above, like a house-rules sheet or consent form. Add up to ${MAX_POLICY_IMAGES}, in the order clients should read them. Clients open them from your profile and can zoom in (optional).`}>
               <View style={imgSt.grid}>
-                {policies.policyImageUrl ? (
-                  <View style={imgSt.thumbWrap}>
-                    <TouchableOpacity onPress={handlePickPolicyImage} disabled={policyImageUploading} activeOpacity={0.7}>
-                      <Image source={{ uri: policies.policyImageUrl }} style={[imgSt.thumb, { backgroundColor: C.border }]} resizeMode="contain" fadeDuration={0} />
-                      {policyImageUploading && (
-                        <View style={imgSt.uploading}>
-                          <ActivityIndicator size="small" color="#fff" />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={imgSt.removeBtn} onPress={handleRemovePolicyImage} disabled={policyImageUploading}>
+                {policies.policyImageUrls.map((url, index) => (
+                  <View key={url} style={imgSt.thumbWrap}>
+                    <Image source={{ uri: url }} style={[imgSt.thumb, { backgroundColor: C.border }]} resizeMode="contain" fadeDuration={0} />
+                    <Text style={[imgSt.pageNo, { color: C.sub }]}>Page {index + 1}</Text>
+                    <TouchableOpacity
+                      style={imgSt.removeBtn}
+                      onPress={() => handleRemovePolicyImage(url)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove page ${index + 1}`}
+                    >
                       <Text style={imgSt.removeText}>✕</Text>
                     </TouchableOpacity>
                   </View>
-                ) : (
+                ))}
+                {policies.policyImageUrls.length < MAX_POLICY_IMAGES && (
                   <TouchableOpacity
                     style={[imgSt.addTile, { borderColor: C.border }]}
                     onPress={handlePickPolicyImage}
-                    disabled={policyImageUploading}
+                    disabled={policyImageUploading || policyImageToCrop !== null}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add policy images"
                   >
                     {policyImageUploading ? (
                       <ActivityIndicator size="small" color={C.accent} />
                     ) : (
                       <>
                         <Text style={[imgSt.addPlus, { color: C.sub }]}>+</Text>
-                        <Text style={[imgSt.addText, { color: C.sub }]}>Add Image</Text>
+                        <Text style={[imgSt.addText, { color: C.sub }]}>{policies.policyImageUrls.length > 0 ? 'Add more' : 'Add Images'}</Text>
                       </>
                     )}
                   </TouchableOpacity>
                 )}
               </View>
-              {policies.policyImageUrl ? (
-                <TouchableOpacity onPress={handlePickPolicyImage} disabled={policyImageUploading} style={{ marginTop: 10 }}>
-                  <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: C.accent }}>
-                    {policyImageUploading ? 'UPLOADING…' : 'REPLACE PHOTO'}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
+              {policies.policyImageUrls.length > 0 && (
+                <Text style={[imgSt.count, { color: C.sub }]}>
+                  {policyImageUploading ? 'UPLOADING…' : `${policies.policyImageUrls.length} OF ${MAX_POLICY_IMAGES}`}
+                </Text>
+              )}
             </Card>
 
             {/* Re-affirmation, not a gate — first-publish acceptance in
@@ -682,11 +709,13 @@ const termsSt = StyleSheet.create({
 
 const imgSt = StyleSheet.create({
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  thumbWrap: { position: 'relative', width: 120, height: 180 },
+  thumbWrap: { position: 'relative', width: 120 },
   thumb:     { width: 120, height: 180, borderRadius: 14 },
   uploading: { ...StyleSheet.absoluteFill, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   removeBtn: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' },
   removeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  pageNo:    { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 4 },
+  count:     { fontFamily: 'BakbakOne-Regular', fontSize: 11, marginTop: 10 },
   addTile:   { width: 84, height: 84, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   addPlus:   { fontSize: 22, fontWeight: '300', lineHeight: 24 },
   addText:   { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 9, marginTop: 2 },

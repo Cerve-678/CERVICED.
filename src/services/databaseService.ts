@@ -19,9 +19,11 @@ import type { SavedCard } from '../features/payments/savedCards';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
+import { toPickList } from "../features/beauty-profile/pickList";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
   DbProvider,
+  LogoFraming,
   DbBooking,
   DbUser,
   DbNotification,
@@ -53,6 +55,8 @@ import type {
   DbProviderAvailabilityOverride,
   BusinessType,
   ServiceCategory,
+  DbProviderAddOn,
+  ProviderAddOnAppliesTo,
 } from "../types/database";
 import type { AddressReleasePolicy } from "../features/business-details/options";
 import { logger, reportError } from "../utils/logger";
@@ -72,6 +76,12 @@ import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from 
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
 import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
+import {
+  toMyProviderReview,
+  toPublicReview,
+  type MyProviderReviewRow,
+  type PublicReviewRow,
+} from "../features/providers/reviewPresentation";
 export type { BookingReviewState } from "../features/bookings/reviewState";
 import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
@@ -1395,6 +1405,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   public_directions,
   about_text,
   logo_url,
+  logo_framing,
   gradient,
   accent_color,
   background_image_url,
@@ -1427,7 +1438,6 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   walk_ins_welcome,
   group_bookings_available,
   vegan_cruelty_free,
-  travel_radius,
   products_used,
   preferred_payment_methods
 `;
@@ -1599,7 +1609,7 @@ export async function getProviderBySlug(
           skin_tones_suitable,
           service_type,
           service_images ( id, url, sort_order, aspect_ratio ),
-          service_add_ons ( id, name, price, description, is_active )
+          service_add_ons ( id, name, price, description, is_active, extra_minutes )
         ),
         provider_specialties ( specialty )
       `,
@@ -1983,7 +1993,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 // response small without narrowing the shared getPortfolioItems() contract.
 const EXPLORE_PORTFOLIO_SELECT = `
   id, provider_id, image_url, caption, category, tags, price, aspect_ratio,
-  provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
 `;
 
 /** Fetch the lean portfolio projection used by Explore's public masonry feed. */
@@ -2028,7 +2038,7 @@ export async function getPortfolioItems(
     .select(
       `
       *,
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("provider.is_active", true)
@@ -2074,7 +2084,7 @@ export async function searchPortfolio(
     .select(
       `
       *,
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("provider.is_active", true)
@@ -2115,7 +2125,7 @@ export async function getDiscoverServices(
       `
       id, provider_id, name, description, price, service_category,
       service_images!inner ( url, sort_order, aspect_ratio, fit ),
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("is_active", true)
@@ -2251,7 +2261,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
           .select(
             `
             *,
-            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
           `,
           )
           .in("id", portfolioIds)
@@ -2270,7 +2280,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
             `
             id, provider_id, name, description, price,
             service_images ( url, sort_order ),
-            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
           `,
           )
           .in("id", serviceIds)
@@ -2301,7 +2311,7 @@ export async function getActivePromotions(
   let query = supabase
     .from("promotions")
     .select(
-      "id, provider_id, title, description, discount_text, discount_percent, discount_amount, service_category, service_ids, promo_code, valid_from, valid_until, is_active, image_url, created_at, providers!inner(display_name, logo_url, slug)",
+      "id, provider_id, title, description, discount_text, discount_percent, discount_amount, service_category, service_ids, promo_code, valid_from, valid_until, is_active, image_url, created_at, providers!inner(display_name, logo_url, logo_framing, slug)",
     )
     .eq("providers.is_active", true)
     .eq("providers.has_gone_live", true)
@@ -2495,7 +2505,7 @@ export async function getMyProviderServices(): Promise<
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active, extra_minutes, provider_add_on_id )",
     )
     .eq("provider_id", provider.id)
     .eq("is_active", true)
@@ -2592,6 +2602,52 @@ export interface MyServiceDraft {
   tags?: ServiceTagGroups;
   /** Absent = leave services.audience as it is. */
   audience?: Exclude<ServiceAudienceValue, ''>;
+}
+
+export interface ServiceDescriptionRevision {
+  id: string;
+  description: string;
+  source: 'draft' | 'published';
+  created_at: string;
+}
+
+/** Back up exactly what the provider accepted in the service editor, before
+ * the larger profile form can refresh or fail to publish it. */
+export async function saveServiceDescriptionDraft(
+  providerId: string,
+  serviceId: string | null,
+  draftKey: string,
+  serviceName: string,
+  description: string,
+): Promise<void> {
+  const { error } = await supabase.from('service_description_history').insert({
+    provider_id: providerId,
+    service_id: serviceId,
+    draft_key: draftKey,
+    service_name: serviceName,
+    description,
+    source: 'draft',
+  });
+  if (error) throw error;
+}
+
+/** Recent draft and published wording for one service. RLS confines this to
+ * the signed-in owner; the provider id also bounds the lookup. */
+export async function getServiceDescriptionHistory(
+  providerId: string,
+  serviceId: string | null,
+  draftKey: string,
+): Promise<ServiceDescriptionRevision[]> {
+  const query = supabase.from('service_description_history')
+    .select('id, description, source, created_at')
+    .eq('provider_id', providerId)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  const { data, error } = serviceId
+    ? await query.eq('service_id', serviceId)
+    : await query.eq('draft_key', draftKey);
+  if (error) throw error;
+  return (data ?? []) as ServiceDescriptionRevision[];
 }
 
 /** The tag/audience columns a draft carries, and nothing for what it doesn't. */
@@ -2723,7 +2779,7 @@ export async function getMyPromotionManagerCore(): Promise<{
     supabase
       .from("services")
       .select(
-        "id, provider_id, service_category, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+        "id, provider_id, service_category, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active, extra_minutes, provider_add_on_id )",
       )
       .eq("provider_id", provider.id)
       .eq("is_active", true)
@@ -3720,6 +3776,12 @@ export type CartClaimItem = Omit<
   | "policy_accepted_at"
   | "safety_ack_required"
   | "safety_ack_at"
+  // The venue isn't the client's to send: the server stamps it into
+  // booking_venue_details from the provider's private details at hold time.
+  | "provider_address_snapshot"
+  | "provider_directions_snapshot"
+  | "provider_coordinates"
+  | "booking_venue_details"
 >;
 
 /** One claimed slot's identity + the real booking id it now maps to. */
@@ -3955,6 +4017,7 @@ export async function getProviderBookings(
       `
       *,
       add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates ),
       booking_client_addresses ( address )
     `,
     )
@@ -4091,7 +4154,8 @@ export async function getOlderProviderBookings(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", provider.id)
@@ -4125,7 +4189,8 @@ export async function getGroupBookingSiblings(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("group_booking_id", groupBookingId)
@@ -4289,6 +4354,7 @@ export interface UserConversationWithProvider {
     slug: string;
     display_name: string;
     logo_url: string | null;
+    logo_framing: LogoFraming | null;
   } | null;
 }
 
@@ -4304,7 +4370,7 @@ export async function getUserConversations(): Promise<
   const { data, error } = await supabase
     .from("provider_conversations")
     .select(
-      "id, provider_id, user_id, last_message, last_message_at, unread_count_user, unread_count_provider, created_at, updated_at, provider: providers ( id, slug, display_name, logo_url )",
+      "id, provider_id, user_id, last_message, last_message_at, unread_count_user, unread_count_provider, created_at, updated_at, provider: providers ( id, slug, display_name, logo_url, logo_framing )",
     )
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false })
@@ -4350,7 +4416,8 @@ export async function getProviderBookingsByDate(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", providerId)
@@ -4374,7 +4441,8 @@ export async function getProviderBookingsByDateRange(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", providerId)
@@ -4401,7 +4469,8 @@ export async function getProviderUpcomingBookings(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", providerId)
@@ -4710,7 +4779,13 @@ export async function getUnreadNotificationCount(
 // REVIEWS
 // ─────────────────────────────────────────────────────────
 
-/** Fetch reviews for a provider */
+/**
+ * Fetch reviews for a provider.
+ *
+ * Through get_provider_reviews, not the table: an anonymous review is hidden
+ * from direct reads, and the RPC returns it with the reviewer blanked. It also
+ * resolves reviewer names itself, so there is no second round trip.
+ */
 export async function getProviderReviews(
   providerId: string,
   options: { limit?: number } = {},
@@ -4719,87 +4794,25 @@ export async function getProviderReviews(
     Math.max(Math.trunc(options.limit ?? DEFAULT_REVIEWS_QUERY_LIMIT), 1),
     DEFAULT_REVIEWS_QUERY_LIMIT,
   );
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("id, user_id, provider_id, rating, comment, created_at")
-    .eq("provider_id", providerId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
+  const { data, error } = await supabase.rpc("get_provider_reviews", {
+    p_provider_id: providerId,
+    p_limit: limit,
+  });
   if (error) throw error;
-  const reviews = (data ?? []) as Pick<
-    DbReview,
-    "id" | "user_id" | "provider_id" | "rating" | "comment" | "created_at"
-  >[];
-  if (reviews.length === 0) return [];
-
-  // Reviewer name/avatar comes from a SECURITY DEFINER RPC, not an embedded
-  // join on the users table — that join relied on a blanket read policy on
-  // users that also exposed health data to anyone (see
-  // fix_users_table_pii_leak.sql). Batched into one call, not per-row.
-  const userIds = [...new Set(reviews.map((r) => r.user_id))];
-  const { data: profiles, error: profilesError } = await supabase.rpc(
-    "get_user_public_profiles",
-    {
-      p_user_ids: userIds,
-    },
-  );
-  if (profilesError) throw profilesError;
-  const profileById = new Map<string, Pick<DbUser, "name" | "avatar_url">>(
-    (profiles ?? []).map(
-      (profile: {
-        id: string;
-        name: string | null;
-        avatar_url: string | null;
-      }) => [
-        profile.id,
-        { name: profile.name ?? "", avatar_url: profile.avatar_url },
-      ],
-    ),
-  );
-
-  return reviews.map((r) => ({
-    ...r,
-    user: profileById.get(r.user_id) ?? { name: "", avatar_url: null },
-  })) as PublicReviewWithUser[];
+  return ((data ?? []) as PublicReviewRow[]).map(toPublicReview);
 }
 
-/** Fetch reviews for the currently authenticated provider */
+/**
+ * Fetch reviews for the currently authenticated provider. An anonymous review
+ * comes back with no reviewer, booking, service or tip — the booking would
+ * name the client.
+ */
 export async function getMyProviderReviews(): Promise<ReviewWithUser[]> {
-  const provider = await getMyProviderProfile();
-  if (!provider) return [];
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("*")
-    .eq("provider_id", provider.id)
-    .order("created_at", { ascending: false })
-    .limit(DEFAULT_REVIEWS_QUERY_LIMIT);
+  const { data, error } = await supabase.rpc("get_my_provider_reviews", {
+    p_limit: DEFAULT_REVIEWS_QUERY_LIMIT,
+  });
   if (error) throw error;
-  const reviews = (data ?? []) as DbReview[];
-  if (reviews.length === 0) return [];
-
-  const userIds = [...new Set(reviews.map((review) => review.user_id))];
-  const { data: profiles, error: profilesError } = await supabase.rpc(
-    "get_user_public_profiles",
-    { p_user_ids: userIds },
-  );
-  if (profilesError) throw profilesError;
-  const profileById = new Map<string, Pick<DbUser, "name" | "avatar_url">>(
-    (profiles ?? []).map(
-      (profile: {
-        id: string;
-        name: string | null;
-        avatar_url: string | null;
-      }) => [
-        profile.id,
-        { name: profile.name ?? "", avatar_url: profile.avatar_url },
-      ],
-    ),
-  );
-  return reviews.map((review) => ({
-    ...review,
-    user: profileById.get(review.user_id) ?? { name: "", avatar_url: null },
-  }));
+  return ((data ?? []) as MyProviderReviewRow[]).map(toMyProviderReview);
 }
 
 /** Submit a review for a completed booking */
@@ -4811,6 +4824,8 @@ export async function submitReview(review: {
   rating: number;
   comment?: string;
   tip_amount?: number;
+  /** Hide who wrote it from everyone, the provider included. */
+  is_anonymous?: boolean;
 }): Promise<DbReview> {
   const { data, error } = await supabase
     .from("reviews")
@@ -6198,8 +6213,8 @@ export interface ClientBeautyProfile {
   scalpCondition: string | null;
   hairGoals: string[];
   treatmentHistory: string[];
-  // Skin
-  skinType: string | null;
+  // Skin — a list since multi-pick (see features/beauty-profile/pickList.ts)
+  skinType: string[];
   skinTone: string | null;
   skinConcerns: string[];
   sensitiveAreas: string[];
@@ -6217,22 +6232,51 @@ export interface ClientBeautyProfile {
   makeupEyes: string | null;
   makeupLips: string | null;
   // General
-  styleVibe: string | null;
+  styleVibe: string[];
   // Health & Consent
   allergies: string[];
   medicalNotes: string | null;
   photographyConsent: boolean;
 }
 
-export async function getClientBeautyProfile(
-  userId: string,
+/** One row of get_client_beauty_profile_for_booking. Every field the booked
+ *  service's category doesn't get comes back null. */
+interface BookingBeautyProfileRow {
+  service_category: string | null;
+  hair_type: string | null;
+  scalp_condition: string | null;
+  hair_goals: string[] | null;
+  treatment_history: string[] | null;
+  /** text[] once 20261108240000 is applied; a single string before it. Read through toPickList. */
+  skin_type: string[] | string | null;
+  skin_tone: string | null;
+  skin_concerns: string[] | null;
+  sensitive_areas: string[] | null;
+  nail_length: string | null;
+  nail_shape: string | null;
+  lash_style: string | null;
+  lash_status: string | null;
+  brow_style: string | null;
+  brow_condition: string | null;
+  makeup_coverage: string | null;
+  makeup_finish: string | null;
+  makeup_eyes: string | null;
+  makeup_lips: string | null;
+  style_vibe: string[] | string | null;
+  allergies: string[] | null;
+  medical_notes: string | null;
+  photography_consent: boolean | null;
+}
+
+export async function getClientBeautyProfileForBooking(
+  bookingId: string,
 ): Promise<ClientBeautyProfile> {
   const EMPTY_PROFILE: ClientBeautyProfile = {
     hairType: null,
     scalpCondition: null,
     hairGoals: [],
     treatmentHistory: [],
-    skinType: null,
+    skinType: [],
     skinTone: null,
     skinConcerns: [],
     sensitiveAreas: [],
@@ -6246,19 +6290,21 @@ export async function getClientBeautyProfile(
     makeupFinish: null,
     makeupEyes: null,
     makeupLips: null,
-    styleVibe: null,
+    styleVibe: [],
     allergies: [],
     medicalNotes: null,
-    photographyConsent: true,
+    // No answer is not a yes: unknown consent reads as "no photos".
+    photographyConsent: false,
   };
 
-  // Goes through a SECURITY DEFINER RPC (not a direct table select) — it
-  // only returns a row when the caller is the provider on an actual
-  // booking with this client. See fix_users_table_pii_leak.sql: the users
-  // table used to have a blanket USING(true) read policy that let anyone
-  // pull any user's health data straight off the table.
+  // Goes through a SECURITY DEFINER RPC (not a direct table select). It
+  // only answers the provider on this booking, and returns null for every
+  // field the booked service's category doesn't get, so a nail booking never
+  // brings the client's hair, skin or makeup details onto the provider's
+  // phone. Allergies, medical notes and photography consent always come back.
+  // See 20261108190000_beauty_profile_shared_by_booked_service.sql.
   const { data, error } = await supabase
-    .rpc("get_client_beauty_profile_for_provider", { p_client_user_id: userId })
+    .rpc("get_client_beauty_profile_for_booking", { p_booking_id: bookingId })
     .maybeSingle();
 
   // A genuine RPC failure must not be indistinguishable from "no allergies on
@@ -6272,13 +6318,13 @@ export async function getClientBeautyProfile(
     return EMPTY_PROFILE;
   }
 
-  const d = data as any;
+  const d = data as BookingBeautyProfileRow;
   return {
     hairType: d.hair_type ?? null,
     scalpCondition: d.scalp_condition ?? null,
     hairGoals: d.hair_goals ?? [],
     treatmentHistory: d.treatment_history ?? [],
-    skinType: d.skin_type ?? null,
+    skinType: toPickList(d.skin_type),
     skinTone: d.skin_tone ?? null,
     skinConcerns: d.skin_concerns ?? [],
     sensitiveAreas: d.sensitive_areas ?? [],
@@ -6292,10 +6338,10 @@ export async function getClientBeautyProfile(
     makeupFinish: d.makeup_finish ?? null,
     makeupEyes: d.makeup_eyes ?? null,
     makeupLips: d.makeup_lips ?? null,
-    styleVibe: d.style_vibe ?? null,
+    styleVibe: toPickList(d.style_vibe),
     allergies: d.allergies ?? [],
     medicalNotes: d.medical_notes ?? null,
-    photographyConsent: d.photography_consent ?? true,
+    photographyConsent: d.photography_consent ?? false,
   };
 }
 
@@ -6654,8 +6700,25 @@ export async function getIntakeFormByBooking(
     .limit(1)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return mapIntakeForm(data);
+  // Throws rather than returning null: null means "no form on this booking",
+  // and the provider's booking detail offers to send one when it sees that.
+  if (error) throw error;
+  return data ? mapIntakeForm(data) : null;
+}
+
+/** Every form sent for one booking, oldest first (provider booking detail
+ *  shows each one's sent/received state, not just the latest). */
+export async function getIntakeFormsByBooking(
+  bookingId: string,
+): Promise<IntakeForm[]> {
+  const { data, error } = await supabase
+    .from("booking_intake_forms")
+    .select("*")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (error) throw error;
+  return (data ?? []).map(mapIntakeForm);
 }
 
 export async function getIntakeFormById(
@@ -6759,17 +6822,23 @@ export async function getInfoPacksByBooking(
     .from("booking_info_packs")
     .select("*")
     .eq("booking_id", bookingId)
-    .order("created_at", { ascending: true });
-  if (error) return [];
+    .order("created_at", { ascending: true })
+    .limit(50);
+  // Throws rather than returning []: an empty list means "nothing sent", and
+  // the provider's booking detail offers to send a pack when it sees that.
+  if (error) throw error;
   return (data ?? []).map(mapBookingInfoPack);
 }
 
-/** Mark an info pack as read — clears it from the booking's attention badge */
+/** Mark an info pack as read — clears it from the booking's attention badge,
+ *  and is what the provider's "opened" count reads. */
 export async function markInfoPackViewed(packId: string): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from("booking_info_packs")
     .update({ viewed_at: new Date().toISOString() })
-    .eq("id", packId);
+    .eq("id", packId)
+    .is("viewed_at", null);
+  if (error) throw error;
 }
 
 /** Booking ids that need the client's attention (pending intake forms +
@@ -6801,6 +6870,130 @@ export async function getMyBookingActionItems(): Promise<
     counts[r.booking_id] = (counts[r.booking_id] ?? 0) + 1;
   }
   return counts;
+}
+
+/** Everything the client's Activity Centre needs that isn't already on the
+ *  bookings in BookingContext — one round of parallel reads, each capped.
+ *  features/bookings/activityCentre.ts turns this plus the bookings into the
+ *  list; this only fetches. */
+export interface ClientActivityRemote {
+  /** Bookings with an intake form still to fill in. */
+  pendingFormBookingIds: string[];
+  /** Bookings with an info pack the client hasn't opened. */
+  unreadPackBookingIds: string[];
+  /** Refund requests still waiting on the provider or on Cerviced. */
+  openRefundRequests: {
+    id: string;
+    bookingId: string;
+    status: 'with_provider' | 'under_review';
+    createdAt: string;
+    passedAutomatically: boolean;
+  }[];
+  /** Late/no-show fees the saved card couldn't cover, so the client is asked to pay. */
+  feesToPay: {
+    id: string;
+    bookingId: string;
+    kind: BookingFeeKind;
+    amountPence: number;
+    payBy: string | null;
+  }[];
+  /** Waitlist slots held for the client, not yet confirmed. Holds are left out
+   *  of client_bookings, so this reads the base table — snapshot names and
+   *  times only, never an address column. */
+  waitlistHolds: {
+    bookingId: string;
+    serviceName: string;
+    providerName: string;
+    bookingDate: string;
+    bookingTime: string;
+    holdExpiresAt: string;
+  }[];
+}
+
+const ACTIVITY_QUERY_LIMIT = 50;
+
+export async function getMyActivity(): Promise<ClientActivityRemote> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) {
+    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [] };
+  }
+
+  const [forms, packs, refunds, fees, holds] = await Promise.all([
+    supabase
+      .from("booking_intake_forms")
+      .select("booking_id")
+      .eq("client_user_id", user.id)
+      .eq("status", "pending")
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_info_packs")
+      .select("booking_id")
+      .eq("client_user_id", user.id)
+      .is("viewed_at", null)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("refund_requests")
+      .select("id, booking_id, status, created_at, passed_automatically")
+      .eq("client_id", user.id)
+      .in("status", ["with_provider", "under_review"])
+      .order("created_at", { ascending: false })
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_fee_charges")
+      .select("id, booking_id, kind, amount_pence, pay_by")
+      .eq("client_user_id", user.id)
+      .eq("status", "awaiting_client")
+      .order("created_at", { ascending: false })
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("bookings")
+      .select("id, service_name_snapshot, provider_name_snapshot, booking_date, booking_time, hold_expires_at")
+      .eq("user_id", user.id)
+      .eq("status", "on_hold")
+      .gt("hold_expires_at", new Date().toISOString())
+      .limit(ACTIVITY_QUERY_LIMIT),
+  ]);
+  if (forms.error) throw forms.error;
+  if (packs.error) throw packs.error;
+  if (refunds.error) throw refunds.error;
+  if (fees.error) throw fees.error;
+  if (holds.error) throw holds.error;
+
+  type RefundRow = { id: string; booking_id: string; status: 'with_provider' | 'under_review'; created_at: string; passed_automatically: boolean | null };
+  type FeeRow = { id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; pay_by: string | null };
+  type HoldRow = {
+    id: string; service_name_snapshot: string | null; provider_name_snapshot: string | null;
+    booking_date: string; booking_time: string; hold_expires_at: string;
+  };
+
+  return {
+    pendingFormBookingIds: ((forms.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
+    unreadPackBookingIds: ((packs.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
+    openRefundRequests: ((refunds.data ?? []) as RefundRow[]).map(r => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      status: r.status,
+      createdAt: r.created_at,
+      passedAutomatically: !!r.passed_automatically,
+    })),
+    feesToPay: ((fees.data ?? []) as FeeRow[]).map(r => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      kind: r.kind,
+      amountPence: r.amount_pence,
+      payBy: r.pay_by,
+    })),
+    waitlistHolds: ((holds.data ?? []) as HoldRow[]).map(r => ({
+      bookingId: r.id,
+      serviceName: r.service_name_snapshot ?? '',
+      providerName: r.provider_name_snapshot ?? '',
+      bookingDate: r.booking_date,
+      bookingTime: r.booking_time,
+      holdExpiresAt: r.hold_expires_at,
+    })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -7492,11 +7685,15 @@ export async function setMyProviderFullAddress(
 export async function getProviderAddressPolicy(
   providerId: string,
 ): Promise<ProviderAddressPolicy | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("business_type, address_release_policy")
     .eq("id", providerId)
     .maybeSingle();
+  // Throws rather than reading as "no policy": a failed read used to make a
+  // mobile provider look like a venue, so their booking showed their own
+  // address as the appointment's location.
+  if (error) throw error;
   return data ? (data as ProviderAddressPolicy) : null;
 }
 
@@ -7753,14 +7950,14 @@ export async function getMyProviderSaverCount(): Promise<number> {
 /** The public provider fields a booked-elsewhere card and its detail need. */
 const EXTERNAL_BOOKING_SELECT =
   "id, client_id, provider_id, booking_date, start_time, service_label, created_at, " +
-  "provider:providers(id, slug, display_name, logo_url, location_text, business_type, external_booking_url, has_gone_live, is_active)";
+  "provider:providers(id, slug, display_name, logo_url, logo_framing, location_text, business_type, external_booking_url, has_gone_live, is_active)";
 
 export type ClientExternalBookingWithProvider = DbClientExternalBooking & {
   /** Null once the provider is no longer live — their row stops being
    *  readable, but the client's own note of the booking stays theirs. */
   provider: Pick<
     DbProvider,
-    "id" | "slug" | "display_name" | "logo_url" | "location_text" | "business_type" | "external_booking_url"
+    "id" | "slug" | "display_name" | "logo_url" | "logo_framing" | "location_text" | "business_type" | "external_booking_url"
   > | null;
 };
 
@@ -7780,6 +7977,7 @@ function mapExternalBookingRow(row: unknown): ClientExternalBookingWithProvider 
         slug: r.provider.slug,
         display_name: r.provider.display_name,
         logo_url: r.provider.logo_url,
+        logo_framing: r.provider.logo_framing ?? null,
         location_text: r.provider.location_text,
         business_type: r.provider.business_type,
         external_booking_url: r.provider.external_booking_url,
@@ -8554,6 +8752,26 @@ export async function getProviderSchedulingConstraints(
   };
 }
 
+/**
+ * The signed-in provider's own monthly release day (null = rolling window).
+ * Lets a screen that edits it (Edit Profile) pick up a change made on the
+ * other one (Scheduling & Availability) when it comes back into view.
+ * Own record, so no has_gone_live filter. Same duplicate-row tie-break as
+ * the provider lookup by user id above.
+ */
+export async function getMyProviderReleaseDay(userId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("schedule_release_day:automation_settings->scheduleReleaseDay")
+    .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return toReleaseDay((data as { schedule_release_day?: unknown } | null)?.schedule_release_day);
+}
+
 // ─────────────────────────────────────────────────────────
 // USERS — profile reads
 // ─────────────────────────────────────────────────────────
@@ -8759,7 +8977,8 @@ export async function getUserDisplayName(
 export async function upgradeUserToProvider(
   userId: string,
   businessName: string,
-  businessEmail: string,
+  // Optional at sign-up — null when left blank, never ''.
+  businessEmail: string | null,
   extras?: {
     businessPhone?: string;
     instagram?: string;
@@ -8892,46 +9111,6 @@ export async function upgradeUserToProvider(
     );
 }
 
-/** Persist the client beauty/health/preference profile for an account being upgraded to dual-role */
-export async function updateClientProfileData(
-  userId: string,
-  data: {
-    dob: string;
-    hairType: string;
-    skinType: string;
-    skinConcerns: string[];
-    styleVibe: string;
-    allergies: string[];
-    treatmentHistory: string[];
-    medicalNotes: string;
-    photographyConsent: boolean;
-    serviceInterests: string[];
-    serviceLocations: string[];
-    maintenanceFrequency: string;
-    referralSource: string;
-  },
-): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({
-      dob: data.dob,
-      hair_type: data.hairType || null,
-      skin_type: data.skinType || null,
-      skin_concerns: data.skinConcerns,
-      style_vibe: data.styleVibe || null,
-      allergies: data.allergies,
-      treatment_history: data.treatmentHistory,
-      medical_notes: data.medicalNotes || null,
-      photography_consent: data.photographyConsent,
-      service_interests: data.serviceInterests,
-      service_locations: data.serviceLocations,
-      maintenance_frequency: data.maintenanceFrequency || null,
-      referral_source: data.referralSource || null,
-    })
-    .eq("id", userId);
-  if (error) throw error;
-}
-
 /** Update name and phone — called from AuthContext so in-memory user stays fresh */
 /**
  * Update the contact details a user can edit about themselves.
@@ -9043,12 +9222,12 @@ export async function updateUserBeautyProfile(
   userId: string,
   data: {
     hair_type?: string | null;
-    skin_type?: string | null;
+    skin_type?: string[] | null;
     skin_tone?: string | null;
     allergies?: string[];
     skin_concerns?: string[];
     sensitive_areas?: string[];
-    style_vibe?: string | null;
+    style_vibe?: string[] | null;
     medical_notes?: string | null;
     photography_consent?: boolean;
     treatment_history?: string[];
@@ -9085,7 +9264,8 @@ export interface UserBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[];
   treatment_history: string[];
-  skin_type: string | null;
+  /** text[] once 20261108240000 is applied; a single string on rows before it. Read through toPickList. */
+  skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[];
   sensitive_areas: string[];
@@ -9099,7 +9279,8 @@ export interface UserBeautyProfileRow {
   makeup_finish: string | null;
   makeup_eyes: string | null;
   makeup_lips: string | null;
-  style_vibe: string | null;
+  /** Same transition as skin_type. */
+  style_vibe: string[] | string | null;
   service_interests: string[];
   gender: string | null;
   has_kids: boolean | null;
@@ -9544,10 +9725,10 @@ export async function upsertUserAfterVerification(data: {
   tiktok: string | null;
   website: string | null;
   hair_type: string | null;
-  skin_type: string | null;
+  skin_type: string[] | null;
   allergies: string[];
   skin_concerns: string[];
-  style_vibe: string | null;
+  style_vibe: string[] | null;
   treatment_history: string[];
   medical_notes: string | null;
   photography_consent: boolean;
@@ -9762,20 +9943,37 @@ export async function getProviderUserIdById(
   return (data as any)?.user_id ?? null;
 }
 
-/** Fetch service_category for the provider owned by a given user.
- * No has_gone_live filter — provider reading their own record. */
-export async function getProviderServiceCategoryByUserId(
-  userId: string,
-): Promise<string | null> {
-  const { data } = await supabase
+/** A provider's current logo and how they framed it, for screens whose logo
+ *  arrives without the framing (a booking's logo snapshot, a search RPC row,
+ *  a cart item). */
+export interface ProviderLogoFramingEntry {
+  logoUrl: string | null;
+  framing: LogoFraming | null;
+}
+
+/**
+ * Current logo + framing for many providers in one query. Client-facing, so
+ * live providers only; a provider who isn't live just gets no entry and the
+ * caller draws its logo unframed.
+ */
+export async function getProviderLogoFramings(
+  providerIds: string[],
+): Promise<Record<string, ProviderLogoFramingEntry>> {
+  const ids = [...new Set(providerIds)].filter(Boolean);
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase
     .from("providers")
-    .select("service_category")
-    .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return (data as any)?.service_category ?? null;
+    .select("id, logo_url, logo_framing")
+    .in("id", ids)
+    .eq("has_gone_live", true)
+    .eq("is_active", true)
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
+  const out: Record<string, ProviderLogoFramingEntry> = {};
+  for (const row of (data ?? []) as { id: string; logo_url: string | null; logo_framing: LogoFraming | null }[]) {
+    out[row.id] = { logoUrl: row.logo_url, framing: row.logo_framing ?? null };
+  }
+  return out;
 }
 
 /** Fetch id, slug, and display_name for a provider by their DB id.
@@ -9868,11 +10066,6 @@ export async function updateProviderContactDetails(
     qualifications?: string | null;
     is_insured_self_declared?: boolean;
     dbs_checked_self_declared?: boolean;
-    travel_radius?: string | null;
-    // Cities covered, from src/constants/ukCities.ts — the same list the
-    // client Search "City" filter reads, so anything selected here is
-    // immediately filterable by clients.
-    service_locations?: string[] | null;
     clientele?: string[] | null;
     // Provider-level hair types catered to (HAIR_TYPES vocabulary). Empty/null
     // = caters to all, same semantics as services.hair_types_suitable, so an
@@ -10090,8 +10283,8 @@ export interface RebookableService {
    */
   providerSlug: string;
   providerDisplayName: string;
-  /** Live add-ons for this service, at today's prices. */
-  addOns: { id: string; name: string; price: number }[];
+  /** Live add-ons for this service, at today's prices and extra time. */
+  addOns: { id: string; name: string; price: number; extraMinutes: number }[];
 }
 
 /**
@@ -10151,7 +10344,7 @@ export async function getRebookableService(
   const { data } = await supabase
     .from("services")
     .select(
-      "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active )",
+      "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active, extra_minutes )",
     )
     .eq("provider_id", providerId)
     .eq("name", serviceName)
@@ -10169,7 +10362,12 @@ export async function getRebookableService(
     providerDisplayName: provider.display_name,
     addOns: ((data as any).service_add_ons ?? [])
       .filter((a: any) => a.is_active)
-      .map((a: any) => ({ id: a.id, name: a.name, price: Number(a.price) })),
+      .map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        price: Number(a.price),
+        extraMinutes: Number(a.extra_minutes ?? 0),
+      })),
   };
 }
 
@@ -10314,34 +10512,87 @@ export interface ProviderInfoPackRow {
   created_at: string;
 }
 
+const INFO_PACK_COLUMNS = "id, provider_id, title, service, service_names, content, created_at";
+
 /** Fetch all info packs for a provider (keyed by provider user_id, not provider row id) */
 export async function getProviderInfoPacksByUserId(
   providerUserId: string,
 ): Promise<ProviderInfoPackRow[]> {
   const { data, error } = await supabase
     .from("info_packs")
-    .select("*")
+    .select(INFO_PACK_COLUMNS)
     .eq("provider_id", providerUserId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(200);
   if (error) throw error;
   return (data ?? []) as ProviderInfoPackRow[];
 }
 
-/** Create a new info pack */
+/** Create a new info pack.
+ *  `send_to_upcoming` decides whether the on_info_pack_created trigger sends
+ *  it to matching upcoming bookings right now (and notifies those clients).
+ *  False: only bookings made from now on get it. Needs migration
+ *  20261106113000; older builds omit it and the column defaults to TRUE. */
 export async function createInfoPack(data: {
   provider_id: string;
   title: string;
   service: string;
   service_names: string[];
   content: string;
+  send_to_upcoming: boolean;
 }): Promise<ProviderInfoPackRow> {
   const { data: row, error } = await supabase
     .from("info_packs")
     .insert(data)
-    .select()
+    .select(INFO_PACK_COLUMNS)
     .single();
   if (error) throw error;
   return row as ProviderInfoPackRow;
+}
+
+/** Edit an info pack. Changes the pack only: clients who already received it
+ *  keep their own copy in booking_info_packs (product decision 2026-11-05),
+ *  and nothing is re-sent. Bookings made afterwards get the new wording. */
+export async function updateInfoPack(
+  id: string,
+  changes: {
+    title: string;
+    service: string;
+    service_names: string[];
+    content: string;
+  },
+): Promise<ProviderInfoPackRow> {
+  const { data: row, error } = await supabase
+    .from("info_packs")
+    .update(changes)
+    .eq("id", id)
+    .select(INFO_PACK_COLUMNS)
+    .single();
+  if (error) throw error;
+  return row as ProviderInfoPackRow;
+}
+
+/** Who each of these packs has reached: one row per booking it was sent to,
+ *  with viewed_at once the client opened it. Feeds "Sent to N · N opened" on
+ *  the list and the ticks in the send sheet. */
+export async function getInfoPackDeliveries(
+  infoPackIds: string[],
+): Promise<{ infoPackId: string; bookingId: string; viewedAt: string | null }[]> {
+  if (infoPackIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("booking_info_packs")
+    .select("info_pack_id, booking_id, viewed_at")
+    .in("info_pack_id", infoPackIds)
+    // Bounded: a provider's whole send history, newest first. At this cap the
+    // oldest sends stop counting, which only ever under-states a total.
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (error) throw error;
+  return (data ?? []).map((r: { info_pack_id: string; booking_id: string; viewed_at: string | null }) => ({
+    infoPackId: r.info_pack_id,
+    bookingId: r.booking_id,
+    viewedAt: r.viewed_at ?? null,
+  }));
 }
 
 /** Delete an info pack by id */
@@ -11416,6 +11667,90 @@ export async function replaceProviderServiceCatalog(
     p_services: services,
   });
   if (error) throw error;
+}
+
+/** Where each of a provider's services sits in their menu, so a save can
+ *  match the services it just created (which had no id yet) back to their
+ *  new ids by category and position. The provider's own rows, so no
+ *  has_gone_live filter: this runs before a new provider has gone live. */
+export async function getProviderServicePositions(
+  providerId: string,
+): Promise<{ id: string; category_name: string; sort_order: number }[]> {
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, category_name, sort_order")
+    .eq("provider_id", providerId)
+    .limit(500);
+  if (error) throw error;
+  return (data ?? []) as { id: string; category_name: string; sort_order: number }[];
+}
+
+/** Read back the fields needed to confirm a full profile publish actually
+ * stored the descriptions the editor submitted. */
+export async function getProviderServiceDescriptionSnapshots(
+  providerId: string,
+): Promise<{ id: string; category_name: string; sort_order: number; description: string | null }[]> {
+  const { data, error } = await supabase
+    .from('services')
+    .select('id, category_name, sort_order, description')
+    .eq('provider_id', providerId)
+    .limit(1000);
+  if (error) throw error;
+  return (data ?? []) as { id: string; category_name: string; sort_order: number; description: string | null }[];
+}
+
+/** The provider's own add-on list (universal add-ons), for editing. Owner
+ *  read only (RLS), so no has_gone_live filter: a provider edits their list
+ *  before going live. */
+export async function getMyProviderAddOns(providerId: string): Promise<DbProviderAddOn[]> {
+  const { data, error } = await supabase
+    .from("provider_add_ons")
+    .select(
+      "id, provider_id, name, price, description, extra_minutes, is_active, applies_to, category_names, included_service_ids, excluded_service_ids, sort_order",
+    )
+    .eq("provider_id", providerId)
+    .order("sort_order", { ascending: true })
+    .limit(50);
+  if (error) throw error;
+  return ((data ?? []) as DbProviderAddOn[]).map(row => ({
+    ...row,
+    price: Number(row.price),
+    extra_minutes: Number(row.extra_minutes ?? 0),
+    category_names: row.category_names ?? [],
+    included_service_ids: row.included_service_ids ?? [],
+    excluded_service_ids: row.excluded_service_ids ?? [],
+  }));
+}
+
+export interface ProviderAddOnSaveItem {
+  /** The saved id, or null for an add-on made in this editing session. */
+  id: string | null;
+  /** The app's own key for this item, echoed back with its saved id. */
+  client_key: string;
+  name: string;
+  price: number;
+  description: string | null;
+  extra_minutes: number;
+  is_active: boolean;
+  applies_to: ProviderAddOnAppliesTo;
+  category_names: string[];
+  included_service_ids: string[];
+  excluded_service_ids: string[];
+}
+
+/** Saves the provider's whole add-on list (replace_provider_add_ons): rows
+ *  left out are deleted, and every service's add-ons are re-derived in the
+ *  same transaction. Returns each item's client_key with its saved id. */
+export async function replaceProviderAddOns(
+  providerId: string,
+  addOns: ProviderAddOnSaveItem[],
+): Promise<{ client_key: string; add_on_id: string }[]> {
+  const { data, error } = await supabase.rpc("replace_provider_add_ons", {
+    p_provider_id: providerId,
+    p_add_ons: addOns,
+  });
+  if (error) throw error;
+  return (data ?? []) as { client_key: string; add_on_id: string }[];
 }
 
 /**

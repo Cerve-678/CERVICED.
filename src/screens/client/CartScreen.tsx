@@ -22,6 +22,7 @@ import {
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
@@ -79,6 +80,7 @@ import { getCartAddOnsSummary, getCartItemFullPrice, toDepositPolicy, resolveDep
 import { calculatePlatformFee, PAYPAL_MAX_CHECKOUT_TOTAL } from '../../features/cart/platformFee';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { openLegalPage } from '../../utils/legalPage';
+import { durationWithAddOns } from '../../features/bookings/addOnTime';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
 // includes the SDK-compatible Stripe module, so it can show the card form;
@@ -1243,7 +1245,8 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 
     const serviceName = item?.serviceName || 'Unknown Service';
     const serviceInstanceIndex = item?.serviceInstanceIndex || 1;
-    const duration = item?.duration || 'Unknown duration';
+    // The appointment's length, add-ons' extra time included.
+    const duration = (item?.duration && durationWithAddOns(item.duration, item.addOns)) || 'Unknown duration';
     const showInstanceNumber =
       allCartItems.filter((i: CartItem) => i.serviceName === item.serviceName).length > 1;
 
@@ -1482,7 +1485,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     const startMinutes = to24hMinutes(firstBooking.selectedTime);
     const last = items[items.length - 1]!;
     const lastBooking = getBooking(last.id);
-    const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
+    const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(durationWithAddOns(last.duration, last.addOns));
     const isScheduled = Boolean(firstBooking.selectedDate && firstBooking.selectedTime);
     const spanKnown = isScheduled && startMinutes !== Number.MAX_SAFE_INTEGER && endMinutes > startMinutes;
     // Every flagged service in this group, in render order, so the banner can
@@ -1569,7 +1572,7 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                     {b.isDepositOnly ? ' (Deposit)' : ''}
                   </Text>
                   <Text style={[styles.gchipMeta, { color: theme.secondaryText }]} numberOfLines={1}>
-                    {item.duration}
+                    {durationWithAddOns(item.duration, item.addOns)}
                   </Text>
                   {issuesByItemId.get(item.id) && (
                     <Text style={styles.groupRowIssue}>{issuesByItemId.get(item.id)}</Text>
@@ -1711,7 +1714,13 @@ const CartProviderSection = memo(function CartProviderSection({
           onNavigateProvider(providerItems);
         }}>
           <View style={styles.providerLogoContainer}>
-            {providerItems[0]?.providerImage ? (
+            {providerItems[0]?.providerImage?.uri ? (
+              <ProviderLogoCircle
+                providerId={providerItems[0].providerId}
+                uri={providerItems[0].providerImage.uri}
+                style={[styles.providerLogo, { borderColor: P.accentDim }]}
+              />
+            ) : providerItems[0]?.providerImage ? (
               <Image source={providerItems[0].providerImage} style={[styles.providerLogo, { borderColor: P.accentDim }]} />
             ) : (
               <View style={[styles.providerLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
@@ -2158,7 +2167,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const last = unit.items[unit.items.length - 1]!;
       const lastBooking = (checkoutSnapshot.bookings[last.id] || {}) as ServiceBooking;
       const startMinutes = to24hMinutes(firstBooking.selectedTime);
-      const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
+      const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(durationWithAddOns(last.duration, last.addOns));
       const spanKnown = !!firstBooking.selectedDate
         && startMinutes !== Number.MAX_SAFE_INTEGER
         && endMinutes > startMinutes;
@@ -2204,7 +2213,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
                   </View>
                   {!!gb.selectedTime && (
                     <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
-                      {formatTime12(gb.selectedTime)} · {groupItem.duration}
+                      {formatTime12(gb.selectedTime)} · {durationWithAddOns(groupItem.duration, groupItem.addOns)}
                     </Text>
                   )}
                   {gb.emergencyRequest && (
@@ -2369,7 +2378,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           providerName: item.providerId ?? item.providerName,
           date: booking?.selectedDate ?? '',
           time: booking?.selectedTime ?? '',
-          duration: item.duration,
+          duration: durationWithAddOns(item.duration, item.addOns),
           cartItemId: item.id,
           serviceId: item.serviceId,
           // See BookingContext's copy of this list: an accepted out-of-hours
@@ -2865,7 +2874,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         providerKey: item.providerId ?? item.providerName,
         date: booking.selectedDate,
         time: booking.selectedTime,
-        duration: item.duration,
+        duration: durationWithAddOns(item.duration, item.addOns),
       };
     })),
     [items, getServiceBooking],
@@ -3142,7 +3151,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         const providerKey = groupItems[0]!.providerId ?? groupItems[0]!.providerName;
         const chains = await AvailabilityService.findAllBackToBackSlots(
           providerKey,
-          groupItems.map(item => ({ serviceId: item.serviceId, duration: item.duration })),
+          groupItems.map(item => ({ serviceId: item.serviceId, duration: durationWithAddOns(item.duration, item.addOns) })),
           date,
         );
         if (!chains) return [];

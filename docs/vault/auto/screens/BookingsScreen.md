@@ -7,8 +7,8 @@ tags: [screen, client]
 **Registered route(s):** `Bookings`
 
 ## → Navigates to
-- [[ProviderChatScreen\|ProviderChat]]
 - [[BookingDetailScreen\|BookingDetail]]
+- [[ProviderChatScreen\|ProviderChat]]
 - [[RescheduleScreen\|Reschedule]]
 - [[ProviderProfileScreen\|ProviderProfile]]
 - [[ExternalBookingDetailScreen\|ExternalBookingDetail]]
