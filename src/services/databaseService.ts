@@ -10000,11 +10000,6 @@ export async function updateProviderContactDetails(
     qualifications?: string | null;
     is_insured_self_declared?: boolean;
     dbs_checked_self_declared?: boolean;
-    travel_radius?: string | null;
-    // Cities covered, from src/constants/ukCities.ts — the same list the
-    // client Search "City" filter reads, so anything selected here is
-    // immediately filterable by clients.
-    service_locations?: string[] | null;
     clientele?: string[] | null;
     // Provider-level hair types catered to (HAIR_TYPES vocabulary). Empty/null
     // = caters to all, same semantics as services.hair_types_suitable, so an

@@ -8,7 +8,7 @@
  *
  *   BusinessInfoScreen      — name, links, emails, external booking, → T&Cs
  *   ServicesPricingScreen   — specialties, clientele, pricing, style
- *   AboutYouScreen          — credentials, patch test, cities covered, access
+ *   AboutYouScreen          — credentials, patch test, languages, access
  *   SchedulingScreen        — availability, booking rules, → working hours
  *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
@@ -106,7 +106,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="shield-checkmark-outline"
             title="About You"
-            subtitle="Credentials, patch test policy, cities covered & accessibility"
+            subtitle="Credentials, patch test policy, languages & accessibility"
             onPress={() => navigation.navigate('AboutYou')}
             C={C}
           />

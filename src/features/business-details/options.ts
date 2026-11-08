@@ -167,12 +167,12 @@ export function productsPlaceholder(serviceCategory: string | null | undefined):
 export const ACCESSIBILITY_OPTS = ['Wheelchair accessible', 'Parking available', 'Ground floor access', 'Home visits for mobility', 'Step-free entrance'];
 
 // NOTE: there is no SETTING_OPTS list here on purpose. The old "Where You
-// Work" card asked for a single setting (salon / home studio / mobile), but
-// that was replaced by a cities-covered selector on AboutYouScreen,
-// which writes `service_locations` from src/constants/ukCities.ts — the same
-// list the client Search "City" filter reads. The providers.service_setting
-// column still exists (added alongside the other practice-detail columns) but
-// is intentionally unwritten by the UI; see the follow-up note in MEMORY.
+// Work" card asked for a single setting (salon / home studio / mobile). It was
+// replaced by a cities-covered selector on AboutYouScreen, which has since
+// been removed too (business_type now answers the setting question). The
+// providers.service_setting column still exists (added alongside the other
+// practice-detail columns) but is intentionally unwritten by the UI; see the
+// follow-up note in MEMORY.
 
 // Values match the live CHECK constraint providers_team_size_check.
 export const TEAM_SIZE_OPTS = [
