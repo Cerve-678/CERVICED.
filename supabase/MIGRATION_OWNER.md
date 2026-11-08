@@ -60,7 +60,7 @@ OWNER:  (none)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261108180000 | `follow_people_and_recommend` | **NOT APPLIED.** Written on `feat/follow-people-backend`. Numbered above the open branches' 20261108100000 (#340), 110000 (#342), 160000 (#350) and 170000 (#352); live max was `20261108141616` when written. Only adds things: 6 new tables (RLS on, no policies), helper functions, triggers on `users` (`AFTER UPDATE OF phone`, `AFTER UPDATE OF has_client_profile`) and 16 RPCs for authenticated users. It redefines no existing function or view and doesn't touch `notifications_type_check`. Apply only on the user's go-ahead, after re-checking the frontier. |
+| 20261108190000 | `follow_people_and_recommend` | **NOT APPLIED.** Written on `feat/follow-people-backend`. Numbered above the open branches' 20261108100000 (#340), 160000 (#350), 170000 (#352) and 180000 (#342, renumbered; this one moved from 180000 to 190000 to avoid it); live max was `20261108141616` when written. Only adds things: 6 new tables (RLS on, no policies), helper functions, triggers on `users` (`AFTER UPDATE OF phone`, `AFTER UPDATE OF has_client_profile`) and 16 RPCs for authenticated users. It redefines no existing function or view and doesn't touch `notifications_type_check`. Apply only on the user's go-ahead, after re-checking the frontier. |
 
 ### Applied 2026-11-06 (bookings carry exact venue coordinates)
 
