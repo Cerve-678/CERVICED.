@@ -1439,6 +1439,8 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   group_bookings_available,
   vegan_cruelty_free,
   products_used,
+  clientele,
+  skin_tones_catered,
   preferred_payment_methods
 `;
 
@@ -3817,7 +3819,7 @@ export async function claimCartBookingSlots(
 /** Best-effort immediate release when the user backs out of payment
  *  (close button, booking failure, Stripe Payment Sheet 'Canceled'). Not
  *  the source of truth for cleanup — expire_cart_holds() cron sweep is —
- *  this just frees the slot sooner than the 10-minute TTL. Callers should
+ *  this just frees the slot sooner than the 5-minute TTL. Callers should
  *  catch-and-log, never let a release failure surface as a user error. */
 export async function releaseCartBookingSlots(
   holdBatchId: string,
@@ -10136,6 +10138,7 @@ export async function updateProviderContactDetails(
     // = caters to all, same semantics as services.hair_types_suitable, so an
     // untouched value is a valid answer rather than an incomplete profile.
     hair_types_catered?: string[] | null;
+    skin_tones_catered?: string[] | null;
     availability_windows?: string[] | null;
     accepts_new_clients?: "yes" | "waitlist" | "no" | null;
     walk_ins_welcome?: boolean;
