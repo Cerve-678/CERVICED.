@@ -16,13 +16,18 @@
 -- they are safety information. The old whole-profile function is dropped.
 --
 -- Nails gets nail length and shape only, plus the safety fields (user,
--- 2026-11-08). Every other category keeps the fields the app showed it before.
+-- 2026-11-08). Every other category keeps the fields the app showed it before
+-- (Kids: sensitive areas).
 -- OTHER still gets everything, as before; an unknown category gets only the
 -- safety fields (it used to get everything).
 --
 -- Apply together with the app change on feat/beauty-profile-by-booked-service:
 -- an app build that still calls the old function shows the profile as failed
 -- to load once this is applied.
+--
+-- Also brings the older SQL that defined or granted the old function in line
+-- (fix_users_table_pii_leak.sql, manual-apply/20260809_…_hardening.sql), so a
+-- replay can't recreate the whole-profile lookup.
 --
 -- NOT applied. Before applying: take the lock in MIGRATION_OWNER.md, and
 -- renumber above live max(version) and above any unapplied migration on an
@@ -47,6 +52,7 @@ AS $$
          WHEN 'MUA' THEN ARRAY['skin_type', 'skin_tone', 'skin_concerns', 'makeup_coverage', 'makeup_finish', 'makeup_eyes', 'makeup_lips', 'style_vibe']
          WHEN 'AESTHETICS' THEN ARRAY['skin_type', 'skin_tone', 'skin_concerns', 'sensitive_areas', 'treatment_history']
          WHEN 'MALE' THEN ARRAY['hair_type', 'scalp_condition', 'skin_type', 'skin_tone', 'skin_concerns']
+         WHEN 'KIDS' THEN ARRAY['sensitive_areas']
          WHEN 'OTHER' THEN ARRAY[
            'hair_type', 'scalp_condition', 'hair_goals', 'treatment_history',
            'skin_type', 'skin_tone', 'skin_concerns', 'sensitive_areas',
@@ -83,8 +89,20 @@ DECLARE
   f text[];
 BEGIN
   -- Only the provider on this booking gets anything back.
+  -- The first of these that is a real category. The snapshot once held a
+  -- provider's menu heading ("Acrylic") instead, which would otherwise win
+  -- the coalesce and leave the provider with the safety fields only.
   SELECT b.user_id,
-         upper(coalesce(s.service_category::text, b.service_category_snapshot, p.service_category::text))
+         coalesce(
+           (SELECT c FROM unnest(ARRAY[
+              upper(s.service_category::text),
+              upper(b.service_category_snapshot),
+              upper(p.service_category::text)
+            ]) WITH ORDINALITY AS t(c, n)
+            WHERE c IN ('HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'MALE', 'KIDS', 'OTHER')
+            ORDER BY n
+            LIMIT 1),
+           'UNKNOWN')
     INTO v_client, v_category
   FROM public.bookings b
   JOIN public.providers p ON p.id = b.provider_id

@@ -32,6 +32,14 @@ describe('beauty profile follows the booked service', () => {
     expect(fieldsFor('NAILS')).toEqual(['nail_length', 'nail_shape']);
   });
 
+  it('keeps sensitive areas for a kids booking', () => {
+    expect(fieldsFor('KIDS')).toEqual(['sensitive_areas']);
+  });
+
+  it('skips a category value that is not a real category, like a menu heading', () => {
+    expect(sql).toContain("WHERE c IN ('HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'MALE', 'KIDS', 'OTHER')");
+  });
+
   it('gives an unknown category nothing beyond the safety fields', () => {
     expect(sql).toMatch(/ELSE ARRAY\[\]::text\[\]\s*END;/);
   });

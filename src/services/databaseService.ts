@@ -6272,6 +6272,34 @@ export interface ClientBeautyProfile {
   photographyConsent: boolean;
 }
 
+/** One row of get_client_beauty_profile_for_booking. Every field the booked
+ *  service's category doesn't get comes back null. */
+interface BookingBeautyProfileRow {
+  service_category: string | null;
+  hair_type: string | null;
+  scalp_condition: string | null;
+  hair_goals: string[] | null;
+  treatment_history: string[] | null;
+  skin_type: string | null;
+  skin_tone: string | null;
+  skin_concerns: string[] | null;
+  sensitive_areas: string[] | null;
+  nail_length: string | null;
+  nail_shape: string | null;
+  lash_style: string | null;
+  lash_status: string | null;
+  brow_style: string | null;
+  brow_condition: string | null;
+  makeup_coverage: string | null;
+  makeup_finish: string | null;
+  makeup_eyes: string | null;
+  makeup_lips: string | null;
+  style_vibe: string | null;
+  allergies: string[] | null;
+  medical_notes: string | null;
+  photography_consent: boolean | null;
+}
+
 export async function getClientBeautyProfileForBooking(
   bookingId: string,
 ): Promise<ClientBeautyProfile> {
@@ -6297,7 +6325,8 @@ export async function getClientBeautyProfileForBooking(
     styleVibe: null,
     allergies: [],
     medicalNotes: null,
-    photographyConsent: true,
+    // No answer is not a yes: unknown consent reads as "no photos".
+    photographyConsent: false,
   };
 
   // Goes through a SECURITY DEFINER RPC (not a direct table select). It
@@ -6321,7 +6350,7 @@ export async function getClientBeautyProfileForBooking(
     return EMPTY_PROFILE;
   }
 
-  const d = data as any;
+  const d = data as BookingBeautyProfileRow;
   return {
     hairType: d.hair_type ?? null,
     scalpCondition: d.scalp_condition ?? null,
@@ -6344,7 +6373,7 @@ export async function getClientBeautyProfileForBooking(
     styleVibe: d.style_vibe ?? null,
     allergies: d.allergies ?? [],
     medicalNotes: d.medical_notes ?? null,
-    photographyConsent: d.photography_consent ?? true,
+    photographyConsent: d.photography_consent ?? false,
   };
 }
 
