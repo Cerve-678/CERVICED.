@@ -15,11 +15,20 @@
 // contacts" heading — never the name the client saved (decided 2026-11-08:
 // echoing it would let a fake account borrow it).
 
-import * as Contacts from 'expo-contacts';
-import * as Crypto from 'expo-crypto';
+import type * as ContactsModule from 'expo-contacts';
+import type * as CryptoModule from 'expo-crypto';
 import { matchContactHashes } from '../../services/databaseService';
 import { normalisePhoneForMatching } from '../../utils/phoneMatching';
 import type { PersonSummary } from './types';
+
+// Both native modules are loaded on first use, not when the app starts. A
+// build made before they were added has no native side for them, and
+// importing them at the top would crash it on launch; this way only the
+// contacts check fails there (and the screen shows that it couldn't check).
+/* eslint-disable @typescript-eslint/no-require-imports */
+const loadContacts = (): typeof ContactsModule => require('expo-contacts') as typeof ContactsModule;
+const loadCrypto = (): typeof CryptoModule => require('expo-crypto') as typeof CryptoModule;
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 /** The server takes 3000 numbers a day per account; never send more. */
 export const CONTACT_NUMBERS_PER_CHECK = 3000;
@@ -52,6 +61,7 @@ export type ContactMatchResult = PersonSummary;
 
 /** Where things stand without asking (reading the status never shows a prompt). */
 export async function getContactsAccess(): Promise<ContactsAccess | 'undetermined'> {
+  const Contacts = loadContacts();
   const res = await Contacts.getPermissionsAsync();
   if (res.granted) return 'granted';
   if (res.status === Contacts.PermissionStatus.UNDETERMINED) return 'undetermined';
@@ -60,7 +70,7 @@ export async function getContactsAccess(): Promise<ContactsAccess | 'undetermine
 
 /** Shows the system prompt (with the app.json wording) if it can still be shown. */
 export async function requestContactsAccess(): Promise<ContactsAccess> {
-  const res = await Contacts.requestPermissionsAsync();
+  const res = await loadContacts().requestPermissionsAsync();
   if (res.granted) return 'granted';
   return res.canAskAgain ? 'denied' : 'blocked';
 }
@@ -88,6 +98,7 @@ export function collectContactNumbers(contacts: readonly RawContact[]): string[]
 
 /** sha256 hex of a normalised number, exactly as social_phone_hash() makes it. */
 export function hashNormalisedNumber(normalised: string): Promise<string> {
+  const Crypto = loadCrypto();
   return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, normalised, {
     encoding: Crypto.CryptoEncoding.HEX,
   });
@@ -98,6 +109,7 @@ export function hashNormalisedNumber(normalised: string): Promise<string> {
  * access is granted. Throws on failure (the screen shows it).
  */
 export async function findContactsOnCerviced(): Promise<ContactMatchResult[]> {
+  const Contacts = loadContacts();
   const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
   const numbers = collectContactNumbers(data);
   if (numbers.length === 0) return [];
