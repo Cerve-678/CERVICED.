@@ -57,7 +57,7 @@ describe('one shape everywhere', () => {
 
   it('the migration rebuilds whichever provider read is live with text[] columns', () => {
     const sql = fs.readFileSync(
-      path.join(root, '..', 'supabase', 'migrations', '20261108170000_beauty_profile_skin_type_and_style_vibe_multi_pick.sql'),
+      path.join(root, '..', 'supabase', 'migrations', '20261108210000_beauty_profile_skin_type_and_style_vibe_multi_pick.sql'),
       'utf8',
     );
     expect(sql).toContain('ALTER COLUMN skin_type  TYPE text[] USING pg_temp.to_pick_list(skin_type)');
