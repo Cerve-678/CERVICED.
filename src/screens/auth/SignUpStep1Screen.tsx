@@ -3,8 +3,6 @@ import React, { useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -23,6 +21,7 @@ import { normalizeExternalBookingUrl } from '../../features/providers/externalBo
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep1'>;
 
@@ -89,7 +88,7 @@ export default function SignUpStep1Screen({ navigation }: Props) {
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 }]}
           keyboardShouldPersistTaps="handled"
@@ -165,7 +164,7 @@ export default function SignUpStep1Screen({ navigation }: Props) {
             <Text style={[styles.continueBtnText, { color: t.onAccent }]}>CONTINUE</Text>
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }
