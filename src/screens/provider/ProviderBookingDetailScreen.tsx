@@ -395,10 +395,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       .then(s => { setAddressSettings(s); setAddressSettingsLoaded(true); })
       .catch((err) => {
         logger.error('[ProviderBookingDetail] address policy load failed:', err);
-        // Mark it answered anyway. Holding the row forever on a failed fetch
-        // is worse than falling back to what the booking itself says, and the
-        // fallback is only reached for a provider whose business_type we could
-        // not read at all.
+        // Mark it answered anyway, so the row stops waiting. With no settings
+        // the Location row shows "—", never an address.
         setAddressSettingsLoaded(true);
       });
   }, [passedProviderBooking?.providerId, fetchedBooking?.providerId]);
@@ -931,12 +929,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const isMobileProvider = addressSettings?.business_type === 'mobile';
   // Until getProviderAddressPolicy answers, this screen does not know whose
   // address the venue is. Rendering anything in the meantime picks the
-  // non-mobile branch by default and falls through to `booking.address` —
-  // which on a mobile booking is provider_address_snapshot, i.e. the
-  // provider's OWN private street address, stamped on every row by
-  // claim_cart_booking_slots(). It flashed up as the appointment's Location
-  // and then vanished when the policy arrived and the row switched to
-  // "Waiting for client's address". Hold the row rather than guess.
+  // non-mobile branch by default, which flashed the wrong status up as the
+  // appointment's Location before the row switched to "Waiting for client's
+  // address". Hold the row rather than guess.
   const addressKnown = addressSettingsLoaded;
   const hasClientAddress = !!booking?.clientAddress?.trim();
 
@@ -1537,8 +1532,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 ) : (
                 <>
                 {/* Three distinct states, where there used to be two.
-                    'always' isn't handled here at all — the address is simply
-                    part of the booking.
+                    'always' just says it's shared — the provider never sees
+                    their own address read back to them here.
 
                     Only a MANUAL policy gets a button. Every timed policy is
                     a statement of fact, not an action: the server releases it
@@ -1580,9 +1575,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       last
                     />
                   )
-                ) : booking.address ? (
-                  <Row label="Location" value={booking.address} textColor={P.text} divColor={rowDiv} last />
-                ) : null}
+                ) : addressPolicy === 'always' ? (
+                  <Row
+                    label="Location"
+                    value="Shared with client automatically"
+                    textColor={P.text}
+                    valueColor="#34C759"
+                    divColor={rowDiv}
+                    last
+                  />
+                ) : (
+                  // Never booking.address: on the provider's side that is
+                  // their OWN address (provider_address_snapshot), which they
+                  // already know, and on a mobile booking it is not where the
+                  // appointment happens at all (user, 2026-11-08). The row
+                  // only reports what happened to it.
+                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                )}
                 </>
                 )}
               </View>
