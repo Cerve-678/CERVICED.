@@ -139,7 +139,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Date/time scheduling | ✅ | `ModernBeautyCalendar` → `AvailabilityService.getAvailableSlots()`, real provider hours from Supabase, filters booked slots via `get_provider_busy_spans` RPC |
 | Slot intervals, booking window, min notice, buffer time | ✅ | `providers.slot_interval_mins` / `booking_window_days` / `min_booking_notice_hrs` / `buffer_mins` |
 | Checkout availability re-check | ✅ | `AvailabilityService.isSlotAvailable()` queries Supabase at checkout |
-| Checkout slot hold | ✅ | 10-minute `on_hold` reservation during payment, TTL cron backstop (see memory `cart-checkout-slot-hold`) |
+| Checkout slot hold | ✅ | 5-minute `on_hold` reservation during payment, TTL cron backstop (see memory `cart-checkout-slot-hold`) |
 | Booking created in Supabase | ✅ | `BookingContext.createBookingsFromCart()` → `databaseService.createBooking()` |
 | Booking confirmation notification + email | ✅ | DB-trigger-owned notification + `sendEmail()` fire-and-forget |
 
