@@ -36,7 +36,7 @@ import { hasDirectionsDestination, hasMapDestination, isMobileBooking, type Book
 import { directionsUrlFor } from '../../utils/mapsLink';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getMyActivity, type ClientActivityRemote, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -44,6 +44,9 @@ import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
+import { bookingTodoCounts, buildClientActivity, type ActivityItem } from '../../features/bookings/activityCentre';
+import { ActivityCentreSheet } from '../../features/bookings/ActivityCentreSheet';
+import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
@@ -112,6 +115,11 @@ const CATEGORY_TABS = [
 // How far back the Past Bookings list (and its category filter) looks.
 // Display-only — the underlying booking rows are never touched by this.
 const PAST_BOOKINGS_VISIBLE_DAYS = 30;
+/** Long enough for the Activity Centre's fade-out before another Modal opens. */
+const ACTIVITY_SHEET_FADE_MS = 350;
+const EMPTY_ACTIVITY: ClientActivityRemote = {
+  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [],
+};
 
 const WaitlistCard = React.memo(function WaitlistCard({
   entry,
@@ -355,23 +363,85 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setWaitlistHoldBusy(false);
   }, [waitlistHold]);
 
-  // Pending intake forms + unread info packs per booking — drives the "!" badge
-  const refreshBookingActionItems = useCallback(() => {
+  const [activityRemote, setActivityRemote] = useState<ClientActivityRemote>(EMPTY_ACTIVITY);
+  const [activityLoaded, setActivityLoaded] = useState(false);
+  const [activityLoadFailed, setActivityLoadFailed] = useState(false);
+  const [activityCentreVisible, setActivityCentreVisible] = useState(false);
+
+  // Activity Centre reads (forms, info packs, refund requests, fees to pay,
+  // waitlist holds). The forms + packs also drive each booking row's "!".
+  const refreshActivity = useCallback(async () => {
     if (!user?.id) return;
-    getMyBookingActionItems()
-      .then(setBookingActionItems)
-      .catch(() => {});
+    try {
+      setActivityRemote(await getMyActivity());
+      setActivityLoadFailed(false);
+    } catch (error: unknown) {
+      logger.warn('[Bookings] activity centre failed to load', error);
+      setActivityLoadFailed(true);
+    } finally {
+      setActivityLoaded(true);
+    }
   }, [user?.id]);
 
   useEffect(() => {
-    refreshBookingActionItems();
-  }, [refreshBookingActionItems, upcomingBookings.length]);
+    void refreshActivity();
+  }, [refreshActivity, upcomingBookings.length, pastBookings.length]);
 
   // Re-check when returning to this screen (e.g. after filling an intake form)
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', refreshBookingActionItems);
+    const unsubscribe = navigation.addListener('focus', () => { void refreshActivity(); });
     return unsubscribe;
-  }, [navigation, refreshBookingActionItems]);
+  }, [navigation, refreshActivity]);
+
+  const bookingActionItems = useMemo(() => bookingTodoCounts(activityRemote), [activityRemote]);
+  const activity = useMemo(() => {
+    const seen = new Set<string>();
+    const all = [...todayBookings, ...upcomingBookings, ...pastBookings].filter(b => {
+      if (seen.has(b.id)) return false;
+      seen.add(b.id);
+      return true;
+    });
+    return buildClientActivity(all, activityRemote);
+  }, [todayBookings, upcomingBookings, pastBookings, activityRemote]);
+  const activityNeedsYouCount = activity.needsYou.length;
+
+  // The waitlist popup and the dialog are Modals of their own: open them once
+  // this sheet has faded out, or iOS drops the second presentation.
+  const handleOpenActivityItem = useCallback((item: ActivityItem) => {
+    setActivityCentreVisible(false);
+    const { target } = item;
+    if (target.type === 'booking') {
+      navigation.navigate('BookingDetail', { bookingId: target.bookingId });
+      return;
+    }
+    if (target.type === 'reschedule') {
+      // Same path a reschedule notification takes: it re-reads the request
+      // and checks the reschedule is still allowed before opening the picker.
+      navigation.setParams({ openBookingId: target.bookingId, openReschedule: true } as any);
+      return;
+    }
+    getBookingById(target.bookingId)
+      .then(direct => {
+        setTimeout(() => {
+          if (direct?.status === 'on_hold') {
+            setWaitlistHold(direct);
+          } else {
+            showAlert('This slot has gone', "The hold ran out before it was confirmed, so it's been offered to someone else.");
+            void refreshActivity();
+          }
+        }, ACTIVITY_SHEET_FADE_MS);
+      })
+      .catch((error: unknown) => {
+        logger.error('[Bookings] waitlist hold lookup failed', error);
+        setTimeout(() => showAlert("Couldn't open this", 'Please try again in a moment.'), ACTIVITY_SHEET_FADE_MS);
+      });
+  }, [navigation, showAlert, refreshActivity]);
+
+  const openActivityCentre = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setActivityCentreVisible(true);
+    void refreshActivity();
+  }, [refreshActivity]);
 
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -412,7 +482,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [showTipModal, setShowTipModal] = useState(false);
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
-  const [bookingActionItems, setBookingActionItems] = useState<Record<string, number>>({});
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapFocused, setMapFocused] = useState(false);
   const [canGeocodeOnAndroid, setCanGeocodeOnAndroid] = useState(false);
@@ -781,6 +850,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     const [bookingsResult] = await Promise.allSettled([
       reloadBookings(),
       refreshUserLocation(),
+      refreshActivity(),
     ]);
 
     if (bookingsResult.status === 'rejected') {
@@ -789,7 +859,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
 
     setRefreshing(false);
-  }, [reloadBookings, refreshUserLocation]);
+  }, [reloadBookings, refreshUserLocation, refreshActivity]);
 
   // ==================== HEADER OPTIONS ====================
 
@@ -809,8 +879,26 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         color: P.text,
       },
       headerTintColor: P.text,
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.activityButton}
+          onPress={openActivityCentre}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={activityNeedsYouCount > 0
+            ? `Activity Centre, ${activityNeedsYouCount} ${activityNeedsYouCount === 1 ? 'thing needs' : 'things need'} you`
+            : 'Activity Centre'}
+        >
+          <Ionicons name="file-tray-full-outline" size={22} color={P.text} />
+          {activityNeedsYouCount > 0 && (
+            <View style={styles.activityBadge}>
+              <TodoMark size={14} />
+            </View>
+          )}
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, isFilterView, isDarkMode, P]);
+  }, [navigation, isFilterView, isDarkMode, P, styles.activityButton, styles.activityBadge, openActivityCentre, activityNeedsYouCount]);
 
   // ==================== EFFECTS ====================
 
@@ -1991,6 +2079,18 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         />
 
+        <ActivityCentreSheet
+          visible={activityCentreVisible}
+          onClose={() => setActivityCentreVisible(false)}
+          activity={activity}
+          loading={!activityLoaded}
+          failed={activityLoadFailed}
+          onOpenItem={handleOpenActivityItem}
+          P={P}
+          isDarkMode={isDarkMode}
+          bottomGap={modalBottomGap}
+        />
+
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={csSt.overlay} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); }}>
@@ -2287,6 +2387,18 @@ const createStyles = (
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 1,
+  },
+  // Top-right Activity Centre button; the "!" sits on its corner.
+  activityButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 1,
   },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',

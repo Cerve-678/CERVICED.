@@ -43,7 +43,8 @@ export interface UserPreferences {
 export interface UserBeautyProfile {
   serviceInterests: string[];
   hairType: string;
-  styleVibe: string;
+  /** Multi-pick since 2026-11-08 — every picked vibe seeds the same tags. */
+  styleVibe: string[];
   treatmentHistory: string[];
   maintenanceFrequency: string;
 }
@@ -96,7 +97,18 @@ const STYLE_VIBE_TO_TAGS: Record<string, string[]> = {
   edgy:        ['edgy', 'bold', 'editorial'],
   'soft-girl': ['soft-girl', 'natural', 'glam'],
   baddie:      ['baddie', 'glam', 'bold'],
+  // The Beauty Profile's own list (features/beauty-profile/options.ts) and the
+  // old sign-up list's 'Minimal', which is still saved on live profiles.
+  bold:              ['bold', 'glam', 'dramatic'],
+  'low-maintenance': ['natural', 'effortless', 'minimalist'],
+  experimental:      ['editorial', 'artistic', 'edgy'],
+  minimal:           ['minimalist', 'natural', 'clean-girl'],
 };
+
+/** The union of seed tags for every picked style vibe, without repeats. */
+function vibeSeedTags(vibes: readonly string[]): string[] {
+  return [...new Set(vibes.flatMap(v => STYLE_VIBE_TO_TAGS[v.toLowerCase()] ?? []))];
+}
 
 // Maps trend search terms to canonical tags for scoring
 const TREND_TO_TAGS: Record<string, string[]> = {
@@ -170,9 +182,9 @@ class UserLearningService {
   setUserProfile(profile: UserBeautyProfile): void {
     this.userProfile = profile;
 
-    // Seed style tag weights from style_vibe profile field
-    if (profile.styleVibe) {
-      const seedTags = STYLE_VIBE_TO_TAGS[profile.styleVibe.toLowerCase()] || [];
+    // Seed style tag weights from every picked style_vibe
+    {
+      const seedTags = vibeSeedTags(profile.styleVibe);
       seedTags.forEach(tag => {
         const current = this.preferences.styleTagWeights.get(tag) || 0;
         // Only seed if user hasn't overridden it with behaviour yet (weight 2 = soft prior)
@@ -384,7 +396,7 @@ class UserLearningService {
       topOccasionTags: await this.getTopOccasionTags(3),
       topTechniqueTags: await this.getTopTechniqueTags(5),
       topTrendNames: await this.getTopTrendNames(3),
-      profileStyleVibe: this.userProfile?.styleVibe || null,
+      profileStyleVibe: this.userProfile?.styleVibe.length ? this.userProfile.styleVibe.join(', ') : null,
       profileHairType: this.userProfile?.hairType || null,
     };
   }
@@ -420,8 +432,8 @@ class UserLearningService {
     }
 
     // Profile signal: style_vibe direct match
-    if (this.userProfile?.styleVibe) {
-      const vibeSeeds = STYLE_VIBE_TO_TAGS[this.userProfile.styleVibe.toLowerCase()] || [];
+    if (this.userProfile?.styleVibe.length) {
+      const vibeSeeds = vibeSeedTags(this.userProfile.styleVibe);
       const matchCount = allTags.filter(t => vibeSeeds.includes(t)).length;
       score += matchCount * 3;
     }
@@ -595,8 +607,8 @@ class UserLearningService {
     }
 
     // Profile: style vibe match
-    if (this.userProfile?.styleVibe) {
-      const vibeSeeds = STYLE_VIBE_TO_TAGS[this.userProfile.styleVibe.toLowerCase()] || [];
+    if (this.userProfile?.styleVibe.length) {
+      const vibeSeeds = vibeSeedTags(this.userProfile.styleVibe);
       const matchCount = (provider.styleTags || []).filter(t => vibeSeeds.includes(t)).length;
       score += matchCount * 2;
     }

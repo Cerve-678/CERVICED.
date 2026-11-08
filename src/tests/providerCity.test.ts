@@ -1,4 +1,12 @@
-import { cityFilterKeys, matchesCityFilter, placeForLocation } from '../utils/providerCity';
+import {
+  MAX_COVERED_AREAS,
+  addCoveredArea,
+  cityFilterKeys,
+  coveredAreaLabel,
+  matchesCityFilter,
+  placeForLocation,
+  suggestedCoverTown,
+} from '../utils/providerCity';
 
 // Search's City filter goes by where a provider says they're based in
 // InfoReg (providers.location_text), which AreaPicker stores as an area and
@@ -55,4 +63,69 @@ it('never matches a provider with no location and no saved cities', () => {
 
 it('matches free text a client typed as "Other" when the provider wrote the same thing', () => {
   expect(matches(['Little Snoring'], 'Little Snoring')).toBe(true);
+});
+
+// "Areas you cover" (providers.service_locations): towns and areas a mobile
+// provider travels to, written by the same AreaPicker.
+
+describe('areas a provider covers', () => {
+  it('matches a covered area to that area and to its town', () => {
+    expect(matches(['Shoreditch, London'], null, ['Shoreditch, London'])).toBe(true);
+    expect(matches(['London'], null, ['Shoreditch, London'])).toBe(true);
+    expect(matches(['London'], 'Chorlton, Manchester', ['Hackney, London'])).toBe(true);
+    expect(matches(['Hackney, London'], null, ['Shoreditch, London'])).toBe(false);
+    expect(matches(['Manchester'], null, ['Shoreditch, London'])).toBe(false);
+  });
+
+  it('matches a whole covered town to the town and to every area in it', () => {
+    expect(matches(['London'], null, ['London'])).toBe(true);
+    expect(matches(['Shoreditch, London'], null, ['London'])).toBe(true);
+    expect(matches(['Chorlton, Manchester'], null, ['London'])).toBe(false);
+  });
+
+  it('still never matches an area pick to a provider merely based in the town', () => {
+    expect(matches(['Shoreditch, London'], 'London', [])).toBe(false);
+  });
+
+  it('reads a covered area typed without its town', () => {
+    expect(matches(['London'], null, ['Shoreditch'])).toBe(true);
+  });
+});
+
+describe('adding a covered place', () => {
+  it('adds a new place at the end, trimmed', () => {
+    expect(addCoveredArea(['London'], '  Chorlton,  Manchester ')).toEqual({
+      outcome: 'added',
+      next: ['London', 'Chorlton, Manchester'],
+    });
+  });
+
+  it('refuses a place already on the list, however it is written', () => {
+    expect(addCoveredArea(['Shoreditch, London'], 'shoreditch,london').outcome).toBe('duplicate');
+  });
+
+  it('refuses a blank answer', () => {
+    expect(addCoveredArea([], '   ').outcome).toBe('empty');
+  });
+
+  it(`stops at ${MAX_COVERED_AREAS} places and leaves the list as it was`, () => {
+    const full = Array.from({ length: MAX_COVERED_AREAS }, (_, i) => `Place ${i}`);
+    const result = addCoveredArea(full, 'Leeds');
+    expect(result.outcome).toBe('full');
+    expect(result.next).toBe(full);
+  });
+});
+
+it('labels a whole town as all of it, and anything else as saved', () => {
+  expect(coveredAreaLabel('London')).toBe('All of London');
+  expect(coveredAreaLabel('Shoreditch, London')).toBe('Shoreditch, London');
+  expect(coveredAreaLabel('Little Snoring')).toBe('Little Snoring');
+});
+
+it('suggests the town a provider is based in until it is on the list', () => {
+  expect(suggestedCoverTown('Shoreditch, London', [])).toBe('London');
+  expect(suggestedCoverTown('Shoreditch, London', ['london'])).toBeNull();
+  expect(suggestedCoverTown('Shoreditch, London', ['Hackney, London'])).toBe('London');
+  expect(suggestedCoverTown('', [])).toBeNull();
+  expect(suggestedCoverTown('Somewhere unlisted', [])).toBeNull();
 });

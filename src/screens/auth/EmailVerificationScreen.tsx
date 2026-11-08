@@ -32,6 +32,7 @@ import { logger } from '../../utils/logger';
 import { BOTTOM_SAFE_GAP } from '../../utils/bottomSafeGap';
 import { toUserMessage } from '../../utils/userFacingError';
 import { withTimeout } from '../../utils/withTimeout';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 
 // How long the code screen waits for the sign-up answers to save before
 // opening the app anyway. The save is one small write and usually takes well
@@ -139,10 +140,10 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         tiktok:                meta['tiktok']                ?? null,
         website:               meta['website']               ?? null,
         hair_type:             meta['hair_type']             ?? null,
-        skin_type:             meta['skin_type']             ?? null,
+        skin_type:             toPickColumn(meta['skin_type']),
         allergies:             meta['allergies']             ?? [],
         skin_concerns:         meta['skin_concerns']         ?? [],
-        style_vibe:            meta['style_vibe']            ?? null,
+        style_vibe:            toPickColumn(meta['style_vibe']),
         treatment_history:     meta['treatment_history']     ?? [],
         medical_notes:         meta['medical_notes']         ?? null,
         photography_consent:   meta['photography_consent']   ?? true,

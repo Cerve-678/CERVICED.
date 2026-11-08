@@ -23,6 +23,7 @@ import {
   type MaintenanceTypeKey,
 } from '../constants/maintenanceServiceTypes';
 import type { BeautyData } from '../types/beautyProfile';
+import { formatPickList } from '../features/beauty-profile/pickList';
 import type {
   MaintenanceItem,
   MaintenanceItemKind,
@@ -177,7 +178,7 @@ export function buildMaintenanceSuggestions(
   // Waxing is never suggested: the only related answer, "Sensitive areas", is
   // about skin sensitivity, and a treatment offered because of it is advice.
   // Clients add waxing themselves from "Add your own".
-  if (profile.skinType) offer('facial', `Skin type: ${profile.skinType}`);
+  if (profile.skinType.length) offer('facial', `Skin type: ${formatPickList(profile.skinType)}`);
 
   // ── Events ────────────────────────────────────────────────────────────────
   const todayYMD = dateToYMD(today);

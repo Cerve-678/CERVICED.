@@ -18,7 +18,7 @@ describe('highlightCategory', () => {
   });
 
   it('never surfaces skin tone', () => {
-    const h = highlightCategory('skin', data({ skinTone: 'Deep', skinType: 'Oily' }), L);
+    const h = highlightCategory('skin', data({ skinTone: 'Deep', skinType: ['Oily'] }), L);
     expect([h.lead, ...h.details]).toEqual(['Oily']);
   });
 

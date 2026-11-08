@@ -106,7 +106,7 @@ interface ProviderCardData {
   // What the City filter matches against, built once per provider by
   // cityFilterKeys (src/utils/providerCity.ts): the InfoReg location
   // (location_text, never the 'London' display fallback above), the town it
-  // sits in, and any saved service_locations.
+  // sits in, and the places in service_locations ("Areas you cover").
   cityKeys: ReadonlySet<string>;
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
@@ -130,9 +130,9 @@ interface FilterOptions {
   // filtered out, same not-excluded-when-unknown rule Distance follows.
   availableOnly?: boolean;
   // Matches where a provider is based (InfoReg's "Where you're based",
-  // location_text), read up to its town, plus any service_locations saved
-  // before About You's cities card was removed — see matchesCityFilter in
-  // src/utils/providerCity.ts. A provider matching ANY selected place is a
+  // location_text), read up to its town, plus the places in
+  // service_locations (a mobile provider's "Areas you cover") — see
+  // matchesCityFilter in src/utils/providerCity.ts. A provider matching ANY selected place is a
   // match (OR, not AND), independent of the GPS-based Distance filter above.
   // CityMultiSelect is the picker, so this stays a multi-select, not the
   // single-city pill it used to be.

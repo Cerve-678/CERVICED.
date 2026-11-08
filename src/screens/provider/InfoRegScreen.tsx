@@ -99,6 +99,7 @@ import {
   selectedBookingInstructions,
   toggleBookingInstruction,
 } from '../../features/business-details/bookingInstructions';
+import AreasYouCoverPicker from '../../components/AreasYouCoverPicker';
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
@@ -149,6 +150,7 @@ import {
   ADDRESS_RELEASE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
+  providerTravelsToClient,
   ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
   SERVICE_TYPE_OPTS,
@@ -2989,6 +2991,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Header/inline icons can't read a StyleSheet colour, so they take the same
   // palette token the sheet above is built from.
   const chromeText = chromeTheme.text;
+  const coverPalette = useMemo(
+    () => ({ text: chromeTheme.text, sub: chromeTheme.sub, surface: chromeTheme.surface, border: chromeTheme.border }),
+    [chromeTheme],
+  );
 
   // Set when a pending "claim your business" code (from ClaimProviderScreen)
   // fails to confirm here — expired, already used, or wrong by the time the
@@ -4721,11 +4727,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
                     It is also what the client Search "City" filter goes by:
                     src/utils/providerCity.ts reads "Shoreditch, London" (or a
-                    bare "Shoreditch") up to London. The old "cities you cover"
-                    list (serviceLocations → providers.service_locations) has no
-                    editor now that About You's "Where You're Based" card is
-                    gone; this screen only round-trips it so saved cities keep
-                    matching that filter.
+                    bare "Shoreditch") up to London. A mobile provider's other
+                    places live in "Areas you cover" just below
+                    (serviceLocations → providers.service_locations).
 
                     Same stepped city → region → area picker the client uses for
                     "Your area" (AreaPicker) — "Other city…" / "Other…" fall back
@@ -4740,6 +4744,30 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
                 />
               </View>
+
+              {/* Areas you cover → providers.service_locations, which Search's
+                  City filter matches (an area by name and by its town; a
+                  whole town for every area in it — src/utils/providerCity.ts).
+                  Mobile only: they travel, so where they're based isn't where
+                  they work. Other types still round-trip whatever was saved
+                  before, untouched. Removing every chip saves an empty list. */}
+              {providerTravelsToClient(providerData.businessType || null) && (
+                <View style={styles.inputGroup} ref={registerField('serviceLocations')}>
+                  <Text style={styles.inputLabel}>Areas you cover</Text>
+                  <Text style={[styles.inputHint, styles.coverHelper]}>
+                    Clients who filter Search by these places will find you.
+                  </Text>
+                  <AreasYouCoverPicker
+                    value={providerData.serviceLocations}
+                    onChange={(serviceLocations) =>
+                      setProviderData(prev => ({ ...prev, serviceLocations }))
+                    }
+                    basedIn={providerData.location}
+                    accentColor={adaptiveAccentColor}
+                    palette={coverPalette}
+                  />
+                </View>
+              )}
 
               {/* Jump-to-next affordance at the foot of the section, once
                   there's nothing left to fill in above it — not a "confirm
@@ -6690,6 +6718,11 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontWeight: '700',
     color: fg(0.86),
     marginTop: 6,
+  },
+  // Helper line between a label and its control, rather than under it.
+  coverHelper: {
+    marginTop: 0,
+    marginBottom: 10,
   },
   // Bright, well-defined text-box card — was a near-invisible 0.2-alpha
   // white fill that washed out against the modal's own light background.

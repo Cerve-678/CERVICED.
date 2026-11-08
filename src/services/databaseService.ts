@@ -19,6 +19,7 @@ import type { SavedCard } from '../features/payments/savedCards';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
+import { toPickList } from "../features/beauty-profile/pickList";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
   DbProvider,
@@ -6295,8 +6296,8 @@ export interface ClientBeautyProfile {
   scalpCondition: string | null;
   hairGoals: string[];
   treatmentHistory: string[];
-  // Skin
-  skinType: string | null;
+  // Skin — a list since multi-pick (see features/beauty-profile/pickList.ts)
+  skinType: string[];
   skinTone: string | null;
   skinConcerns: string[];
   sensitiveAreas: string[];
@@ -6314,7 +6315,7 @@ export interface ClientBeautyProfile {
   makeupEyes: string | null;
   makeupLips: string | null;
   // General
-  styleVibe: string | null;
+  styleVibe: string[];
   // Health & Consent
   allergies: string[];
   medicalNotes: string | null;
@@ -6329,7 +6330,8 @@ interface BookingBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[] | null;
   treatment_history: string[] | null;
-  skin_type: string | null;
+  /** text[] once 20261108240000 is applied; a single string before it. Read through toPickList. */
+  skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[] | null;
   sensitive_areas: string[] | null;
@@ -6343,7 +6345,7 @@ interface BookingBeautyProfileRow {
   makeup_finish: string | null;
   makeup_eyes: string | null;
   makeup_lips: string | null;
-  style_vibe: string | null;
+  style_vibe: string[] | string | null;
   allergies: string[] | null;
   medical_notes: string | null;
   photography_consent: boolean | null;
@@ -6357,7 +6359,7 @@ export async function getClientBeautyProfileForBooking(
     scalpCondition: null,
     hairGoals: [],
     treatmentHistory: [],
-    skinType: null,
+    skinType: [],
     skinTone: null,
     skinConcerns: [],
     sensitiveAreas: [],
@@ -6371,7 +6373,7 @@ export async function getClientBeautyProfileForBooking(
     makeupFinish: null,
     makeupEyes: null,
     makeupLips: null,
-    styleVibe: null,
+    styleVibe: [],
     allergies: [],
     medicalNotes: null,
     // No answer is not a yes: unknown consent reads as "no photos".
@@ -6405,7 +6407,7 @@ export async function getClientBeautyProfileForBooking(
     scalpCondition: d.scalp_condition ?? null,
     hairGoals: d.hair_goals ?? [],
     treatmentHistory: d.treatment_history ?? [],
-    skinType: d.skin_type ?? null,
+    skinType: toPickList(d.skin_type),
     skinTone: d.skin_tone ?? null,
     skinConcerns: d.skin_concerns ?? [],
     sensitiveAreas: d.sensitive_areas ?? [],
@@ -6419,7 +6421,7 @@ export async function getClientBeautyProfileForBooking(
     makeupFinish: d.makeup_finish ?? null,
     makeupEyes: d.makeup_eyes ?? null,
     makeupLips: d.makeup_lips ?? null,
-    styleVibe: d.style_vibe ?? null,
+    styleVibe: toPickList(d.style_vibe),
     allergies: d.allergies ?? [],
     medicalNotes: d.medical_notes ?? null,
     photographyConsent: d.photography_consent ?? false,
@@ -6951,6 +6953,130 @@ export async function getMyBookingActionItems(): Promise<
     counts[r.booking_id] = (counts[r.booking_id] ?? 0) + 1;
   }
   return counts;
+}
+
+/** Everything the client's Activity Centre needs that isn't already on the
+ *  bookings in BookingContext — one round of parallel reads, each capped.
+ *  features/bookings/activityCentre.ts turns this plus the bookings into the
+ *  list; this only fetches. */
+export interface ClientActivityRemote {
+  /** Bookings with an intake form still to fill in. */
+  pendingFormBookingIds: string[];
+  /** Bookings with an info pack the client hasn't opened. */
+  unreadPackBookingIds: string[];
+  /** Refund requests still waiting on the provider or on Cerviced. */
+  openRefundRequests: {
+    id: string;
+    bookingId: string;
+    status: 'with_provider' | 'under_review';
+    createdAt: string;
+    passedAutomatically: boolean;
+  }[];
+  /** Late/no-show fees the saved card couldn't cover, so the client is asked to pay. */
+  feesToPay: {
+    id: string;
+    bookingId: string;
+    kind: BookingFeeKind;
+    amountPence: number;
+    payBy: string | null;
+  }[];
+  /** Waitlist slots held for the client, not yet confirmed. Holds are left out
+   *  of client_bookings, so this reads the base table — snapshot names and
+   *  times only, never an address column. */
+  waitlistHolds: {
+    bookingId: string;
+    serviceName: string;
+    providerName: string;
+    bookingDate: string;
+    bookingTime: string;
+    holdExpiresAt: string;
+  }[];
+}
+
+const ACTIVITY_QUERY_LIMIT = 50;
+
+export async function getMyActivity(): Promise<ClientActivityRemote> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) {
+    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [] };
+  }
+
+  const [forms, packs, refunds, fees, holds] = await Promise.all([
+    supabase
+      .from("booking_intake_forms")
+      .select("booking_id")
+      .eq("client_user_id", user.id)
+      .eq("status", "pending")
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_info_packs")
+      .select("booking_id")
+      .eq("client_user_id", user.id)
+      .is("viewed_at", null)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("refund_requests")
+      .select("id, booking_id, status, created_at, passed_automatically")
+      .eq("client_id", user.id)
+      .in("status", ["with_provider", "under_review"])
+      .order("created_at", { ascending: false })
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_fee_charges")
+      .select("id, booking_id, kind, amount_pence, pay_by")
+      .eq("client_user_id", user.id)
+      .eq("status", "awaiting_client")
+      .order("created_at", { ascending: false })
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("bookings")
+      .select("id, service_name_snapshot, provider_name_snapshot, booking_date, booking_time, hold_expires_at")
+      .eq("user_id", user.id)
+      .eq("status", "on_hold")
+      .gt("hold_expires_at", new Date().toISOString())
+      .limit(ACTIVITY_QUERY_LIMIT),
+  ]);
+  if (forms.error) throw forms.error;
+  if (packs.error) throw packs.error;
+  if (refunds.error) throw refunds.error;
+  if (fees.error) throw fees.error;
+  if (holds.error) throw holds.error;
+
+  type RefundRow = { id: string; booking_id: string; status: 'with_provider' | 'under_review'; created_at: string; passed_automatically: boolean | null };
+  type FeeRow = { id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; pay_by: string | null };
+  type HoldRow = {
+    id: string; service_name_snapshot: string | null; provider_name_snapshot: string | null;
+    booking_date: string; booking_time: string; hold_expires_at: string;
+  };
+
+  return {
+    pendingFormBookingIds: ((forms.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
+    unreadPackBookingIds: ((packs.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
+    openRefundRequests: ((refunds.data ?? []) as RefundRow[]).map(r => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      status: r.status,
+      createdAt: r.created_at,
+      passedAutomatically: !!r.passed_automatically,
+    })),
+    feesToPay: ((fees.data ?? []) as FeeRow[]).map(r => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      kind: r.kind,
+      amountPence: r.amount_pence,
+      payBy: r.pay_by,
+    })),
+    waitlistHolds: ((holds.data ?? []) as HoldRow[]).map(r => ({
+      bookingId: r.id,
+      serviceName: r.service_name_snapshot ?? '',
+      providerName: r.provider_name_snapshot ?? '',
+      bookingDate: r.booking_date,
+      bookingTime: r.booking_time,
+      holdExpiresAt: r.hold_expires_at,
+    })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -9068,46 +9194,6 @@ export async function upgradeUserToProvider(
     );
 }
 
-/** Persist the client beauty/health/preference profile for an account being upgraded to dual-role */
-export async function updateClientProfileData(
-  userId: string,
-  data: {
-    dob: string;
-    hairType: string;
-    skinType: string;
-    skinConcerns: string[];
-    styleVibe: string;
-    allergies: string[];
-    treatmentHistory: string[];
-    medicalNotes: string;
-    photographyConsent: boolean;
-    serviceInterests: string[];
-    serviceLocations: string[];
-    maintenanceFrequency: string;
-    referralSource: string;
-  },
-): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({
-      dob: data.dob,
-      hair_type: data.hairType || null,
-      skin_type: data.skinType || null,
-      skin_concerns: data.skinConcerns,
-      style_vibe: data.styleVibe || null,
-      allergies: data.allergies,
-      treatment_history: data.treatmentHistory,
-      medical_notes: data.medicalNotes || null,
-      photography_consent: data.photographyConsent,
-      service_interests: data.serviceInterests,
-      service_locations: data.serviceLocations,
-      maintenance_frequency: data.maintenanceFrequency || null,
-      referral_source: data.referralSource || null,
-    })
-    .eq("id", userId);
-  if (error) throw error;
-}
-
 /** Update name and phone — called from AuthContext so in-memory user stays fresh */
 /**
  * Update the contact details a user can edit about themselves.
@@ -9219,12 +9305,12 @@ export async function updateUserBeautyProfile(
   userId: string,
   data: {
     hair_type?: string | null;
-    skin_type?: string | null;
+    skin_type?: string[] | null;
     skin_tone?: string | null;
     allergies?: string[];
     skin_concerns?: string[];
     sensitive_areas?: string[];
-    style_vibe?: string | null;
+    style_vibe?: string[] | null;
     medical_notes?: string | null;
     photography_consent?: boolean;
     treatment_history?: string[];
@@ -9261,7 +9347,8 @@ export interface UserBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[];
   treatment_history: string[];
-  skin_type: string | null;
+  /** text[] once 20261108240000 is applied; a single string on rows before it. Read through toPickList. */
+  skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[];
   sensitive_areas: string[];
@@ -9275,7 +9362,8 @@ export interface UserBeautyProfileRow {
   makeup_finish: string | null;
   makeup_eyes: string | null;
   makeup_lips: string | null;
-  style_vibe: string | null;
+  /** Same transition as skin_type. */
+  style_vibe: string[] | string | null;
   service_interests: string[];
   gender: string | null;
   has_kids: boolean | null;
@@ -9720,10 +9808,10 @@ export async function upsertUserAfterVerification(data: {
   tiktok: string | null;
   website: string | null;
   hair_type: string | null;
-  skin_type: string | null;
+  skin_type: string[] | null;
   allergies: string[];
   skin_concerns: string[];
-  style_vibe: string | null;
+  style_vibe: string[] | null;
   treatment_history: string[];
   medical_notes: string | null;
   photography_consent: boolean;

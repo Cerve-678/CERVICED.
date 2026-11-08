@@ -42,6 +42,12 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     });
   };
 
+  // A saved answer that isn't in today's chip list (sign-up offered a few
+  // style vibes this list doesn't) still shows, so it can be seen and
+  // un-picked rather than riding along invisibly in a multi-pick list.
+  const withSaved = (options: string[], saved: string[]) =>
+    [...options, ...saved.filter(v => !options.includes(v))];
+
   // A "none" answer can't sit alongside real ones: picking it clears the rest,
   // and picking anything else clears it.
   const toggleExclusive = (field: 'allergies' | 'skinConcerns' | 'treatmentHistory', none: string, item: string) => {
@@ -127,9 +133,9 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     case 'skin':
       return (
         <>
-          {sectionHead('SKIN TYPE', { selected: draft.skinType ? 1 : 0, total: 1 })}
-          {sub('Your skin type')}
-          {renderChips(SKIN_TYPES, o => draft.skinType === o, o => setSingle('skinType', o))}
+          {sectionHead('SKIN TYPE', { selected: draft.skinType.length, total: SKIN_TYPES.length })}
+          {sub('Pick all that describe your skin')}
+          {renderChips(withSaved(SKIN_TYPES, draft.skinType), o => draft.skinType.includes(o), o => toggleMulti('skinType', o))}
 
           {sectionHead('SKIN TONE', { selected: draft.skinTone ? 1 : 0, total: 1 }, { optional: true })}
           {sub('Your complexion')}
@@ -224,9 +230,9 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     case 'general':
       return (
         <>
-          {sectionHead('STYLE VIBE', { selected: draft.styleVibe ? 1 : 0, total: 1 })}
-          {sub('How would you describe your overall look?')}
-          {renderChips(STYLE_VIBES, o => draft.styleVibe === o, o => setSingle('styleVibe', o))}
+          {sectionHead('STYLE VIBE', { selected: draft.styleVibe.length, total: STYLE_VIBES.length })}
+          {sub('How would you describe your overall look? Pick as many as fit.')}
+          {renderChips(withSaved(STYLE_VIBES, draft.styleVibe), o => draft.styleVibe.includes(o), o => toggleMulti('styleVibe', o))}
         </>
       );
 

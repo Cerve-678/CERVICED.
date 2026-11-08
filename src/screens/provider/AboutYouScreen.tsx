@@ -9,10 +9,10 @@
  * travel radius → providers.travel_radius) was removed from here on purpose.
  * Location lives in Edit Profile (InfoRegScreen) now: "Where you're based"
  * writes location_text, which is what Search's City filter goes by
- * (src/utils/providerCity.ts, still also matching any saved
- * service_locations). Nothing edits service_locations any more. How far a
- * mobile provider travels is said once, in Policies → Travel; travel_radius
- * is no longer read or written by the app.
+ * (src/utils/providerCity.ts), and a mobile provider's "Areas you cover"
+ * just below it writes service_locations, which the filter matches too. How far a mobile provider travels
+ * is said once, in Policies → Travel; travel_radius is no longer read or
+ * written by the app.
  *
  * Two things worth knowing before editing:
  *
