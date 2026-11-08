@@ -14,6 +14,7 @@ import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectSta
 import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
 import { groupTipsByBooking } from '../features/payments/tipsByBooking';
 import { providerCancelGroupBooking, providerCancelOwnBooking } from '../services/databaseService';
+import { MULTI_SERVICE_BOOKING_ENABLED } from '../constants/featureFlags';
 
 const payoutLabels: Record<ProviderPayout['status'], string> = {
   held: 'Awaiting release', transferred: 'Released to Stripe', failed: 'Needs attention',
@@ -167,14 +168,16 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [refundRow, setRefundRow] = useState<ProviderPayout | null>(null);
   const { showAlert, DialogHost } = useAppDialog();
   // The same "Cancel appointment too" the booking detail offers, for a booking
-  // that's still upcoming or pending. A group booking cancels as a whole, as
-  // it does there.
+  // that's still upcoming or pending, and it cancels what the detail would:
+  // just this service while multi-service booking is off (each service of an
+  // older group booking is managed on its own), the whole group once it's on.
   const cancelRefundBooking = useMemo(() => {
     const row = refundRow;
     const booking = row?.booking;
     if (!row || !booking || (booking.status !== 'confirmed' && booking.status !== 'pending')) return undefined;
+    const groupId = MULTI_SERVICE_BOOKING_ENABLED ? booking.group_booking_id : null;
     return async () => {
-      if (booking.group_booking_id) await providerCancelGroupBooking(booking.group_booking_id);
+      if (groupId) await providerCancelGroupBooking(groupId);
       else await providerCancelOwnBooking(row.booking_id);
     };
   }, [refundRow]);

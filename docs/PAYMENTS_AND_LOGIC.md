@@ -380,7 +380,9 @@ Pay or PayPal.
   only shows the summary.
 - **A full refund of an upcoming booking cancels it too, unless the provider
   unticks "Cancel appointment too"** on the refund sheet (from the booking
-  detail or Payments → Booking payments; a group booking cancels as a whole).
+  detail or Payments → Booking payments). It cancels only that one service:
+  multi-service booking is off, so each service of an older group booking is
+  cancelled on its own (the whole group would cancel together once it's back).
   Unticked, the appointment stays booked with nothing left to pay. A refund
   followed by a cancel never refunds twice: the cancel's automatic full refund
   counts every refund Stripe already made and finds nothing left
