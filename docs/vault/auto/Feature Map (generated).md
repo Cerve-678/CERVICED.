@@ -108,7 +108,7 @@ Curated: [[Payments]] · **157 files**
 - … +127 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **329 files**
+Curated: [[Booking Flow]] · **331 files**
 - `src/services/databaseService.ts` _(1014)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(698)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **329 files**
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/utils/scheduleIssues.ts` _(94)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- … +299 more
+- … +301 more
 
 ## Notifications
 Curated: [[Notifications]] · **181 files**
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **181 files**
 - … +151 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **84 files**
+Curated: [[Provider Onboarding & Go-Live]] · **85 files**
 - `src/services/databaseService.ts` _(91)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **84 files**
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep2Screen.tsx` _(3)_
 - `src/screens/auth/SignUpStep3Screen.tsx` _(3)_
-- … +54 more
+- … +55 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **64 files**
@@ -346,7 +346,7 @@ Curated: [[Services]] · **52 files**
 - … +22 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **82 files**
+Curated: [[Payments]] · **83 files**
 - `src/screens/client/CartScreen.tsx` _(441)_
 - `src/services/databaseService.ts` _(106)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **82 files**
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/constants/feeTerms.ts` _(4)_
 - `src/features/bookings/addOnTime.ts` _(4)_
-- … +52 more
+- … +53 more

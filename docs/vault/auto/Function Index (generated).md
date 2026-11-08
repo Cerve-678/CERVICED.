@@ -5,7 +5,7 @@
 
 #generated
 
-**3231 functions** across **444 files**.
+**3233 functions** across **445 files**.
 
 ### `src/components/` (59)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -189,8 +189,9 @@
 ### `src/features/provider-bookings/` (1)
 - `tipPresentation.ts` — **formatTipAmount** · pounds · **providerTipNote**
 
-### `src/features/provider-registration/` (17)
-- `AddOnEditorModal.tsx` — **AddOnEditorModal** · categoryNames · handleDelete · handleSave · listNames · placementHint · toggleCategory · toggleService
+### `src/features/provider-registration/` (18)
+- `AddOnEditorModal.tsx` — **AddOnEditorModal** · categoryNames · handleDelete · handleSave · listNames · placementHint · setCategoryPicked · toggleCategory · toggleService
+- `AddOnGuide.tsx` — **AddOnGuide**
 - `addOnLibrary.ts` — **addOnAppliesTo** · **addOnKeysForSavedService** · **applyRuleToServices** · **buildAddOnSaveItems** · **defaultAddOnKeysForCategory** · **describeAddOnRule** · joinNames · **libraryItemFromRow** · mapServices · **newAddOnKey** · **removeAddOnFromServices** · **removeCategoryFromLibrary** · **renameCategoryInLibrary** · **ruleCovers** · **servicesWithAddOn** · **setAddOnOnService** · **suggestAddOns** · **validateAddOn** · withKey
 - `AddOnLibrarySection.tsx` — **AddOnLibrarySection**
 - `addOnUi.tsx` — **AddOnChip** · **addOnMetaLine** · **ExtraTimeChips** · **formatAddOnPrice** · **tapLight** · **tapMedium** · **tapSelect** · **tapWarn** · **TickBox**
