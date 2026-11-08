@@ -379,4 +379,8 @@ SELECT cron.alter_job(
 SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'provider-stale-reschedule-reminders';
 DROP FUNCTION IF EXISTS public.process_provider_stale_reschedule_reminders();
 
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261109120000', 'reschedule_reply_45_minutes')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;
