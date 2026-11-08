@@ -5,7 +5,7 @@
 
 #generated
 
-**3233 functions** across **445 files**.
+**3234 functions** across **445 files**.
 
 ### `src/components/` (59)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -427,7 +427,7 @@
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **toArgbHex**
 - `cropRect.ts` — clamp · **fitContain** · **moveCrop** · **moveHandle** · **toImageCrop**
-- `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
+- `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDayOrdinalShortMonth** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `dayTimelineRange.ts` — **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
 - `displaySettings.ts` — **clampTextScale** · **displaySettingStorageKey** · **fontFamilyForChoice** · **isFontChoiceKey** · **isLanguageCode** · **isRegionCode** · **labelForTextScale** · **resolveStoredDisplaySettings** · **snapTextScaleToStep**
