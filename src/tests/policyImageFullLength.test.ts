@@ -20,7 +20,8 @@ describe('detailed policy image', () => {
   it('offers a crop after picking, and uploads what comes back from it', () => {
     expect(source).toContain('setPolicyImageCropQueue(picked)');
     expect(source).toContain('onDone={handlePolicyImageCropped}');
-    expect(source).toContain("uploadToStorage('portfolio', path, uri)");
+    // 'document' keeps a long sheet at full width, so it isn't blurry when read.
+    expect(source).toContain("uploadToStorage('portfolio', path, uri, 'document')");
   });
 
   it('previews the whole photo instead of cutting it to the tile', () => {
