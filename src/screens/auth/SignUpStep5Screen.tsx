@@ -35,6 +35,7 @@ import { serviceLocationsFromArea } from '../../utils/clientArea';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 import { logger } from '../../utils/logger';
 import {
   Chip, ChipWrap, FormCard, PrimaryButton, QuestionCard, ScreenTitle, SectionLabel, SwitchRow, useFieldInputStyle,
@@ -320,9 +321,9 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             business_type: data.businessType || null,
             business_phone: data.businessPhone || null, instagram: data.instagram || null,
             tiktok: data.tiktok || null, website: data.website || null,
-            hair_type: data.hairType || null, skin_type: data.skinType || null,
+            hair_type: data.hairType || null, skin_type: toPickColumn(data.skinType),
             allergies: data.allergies, skin_concerns: data.skinConcerns,
-            style_vibe: data.styleVibe || null, treatment_history: data.treatmentHistory,
+            style_vibe: toPickColumn(data.styleVibe), treatment_history: data.treatmentHistory,
             medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
             service_interests: isProvider ? data.serviceInterests : selectedInterests,
             service_locations: isProvider ? data.serviceLocations : selectedLocations,

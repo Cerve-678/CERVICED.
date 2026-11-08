@@ -19,6 +19,7 @@ import type { SavedCard } from '../features/payments/savedCards';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
+import { toPickList } from "../features/beauty-profile/pickList";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
   DbProvider,
@@ -6260,8 +6261,8 @@ export interface ClientBeautyProfile {
   scalpCondition: string | null;
   hairGoals: string[];
   treatmentHistory: string[];
-  // Skin
-  skinType: string | null;
+  // Skin — a list since multi-pick (see features/beauty-profile/pickList.ts)
+  skinType: string[];
   skinTone: string | null;
   skinConcerns: string[];
   sensitiveAreas: string[];
@@ -6279,7 +6280,7 @@ export interface ClientBeautyProfile {
   makeupEyes: string | null;
   makeupLips: string | null;
   // General
-  styleVibe: string | null;
+  styleVibe: string[];
   // Health & Consent
   allergies: string[];
   medicalNotes: string | null;
@@ -6294,7 +6295,8 @@ interface BookingBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[] | null;
   treatment_history: string[] | null;
-  skin_type: string | null;
+  /** text[] once 20261108240000 is applied; a single string before it. Read through toPickList. */
+  skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[] | null;
   sensitive_areas: string[] | null;
@@ -6308,7 +6310,7 @@ interface BookingBeautyProfileRow {
   makeup_finish: string | null;
   makeup_eyes: string | null;
   makeup_lips: string | null;
-  style_vibe: string | null;
+  style_vibe: string[] | string | null;
   allergies: string[] | null;
   medical_notes: string | null;
   photography_consent: boolean | null;
@@ -6322,7 +6324,7 @@ export async function getClientBeautyProfileForBooking(
     scalpCondition: null,
     hairGoals: [],
     treatmentHistory: [],
-    skinType: null,
+    skinType: [],
     skinTone: null,
     skinConcerns: [],
     sensitiveAreas: [],
@@ -6336,7 +6338,7 @@ export async function getClientBeautyProfileForBooking(
     makeupFinish: null,
     makeupEyes: null,
     makeupLips: null,
-    styleVibe: null,
+    styleVibe: [],
     allergies: [],
     medicalNotes: null,
     // No answer is not a yes: unknown consent reads as "no photos".
@@ -6370,7 +6372,7 @@ export async function getClientBeautyProfileForBooking(
     scalpCondition: d.scalp_condition ?? null,
     hairGoals: d.hair_goals ?? [],
     treatmentHistory: d.treatment_history ?? [],
-    skinType: d.skin_type ?? null,
+    skinType: toPickList(d.skin_type),
     skinTone: d.skin_tone ?? null,
     skinConcerns: d.skin_concerns ?? [],
     sensitiveAreas: d.sensitive_areas ?? [],
@@ -6384,7 +6386,7 @@ export async function getClientBeautyProfileForBooking(
     makeupFinish: d.makeup_finish ?? null,
     makeupEyes: d.makeup_eyes ?? null,
     makeupLips: d.makeup_lips ?? null,
-    styleVibe: d.style_vibe ?? null,
+    styleVibe: toPickList(d.style_vibe),
     allergies: d.allergies ?? [],
     medicalNotes: d.medical_notes ?? null,
     photographyConsent: d.photography_consent ?? false,
@@ -9157,46 +9159,6 @@ export async function upgradeUserToProvider(
     );
 }
 
-/** Persist the client beauty/health/preference profile for an account being upgraded to dual-role */
-export async function updateClientProfileData(
-  userId: string,
-  data: {
-    dob: string;
-    hairType: string;
-    skinType: string;
-    skinConcerns: string[];
-    styleVibe: string;
-    allergies: string[];
-    treatmentHistory: string[];
-    medicalNotes: string;
-    photographyConsent: boolean;
-    serviceInterests: string[];
-    serviceLocations: string[];
-    maintenanceFrequency: string;
-    referralSource: string;
-  },
-): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({
-      dob: data.dob,
-      hair_type: data.hairType || null,
-      skin_type: data.skinType || null,
-      skin_concerns: data.skinConcerns,
-      style_vibe: data.styleVibe || null,
-      allergies: data.allergies,
-      treatment_history: data.treatmentHistory,
-      medical_notes: data.medicalNotes || null,
-      photography_consent: data.photographyConsent,
-      service_interests: data.serviceInterests,
-      service_locations: data.serviceLocations,
-      maintenance_frequency: data.maintenanceFrequency || null,
-      referral_source: data.referralSource || null,
-    })
-    .eq("id", userId);
-  if (error) throw error;
-}
-
 /** Update name and phone — called from AuthContext so in-memory user stays fresh */
 /**
  * Update the contact details a user can edit about themselves.
@@ -9308,12 +9270,12 @@ export async function updateUserBeautyProfile(
   userId: string,
   data: {
     hair_type?: string | null;
-    skin_type?: string | null;
+    skin_type?: string[] | null;
     skin_tone?: string | null;
     allergies?: string[];
     skin_concerns?: string[];
     sensitive_areas?: string[];
-    style_vibe?: string | null;
+    style_vibe?: string[] | null;
     medical_notes?: string | null;
     photography_consent?: boolean;
     treatment_history?: string[];
@@ -9350,7 +9312,8 @@ export interface UserBeautyProfileRow {
   scalp_condition: string | null;
   hair_goals: string[];
   treatment_history: string[];
-  skin_type: string | null;
+  /** text[] once 20261108240000 is applied; a single string on rows before it. Read through toPickList. */
+  skin_type: string[] | string | null;
   skin_tone: string | null;
   skin_concerns: string[];
   sensitive_areas: string[];
@@ -9364,7 +9327,8 @@ export interface UserBeautyProfileRow {
   makeup_finish: string | null;
   makeup_eyes: string | null;
   makeup_lips: string | null;
-  style_vibe: string | null;
+  /** Same transition as skin_type. */
+  style_vibe: string[] | string | null;
   service_interests: string[];
   gender: string | null;
   has_kids: boolean | null;
@@ -9809,10 +9773,10 @@ export async function upsertUserAfterVerification(data: {
   tiktok: string | null;
   website: string | null;
   hair_type: string | null;
-  skin_type: string | null;
+  skin_type: string[] | null;
   allergies: string[];
   skin_concerns: string[];
-  style_vibe: string | null;
+  style_vibe: string[] | null;
   treatment_history: string[];
   medical_notes: string | null;
   photography_consent: boolean;

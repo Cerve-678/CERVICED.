@@ -4,9 +4,9 @@ import { EMPTY_BEAUTY_DATA, type BeautyData } from '../types/beautyProfile';
 const FILLED: BeautyData = {
   ...EMPTY_BEAUTY_DATA,
   hairType: '4C',
-  skinType: 'Oily',
+  skinType: ['Oily'],
   skinConcerns: ['Acne'],
-  styleVibe: 'Natural',
+  styleVibe: ['Natural'],
   allergies: ['None known'],
   treatmentHistory: ['None'],
 };

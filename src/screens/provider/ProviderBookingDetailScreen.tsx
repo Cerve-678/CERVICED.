@@ -90,6 +90,7 @@ import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { formsNotYetSent, packsNotYetSent } from '../../features/info-packs/infoPackLogic';
 import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings/receipt';
+import { formatPickList } from '../../features/beauty-profile/pickList';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
@@ -1797,12 +1798,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
                         const CR = (items: string[], color?: string) => chipRow(items, color);
 
-                        const hasSkin = (clientProfile.skinType) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
+                        const hasSkin = (clientProfile.skinType.length > 0) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
                         const hasHair = (clientProfile.hairType) || (clientProfile.scalpCondition) || (clientProfile.hairGoals.length > 0) || (clientProfile.treatmentHistory.length > 0);
                         const hasNails = (clientProfile.nailLength) || (clientProfile.nailShape);
                         const hasLashesBrows = (clientProfile.lashStyle) || (clientProfile.lashStatus) || (clientProfile.browStyle) || (clientProfile.browCondition);
                         const hasMakeup = (clientProfile.makeupCoverage) || (clientProfile.makeupFinish) || (clientProfile.makeupEyes) || (clientProfile.makeupLips);
-                        const hasStyle = clientProfile.styleVibe;
+                        const hasStyle = clientProfile.styleVibe.length > 0;
                         const hasAlerts = (clientProfile.allergies.length > 0) || (clientProfile.medicalNotes);
 
                         return (
@@ -1826,7 +1827,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasSkin && (
                               <>
                                 {catLabel('Skin')}
-                                {clientProfile.skinType ? <Row label="Skin type" value={clientProfile.skinType} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.skinType.length > 0 ? <Row label="Skin type" value={formatPickList(clientProfile.skinType)} textColor={P.text} divColor={rowDiv} /> : null}
                                 {clientProfile.skinTone ? <Row label="Skin tone" value={clientProfile.skinTone} textColor={P.text} divColor={rowDiv} /> : null}
                                 {clientProfile.skinConcerns.length > 0 && (
                                   <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
@@ -1899,7 +1900,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasStyle && (
                               <>
                                 {catLabel('Style')}
-                                <Row label="Style vibe" value={clientProfile.styleVibe!} textColor={P.text} divColor={rowDiv} />
+                                <Row label="Style vibe" value={formatPickList(clientProfile.styleVibe)} textColor={P.text} divColor={rowDiv} />
                               </>
                             )}
 
