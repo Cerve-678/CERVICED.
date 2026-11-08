@@ -1161,7 +1161,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
   const [calendarView, setCalendarView] = useCalendarViewPreference(user?.id);
   const releaseQuickView = useMemo(
-    () => (bookingHorizon ? describeReleaseQuickView(bookingHorizon) : null),
+    () => (bookingHorizon ? describeReleaseQuickView(bookingHorizon) : undefined),
     [bookingHorizon],
   );
   // Where the release day is set (and also in Edit Profile).

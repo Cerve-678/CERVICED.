@@ -8,6 +8,7 @@ import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen
 import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import SearchScreen from '../../../screens/client/SearchScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
+import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvidersScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import CartScreen from '../../../screens/client/CartScreen';
@@ -100,6 +101,24 @@ export default function HomeNavigator() {
           headerBackTitle: 'Home',
           headerTransparent: false,
           headerShadowVisible: false,
+          headerTitleStyle: {
+            fontFamily: 'BakbakOne',
+            fontSize: 22,
+            color: theme.text,
+          },
+          headerTintColor: theme.text,
+        }}
+      />
+
+      <HomeStack.Screen
+        name="ActivityCentre"
+        component={ActivityCentreScreen}
+        options={{
+          title: 'Activity Centre',
+          presentation: 'card',
+          headerTransparent: false,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
             fontFamily: 'BakbakOne',
             fontSize: 22,

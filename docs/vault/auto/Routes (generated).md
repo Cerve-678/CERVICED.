@@ -26,6 +26,7 @@ Curated overview: [[Screens & Navigation]].
 - `Search`
 - `Bookings`
 - `BookingDetail`
+- `ActivityCentre`
 - `ExternalBookingDetail`
 - `Reschedule`
 - `BookmarkedProviders`

@@ -934,7 +934,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={[st.statusBadge, { backgroundColor: getStatusColor(booking.status, booking.isPendingReschedule) }]}>
                   <Text style={st.statusText}>
                     {booking.isPendingReschedule
-                      ? ((booking as any).rescheduleRequest?.providerAvailableDates ? 'RESCHEDULE AVAILABLE' : 'RESCHEDULE PENDING')
+                      ? (booking.rescheduleRequest?.providerAvailableDates ? 'RESCHEDULE OFFERED' : 'RESCHEDULE PENDING')
                       : booking.status.replace('_', ' ').toUpperCase()}
                   </Text>
                 </View>
@@ -1354,13 +1354,29 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <View style={st.section}>
               <View style={[st.rescheduleBanner, { backgroundColor: C.card, borderColor: C.accent }]}>
                 <Text style={[{ fontSize: 14, fontWeight: '700', color: C.accent, marginBottom: 4 }]}>
-                  {(booking as any).rescheduleRequest?.providerAvailableDates ? 'Available Times Received!' : 'Reschedule Requested'}
+                  {booking.rescheduleRequest?.providerAvailableDates
+                    ? (booking.rescheduleRequest.requestedBy === 'provider' ? 'New Time Offered' : 'Available Times Received')
+                    : 'Reschedule Requested'}
                 </Text>
                 <Text style={{ fontSize: 13, color: C.sub }}>
-                  {(booking as any).rescheduleRequest?.providerAvailableDates
-                    ? `${booking.providerName} has responded with available times. Tap Reschedule Now to confirm.`
+                  {booking.rescheduleRequest?.providerAvailableDates
+                    ? (booking.rescheduleRequest.requestedBy === 'provider'
+                        ? `${booking.providerName} has offered a new available time for this booking. Tap Reschedule Now to confirm the new date.`
+                        : `${booking.providerName} has responded with available times. Tap Reschedule Now to confirm.`)
                     : `Waiting for ${booking.providerName} to respond with available dates.`}
                 </Text>
+                {booking.rescheduleRequest?.providerAvailableDates && !!booking.rescheduleRequest.providerNote && (
+                  <Text style={{ fontSize: 13, color: C.text, marginTop: 8, lineHeight: 19 }}>
+                    Note from {booking.providerName}: {booking.rescheduleRequest.providerNote}
+                  </Text>
+                )}
+                {booking.rescheduleRequest?.providerAvailableDates && (
+                  <Text style={{ fontSize: 12, color: C.sub, marginTop: 6 }}>
+                    {booking.rescheduleRequest.cancelIfDeclined
+                      ? 'If you decline, this booking will be cancelled and any payment refunded in full.'
+                      : `If you decline, your original appointment on ${formatBookingDisplayDate(booking.bookingDate)} stays booked.`}
+                  </Text>
+                )}
                 {/* Show what was actually requested — previously not surfaced
                     anywhere after submission (requestedDates/requestedTimes
                     come from booking_reschedule_requests via
