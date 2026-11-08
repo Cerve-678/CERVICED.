@@ -103,6 +103,16 @@ export function describeRefundOutcome(
       providerStatus: 'Refund pending',
     };
   }
+  // The payment status can arrive before the refunded amount is refreshed in
+  // the booking detail. Keep the issued tag visible during that short window.
+  if ((booking.paymentStatus === PaymentStatus.REFUNDED || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED) && refunded <= 0 && kept <= 0) {
+    return {
+      title: 'Refunded',
+      message: 'Your refund has been issued. Banks usually take 5–10 working days to show it.',
+      rows: [],
+      providerStatus: 'Refund issued',
+    };
+  }
   if (kept > 0) {
     return {
       title: refunded > 0 ? 'Refunded' : 'No refund',

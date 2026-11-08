@@ -497,6 +497,9 @@ export function applyRescheduleRequestRow(
       ...(row.requested_dates ? { requestedDates: row.requested_dates } : {}),
       ...(row.requested_times ? { requestedTimes: row.requested_times } : {}),
       requestedAt: row.created_at,
+      requestedBy: row.requested_by,
+      cancelIfDeclined: row.cancel_if_declined === true,
+      ...(row.response_note ? { providerNote: row.response_note } : {}),
       ...(responded
         ? {
             providerAvailableDates: row.provider_available_slots as AvailableDate[],
