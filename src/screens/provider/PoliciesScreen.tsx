@@ -574,12 +574,18 @@ export default function PoliciesScreen({ navigation }: any) {
                 stay away from money: a charge written here would be an
                 off-app charge the checkout knows nothing about (see the
                 deposit/balance liability boundary in CLAUDE.md). */}
-            <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
+            {/* How far a mobile provider travels has its own field now, in
+                Edit Profile beside "Where you're based" (providers.
+                travel_radius, "Travels up to …" on the profile). This note is
+                separate free text and nothing keeps the two in step, so the
+                copy steers distance there instead of inviting a second,
+                possibly different, number here. */}
+            <Card title="Travel" sub="If you travel to clients: anything they should know before you come. How far you travel is set in Edit Profile, under Where you're based. Shown on your profile (optional).">
               <Field
                 label="Your travel policy"
                 value={policies.travelPolicy}
                 onChange={v => setPolicy('travelPolicy', v)}
-                placeholder='e.g. "I travel up to 10 miles and need somewhere to set up with a plug socket"'
+                placeholder='e.g. "I need somewhere to set up with a plug socket and good light"'
                 multiline
               />
             </Card>

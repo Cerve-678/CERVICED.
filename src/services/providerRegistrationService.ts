@@ -178,9 +178,17 @@ export interface ProviderRegistrationData {
   // first writer.
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
   priceBands: string[];
-  // Service-coverage cities — drives providers.service_locations, read by
-  // the client Search "City" filter. See src/constants/ukCities.ts.
+  // Service-coverage cities — providers.service_locations. Nothing edits it
+  // any more; it's round-tripped so old values keep matching the client
+  // Search "City" filter, which now goes by `location` first (see
+  // src/utils/providerCity.ts).
   serviceLocations: string[];
+  /** providers.travel_radius, free text ("10 miles"). Asked in InfoReg under
+   *  "Where you're based", only for a mobile business type; shown on the
+   *  client profile as "Travels up to …" for a mobile provider only. Optional
+   *  so a form cached before this field existed saves without wiping it —
+   *  see the payload's spread below. */
+  travelRadius?: string;
   fullAddress: string;
   /** Private arrival/access instructions, released to a booked client only
    * when their appointment location has been released. */
@@ -401,6 +409,16 @@ function minutesToDuration(minutes: number): string {
   const mins = minutes % 60;
   if (mins === 0) return `${hrs} hr${hrs > 1 ? 's' : ''}`;
   return `${hrs} hr ${mins} mins`;
+}
+
+/** travel_radius for the providers write. A blank answer clears the column;
+ *  a form with no travelRadius at all (cached before the field existed)
+ *  leaves it alone rather than wiping a value the provider never saw. */
+export function travelRadiusPatch(
+  data: Pick<ProviderRegistrationData, 'travelRadius'>,
+): { travel_radius?: string | null } {
+  if (typeof data.travelRadius !== 'string') return {};
+  return { travel_radius: data.travelRadius.trim() || null };
 }
 
 function generateSlug(name: string): string {
@@ -658,6 +676,7 @@ export async function saveProviderToSupabase(
         price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
+        ...travelRadiusPatch(data),
         preferred_payment_methods: data.preferredPaymentMethods,
         // reconcile, not `|| 'on_confirmation'`: the old fallback silently
         // turned "never share" into "share on confirmation" for any provider
@@ -719,6 +738,7 @@ export async function saveProviderToSupabase(
         price_bands: data.priceBands,
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
+        ...travelRadiusPatch(data),
         preferred_payment_methods: data.preferredPaymentMethods,
         // reconcile, not `|| 'on_confirmation'`: the old fallback silently
         // turned "never share" into "share on confirmation" for any provider
@@ -1016,6 +1036,7 @@ export function providerRowToRegistrationData(
     priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
     priceBands: provider.price_bands ?? [],
     serviceLocations: provider.service_locations || [],
+    travelRadius: provider.travel_radius ?? '',
     preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress: catalogue.fullAddress,
     howToGetThere: catalogue.howToGetThere,

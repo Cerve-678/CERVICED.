@@ -49,6 +49,7 @@ import { filtersAllowLinkOnly } from '../../features/providers/linkOnlySearch';
 import { highlightSearchTerms, scatterServicesBetweenProviders, type SearchResultRow } from '../../features/providers/searchResultsLayout';
 import { logger } from '../../utils/logger';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { cityFilterKeys, matchesCityFilter } from '../../utils/providerCity';
 import SearchGuideSheet, { AVAILABILITY_INFO } from '../../features/providers/SearchGuideSheet';
 import {
   resolveProviderPriceRange,
@@ -102,10 +103,11 @@ interface ProviderCardData {
   // computed distance, which stays available for the Distance filter/sort
   // via latitude/longitude above but is no longer displayed per-card.
   location: string;
-  // Service-coverage cities (providers.service_locations) — what the City
-  // filter matches against. Distinct from `location` above, which is a
-  // single display string, not a list of covered cities.
-  serviceLocations: string[];
+  // What the City filter matches against, built once per provider by
+  // cityFilterKeys (src/utils/providerCity.ts): the InfoReg location
+  // (location_text, never the 'London' display fallback above), the town it
+  // sits in, and any saved service_locations.
+  cityKeys: ReadonlySet<string>;
   walkInsWelcome: boolean;
   groupBookingsAvailable: boolean;
   veganCrueltyFree: boolean;
@@ -127,13 +129,14 @@ interface FilterOptions {
   // all) — providers whose availability hasn't resolved yet are never
   // filtered out, same not-excluded-when-unknown rule Distance follows.
   availableOnly?: boolean;
-  // Matches against a provider's service_locations array (see
-  // src/constants/ukCities.ts) — a provider covering ANY selected city is a
+  // Matches where a provider is based (InfoReg's "Where you're based",
+  // location_text), read up to its town, plus any service_locations saved
+  // before About You's cities card was removed — see matchesCityFilter in
+  // src/utils/providerCity.ts. A provider matching ANY selected place is a
   // match (OR, not AND), independent of the GPS-based Distance filter above.
   // CityMultiSelect is the shared picker (also used by the client's sign-up
   // LOCATION question) so this stays a multi-select, not the single-city pill
-  // it used to be. No provider screen edits service_locations any more, so
-  // this only matches values saved before About You's cities card was removed.
+  // it used to be.
   city?: string[];
   // Matches against the provider-level providers.hair_types_catered, folded
   // into the same batched getProvidersAvailability() RPC call as the
@@ -660,7 +663,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       service: p.service_category,
       logo: p.logo_url ? { uri: p.logo_url } : require('../../../assets/icon.png'),
       location: p.location_text ?? 'London',
-      serviceLocations: p.service_locations ?? [],
+      cityKeys: cityFilterKeys(p.location_text, p.service_locations),
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
       distanceMiles: null,
@@ -1121,7 +1124,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       list = list.filter(p => p.distanceMiles != null && p.distanceMiles <= activeFilters.distance!);
     }
     if (activeFilters.city?.length) {
-      list = list.filter(p => activeFilters.city!.some(c => p.serviceLocations.includes(c)));
+      list = list.filter(p => matchesCityFilter(activeFilters.city!, p.cityKeys));
     }
     if (activeFilters.hairType) {
       // Same "don't claim a match until the batched lookup has answered" rule
