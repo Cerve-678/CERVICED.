@@ -72,7 +72,7 @@ describe('booking receipt', () => {
     expect(html).not.toContain('not through CERVICED');
   });
 
-  it('lists a paid deposit in the breakdown, above the total', () => {
+  it('lists a paid deposit under the total, with the payment', () => {
     const booking = {
       id: 'dep12345-booking', serviceName: 'Balayage', providerName: 'Studio One',
       bookingDate: '2026-08-10', bookingTime: '10:00', createdAt: '2026-08-01T12:00:00.000Z',
@@ -83,7 +83,9 @@ describe('booking receipt', () => {
 
     expect(calculateBookingPaymentBreakdown(booking).depositPaid).toBe(20);
     const html = buildClientReceiptHTML(booking);
-    expect(html).toMatch(/class="line fee"><span class="name">Deposit paid<\/span><span class="amt">£20\.00/);
+    expect(html).not.toContain('<span class="name">Deposit paid</span>');
+    expect(html).toMatch(/class="pline"><span>Deposit paid<\/span><span class="amt">£20\.00/);
+    expect(html).toContain('<span>Paid (incl. fee)</span>');
   });
 
   it('shows no deposit line until the deposit is paid, or on a full payment', () => {

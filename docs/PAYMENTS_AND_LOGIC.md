@@ -165,16 +165,17 @@ Due at Appointment           £0.00
 ```
 Service                            £300.00
 Cerviced platform fee                £3.13
-Deposit paid                        £60.00
 Total                              £303.13
-Paid                                £63.13
+Deposit paid                        £60.00
+Paid (incl. fee)                    £63.13
 Due at Appointment                 £240.00
 ```
 
-Once a deposit has been paid, the breakdown also lists it as **Deposit paid**.
-It's part of the service price, not added on top, so Total doesn't change, and
-Paid already includes it. Nothing shows before the deposit is paid, or on a
-booking paid in full.
+Once a deposit has been paid, the receipt also lists it as **Deposit paid**,
+under Total with the payment, and Paid reads **Paid (incl. fee)** so the two
+figures don't look like they disagree. The deposit is part of the service
+price, never a line above Total, so Total doesn't change. Nothing shows before
+the deposit is paid, or on a booking paid in full.
 
 Every receipt (in the app, on booking details, and in the confirmation email)
 ends with the same two figures: **Paid**, what left the card with the fee
@@ -996,7 +997,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
 | 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. Not live until `apply-cancellation-refund` is deployed from main, which must happen before an app build carrying this ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
-| 8 Nov | A paid deposit gets its own "Deposit paid" line in the client's breakdown (booking details receipt, PDF, confirmation email), above Total. It's part of the price, so Total, Paid and Due don't change | The client wanted to see the deposit amount itself, not only the Paid figure that includes the fee |
+| 8 Nov | A paid deposit gets its own "Deposit paid" line on the client's receipt (booking details, PDF, confirmation email), under Total beside "Paid (incl. fee)". It's part of the price, so Total, Paid and Due don't change. (First built above Total; moved the same day because it read as an addition) | The client wanted to see the deposit amount itself, not only the Paid figure that includes the fee |
 | 1 Nov | The fee becomes 5% of what's charged + 40p (£1.99–£24.99), deposits count as the deposit, shared across every booking in the checkout; PayPal only up to £600; the fee is refunded Uber-style (already how refunds worked) | The flat £1.99/£3.99/£5.99 tiers lost money on larger bookings and on most PayPal payments over £50 |
 | 2 Nov | Link-only pros can become full members themselves. The app shows £25.99 a month with 2 months free, counted from the day they go live again, but charges nothing until pricing is final | Lets demand from client nudges turn into full providers now, without building billing first |
 | 6 Nov | The £25.99 monthly price comes off every full-membership screen; only "2 months free" stays | Pricing isn't final, so the app shouldn't name a number yet |

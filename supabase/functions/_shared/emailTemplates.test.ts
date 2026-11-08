@@ -238,14 +238,14 @@ describe('booking confirmation money', () => {
     });
     // £65 + £8 add-on + £1.99 fee = £74.99 total; £21.99 paid, £53.00 left.
     expect(html).toContain('Deposit paid');
-    expect(html).toContain('>Paid<');
+    expect(html).toContain('>Paid (incl. fee)<');
     expect(html).toContain('£21.99');
     expect(html).toContain('Due at Appointment');
     expect(html).toContain('£53.00');
     expect(html).not.toContain('Due to provider');
   });
 
-  it('lists a paid deposit in the breakdown, above the total', () => {
+  it('lists a paid deposit under the total, with the payment', () => {
     const { html } = bookingConfirmationEmail({
       ...BOOKING,
       paymentType: 'deposit',
@@ -255,7 +255,8 @@ describe('booking confirmation money', () => {
     });
     const depositLine = html.search(/>Deposit paid<\/td>\s*<td[^>]*>£20\.00</);
     expect(depositLine).toBeGreaterThan(-1);
-    expect(depositLine).toBeLessThan(html.indexOf('>Total<'));
+    expect(depositLine).toBeGreaterThan(html.indexOf('>Total<'));
+    expect(depositLine).toBeLessThan(html.indexOf('>Paid (incl. fee)<'));
   });
 
   it('leaves the deposit line out until the deposit is paid, and on a full payment', () => {

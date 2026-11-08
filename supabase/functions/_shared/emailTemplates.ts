@@ -958,14 +958,16 @@ export function bookingConfirmationEmail(params: BookingConfirmationParams) {
   const lines =
     line(params.service, params.basePrice, false) +
     params.addOns.map(a => line(`+ ${a.name}`, Number(a.price) || 0, true)).join('') +
-    (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '') +
-    // The deposit, once paid, as its own line — same as the in-app receipt
-    // (calculateBookingPaymentBreakdown's depositPaid). Part of the price, not
-    // added to the total.
-    (isDeposit && !isUnpaid && params.depositAmount > 0 ? line('Deposit paid', params.depositAmount, true) : '');
+    (params.serviceCharge > 0 ? line('Cerviced platform fee', params.serviceCharge, true) : '');
+
+  // The deposit, once paid, listed under Total with the payment — same as the
+  // in-app receipt (calculateBookingPaymentBreakdown's depositPaid). It's part
+  // of the price, so it never goes in the lines above Total.
+  const depositPaid = isDeposit && !isUnpaid ? params.depositAmount : 0;
 
   const payRows =
-    payRow('Paid', paidAmount, remaining <= 0) +
+    (depositPaid > 0 ? payRow('Deposit paid', depositPaid, false) : '') +
+    payRow(depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', paidAmount, remaining <= 0) +
     payRow('Due at Appointment', remaining, remaining > 0);
 
   const e = {
