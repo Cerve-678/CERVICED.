@@ -1,4 +1,4 @@
-import { bookingTodoCounts, buildClientActivity, type ActivityBooking } from '../features/bookings/activityCentre';
+import { activityTimeline, bookingTodoCounts, buildClientActivity, type ActivityBooking } from '../features/bookings/activityCentre';
 import type { ClientActivityRemote } from '../services/databaseService';
 import { BookingStatus, PaymentStatus } from '../types/booking';
 
@@ -112,7 +112,10 @@ describe('buildClientActivity', () => {
     expect(review.title).toBe('Refund under review by Cerviced');
     expect(review.detail).toMatch(/^Braids by Amara didn't reply in time/);
     // Never promises the money is coming.
-    for (const item of inProgress) expect(item.detail).not.toMatch(/you will get|on its way/i);
+    for (const item of inProgress) {
+      expect(item.detail).not.toMatch(/you will get|on its way/i);
+      expect(item.summary).not.toMatch(/you will get|on its way|refunded/i);
+    }
   });
 
   it('lists booking requests still waiting for the provider', () => {
@@ -133,6 +136,75 @@ describe('buildClientActivity', () => {
     const { needsYou } = buildClientActivity([], remote, NOW);
     expect(needsYou[0]).toMatchObject({ kind: 'waitlist_hold', target: { type: 'waitlist_hold', bookingId: 'h1' } });
     expect(needsYou[0]!.detail).toMatch(/^Silk press with Hair by Jo · Tue 10 Nov at 09:00am\. Confirm it before /);
+  });
+});
+
+describe('live tiles: pulse, caption and status-pill line', () => {
+  const hold = {
+    bookingId: 'h1', serviceName: 'Lash lift', providerName: 'Amara Cole',
+    bookingDate: '2026-11-12', bookingTime: '14:30:00', holdExpiresAt: '2026-11-08T16:15:00Z',
+  };
+
+  it('pulses fast inside a day, slow for a further hard deadline, and stays still for an appointment-only item', () => {
+    const remote: ClientActivityRemote = {
+      ...none,
+      waitlistHolds: [hold],
+      feesToPay: [{ id: 'f1', bookingId: 'b1', kind: 'late', amountPence: 1250, payBy: '2026-11-10T12:00:00Z' }],
+      pendingFormBookingIds: ['b2'],
+    };
+    const { needsYou, inProgress } = buildClientActivity(
+      [booking('b1'), booking('b2', { bookingDate: '2026-11-14', bookingTime: '11:00' }), booking('b3', { status: BookingStatus.PENDING })],
+      remote,
+      NOW,
+    );
+    expect(needsYou.map(i => [i.kind, i.pulse])).toEqual([
+      ['waitlist_hold', 'urgent'],
+      ['fee_to_pay', 'soon'],
+      ['intake_form', 'still'],
+    ]);
+    expect(inProgress.map(i => i.pulse)).toEqual(['waiting']);
+    expect(needsYou.map(i => i.caption)).toEqual([expect.stringMatching(/^Ends at /), 'Pay by Tue 10 Nov', 'Before Sat 14 Nov']);
+    expect(needsYou[1]!.summary).toBe('Late fee of £12.50 to pay by Tue 10 Nov');
+    expect(needsYou[2]!.summary).toBe('Braids by Amara needs your form');
+    expect(inProgress[0]!.summary).toBe('Waiting for Braids by Amara to confirm Knotless braids');
+  });
+
+  it('an appointment-tied item due within a day is urgent too', () => {
+    const { needsYou } = buildClientActivity(
+      [booking('b1', { bookingDate: '2026-11-08', bookingTime: '18:00' })],
+      { ...none, pendingFormBookingIds: ['b1'] },
+      NOW,
+    );
+    expect(needsYou[0]!.pulse).toBe('urgent');
+  });
+});
+
+describe('activityTimeline', () => {
+  it('stays plain tiles while everything waiting on the client falls on one day, however much is in progress', () => {
+    const activity = buildClientActivity(
+      [booking('b1', { bookingDate: '2026-11-08', bookingTime: '18:00' }), booking('b2', { status: BookingStatus.PENDING, bookingDate: '2026-11-20' })],
+      { ...none, pendingFormBookingIds: ['b1'], unreadPackBookingIds: ['b1'] },
+      NOW,
+    );
+    expect(activityTimeline(activity, NOW)).toBeNull();
+  });
+
+  it('lays the list on a dated line once two or more days are involved, overdue items counting as today', () => {
+    const activity = buildClientActivity(
+      [booking('b1'), booking('b2', { bookingDate: '2026-11-14', bookingTime: '11:00' }), booking('b3', { status: BookingStatus.PENDING })],
+      {
+        ...none,
+        feesToPay: [{ id: 'f1', bookingId: 'b1', kind: 'late', amountPence: 1250, payBy: '2026-11-07T12:00:00Z' }],
+        pendingFormBookingIds: ['b2'],
+      },
+      NOW,
+    );
+    const line = activityTimeline(activity, NOW)!;
+    expect(line.days.map(d => [d.label, d.isToday, d.items.map(i => i.kind)])).toEqual([
+      ['TODAY', true, ['fee_to_pay']],
+      ['SAT 14 NOV', false, ['intake_form']],
+    ]);
+    expect(line.inProgress.map(i => i.kind)).toEqual(['awaiting_confirmation']);
   });
 });
 

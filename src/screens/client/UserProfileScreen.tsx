@@ -211,7 +211,7 @@ export default function UserProfileScreen({ navigation }: any) {
               icon="calendar-today"
               title={t('profile.forYou.activity.title')}
               subtitle={t('profile.forYou.activity.sub')}
-              onPress={() => navigation.navigate('Bookings', { openActivityCentre: true })}
+              onPress={() => navigation.navigate('ActivityCentre')}
               palette={P}
               badge={activityNeedsYou > 0 ? t('profile.forYou.activity.count', { count: activityNeedsYou > 99 ? '99+' : activityNeedsYou }) : undefined}
               todoLabel={activityNeedsYou > 0 ? t('profile.forYou.activity.todo') : undefined}

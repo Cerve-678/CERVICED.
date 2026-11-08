@@ -44,6 +44,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { FullImageViewer } from "../../components/FullImageViewer";
+import { LogoZoomViewer } from "../../components/LogoZoomViewer";
 import { policyImageUrls } from "../../features/providers/policyImages";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
@@ -120,6 +121,7 @@ import {
   ProviderReviewPreviewSection,
   ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
+import { productsGroup, workWithGroups } from "../../features/providers/workWith";
 import { PAYMENT_OPTS } from "../../features/business-details/options";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -1778,6 +1780,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // Who they work with (clients, skin tones, hair types) from About You's
+    // "I Work With" — here, not in the About/Policy card, which is the bio.
+    groups.push(...workWithGroups(provider));
+    // Its own section, from Services & Pricing's "Products I Work With".
+    const products = productsGroup(provider);
+    if (products) groups.push(products);
     if (provider.languagesSpoken.length > 0) {
       groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
     }
@@ -1815,7 +1823,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [provider]);
 
   // One natural-language paragraph rather than a label/value dump — these are
-  // five unrelated one-liners, and as rows they read like a spec sheet for
+  // unrelated one-liners, and as rows they read like a spec sheet for
   // facts a client only skims.
   const goodToKnowText = useMemo(() => {
     if (!provider) return "";
@@ -1823,12 +1831,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.walkInsWelcome) sentences.push("Walk-ins are welcome");
     if (provider.groupBookingsAvailable) {
       sentences.push("Group bookings are available");
-    }
-    if (provider.veganCrueltyFree) {
-      sentences.push("Products used are vegan and cruelty-free");
-    }
-    if (provider.productsUsed.trim()) {
-      sentences.push(`Works with ${provider.productsUsed.trim()}`);
     }
     return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
   }, [provider]);
@@ -4395,12 +4397,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           label="Policy document"
         />
 
-        {/* The whole logo, uncropped, from a tap on the profile circle. */}
-        <FullImageViewer
-          uris={provider.providerLogo?.uri ? [provider.providerLogo.uri] : []}
+        {/* A tap on the profile circle zooms the logo in over the page. */}
+        <LogoZoomViewer
+          uri={provider.providerLogo?.uri}
+          framing={provider.providerLogoFraming}
           visible={showFullLogo}
           onClose={() => setShowFullLogo(false)}
-          label="Logo"
+          accessibilityName={provider.displayName}
         />
 
         {/* Fullscreen service image carousel modal — hidden whenever the "All
@@ -5007,7 +5010,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         setShowFullLogo(true);
                       }}
                       accessibilityRole="imagebutton"
-                      accessibilityLabel={`${provider.displayName} logo. Tap to see it in full`}
+                      accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
                     >
                       <LogoCircle
                         uri={provider.providerLogo.uri}
@@ -5349,6 +5352,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   style={[
                     styles.aboutCard,
                     { backgroundColor: cardBg, borderColor: OP.border },
+                    // Room under the last line for the policy button, so it
+                    // never sits on top of the text.
+                    policyPages.length > 0 && styles.aboutCardWithPolicyFab,
                   ]}
                 >
                   <LinearGradient
@@ -6251,6 +6257,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
+  // The policy button's height plus its bottom offset (policyImageFab), so the
+  // card's last line ends above the button instead of under it.
+  aboutCardWithPolicyFab: {
+    paddingBottom: 10 + 44,
+  },
   cardHighlight: {
     position: "absolute",
     top: 0,
@@ -6745,7 +6756,7 @@ const styles = StyleSheet.create({
   // structured policy fields at all, in which case it's the only way in).
   policyImageFab: {
     position: "absolute",
-    bottom: 14,
+    bottom: 10,
     right: 14,
     width: 44,
     height: 44,

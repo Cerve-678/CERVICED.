@@ -9,15 +9,24 @@ describe('Activity Centre card in client Settings → For you', () => {
   const settings = read('UserProfileScreen.tsx');
   const bookings = read('BookingsScreen.tsx');
 
-  it('counts from the same hook as the Bookings sheet, so the two never disagree', () => {
+  it('counts from the same hook as Bookings, so the two never disagree', () => {
     expect(settings).toContain('useClientActivity()');
     expect(bookings).toContain('useClientActivity()');
     expect(bookings).not.toContain('getMyActivity(');
   });
 
-  it('opens the sheet on Bookings', () => {
-    expect(settings).toContain("navigation.navigate('Bookings', { openActivityCentre: true })");
-    expect(bookings).toContain('route?.params?.openActivityCentre');
+  it('opens the Activity Centre as its own page, from Settings and from Bookings', () => {
+    expect(settings).toContain("navigation.navigate('ActivityCentre')");
+    expect(bookings).toContain("navigation.navigate('ActivityCentre')");
+    expect(read('ActivityCentreScreen.tsx')).toContain('useClientActivity()');
+  });
+
+  it('is registered in every client stack that has Bookings', () => {
+    for (const tab of ['Home', 'Cart', 'Becca', 'Profile']) {
+      const nav = fs.readFileSync(path.join(__dirname, '..', 'navigation', 'client', 'tabs', `${tab}Navigator.tsx`), 'utf8');
+      expect(nav).toContain('name="Bookings"');
+      expect(nav).toContain('name="ActivityCentre"');
+    }
   });
 
   it('sits in the For you section, before Messages', () => {
