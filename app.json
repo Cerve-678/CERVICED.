@@ -72,7 +72,7 @@
       [
         "expo-contacts",
         {
-          "contactsPermission": "CERVICED scrambles phone numbers on your phone before comparing them. Your address book is never saved."
+          "contactsPermission": "Find friends who are already on CERVICED. Your address book is never saved."
         }
       ],
       [

@@ -79,7 +79,7 @@ const MIN_QUERY = 2;
 const FACE = 42;
 
 type Row =
-  | { kind: 'result'; key: string; person: PersonSummary; contactName?: string | null }
+  | { kind: 'result'; key: string; person: PersonSummary }
   | { kind: 'contacts'; key: string }
   | { kind: 'request'; key: string; entry: PersonListEntry }
   | { kind: 'following'; key: string; entry: PersonListEntry }
@@ -497,7 +497,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         title: `IN YOUR CONTACTS · ${contactMatches.length}`,
         data:
           contactMatches.length > 0
-            ? contactMatches.map((person) => ({ kind: 'result', key: `c-${person.userId}`, person, contactName: person.contactName }))
+            ? contactMatches.map((person) => ({ kind: 'result', key: `c-${person.userId}`, person }))
             : [{ kind: 'note', key: 'c-empty', text: 'Nobody in your contacts is on CERVICED yet, or they’ve chosen not to be found by number.' }],
       });
     } else if (contactsState !== 'dismissed') {
@@ -663,7 +663,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         <Text style={[styles.contactsKick, { color: P.onAccent }]}>CONTACTS</Text>
         <Text style={[styles.contactsTitle, { color: P.onAccent }]}>See who you know here</Text>
         <Text style={[ui.body, { color: P.onAccent, opacity: 0.9 }]}>
-          CERVICED scrambles phone numbers on your phone before comparing them. Your address book is never saved.
+          Find friends who are already on CERVICED. Your address book is never saved.
         </Text>
         {contactsState === 'error' && contactsError ? (
           <Text style={[ui.body, { color: P.onAccent }]}>{contactsError}</Text>
@@ -728,17 +728,11 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
               accessibilityLabel={`${label} ${p.name}. Double tap to change.`}
             />
           );
-        // The account's own name leads: numbers aren't verified, so the
-        // contact's name is only a hint, never a claim of who this is.
-        const sub = [
-          item.contactName ? `In your contacts as ${item.contactName}` : null,
-          p.followsMe === 'accepted' ? 'Follows you' : null,
-        ].filter(Boolean).join(' · ') || null;
         return personRow(
           p.userId,
           p.name,
           p.avatarUrl,
-          sub,
+          p.followsMe === 'accepted' ? 'Follows you' : null,
           <>{button}{moreButton(p.userId, p.name)}</>,
         );
       }

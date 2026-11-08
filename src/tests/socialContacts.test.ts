@@ -35,30 +35,25 @@ import {
 const SERVER_HASH_07700900123 = '033134b911b137918338415ee3d20a064b24773d36a3b02e8b99fdd3fcd6b4cd';
 
 describe('contact numbers', () => {
-  it('normalises, de-duplicates and keeps the first name for each number', () => {
+  it('normalises and de-duplicates numbers, reading nothing else', () => {
     const out = collectContactNumbers([
-      { name: 'Amara', phoneNumbers: [{ number: '07700 900123' }, { number: '+44 7700 900123' }] },
-      { name: 'Jo', phoneNumbers: [{ number: '+44 (0)7700 900456' }, { number: '123' }, { number: null }] },
-      { name: '  ', phoneNumbers: [{ number: '0044 7700 900789' }] },
-      { name: 'No phone' },
+      { phoneNumbers: [{ number: '07700 900123' }, { number: '+44 7700 900123' }] },
+      { phoneNumbers: [{ number: '+44 (0)7700 900456' }, { number: '123' }, { number: null }] },
+      { phoneNumbers: [{ number: '0044 7700 900789' }] },
+      {},
     ]);
-    expect(Array.from(out.entries())).toEqual([
-      ['447700900123', 'Amara'],
-      ['447700900456', 'Jo'],
-      ['447700900789', null],
-    ]);
+    expect(out).toEqual(['447700900123', '447700900456', '447700900789']);
   });
 
   it('never collects more than the server allows in a day', () => {
     const many = Array.from({ length: CONTACT_NUMBERS_PER_CHECK + 50 }, (_, i) => ({
-      name: `P${i}`,
       phoneNumbers: [{ number: `07700${String(i).padStart(6, '0')}` }],
     }));
-    expect(collectContactNumbers(many).size).toBe(CONTACT_NUMBERS_PER_CHECK);
+    expect(collectContactNumbers(many)).toHaveLength(CONTACT_NUMBERS_PER_CHECK);
   });
 
   it('hashes exactly as the server does', async () => {
-    const normalised = Array.from(collectContactNumbers([{ phoneNumbers: [{ number: '07700 900123' }] }]).keys())[0]!;
+    const normalised = collectContactNumbers([{ phoneNumbers: [{ number: '07700 900123' }] }])[0]!;
     await expect(hashNormalisedNumber(normalised)).resolves.toBe(SERVER_HASH_07700900123);
     expect(createHash('sha256').update('447700900123').digest('hex')).toBe(SERVER_HASH_07700900123);
   });
@@ -67,7 +62,7 @@ describe('contact numbers', () => {
 describe('findContactsOnCerviced', () => {
   beforeEach(() => { mockGetContactsAsync.mockReset(); mockMatchContactHashes.mockReset(); });
 
-  it('sends only hashes and labels each match with the contact name it came from', async () => {
+  it('reads only phone numbers, sends only hashes, and returns just the account', async () => {
     mockGetContactsAsync.mockResolvedValue({ data: [{ name: 'Mum', phoneNumbers: [{ number: '07700 900123' }] }] });
     mockMatchContactHashes.mockResolvedValue([
       { userId: 'u1', name: 'Amara Okafor', avatarUrl: null, myStatus: null, followsMe: null, phoneHash: SERVER_HASH_07700900123 },
@@ -75,8 +70,10 @@ describe('findContactsOnCerviced', () => {
     const out = await findContactsOnCerviced();
     expect(mockMatchContactHashes).toHaveBeenCalledWith([SERVER_HASH_07700900123]);
     expect(JSON.stringify(mockMatchContactHashes.mock.calls)).not.toContain('7700');
+    expect(mockGetContactsAsync).toHaveBeenCalledWith({ fields: ['phoneNumbers'] });
+    expect(JSON.stringify(out)).not.toContain('Mum');
     expect(out).toEqual([
-      { userId: 'u1', name: 'Amara Okafor', avatarUrl: null, myStatus: null, followsMe: null, contactName: 'Mum' },
+      { userId: 'u1', name: 'Amara Okafor', avatarUrl: null, myStatus: null, followsMe: null },
     ]);
   });
 
