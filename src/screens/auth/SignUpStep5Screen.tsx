@@ -159,7 +159,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const onLayoutFor = (yRef: React.MutableRefObject<CardLayout>) =>
     (e: LayoutChangeEvent) => { yRef.current = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height }; };
 
-  const { onScroll, onViewportLayout, reveal } = useRevealNext(scrollRef);
+  const { onScroll, onViewportLayout, onScrollBeginDrag, reveal } = useRevealNext(scrollRef);
 
   const scrollTo = (yRef: React.MutableRefObject<CardLayout>) => {
     scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current.y - 24), animated: true });
@@ -398,6 +398,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         onScroll={onScroll}
+        onScrollBeginDrag={onScrollBeginDrag}
         scrollEventThrottle={32}
         onLayout={onViewportLayout}
       >

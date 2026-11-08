@@ -114,7 +114,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const onLayoutFor = (yRef: React.MutableRefObject<CardLayout>) =>
     (e: LayoutChangeEvent) => { yRef.current = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height }; };
 
-  const { onScroll, onViewportLayout, reveal } = useRevealNext(scrollRef);
+  const { onScroll, onViewportLayout, onScrollBeginDrag, reveal } = useRevealNext(scrollRef);
 
   // Chip already gives the selection haptic, so the handlers below don't.
   const chips = <T extends string>(items: { v: T; l: string }[], isOn: (v: T) => boolean, onPress: (v: T) => void) => (
@@ -270,6 +270,7 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           onScroll={onScroll}
+          onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={32}
           onLayout={onViewportLayout}
         >
