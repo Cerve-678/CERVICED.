@@ -108,7 +108,7 @@ Curated: [[Payments]] · **161 files**
 - … +131 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **347 files**
+Curated: [[Booking Flow]] · **348 files**
 - `src/services/databaseService.ts` _(1084)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **347 files**
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/utils/scheduleIssues.ts` _(94)_
-- … +317 more
+- … +318 more
 
 ## Notifications
 Curated: [[Notifications]] · **184 files**
@@ -230,17 +230,17 @@ Curated: [[Booking Flow]] · **66 files**
 - `src/screens/provider/InfoRegScreen.tsx` _(10)_
 - `src/types/database.ts` _(9)_
 - `src/constants/waitlist.ts` _(7)_
-- `src/features/bookings/activityCentre.ts` _(6)_
+- `src/features/bookings/activityCentre.ts` _(7)_
 - `src/i18n/catalogs/en.ts` _(6)_
 - `src/screens/shared/NotificationsScreen.tsx` _(6)_
 - `supabase/fix_reschedule_flow_completion.sql` _(6)_
 - `src/features/achievements/achievementPresentation.ts` _(5)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(5)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(5)_
-- `src/screens/client/ActivityCentreScreen.tsx` _(4)_
 - `supabase/fix_backfill_null_booking_end_time.sql` _(4)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(4)_
 - `supabase/fix_handle_booking_status_change_on_hold_notification.sql` _(4)_
+- `supabase/fix_provider_status_transition_guard.sql` _(4)_
 - … +36 more
 
 ## Reschedule / cancel

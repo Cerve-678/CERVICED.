@@ -5,7 +5,7 @@
 
 #generated
 
-**3361 functions** across **476 files**.
+**3376 functions** across **477 files**.
 
 ### `src/components/` (63)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -123,8 +123,9 @@
 - `profileRow.ts` — **beautyDataFromRow**
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
 
-### `src/features/bookings/` (25)
-- `activityCentre.ts` — appointmentMs · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · names · pounds · shortDay · when
+### `src/features/bookings/` (26)
+- `activityCentre.ts` — **activityTimeline** · appointmentMs · beforeDay · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · localDayKey · names · needsYouPulse · pounds · shortDay · when
+- `ActivityLive.tsx` — **ActivityTile** · **LiveDot** · **StatusPill** · **TimelineGroup** · **TimelineRail** · useEntrance · **useReduceMotion**
 - `addOnTime.ts` — **addOnExtraMinutes** · **durationWithAddOns** · **formatAddOnExtraTime**
 - `AnonymousReviewToggle.tsx` — **AnonymousReviewToggle**
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
@@ -323,7 +324,7 @@
 - `WelcomeScreen.tsx` — handleAppleLogin · handleGoogleLogin · rise · rowStyle · WelcomeScreen
 
 ### `src/screens/client/` (23)
-- `ActivityCentreScreen.tsx` — ActivityCentreScreen · onRefresh · openItem · renderRow
+- `ActivityCentreScreen.tsx` — ActivityCentreScreen · onRefresh · openItem · pillMessages · renderList · sectionHead · tile · timeline
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
 - `BeautyProfileScreen.tsx` — BeautyProfileScreen · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openSetup · openTodoField · pickedCount · stats · todo · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · tick
