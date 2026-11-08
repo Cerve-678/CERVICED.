@@ -266,6 +266,7 @@ Curated: [[Booking Flow]] · **202 files**
 - `src/screens/client/BookingsScreen.tsx` _(58)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
+- `src/components/IssueRefundSheet.tsx` _(54)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
@@ -273,7 +274,6 @@ Curated: [[Booking Flow]] · **202 files**
 - `src/types/booking.ts` _(40)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
-- `src/components/IssueRefundSheet.tsx` _(38)_
 - `src/types/database.ts` _(38)_
 - … +172 more
 

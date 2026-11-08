@@ -371,6 +371,14 @@ Pay or PayPal.
   deposit, and later the provider gives it back. The provider's refund sheet
   shows what has already gone back and what's left, and after a full refund it
   only shows the summary.
+- **A full refund of an upcoming booking cancels it too, unless the provider
+  unticks "Cancel appointment too"** on the refund sheet (booking detail only;
+  the Payments list's sheet doesn't offer the cancel). Unticked, the
+  appointment stays booked with nothing left to pay. Refund first, then cancel
+  in either order never refunds twice: the cancel's automatic full refund
+  counts every refund Stripe already made and finds nothing left
+  (`refund-payment` returns `already_refunded`). A partial refund then a
+  cancel gives back the rest.
 - **A partial refund of everything the provider still holds is a full
   refund**: the client gets back everything they paid, fee included. The one
   exception is after a late cancellation the policy settled, where giving back

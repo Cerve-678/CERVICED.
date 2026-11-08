@@ -171,6 +171,18 @@ export interface ProviderRefundPreview {
 }
 
 /**
+ * Whether the refund sheet's "Cancel appointment too" box is ticked. Only a
+ * full refund of a booking that can still be cancelled can cancel it. Ticked by
+ * default then: a fully refunded appointment left booked means the client can
+ * turn up having paid nothing, which is rarely what the provider meant. The
+ * provider's own tick or untick (`providerChoice`, null until they touch it)
+ * wins and survives switching between full and partial.
+ */
+export function cancelsWithRefund(isFull: boolean, canCancel: boolean, providerChoice: boolean | null): boolean {
+  return isFull && canCancel && (providerChoice ?? true);
+}
+
+/**
  * Mirrors supabase/functions/_shared/refundPlan.ts for display only; the
  * server re-derives every figure. `heldPence` is what the provider still holds.
  *
