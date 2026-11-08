@@ -10,13 +10,13 @@ describe('TapToEditTextInput', () => {
   it('ignores touches on the input until it has been tapped into', () => {
     const screen = render(<TapToEditTextInput value="" placeholder="About you" />);
     const input = screen.UNSAFE_getByType(TextInput);
-    expect(input.parent?.props.pointerEvents).toBe('none');
+    expect(input.parent?.props['pointerEvents']).toBe('none');
 
     fireEvent(input, 'focus');
-    expect(screen.UNSAFE_getByType(TextInput).parent?.props.pointerEvents).toBe('auto');
+    expect(screen.UNSAFE_getByType(TextInput).parent?.props['pointerEvents']).toBe('auto');
 
     fireEvent(screen.UNSAFE_getByType(TextInput), 'blur');
-    expect(screen.UNSAFE_getByType(TextInput).parent?.props.pointerEvents).toBe('none');
+    expect(screen.UNSAFE_getByType(TextInput).parent?.props['pointerEvents']).toBe('none');
   });
 
   it("still calls the caller's focus and blur handlers", () => {
