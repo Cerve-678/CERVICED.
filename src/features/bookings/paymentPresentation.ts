@@ -43,6 +43,10 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const paidLabel = 'Paid';
   const paidAmount = isUnpaid ? 0 : amountPaidAtCheckout;
   const remainingBalance = Math.max(0, total - paidAmount);
+  // The deposit itself, shown as its own line in the breakdown (owner's call,
+  // 2026-11-08), only once it has actually been paid. It's part of the
+  // service price, not added on top, and Paid above already includes it.
+  const depositPaid = isDeposit && !isUnpaid ? depositAmount : 0;
 
   return {
     servicePrice,
@@ -60,6 +64,7 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     isUnpaid,
     paidLabel,
     paidAmount,
+    depositPaid,
   };
 }
 
