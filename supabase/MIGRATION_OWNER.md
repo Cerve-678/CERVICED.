@@ -84,6 +84,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261108230000 | `anonymous_reviews` | **APPLIED 2026-11-08** by cerviced-17 on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Renumbered 140000 → 160000 → 200000 → 230000 as 141616, #340, #342 and #358 (220000) landed. Frontier before applying: live max `20261108220000`; lock `(none)`; md5 guard on `handle_review_received` (`2184a117…`) matched. Adds `reviews.is_anonymous BOOLEAN NOT NULL DEFAULT false`; `reviews_public_read` / `reviews_owner_read` skip anonymous rows; new `reviews_reviewer_read` lets the author read their own; adds `get_provider_reviews(uuid,integer)` and `get_my_provider_reviews(integer)` (blank reviewer/booking/service/tip on anonymous rows); rebuilds `handle_review_received` so an anonymous review's notification has no booking link. Verified live: version present; column default false / NOT NULL; six reviews policies incl. `reviews_reviewer_read`; both readers authenticated-only (anon can't execute); new `handle_review_received` md5 `a6f572b1…`. Written on `feat/anonymous-reviews` (#350). |
 
+### Applied 2026-11-08 (following people + Recommend)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108220000 | `follow_people_and_recommend` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the worktree (absolute path, `--workdir` the main folder). Frontier before applying: live max `20261108190000` (#340 at 180000 and #342 at 190000 applied); #350 at 200000 and #352 at 210000 are held on the user's decisions and will renumber above this one. Lock was `(none)` on main. Additive only: no existing function, view or constraint redefined. Verified live: version present; 7 tables with RLS, 0 policies, no anon/authenticated table grants; the 16 app RPCs are executable by authenticated only; the 12 helpers aren't executable by authenticated; every SECURITY DEFINER function has search_path set; both `users` triggers are present; 16 phone hashes backfilled; trigram index present. A read-only smoke test as a client returned the expected defaults. Written on `feat/follow-people-backend` (#358). |
+
 ### Applied 2026-11-08 (a provider only gets the beauty-profile fields for the booked service)
 
 | Authored version | Name | Status |
