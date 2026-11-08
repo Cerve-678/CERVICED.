@@ -5,7 +5,7 @@
 
 #generated
 
-**3353 functions** across **472 files**.
+**3359 functions** across **474 files**.
 
 ### `src/components/` (63)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -149,10 +149,11 @@
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · **minutesOfDay** · **tipWindowClosesAt**
 - `useClientActivity.ts` — activity · refresh · **useClientActivity**
 
-### `src/features/business-details/` (5)
+### `src/features/business-details/` (6)
 - `bookingInstructions.ts` — **selectedBookingInstructions** · **toggleBookingInstruction**
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
-- `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **productsPlaceholder** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
+- `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
+- `productBrands.ts` — brandKey · **joinProductsUsed** · **productBrandSections** · **splitProductsUsed**
 - `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `useLearnedSpecialities.ts` — **useSpecialityOptionsWithLearned**
 
@@ -222,7 +223,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (40)
+### `src/features/providers/` (41)
 - `aboutPreview.ts` — **aboutPreview**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
@@ -263,6 +264,7 @@
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
+- `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
 ### `src/i18n/` (3)
 - `translate.ts` — **interpolate** · **isTranslationKey** · **resolveTranslation** · **translate**
