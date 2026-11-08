@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  booking-venue-private (Claude, branch fix/booking-venue-private, 2026-11-08)
 ```
+
+### Pending (provider venue moved off bookings so clients can't read it early)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108100000 | `booking_venue_details_private` | **NOT APPLIED** — waiting for the user's go-ahead, and the edge function `send-booking-confirmation` must be deployed in the same window (it reads the new `booking_released_venue()`; the old one selects a column this drops). Numbered above live max `20261106190048`; no open PR has an unapplied migration. md5 guards on `client_bookings` (`46b52e14…`), `claim_cart_booking_slots` (`5feeca61…`), `stamp_booking_address_snapshot` (`67801162…`). Creates `booking_venue_details` (provider-read RLS only), `booking_released_venue()` (service_role), `client_booking_venue()` (authenticated, own client/provider + released), rebuilds `client_bookings` on it, replaces the stamp trigger with AFTER INSERT `stamp_booking_venue_details()`, drops the venue lines from the claim, copies 126 venues, then DROPS `bookings.provider_address_snapshot`, `provider_directions_snapshot`, `provider_coordinates`. Dry-run on live 2026-11-08, rolled back: client lost raw access (column gone, 0 venue rows), released view addresses unchanged except 10 mobile bookings that no longer show the provider's base; provider still reads its 37 venues. |
 
 ### Applied 2026-11-06 (bookings carry exact venue coordinates)
 

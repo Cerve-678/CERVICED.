@@ -931,12 +931,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const isMobileProvider = addressSettings?.business_type === 'mobile';
   // Until getProviderAddressPolicy answers, this screen does not know whose
   // address the venue is. Rendering anything in the meantime picks the
-  // non-mobile branch by default and falls through to `booking.address` —
-  // which on a mobile booking is provider_address_snapshot, i.e. the
-  // provider's OWN private street address, stamped on every row by
-  // claim_cart_booking_slots(). It flashed up as the appointment's Location
-  // and then vanished when the policy arrived and the row switched to
-  // "Waiting for client's address". Hold the row rather than guess.
+  // non-mobile branch by default and falls through to `booking.address`.
+  // Mobile bookings used to carry the provider's OWN private street address
+  // there, which flashed up as the appointment's Location and then vanished
+  // when the policy arrived. Since 20261108100000 they carry no venue at all,
+  // but the wrong branch would still say the wrong thing. Hold the row
+  // rather than guess.
   const addressKnown = addressSettingsLoaded;
   const hasClientAddress = !!booking?.clientAddress?.trim();
 

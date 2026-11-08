@@ -3768,6 +3768,12 @@ export type CartClaimItem = Omit<
   | "policy_accepted_at"
   | "safety_ack_required"
   | "safety_ack_at"
+  // The venue isn't the client's to send: the server stamps it into
+  // booking_venue_details from the provider's private details at hold time.
+  | "provider_address_snapshot"
+  | "provider_directions_snapshot"
+  | "provider_coordinates"
+  | "booking_venue_details"
 >;
 
 /** One claimed slot's identity + the real booking id it now maps to. */
@@ -4003,6 +4009,7 @@ export async function getProviderBookings(
       `
       *,
       add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates ),
       booking_client_addresses ( address )
     `,
     )
@@ -4139,7 +4146,8 @@ export async function getOlderProviderBookings(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", provider.id)
@@ -4173,7 +4181,8 @@ export async function getGroupBookingSiblings(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("group_booking_id", groupBookingId)
@@ -4398,7 +4407,8 @@ export async function getProviderBookingsByDate(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", providerId)
@@ -4422,7 +4432,8 @@ export async function getProviderBookingsByDateRange(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", providerId)
@@ -4449,7 +4460,8 @@ export async function getProviderUpcomingBookings(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates )
     `,
     )
     .eq("provider_id", providerId)
