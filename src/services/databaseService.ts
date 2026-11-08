@@ -7566,11 +7566,15 @@ export async function setMyProviderFullAddress(
 export async function getProviderAddressPolicy(
   providerId: string,
 ): Promise<ProviderAddressPolicy | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("business_type, address_release_policy")
     .eq("id", providerId)
     .maybeSingle();
+  // Throws rather than reading as "no policy": a failed read used to make a
+  // mobile provider look like a venue, so their booking showed their own
+  // address as the appointment's location.
+  if (error) throw error;
   return data ? (data as ProviderAddressPolicy) : null;
 }
 
