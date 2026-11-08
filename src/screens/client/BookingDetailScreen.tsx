@@ -1058,7 +1058,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 style={[st.receiptButton, { borderColor: C.accent }]}
               >
-                <Ionicons name={showReceipt ? 'chevron-up' : 'receipt-outline'} size={13} color={C.accentText} />
                 <Text style={{ color: C.accentText, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
@@ -1129,31 +1128,31 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
-                  {/* Itemised breakdown */}
+                  {/* Itemised breakdown: the service by name, its add-ons
+                      indented under it (then a Subtotal, only when there are
+                      add-ons), and the platform fee in lighter text. Nothing
+                      above Total is a payment — the deposit sits below it,
+                      with Paid. */}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Base Price</Text>
-                    <Text style={{ color: C.text, fontSize: 13 }}>£{payment.servicePrice.toFixed(2)}</Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600', flexShrink: 1, marginRight: 12 }} numberOfLines={2}>{booking.serviceName || 'Service'}</Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>£{payment.servicePrice.toFixed(2)}</Text>
                   </View>
                   {(booking.addOns ?? []).map((a, i) => (
-                    <View key={`ao-${i}`} style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13, flexShrink: 1, marginRight: 12 }} numberOfLines={1}>• {a.name}</Text>
-                      <Text style={{ color: C.text, fontSize: 13 }}>+£{a.price.toFixed(2)}</Text>
+                    <View key={`ao-${i}`} style={[st.rcptRow, st.rcptAddOnRow]}>
+                      <Text style={{ color: C.sub, fontSize: 13, flexShrink: 1, marginRight: 12 }} numberOfLines={1}>+ {a.name}</Text>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>£{a.price.toFixed(2)}</Text>
                     </View>
                   ))}
                   {payment.addOnsTotal > 0 && (
                     <View style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13 }}>Subtotal</Text>
+                      <Text style={{ color: C.text, fontSize: 13 }}>Subtotal</Text>
                       <Text style={{ color: C.text, fontSize: 13 }}>£{payment.subtotal.toFixed(2)}</Text>
                     </View>
                   )}
-                  <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Platform Fee</Text>
-                    <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
-                  </View>
-                  {payment.depositPaid > 0 && (
+                  {payment.serviceCharge > 0 && (
                     <View style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13 }}>Deposit paid</Text>
-                      <Text style={{ color: C.text, fontSize: 13 }}>£{payment.depositPaid.toFixed(2)}</Text>
+                      <Text style={{ color: C.sub, fontSize: 12 }}>Platform fee</Text>
+                      <Text style={{ color: C.sub, fontSize: 12 }}>£{payment.serviceCharge.toFixed(2)}</Text>
                     </View>
                   )}
 
@@ -1164,8 +1163,21 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>Total</Text>
                     <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>£{payment.total.toFixed(2)}</Text>
                   </View>
+
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
+
+                  {/* The deposit is part of the price, so it's listed here
+                      with what was paid, never added above Total. Paid says
+                      it includes the fee whenever a deposit line sits next to
+                      it, so the two figures don't look like they disagree. */}
+                  {payment.depositPaid > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>Deposit paid</Text>
+                      <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>£{payment.depositPaid.toFixed(2)}</Text>
+                    </View>
+                  )}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.depositPaid > 0 ? 'Paid (incl. fee)' : payment.paidLabel}</Text>
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>
@@ -2168,11 +2180,12 @@ const st = StyleSheet.create({
   todoCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 8 },
   todoBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   todoBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
-  receiptButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderStyle: 'dotted', borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6 },
+  receiptButton: { borderWidth: 1.5, borderStyle: 'dotted', borderRadius: 100, paddingHorizontal: 14, paddingVertical: 6 },
   receiptContainer: { borderRadius: 8, padding: 12 },
   receiptPaper: { padding: 16, borderRadius: 6, borderWidth: 1, borderStyle: 'dashed' },
   receiptFullyPaidBadge: { backgroundColor: 'rgba(52,199,89,0.15)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12, marginTop: 10, alignSelf: 'center' },
   receiptFullyPaidText: { color: '#34C759', fontSize: 12, fontWeight: '700' },
+  rcptAddOnRow: { paddingLeft: 12 },
   rcptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   actions: { marginTop: 8, marginBottom: 8, gap: 12 },
   cancelBtn: { borderWidth: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },

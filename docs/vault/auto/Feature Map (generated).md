@@ -83,9 +83,9 @@ Curated: [[Payments]] · **161 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/services/bookingService.ts` _(101)_
+- `src/screens/client/BookingDetailScreen.tsx` _(98)_
+- `src/features/bookings/receipt.ts` _(93)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
-- `src/screens/client/BookingDetailScreen.tsx` _(91)_
-- `src/features/bookings/receipt.ts` _(88)_
 - `src/types/database.ts` _(59)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(58)_
 - `src/features/bookings/paymentPresentation.ts` _(53)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **347 files**
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(588)_
 - `src/services/becca/capabilities/client.ts` _(585)_
-- `src/screens/client/BookingDetailScreen.tsx` _(498)_
+- `src/screens/client/BookingDetailScreen.tsx` _(499)_
 - `src/screens/client/BookingsScreen.tsx` _(399)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(252)_
