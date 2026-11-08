@@ -55,6 +55,7 @@ import { describeRefundRequestTimeline, isRefundRequestOpen } from '../../featur
 import { clientRequestNote, requestAnswerDeadline } from '../../features/bookings/requestWindow';
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { FullImageViewer } from '../../components/FullImageViewer';
+import { policyImageUrls, type PolicyImageFields } from '../../features/providers/policyImages';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
@@ -174,7 +175,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   // The provider's "Detailed Policy Image" (optional) — their current one, read
   // live rather than from the snapshot: it's a reference document shown as a
   // pop-up (same as on their profile), not a term the client froze at checkout.
-  const [policyImageUrl, setPolicyImageUrl] = useState<string | null>(null);
+  // Every page of the provider's detailed policy, in order.
+  const [policyPages, setPolicyPages] = useState<string[]>([]);
 
   // UI state
   const [showReceipt, setShowReceipt] = useState(false);
@@ -332,10 +334,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         setLivePolicyFallback(
           booking.policySnapshot ? null : metadata.bookingPolicies,
         );
-        setPolicyImageUrl(
-          (metadata.bookingPolicies as { policyImageUrl?: string } | null)
-            ?.policyImageUrl ?? null,
-        );
+        setPolicyPages(policyImageUrls(metadata.bookingPolicies as PolicyImageFields | null));
         // Kept even for a booking that already has a client address: its
         // business_type is what says whose address is the venue. Dropping it
         // whenever a client address existed is what let a salon booking be
@@ -1241,7 +1240,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               policy without going back to the profile. Live (not snapshotted):
               it's a document to read, not a term frozen at checkout. Hidden on
               past bookings, which have nothing left to act on. */}
-          {!isPast && policyImageUrl && (
+          {!isPast && policyPages.length > 0 && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>
                 {booking.providerName}'S FULL POLICY
@@ -1501,7 +1500,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Policy Image ─── the provider's detailed policy document,
             scrollable when it's long; the same viewer as their profile. */}
-        <FullImageViewer uri={policyImageUrl} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} label="Policy document" />
+        <FullImageViewer uris={policyPages} visible={showPolicyImage} onClose={() => setShowPolicyImage(false)} label="Policy document" />
 
         {/* ─── Cancel Modal ───────────────────────────────────────────────
             Same modal handles both states: the normal "are you sure" ask,
