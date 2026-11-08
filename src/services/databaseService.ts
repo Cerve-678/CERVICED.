@@ -6272,8 +6272,8 @@ export interface ClientBeautyProfile {
   photographyConsent: boolean;
 }
 
-export async function getClientBeautyProfile(
-  userId: string,
+export async function getClientBeautyProfileForBooking(
+  bookingId: string,
 ): Promise<ClientBeautyProfile> {
   const EMPTY_PROFILE: ClientBeautyProfile = {
     hairType: null,
@@ -6300,13 +6300,14 @@ export async function getClientBeautyProfile(
     photographyConsent: true,
   };
 
-  // Goes through a SECURITY DEFINER RPC (not a direct table select) — it
-  // only returns a row when the caller is the provider on an actual
-  // booking with this client. See fix_users_table_pii_leak.sql: the users
-  // table used to have a blanket USING(true) read policy that let anyone
-  // pull any user's health data straight off the table.
+  // Goes through a SECURITY DEFINER RPC (not a direct table select). It
+  // only answers the provider on this booking, and returns null for every
+  // field the booked service's category doesn't get, so a nail booking never
+  // brings the client's hair, skin or makeup details onto the provider's
+  // phone. Allergies, medical notes and photography consent always come back.
+  // See 20261108100000_beauty_profile_shared_by_booked_service.sql.
   const { data, error } = await supabase
-    .rpc("get_client_beauty_profile_for_provider", { p_client_user_id: userId })
+    .rpc("get_client_beauty_profile_for_booking", { p_booking_id: bookingId })
     .maybeSingle();
 
   // A genuine RPC failure must not be indistinguishable from "no allergies on
@@ -9831,22 +9832,6 @@ export async function getProviderUserIdById(
     .eq("id", providerId)
     .maybeSingle();
   return (data as any)?.user_id ?? null;
-}
-
-/** Fetch service_category for the provider owned by a given user.
- * No has_gone_live filter — provider reading their own record. */
-export async function getProviderServiceCategoryByUserId(
-  userId: string,
-): Promise<string | null> {
-  const { data } = await supabase
-    .from("providers")
-    .select("service_category")
-    .eq("user_id", userId)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return (data as any)?.service_category ?? null;
 }
 
 /** Fetch id, slug, and display_name for a provider by their DB id.

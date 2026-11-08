@@ -109,12 +109,12 @@ Curated: [[Payments]] · **157 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **331 files**
-- `src/services/databaseService.ts` _(1014)_
+- `src/services/databaseService.ts` _(1017)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(698)_
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/services/becca/capabilities/client.ts` _(585)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(572)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(575)_
 - `src/screens/client/BookingDetailScreen.tsx` _(472)_
 - `src/screens/client/BookingsScreen.tsx` _(395)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **181 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **85 files**
-- `src/services/databaseService.ts` _(90)_
+- `src/services/databaseService.ts` _(89)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
