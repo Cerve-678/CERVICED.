@@ -22,6 +22,17 @@ import { countdownFor, groupMaintenanceItems, landingStubs, type CountdownUnit }
 import type { MaintenanceState } from '../maintenance/useMaintenance';
 import { FONT_BODY, FONT_DISPLAY, semanticColors, hapticLight, ui } from '../maintenance/ui';
 import { CARD_TRAITS, highlightCategory, type HighlightLabels } from './highlights';
+import { TodoMark } from '../../components/TodoMark';
+import type { BeautyTodoField, BeautyTodoItem } from '../../utils/beautyProfileTodo';
+
+const TODO_LABEL: Record<BeautyTodoField, TranslationKey> = {
+  hairType: 'beautyProfile.todo.hairType',
+  skinType: 'beautyProfile.todo.skinType',
+  skinConcerns: 'beautyProfile.todo.skinConcerns',
+  styleVibe: 'beautyProfile.todo.styleVibe',
+  allergies: 'beautyProfile.todo.allergies',
+  treatmentHistory: 'beautyProfile.todo.treatmentHistory',
+};
 
 interface Props {
   profile: BeautyData;
@@ -32,6 +43,11 @@ interface Props {
   onOpenSetup: () => void;
   onOpenProfile: () => void;
   onOpenHealth: () => void;
+  /** What's still to do (beautyProfileTodo) — the same list behind the
+   *  red "!" on the Settings row. */
+  todo: BeautyTodoItem[];
+  onOpenTodoField: (field: BeautyTodoField) => void;
+  onOpenAccountDetails: () => void;
 }
 
 const COUNTDOWN_UNIT: Record<CountdownUnit, TranslationKey> = {
@@ -48,6 +64,7 @@ const COUNTDOWN_UNIT: Record<CountdownUnit, TranslationKey> = {
 
 export function BeautyLanding({
   profile, stats, maintenance, onBack, onOpenMaintenance, onOpenSetup, onOpenProfile, onOpenHealth,
+  todo, onOpenTodoField, onOpenAccountDetails,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { t } = useTranslation();
@@ -233,8 +250,52 @@ export function BeautyLanding({
     );
   };
 
+  // ── Still to fill in: required answers, then the date of birth ──────────
+  // Each card opens the one place that can clear it: the first blank answer's
+  // category, or Account details for the date of birth (Beauty Profile has no
+  // field for it).
+  const todoFields = todo.filter((i): i is BeautyTodoField => i !== 'dob');
+  const todoNames = todoFields.map(f => t(TODO_LABEL[f])).join(', ');
+  const todoCards = todo.length === 0 ? null : (
+    <>
+      {todoFields.length > 0 && (
+        <TouchableOpacity
+          style={[styles.nudge, { backgroundColor: P.accentDim }]}
+          onPress={go(() => onOpenTodoField(todoFields[0]!))}
+          activeOpacity={0.5}
+          accessibilityRole="button"
+          accessibilityLabel={t('beautyProfile.todo.a11y', { fields: todoNames })}
+        >
+          <TodoMark size={20} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.nudgeTitle, { color: P.text }]}>{t('beautyProfile.todo.title').toUpperCase()}</Text>
+            <Text style={[styles.nudgeSub, { color: P.sub }]}>{todoNames}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={P.sub} />
+        </TouchableOpacity>
+      )}
+      {todo.includes('dob') && (
+        <TouchableOpacity
+          style={[styles.nudge, { backgroundColor: P.accentDim }]}
+          onPress={go(onOpenAccountDetails)}
+          activeOpacity={0.5}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('beautyProfile.todo.dob.title')}, ${t('beautyProfile.todo.dob.sub')}`}
+        >
+          <TodoMark size={20} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.nudgeTitle, { color: P.text }]}>{t('beautyProfile.todo.dob.title').toUpperCase()}</Text>
+            <Text style={[styles.nudgeSub, { color: P.sub }]}>{t('beautyProfile.todo.dob.sub')}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={P.sub} />
+        </TouchableOpacity>
+      )}
+    </>
+  );
+
   // ── What to do next on the profile ──────────────────────────────────────
-  const nudge = !health.started ? (
+  // Required answers come first; the softer nudges only once those are done.
+  const nudge = todoFields.length > 0 ? null : !health.started ? (
     <TouchableOpacity
       style={[styles.nudge, { backgroundColor: S.warnDim }]}
       onPress={go(onOpenHealth)}
@@ -287,6 +348,7 @@ export function BeautyLanding({
         </View>
 
         {beautyCard}
+        {todoCards}
 
         <View style={styles.sectionHead}>
           <Text style={[styles.kicker, { color: P.sub }]}>{t('maintenance.title').toUpperCase()}</Text>

@@ -52,7 +52,7 @@ export interface RegistrationData {
   // Optional at signup (a brand-new provider can have 0 years). Kept as the raw
   // string the field types; parsed to an INT at the save boundary. Staged on
   // users.years_experience, then copied to providers.years_experience by
-  // InfoRegScreen's first-save prefill — same route as team_size/price_range.
+  // InfoRegScreen's prefill — same route as price_bands/price_range.
   yearsExperience: string;
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
   priceBands: string[];

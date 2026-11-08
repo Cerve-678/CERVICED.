@@ -58,15 +58,17 @@ import { useAppDialog } from '../../components/AppDialog';
 import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData, saveProviderPolicies, loadProviderPolicies, uploadToStorage, ServiceDescriptionVerificationError } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
+import { ExpandableAboutText, revealIfScrolledPast } from '../../features/providers/ExpandableAboutText';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderReleaseDay } from '../../services/databaseService';
 import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
-import { FramedLogo } from '../../components/FramedLogo';
+import { FramedLogo, LogoCircle } from '../../components/FramedLogo';
 import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
-import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/provider-registration/ReleaseDayPicker';
+import { slotsPillText } from '../../utils/slotsRowText';
+import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
 import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
 import {
@@ -84,7 +86,7 @@ import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
 import { openLegalPage } from '../../utils/legalPage';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
-import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
+import { formatLongDate } from '../../utils/dateUtils';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { useVerticalDragReorder } from '../../features/provider-registration/useVerticalDragReorder';
 import { ProviderSpecialitiesSection } from '../../features/providers/ProviderProfileSections';
@@ -100,12 +102,14 @@ import {
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import { fillProfileFromSignup } from '../../features/provider-registration/signupAnswers';
 import {
   applyRuleToServices,
   defaultAddOnKeysForCategory,
   removeAddOnFromServices,
   removeCategoryFromLibrary,
   renameCategoryInLibrary,
+  MAX_ADD_ONS,
   type AddOnLibraryItem,
 } from '../../features/provider-registration/addOnLibrary';
 import { AddOnLibrarySection } from '../../features/provider-registration/AddOnLibrarySection';
@@ -143,9 +147,9 @@ import { toUserMessage } from '../../utils/userFacingError';
 
 import {
   ADDRESS_RELEASE_OPTS,
-  BUSINESS_TYPE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
+  providerTravelsToClient,
   ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
   SERVICE_TYPE_OPTS,
@@ -2167,7 +2171,24 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const [selectedPreviewCategory, setSelectedPreviewCategory] = useState<string>(
     categoryNames[0] || ''
   );
-  const [showFullAbout, setShowFullAbout] = useState(false);
+  // Collapsing a long About from its bottom brings the card back into view
+  // rather than leaving the provider below it — same as the live profile.
+  const previewScrollRef = useRef<ScrollViewInstance>(null);
+  const previewAboutCardRef = useRef<ViewInstance>(null);
+  const previewScrollYRef = useRef(0);
+  const handlePreviewScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    previewScrollYRef.current = e.nativeEvent.contentOffset.y;
+  }, []);
+  const handlePreviewAboutCollapse = useCallback(() => {
+    revealIfScrolledPast({
+      scroll: previewScrollRef.current,
+      target: previewAboutCardRef.current,
+      scrollY: previewScrollYRef.current,
+      // The PREVIEW header sits above this ScrollView, not over it, so only a
+      // little breathing room is needed.
+      topInset: 12,
+    });
+  }, []);
 
   // Update selected category when categories change
   React.useEffect(() => {
@@ -2255,20 +2276,18 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           </View>
 
           <ScrollView
+            ref={previewScrollRef}
             style={styles.previewScrollContent}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.previewScrollContentContainer}
+            onScroll={handlePreviewScroll}
+            scrollEventThrottle={32}
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
             <View style={styles.previewLogoContainer}>
               <View style={styles.previewLogoWrapper}>
                 {providerData.logo ? (
-                  <Image
-                    source={{ uri: providerData.logo }}
-                    style={styles.previewProviderLogo}
-                    resizeMode="cover"
-                    fadeDuration={0}
-                  />
+                  <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.previewProviderLogo} />
                 ) : (
                   <View style={[styles.previewProviderLogo, { backgroundColor: accentColor, alignItems: 'center', justifyContent: 'center' }]}>
                     <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>
@@ -2364,13 +2383,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewSlotsCardHighlight}
                 />
-                {/* Mirrors the computed pill on the real client-facing
-                    profile — same scheduleReleaseDay source, so the preview
-                    never shows text the live screen wouldn't. */}
+                {/* Mirrors the pill on the real client-facing profile: same
+                    helper, same scheduleReleaseDay source, so the preview
+                    never shows text the live screen wouldn't. The day itself
+                    is set in Scheduling & Availability. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
-                  {providerData.scheduleReleaseDay != null
-                    ? `New slots drop on the ${ordinalSuffix(providerData.scheduleReleaseDay)}`
-                    : "Set a release day below"}
+                  {slotsPillText(providerData.scheduleReleaseDay)}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
                   <BellIcon size={16} color={PP.sub} />
@@ -2386,33 +2404,31 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             <View style={[styles.previewContentSheetClip, { backgroundColor: PP.bg }]}>
               {/* About card — the Policy tab that used to live here moved out
                   to Business Profile → Policies along with editing, so this
-                  preview no longer shows or depends on any policy state. */}
-              <BlurView
-                intensity={cardBlurIntensity}
-                tint={cardBlurTint}
-                style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-              >
-                <LinearGradient
-                  colors={cardHighlightColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.previewCardHighlight}
-                />
-                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
-                <Text style={[styles.previewAboutText, { color: PP.sub }]}>
-                  {showFullAbout
-                    ? providerData.aboutText || 'Your business description will appear here...'
-                    : `${(providerData.aboutText || 'Your business description will appear here...').substring(0, 150)}...`}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => { tapSelect(); setShowFullAbout(!showFullAbout); }}
-                  style={styles.previewMoreButton}
+                  preview no longer shows or depends on any policy state.
+                  The unstyled wrapper is only there to be measured — see
+                  handlePreviewAboutCollapse. */}
+              <View ref={previewAboutCardRef}>
+                <BlurView
+                  intensity={cardBlurIntensity}
+                  tint={cardBlurTint}
+                  style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
                 >
-                  <Text style={[styles.previewMoreButtonText, { color: PP.text }]}>
-                    {showFullAbout ? 'Show Less' : 'More'}
-                  </Text>
-                </TouchableOpacity>
-              </BlurView>
+                  <LinearGradient
+                    colors={cardHighlightColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.previewCardHighlight}
+                  />
+                  <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
+                  <ExpandableAboutText
+                    text={providerData.aboutText || 'Your business description will appear here...'}
+                    textStyle={[styles.previewAboutText, { color: PP.sub }]}
+                    linkStyle={styles.previewMoreButton}
+                    linkTextStyle={[styles.previewMoreButtonText, { color: PP.text }]}
+                    onCollapse={handlePreviewAboutCollapse}
+                  />
+                </BlurView>
+              </View>
 
               {/* Link-only clients see specialities where the price list
                   would be; their prices live on their own booking page. */}
@@ -2805,7 +2821,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // magic number left to keep in sync when the layout changes.
   const fieldNodes = useRef<Record<string, ViewInstance | null>>({});
 
-  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const registerField = useCallback(
     (name: string) => (node: ViewInstance | null) => { fieldNodes.current[name] = node; },
     [],
@@ -2881,6 +2896,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     priceRange: '',
     priceBands: [],
     serviceLocations: [],
+    travelRadius: '',
     preferredPaymentMethods: [],
     fullAddress: '',
     howToGetThere: '',
@@ -2928,6 +2944,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // The cached profile can be edited while its live refresh is still in
   // flight. Preserve service changes if that refresh completes afterwards.
   const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
+  // The release day is also edited in Scheduling & Availability. True once
+  // it's changed here; until then the save leaves it alone and focus
+  // re-reads it, so this screen never writes back an older day.
+  const releaseDayEditedRef = useRef(false);
+  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
   // cache to fall back to) — gated in the render below, ahead of the normal
@@ -2981,6 +3002,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // responds, then reconcile it with Supabase in the background. The cache is
   // only a fast starting point: the live read still owns the final state and
   // failures only surface when neither source can provide a profile.
+  // Coming back to this screen picks up a release day changed in Scheduling
+  // & Availability meanwhile, unless it was already changed here.
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+    return navigation.addListener('focus', () => {
+      if (releaseDayEditedRef.current) return;
+      getMyProviderReleaseDay(userId)
+        .then(day => {
+          if (releaseDayEditedRef.current) return;
+          setProviderData(prev => (prev.scheduleReleaseDay === day ? prev : { ...prev, scheduleReleaseDay: day }));
+        })
+        .catch(err => logger.warn('InfoReg: release day refresh failed:', err?.message ?? err));
+    });
+  }, [navigation, user?.id]);
+
   useEffect(() => {
     if (!user?.id) { setIsLoadingProvider(false); return; }
     const userId = user.id;
@@ -3006,10 +3043,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // call picks up every scraped field (services included) for free, no
     // separate prefill path needed. Best-effort: an expired/already-used
     // code just means the provider sets up their profile from scratch.
+    // Set when this load attaches a listing — see the claimed-row prefill below.
+    let claimedListing = false;
     getPendingClaim()
       .then(pending => {
         if (!pending) return;
         return claimProviderProfile(pending.providerId, pending.code)
+          .then(() => { claimedListing = true; })
           .catch(err => {
             logger.warn('claimProviderProfile failed:', err?.message ?? err);
             setClaimError(
@@ -3042,6 +3082,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // The signup prefill below only runs on the very first save, so
               // an existing provider who never set an enquiry address saw an
               // empty field even though their business email was on file.
+              // A just-claimed listing already has a providers row, so the
+              // first-save prefill below never runs for it — and everything
+              // the owner answered at sign-up (price ranges, years, where
+              // they work, payment methods) would stay stranded on `users`.
+              // Fill the listing's blanks from it instead; it lands on the
+              // next save, which a claimed listing needs before going live.
+              if (claimedListing) {
+                getUserSignupPrefillInfo(userId)
+                  .then(prefill => {
+                    if (!prefill || cancelled) return;
+                    setProviderData(prev => fillProfileFromSignup(prev, prefill));
+                  })
+                  .catch(err => logger.warn('InfoReg: sign-up answers for claimed listing failed to load:', err?.message ?? err));
+              }
               if (!data.email) {
                 getUserBusinessInfo(userId)
                   .then(info => {
@@ -3060,12 +3114,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             return getUserSignupPrefillInfo(userId)
               .then(prefill => {
                 if (!prefill) return;
-                const validBusinessTypes: ProviderRegistrationData['businessType'][] = BUSINESS_TYPE_OPTS.map(o => o.value);
-                const prefilledBusinessType = validBusinessTypes.find(v => v === prefill.business_type);
-                const validTeamSizes: ProviderRegistrationData['teamSize'][] = ['solo', 'small_team', 'large_team'];
-                const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
-                const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
-                const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
                 // "Services you offer" on SignUpStep4 is already a
                 // multi-select, and its answer already lands in
                 // users.service_interests — it just never reached the
@@ -3084,7 +3132,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ),
                 );
                 setProviderData(prev => ({
-                  ...prev,
+                  ...fillProfileFromSignup(prev, prefill),
                   ...(prefilledServiceTypes.length
                     ? {
                         serviceCategories: prefilledServiceTypes,
@@ -3093,37 +3141,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         providerService: prefilledServiceTypes[0] as string,
                       }
                     : {}),
-                  providerName: prev.providerName || prefill.business_name || prefill.name || '',
-                  phone: prev.phone || prefill.business_phone || prefill.phone || '',
-                  email: prev.email || prefill.business_email || '',
-                  instagram: prev.instagram || prefill.instagram || '',
-                  website: prev.website || prefill.website || '',
-                  // Asked on SignUpStep1 ("I use my own booking link").
-                  externalBookingUrl: prev.externalBookingUrl || prefill.external_booking_url || '',
-                  tiktok: prev.tiktok || prefill.tiktok || '',
-                  businessType: prev.businessType || prefilledBusinessType || '',
-                  teamSize: prev.teamSize || prefilledTeamSize || '',
-                  // Optional at signup, staged on users.years_experience. Carried
-                  // through so the first save writes it to providers; edited
-                  // afterwards in Business Info. String form because the field
-                  // (and the hero preview) are string-typed.
-                  yearsExperience: prev.yearsExperience || (prefill.years_experience != null ? String(prefill.years_experience) : ''),
-                  location: prev.location || prefill.location_text || '',
-                  accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
-                  languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
-                  priceRange: prev.priceRange || prefilledPriceRange || '',
-                  priceBands: prev.priceBands.length ? prev.priceBands : (prefill.price_bands ?? []),
-                  // Round-trip only — this screen neither shows nor owns contact
-                  // channels (Communications does). It's carried purely because
-                  // saveProviderToSupabase writes preferred_contact_methods on
-                  // every save, so dropping it here would reset the provider's
-                  // Communications toggles to ['in_app'] whenever they edit
-                  // anything in InfoReg.
-                  preferredContactMethods: (prev.preferredContactMethods.length && prev.preferredContactMethods[0] !== 'in_app')
-                    ? prev.preferredContactMethods
-                    : (prefill.preferred_contact_methods?.length ? prefill.preferred_contact_methods : prev.preferredContactMethods),
-                  serviceLocations: prev.serviceLocations.length ? prev.serviceLocations : (prefill.service_locations ?? []),
-                  preferredPaymentMethods: prev.preferredPaymentMethods.length ? prev.preferredPaymentMethods : (prefill.preferred_payment_methods ?? []),
                 }));
               })
               .catch(() => {});
@@ -3404,10 +3421,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!providerData.logo) setLogoPage(0);
   }, [providerData.logo]);
 
-  // No crop step (user, 2026-11-03). With allowsEditing, expo-image-picker
+  // The circle and the two Home cards are each framed in their own shape, by
+  // pinch and drag. Only a zoom and an offset are stored per shape; the logo
+  // image itself stays as picked.
+  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
+  const [logoImageRatio, setLogoImageRatio] = useState(1);
+
+  // No iOS crop step (user, 2026-11-03). With allowsEditing, expo-image-picker
   // falls back to iOS's older UIImagePickerController, which was slow to
-  // appear; without it the system photo picker opens straight away. The circle
-  // fills with the photo (resizeMode cover) and the Home cards are framed below.
+  // appear; without it the system photo picker opens straight away. The new
+  // photo goes straight into the circle framer instead, so it can be adjusted
+  // (user, 2026-11-06: "circle logo doesn't allow adjustment").
   const handleSelectLogo = async () => {
     // No permission request first: picking from the library needs none on
     // iOS or Android, and asking added a round trip before every picker.
@@ -3419,16 +3443,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
     const asset = result.assets?.[0];
     if (!result.canceled && asset) {
-      // A new image makes the old card framing meaningless, so it resets.
+      // A new image makes the old framing meaningless, so it resets.
       setProviderData(prev => ({ ...prev, logo: asset.uri, logoFraming: null }));
+      setLogoImageRatio(asset.width > 0 && asset.height > 0 ? asset.width / asset.height : 1);
+      setFramingSlot('circle');
     }
   };
-
-  // The two Home cards are framed separately, in their own shape, by pinch
-  // and drag. Only a zoom and an offset are
-  // stored per card; the logo image itself stays as picked.
-  const [framingSlot, setFramingSlot] = useState<LogoCardSlot | null>(null);
-  const [logoImageRatio, setLogoImageRatio] = useState(1);
 
   const handleFrameLogo = (slot: LogoCardSlot) => {
     const logo = providerData.logo;
@@ -3749,9 +3769,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             ? normalizeExternalBookingUrl(providerData.externalBookingUrl) ?? ''
             : providerData.externalBookingUrl,
           bookingMode: isLinkOnly ? 'external' : 'cerviced',
+          scheduleReleaseDayEdited: releaseDayEditedRef.current,
         },
         !isEditMode && termsAccepted,
       );
+      releaseDayEditedRef.current = false;
       // First save only: the providers row now exists, so the specialities
       // answered at sign-up can finally be attached to it. Without this they
       // never reached the profile hero or Search's Speciality filter.
@@ -4481,7 +4503,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 first page of a swipe: the next two pages are the same logo in
                 the small and large Home cards, at their real sizes, so the
                 provider sees each crop in place rather than in a list below.
-                Tapping any page reopens the crop. */}
+                Tapping any page opens the framer for that shape; the circle's
+                framer can also swap the photo. */}
               <View style={styles.logoSection}>
                 {providerData.logo ? (
                   <>
@@ -4501,20 +4524,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <View style={[styles.logoPage, { width: logoPagerWidth }]}>
                             <TouchableOpacity
                               style={styles.logoContainer}
-                              onPress={() => { tapSelect(); handleSelectLogo(); }}
+                              onPress={() => { tapSelect(); handleFrameLogo('circle'); }}
                               activeOpacity={0.8}
                               accessibilityRole="button"
                               accessibilityLabel="Adjust logo"
                               accessibilityHint="Swipe left to see it on Home"
                             >
-                              <Image
-                                source={{ uri: providerData.logo }}
-                                style={styles.providerLogo}
-                                resizeMode="cover"
-                                // Per the Scalability rules: without this any unrelated
-                                // re-render can retrigger the default fade-in as a flicker.
-                                fadeDuration={0}
-                              />
+                              <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.providerLogo} />
                               {/* Badge sits on the 45° diagonal of the circle rather than a
                                   square's corner, so it hugs the edge instead of floating
                                   off it — offset = r - (r/√2) - badgeR, rounded. */}
@@ -4582,6 +4598,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 initial={framingSlot ? providerData.logoFraming?.[framingSlot] : undefined}
                 onDone={handleLogoFramed}
                 onCancel={() => setFramingSlot(null)}
+                onReplace={framingSlot === 'circle' ? () => { tapSelect(); handleSelectLogo(); } : undefined}
                 palette={{
                   bg: chrome.surf(0.98),
                   card: chrome.surf(0.35),
@@ -4704,10 +4721,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     filter/sort, free-text search matching, and the location
                     line on provider cards.
 
-                    The separate "cities you cover" multi-select (serviceLocations
-                    → providers.service_locations, feeding the client Search
-                    "City" filter) lives in Business Details › AboutYouScreen —
-                    not duplicated here.
+                    It is also what the client Search "City" filter goes by:
+                    src/utils/providerCity.ts reads "Shoreditch, London" (or a
+                    bare "Shoreditch") up to London. The old "cities you cover"
+                    list (serviceLocations → providers.service_locations) has no
+                    editor now that About You's "Where You're Based" card is
+                    gone; this screen only round-trips it so saved cities keep
+                    matching that filter.
 
                     Same stepped city → region → area picker the client uses for
                     "Your area" (AreaPicker) — "Other city…" / "Other…" fall back
@@ -4722,6 +4742,37 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
                 />
               </View>
+
+              {/* How far a mobile provider travels → providers.travel_radius,
+                  shown on the client profile as "Travels up to …". Asked here,
+                  beside the location it's measured from, and only when the
+                  business type means they travel (mobile); the profile hides
+                  the line for every other type, so an old value can't
+                  contradict a salon or studio. Free text, like the column.
+                  Blank clears it. Policies → Travel is a separate free-text
+                  note, not tied to this. */}
+              {providerTravelsToClient(providerData.businessType || null) && (
+                <View
+                  style={styles.inputGroup}
+                  ref={registerField('travelRadius')}
+                >
+                  <Text style={styles.inputLabel}>How far you travel</Text>
+                  <View style={[styles.inputBlur, styles.profileInputBox]}>
+                    <TextInput
+                      style={styles.textInput}
+                      value={providerData.travelRadius ?? ''}
+                      onChangeText={(text) =>
+                        setProviderData(prev => ({ ...prev, travelRadius: text }))
+                      }
+                      placeholder="e.g. 10 miles"
+                      placeholderTextColor={chrome.fg(0.4)}
+                      maxLength={40}
+                      onFocus={() => handleInputFocus('travelRadius', 'identity')}
+                    />
+                  </View>
+                  <Text style={styles.inputHint}>Shown on your profile as "Travels up to …". Leave blank to hide it (optional).</Text>
+                </View>
+              )}
 
               {/* Jump-to-next affordance at the foot of the section, once
                   there's nothing left to fill in above it — not a "confirm
@@ -4811,19 +4862,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* The release day's ONLY editor. One stored value
-                  (automation_settings.scheduleReleaseDay, merged in on save)
-                  drives the booking limit (utils/bookingHorizon,
-                  provider_last_bookable_date), the profile pill and the
-                  release message. Scheduling shows it read-only. The row IS
-                  the picker: tap, choose a day, or "No release day" there. */}
+              {/* The release day. Edited here AND in Scheduling &
+                  Availability: both write automation_settings.scheduleReleaseDay
+                  (merged in on save), which drives the booking limit
+                  (utils/bookingHorizon, provider_last_bookable_date), the
+                  profile pill and the release message. The save only writes
+                  it when it was changed here (releaseDayEditedRef), and the
+                  value is re-read on focus, so the two screens stay in step.
+                  The row IS the picker: tap, choose a day, or "No release
+                  day" there. */}
               <View
                 style={styles.inputGroup}
                 ref={registerField('scheduleReleaseDay')}
               >
                 <View style={styles.toggleInfo}>
                   <Text style={styles.toggleLabel}>Monthly Release Day</Text>
-                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead.</Text>
+                  <Text style={styles.toggleHint}>{RELEASE_DAY_EXPLAINER} Leave it unset to let clients book a rolling window ahead instead. You can also change it in Scheduling & Availability.</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.releaseDayBtn}
@@ -5155,12 +5209,26 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <View style={styles.servicesSection}>
                 <View style={styles.servicesSectionHeader}>
                   <Text style={styles.sectionTitleNoCard}>Your Services</Text>
-                  <TouchableOpacity
-                    style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
-                    onPress={() => { tapLight(); setShowCategoryModal(true); }}
-                  >
-                    <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
-                  </TouchableOpacity>
+                  <View style={styles.servicesHeaderButtons}>
+                    {/* New add-ons start here, beside + Add Category. Hidden
+                        when the add-on list didn't load (a save mustn't
+                        replace it with nothing) or is already full. */}
+                    {providerData.addOnLibrary && providerData.addOnLibrary.length < MAX_ADD_ONS ? (
+                      <TouchableOpacity
+                        style={[styles.addAddOnHeaderButton, { borderColor: adaptiveAccentColor }]}
+                        onPress={() => { tapLight(); openAddOnEditor(null); }}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.addCategoryText, { color: adaptiveAccentColor }]}>+ Add-on</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => { tapLight(); setShowCategoryModal(true); }}
+                    >
+                      <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                   {/* Service-type switch — plain underline, the same
@@ -5753,9 +5821,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
 
 
-              {/* WHERE YOU WORK (cities covered) moved up to 01 · Identity,
-                  alongside "Where you're based" — the two location questions
-                  belong together rather than four sections apart. */}
 
               {/* PRICE RANGE moved out to Services & Pricing (ServicesPricingScreen) —
                   same field, same providers.price_tier column, alongside the
@@ -5930,6 +5995,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
+
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
             value={providerData.scheduleReleaseDay ?? new Date().getDate()}
@@ -5939,8 +6005,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             subColor={editTheme.sub}
             borderColor={editTheme.border}
             allowClear
-            onClear={() => setProviderData(prev => ({ ...prev, scheduleReleaseDay: null }))}
-            onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
+            onClear={() => { releaseDayEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseDay: null })); }}
+            onSelect={(day) => { releaseDayEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseDay: day })); }}
             onClose={() => setReleaseDayPickerVisible(false)}
           />
 
@@ -6810,10 +6876,23 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 15,
     paddingHorizontal: 5,
   },
+  servicesHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   addCategoryButton: {
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
+  },
+  // Outlined, so it reads as the smaller of the two next to + Add Category.
+  // 1.5px border, 1.5px less padding: same height as the filled button.
+  addAddOnHeaderButton: {
+    paddingHorizontal: 13.5,
+    paddingVertical: 6.5,
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
   addCategoryText: {
     fontFamily: 'BakbakOne-Regular',

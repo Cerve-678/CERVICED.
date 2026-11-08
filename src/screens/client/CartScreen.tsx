@@ -22,6 +22,7 @@ import {
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
+import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { useFocusEffect } from '@react-navigation/native';
@@ -1713,7 +1714,13 @@ const CartProviderSection = memo(function CartProviderSection({
           onNavigateProvider(providerItems);
         }}>
           <View style={styles.providerLogoContainer}>
-            {providerItems[0]?.providerImage ? (
+            {providerItems[0]?.providerImage?.uri ? (
+              <ProviderLogoCircle
+                providerId={providerItems[0].providerId}
+                uri={providerItems[0].providerImage.uri}
+                style={[styles.providerLogo, { borderColor: P.accentDim }]}
+              />
+            ) : providerItems[0]?.providerImage ? (
               <Image source={providerItems[0].providerImage} style={[styles.providerLogo, { borderColor: P.accentDim }]} />
             ) : (
               <View style={[styles.providerLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />

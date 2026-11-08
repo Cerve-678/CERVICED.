@@ -64,6 +64,7 @@ export const fr: Catalog = {
   'profile.account.account.title': 'Compte',
   'profile.account.account.sub': 'Nom, téléphone, date de naissance',
   'profile.forYou.beauty.title': 'Profil beauté',
+  'profile.forYou.beauty.todo': 'Il reste quelque chose à compléter',
   'profile.account.password.title': 'Changer le mot de passe',
   'profile.account.password.sub': 'Mettre à jour les identifiants',
   'profile.account.payment.title': 'Moyens de paiement',

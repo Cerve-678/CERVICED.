@@ -8,15 +8,15 @@ interface FramedLogoProps {
   uri: string;
   /** The provider's saved framing; null or missing = fill and centre. */
   framing?: LogoFraming | null | undefined;
-  /** Which card's framing to use. Without one the logo fills and centres. */
+  /** Which shape's framing to use. Without one the logo fills and centres. */
   slot?: LogoCardSlot | undefined;
-  /** Usually just a borderRadius matching the card. */
+  /** Usually just a borderRadius matching the shape. */
   style?: StyleProp<ViewStyle>;
 }
 
 /**
  * A provider's logo filling its parent, placed the way the provider framed it
- * for that card. Fills the parent absolutely and clips to it, so the card
+ * for that shape. Fills the parent absolutely and clips to it, so the card
  * behind shows wherever the logo has been zoomed out past its edges.
  */
 export const FramedLogo = memo(function FramedLogo({ uri, framing, slot, style }: FramedLogoProps) {
@@ -48,6 +48,30 @@ export const FramedLogo = memo(function FramedLogo({ uri, framing, slot, style }
           transition={0}
         />
       )}
+    </View>
+  );
+});
+
+interface LogoCircleProps {
+  uri: string;
+  /** The provider's saved framing; null or missing = fill and centre. */
+  framing?: LogoFraming | null | undefined;
+  /** The circle itself: its size, radius, background and any margins. */
+  style?: StyleProp<ViewStyle>;
+}
+
+/**
+ * A provider's round logo, placed the way they framed the circle in Info Reg.
+ * Drop-in for an `<Image>` that drew the logo as a circle: give it the same
+ * style. Without a framing, the logo fills and centres as before.
+ */
+export const LogoCircle = memo(function LogoCircle({ uri, framing, style }: LogoCircleProps) {
+  // The clip sits on an inner layer, not on `style`: overflow hidden on the
+  // circle itself would drop any shadow it carries on iOS.
+  const radius = StyleSheet.flatten(style)?.borderRadius ?? 9999;
+  return (
+    <View style={style}>
+      <FramedLogo uri={uri} framing={framing} slot="circle" style={{ borderRadius: radius }} />
     </View>
   );
 });

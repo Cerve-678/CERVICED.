@@ -22,6 +22,7 @@ import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
   DbProvider,
+  LogoFraming,
   DbBooking,
   DbUser,
   DbNotification,
@@ -1397,6 +1398,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   public_directions,
   about_text,
   logo_url,
+  logo_framing,
   gradient,
   accent_color,
   background_image_url,
@@ -1985,7 +1987,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 // response small without narrowing the shared getPortfolioItems() contract.
 const EXPLORE_PORTFOLIO_SELECT = `
   id, provider_id, image_url, caption, category, tags, price, aspect_ratio,
-  provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+  provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
 `;
 
 /** Fetch the lean portfolio projection used by Explore's public masonry feed. */
@@ -2030,7 +2032,7 @@ export async function getPortfolioItems(
     .select(
       `
       *,
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("provider.is_active", true)
@@ -2076,7 +2078,7 @@ export async function searchPortfolio(
     .select(
       `
       *,
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("provider.is_active", true)
@@ -2117,7 +2119,7 @@ export async function getDiscoverServices(
       `
       id, provider_id, name, description, price, service_category,
       service_images!inner ( url, sort_order, aspect_ratio, fit ),
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
     `,
     )
     .eq("is_active", true)
@@ -2253,7 +2255,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
           .select(
             `
             *,
-            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
           `,
           )
           .in("id", portfolioIds)
@@ -2272,7 +2274,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
             `
             id, provider_id, name, description, price,
             service_images ( url, sort_order ),
-            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, logo_framing, rating, review_count )
           `,
           )
           .in("id", serviceIds)
@@ -2303,7 +2305,7 @@ export async function getActivePromotions(
   let query = supabase
     .from("promotions")
     .select(
-      "id, provider_id, title, description, discount_text, discount_percent, discount_amount, service_category, service_ids, promo_code, valid_from, valid_until, is_active, image_url, created_at, providers!inner(display_name, logo_url, slug)",
+      "id, provider_id, title, description, discount_text, discount_percent, discount_amount, service_category, service_ids, promo_code, valid_from, valid_until, is_active, image_url, created_at, providers!inner(display_name, logo_url, logo_framing, slug)",
     )
     .eq("providers.is_active", true)
     .eq("providers.has_gone_live", true)
@@ -4346,6 +4348,7 @@ export interface UserConversationWithProvider {
     slug: string;
     display_name: string;
     logo_url: string | null;
+    logo_framing: LogoFraming | null;
   } | null;
 }
 
@@ -4361,7 +4364,7 @@ export async function getUserConversations(): Promise<
   const { data, error } = await supabase
     .from("provider_conversations")
     .select(
-      "id, provider_id, user_id, last_message, last_message_at, unread_count_user, unread_count_provider, created_at, updated_at, provider: providers ( id, slug, display_name, logo_url )",
+      "id, provider_id, user_id, last_message, last_message_at, unread_count_user, unread_count_provider, created_at, updated_at, provider: providers ( id, slug, display_name, logo_url, logo_framing )",
     )
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false })
@@ -7575,11 +7578,15 @@ export async function setMyProviderFullAddress(
 export async function getProviderAddressPolicy(
   providerId: string,
 ): Promise<ProviderAddressPolicy | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("providers")
     .select("business_type, address_release_policy")
     .eq("id", providerId)
     .maybeSingle();
+  // Throws rather than reading as "no policy": a failed read used to make a
+  // mobile provider look like a venue, so their booking showed their own
+  // address as the appointment's location.
+  if (error) throw error;
   return data ? (data as ProviderAddressPolicy) : null;
 }
 
@@ -7836,14 +7843,14 @@ export async function getMyProviderSaverCount(): Promise<number> {
 /** The public provider fields a booked-elsewhere card and its detail need. */
 const EXTERNAL_BOOKING_SELECT =
   "id, client_id, provider_id, booking_date, start_time, service_label, created_at, " +
-  "provider:providers(id, slug, display_name, logo_url, location_text, business_type, external_booking_url, has_gone_live, is_active)";
+  "provider:providers(id, slug, display_name, logo_url, logo_framing, location_text, business_type, external_booking_url, has_gone_live, is_active)";
 
 export type ClientExternalBookingWithProvider = DbClientExternalBooking & {
   /** Null once the provider is no longer live — their row stops being
    *  readable, but the client's own note of the booking stays theirs. */
   provider: Pick<
     DbProvider,
-    "id" | "slug" | "display_name" | "logo_url" | "location_text" | "business_type" | "external_booking_url"
+    "id" | "slug" | "display_name" | "logo_url" | "logo_framing" | "location_text" | "business_type" | "external_booking_url"
   > | null;
 };
 
@@ -7863,6 +7870,7 @@ function mapExternalBookingRow(row: unknown): ClientExternalBookingWithProvider 
         slug: r.provider.slug,
         display_name: r.provider.display_name,
         logo_url: r.provider.logo_url,
+        logo_framing: r.provider.logo_framing ?? null,
         location_text: r.provider.location_text,
         business_type: r.provider.business_type,
         external_booking_url: r.provider.external_booking_url,
@@ -8637,6 +8645,26 @@ export async function getProviderSchedulingConstraints(
   };
 }
 
+/**
+ * The signed-in provider's own monthly release day (null = rolling window).
+ * Lets a screen that edits it (Edit Profile) pick up a change made on the
+ * other one (Scheduling & Availability) when it comes back into view.
+ * Own record, so no has_gone_live filter. Same duplicate-row tie-break as
+ * the provider lookup by user id above.
+ */
+export async function getMyProviderReleaseDay(userId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("schedule_release_day:automation_settings->scheduleReleaseDay")
+    .eq("user_id", userId)
+    .order("is_active", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return toReleaseDay((data as { schedule_release_day?: unknown } | null)?.schedule_release_day);
+}
+
 // ─────────────────────────────────────────────────────────
 // USERS — profile reads
 // ─────────────────────────────────────────────────────────
@@ -8842,7 +8870,8 @@ export async function getUserDisplayName(
 export async function upgradeUserToProvider(
   userId: string,
   businessName: string,
-  businessEmail: string,
+  // Optional at sign-up — null when left blank, never ''.
+  businessEmail: string | null,
   extras?: {
     businessPhone?: string;
     instagram?: string;
@@ -9861,6 +9890,39 @@ export async function getProviderServiceCategoryByUserId(
   return (data as any)?.service_category ?? null;
 }
 
+/** A provider's current logo and how they framed it, for screens whose logo
+ *  arrives without the framing (a booking's logo snapshot, a search RPC row,
+ *  a cart item). */
+export interface ProviderLogoFramingEntry {
+  logoUrl: string | null;
+  framing: LogoFraming | null;
+}
+
+/**
+ * Current logo + framing for many providers in one query. Client-facing, so
+ * live providers only; a provider who isn't live just gets no entry and the
+ * caller draws its logo unframed.
+ */
+export async function getProviderLogoFramings(
+  providerIds: string[],
+): Promise<Record<string, ProviderLogoFramingEntry>> {
+  const ids = [...new Set(providerIds)].filter(Boolean);
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id, logo_url, logo_framing")
+    .in("id", ids)
+    .eq("has_gone_live", true)
+    .eq("is_active", true)
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
+  const out: Record<string, ProviderLogoFramingEntry> = {};
+  for (const row of (data ?? []) as { id: string; logo_url: string | null; logo_framing: LogoFraming | null }[]) {
+    out[row.id] = { logoUrl: row.logo_url, framing: row.logo_framing ?? null };
+  }
+  return out;
+}
+
 /** Fetch id, slug, and display_name for a provider by their DB id.
  * No has_gone_live filter — called from notification taps where the user already
  * has an existing booking relationship with this provider; filtering by has_gone_live
@@ -9951,11 +10013,6 @@ export async function updateProviderContactDetails(
     qualifications?: string | null;
     is_insured_self_declared?: boolean;
     dbs_checked_self_declared?: boolean;
-    travel_radius?: string | null;
-    // Cities covered, from src/constants/ukCities.ts — the same list the
-    // client Search "City" filter reads, so anything selected here is
-    // immediately filterable by clients.
-    service_locations?: string[] | null;
     clientele?: string[] | null;
     // Provider-level hair types catered to (HAIR_TYPES vocabulary). Empty/null
     // = caters to all, same semantics as services.hair_types_suitable, so an

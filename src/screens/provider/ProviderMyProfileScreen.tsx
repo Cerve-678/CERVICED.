@@ -53,6 +53,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from '../../components/SafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
+import { LogoCircle } from '../../components/FramedLogo';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
@@ -1804,12 +1805,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               </View>
 
               {providerData.logo ? (
-                <Image
-                  source={{ uri: providerData.logo }}
-                  style={styles.avatar}
-                  resizeMode="cover"
-                  fadeDuration={0}
-                />
+                <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
                   <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
