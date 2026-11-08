@@ -106,7 +106,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="shield-checkmark-outline"
             title="About You"
-            subtitle="Credentials, patch test policy, languages & accessibility"
+            subtitle="Areas you cover, credentials, patch test policy, languages & accessibility"
             onPress={() => navigation.navigate('AboutYou')}
             C={C}
           />

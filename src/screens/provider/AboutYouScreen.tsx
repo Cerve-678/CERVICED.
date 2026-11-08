@@ -2,17 +2,18 @@
  * About You — the "can clients trust you, and can they physically reach you"
  * third of what used to be the single 671-line Business Details screen.
  *
- * Scope: credentials & policies (qualifications, insurance, DBS, patch test,
- * online consultations), languages, and accessibility.
+ * Scope: a mobile provider's "Areas you cover", credentials & policies
+ * (qualifications, insurance, DBS, patch test, online consultations),
+ * languages, and accessibility.
  *
- * The "Where You're Based" card (cities covered → providers.service_locations,
- * travel radius → providers.travel_radius) was removed from here on purpose.
- * Location lives in Edit Profile (InfoRegScreen) now: "Where you're based"
- * writes location_text, which is what Search's City filter goes by
- * (src/utils/providerCity.ts), and a mobile provider's "Areas you cover"
- * just below it writes service_locations, which the filter matches too. How far a mobile provider travels
- * is said once, in Policies → Travel; travel_radius is no longer read or
- * written by the app.
+ * "Areas you cover" writes providers.service_locations, which Search's City
+ * filter matches alongside location_text (src/utils/providerCity.ts). This is
+ * its only editor for an existing provider: Edit Profile (InfoRegScreen) no
+ * longer shows or saves it, so the two screens can't overwrite each other.
+ * "Where you're based" (location_text) stays in Edit Profile; it's read here
+ * only to suggest a first town. How far a mobile provider travels is said
+ * once, in Policies → Travel; travel_radius is no longer read or written by
+ * the app.
  *
  * Two things worth knowing before editing:
  *
@@ -41,8 +42,9 @@ import {
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
-  LANGUAGE_OPTS, ACCESSIBILITY_OPTS, PATCH_OPTS,
+  LANGUAGE_OPTS, ACCESSIBILITY_OPTS, PATCH_OPTS, providerTravelsToClient,
 } from '../../features/business-details/options';
+import AreasYouCoverPicker from '../../components/AreasYouCoverPicker';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
 
@@ -52,6 +54,12 @@ export default function AboutYouScreen({ navigation }: any) {
   const C = useBusinessPalette();
 
   const [providerId, setProviderId] = useState<string | null>(null);
+
+  // Areas you cover — mobile providers only (they travel, so where they're
+  // based isn't where they work). Other types never see it and never write it.
+  const [travels, setTravels]                 = useState(false);
+  const [basedIn, setBasedIn]                 = useState('');
+  const [serviceLocations, setServiceLocations] = useState<string[]>([]);
 
   const [qualifications, setQualifications] = useState('');
   const [isInsured, setIsInsured]           = useState(false);
@@ -90,6 +98,9 @@ export default function AboutYouScreen({ navigation }: any) {
         const providerData = await getMyProviderProfile();
         if (providerData) {
           setProviderId(providerData.id ?? null);
+          setTravels(providerTravelsToClient(providerData.business_type ?? null));
+          setBasedIn(providerData.location_text ?? '');
+          setServiceLocations(providerData.service_locations ?? []);
           setQualifications(providerData.qualifications ?? '');
           setIsInsured(providerData.is_insured_self_declared ?? false);
           setDbsChecked(providerData.dbs_checked_self_declared ?? false);
@@ -145,6 +156,8 @@ export default function AboutYouScreen({ navigation }: any) {
         patch_test_policy: (patchTest as 'always' | 'new_clients' | 'optional' | 'not_needed') || null,
         languages_spoken: finalLanguages,
         accessibility_notes: accessibility.length ? accessibility.join('|') : null,
+        // Removing every chip saves an empty list on purpose.
+        ...(travels ? { service_locations: serviceLocations } : {}),
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -189,6 +202,18 @@ export default function AboutYouScreen({ navigation }: any) {
             keyboardShouldPersistTaps="handled"
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
+
+            {travels && (
+              <Card title="Areas You Cover" sub="The towns and areas you travel to. Clients who filter Search by these places will find you.">
+                <AreasYouCoverPicker
+                  value={serviceLocations}
+                  onChange={setServiceLocations}
+                  basedIn={basedIn}
+                  accentColor={C.accent}
+                  palette={C}
+                />
+              </Card>
+            )}
 
             <Card title="Credentials & Policies" sub="Builds trust with clients and helps them book with confidence.">
               <Field label="Qualifications & Training" value={qualifications} onChange={setQualifications} placeholder="e.g. NVQ Level 3, VTCT, City & Guilds..." multiline />
