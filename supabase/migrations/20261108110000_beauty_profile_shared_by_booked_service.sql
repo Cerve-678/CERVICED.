@@ -155,7 +155,7 @@ GRANT EXECUTE ON FUNCTION public.get_client_beauty_profile_for_booking(uuid)
 DROP FUNCTION IF EXISTS public.get_client_beauty_profile_for_provider(uuid);
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261108100000', 'beauty_profile_shared_by_booked_service')
+VALUES ('20261108110000', 'beauty_profile_shared_by_booked_service')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
