@@ -14,6 +14,14 @@ export function notificationAmount(type: string, title: string, message: string)
   return `${title} ${message}`.match(POUND_FIGURE)?.[0] ?? null;
 }
 
+/**
+ * Booking notifications whose tap lands on that booking's review form rather
+ * than the booking itself: "Rate Now", and the provider's automated day-after
+ * check-in. Shared by the push tap and the in-app list so the two can't drift.
+ * BookingsScreen opens the booking instead when it's already been reviewed.
+ */
+export const REVIEW_PROMPT_TYPES: ReadonlySet<string> = new Set(['review_request', 'post_appt_check_in']);
+
 /** Only a whole month earns a certificate. A shorter run has the same type but a different kind. */
 export function isCertificateNotification(type: string, metadata: unknown): boolean {
   if (type !== 'schedule_fully_booked') return false;
