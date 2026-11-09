@@ -64,6 +64,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAppDialog } from "../../components/AppDialog";
 import { logger } from '../../utils/logger';
+import { openLegalPage } from '../../utils/legalPage';
+import { openAboutPage } from '../../utils/aboutPage';
 
 // "Wednesday 5th" — compact day+date for the hero screen's top-right label.
 // No such formatter exists in dateUtils.ts (formatLongDate also includes
@@ -953,7 +955,12 @@ export default function BeccaScreen({
       // Account settings live on the Profile tab's own stack. Switching tabs
       // with its nested route opens the exact page Becca named, instead of
       // dropping the client at the Profile landing page to search again.
-      if (typeof profileScreen === "string") {
+      // Terms and About are website pages now, not screens on that stack.
+      if (profileScreen === "Terms") {
+        openLegalPage("terms");
+      } else if (profileScreen === "About") {
+        openAboutPage();
+      } else if (typeof profileScreen === "string") {
         navigation.getParent()?.navigate("Profile", { screen: profileScreen });
       }
       return;

@@ -21,7 +21,6 @@ tags: [screen, client]
 - [[TextSizingScreen\|TextSizing]]
 - [[LanguageRegionScreen\|LanguageRegion]]
 - [[HelpCentreScreen\|HelpCentre]]
-- [[AboutScreen\|About]]
 - [[ReportProblemScreen\|ReportProblem]]
 - [[AdminDashboardScreen\|AdminDashboard]]
 - `SignUpStep3` _(navigator / dynamic)_

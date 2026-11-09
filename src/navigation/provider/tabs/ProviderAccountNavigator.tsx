@@ -13,7 +13,6 @@ import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
-import AboutScreen from '../../../screens/shared/AboutScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
 import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
@@ -273,11 +272,6 @@ export default function ProviderAccountNavigator() {
         options={{ headerShown: false }}
       />
 
-      <ProviderAccountStack.Screen
-        name="About"
-        component={AboutScreen}
-        options={{ headerShown: false }}
-      />
 
       <ProviderAccountStack.Screen
         name="ReportProblem"

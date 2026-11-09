@@ -194,7 +194,6 @@ export type ProfileStackParamList = {
   HelpCentre: undefined;
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;
@@ -404,7 +403,6 @@ export type ProviderAccountStackParamList = {
   // both hats reach the same single setting.
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;

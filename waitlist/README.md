@@ -106,8 +106,9 @@ Since 2026-11-08 both pages share the same header menu (About us, How it works,
 Health & safety, Terms & policies, Join the waitlist) and a four-column footer
 that links every policy on `/legal` by its section id (`#terms`,
 `#provider-terms`, `#privacy`, `#cookies`, `#fees`, `#safety`, `#providers`,
-`#community`, `#reviews`, `#complaints`) plus the home page's `#about`,
-`#for-you` and `#join`. If you rename or add a policy section, update both
+`#community`, `#reviews`, `#complaints`) plus `/about` (the About page, `about/index.html`) and the home page's
+`#for-you` and `#join`. The app's About row opens `/about` too, so it is the
+only copy of the About text. If you rename or add a policy section, update both
 footers. The footer contact is support@cerviced.co, the address the legal page
 uses (the old footer said hello@cerviced.com).
 
