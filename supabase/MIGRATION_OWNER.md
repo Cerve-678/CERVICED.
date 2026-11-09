@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session on branch feat/circle-own-face (applying 20261109150000)
 ```
 
 ### Applied 2026-11-09 (follow people: visits only from the notice, Blocked list)
