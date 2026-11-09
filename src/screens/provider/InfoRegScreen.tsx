@@ -2237,6 +2237,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+      {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+      <SafeAreaProvider>
+      <WindowControlsInsetProvider>
       {/* The clock sits on the hero, which is pale for light presets with no
           cover photo — white there was unreadable. */}
       <FocusAwareStatusBar barStyle={heroIsDark ? 'light-content' : 'dark-content'} />
@@ -2712,6 +2715,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           </ScrollView>
         </SafeAreaView>
       </View>
+      </WindowControlsInsetProvider>
+      </SafeAreaProvider>
     </Modal>
   );
 };
