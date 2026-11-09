@@ -6,7 +6,7 @@ import { join } from 'path';
 // swaps that line for the provider's own note (or, with none, a line asking
 // the client to read the provider's policies), and the copy that promises it.
 const migration = readFileSync(
-  join(__dirname, '../../supabase/migrations/20261109180000_reminder_uses_provider_note_or_policies.sql'),
+  join(__dirname, '../../supabase/migrations/20261109200000_reminder_uses_provider_note_or_policies.sql'),
   'utf8',
 );
 

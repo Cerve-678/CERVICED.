@@ -1,4 +1,4 @@
--- 20261109180000_reminder_uses_provider_note_or_policies.sql
+-- 20261109200000_reminder_uses_provider_note_or_policies.sql
 --
 -- The client's "Appointment Tomorrow" reminder ended with a fixed
 -- ". Please arrive 10 minutes early." for every booking with every provider,
@@ -11,8 +11,8 @@
 -- reminder asks the client to read the provider's policies instead.
 --
 -- Written 2026-11-03 as 20261103120000 but never applied; renumbered
--- 2026-11-09 above the live frontier (20261109150000) and the unapplied
--- migrations on open PRs (20261109160000, 20261109170000).
+-- 2026-11-09 above the live frontier (20261109190000; earlier drafts sat at 180000, overtaken)
+-- and every migration on an open PR.
 --
 -- Redefined FROM LIVE, per supabase/MIGRATION_OWNER.md: this reads the live
 -- function, swaps exactly that one literal, and re-creates it. The md5 guard
@@ -48,7 +48,7 @@ END
 $mig$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261109180000', 'reminder_uses_provider_note_or_policies')
+VALUES ('20261109200000', 'reminder_uses_provider_note_or_policies')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
