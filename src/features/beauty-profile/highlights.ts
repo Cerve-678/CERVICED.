@@ -11,7 +11,7 @@
 
 import type { BeautyData, CategoryKey } from '../../types/beautyProfile';
 import type { BeautyProfileStats } from '../../utils/beautyProfileStats';
-import { GENDER_LABELS } from './options';
+import { GENDER_LABELS, hairTreatmentHistory } from './options';
 
 /** The few display words that aren't stored answers, passed in already
  *  translated so this file stays pure. */
@@ -36,7 +36,7 @@ const nonEmpty = (values: (string | string[] | null | undefined)[]): string[] =>
 /** Answers for a category in priority order: the first becomes the lead. */
 function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): string[] {
   switch (key) {
-    case 'hair':        return nonEmpty([d.hairType, d.scalpCondition ? L.scalp(d.scalpCondition) : '', d.hairGoals, d.treatmentHistory]);
+    case 'hair':        return nonEmpty([d.hairType, d.scalpCondition ? L.scalp(d.scalpCondition) : '', d.hairGoals, hairTreatmentHistory(d.treatmentHistory)]);
     case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas]);
     case 'nails':       return nonEmpty([d.nailShape, d.nailLength]);
     case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.browCondition]);

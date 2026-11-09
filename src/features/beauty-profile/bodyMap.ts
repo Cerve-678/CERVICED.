@@ -10,6 +10,7 @@
 // SAVE PROFILE transaction is unchanged.
 
 import type { BeautyData, CategoryKey } from '../../types/beautyProfile';
+import { hairTreatmentHistory } from './options';
 import type { MaintenanceItem } from '../../types/maintenance';
 import {
   categoryOf,
@@ -71,7 +72,7 @@ export function areaRows(area: MapArea, d: BeautyData): AreaRow[] {
       return [
         { label: 'Hair type', value: join(d.hairType) },
         { label: 'Scalp', value: join(d.scalpCondition) },
-        { label: 'History', value: join(d.treatmentHistory) },
+        { label: 'History', value: join(hairTreatmentHistory(d.treatmentHistory)) },
         { label: 'Goals', value: join(d.hairGoals) },
       ];
     case 'skin':

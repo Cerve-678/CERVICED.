@@ -115,7 +115,7 @@
 - `moneyPresentation.ts` — day · **describeFailedPayout** · **describeOwed** · **describeRefundRequest** · **formatPence** · **parsePounds**
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 
-### `src/features/beauty-profile/` (11)
+### `src/features/beauty-profile/` (12)
 - `BeautyMapLanding.tsx` — **BeautyMapLanding** · go · maintenanceStrip · nextUp · visibleItems
 - `BodyFigure.tsx` — **BodyMap** · **FigureThumb** · LineFigure · onLayout · PortraitFigure · SegmentsFigure · zone · ZonesFigure
 - `bodyMap.ts` — **areaForMaintenanceItem** · **areaRows** · **dueDotsByArea** · **maintenanceForMap** · **parseFigurePrefs**
@@ -123,6 +123,7 @@
 - `FigureSheet.tsx` — **FigureSheet**
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
+- `options.ts` — **hairTreatmentHistory**
 - `pickList.ts` — **formatPickList** · parseJsonArray · **toPickColumn** · **toPickList**
 - `profileRow.ts` — **beautyDataFromRow**
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
