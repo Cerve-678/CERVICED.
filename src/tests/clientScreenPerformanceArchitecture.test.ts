@@ -18,8 +18,13 @@ describe('client screen performance contracts', () => {
   it('bounds the initial Explore queries and never keeps the feed spinner forever', () => {
     const source = readScreen('ExploreScreen');
 
-    expect(source).toContain('DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20');
-    expect(source).toContain('DISCOVER_INITIAL_SERVICE_LIMIT = 10');
+    // The first load is a bounded, shuffled pool (no wider than the repo-wide
+    // 200-row list cap) so the top of Explore isn't only the newest uploads;
+    // scroll pages after it stay small.
+    expect(source).toContain('DISCOVER_FIRST_PORTFOLIO_POOL = 200');
+    expect(source).toContain('DISCOVER_FIRST_SERVICE_POOL = 40');
+    expect(source).toContain('DISCOVER_PAGE_PORTFOLIO_LIMIT = 20');
+    expect(source).toContain('DISCOVER_PAGE_SERVICE_LIMIT = 10');
     expect(source).toContain('const loadNextDiscoverPage');
     expect(source).toContain('getExplorePortfolioItems(');
     expect(source).toContain('cursor.portfolioOffset');
@@ -34,7 +39,7 @@ describe('client screen performance contracts', () => {
       'utf8',
     );
 
-    expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT)');
+    expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_FIRST_PORTFOLIO_POOL)');
     expect(database).toContain('const EXPLORE_PORTFOLIO_SELECT');
     expect(database).toContain('.select(EXPLORE_PORTFOLIO_SELECT)');
   });

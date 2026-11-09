@@ -95,10 +95,16 @@ const INITIAL_EXPLORE_ITEMS = 20;
 const EXPLORE_BATCH_SIZE = 18;
 const LOAD_MORE_THRESHOLD = 900;
 const LOAD_MORE_COOLDOWN_MS = 300;
-// Only the first viewport belongs on the critical path. Further source pages
-// are fetched as the client reaches the end of this initial window.
-const DISCOVER_INITIAL_PORTFOLIO_LIMIT = 20;
-const DISCOVER_INITIAL_SERVICE_LIMIT = 10;
+// The first load fetches a wide pool and shuffles all of it. Rows come back
+// newest first, and providers upload in batches, so a first page of only the
+// 20 newest photos was routinely two or three providers' latest uploads —
+// the same handful of pictures at the top of Explore every time. The pool is
+// the lean card projection, and only the rendered window's images download.
+// Pages fetched on scroll after the pool stay small.
+const DISCOVER_FIRST_PORTFOLIO_POOL = 200;
+const DISCOVER_FIRST_SERVICE_POOL = 40;
+const DISCOVER_PAGE_PORTFOLIO_LIMIT = 20;
+const DISCOVER_PAGE_SERVICE_LIMIT = 10;
 // The back-to-top arrow appears once the grid is scrolled this many screen
 // heights down, fading in over the next fifth of a screen.
 const BACK_TO_TOP_AFTER_SCREENS = 1;
@@ -541,8 +547,8 @@ const ExploreScreen = memo(() => {
       Promise.all([
         // Explore is a browse surface, including for providers viewing their
         // own public work. Do not hide a provider's images from this feed.
-        getExplorePortfolioItems(category, DISCOVER_INITIAL_PORTFOLIO_LIMIT),
-        getDiscoverServices(category, DISCOVER_INITIAL_SERVICE_LIMIT, undefined, { excludeOwnProvider: false }),
+        getExplorePortfolioItems(category, DISCOVER_FIRST_PORTFOLIO_POOL),
+        getDiscoverServices(category, DISCOVER_FIRST_SERVICE_POOL, undefined, { excludeOwnProvider: false }),
       ]),
       8_000,
       'Explore feed',
@@ -577,8 +583,8 @@ const ExploreScreen = memo(() => {
       portfolioOffset: portfolioData.length,
       serviceOffset: serviceData.length,
       hasMore:
-        portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
-        serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+        portfolioData.length === DISCOVER_FIRST_PORTFOLIO_POOL ||
+        serviceData.length === DISCOVER_FIRST_SERVICE_POOL,
     });
     return feed;
   }, [filterMap, mapDbPortfolioItem, mapDbServiceToCards]);
@@ -595,12 +601,12 @@ const ExploreScreen = memo(() => {
         Promise.all([
           getExplorePortfolioItems(
             category,
-            DISCOVER_INITIAL_PORTFOLIO_LIMIT,
+            DISCOVER_PAGE_PORTFOLIO_LIMIT,
             cursor.portfolioOffset,
           ),
           getDiscoverServices(
             category,
-            DISCOVER_INITIAL_SERVICE_LIMIT,
+            DISCOVER_PAGE_SERVICE_LIMIT,
             undefined,
             { excludeOwnProvider: false },
             cursor.serviceOffset,
@@ -614,8 +620,8 @@ const ExploreScreen = memo(() => {
         portfolioOffset: cursor.portfolioOffset + portfolioData.length,
         serviceOffset: cursor.serviceOffset + serviceData.length,
         hasMore:
-          portfolioData.length === DISCOVER_INITIAL_PORTFOLIO_LIMIT ||
-          serviceData.length === DISCOVER_INITIAL_SERVICE_LIMIT,
+          portfolioData.length === DISCOVER_PAGE_PORTFOLIO_LIMIT ||
+          serviceData.length === DISCOVER_PAGE_SERVICE_LIMIT,
       });
 
       setPortfolioItems(existing => {
