@@ -480,6 +480,14 @@ describe('notification routing — follow request', () => {
     expect(clientOnly).toContain("'follow_request'");
   });
 
+  it('still opens Your circle after the request is answered', () => {
+    // The trigger clears is_actionable once answered; the button must not go with it.
+    const screen = notificationsScreen();
+    expect(screen).toMatch(/const opensSomewhere = [\s\S]*n\.actionable \|\| n\.type === 'follow_request'/);
+    expect(screen).not.toContain('selectedNotification.actionable &&');
+    expect(screen).toContain("'Open Your Circle'");
+  });
+
   it('never outlives the request: answered marks it read, cancelled deletes it', () => {
     const sql = migration();
     expect(sql).toContain('AFTER INSERT OR UPDATE OF status OR DELETE ON public.client_follows');
