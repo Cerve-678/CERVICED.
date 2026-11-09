@@ -34,6 +34,7 @@ import { highlightCategory, type HighlightLabels } from './highlights';
 import { AREA_CATEGORY, AREA_PANEL_LABEL, areaRows, maintenanceForMap, type FigurePrefs, type MapArea } from './bodyMap';
 import { BodyMap } from './BodyFigure';
 import { FigureSheet } from './FigureSheet';
+import { allSuitedIdeas, isSuitedCategory, suitedIdeas, type SuitedIdea } from './suitedIdeas';
 
 const TODO_LABEL: Record<BeautyTodoField, TranslationKey> = {
   hairType: 'beautyProfile.todo.hairType',
@@ -74,12 +75,14 @@ interface Props {
   todo: BeautyTodoItem[];
   onOpenTodoField: (field: BeautyTodoField) => void;
   onOpenAccountDetails: () => void;
+  /** Opens Search for one of the "Suited to you" ideas. */
+  onFindIdea: (idea: SuitedIdea) => void;
 }
 
 export function BeautyMapLanding({
   profile, stats, maintenance, figurePrefs, onFigurePrefsChange, circle, onBack, onEditCategory,
   onOpenHealth, onOpenAllProfile, onOpenMaintenance, onOpenSetup, onOpenCircle, onBook, onDone,
-  onSnooze, busyItemId, todo, onOpenTodoField, onOpenAccountDetails,
+  onSnooze, busyItemId, todo, onOpenTodoField, onOpenAccountDetails, onFindIdea,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const S = semanticColors(isDarkMode);
@@ -161,6 +164,14 @@ export function BeautyMapLanding({
   const category = AREA_CATEGORY[area];
   const lead = highlightCategory(category, profile, labels).lead;
   const rows = areaRows(area, profile);
+
+  // ── Suited to you: what the picked area's answers point to. General mixes
+  // every category; Skin has none on purpose (see suitedIdeas.ts).
+  const ideasArea = category === 'general' || isSuitedCategory(category);
+  const ideas = useMemo(
+    () => (category === 'general' ? allSuitedIdeas(profile, 2).slice(0, 6) : suitedIdeas(category, profile)),
+    [category, profile],
+  );
 
   // ── Still to fill in ─────────────────────────────────────────────────────
   const todoFields = todo.filter((i): i is BeautyTodoField => i !== 'dob');
@@ -309,6 +320,48 @@ export function BeautyMapLanding({
           ))}
         </View>
 
+        {ideasArea && (
+          <View style={[ui.card, styles.suited, { backgroundColor: P.card, borderColor: P.border }]}>
+            <View style={styles.suitedHead}>
+              <Ionicons name="sparkles-outline" size={14} color={P.accentText} />
+              <Text style={[styles.kicker, { color: P.sub }]}>{t('beautyProfile.suited.title').toUpperCase()}</Text>
+            </View>
+            {ideas.length === 0 ? (
+              <TouchableOpacity
+                onPress={go(() => onEditCategory(category === 'general' ? 'hair' : category))}
+                activeOpacity={0.5}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.suitedEmpty, { color: P.sub }]}>{t('beautyProfile.suited.empty')}</Text>
+                <Text style={[styles.link, styles.suitedEmptyLink, { color: P.accentText }]}>
+                  {t('beautyProfile.card.add').toUpperCase()} ›
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <Text style={[styles.suitedSub, { color: P.sub }]}>{t('beautyProfile.suited.sub')}</Text>
+                {ideas.map((idea) => (
+                  <TouchableOpacity
+                    key={`${idea.category}-${idea.label}`}
+                    style={[styles.row, { borderTopColor: P.sep }]}
+                    onPress={go(() => onFindIdea(idea))}
+                    activeOpacity={0.5}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${idea.label}, ${idea.because}. ${t('beautyProfile.suited.find')}`}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.suitedLabel, { color: P.text }]}>{idea.label}</Text>
+                      <Text style={[styles.suitedBecause, { color: P.sub }]} numberOfLines={1}>{idea.because}</Text>
+                    </View>
+                    <Text style={[styles.link, { color: P.accentText }]}>{t('beautyProfile.suited.find').toUpperCase()}</Text>
+                    <Ionicons name="chevron-forward" size={13} color={P.sub} />
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+          </View>
+        )}
+
         <TouchableOpacity onPress={go(onOpenAllProfile)} activeOpacity={0.5} accessibilityRole="button" style={styles.allLink}>
           <Text style={[styles.link, { color: P.accentText }]}>
             {t('beautyProfile.map.seeAll', { percent: stats.overallPercent }).toUpperCase()} ›
@@ -356,4 +409,12 @@ const styles = StyleSheet.create({
   rowLabel: { width: 108, fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 0.8 },
   rowValue: { flex: 1, fontFamily: FONT_BODY, fontSize: 14 },
   allLink: { alignSelf: 'center', paddingVertical: 6 },
+
+  suited: { borderRadius: 20, padding: 16 },
+  suitedHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  suitedSub: { fontFamily: FONT_BODY, fontSize: 12.5, lineHeight: 17, marginTop: 4, marginBottom: 6 },
+  suitedLabel: { fontFamily: FONT_DISPLAY, fontSize: 13.5, letterSpacing: 0.4 },
+  suitedBecause: { fontFamily: FONT_BODY, fontSize: 11.5, marginTop: 2 },
+  suitedEmpty: { fontFamily: FONT_BODY, fontSize: 13, lineHeight: 18, marginTop: 6 },
+  suitedEmptyLink: { marginTop: 8 },
 });
