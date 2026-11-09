@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/admin-blank-provider — 20261109260000_blank_provider_cannot_go_live (2026-11-09)
 ```
 
 ### Applied 2026-11-09 (accounts you created, admin)

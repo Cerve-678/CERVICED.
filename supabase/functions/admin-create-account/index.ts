@@ -410,6 +410,23 @@ async function addDetails(admin: Admin, callerId: string, body: Record<string, u
     return json({ error: 'Something went wrong.' }, 500);
   }
 
+  // check_and_set_provider_live keeps a blank account offline while
+  // details_pending is true (migration 20261109260000). Nothing else re-runs it
+  // now that the flag is clear, so do it here: a profile that's otherwise
+  // ready goes live straight away. A failure only delays that until their next
+  // profile save, so it is logged rather than failing the hand-over.
+  const { data: providerRows, error: providersError } = await admin.from('providers')
+    .select('id')
+    .eq('user_id', user.id);
+  if (providersError) {
+    console.error('[admin-create-account] add_details could not read the provider rows:', providersError);
+  } else {
+    for (const row of (providerRows ?? []) as Array<{ id: string }>) {
+      const { error: liveError } = await admin.rpc('check_and_set_provider_live', { p_provider_id: row.id });
+      if (liveError) console.error('[admin-create-account] add_details could not re-check going live:', liveError);
+    }
+  }
+
   console.log(`[admin-create-account] ${callerId} added details to blank account ${user.id}`);
   return json({
     userId: user.id,
