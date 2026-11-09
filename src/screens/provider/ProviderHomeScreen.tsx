@@ -2262,6 +2262,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
           <Text style={[s.sheetTitle, { color: P.sub }]}>Quick Access</Text>
 
+          {/* These routes hide the bottom nav: add a new row's route to
+              QUICK_ACCESS_ROUTES in navigation/tabBarVisibility.ts too. */}
           {([
             { icon: 'add-circle-outline',      title: 'Add Booking', sub: 'Manually book a client in',        route: 'AddBooking'       },
             { icon: 'calendar-outline',        title: 'Schedule',    sub: 'Set your hours & block dates',      route: 'ProviderSchedule' },

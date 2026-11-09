@@ -13,9 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
-import { SETTINGS_TAB, settingsStackHidesTabBar } from '../navigation/settingsTabBar';
+import { stackHidesTabBar, tabStackRouteNames } from '../navigation/tabBarVisibility';
 import { useExploreFocusStore } from '../stores/useExploreFocusStore';
 import { explorePillVisible } from '../utils/exploreTabBarScroll';
 import {
@@ -110,11 +109,11 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
   }, []);
   const keyboardHidden = !!focusedRouteOptions?.tabBarHideOnKeyboard && keyboardVisible;
   const focusedTab = state.routes[state.index];
-  // Both hats' Settings tab: only the screens listed in settingsTabBar.ts keep the bar.
-  const settingsStackHidden = focusedTab?.name === SETTINGS_TAB
-    && settingsStackHidesTabBar(getFocusedRouteNameFromRoute(focusedTab));
+  // Settings sub-screens (both hats) and the provider's Quick Access screens:
+  // the rule lives in tabBarVisibility.ts.
+  const stackHidden = !!focusedTab && stackHidesTabBar(focusedTab.name, tabStackRouteNames(focusedTab));
   const forceHidden = keyboardHidden
-    || settingsStackHidden
+    || stackHidden
     || (focusedRouteOptions?.tabBarStyle as { display?: string } | undefined)?.display === 'none';
   const forceHideProgress = useRef(new Animated.Value(0)).current;
   useEffect(() => {

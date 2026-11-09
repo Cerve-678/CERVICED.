@@ -18,7 +18,7 @@ import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
-import { useSettingsStackHidesTabBar } from '../../navigation/settingsTabBar';
+import { useStackHidesTabBar } from '../../navigation/tabBarVisibility';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useAppDialog } from '../../components/AppDialog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -55,8 +55,9 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   const { user } = useAuth();
   const { showToast, DialogHost } = useAppDialog();
   const insets = useSafeAreaInsets();
-  // Opened from Settings → Inbox there is no tab bar to clear, only the home indicator.
-  const tabBarHidden = useSettingsStackHidesTabBar();
+  // Opened from Settings → Inbox or Home → Quick Access → Inbox there is no tab
+  // bar to clear, only the home indicator.
+  const tabBarHidden = useStackHidesTabBar();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
