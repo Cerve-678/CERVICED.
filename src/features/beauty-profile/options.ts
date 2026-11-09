@@ -34,10 +34,21 @@ export const MAKEUP_FINISH    = ['Matte', 'Dewy', 'Satin'];
 export const MAKEUP_EYES      = ['Subtle', 'Defined', 'Bold / dramatic'];
 export const MAKEUP_LIPS      = ['Nude', 'Berry / wine', 'Coral / peach', 'Classic red', 'Bold colour'];
 export const STYLE_VIBES      = ['Natural', 'Glam', 'Bold', 'Classic', 'Editorial', 'Low-maintenance', 'Experimental'];
+// Shown under Hair. 'Lash extensions' was here until 2026-11-09; lashes have
+// their own status in Lashes & Brows ('Currently have extensions').
 export const TREATMENT_HISTORY = [
   'Virgin hair', 'Coloured', 'Bleached / lightened', 'Relaxed / permed',
-  'Hair extensions', 'Lash extensions', 'Microblading', 'Fillers / Botox', 'Chemical peels', 'None',
+  'Hair extensions', 'Microblading', 'Fillers / Botox', 'Chemical peels', 'None',
 ];
+
+/**
+ * Treatment history as shown under Hair. Older profiles (and sign-up, which
+ * asks across every category) can hold 'Lash extensions'; it stays stored —
+ * maintenance suggestions read it — but isn't a hair answer, so Hair skips it.
+ */
+export function hairTreatmentHistory(history: string[]): string[] {
+  return history.filter(v => v !== 'Lash extensions');
+}
 
 export const GENDER_LABELS: Record<Gender, string> = {
   female: 'Female',
