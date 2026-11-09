@@ -5,7 +5,7 @@
 
 #generated
 
-**3496 functions** across **495 files**.
+**3497 functions** across **495 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -26,7 +26,7 @@
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
-- `FocusAwareStatusBar.tsx` — **FocusAwareStatusBar**
+- `FocusAwareStatusBar.tsx` — **FocusAwareStatusBar** · reassert
 - `FramedLogo.tsx` — **FramedLogo** · **LogoCircle**
 - `FullImageViewer.tsx` — clampX · clampY · close · **FullImageViewer** · onZoomChange · report · settle · ZoomablePage
 - `FullyBookedCertificate.tsx` — ConfettiPiece · FullyBookedCertificate · **fullyBookedLine** · makePieces · pieces
