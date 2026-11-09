@@ -5,7 +5,7 @@
 
 #generated
 
-**82 screens.** Curated overview: [[Screens & Navigation]].
+**83 screens.** Curated overview: [[Screens & Navigation]].
 
 ## Provider (35)
 - `src/screens/client/ProviderChatScreen.tsx`
@@ -44,7 +44,7 @@
 - `src/screens/provider/SchedulingScreen.tsx`
 - `src/screens/provider/ServicesPricingScreen.tsx`
 
-## Client / shared (47)
+## Client / shared (48)
 - `src/screens/auth/AuthScreen.tsx`
 - `src/screens/auth/ClaimProviderScreen.tsx`
 - `src/screens/auth/EmailVerificationScreen.tsx`
@@ -66,6 +66,7 @@
 - `src/screens/client/BookingsScreen.tsx`
 - `src/screens/client/BookmarkedProvidersScreen.tsx`
 - `src/screens/client/CartScreen.tsx`
+- `src/screens/client/CircleScreen.tsx`
 - `src/screens/client/ClientIntakeFormScreen.tsx`
 - `src/screens/client/ExploreScreen.tsx`
 - `src/screens/client/ExternalBookingDetailScreen.tsx`

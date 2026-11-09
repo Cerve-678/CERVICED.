@@ -48,6 +48,7 @@ import { logger } from '../../utils/logger';
 import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
 import { shuffle } from '../../utils/shuffle';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { CircleMomentsHost } from '../../features/social/CircleMomentsHost';
 import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
 import { PortfolioCard } from '../../components/PortfolioCard';
@@ -2051,6 +2052,13 @@ export default function HomeScreen() {
       </ScrollView>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
+      {/* After a completed booking: the one-time Show where I go notice, or
+          "Send people their way?". Waits for Home to be clear. */}
+      <CircleMomentsHost
+        userId={user?.id ?? null}
+        bookings={bookings}
+        active={isFocused && !showTour && !showLocationModal}
+      />
     </View>
   );
 }

@@ -6,6 +6,7 @@ import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import MessagesScreen from '../../../screens/client/MessagesScreen';
 import ProfileInfoScreen from '../../../screens/client/ProfileInfoScreen';
 import BeautyProfileScreen from '../../../screens/client/BeautyProfileScreen';
+import CircleScreen from '../../../screens/client/CircleScreen';
 import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import NotificationsSettingsScreen from '../../../screens/client/NotificationsSettingsScreen';
 import PaymentMethodsScreen from '../../../screens/client/PaymentMethodsScreen';
@@ -35,7 +36,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 export default function ProfileNavigator() {
-  const { theme } = useTheme();
+  const { theme, palette } = useTheme();
 
   return (
     <ProfileStack.Navigator>
@@ -53,6 +54,21 @@ export default function ProfileNavigator() {
         name="BeautyProfile"
         component={BeautyProfileScreen}
         options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="Circle"
+        component={CircleScreen}
+        options={{
+          title: 'Your circle',
+          presentation: 'card',
+          headerBackTitle: 'Back',
+          headerShadowVisible: false,
+          // palette.bg is what ThemedBackground paints, so the header and
+          // the screen read as one surface (theme.background differs).
+          headerStyle: { backgroundColor: palette.bg },
+          headerTintColor: palette.text,
+          headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, color: palette.text },
+        }}
       />
       <ProfileStack.Screen
         name="ChangePassword"

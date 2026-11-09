@@ -48,6 +48,10 @@ interface Props {
   todo: BeautyTodoItem[];
   onOpenTodoField: (field: BeautyTodoField) => void;
   onOpenAccountDetails: () => void;
+  /** Your circle (find people, requests, sharing switches). */
+  onOpenCircle: () => void;
+  /** Follow requests waiting, from the sharing settings; 0 until loaded. */
+  circleRequests: number;
 }
 
 const COUNTDOWN_UNIT: Record<CountdownUnit, TranslationKey> = {
@@ -64,7 +68,7 @@ const COUNTDOWN_UNIT: Record<CountdownUnit, TranslationKey> = {
 
 export function BeautyLanding({
   profile, stats, maintenance, onBack, onOpenMaintenance, onOpenSetup, onOpenProfile, onOpenHealth,
-  todo, onOpenTodoField, onOpenAccountDetails,
+  todo, onOpenTodoField, onOpenAccountDetails, onOpenCircle, circleRequests,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { t } = useTranslation();
@@ -105,6 +109,9 @@ export function BeautyLanding({
   const blank = CATEGORY_ORDER.filter(k => k !== 'health' && k !== 'consent' && !stats.byCategory[k].started);
 
   const go = (fn: () => void) => () => { hapticLight(); fn(); };
+  const circleLine = circleRequests > 0
+    ? (circleRequests === 1 ? t('beautyProfile.circle.requestsOne') : t('beautyProfile.circle.requests', { count: circleRequests }))
+    : t('beautyProfile.circle.sub');
   const onSoft = { color: P.onAccent, opacity: 0.72 };
 
   // ── My Profile: the Beauty Card ─────────────────────────────────────────
@@ -362,6 +369,22 @@ export function BeautyLanding({
         </View>
         {maintenanceBody()}
 
+        <TouchableOpacity
+          style={[styles.nudge, styles.circleStrip, { backgroundColor: P.card, borderColor: P.border }]}
+          onPress={go(onOpenCircle)}
+          activeOpacity={0.5}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('beautyProfile.circle.title')}, ${circleLine}`}
+        >
+          <Ionicons name="people-outline" size={20} color={P.accentText} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.nudgeTitle, { color: P.text }]}>{t('beautyProfile.circle.title').toUpperCase()}</Text>
+            <Text style={[styles.nudgeSub, { color: P.sub }]}>{circleLine}</Text>
+          </View>
+          {circleRequests > 0 && <View style={[styles.circleDot, { backgroundColor: S.bad }]} />}
+          <Ionicons name="chevron-forward" size={16} color={P.sub} />
+        </TouchableOpacity>
+
         {nudge}
       </ScrollView>
     </ThemedBackground>
@@ -407,6 +430,8 @@ const styles = StyleSheet.create({
   stubTitle: { fontFamily: FONT_BODY, fontSize: 12.5, fontWeight: '700', lineHeight: 16, marginTop: 4 },
 
   nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16 },
+  circleStrip: { borderWidth: 1, marginTop: 14 },
+  circleDot: { width: 8, height: 8, borderRadius: 4 },
   nudgeTitle: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
   nudgeSub: { fontFamily: FONT_BODY, fontSize: 12, lineHeight: 16, marginTop: 2 },
 });

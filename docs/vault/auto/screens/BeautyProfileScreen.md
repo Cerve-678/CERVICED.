@@ -11,6 +11,7 @@ tags: [screen, client]
 - [[MessagesScreen\|Messages]]
 - [[BookingsScreen\|Bookings]]
 - [[ProfileInfoScreen\|ProfileInfo]]
+- [[CircleScreen\|Circle]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
