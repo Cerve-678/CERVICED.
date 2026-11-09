@@ -6308,8 +6308,8 @@ export async function removeProviderBlockedDate(
 
 export interface ClientBeautyProfile {
   // Hair
-  hairType: string | null;
-  scalpCondition: string | null;
+  hairType: string[];
+  scalpCondition: string[];
   hairGoals: string[];
   treatmentHistory: string[];
   // Skin — a list since multi-pick (see features/beauty-profile/pickList.ts)
@@ -6318,18 +6318,18 @@ export interface ClientBeautyProfile {
   skinConcerns: string[];
   sensitiveAreas: string[];
   // Nails
-  nailLength: string | null;
-  nailShape: string | null;
+  nailLength: string[];
+  nailShape: string[];
   // Lashes & Brows
-  lashStyle: string | null;
+  lashStyle: string[];
   lashStatus: string | null;
-  browStyle: string | null;
-  browCondition: string | null;
+  browStyle: string[];
+  browCondition: string[];
   // Makeup
-  makeupCoverage: string | null;
-  makeupFinish: string | null;
-  makeupEyes: string | null;
-  makeupLips: string | null;
+  makeupCoverage: string[];
+  makeupFinish: string[];
+  makeupEyes: string[];
+  makeupLips: string[];
   // General
   styleVibe: string[];
   // Health & Consent
@@ -6342,8 +6342,8 @@ export interface ClientBeautyProfile {
  *  service's category doesn't get comes back null. */
 interface BookingBeautyProfileRow {
   service_category: string | null;
-  hair_type: string | null;
-  scalp_condition: string | null;
+  hair_type: string[] | string | null;
+  scalp_condition: string[] | string | null;
   hair_goals: string[] | null;
   treatment_history: string[] | null;
   /** text[] once 20261108240000 is applied; a single string before it. Read through toPickList. */
@@ -6351,16 +6351,16 @@ interface BookingBeautyProfileRow {
   skin_tone: string | null;
   skin_concerns: string[] | null;
   sensitive_areas: string[] | null;
-  nail_length: string | null;
-  nail_shape: string | null;
-  lash_style: string | null;
+  nail_length: string[] | string | null;
+  nail_shape: string[] | string | null;
+  lash_style: string[] | string | null;
   lash_status: string | null;
-  brow_style: string | null;
-  brow_condition: string | null;
-  makeup_coverage: string | null;
-  makeup_finish: string | null;
-  makeup_eyes: string | null;
-  makeup_lips: string | null;
+  brow_style: string[] | string | null;
+  brow_condition: string[] | string | null;
+  makeup_coverage: string[] | string | null;
+  makeup_finish: string[] | string | null;
+  makeup_eyes: string[] | string | null;
+  makeup_lips: string[] | string | null;
   style_vibe: string[] | string | null;
   allergies: string[] | null;
   medical_notes: string | null;
@@ -6371,24 +6371,24 @@ export async function getClientBeautyProfileForBooking(
   bookingId: string,
 ): Promise<ClientBeautyProfile> {
   const EMPTY_PROFILE: ClientBeautyProfile = {
-    hairType: null,
-    scalpCondition: null,
+    hairType: [],
+    scalpCondition: [],
     hairGoals: [],
     treatmentHistory: [],
     skinType: [],
     skinTone: null,
     skinConcerns: [],
     sensitiveAreas: [],
-    nailLength: null,
-    nailShape: null,
-    lashStyle: null,
+    nailLength: [],
+    nailShape: [],
+    lashStyle: [],
     lashStatus: null,
-    browStyle: null,
-    browCondition: null,
-    makeupCoverage: null,
-    makeupFinish: null,
-    makeupEyes: null,
-    makeupLips: null,
+    browStyle: [],
+    browCondition: [],
+    makeupCoverage: [],
+    makeupFinish: [],
+    makeupEyes: [],
+    makeupLips: [],
     styleVibe: [],
     allergies: [],
     medicalNotes: null,
@@ -6419,24 +6419,24 @@ export async function getClientBeautyProfileForBooking(
 
   const d = data as BookingBeautyProfileRow;
   return {
-    hairType: d.hair_type ?? null,
-    scalpCondition: d.scalp_condition ?? null,
+    hairType: toPickList(d.hair_type),
+    scalpCondition: toPickList(d.scalp_condition),
     hairGoals: d.hair_goals ?? [],
     treatmentHistory: d.treatment_history ?? [],
     skinType: toPickList(d.skin_type),
     skinTone: d.skin_tone ?? null,
     skinConcerns: d.skin_concerns ?? [],
     sensitiveAreas: d.sensitive_areas ?? [],
-    nailLength: d.nail_length ?? null,
-    nailShape: d.nail_shape ?? null,
-    lashStyle: d.lash_style ?? null,
+    nailLength: toPickList(d.nail_length),
+    nailShape: toPickList(d.nail_shape),
+    lashStyle: toPickList(d.lash_style),
     lashStatus: d.lash_status ?? null,
-    browStyle: d.brow_style ?? null,
-    browCondition: d.brow_condition ?? null,
-    makeupCoverage: d.makeup_coverage ?? null,
-    makeupFinish: d.makeup_finish ?? null,
-    makeupEyes: d.makeup_eyes ?? null,
-    makeupLips: d.makeup_lips ?? null,
+    browStyle: toPickList(d.brow_style),
+    browCondition: toPickList(d.brow_condition),
+    makeupCoverage: toPickList(d.makeup_coverage),
+    makeupFinish: toPickList(d.makeup_finish),
+    makeupEyes: toPickList(d.makeup_eyes),
+    makeupLips: toPickList(d.makeup_lips),
     styleVibe: toPickList(d.style_vibe),
     allergies: d.allergies ?? [],
     medicalNotes: d.medical_notes ?? null,
@@ -9389,7 +9389,7 @@ export async function updateMyStagedProviderAnswers(
 export async function updateUserBeautyProfile(
   userId: string,
   data: {
-    hair_type?: string | null;
+    hair_type?: string[] | null;
     skin_type?: string[] | null;
     skin_tone?: string | null;
     allergies?: string[];
@@ -9399,17 +9399,17 @@ export async function updateUserBeautyProfile(
     medical_notes?: string | null;
     photography_consent?: boolean;
     treatment_history?: string[];
-    makeup_coverage?: string | null;
-    makeup_finish?: string | null;
-    makeup_eyes?: string | null;
-    makeup_lips?: string | null;
-    nail_length?: string | null;
-    nail_shape?: string | null;
-    lash_style?: string | null;
+    makeup_coverage?: string[] | null;
+    makeup_finish?: string[] | null;
+    makeup_eyes?: string[] | null;
+    makeup_lips?: string[] | null;
+    nail_length?: string[] | null;
+    nail_shape?: string[] | null;
+    lash_style?: string[] | null;
     lash_status?: string | null;
-    brow_style?: string | null;
-    brow_condition?: string | null;
-    scalp_condition?: string | null;
+    brow_style?: string[] | null;
+    brow_condition?: string[] | null;
+    scalp_condition?: string[] | null;
     hair_goals?: string[];
     service_interests?: string[];
     gender?: string | null;
@@ -9428,8 +9428,8 @@ export async function updateUserBeautyProfile(
 }
 
 export interface UserBeautyProfileRow {
-  hair_type: string | null;
-  scalp_condition: string | null;
+  hair_type: string[] | string | null;
+  scalp_condition: string[] | string | null;
   hair_goals: string[];
   treatment_history: string[];
   /** text[] once 20261108240000 is applied; a single string on rows before it. Read through toPickList. */
@@ -9437,16 +9437,16 @@ export interface UserBeautyProfileRow {
   skin_tone: string | null;
   skin_concerns: string[];
   sensitive_areas: string[];
-  nail_length: string | null;
-  nail_shape: string | null;
-  lash_style: string | null;
+  nail_length: string[] | string | null;
+  nail_shape: string[] | string | null;
+  lash_style: string[] | string | null;
   lash_status: string | null;
-  brow_style: string | null;
-  brow_condition: string | null;
-  makeup_coverage: string | null;
-  makeup_finish: string | null;
-  makeup_eyes: string | null;
-  makeup_lips: string | null;
+  brow_style: string[] | string | null;
+  brow_condition: string[] | string | null;
+  makeup_coverage: string[] | string | null;
+  makeup_finish: string[] | string | null;
+  makeup_eyes: string[] | string | null;
+  makeup_lips: string[] | string | null;
   /** Same transition as skin_type. */
   style_vibe: string[] | string | null;
   service_interests: string[];
@@ -9892,7 +9892,7 @@ export async function upsertUserAfterVerification(data: {
   instagram: string | null;
   tiktok: string | null;
   website: string | null;
-  hair_type: string | null;
+  hair_type: string[] | null;
   skin_type: string[] | null;
   allergies: string[];
   skin_concerns: string[];

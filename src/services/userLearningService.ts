@@ -42,7 +42,8 @@ export interface UserPreferences {
 
 export interface UserBeautyProfile {
   serviceInterests: string[];
-  hairType: string;
+  /** Multi-pick since 2026-11-09 (e.g. 4B and 4C). */
+  hairType: string[];
   /** Multi-pick since 2026-11-08 — every picked vibe seeds the same tags. */
   styleVibe: string[];
   treatmentHistory: string[];
@@ -397,7 +398,7 @@ class UserLearningService {
       topTechniqueTags: await this.getTopTechniqueTags(5),
       topTrendNames: await this.getTopTrendNames(3),
       profileStyleVibe: this.userProfile?.styleVibe.length ? this.userProfile.styleVibe.join(', ') : null,
-      profileHairType: this.userProfile?.hairType || null,
+      profileHairType: this.userProfile?.hairType.length ? this.userProfile.hairType.join(', ') : null,
     };
   }
 
@@ -601,9 +602,9 @@ class UserLearningService {
     });
 
     // Profile: hair type expertise match
-    if (this.userProfile?.hairType) {
-      const hairKey = this.userProfile.hairType.toLowerCase().replace(/\s+/g, '-');
-      if ((provider.expertiseTags || []).some(t => t.includes(hairKey))) score += 4;
+    if (this.userProfile?.hairType.length) {
+      const hairKeys = this.userProfile.hairType.map(h => h.toLowerCase().replace(/\s+/g, '-'));
+      if ((provider.expertiseTags || []).some(t => hairKeys.some(k => t.includes(k)))) score += 4;
     }
 
     // Profile: style vibe match

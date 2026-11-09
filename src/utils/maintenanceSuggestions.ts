@@ -117,8 +117,10 @@ export function buildMaintenanceSuggestions(
   };
 
   // ── Hair ──────────────────────────────────────────────────────────────────
-  const hairAnswer = profile.hairType ? `Hair type: ${profile.hairType}` : null;
-  if (profile.hairType && TEXTURED_HAIR_TYPES.has(profile.hairType)) {
+  // Hair type is multi-pick (e.g. 4B and 4C); any textured pick counts.
+  const hairAnswer = profile.hairType.length ? `Hair type: ${formatPickList(profile.hairType)}` : null;
+  const texturedHair = profile.hairType.some(t => TEXTURED_HAIR_TYPES.has(t));
+  if (texturedHair) {
     offer('wash_and_go', hairAnswer!);
     offer('silk_press', hairAnswer!);
     offer('deep_conditioning', hairAnswer!);
@@ -161,20 +163,20 @@ export function buildMaintenanceSuggestions(
     offer('lash_infill', 'Lashes: Currently have extensions');
   } else if (profile.lashStatus !== 'No extensions' && profile.treatmentHistory.includes('Lash extensions')) {
     offer('lash_infill', 'Treatment history: Lash extensions');
-  } else if (profile.lashStatus === 'No extensions' && profile.lashStyle === 'Natural') {
+  } else if (profile.lashStatus === 'No extensions' && profile.lashStyle.includes('Natural')) {
     // Natural lashes, no extensions: a lift is the bookable lash service.
     offer('lash_lift', 'Lashes: Natural, no extensions');
   }
-  const nailAnswer = profile.nailShape ? `Nails: ${profile.nailShape}`
-    : profile.nailLength ? `Nails: ${profile.nailLength}`
+  const nailAnswer = profile.nailShape.length ? `Nails: ${formatPickList(profile.nailShape)}`
+    : profile.nailLength.length ? `Nails: ${formatPickList(profile.nailLength)}`
     : null;
   if (nailAnswer) {
     offer('nails_general', nailAnswer);
     offer('pedicure', nailAnswer);
   }
-  if (profile.browStyle === 'Laminated') offer('brow_lamination', 'Brows: Laminated');
-  else if (profile.browStyle) offer('brows_general', `Brows: ${profile.browStyle}`);
-  else if (profile.browCondition) offer('brows_general', `Brows: ${profile.browCondition}`);
+  if (profile.browStyle.includes('Laminated')) offer('brow_lamination', 'Brows: Laminated');
+  else if (profile.browStyle.length) offer('brows_general', `Brows: ${formatPickList(profile.browStyle)}`);
+  else if (profile.browCondition.length) offer('brows_general', `Brows: ${formatPickList(profile.browCondition)}`);
   // Waxing is never suggested: the only related answer, "Sensitive areas", is
   // about skin sensitivity, and a treatment offered because of it is advice.
   // Clients add waxing themselves from "Add your own".

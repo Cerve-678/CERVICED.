@@ -14,8 +14,8 @@ export type Gender = 'female' | 'male' | 'non-binary' | 'prefer-not-to-say';
 
 export interface BeautyData {
   // Hair
-  hairType:           string;
-  scalpCondition:     string;
+  hairType:           string[];
+  scalpCondition:     string[];
   hairGoals:          string[];
   treatmentHistory:   string[];
   // Skin
@@ -24,18 +24,18 @@ export interface BeautyData {
   skinConcerns:       string[];
   sensitiveAreas:     string[];
   // Nails
-  nailLength:         string;
-  nailShape:          string;
+  nailLength:         string[];
+  nailShape:          string[];
   // Lashes & Brows
-  lashStyle:          string;
+  lashStyle:          string[];
   lashStatus:         string;
-  browStyle:          string;
-  browCondition:      string;
+  browStyle:          string[];
+  browCondition:      string[];
   // Makeup
-  makeupCoverage:     string;
-  makeupFinish:       string;
-  makeupEyes:         string;
-  makeupLips:         string;
+  makeupCoverage:     string[];
+  makeupFinish:       string[];
+  makeupEyes:         string[];
+  makeupLips:         string[];
   // General
   styleVibe:          string[];
   serviceInterests:   string[];
@@ -49,11 +49,11 @@ export interface BeautyData {
 }
 
 export const EMPTY_BEAUTY_DATA: BeautyData = {
-  hairType: '', scalpCondition: '', hairGoals: [], treatmentHistory: [],
+  hairType: [], scalpCondition: [], hairGoals: [], treatmentHistory: [],
   skinType: [], skinTone: '', skinConcerns: [], sensitiveAreas: [],
-  nailLength: '', nailShape: '',
-  lashStyle: '', lashStatus: '', browStyle: '', browCondition: '',
-  makeupCoverage: '', makeupFinish: '', makeupEyes: '', makeupLips: '',
+  nailLength: [], nailShape: [],
+  lashStyle: [], lashStatus: '', browStyle: [], browCondition: [],
+  makeupCoverage: [], makeupFinish: [], makeupEyes: [], makeupLips: [],
   styleVibe: [], serviceInterests: [],
   gender: null, has_kids: false,
   allergies: [], medicalNotes: '', photographyConsent: true,

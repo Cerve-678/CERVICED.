@@ -3460,12 +3460,16 @@ const beautyProfile: Capability = {
     // this same object — they are for the provider treating you, and Becca
     // neither recites nor interprets them (see BECCA_CAPABILITIES.md §2.1).
     const fields: { title: string; detail: string }[] = [];
-    if (profile?.hair_type) fields.push({ title: "Hair type", detail: profile.hair_type });
+    const hairTypes = toPickList(profile?.hair_type);
+    if (hairTypes.length) fields.push({ title: "Hair type", detail: formatPickList(hairTypes) });
     const skinTypes = toPickList(profile?.skin_type);
     if (skinTypes.length) fields.push({ title: "Skin type", detail: formatPickList(skinTypes) });
-    if (profile?.nail_shape) fields.push({ title: "Nail shape", detail: profile.nail_shape });
-    if (profile?.lash_style) fields.push({ title: "Lash style", detail: profile.lash_style });
-    if (profile?.brow_style) fields.push({ title: "Brow style", detail: profile.brow_style });
+    const nailShapes = toPickList(profile?.nail_shape);
+    if (nailShapes.length) fields.push({ title: "Nail shape", detail: formatPickList(nailShapes) });
+    const lashStyles = toPickList(profile?.lash_style);
+    if (lashStyles.length) fields.push({ title: "Lash style", detail: formatPickList(lashStyles) });
+    const browStyles = toPickList(profile?.brow_style);
+    if (browStyles.length) fields.push({ title: "Brow style", detail: formatPickList(browStyles) });
     const styleVibes = toPickList(profile?.style_vibe);
     if (styleVibes.length) fields.push({ title: "Style", detail: formatPickList(styleVibes) });
     const bits = fields.map((f) => `- **${f.title}:** ${f.detail}`);

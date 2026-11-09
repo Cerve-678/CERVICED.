@@ -29,7 +29,7 @@ describe('buildMaintenanceSuggestions', () => {
   });
 
   it('offers the textured-hair services for coily hair, each citing the answer', () => {
-    const s = buildMaintenanceSuggestions(profile({ hairType: 'Coily' }), NO_ANSWERS, [], TODAY);
+    const s = buildMaintenanceSuggestions(profile({ hairType: ['Coily'] }), NO_ANSWERS, [], TODAY);
     expect(s.map(x => x.typeKey)).toEqual(['wash_and_go', 'silk_press', 'deep_conditioning', 'trim']);
     s.forEach(x => expect(x.answer).toBe('Hair type: Coily'));
   });
@@ -43,9 +43,9 @@ describe('buildMaintenanceSuggestions', () => {
   it('never lets a profile answer change an interval length', () => {
     // Hair type and history may choose WHICH types, never how long (legal mitigation 2).
     const variants: Partial<BeautyData>[] = [
-      { hairType: 'Straight' }, { hairType: '4C' },
-      { hairType: '4C', treatmentHistory: ['Relaxed / permed', 'Bleached / lightened'] },
-      { hairType: 'Wavy', hairGoals: ['Moisture'], skinTone: 'Deep' },
+      { hairType: ['Straight'] }, { hairType: ['4C'] },
+      { hairType: ['4C'], treatmentHistory: ['Relaxed / permed', 'Bleached / lightened'] },
+      { hairType: ['Wavy'], hairGoals: ['Moisture'], skinTone: 'Deep' },
     ];
     for (const v of variants) {
       for (const s of buildMaintenanceSuggestions(profile(v), NO_ANSWERS, [], TODAY)) {
@@ -69,7 +69,7 @@ describe('buildMaintenanceSuggestions', () => {
 
   it('skips types the client already has, paused or not', () => {
     const s = buildMaintenanceSuggestions(
-      profile({ hairType: 'Coily' }), NO_ANSWERS,
+      profile({ hairType: ['Coily'] }), NO_ANSWERS,
       [item({ typeKey: 'silk_press', paused: true }), item({ typeKey: 'trim' })], TODAY);
     expect(s.map(x => x.typeKey)).toEqual(['wash_and_go', 'deep_conditioning']);
   });
@@ -104,23 +104,23 @@ describe('buildMaintenanceSuggestions', () => {
   });
 
   it('offers brow lamination for laminated brows, the general brow visit otherwise', () => {
-    const lam = buildMaintenanceSuggestions(profile({ browStyle: 'Laminated' }), NO_ANSWERS, [], TODAY);
+    const lam = buildMaintenanceSuggestions(profile({ browStyle: ['Laminated'] }), NO_ANSWERS, [], TODAY);
     expect(lam.map(x => [x.typeKey, x.answer])).toEqual([['brow_lamination', 'Brows: Laminated']]);
-    const nat = buildMaintenanceSuggestions(profile({ browStyle: 'Natural' }), NO_ANSWERS, [], TODAY);
+    const nat = buildMaintenanceSuggestions(profile({ browStyle: ['Natural'] }), NO_ANSWERS, [], TODAY);
     expect(nat.map(x => x.typeKey)).toEqual(['brows_general']);
   });
 
   it('offers a lash lift only for natural lashes with no extensions', () => {
     const lift = buildMaintenanceSuggestions(
-      profile({ lashStatus: 'No extensions', lashStyle: 'Natural' }), NO_ANSWERS, [], TODAY);
+      profile({ lashStatus: 'No extensions', lashStyle: ['Natural'] }), NO_ANSWERS, [], TODAY);
     expect(lift.map(x => x.typeKey)).toEqual(['lash_lift']);
     const ext = buildMaintenanceSuggestions(
-      profile({ lashStatus: 'Currently have extensions', lashStyle: 'Natural' }), NO_ANSWERS, [], TODAY);
+      profile({ lashStatus: 'Currently have extensions', lashStyle: ['Natural'] }), NO_ANSWERS, [], TODAY);
     expect(ext.map(x => x.typeKey)).toEqual(['lash_infill']);
   });
 
   it('offers a pedicure alongside the nail visit, citing the same answer', () => {
-    const s = buildMaintenanceSuggestions(profile({ nailShape: 'Almond' }), NO_ANSWERS, [], TODAY);
+    const s = buildMaintenanceSuggestions(profile({ nailShape: ['Almond'] }), NO_ANSWERS, [], TODAY);
     expect(s.map(x => [x.typeKey, x.answer])).toEqual([
       ['nails_general', 'Nails: Almond'],
       ['pedicure', 'Nails: Almond'],

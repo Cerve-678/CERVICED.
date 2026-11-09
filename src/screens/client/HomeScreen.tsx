@@ -504,7 +504,7 @@ export default function HomeScreen() {
       const u = user as any;
       userLearningService.setUserProfile({
         serviceInterests:    u.serviceInterests    || [],
-        hairType:            u.hairType            || '',
+        hairType:            toPickList(u.hairType),
         styleVibe:           toPickList(u.styleVibe),
         treatmentHistory:    u.treatmentHistory    || [],
         maintenanceFrequency: u.maintenanceFrequency || '',

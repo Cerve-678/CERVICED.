@@ -38,9 +38,9 @@ const SMOOTH_GOALS_FIRST = [
  * Every hair goal, with the ones that usually fit this hair type first. Nothing
  * is hidden: anyone can pick any goal, it's only the order that changes.
  */
-export function hairGoalsFor(hairType: string): string[] {
-  const textured = ['Curly', 'Coily', '4A', '4B', '4C'].includes(hairType);
-  const smooth = hairType === 'Straight' || hairType === 'Wavy';
+export function hairGoalsFor(hairTypes: readonly string[]): string[] {
+  const textured = hairTypes.some(t => ['Curly', 'Coily', '4A', '4B', '4C'].includes(t));
+  const smooth = !textured && hairTypes.some(t => t === 'Straight' || t === 'Wavy');
   const lead = textured ? TEXTURED_GOALS_FIRST : smooth ? SMOOTH_GOALS_FIRST : [];
   return [...lead, ...HAIR_GOALS.filter(g => !lead.includes(g))];
 }

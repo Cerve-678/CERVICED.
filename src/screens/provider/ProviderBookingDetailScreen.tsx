@@ -1816,10 +1816,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         const hairHistory = hairTreatmentHistory(clientProfile.treatmentHistory);
 
                         const hasSkin = (clientProfile.skinType.length > 0) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
-                        const hasHair = (clientProfile.hairType) || (clientProfile.scalpCondition) || (clientProfile.hairGoals.length > 0) || (hairHistory.length > 0);
-                        const hasNails = (clientProfile.nailLength) || (clientProfile.nailShape);
-                        const hasLashesBrows = (clientProfile.lashStyle) || (clientProfile.lashStatus) || (clientProfile.browStyle) || (clientProfile.browCondition);
-                        const hasMakeup = (clientProfile.makeupCoverage) || (clientProfile.makeupFinish) || (clientProfile.makeupEyes) || (clientProfile.makeupLips);
+                        const hasHair = (clientProfile.hairType.length > 0) || (clientProfile.scalpCondition.length > 0) || (clientProfile.hairGoals.length > 0) || (hairHistory.length > 0);
+                        const hasNails = (clientProfile.nailLength.length > 0) || (clientProfile.nailShape.length > 0);
+                        const hasLashesBrows = (clientProfile.lashStyle.length > 0) || (clientProfile.lashStatus) || (clientProfile.browStyle.length > 0) || (clientProfile.browCondition.length > 0);
+                        const hasMakeup = (clientProfile.makeupCoverage.length > 0) || (clientProfile.makeupFinish.length > 0) || (clientProfile.makeupEyes.length > 0) || (clientProfile.makeupLips.length > 0);
                         const hasStyle = clientProfile.styleVibe.length > 0;
                         const hasAlerts = (clientProfile.allergies.length > 0) || (clientProfile.medicalNotes);
 
@@ -1865,8 +1865,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasHair && (
                               <>
                                 {catLabel('Hair')}
-                                {clientProfile.hairType ? <Row label="Hair type" value={clientProfile.hairType} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.scalpCondition ? <Row label="Scalp condition" value={clientProfile.scalpCondition} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.hairType.length > 0 ? <Row label="Hair type" value={formatPickList(clientProfile.hairType)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.scalpCondition.length > 0 ? <Row label="Scalp condition" value={formatPickList(clientProfile.scalpCondition)} textColor={P.text} divColor={rowDiv} /> : null}
                                 {hairHistory.length > 0 && (
                                   <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                     <Text style={[styles.rowLabel, { color: P.text }]}>Treatment history</Text>
@@ -1886,8 +1886,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasNails && (
                               <>
                                 {catLabel('Nails')}
-                                {clientProfile.nailLength ? <Row label="Preferred length" value={clientProfile.nailLength} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.nailShape ? <Row label="Preferred shape" value={clientProfile.nailShape} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.nailLength.length > 0 ? <Row label="Preferred length" value={formatPickList(clientProfile.nailLength)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.nailShape.length > 0 ? <Row label="Preferred shape" value={formatPickList(clientProfile.nailShape)} textColor={P.text} divColor={rowDiv} /> : null}
                               </>
                             )}
 
@@ -1895,10 +1895,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasLashesBrows && (
                               <>
                                 {catLabel('Lashes & Brows')}
-                                {clientProfile.lashStyle ? <Row label="Lash style" value={clientProfile.lashStyle} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.lashStyle.length > 0 ? <Row label="Lash style" value={formatPickList(clientProfile.lashStyle)} textColor={P.text} divColor={rowDiv} /> : null}
                                 {clientProfile.lashStatus ? <Row label="Lash status" value={clientProfile.lashStatus} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.browStyle ? <Row label="Brow style" value={clientProfile.browStyle} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.browCondition ? <Row label="Brow condition" value={clientProfile.browCondition} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.browStyle.length > 0 ? <Row label="Brow style" value={formatPickList(clientProfile.browStyle)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.browCondition.length > 0 ? <Row label="Brow condition" value={formatPickList(clientProfile.browCondition)} textColor={P.text} divColor={rowDiv} /> : null}
                               </>
                             )}
 
@@ -1906,10 +1906,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasMakeup && (
                               <>
                                 {catLabel('Makeup')}
-                                {clientProfile.makeupCoverage ? <Row label="Coverage" value={clientProfile.makeupCoverage} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupFinish ? <Row label="Finish" value={clientProfile.makeupFinish} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupEyes ? <Row label="Eye style" value={clientProfile.makeupEyes} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupLips ? <Row label="Lip preference" value={clientProfile.makeupLips} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupCoverage.length > 0 ? <Row label="Coverage" value={formatPickList(clientProfile.makeupCoverage)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupFinish.length > 0 ? <Row label="Finish" value={formatPickList(clientProfile.makeupFinish)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupEyes.length > 0 ? <Row label="Eye style" value={formatPickList(clientProfile.makeupEyes)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.makeupLips.length > 0 ? <Row label="Lip preference" value={formatPickList(clientProfile.makeupLips)} textColor={P.text} divColor={rowDiv} /> : null}
                               </>
                             )}
 
