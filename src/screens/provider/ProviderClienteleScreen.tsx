@@ -123,10 +123,17 @@ function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: 
   visible: boolean; member: ClienteleMember | null; bookings: DbBooking[];
   loading: boolean; onClose: () => void; P: typeof LIGHT;
 }) {
+  // Inside a <Modal>, so the live inset, not SafeAreaView (inert here).
+  const bottomInset = useSystemBottomInset();
   return (
     <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={chSt.backdrop} activeOpacity={1} onPress={onClose} />
-      <View style={[chSt.sheet, { backgroundColor: P.surface }]}>
+      {/* The dim fills the whole window BEHIND the sheet. It used to be a
+          strip stacked above the sheet, so it stopped in a straight line at
+          the sheet's top edge and the two rounded corners showed the
+          undimmed screen through their cut-outs. */}
+      <View style={chSt.overlay}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+      <View style={[chSt.sheet, { backgroundColor: P.surface, paddingBottom: bottomInset }]}>
         <View style={[chSt.handle, { backgroundColor: P.border }]} />
         <View style={chSt.header}>
           {member && (
@@ -148,7 +155,7 @@ function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: 
         ) : bookings.length === 0 ? (
           <View style={chSt.center}><Text style={[chSt.emptySub, { color: P.sub }]}>No booking history</Text></View>
         ) : (
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 504 }} contentContainerStyle={{ paddingBottom: 40 }}>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 504 }} contentContainerStyle={{ paddingBottom: 16 }}>
             {bookings.map(b => {
               const statusColor = b.status === 'completed' ? GREEN
                 : b.status === 'cancelled' ? DANGER : P.sub;
@@ -174,11 +181,12 @@ function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: 
           </ScrollView>
         )}
       </View>
+      </View>
     </Modal>
   );
 }
 const chSt = StyleSheet.create({
-  backdrop:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  overlay:     { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '75%' },
   handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   header:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
