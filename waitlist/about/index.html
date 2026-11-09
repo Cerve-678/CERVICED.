@@ -318,6 +318,125 @@ body{transition:background-color .35s ease,color .35s ease;}
 }
 .replay[hidden]{display:none !important;}
 
+/* ── From the feed section ────────────────────────────────────────────
+   The providers people find on social media, bookable in one app. The
+   headline rotates the platform; the right side is a DM thread that never
+   got answered beside the booking that replaces it. */
+.feed{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,0.95fr);gap:56px;align-items:center;}
+.feed-copy{display:flex;flex-direction:column;gap:22px;min-width:0;}
+.feed h2{font-size:clamp(30px,4.4vw,52px);text-transform:uppercase;line-height:1.04;}
+.feed h2 > span{display:block;}
+.feed h2 .then{color:var(--sub);}
+.rotator{display:inline-grid;color:var(--accent-text);}
+.rotator > span{grid-area:1/1;}
+.rotator .alt{visibility:hidden;}
+.feed-copy > p{color:var(--sub);max-width:48ch;}
+.feed-copy > p strong{color:var(--text);font-weight:600;}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+.chat{display:flex;flex-direction:column;gap:12px;min-width:0;}
+.dm{
+  background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:18px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.dm-head{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px;}
+.bubble{max-width:82%;padding:10px 14px;border-radius:18px;font-size:14.5px;line-height:1.4;}
+.bubble.me{align-self:flex-end;background:var(--accent);color:var(--on-accent);border-bottom-right-radius:6px;}
+.bubble.them{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:6px;}
+.seen{align-self:flex-end;font-size:12px;color:var(--sub);padding-right:6px;}
+.booked{
+  background:var(--card);border:1.5px solid var(--accent);border-radius:22px;box-shadow:var(--shadow);
+  padding:18px 20px;display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;
+}
+.booked .when{grid-row:span 2;font-family:'Bakbak One',sans-serif;text-transform:uppercase;font-size:12px;letter-spacing:0.12em;color:var(--sub);text-align:center;line-height:1.15;}
+.booked .when b{display:block;font-weight:400;font-size:26px;letter-spacing:0;color:var(--text);}
+.booked .svc{font-size:15.5px;}
+.booked .meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;}
+
+/* ── Client showcases: circle, beauty profile, maintenance ─────────── */
+.shows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-bottom:56px;}
+.show{
+  background:var(--card);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);
+  padding:22px;display:flex;flex-direction:column;gap:16px;min-width:0;
+}
+/* Line the three cards up: demo, heading and text share rows across cards. */
+@supports (grid-template-rows: subgrid){
+  .shows{grid-template-rows:auto auto auto;row-gap:0;}
+  .show{display:grid;grid-row:span 3;grid-template-rows:subgrid;gap:16px;align-content:start;}
+}
+.show h3{font-size:20px;text-transform:uppercase;letter-spacing:0.01em;}
+.show > p{font-size:15px;color:var(--sub);}
+.demo{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:178px;}
+
+.prov{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.prov .svc{font-size:14.5px;}
+.faces{display:flex;align-items:center;}
+.face{
+  width:30px;height:30px;border-radius:50%;display:grid;place-items:center;position:relative;
+  font-family:'Bakbak One',sans-serif;font-size:10.5px;letter-spacing:0.03em;
+  background:var(--secondary);color:var(--secondary-text);border:2px solid var(--card);margin-left:-8px;
+}
+.face:first-child{margin-left:0;}
+.face:nth-child(1){z-index:4;} .face:nth-child(2){z-index:3;} .face:nth-child(3){z-index:2;} .face:nth-child(4){z-index:1;}
+.face.more{background:var(--accent);color:var(--on-accent);}
+.face .heart{position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;background:var(--card);display:grid;place-items:center;color:var(--accent-text);font-size:9px;line-height:1;}
+.circle-rows{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--sep);padding-top:10px;}
+.circle-rows div{display:flex;justify-content:space-between;gap:10px;font-size:13px;}
+.circle-rows .who{font-size:13px;}
+.rec{
+  align-self:flex-start;margin-top:auto;padding:7px 14px;border-radius:999px;border:1px solid var(--accent);color:var(--accent-text);
+  font-family:'Bakbak One',sans-serif;font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;
+}
+
+.areas{display:flex;flex-wrap:wrap;gap:6px;}
+.area{padding:6px 11px;border-radius:999px;border:1px solid var(--border);font-size:12.5px;color:var(--sub);}
+.area.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+.answers{display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--sep);padding-top:10px;font-size:13px;}
+.answers div{display:flex;justify-content:space-between;gap:10px;}
+.answers span:first-child{color:var(--sub);}
+.shared{font-size:12px;color:var(--sub);margin-top:auto;}
+.shared b{font-weight:600;color:var(--accent-text);}
+
+.due{background:var(--card);border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.due-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+.due-top .svc{font-size:15px;}
+.count-n{font-family:'Bakbak One',sans-serif;font-size:22px;font-variant-numeric:tabular-nums;color:var(--text);line-height:1;}
+.count-n small{font-family:'Jura',sans-serif;font-size:12px;color:var(--sub);margin-left:3px;}
+.due-acts{display:flex;gap:6px;flex-wrap:wrap;}
+.due-acts span{padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);color:var(--sub);}
+.due-acts span:first-child{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+.next{display:flex;flex-direction:column;gap:6px;font-size:13px;}
+.next div{display:flex;justify-content:space-between;gap:10px;}
+.next span:last-child{color:var(--sub);font-variant-numeric:tabular-nums;}
+
+.motion .show .face,.motion .show .area,.motion .show .answers div,.motion .show .due,.motion .show .next div,.motion .show .rec,.motion .show .circle-rows div{
+  opacity:0;transform:translateY(8px) scale(.96);transition:opacity .45s ease,transform .5s cubic-bezier(.34,1.56,.64,1);
+  transition-delay:calc(var(--d,0) * 110ms + .3s);
+}
+.motion .show.is-in .face,.motion .show.is-in .area,.motion .show.is-in .answers div,.motion .show.is-in .due,.motion .show.is-in .next div,.motion .show.is-in .rec,.motion .show.is-in .circle-rows div{opacity:1;transform:none;}
+.motion .show.is-in .area.on{animation:pick 2.8s ease 1.4s infinite;}
+@keyframes pick{50%{box-shadow:0 0 0 5px var(--accent-dim);}}
+
+/* ── Text animation ───────────────────────────────────────────────── */
+.mark{background-image:linear-gradient(var(--accent-dim),var(--accent-dim));background-repeat:no-repeat;background-size:100% 100%;padding:0 .12em;border-radius:3px;}
+.motion .mark{background-size:0% 100%;transition:background-size .9s cubic-bezier(.22,.68,.35,1) .35s;}
+.motion .is-in .mark{background-size:100% 100%;}
+.motion .split .w{display:inline-block;opacity:0;transform:translateY(.55em) rotate(2deg);transition:opacity .5s ease,transform .65s cubic-bezier(.22,.68,.35,1);transition-delay:calc(var(--w) * 55ms + 80ms);}
+.motion .is-in .split .w{opacity:1;transform:none;}
+.motion .rotator > span{transition:opacity .45s ease,transform .55s cubic-bezier(.22,.68,.35,1);}
+.motion .rotator > span.out{opacity:0;transform:translateY(-.45em);}
+.motion .rotator > span.in-start{opacity:0;transform:translateY(.45em);transition:none;}
+.motion .feed .bubble,.motion .feed .seen{opacity:0;transform:translateY(10px);transition:opacity .45s ease,transform .45s ease;}
+.motion .feed.is-in .bubble,.motion .feed.is-in .seen{opacity:1;transform:none;}
+.motion .feed.is-in .bubble:nth-of-type(2){transition-delay:.35s;}
+.motion .feed.is-in .bubble:nth-of-type(3){transition-delay:.9s;}
+.motion .feed.is-in .bubble:nth-of-type(4){transition-delay:1.5s;}
+.motion .feed.is-in .seen{transition-delay:2s;}
+.motion .feed .dm{transition:opacity .6s ease 2.6s;}
+.motion .feed.is-in .dm{opacity:.55;}
+.motion .feed .booked{opacity:0;transform:translateY(16px) scale(.97);transition:opacity .6s ease 2.9s,transform .7s cubic-bezier(.34,1.56,.64,1) 2.9s;}
+.motion .feed.is-in .booked{opacity:1;transform:none;}
+
 /* ── Motion ───────────────────────────────────────────────────────────
    Only under html.motion (set in <head> when the device allows motion), so
    with reduced motion or no script every element is simply visible. */
@@ -345,6 +464,8 @@ body{transition:background-color .35s ease,color .35s ease;}
 
 @media (max-width:880px){
   .onecart{grid-template-columns:1fr;gap:36px;}
+  .feed{grid-template-columns:1fr;gap:36px;}
+  .shows{grid-template-columns:1fr;max-width:560px;}
   .hero{grid-template-columns:1fr;gap:44px;padding:56px 0 64px;}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .foot-cols{grid-template-columns:1fr 1fr;}
@@ -403,6 +524,38 @@ body{transition:background-color .35s ease,color .35s ease;}
   </div>
 </div>
 
+<section id="from-the-feed">
+  <div class="wrap">
+    <div class="feed reveal" id="feed">
+      <div class="feed-copy">
+        <span class="label">From the feed</span>
+        <h2>
+          <span>Found them on</span>
+          <span><span class="sr-only">Instagram, TikTok or Facebook?</span><span class="rotator" aria-hidden="true"><span class="cur">Instagram?</span><span class="alt">your feed?</span></span></span>
+          <span class="then">Book them here.</span>
+        </h2>
+        <p>Book your favourite Instagram and social media providers, <span class="mark">all in one app</span>.</p>
+        <p>Independent beauty grows on social media, but booking it still happens in DMs, comment threads and link-in-bio forms. On Cerviced a provider's real availability, prices, deposits and policies sit on their profile, so <strong>you book in a few taps instead of waiting for a reply.</strong></p>
+      </div>
+
+      <div class="chat" aria-label="Example: a DM asking for an appointment, and the same appointment booked on Cerviced">
+        <div class="dm">
+          <div class="dm-head"><span class="label">Direct message</span><span class="label">Nia Hair</span></div>
+          <div class="bubble me">Hi! Do you have anything this Saturday for knotless braids?</div>
+          <div class="bubble them">Let me check and get back to you x</div>
+          <div class="bubble me">Any update? Need to know for my holiday</div>
+          <span class="seen">Seen 2 days ago</span>
+        </div>
+        <div class="booked">
+          <span class="when">Sat<b>11:00</b></span>
+          <span class="svc">Knotless braids · Nia Hair</span>
+          <span class="meta"><span class="pill">Booked</span><span class="who">Deposit paid · policies agreed</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="one-cart">
   <div class="wrap">
     <div class="onecart reveal" id="onecart">
@@ -447,7 +600,7 @@ body{transition:background-color .35s ease,color .35s ease;}
     </div>
     <div class="prose reveal">
       <p>Most booking software started with one business, one diary and one checkout. That made sense when a salon did everything under one roof.</p>
-      <p>It doesn't fit beauty today. A client sees a different expert for hair, lashes, nails and skin, and each of those experts runs a business of one. <strong>The client has a routine. The provider has a business. Nothing connected the two.</strong></p>
+      <p>It doesn't fit beauty today. A client sees a different expert for hair, lashes, nails and skin, and each of those experts runs a business of one. <strong>The client has a routine. The provider has a business. <span class="mark">Nothing connected the two.</span></strong></p>
       <p>Cerviced starts from both ends at once: the client's whole routine, and the independent provider's whole business. Every feature we build joins them up.</p>
     </div>
   </div>
@@ -459,13 +612,55 @@ body{transition:background-color .35s ease,color .35s ease;}
       <span class="label">For clients</span>
       <h2>Your whole routine, in one place</h2>
     </div>
+    <div class="shows">
+      <div class="show reveal" style="--i:0">
+        <div class="demo" aria-label="Example: faces of people you follow on a provider">
+          <div class="prov"><span><span class="svc">Studio Ren</span><br><span class="who">Lashes · Camberwell</span></span>
+            <span class="faces"><span class="face" style="--d:0">AK<span class="heart" aria-hidden="true">♥</span></span><span class="face" style="--d:1">JO</span><span class="face" style="--d:2">TB</span><span class="face more" style="--d:3">+2</span></span></div>
+          <div class="circle-rows">
+            <div style="--d:4"><span>Ama</span><span class="who">Recommends</span></div>
+            <div style="--d:5"><span>Jo</span><span class="who">Has been · 3 times</span></div>
+          </div>
+          <span class="rec" style="--d:6">Recommend</span>
+        </div>
+        <h3>See who's been to who</h3>
+        <p>Follow friends and see their faces on the providers they recommend or have been to. Recommend the ones you love. You decide whether your followers see where you go.</p>
+      </div>
+
+      <div class="show reveal" style="--i:1">
+        <div class="demo" aria-label="Example: a beauty profile">
+          <div class="areas"><span class="area on" style="--d:0">Hair</span><span class="area" style="--d:1">Lashes &amp; Brows</span><span class="area" style="--d:2">Skin</span><span class="area" style="--d:3">Makeup</span><span class="area" style="--d:4">Nails</span><span class="area" style="--d:5">Style</span></div>
+          <div class="answers">
+            <div style="--d:6"><span>Hair type</span><span>4C</span></div>
+            <div style="--d:7"><span>Scalp</span><span>Sensitive</span></div>
+            <div style="--d:8"><span>Hair goals</span><span>Length retention</span></div>
+            <div style="--d:9"><span>Allergies</span><span>Noted</span></div>
+          </div>
+          <p class="shared">Shared with <b>Nia Hair</b> for this booking: hair answers and allergies only.</p>
+        </div>
+        <h3>A beauty profile that's yours</h3>
+        <p>Hair, lashes and brows, skin, makeup, nails and style, mapped once. A provider sees only what their service needs, and only once you've booked them.</p>
+      </div>
+
+      <div class="show reveal" style="--i:2">
+        <div class="demo" aria-label="Example: maintenance reminders">
+          <div class="due" style="--d:0">
+            <div class="due-top"><span><span class="svc">Lash refill</span><br><span class="who">Studio Ren</span></span><span class="count-n">3<small>days</small></span></div>
+            <div class="due-acts"><span>Book</span><span>Done it</span><span>Snooze +7 days</span></div>
+          </div>
+          <div class="next">
+            <div style="--d:1"><span>Gel infill</span><span>9 days</span></div>
+            <div style="--d:2"><span>Silk press</span><span>3 weeks</span></div>
+          </div>
+        </div>
+        <h3>Maintenance reminders</h3>
+        <p>After each appointment, Cerviced works out when you're due again and reminds you on the day. Book, mark it done or snooze a week. If you've already booked, it stays quiet.</p>
+      </div>
+    </div>
     <div class="grid">
-      <div class="point reveal" style="--i:0"><span class="rule"></span><h3>One cart, every provider</h3><p>Add hair in one postcode, lashes in another and nails at home, then pay once. Book back-to-back and the times line up for you.</p></div>
-      <div class="point reveal" style="--i:1"><span class="rule"></span><h3>A profile that remembers you</h3><p>Your hair type, skin, allergies and preferences, saved once. A provider sees only what their service needs, and only once you've booked them.</p></div>
-      <div class="point reveal" style="--i:2"><span class="rule"></span><h3>Maintenance that keeps time</h3><p>Cerviced works out when your infills, refills and touch-ups are due and reminds you on the day. If you've already booked, it stays quiet.</p></div>
-      <div class="point reveal" style="--i:3"><span class="rule"></span><h3>Becca, your assistant</h3><p>Ask in your own words. Becca finds providers, answers questions about your bookings and puts your last appointment back in your cart in one tap.</p></div>
-      <div class="point reveal" style="--i:4"><span class="rule"></span><h3>Waitlists that move</h3><p>When a time you wanted frees up, it's held for you and you're told straight away. If you pass, it goes to the next person in line.</p></div>
-      <div class="point reveal" style="--i:5"><span class="rule"></span><h3>Rescheduling on a clock</h3><p>Ask to move an appointment and the other side has 45 minutes to answer. You both see the deadline, so nobody waits days for a reply.</p></div>
+      <div class="point reveal" style="--i:0"><span class="rule"></span><h3>Becca, your assistant</h3><p>Ask in your own words. Becca finds providers, answers questions about your bookings and puts your last appointment back in your cart in one tap.</p></div>
+      <div class="point reveal" style="--i:1"><span class="rule"></span><h3>Waitlists that move</h3><p>When a time you wanted frees up, it's held for you and you're told straight away. If you pass, it goes to the next person in line.</p></div>
+      <div class="point reveal" style="--i:2"><span class="rule"></span><h3>Rescheduling on a clock</h3><p>Ask to move an appointment and the other side has 45 minutes to answer. You both see the deadline, so nobody waits days for a reply.</p></div>
     </div>
   </div>
 </section>
@@ -483,7 +678,7 @@ body{transition:background-color .35s ease,color .35s ease;}
       <div class="point reveal" style="--i:2"><span class="rule"></span><h3>Your diary, your release day</h3><p>Let clients book a set time ahead, or open a month at a time on the day you choose.</p></div>
       <div class="point reveal" style="--i:3"><span class="rule"></span><h3>Clients who arrive ready</h3><p>Send info packs and forms before each appointment, so you know what you need to before anyone sits down.</p></div>
       <div class="point reveal" style="--i:4"><span class="rule"></span><h3>Paid properly</h3><p>Clients pay by card, Apple Pay, Google Pay or PayPal. Payouts go to your bank on the schedule you choose, and every tip goes to you in full.</p></div>
-      <div class="point reveal" style="--i:5"><span class="rule"></span><h3>Found by the right people</h3><p>Clients search by what they actually want, typos and all, and find you by service, area and the details that matter to them.</p></div>
+      <div class="point reveal" style="--i:5"><span class="rule"></span><h3>Found by the right people</h3><p>Clients find you by the service they want, where they are and the details that matter to them.</p></div>
     </div>
   </div>
 </section>
@@ -565,6 +760,31 @@ body{transition:background-color .35s ease,color .35s ease;}
 
   if(!d.classList.contains('motion'))return;
   var started=false, box=null;
+
+  /* Section headlines rise in word by word. */
+  document.querySelectorAll('.section-head h2, .manifesto h2').forEach(function(h){
+    var words=h.textContent.trim().split(/\s+/); h.setAttribute('aria-label',h.textContent.trim());
+    h.textContent=''; h.classList.add('split');
+    words.forEach(function(w,i){
+      var sp=document.createElement('span'); sp.className='w'; sp.style.setProperty('--w',i); sp.setAttribute('aria-hidden','true'); sp.textContent=w;
+      h.appendChild(sp); if(i<words.length-1)h.appendChild(document.createTextNode(' '));
+    });
+  });
+
+  /* "Found them on ___?" cycles through the platforms. */
+  var rot=document.querySelector('.rotator .cur');
+  if(rot){
+    var names=['Instagram?','TikTok?','Facebook?','your feed?'], ni=0;
+    setInterval(function(){
+      if(document.hidden)return;
+      rot.classList.add('out');
+      setTimeout(function(){
+        ni=(ni+1)%names.length; rot.textContent=names[ni];
+        rot.classList.remove('out'); rot.classList.add('in-start');
+        void rot.offsetWidth; rot.classList.remove('in-start');
+      },320);
+    },2300);
+  }
 
   /* Scroll reveals. */
   var io=new IntersectionObserver(function(es){
