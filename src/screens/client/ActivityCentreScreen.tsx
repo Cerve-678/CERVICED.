@@ -124,6 +124,13 @@ export default function ActivityCentreScreen({ navigation }: Props) {
     </View>
   );
 
+  const doneSection = () => activity.done.length > 0 && (
+    <View style={st.section}>
+      {sectionHead('DONE', false)}
+      {activity.done.map(tile)}
+    </View>
+  );
+
   const renderList = () => {
     if (timeline) {
       return (
@@ -136,6 +143,11 @@ export default function ActivityCentreScreen({ navigation }: Props) {
           {timeline.inProgress.length > 0 && (
             <TimelineGroup label="IN PROGRESS" waiting animate={animate}>
               {timeline.inProgress.map(tile)}
+            </TimelineGroup>
+          )}
+          {timeline.done.length > 0 && (
+            <TimelineGroup label="DONE" waiting animate={animate}>
+              {timeline.done.map(tile)}
             </TimelineGroup>
           )}
         </TimelineRail>
@@ -155,6 +167,7 @@ export default function ActivityCentreScreen({ navigation }: Props) {
             {activity.inProgress.map(tile)}
           </View>
         )}
+        {doneSection()}
       </>
     );
   };
@@ -180,13 +193,16 @@ export default function ActivityCentreScreen({ navigation }: Props) {
           <>
             <StatusPill messages={pillMessages} animate={animate} />
             {empty ? (
-              <View style={st.empty}>
-                <LiveDot pulse="waiting" animate={animate} size={18} />
-                <Text style={[st.emptyTitle, { color: P.text }]}>You're all caught up</Text>
-                <Text style={[st.emptyBody, { color: P.sub }]}>
-                  Refunds, reschedules, forms to fill in and anything else to do with your bookings will show up here.
-                </Text>
-              </View>
+              <>
+                <View style={st.empty}>
+                  <LiveDot pulse="waiting" animate={animate} size={18} />
+                  <Text style={[st.emptyTitle, { color: P.text }]}>You're all caught up</Text>
+                  <Text style={[st.emptyBody, { color: P.sub }]}>
+                    Refunds, reschedules, forms to fill in and anything else to do with your bookings will show up here.
+                  </Text>
+                </View>
+                <View style={st.doneAfterEmpty}>{doneSection()}</View>
+              </>
             ) : (
               renderList()
             )}
@@ -207,6 +223,7 @@ const st = StyleSheet.create({
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, marginBottom: 8, marginHorizontal: 4 },
   sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1.5 },
   empty: { alignItems: 'center', paddingTop: 56, paddingHorizontal: 24, gap: 10 },
+  doneAfterEmpty: { marginTop: 32 },
   emptyTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, marginTop: 8 },
   emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });
