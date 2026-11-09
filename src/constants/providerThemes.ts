@@ -66,6 +66,24 @@ function isHeroFinish(value: string | undefined): value is HeroFinish {
   return HERO_FINISHES.some(f => f.key === value);
 }
 
+// ── Card shape ────────────────────────────────────────────────────────────────
+// The corners of the service cards and category pills on the public profile,
+// where the service info sits: the rounded look the profile has always had,
+// or square. Picked in Branding & Style (owner's call, 2026-11-09).
+
+export type CardShape = 'rounded' | 'square';
+
+export const DEFAULT_CARD_SHAPE: CardShape = 'rounded';
+
+export const CARD_SHAPES: { key: CardShape; name: string; description: string }[] = [
+  { key: 'rounded', name: 'Rounded', description: 'Soft, rounded corners' },
+  { key: 'square',  name: 'Square',  description: 'Straight, square corners' },
+];
+
+function isCardShape(value: string | undefined): value is CardShape {
+  return CARD_SHAPES.some(s => s.key === value);
+}
+
 // ── Collections ───────────────────────────────────────────────────────────────
 // The picker shows the sets in these groups, in this order. The five named
 // collections came from the owner's picks on 2026-11-03
@@ -361,21 +379,37 @@ export function decodeCustomTheme(key: string | null | undefined): { backdrop: s
 
 // ── Full key encoding (base theme + optional content-area suffix) ────────────
 
-/** Compose the stored profile_theme value from a base key, a sheet colour and
- *  a hero finish. The sheet is written out whenever a finish follows it, so
- *  the parts never shift position. */
-export function encodeThemeKey(base: string, sheet?: string, finish: HeroFinish = DEFAULT_HERO_FINISH): string {
+/** Compose the stored profile_theme value from a base key, a sheet colour, a
+ *  hero finish and a card shape. Every part before a non-default one is
+ *  written out, so the parts never shift position. */
+export function encodeThemeKey(
+  base: string,
+  sheet?: string,
+  finish: HeroFinish = DEFAULT_HERO_FINISH,
+  shape: CardShape = DEFAULT_CARD_SHAPE,
+): string {
+  if (shape !== DEFAULT_CARD_SHAPE) return `${base}|${sheet || SHEET_BG}|${finish}|${shape}`;
   if (finish !== DEFAULT_HERO_FINISH) return `${base}|${sheet || SHEET_BG}|${finish}`;
   return sheet && sheet !== SHEET_BG ? `${base}|${sheet}` : base;
 }
 
-/** Split a stored profile_theme value into base key, sheet colour and hero
- *  finish. Anything unreadable falls back to the default for that part. */
-export function parseThemeKey(key: string | null | undefined): { base: string | null; sheet: string; finish: HeroFinish } {
-  if (!key) return { base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH };
-  const [base, sheet, finish] = key.split('|');
+/** Split a stored profile_theme value into base key, sheet colour, hero finish
+ *  and card shape. Anything unreadable falls back to the default for that part. */
+export function parseThemeKey(key: string | null | undefined): {
+  base: string | null;
+  sheet: string;
+  finish: HeroFinish;
+  shape: CardShape;
+} {
+  if (!key) return { base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH, shape: DEFAULT_CARD_SHAPE };
+  const [base, sheet, finish, shape] = key.split('|');
   const validSheet = /^#[0-9a-fA-F]{6}$/.test(sheet ?? '') ? sheet! : SHEET_BG;
-  return { base: base ?? null, sheet: validSheet, finish: isHeroFinish(finish) ? finish : DEFAULT_HERO_FINISH };
+  return {
+    base: base ?? null,
+    sheet: validSheet,
+    finish: isHeroFinish(finish) ? finish : DEFAULT_HERO_FINISH,
+    shape: isCardShape(shape) ? shape : DEFAULT_CARD_SHAPE,
+  };
 }
 
 /** Resolve a stored theme key (preset or custom-encoded, with optional sheet

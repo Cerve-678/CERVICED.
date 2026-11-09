@@ -1,6 +1,11 @@
 import React from 'react';
 import { render, fireEvent, screen } from '@testing-library/react-native';
-import ServiceEditorSheet, { EMPTY_SERVICE_VALUE, toEditorValue } from '../features/providers/ServiceEditorSheet';
+import ServiceEditorSheet, {
+  EMPTY_SERVICE_VALUE,
+  editorDurationMinutes,
+  splitDuration,
+  toEditorValue,
+} from '../features/providers/ServiceEditorSheet';
 
 jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn().mockResolvedValue(undefined),
@@ -47,7 +52,7 @@ describe('ServiceEditorSheet findability', () => {
     const onSave = open();
     fireEvent.changeText(screen.getByPlaceholderText('e.g. Gel Overlay'), 'Slick French');
     fireEvent.changeText(screen.getByPlaceholderText('35'), '30');
-    fireEvent.changeText(screen.getByPlaceholderText('45'), '45');
+    fireEvent.changeText(screen.getByLabelText('Minutes'), '45');
 
     fireEvent.press(screen.getByText('Add service'));
     expect(screen.getByText(/Add a short description/)).toBeTruthy();
@@ -74,7 +79,7 @@ describe('ServiceEditorSheet findability', () => {
     expect(screen.getByRole('checkbox', { name: 'french' }).props['accessibilityState']).toEqual({ checked: false });
 
     fireEvent.changeText(screen.getByPlaceholderText('35'), '30');
-    fireEvent.changeText(screen.getByPlaceholderText('45'), '45');
+    fireEvent.changeText(screen.getByLabelText('Minutes'), '45');
     fireEvent.changeText(screen.getByPlaceholderText("What's included, what to expect"), 'Glossy gel with a crisp French edge.');
     fireEvent.press(screen.getByText('Women'));
     fireEvent.press(screen.getByText('Add service'));
@@ -128,5 +133,53 @@ describe('ServiceEditorSheet findability', () => {
     expect(onSave.mock.calls[0][0]).toEqual(expect.objectContaining({
       tags: expect.objectContaining({ techniqueTags: expect.arrayContaining(['volume']) }),
     }));
+  });
+
+  it('shows a saved length in hours and minutes, and saves the boxes back as minutes', () => {
+    const onSave = open({
+      isNew: false,
+      initial: toEditorValue({
+        name: 'Knotless braids', price: 120, duration_minutes: 270, description: 'Waist length, hair included.',
+        is_active: true, technique_tags: ['knotless'], audience: 'women',
+      }),
+    });
+    expect(screen.getByLabelText('Hours').props['value']).toBe('4');
+    expect(screen.getByLabelText('Minutes').props['value']).toBe('30');
+
+    fireEvent.changeText(screen.getByLabelText('Hours'), '5');
+    fireEvent.changeText(screen.getByLabelText('Minutes'), '');
+    fireEvent.press(screen.getByText('Save changes'));
+    expect(onSave.mock.calls[0][0]).toEqual(expect.objectContaining({ durationMinutes: 300 }));
+  });
+
+  it('refuses a service with no length', () => {
+    const onSave = open({
+      isNew: false,
+      initial: toEditorValue({
+        name: 'Classic French', price: 30, duration_minutes: 45, description: 'Any colour',
+        is_active: true, technique_tags: ['french'], audience: 'women',
+      }),
+    });
+    fireEvent.changeText(screen.getByLabelText('Minutes'), '');
+    fireEvent.press(screen.getByText('Save changes'));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText('Enter how long it takes, in hours and minutes.')).toBeTruthy();
+  });
+});
+
+describe('service editor duration boxes', () => {
+  it.each([
+    [45, { hours: '', minutes: '45' }],
+    [60, { hours: '1', minutes: '' }],
+    [90, { hours: '1', minutes: '30' }],
+    [480, { hours: '8', minutes: '' }],
+  ])('%i minutes round-trips through the hour and minute boxes', (total, boxes) => {
+    expect(splitDuration(total)).toEqual(boxes);
+    expect(editorDurationMinutes(boxes)).toBe(total);
+  });
+
+  it('rejects anything that is not a whole number', () => {
+    expect(editorDurationMinutes({ hours: '1.5', minutes: '' })).toBeNull();
+    expect(editorDurationMinutes({ hours: '', minutes: 'abc' })).toBeNull();
   });
 });

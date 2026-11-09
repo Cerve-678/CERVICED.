@@ -61,7 +61,10 @@ export interface ServiceEditorPalette {
 export interface ServiceEditorValue {
   name: string;
   price: string;
-  duration: string;
+  /** Length as typed: whole hours plus leftover minutes ("1" + "30"), so a
+   *  provider thinks in hours, the way services are priced and talked about. */
+  hours: string;
+  minutes: string;
   description: string;
   /** Only offered when editing. A new service always starts on the menu. */
   isActive: boolean;
@@ -88,7 +91,7 @@ export function toEditorValue(service: {
   return {
     name: service.name,
     price: String(service.price ?? ''),
-    duration: String(service.duration_minutes ?? ''),
+    ...splitDuration(service.duration_minutes),
     description: service.description ?? '',
     isActive: service.is_active,
     tags: {
@@ -102,10 +105,29 @@ export function toEditorValue(service: {
   };
 }
 
+/** Stored minutes → the two boxes. A zero part is left blank rather than "0",
+ *  so 45 min shows as just "45" in the minutes box. */
+export function splitDuration(totalMinutes: number | null | undefined): Pick<ServiceEditorValue, 'hours' | 'minutes'> {
+  if (!totalMinutes || totalMinutes <= 0) return { hours: '', minutes: '' };
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return { hours: h ? String(h) : '', minutes: m ? String(m) : '' };
+}
+
+/** The two boxes → minutes for the column, or null when either box holds
+ *  something that isn't a whole number. A blank box counts as 0. */
+export function editorDurationMinutes(value: Pick<ServiceEditorValue, 'hours' | 'minutes'>): number | null {
+  const h = value.hours.trim() === '' ? 0 : Number(value.hours);
+  const m = value.minutes.trim() === '' ? 0 : Number(value.minutes);
+  if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || m < 0) return null;
+  return h * 60 + m;
+}
+
 export const EMPTY_SERVICE_VALUE: ServiceEditorValue = {
   name: '',
   price: '',
-  duration: '',
+  hours: '',
+  minutes: '',
   description: '',
   isActive: true,
   tags: emptyTagGroups(),
@@ -132,11 +154,11 @@ function validateServiceValue(value: ServiceEditorValue): string | null {
   if (!value.name.trim()) return 'Give the service a name.';
   const price = Number(value.price);
   if (!Number.isFinite(price) || price < 0) return 'Enter a price, or 0 if it varies.';
-  const duration = Number(value.duration);
+  const duration = editorDurationMinutes(value);
   // A zero-length service is what made bookings look like they occupied no
   // time at all and never clash with anything — see the schedule-issues work.
-  if (!Number.isInteger(duration) || duration <= 0) {
-    return 'Enter how many minutes it takes.';
+  if (duration === null || duration <= 0) {
+    return 'Enter how long it takes, in hours and minutes.';
   }
   return null;
 }
@@ -161,7 +183,8 @@ function toDraft(
   return {
     name: value.name.trim(),
     price: Number(value.price),
-    durationMinutes: Number(value.duration),
+    // validateServiceValue has already rejected a null here.
+    durationMinutes: editorDurationMinutes(value) ?? 0,
     description: value.description.trim() || null,
     ...(isNew ? {} : { isActive: value.isActive }),
     ...(findability.tags ? { tags: findability.tags } : {}),
@@ -364,15 +387,29 @@ export default function ServiceEditorSheet({
                 />
               </View>
               <View style={styles.pairItem}>
-                <Text style={[styles.label, { color: palette.sub }]}>MINUTES</Text>
-                <TextInput
-                  value={value.duration}
-                  onChangeText={duration => setValue(v => ({ ...v, duration }))}
-                  keyboardType="number-pad"
-                  placeholder="45"
-                  placeholderTextColor={palette.sub}
-                  style={[styles.input, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
-                />
+                <Text style={[styles.label, { color: palette.sub }]}>HOW LONG</Text>
+                <View style={styles.durationRow}>
+                  <TextInput
+                    value={value.hours}
+                    onChangeText={hours => setValue(v => ({ ...v, hours }))}
+                    keyboardType="number-pad"
+                    placeholder="1"
+                    placeholderTextColor={palette.sub}
+                    accessibilityLabel="Hours"
+                    style={[styles.input, styles.durationInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
+                  />
+                  <Text style={[styles.durationUnit, { color: palette.sub }]}>hr</Text>
+                  <TextInput
+                    value={value.minutes}
+                    onChangeText={minutes => setValue(v => ({ ...v, minutes }))}
+                    keyboardType="number-pad"
+                    placeholder="30"
+                    placeholderTextColor={palette.sub}
+                    accessibilityLabel="Minutes"
+                    style={[styles.input, styles.durationInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
+                  />
+                  <Text style={[styles.durationUnit, { color: palette.sub }]}>min</Text>
+                </View>
               </View>
             </View>
 
@@ -571,6 +608,20 @@ const styles = StyleSheet.create({
   },
   pairItem: {
     flex: 1,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  durationInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 10,
+    textAlign: 'center',
+  },
+  durationUnit: {
+    fontSize: 13,
   },
   visibilityRow: {
     flexDirection: 'row',

@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **359 files**
 ## Notifications
 Curated: [[Notifications]] · **186 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(344)_
+- `src/screens/shared/NotificationsScreen.tsx` _(345)_
 - `src/services/databaseService.ts` _(194)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **186 files**
 - … +156 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **86 files**
+Curated: [[Provider Onboarding & Go-Live]] · **87 files**
 - `src/services/databaseService.ts` _(92)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **86 files**
 - `src/screens/client/CartScreen.tsx` _(4)_
 - `src/screens/auth/ClaimProviderScreen.tsx` _(3)_
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
-- … +56 more
+- … +57 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **67 files**

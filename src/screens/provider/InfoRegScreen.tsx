@@ -107,6 +107,7 @@ import { fillProfileFromSignup } from '../../features/provider-registration/sign
 import {
   applyRuleToServices,
   defaultAddOnKeysForCategory,
+  mergeAddOns,
   removeAddOnFromServices,
   removeCategoryFromLibrary,
   renameCategoryInLibrary,
@@ -3636,7 +3637,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         ...prev,
         categories,
         ...(newAddOns.length && prev.addOnLibrary
-          ? { addOnLibrary: [...prev.addOnLibrary, ...newAddOns] }
+          ? { addOnLibrary: mergeAddOns(prev.addOnLibrary, newAddOns) }
           : {}),
       };
     });
