@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  follow-people session (feat/follow-people-decisions, #395) applying 20261109130000
+OWNER:  (none)
 ```
+
+### Applied 2026-11-09 (follow people: visits only from the notice, Blocked list)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109130000 | `follow_people_visits_from_notice_and_blocked_list` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge safely"), via `supabase db query --linked -f` with `--workdir` the main folder; version recorded by the file. Frontier before applying: live max `20261109120000`, and no higher migration on any open PR; lock `(none)` on main, taken on `feat/follow-people-decisions` (add7effe). md5 guards matched (`get_circle_for_providers` `f93b00e9…`, `get_my_people` `cdcd89d8…`). Forced-rollback dry run first (2026-11-08). Both functions rebuilt from #358's applied source with only these changes: a completed booking counts as a visit only if the appointment ended after `where_i_go_notice_seen_at`, and `get_my_people` gains a `'blocked'` kind. Verified live: version present (now live max); new md5s circle `044a3734…`, people `fece334d…`; the cutoff and the blocked kind are in the bodies; anon can't execute either, authenticated can. Written on `feat/follow-people-decisions` (#395). |
 
 ### Applied 2026-11-08 (reschedule: 45 minutes to answer, both people told)
 
