@@ -366,18 +366,17 @@ async function addDetails(admin: Admin, callerId: string, body: Record<string, u
   const generated = input.password === null;
   const password = input.password ?? generatePassword();
 
-  // details_pending stays true until the users row is updated too, so a
-  // failure part-way can simply be tried again.
-  const { error: authError } = await admin.auth.admin.updateUserById(user.id, {
-    email: input.email,
-    email_confirm: true,
-    password,
-    user_metadata: { ...(user.user_metadata ?? {}), name: input.name, phone: input.phone ?? '', dob: input.dob },
-  });
-  if (authError) {
-    const known = emailTakenResponse(authError);
-    if (known) return known;
-    console.error('[admin-create-account] add_details could not update the login:', authError);
+  // The users row first, keeping what it held so it can be put back. Then the
+  // login, the owner's sign-in and details_pending = false in ONE auth update:
+  // the account is never left with the owner's password while still flagged
+  // as a blank one (which open_blank would happily reset). If that update
+  // fails, the row is restored and nothing has changed.
+  const { data: before, error: readError } = await admin.from('users')
+    .select('email, name, phone, dob')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (readError || !before) {
+    console.error('[admin-create-account] add_details could not read the users row:', readError);
     return json({ error: 'Something went wrong.' }, 500);
   }
 
@@ -385,11 +384,16 @@ async function addDetails(admin: Admin, callerId: string, body: Record<string, u
     .update({ email: input.email, name: input.name, phone: input.phone ?? '', dob: input.dob })
     .eq('id', user.id);
   if (rowError) {
+    if ((rowError as { code?: string }).code === '23505') return emailTakenResponse({ code: 'email_exists' })!;
     console.error('[admin-create-account] add_details could not update the users row:', rowError);
     return json({ error: 'Something went wrong.' }, 500);
   }
 
-  const { error: metaError } = await admin.auth.admin.updateUserById(user.id, {
+  const { error: authError } = await admin.auth.admin.updateUserById(user.id, {
+    email: input.email,
+    email_confirm: true,
+    password,
+    user_metadata: { ...(user.user_metadata ?? {}), name: input.name, phone: input.phone ?? '', dob: input.dob },
     app_metadata: {
       ...(user.app_metadata ?? {}),
       details_pending: false,
@@ -397,7 +401,14 @@ async function addDetails(admin: Admin, callerId: string, body: Record<string, u
       details_added_at: new Date().toISOString(),
     },
   });
-  if (metaError) console.error('[admin-create-account] add_details could not clear details_pending:', metaError);
+  if (authError) {
+    const { error: undoError } = await admin.from('users').update(before).eq('id', user.id);
+    if (undoError) console.error('[admin-create-account] add_details could not restore the users row:', undoError);
+    const known = emailTakenResponse(authError);
+    if (known) return known;
+    console.error('[admin-create-account] add_details could not update the login:', authError);
+    return json({ error: 'Something went wrong.' }, 500);
+  }
 
   console.log(`[admin-create-account] ${callerId} added details to blank account ${user.id}`);
   return json({
