@@ -13,8 +13,9 @@
 // providers row on first save, and has_gone_live gating is untouched.
 //
 // Only admin_users may call this, checked here against the caller's own
-// session. Who created the account, and when, is kept in the auth user's
-// app_metadata, which the account holder can't edit.
+// session. Each account created is logged in admin_actions ('create_account'),
+// which Admin → Accounts you created lists (admin_created_accounts()), and
+// also stamped on the auth user's app_metadata, which its holder can't edit.
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 
 const corsHeaders = {
@@ -36,6 +37,8 @@ interface CreateAccountInput {
   name: string;
   email: string;
   phone: string | null;
+  /** YYYY-MM-DD, at least 16 years ago — the same rule as sign-up. */
+  dob: string;
   businessName: string | null;
   /** Blank means "make one up": a readable one is generated and returned. */
   password: string | null;
@@ -60,6 +63,9 @@ function parseInput(raw: unknown): CreateAccountInput | string {
   if (!name) return 'Add their name.';
   const email = text(body.email)?.toLowerCase() ?? null;
   if (!email || !EMAIL_RE.test(email)) return 'Add a real email address. It is what they sign in with.';
+  const dob = typeof body.dob === 'string' ? body.dob.trim() : '';
+  const dobProblem = checkDob(dob);
+  if (dobProblem) return dobProblem;
   const businessName = text(body.businessName);
   if (accountType === 'provider' && !businessName) return 'Add the business name.';
   const password = typeof body.password === 'string' && body.password.length > 0 ? body.password : null;
@@ -70,9 +76,24 @@ function parseInput(raw: unknown): CreateAccountInput | string {
     name,
     email,
     phone: text(body.phone),
+    dob,
     businessName: accountType === 'provider' ? businessName : null,
     password,
   };
+}
+
+// Mirrors validateDob in src/utils/validation.ts.
+function checkDob(dob: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
+  if (!match) return 'Add their date of birth.';
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (year < 1900 || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return 'That date of birth isn\'t a real date.';
+  }
+  const sixteenth = new Date(Date.UTC(year + 16, month - 1, day));
+  if (sixteenth.getTime() > Date.now()) return 'They must be at least 16.';
+  return null;
 }
 
 // No look-alike characters (0/O, 1/l/I), since this is read aloud or typed
@@ -138,6 +159,7 @@ Deno.serve(async (req) => {
         name: input.name,
         role,
         phone: input.phone ?? '',
+        dob: input.dob,
         business_name: input.businessName,
       },
       app_metadata: {
@@ -168,6 +190,7 @@ Deno.serve(async (req) => {
       email: input.email,
       name: input.name,
       phone: input.phone ?? '',
+      dob: input.dob,
       role,
       login_method: 'email',
       ...(role === 'user' ? { has_client_profile: true } : {}),
@@ -181,6 +204,17 @@ Deno.serve(async (req) => {
       if (undoError) console.error('[admin-create-account] could not remove the login:', undoError);
       return json({ error: 'Something went wrong.' }, 500);
     }
+
+    // The record Admin → Accounts you created reads. The account is already
+    // usable by now, so a failure here is logged rather than undoing it; the
+    // app_metadata stamp above still says who made it.
+    const { error: logError } = await admin.from('admin_actions').insert({
+      admin_user_id: caller.id,
+      action: 'create_account',
+      target_id: userId,
+      detail: { account_type: input.accountType },
+    });
+    if (logError) console.error('[admin-create-account] could not log the account in admin_actions:', logError);
 
     console.log(`[admin-create-account] ${caller.id} created ${role} account ${userId}`);
     return json({

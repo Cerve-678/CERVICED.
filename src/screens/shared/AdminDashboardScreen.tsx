@@ -90,7 +90,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     ? describeDelta(data.money.paid_in_pence, data.money.paid_in_prev_pence, span, { format: pounds })
     : null;
 
-  const go = (route: 'AdminMoney' | 'AdminCreateAccount' | 'DevSettings') => {
+  const go = (route: 'AdminMoney' | 'AdminCreateAccount' | 'AdminCreatedAccounts' | 'DevSettings') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     navigation.navigate(route);
   };
@@ -272,6 +272,9 @@ export default function AdminDashboardScreen({ navigation }: any) {
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <ToolRow P={P} icon="person-add-outline" title="Create an account" subtitle="Open a provider or client account that's ready to sign in to, with no emails"
                 onPress={() => go('AdminCreateAccount')} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <ToolRow P={P} icon="people-outline" title="Accounts you created" subtitle="Who you've opened accounts for, when, and whether providers have gone live"
+                onPress={() => go('AdminCreatedAccounts')} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <ToolRow P={P} icon="construct-outline" title="Developer tools" subtitle="Test pushes and emails, debug logs, resets for your own account"
                 onPress={() => go('DevSettings')} />
