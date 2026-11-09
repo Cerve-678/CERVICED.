@@ -5,13 +5,14 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFolderPhotos } from '../../stores/useCollectionsStore';
 import type { ExploreCollection } from '../../types/collections';
-import { CollectionFolder } from './CollectionFolder';
+import { CollectionFolder, type FolderPaperRect } from './CollectionFolder';
 
 const FOLDER_WIDTH = 138;
 
 interface CollectionsRowProps {
   collections: ExploreCollection[];
-  onOpen: (collection: ExploreCollection) => void;
+  /** Gets where the folder's looks were, newest first, for the open animation. */
+  onOpen: (collection: ExploreCollection, papers: FolderPaperRect[]) => void;
   onEdit: (collection: ExploreCollection) => void;
   onNew: () => void;
   /** Side padding, to line the first folder up with the grid below. */
@@ -70,11 +71,11 @@ const RowFolder = memo(function RowFolder({
   onEdit,
 }: {
   collection: ExploreCollection;
-  onOpen: (collection: ExploreCollection) => void;
+  onOpen: (collection: ExploreCollection, papers: FolderPaperRect[]) => void;
   onEdit: (collection: ExploreCollection) => void;
 }) {
   const photos = useFolderPhotos(collection.itemIds);
-  const handlePress = useCallback(() => { tap(); onOpen(collection); }, [collection, onOpen]);
+  const handlePress = useCallback((papers: FolderPaperRect[]) => { tap(); onOpen(collection, papers); }, [collection, onOpen]);
   const handleLongPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     onEdit(collection);

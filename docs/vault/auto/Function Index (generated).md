@@ -5,7 +5,7 @@
 
 #generated
 
-**3636 functions** across **519 files**.
+**3642 functions** across **520 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -77,12 +77,13 @@
 ### `src/components/analytics/` (1)
 - `AnalyticsKit.tsx` — **accentColor** · **AnalyticsHeader** · **AnimatedNumber** · **BarChart** · **DeckCard** · handlePress · **HeroGradient** · **InsightStrip** · **LivePulse** · pressIn · pressOut · **PressScale** · **RangeSelector** · **Reveal** · **SectionLabel** · **StatTile** · **tileWidth**
 
-### `src/components/collections/` (8)
+### `src/components/collections/` (9)
 - `AddToCollectionSheet.tsx` — **AddToCollectionSheet** · ensureSaved · handleCreate · handleToggle · SheetFolder
 - `CollectionEditorSheet.tsx` — **CollectionEditorSheet** · handleDelete · handleSave
-- `CollectionFolder.tsx` — animatePress · **CollectionFolder** · Paper
+- `CollectionFolder.tsx` — animatePress · **CollectionFolder** · handlePress · Paper
 - `CollectionForm.tsx` — **CollectionForm**
 - `CollectionOfferBar.tsx` — **CollectionOfferBar**
+- `CollectionOpenFlight.tsx` — **CollectionFlightTarget** · **CollectionOpenFlight** · measure
 - `CollectionSheetFrame.tsx` — **CollectionSheetFrame**
 - `CollectionsRow.tsx` — **CollectionsRow** · handleLongPress · handlePress · RowFolder · tap
 - `OpenCollectionHeader.tsx` — **OpenCollectionHeader** · tap
@@ -369,7 +370,7 @@
 - `CartScreen.tsx` — abandonOutstandingCheckout · addOnsSummary · backFromSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartCheckoutFooter · cartProviderRows · CartProviderSection · CartScreen · checkoutProviderSections · checkoutRenderUnits · checkoutTotalsFrom · clearItemIssue · depositPolicyArg · displayedItemIssues · dynamicStyles · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · flagged · flaggedProviderKeys · flaggedProvidersKey · formatCardNumber · formatExpiry · formatNameList · frozenCheckoutTotals · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleClose · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveFromCart · handleRemoveOne · handleReviewConfirm · handleScrollTargetLaidOut · handleScrollToIndexFailed · hasDeposit · hasUnscheduledItems · identifyCartConflicts · itemPromoDiscounts · itemsByProvider · jumpToRow · localItemIssues · navigateToProvider · onRefresh · openAddressSettings · outside · paymentSheetCartItems · platformFee · pricedCheckoutItems · priceOf · priceOfItem · promoSavingsShown · providerNamesKey · renderAddOns · renderCartProviderRow · renderCheckoutUnit · reportTargetOffset · showCards · SummaryShell · timestamp · toCartIssue · toggleProviderCollapsed · totalPrice
 - `CircleScreen.tsx` — afterFollowChange · checkContacts · CircleScreen · confirmBlock · confirmRemoveFollower · confirmUnblock · confirmUnfollow · Face · follow · loadBlocked · loadLists · loadSettings · moreButton · myStatusById · onPrivateChange · onShowWhereIGoChange · personRow · remove · renderContactsCard · renderItem · renderSharing · respond · runForRow · saveSetting
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
-- `ExploreScreen.tsx` — backToTopOpacity · backToTopTranslateY · columnWidth · dedupeByImageUri · editingCollection · filters · filterTabs · finishTour · getItemHeight · handleBackToTop · handleBookNow · handleCloseCollection · handleCloseDetail · handleCloseEditor · handleCollectionDeleted · handleDiscoverScrollSettled · handleEditCollection · handleFavouritesScrollSettled · handleImagePress · handleNewCollection · handleOpenCollection · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · openCollection · prepareDetailItem · renderPortfolioCard · shownFavouriteItems · SkeletonMasonryGrid · tourCardId · updateBackToTop · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
+- `ExploreScreen.tsx` — backToTopOpacity · backToTopTranslateY · columnWidth · dedupeByImageUri · editingCollection · filters · filterTabs · finishTour · getItemHeight · handleBackToTop · handleBookNow · handleCloseCollection · handleCloseDetail · handleCloseEditor · handleCollectionDeleted · handleDiscoverScrollSettled · handleEditCollection · handleFavouritesScrollSettled · handleFlightLanded · handleFlightMeasured · handleImagePress · handleNewCollection · handleOpenCollection · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · openCollection · prepareDetailItem · renderPortfolioCard · shownFavouriteItems · SkeletonMasonryGrid · tourCardId · updateBackToTop · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
 - `ExternalBookingDetailScreen.tsx` — createStyles · ExternalBookingDetailScreen · handleAddToCalendar · handleMessage · handleOpenPage · handleRemove · load · retry
 - `HomeScreen.tsx` — allCategorizedProviders · availableThisWeekProviders · currentOffers · finishTour · handleBackPress · handleRadiusChange · handleSelectPlace · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · kidsSectionRelevant · loadSecondaryRails · loadUnreadCount · maleProvidersDisplay · maleSectionRelevant · navigateToAudienceService · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · openRecommendProvider · previouslyBookedProviders · ProviderRail · recommendationCandidates · recommendedProvidersList · renderKidsSection · renderMaleSection · resetFilters · RoundProviderRail · serviceProviders · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData · visibleTourSteps
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo

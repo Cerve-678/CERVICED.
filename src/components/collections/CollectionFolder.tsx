@@ -1,5 +1,7 @@
 import React, { memo, useEffect, useId, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ViewInstance } from 'react-native';
+import { LinearGradient as FadeGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import Svg, { ClipPath, Defs, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { COLLECTION_PALETTES } from '../../constants/collectionColors';
@@ -33,6 +35,18 @@ const FAN = [
 const PAPER_W = 72;
 const PAPER_H = 92;
 
+/** Where one sticking-out look sits on screen, for the open animation. */
+export interface FolderPaperRect {
+  id: string;
+  uri: string | null;
+  /** Window coordinates of the un-rotated photo. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotate: number;
+}
+
 export interface CollectionFolderPhoto {
   /** The saved item id, so a photo keeps its identity as more are added. */
   id: string;
@@ -48,7 +62,8 @@ interface CollectionFolderProps {
   width?: number;
   /** Hides the name and count, for small folders next to a text label. */
   hideLabel?: boolean;
-  onPress?: () => void;
+  /** Gets where each sticking-out look is, newest first, so they can fly out. */
+  onPress?: (papers: FolderPaperRect[]) => void;
   onLongPress?: () => void;
   accessibilityLabel?: string;
 }
@@ -102,6 +117,13 @@ const Paper = memo(function Paper({
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.paperBlank]} />
       )}
+      {/* Shaded where it goes into the folder, so it reads as tucked inside. */}
+      <FadeGradient
+        pointerEvents="none"
+        colors={['rgba(60,10,35,0)', 'rgba(60,10,35,0.32)']}
+        locations={[0.45, 1]}
+        style={StyleSheet.absoluteFill}
+      />
     </Animated.View>
   );
 });
@@ -142,14 +164,56 @@ export const CollectionFolder = memo(function CollectionFolder({
 
   const countLabel = count === 0 ? 'Empty' : count === 1 ? '1 look' : `${count} looks`;
 
+  // Where the looks are, worked out from the folder's own position so the
+  // fan's rotation doesn't skew the measurement. Newest first: that's the
+  // order the open collection lists them in.
+  const bodyRef = useRef<ViewInstance>(null);
+  const handlePress = () => {
+    if (!onPress) return;
+    const node = bodyRef.current;
+    if (!node) { onPress([]); return; }
+    node.measureInWindow((x, y) => {
+      const papers = shown.map((photo, slot) => {
+        const pos = FAN[slot] ?? FAN[0];
+        return {
+          id: photo.id,
+          uri: photo.uri,
+          x: x + pos.left * scale,
+          y: y + (pos.top - 9) * scale,
+          width: PAPER_W * scale,
+          height: PAPER_H * scale,
+          rotate: pos.rotate,
+        };
+      });
+      onPress(papers.reverse());
+    });
+  };
+
   const body = (
     <Animated.View
+      ref={bodyRef}
+      collapsable={false}
       style={{
         width,
         height: DESIGN_H * scale,
         transform: [{ scale: press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.97] }) }],
       }}
     >
+      {/* Two shadows: a tight one where it touches the ground, a soft one around it. */}
+      <View
+        style={[
+          styles.contact,
+          {
+            left: 16 * scale,
+            right: 16 * scale,
+            height: 12 * scale,
+            borderRadius: 6 * scale,
+            backgroundColor: palette.back,
+            shadowOffset: { width: 0, height: 3 * scale },
+            shadowRadius: 4 * scale,
+          },
+        ]}
+      />
       <View
         style={[
           styles.back,
@@ -158,11 +222,19 @@ export const CollectionFolder = memo(function CollectionFolder({
             borderRadius: 18 * scale,
             backgroundColor: palette.back,
             shadowColor: palette.deep,
-            shadowOffset: { width: 0, height: 8 * scale },
-            shadowRadius: 12 * scale,
+            shadowOffset: { width: 0, height: 10 * scale },
+            shadowRadius: 14 * scale,
           },
         ]}
-      />
+      >
+        {/* Darker toward where the looks go in. */}
+        <FadeGradient
+          pointerEvents="none"
+          colors={[palette.back, palette.backShade, palette.backShade]}
+          locations={[0, 0.38, 1]}
+          style={[StyleSheet.absoluteFill, { borderRadius: 18 * scale }]}
+        />
+      </View>
       <View
         style={[
           styles.tab,
@@ -202,8 +274,12 @@ export const CollectionFolder = memo(function CollectionFolder({
             <Stop offset="0.55" stopColor="#FFFFFF" stopOpacity={0} />
           </RadialGradient>
           <LinearGradient id={`s${gid}`} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0.55" stopColor="#3C001E" stopOpacity={0} />
-            <Stop offset="1" stopColor="#3C001E" stopOpacity={0.08} />
+            <Stop offset="0.5" stopColor="#3C001E" stopOpacity={0} />
+            <Stop offset="1" stopColor="#3C001E" stopOpacity={0.16} />
+          </LinearGradient>
+          <LinearGradient id={`h${gid}`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.4} />
+            <Stop offset="0.2" stopColor="#FFFFFF" stopOpacity={0} />
           </LinearGradient>
           <ClipPath id={`c${gid}`}>
             <Path d={FRONT_PATH} />
@@ -211,6 +287,7 @@ export const CollectionFolder = memo(function CollectionFolder({
         </Defs>
         <Path d={FRONT_PATH} fill={`url(#b${gid})`} />
         <Path d={FRONT_PATH} fill={`url(#s${gid})`} />
+        <Path d={FRONT_PATH} fill={`url(#h${gid})`} />
         <Path d={FRONT_PATH} fill={`url(#g${gid})`} />
         <Path
           d={FRONT_PATH}
@@ -243,7 +320,7 @@ export const CollectionFolder = memo(function CollectionFolder({
   if (!onPress && !onLongPress) return body;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       onLongPress={onLongPress}
       onPressIn={() => animatePress(1)}
       onPressOut={() => animatePress(0)}
@@ -256,13 +333,20 @@ export const CollectionFolder = memo(function CollectionFolder({
 });
 
 const styles = StyleSheet.create({
+  contact: {
+    position: 'absolute',
+    bottom: 0,
+    shadowColor: '#280A19',
+    shadowOpacity: 0.4,
+    elevation: 2,
+  },
   back: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    shadowOpacity: 0.35,
-    elevation: 3,
+    shadowOpacity: 0.3,
+    elevation: 4,
   },
   tab: {
     position: 'absolute',
@@ -274,9 +358,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     shadowColor: '#28141E',
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 4 },
   },
   paperBlank: {
     backgroundColor: '#F2ECEE',

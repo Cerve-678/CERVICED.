@@ -9,6 +9,7 @@ import {
   Easing,
   useWindowDimensions,
   ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,6 +64,12 @@ import { OpenCollectionHeader } from '../../components/collections/OpenCollectio
 import { CollectionOfferBar } from '../../components/collections/CollectionOfferBar';
 import { AddToCollectionSheet } from '../../components/collections/AddToCollectionSheet';
 import { CollectionEditorSheet } from '../../components/collections/CollectionEditorSheet';
+import type { FolderPaperRect } from '../../components/collections/CollectionFolder';
+import {
+  CollectionFlightTarget,
+  CollectionOpenFlight,
+  type FlightRect,
+} from '../../components/collections/CollectionOpenFlight';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
@@ -387,7 +394,10 @@ const ExploreScreen = memo(() => {
     void loadCollections(user?.id ?? null);
   }, [loadCollections, user?.id]);
   useEffect(() => {
-    if (activeTab !== 'favourites') setOpenCollectionId(null);
+    if (activeTab !== 'favourites') {
+      setOpenCollectionId(null);
+      setFlight(null);
+    }
   }, [activeTab]);
   const openCollection = useMemo(
     () => collections.find(c => c.id === openCollectionId) ?? null,
@@ -402,11 +412,46 @@ const ExploreScreen = memo(() => {
       : undefined),
     [collectionEditor, collections],
   );
-  const handleOpenCollection = useCallback((collection: ExploreCollection) => {
+  // Opening a folder flies its looks into the grid (CollectionOpenFlight).
+  // Skipped when the phone asks for less motion.
+  const reduceMotionRef = useRef(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(enabled => { reduceMotionRef.current = enabled; })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', enabled => {
+      reduceMotionRef.current = enabled;
+    });
+    return () => sub.remove();
+  }, []);
+  const [flight, setFlight] = useState<{
+    key: number;
+    papers: FolderPaperRect[];
+    targets: (FlightRect | null)[];
+  } | null>(null);
+  const handleOpenCollection = useCallback((collection: ExploreCollection, papers: FolderPaperRect[]) => {
+    const flying = papers.filter(p => p.uri);
+    setFlight(
+      !reduceMotionRef.current && flying.length > 0
+        ? { key: Date.now(), papers: flying, targets: flying.map(() => null) }
+        : null,
+    );
     setOpenCollectionId(collection.id);
     favouritesGridRef.current?.scrollToTop();
   }, []);
-  const handleCloseCollection = useCallback(() => setOpenCollectionId(null), []);
+  const handleFlightMeasured = useCallback((index: number, rect: FlightRect) => {
+    setFlight(current => {
+      if (!current || index >= current.targets.length || current.targets[index]) return current;
+      const targets = current.targets.slice();
+      targets[index] = rect;
+      return { ...current, targets };
+    });
+  }, []);
+  const handleFlightLanded = useCallback(() => setFlight(null), []);
+  const handleCloseCollection = useCallback(() => {
+    setFlight(null);
+    setOpenCollectionId(null);
+  }, []);
   const handleEditCollection = useCallback(
     (collection: ExploreCollection) => setCollectionEditor({ collection }),
     [],
@@ -1113,19 +1158,28 @@ const ExploreScreen = memo(() => {
   // packer's reserved slot and the card's rendered box must be the exact
   // same number (see masonryHeight.ts), and only this screen holds the
   // measured-ratio cache both sides need to agree on.
+  // While a folder's looks are flying in, the cards they land on wait hidden.
+  const flightCount = flight?.papers.length ?? 0;
   const renderPortfolioCard = useCallback(
-    (item: PortfolioItem, index: number) => (
-      <PortfolioCard
-        item={item}
-        columnWidth={columnWidth}
-        imageHeight={getItemHeight(item, columnWidth)}
-        onPress={handleImagePress}
-        index={index}
-        offersCollections
-        {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
-      />
-    ),
-    [columnWidth, handleImagePress, getItemHeight, tourCardId]
+    (item: PortfolioItem, index: number) => {
+      const card = (
+        <PortfolioCard
+          item={item}
+          columnWidth={columnWidth}
+          imageHeight={getItemHeight(item, columnWidth)}
+          onPress={handleImagePress}
+          index={index}
+          offersCollections
+          {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
+        />
+      );
+      return (
+        <CollectionFlightTarget index={index} active={index < flightCount} onMeasured={handleFlightMeasured}>
+          {card}
+        </CollectionFlightTarget>
+      );
+    },
+    [columnWidth, handleImagePress, getItemHeight, tourCardId, flightCount, handleFlightMeasured]
   );
 
 
@@ -1341,6 +1395,15 @@ const ExploreScreen = memo(() => {
           <Ionicons name="arrow-up" size={18} color={P.text} />
         </TouchableOpacity>
       </Animated.View>
+
+      {flight && (
+        <CollectionOpenFlight
+          key={flight.key}
+          papers={flight.papers}
+          targets={flight.targets}
+          onLanded={handleFlightLanded}
+        />
+      )}
 
       {/* After a heart: offer to put the look in a collection. */}
       <CollectionOfferBar host="explore" bottom={FLOATING_TAB_BAR_CLEARANCE} />
