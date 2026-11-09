@@ -33,7 +33,6 @@ _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
 - [[ProviderAccountScreen]]
 - [[ProviderHomeScreen]]
 - [[ProviderMyProfileScreen]]
-- [[AdminCreateAccountScreen]]
 - [[AdminCreatedAccountsScreen]]
 - [[AdminMoneyScreen]]
 - [[BeccaScreen]]

@@ -202,8 +202,9 @@ export type ProfileStackParamList = {
   AdminDashboard: undefined;
   /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
-  /** Admin accounts only: open a ready-to-use account with no emails. */
-  AdminCreateAccount: undefined;
+  /** Admin accounts only: open a ready-to-use account with no emails, or
+   *  (addDetailsForUserId) give a blank provider account its owner's details. */
+  AdminCreateAccount: { addDetailsForUserId?: string } | undefined;
   /** Admin accounts only: every account opened from Create an account. */
   AdminCreatedAccounts: undefined;
   Points: undefined;
@@ -415,8 +416,9 @@ export type ProviderAccountStackParamList = {
   AdminDashboard: undefined;
   /** Admin accounts only; reached from the admin dashboard. */
   AdminMoney: undefined;
-  /** Admin accounts only: open a ready-to-use account with no emails. */
-  AdminCreateAccount: undefined;
+  /** Admin accounts only: open a ready-to-use account with no emails, or
+   *  (addDetailsForUserId) give a blank provider account its owner's details. */
+  AdminCreateAccount: { addDetailsForUserId?: string } | undefined;
   /** Admin accounts only: every account opened from Create an account. */
   AdminCreatedAccounts: undefined;
   DevSettings: undefined;

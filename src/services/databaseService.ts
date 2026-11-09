@@ -12533,16 +12533,26 @@ export class AdminCreateAccountRefused extends Error {}
  * supabase/functions/admin-create-account/index.ts.
  */
 export async function adminCreateAccount(input: AdminCreateAccountInput): Promise<AdminCreateAccountResult> {
-  const { data, error } = await supabase.functions.invoke('admin-create-account', { body: input });
+  const data = await invokeAdminAccountAction({ action: 'create', ...input });
+  return toCreateAccountResult(data);
+}
+
+/** One call to admin-create-account; a 4xx reason comes back as AdminCreateAccountRefused. */
+async function invokeAdminAccountAction(body: Record<string, unknown>): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke('admin-create-account', { body });
   if (error) {
     // 4xx bodies are written to be shown; a 5xx body never is.
     const res = (error as { context?: Response }).context;
     if (res && res.status >= 400 && res.status < 500) {
-      const body = await res.json().catch(() => null) as { error?: unknown } | null;
-      if (typeof body?.error === 'string' && body.error) throw new AdminCreateAccountRefused(body.error);
+      const parsed = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof parsed?.error === 'string' && parsed.error) throw new AdminCreateAccountRefused(parsed.error);
     }
     throw error;
   }
+  return data;
+}
+
+function toCreateAccountResult(data: unknown): AdminCreateAccountResult {
   const result = data as Partial<AdminCreateAccountResult> | null;
   if (typeof result?.userId !== 'string' || typeof result.email !== 'string') {
     throw new Error('admin-create-account returned no account.');
@@ -12553,6 +12563,54 @@ export async function adminCreateAccount(input: AdminCreateAccountInput): Promis
     accountType: result.accountType === 'client' ? 'client' : 'provider',
     ...(typeof result.generatedPassword === 'string' ? { generatedPassword: result.generatedPassword } : {}),
   };
+}
+
+/**
+ * Blank provider accounts (Admin → Start a provider now) sign in with a
+ * made-up address here until their details are added. Mirrored by
+ * BLANK_EMAIL_DOMAIN in supabase/functions/admin-create-account/index.ts.
+ */
+export const BLANK_ACCOUNT_EMAIL_DOMAIN = 'pending.cerviced.co';
+
+/** A login the app can sign straight in with. */
+export interface AdminAccountLogin {
+  userId: string;
+  email: string;
+  password: string;
+}
+
+function toAccountLogin(data: unknown): AdminAccountLogin {
+  const result = data as Partial<AdminAccountLogin> | null;
+  if (typeof result?.userId !== 'string' || typeof result.email !== 'string' || typeof result.password !== 'string') {
+    throw new Error('admin-create-account returned no login.');
+  }
+  return { userId: result.userId, email: result.email, password: result.password };
+}
+
+/** Admins only: a provider account with no details yet, to sign into and set up now. */
+export async function adminStartBlankProvider(): Promise<AdminAccountLogin> {
+  return toAccountLogin(await invokeAdminAccountAction({ action: 'start_blank_provider' }));
+}
+
+/** Admins only: back into a blank provider account. Sets it a fresh password each time. */
+export async function adminOpenBlankAccount(userId: string): Promise<AdminAccountLogin> {
+  return toAccountLogin(await invokeAdminAccountAction({ action: 'open_blank', userId }));
+}
+
+export interface AdminAddAccountDetailsInput {
+  userId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  /** YYYY-MM-DD; at least 16. */
+  dob: string;
+  /** Leave blank to have one made up (returned as generatedPassword). */
+  password?: string;
+}
+
+/** Admins only: gives a blank provider account its owner's details, after which it's theirs. */
+export async function adminAddAccountDetails(input: AdminAddAccountDetailsInput): Promise<AdminCreateAccountResult> {
+  return toCreateAccountResult(await invokeAdminAccountAction({ action: 'add_details', ...input }));
 }
 
 export type AdminCreatedProviderStatus = 'live' | 'setting_up' | 'not_started';
@@ -12567,6 +12625,8 @@ export interface AdminCreatedAccount {
   email: string | null;
   /** Providers only. */
   providerStatus: AdminCreatedProviderStatus | null;
+  /** A blank provider whose owner's details haven't been added yet. */
+  detailsPending: boolean;
 }
 
 /** Accounts opened from Admin → Create an account, newest first. Throws for a non-admin. */
@@ -12580,14 +12640,16 @@ export async function listAdminCreatedAccounts(limit = 200): Promise<AdminCreate
   };
   return (data as Row[]).map(row => {
     const status = row.provider_status;
+    const email = typeof row.email === 'string' ? row.email : null;
     return {
       userId: String(row.user_id),
       createdAt: String(row.created_at),
       accountType: row.account_type === 'client' ? 'client' : 'provider',
       createdByName: typeof row.created_by_name === 'string' ? row.created_by_name : null,
       name: typeof row.name === 'string' ? row.name : null,
-      email: typeof row.email === 'string' ? row.email : null,
+      email,
       providerStatus: status === 'live' || status === 'setting_up' || status === 'not_started' ? status : null,
+      detailsPending: email !== null && email.endsWith(`@${BLANK_ACCOUNT_EMAIL_DOMAIN}`),
     };
   });
 }
