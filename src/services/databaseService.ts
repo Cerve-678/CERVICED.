@@ -12757,6 +12757,24 @@ export async function setProviderRecommendation(providerId: string, on: boolean)
   if (error) throw error;
 }
 
+/** My own name, picture and the live providers I recommend (not hidden), for my own face in the ring. */
+export interface MyRecommends {
+  name: string | null;
+  avatarUrl: string | null;
+  providerIds: string[];
+}
+
+export async function getMyRecommendedProviders(): Promise<MyRecommends> {
+  const { data, error } = await supabase.rpc('get_my_recommended_providers');
+  if (error) throw error;
+  const row = data as { name: string | null; avatar_url: string | null; provider_ids: string[] | null };
+  return {
+    name: row.name,
+    avatarUrl: row.avatar_url || null,
+    providerIds: row.provider_ids ?? [],
+  };
+}
+
 /** "Don't show this one": keeps my face off this provider's cards. */
 export async function setProviderHidden(providerId: string, hidden: boolean): Promise<void> {
   const { error } = await supabase.rpc('set_provider_hidden', {

@@ -156,7 +156,9 @@ function CircleSheet({
         ]}
       >
         <View style={[styles.grabber, { backgroundColor: P.border }]} />
-        <Text style={[styles.sheetTitle, { color: P.text }]}>People you follow</Text>
+        <Text style={[styles.sheetTitle, { color: P.text }]}>
+          {people.some((p) => !p.isMe) ? 'People you follow' : 'Your recommendation'}
+        </Text>
         {providerName ? (
           <Text style={[styles.sheetSub, { color: P.sub }]} numberOfLines={1}>
             at {providerName}
@@ -173,7 +175,7 @@ function CircleSheet({
               heartFill="#FF2D78"
             />
             <Text style={[styles.sheetName, { color: P.text }]} numberOfLines={1}>
-              {firstName(person.name)}
+              {person.isMe ? 'You' : firstName(person.name)}
             </Text>
             <Text style={[styles.sheetLine, { color: person.recommends ? P.accentText : P.sub }]}>
               {circleLine(person)}

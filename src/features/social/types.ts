@@ -70,6 +70,8 @@ export interface CirclePerson {
   avatarUrl: string | null;
   recommends: boolean;
   visits: number;
+  /** The signed-in client themself, shown first on providers they recommend. */
+  isMe?: boolean | undefined;
 }
 
 /** providerId → people, recommenders first. */
