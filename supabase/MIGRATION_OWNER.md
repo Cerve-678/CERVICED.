@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  feat/admin-blank-provider — 20261109260000_blank_provider_cannot_go_live (2026-11-09)
 ```
 
+### Applied 2026-11-09 (find people through contacts only)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109240000 | `drop_people_name_search` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109220000`. Unapplied migrations on open PRs were `20261109210000_marketing_studio` (its owner, cerviced-6a, said ok and will renumber above the live max) and `20261109230000_profile_import_reads` (no running session owns it; it only creates `profile_import_reads`). **Both now sit below the frontier and must renumber above 20261109240000.** cerviced-5b's `20261109250000_release_time` is already above. Lock taken on `feat/circle-follow-back-contacts-only` (62646b9b). Forced-rollback dry run first (`search_people` 0, `match_contact_hashes` 1, version row 1; live unchanged). Only drops `public.search_people(text, integer)`. Verified live: version present (now live max); `search_people` gone; `match_contact_hashes` present, authenticated can execute and anon can't. Written on `feat/circle-follow-back-contacts-only` (#424). |
+
 ### Applied 2026-11-09 (accounts you created, admin)
 
 | Authored version | Name | Status |

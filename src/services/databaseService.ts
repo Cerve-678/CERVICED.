@@ -12841,17 +12841,6 @@ export async function unblockPerson(personId: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Name search. The server ignores queries under 2 characters and caps at 50. */
-export async function searchPeople(query: string, limit = 25): Promise<PersonSummary[]> {
-  if (query.trim().length < 2) return [];
-  const { data, error } = await supabase.rpc('search_people', {
-    p_query: query.trim(),
-    p_limit: limit,
-  });
-  if (error) throw error;
-  return ((data ?? []) as PersonRow[]).map(mapPerson);
-}
-
 /**
  * Compares sha256 hashes of the device's contact numbers (normalised with
  * normalisePhoneForMatching) against accounts. Nothing sent is stored.
