@@ -60,9 +60,11 @@ import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData
 import type { ProviderRegistrationData, ServiceImageDraft } from '../../services/providerRegistrationService';
 import { normalizeExternalBookingUrl } from '../../features/providers/externalBookingLink';
 import { ExpandableAboutText, revealIfScrolledPast } from '../../features/providers/ExpandableAboutText';
-import { transferFromAcuity } from '../../services/acuityTransferService';
+import { mergeImportedProfile, policyFieldsFromImport, IMPORT_DEFAULT_DURATION, type ProfileImportSummary } from '../../features/provider-registration/profileImport';
+import { pickPhotosForImport, pickPdfForImport, ImportPickError } from '../../features/provider-registration/profileImportFiles';
+import type { ImportedProfile } from '../../types/profileImport';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderReleaseDay } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderReleaseDay, readProfileFromLink, readProfileFromFiles, ProfileImportRefused } from '../../services/databaseService';
 import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
@@ -84,7 +86,7 @@ import {
 
 // Navigation types
 import { ProfileStackParamList } from '../../navigation/types';
-import { logger } from '../../utils/logger';
+import { logger, reportError } from '../../utils/logger';
 import { openLegalPage } from '../../utils/legalPage';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
 import { formatLongDate } from '../../utils/dateUtils';
@@ -145,6 +147,7 @@ import {
   type InfoRegSectionKey as EditorSectionKey,
 } from '../../features/provider-registration/infoRegSections';
 import { toUserMessage } from '../../utils/userFacingError';
+import type { NoticeChoice } from '../../utils/policyDisplay';
 
 import {
   ADDRESS_RELEASE_OPTS,
@@ -229,7 +232,7 @@ const REVIEW_WARN_COLOR = '#FF9500';
 // of sync between the two.
 
 // ─── Policy types ────────────────────────────────────────────────────────────
-type CancelNotice     = 'none' | '24h' | '48h' | '72h';
+type CancelNotice     = NoticeChoice;
 type CancelPenalty    = 'none' | 'deposit' | 'half';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
@@ -1948,102 +1951,229 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
   );
 };
 
-// Transfer Data Modal
-interface TransferDataModalProps {
+// Import Profile Modal ─ reads a price list from photos, a PDF or a link and
+// shows what it found before anything is added. Nothing is saved here: Add to
+// profile fills the form, and the person still checks it and taps Save.
+type ImportSource = 'photos' | 'pdf' | 'link';
+
+interface ImportProfileModalProps {
   visible: boolean;
   onClose: () => void;
-  onTransfer: (url: string) => Promise<void>;
-  onSkip: () => void;
+  /** What adding this would change, worked out against the form as it is now. */
+  previewImport: (imported: ImportedProfile) => ImportPreview;
+  onApply: (imported: ImportedProfile) => void;
 }
 
-const TransferDataModal: React.FC<TransferDataModalProps> = ({
+interface ImportPreview extends ProfileImportSummary {
+  /** Policies were read but the saved ones didn't load, so they're left out. */
+  policiesUnavailable: boolean;
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+const ImportProfileModal: React.FC<ImportProfileModalProps> = ({
   visible,
   onClose,
-  onTransfer,
-  onSkip,
+  previewImport,
+  onApply,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
-  const [acuityUrl, setAcuityUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [link, setLink] = useState('');
+  const [reading, setReading] = useState<ImportSource | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [statusMsg, setStatusMsg] = useState('');
+  const [result, setResult] = useState<{ imported: ImportedProfile; preview: ImportPreview } | null>(null);
 
-  const handleTransferPress = async () => {
-    const trimmed = acuityUrl.trim();
-    if (!trimmed) {
-      setErrorMsg('Please paste your Acuity Scheduling link first.');
-      return;
-    }
-    if (!trimmed.startsWith('http')) {
-      setErrorMsg('Please paste the full URL starting with https://');
-      return;
-    }
+  // Starts clean every time it opens.
+  useEffect(() => {
+    if (!visible) return;
+    setLink('');
+    setReading(null);
     setErrorMsg('');
-    setIsLoading(true);
-    setStatusMsg('Fetching your Acuity page…');
+    setResult(null);
+  }, [visible]);
+
+  const read = async (source: ImportSource) => {
+    setErrorMsg('');
+    let imported: ImportedProfile;
     try {
-      setStatusMsg('Reading your services…');
-      await onTransfer(trimmed);
-    } catch (e: any) {
-      setErrorMsg(toUserMessage(e, "We couldn't read that page. Check the link and try again.", 'InfoRegScreen.acuityTransfer'));
-      setIsLoading(false);
-      setStatusMsg('');
+      if (source === 'link') {
+        const trimmed = link.trim();
+        if (!/^https?:\/\//i.test(trimmed)) {
+          setErrorMsg('Paste the whole link, starting with https://');
+          return;
+        }
+        setReading('link');
+        imported = await readProfileFromLink(trimmed);
+      } else {
+        const files = source === 'photos' ? await pickPhotosForImport() : await pickPdfForImport();
+        if (!files || files.length === 0) return;
+        setReading(source);
+        imported = await readProfileFromFiles(files);
+      }
+    } catch (e) {
+      if (e instanceof ImportPickError || e instanceof ProfileImportRefused) {
+        reportError(e, 'InfoRegScreen.importProfile');
+        setErrorMsg(e.message);
+      } else {
+        setErrorMsg(toUserMessage(e, "That couldn't be read. Please try again.", 'InfoRegScreen.importProfile'));
+      }
+      return;
+    } finally {
+      setReading(null);
     }
+    const preview = previewImport(imported);
+    const nothing = preview.servicesAdded === 0 && preview.addOnsAdded === 0
+      && preview.detailsFilled.length === 0 && preview.policyLines.length === 0
+      && preview.feesAndDeposits.length === 0;
+    if (nothing) {
+      setErrorMsg(preview.servicesSkipped > 0
+        ? 'Everything it found is already on your profile.'
+        : preview.unclear || "No services or prices were found there. Try clearer screenshots of the price list.");
+      return;
+    }
+    setResult({ imported, preview });
   };
 
+  const busy = reading !== null;
+  const p = result?.preview;
+  const found: string[] = p ? [
+    p.servicesAdded > 0
+      ? `${plural(p.servicesAdded, 'service')}${p.categoriesAdded === 0 ? '' : p.categoriesAdded === 1 ? ', 1 new category' : `, ${p.categoriesAdded} new categories`}`
+      : '',
+    p.addOnsAdded > 0 ? plural(p.addOnsAdded, 'add-on') : '',
+    p.detailsFilled.length > 0 ? p.detailsFilled.join(', ') : '',
+  ].filter(Boolean) : [];
+  const toCheck: string[] = p ? [
+    p.servicesWithoutPrice > 0 ? `${plural(p.servicesWithoutPrice, 'service')} had no price, so ${p.servicesWithoutPrice === 1 ? 'it shows' : 'they show'} £0.` : '',
+    p.servicesWithoutLength > 0 ? `${plural(p.servicesWithoutLength, 'service')} had no length, so ${p.servicesWithoutLength === 1 ? 'it is' : 'they are'} set to ${IMPORT_DEFAULT_DURATION}.` : '',
+    p.servicesSkipped > 0 ? `${plural(p.servicesSkipped, 'service')} you already have ${p.servicesSkipped === 1 ? 'was' : 'were'} left as ${p.servicesSkipped === 1 ? 'it is' : 'they are'}.` : '',
+    p.addOnsSkipped > 0 ? `${plural(p.addOnsSkipped, 'add-on')} ${p.addOnsSkipped === 1 ? 'was' : 'were'} already there, or couldn't be added.` : '',
+    p.addOnsUnavailable ? "Your add-ons didn't load, so none were added. Reopen this screen and import again." : '',
+    p.policiesUnavailable ? "Your saved policies didn't load, so none were added. Reopen this screen and import again." : '',
+    p.unclear,
+  ].filter(Boolean) : [];
+
   return (
-    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={busy ? undefined : onClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.transferModal}>
-          <LinearGradient
-            colors={[chrome.surf(0.9), chrome.surf(0.7)]}
-            style={styles.transferGradient}
-          />
-          <Text style={styles.transferTitle}>Import from Acuity</Text>
-          <Text style={styles.transferSubtitle}>
-            Paste your Acuity Scheduling link and we'll automatically import your services, prices, and business info.
-          </Text>
-
-          <View style={styles.inputBlur}>
-            <TextInput
-              style={styles.textInput}
-              value={acuityUrl}
-              onChangeText={(text) => { setAcuityUrl(text); setErrorMsg(''); }}
-              placeholder="https://acuityscheduling.com/schedule.php?owner=…"
-              placeholderTextColor={chrome.fg(0.4)}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              editable={!isLoading}
-            />
-          </View>
-
-          {errorMsg ? (
-            <Text style={styles.transferError}>{errorMsg}</Text>
-          ) : null}
-
-          {isLoading ? (
-            <View style={styles.transferLoadingRow}>
-              <ActivityIndicator size="small" color="#AF9197" />
-              <Text style={styles.transferLoadingText}>{statusMsg}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.transferButtons}>
-            <TouchableOpacity
-              style={[styles.transferButton, isLoading && { opacity: 0.5 }]}
-              onPress={() => { tapSelect(); handleTransferPress(); }}
-              disabled={isLoading}
-            >
-              <Text style={styles.transferButtonText}>
-                {isLoading ? 'Importing…' : 'Import My Profile'}
+        <View style={[styles.transferModal, { maxHeight: '85%' }]}>
+          <LinearGradient colors={[chrome.surf(0.9), chrome.surf(0.7)]} style={styles.transferGradient} />
+          {!result ? (
+            <>
+              <Text style={styles.transferTitle}>Import a price list</Text>
+              <Text style={styles.transferSubtitle}>
+                Choose screenshots or photos of the price list, a PDF, or paste a link. We'll read the services, prices, add-ons and policies, and show you before anything is added.
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.skipButton} onPress={() => { tapLight(); onSkip(); }} disabled={isLoading}>
-              <Text style={styles.skipButtonText}>Start Fresh Instead</Text>
-            </TouchableOpacity>
-          </View>
+
+              <View style={styles.transferButtons}>
+                <TouchableOpacity
+                  style={[styles.transferButton, busy && { opacity: 0.5 }]}
+                  onPress={() => { tapSelect(); void read('photos'); }}
+                  disabled={busy}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.transferButtonText}>{reading === 'photos' ? 'Reading…' : 'Screenshots or photos'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.skipButton, busy && { opacity: 0.5 }]}
+                  onPress={() => { tapSelect(); void read('pdf'); }}
+                  disabled={busy}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.skipButtonText}>{reading === 'pdf' ? 'Reading…' : 'A PDF'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.inputBlur, { marginTop: 16 }]}>
+                <TextInput
+                  style={styles.textInput}
+                  value={link}
+                  onChangeText={(text) => { setLink(text); setErrorMsg(''); }}
+                  placeholder="Or paste a link: booking page, website, PDF"
+                  placeholderTextColor={chrome.fg(0.4)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  editable={!busy}
+                  returnKeyType="go"
+                  onSubmitEditing={() => { if (link.trim()) void read('link'); }}
+                />
+              </View>
+              {link.trim() ? (
+                <TouchableOpacity
+                  style={[styles.transferButton, { marginTop: 10 }, busy && { opacity: 0.5 }]}
+                  onPress={() => { tapSelect(); void read('link'); }}
+                  disabled={busy}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.transferButtonText}>{reading === 'link' ? 'Reading…' : 'Read this link'}</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {errorMsg ? <Text style={styles.transferError}>{errorMsg}</Text> : null}
+              {busy ? (
+                <View style={styles.transferLoadingRow}>
+                  <ActivityIndicator size="small" color="#AF9197" />
+                  <Text style={styles.transferLoadingText}>Reading the price list. This can take up to a minute.</Text>
+                </View>
+              ) : null}
+
+              <TouchableOpacity style={[styles.skipButton, { marginTop: 20 }]} onPress={() => { tapLight(); onClose(); }} disabled={busy} accessibilityRole="button">
+                <Text style={styles.skipButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.transferTitle}>Here's what we found</Text>
+              <ScrollView style={{ flexGrow: 0 }} showsVerticalScrollIndicator={false}>
+                {found.length > 0 ? (
+                  <>
+                    <Text style={styles.importLabel}>ADDS</Text>
+                    {found.map(line => <Text key={line} style={styles.importLine}>{line}</Text>)}
+                  </>
+                ) : null}
+                {p && p.policyLines.length > 0 ? (
+                  <>
+                    <Text style={styles.importLabel}>POLICIES</Text>
+                    {p.policyLines.map(line => <Text key={line} style={styles.importLine}>{line}</Text>)}
+                  </>
+                ) : null}
+                {p && p.feesAndDeposits.length > 0 ? (
+                  <>
+                    <Text style={styles.importLabel}>FEES AND DEPOSITS: NOT SET</Text>
+                    <Text style={styles.importNote}>
+                      These charge clients' cards, so they're never set from an import. Set them yourself in Business Profile → Policies and Payments after saving.
+                    </Text>
+                    {p.feesAndDeposits.map(line => <Text key={line} style={styles.importLine}>{line}</Text>)}
+                  </>
+                ) : null}
+                {toCheck.length > 0 ? (
+                  <>
+                    <Text style={styles.importLabel}>CHECK</Text>
+                    {toCheck.map(line => <Text key={line} style={styles.importLine}>{line}</Text>)}
+                  </>
+                ) : null}
+                <Text style={[styles.importNote, { marginTop: 14 }]}>
+                  Nothing is saved yet. Check everything, then tap Save & Publish.
+                </Text>
+              </ScrollView>
+              <View style={styles.transferButtons}>
+                <TouchableOpacity
+                  style={styles.transferButton}
+                  onPress={() => { tapSelect(); onApply(result.imported); }}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.transferButtonText}>Add to profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.skipButton} onPress={() => { tapLight(); setResult(null); }} accessibilityRole="button">
+                  <Text style={styles.skipButtonText}>Back</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -3374,7 +3504,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  // An import added policy wording. A link-only provider's first save files
+  // no policies unless they wrote some, and an imported price list is theirs.
+  const [policiesImported, setPoliciesImported] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   // A link-only preview shows specialities, which this screen doesn't hold
   // once the provider exists, so they're read when the preview opens. Before
@@ -3484,33 +3617,44 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }));
   };
 
-  // Handle data transfer from Acuity Scheduling URL
-  const handleTransferData = useCallback(async (url: string) => {
-    const extracted = await transferFromAcuity(url);
-    // Preserve any existing contact fields not covered by Acuity import.
-    // Imported services start with whichever add-ons already cover their
-    // category, the same as a service added by hand.
-    setProviderData(prev => ({
-      ...prev,
-      ...extracted,
-      categories: prev.addOnLibrary
-        ? Object.fromEntries(Object.entries(extracted.categories).map(([categoryName, services]) => [
-            categoryName,
-            services.map(service => ({
-              ...service,
-              addOnKeys: defaultAddOnKeysForCategory(prev.addOnLibrary ?? [], categoryName),
-            })),
-          ]))
-        : extracted.categories,
-    }));
-    const firstCat = Object.keys(extracted.categories)[0];
-    if (firstCat) setSelectedCategory(firstCat);
-    setShowTransferModal(false);
-    Alert.alert(
-      'Import Complete!',
-      `We found ${Object.values(extracted.categories).flat().length} services from your Acuity profile. Review and save when ready.`
-    );
-  }, []);
+  // Import box: what an imported price list would add, worked out against the
+  // form as it stands, then the same merge applied for real on Add to profile.
+  // See features/provider-registration/profileImport for the rules.
+  const previewImport = useCallback((imported: ImportedProfile) => {
+    const { summary } = mergeImportedProfile(providerData, imported);
+    const { lines } = policyFieldsFromImport(policies as unknown as Record<string, unknown>, imported.policies, policiesOnFile);
+    return {
+      ...summary,
+      policyLines: policiesLoaded ? lines : [],
+      policiesUnavailable: !policiesLoaded && lines.length > 0,
+    };
+  }, [providerData, policies, policiesOnFile, policiesLoaded]);
+
+  const applyImport = useCallback((imported: ImportedProfile) => {
+    setProviderData(prev => {
+      const { data } = mergeImportedProfile(prev, imported);
+      // Kept like a service editor save, so a live profile refresh can't put
+      // the categories back the way they were before the import.
+      for (const [name, services] of Object.entries(data.categories)) {
+        if (services !== prev.categories[name]) editedServiceCategoriesRef.current[name] = services;
+      }
+      return data;
+    });
+    if (policiesLoaded) {
+      const { fields, lines } = policyFieldsFromImport(policies as unknown as Record<string, unknown>, imported.policies, policiesOnFile);
+      if (lines.length > 0) {
+        setPolicies(prev => ({ ...prev, ...fields }));
+        setPoliciesImported(true);
+      }
+    }
+    const firstCat = Object.keys(imported.categories ?? {})[0];
+    if (firstCat) {
+      // The merge files it under an existing category of the same name, if any.
+      const key = firstCat.trim().toLowerCase();
+      setSelectedCategory(Object.keys(providerData.categories).find(name => name.trim().toLowerCase() === key) ?? firstCat.trim());
+    }
+    setShowImportModal(false);
+  }, [policies, policiesOnFile, policiesLoaded, providerData.categories]);
 
   // Add service category
   const handleAddCategory = useCallback((name: string, description: string) => {
@@ -3799,7 +3943,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       // writing the in-memory `policies` back while it's still stuck at
       // DEFAULT_POLICIES (a failed load) would silently wipe out whatever a
       // provider had already saved via Business Profile → Policies.
-      if (policiesLoaded && (policiesOnFile || !isLinkOnly)) {
+      if (policiesLoaded && (policiesOnFile || !isLinkOnly || policiesImported)) {
         await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
       }
       // Same guard, same reason: only write the terms back once we know what
@@ -3829,7 +3973,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, policiesLoaded, policiesOnFile, signupSpecialties, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
+  }, [providerData, user, policies, policiesLoaded, policiesOnFile, policiesImported, signupSpecialties, ownTerms, ownTermsLoaded, navigation, isEditMode, termsAccepted, isLinkOnly]);
 
   // The pager owns swipe tracking; this callback is the single imperative
   // entry point used by timeline tabs, Next buttons and validation shortcuts.
@@ -4326,11 +4470,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         <FocusAwareStatusBar barStyle={statusBarStyle} />
 
         {/* Transfer Data Modal */}
-        <TransferDataModal
-          visible={showTransferModal}
-          onClose={() => setShowTransferModal(false)}
-          onTransfer={handleTransferData}
-          onSkip={() => setShowTransferModal(false)}
+        <ImportProfileModal
+          visible={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          previewImport={previewImport}
+          onApply={applyImport}
         />
 
         {/* Add Category Modal */}
@@ -5210,6 +5354,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </View>
                 </View>
 
+                {/* Fills services, add-ons, details and policies from a price
+                    list. Nothing is saved until Save & Publish. */}
+                <TouchableOpacity
+                  style={[styles.importEntry, { borderColor: adaptiveAccentColor }]}
+                  onPress={() => { tapLight(); setShowImportModal(true); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Import a price list from screenshots, a PDF or a link"
+                >
+                  <Ionicons name="document-text-outline" size={20} color={adaptiveAccentColor} />
+                  <Text style={styles.importEntryText}>Import a price list from screenshots, a PDF or a link</Text>
+                  <Ionicons name="chevron-forward" size={18} color={adaptiveAccentColor} />
+                </TouchableOpacity>
+
                   {/* Service-type switch — plain underline, the same
                       treatment as the History / To Do row on
                       ProviderBookingHistoryScreen, and deliberately not a
@@ -6008,7 +6166,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 // InfoRegScreen computes that resolved palette once as `chromeTheme` (see
 // resolveChromeTheme below) and provides it via InfoRegChromeContext; the 13
 // sub-components declared earlier in this file (AddCategoryModal,
-// TransferDataModal, ServiceModal, etc.) read it through useScreenStyles()/
+// ImportProfileModal, ServiceModal, etc.) read it through useScreenStyles()/
 // useChrome() below rather than taking it as a prop each. Every layout value
 // in the sheet stays exactly as it was — only the colour source branches.
 //
@@ -7628,7 +7786,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 20,
   },
 
-  // Transfer Modal
+  // Import Modal (ImportProfileModal)
   transferModal: {
     marginHorizontal: 25,
     marginTop: 'auto',
@@ -7703,9 +7861,53 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 12,
   },
   transferLoadingText: {
+    flexShrink: 1,
     fontSize: 13,
     color: '#AF9197',
     fontStyle: 'italic',
+  },
+  importLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: '#AF9197',
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  importLine: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    color: P.text,
+    marginBottom: 2,
+  },
+  importNote: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 18,
+    color: fg(0.7),
+    marginBottom: 4,
+  },
+  importEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    marginBottom: 15,
+    marginHorizontal: 5,
+  },
+  importEntryText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 19,
+    color: P.text,
   },
 
   // Buttons
