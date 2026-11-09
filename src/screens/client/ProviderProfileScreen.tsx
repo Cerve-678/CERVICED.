@@ -507,7 +507,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
                     colors={["rgba(255,255,255,0.4)", "transparent"]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 0, y: 1 }}
-                    style={styles.modalCardHighlight}
+                    style={[styles.modalCardHighlight, squareCards && styles.squareCard]}
                   />
                   <View style={styles.modalReviewHeader}>
                     <Text style={styles.modalReviewerName}>{review.name}</Text>
@@ -1475,9 +1475,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
-  // Branding → Card Shape: square corners on every card on the profile (the
-  // service cards and category pills, the availability card, About, the
-  // sharing card and the reviews), or the rounded look it has always had.
+  // Branding → Card Shape: square corners on the profile's cards (the service
+  // cards and category pills, About/Policies, the sharing card, Reviews,
+  // Contact, Opening hours, Additional info), or the rounded look it has
+  // always had. The availability pill and Instagram button beside it stay
+  // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
@@ -1713,6 +1715,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     blurTint: cardBlurTint,
     blurIntensity: cardBlurIntensity,
     highlightColors: cardHighlightColors,
+    squareCards,
   }), [
     OP.text,
     OP.sub,
@@ -1724,6 +1727,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     cardBlurTint,
     cardBlurIntensity,
     cardHighlightColors,
+    squareCards,
   ]);
 
   // Venue/workspace shots are stamped with their own category by
@@ -3744,7 +3748,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               colors={cardHighlightColors}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
-              style={styles.cardHighlight}
+              style={[styles.cardHighlight, squareCards && styles.squareCard]}
             />
             <View style={styles.serviceCardBlur}>
               <View style={styles.serviceItem}>
@@ -5276,14 +5280,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       style={[
                         styles.slotsRow,
                         { backgroundColor: cardBg, borderColor: OP.border },
-                        squareCards && styles.squareCard,
                       ]}
                     >
                       <LinearGradient
                         colors={cardHighlightColors}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
-                        style={[styles.slotsCardHighlight, squareCards && styles.squareCard]}
+                        style={styles.slotsCardHighlight}
                       />
                       <Text style={[styles.slotsText, { color: OP.sub }]}>
                         {pillText}
@@ -5305,7 +5308,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     </BlurView>
                     {showInstagram ? (
                       <TouchableOpacity
-                        style={[styles.instagramButtonOutside, squareCards && styles.squareCard]}
+                        style={styles.instagramButtonOutside}
                         onPress={() => {
                           Haptics.selectionAsync().catch(() => {});
                           Linking.openURL(
@@ -5327,14 +5330,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           style={[
                             styles.instagramButtonSurface,
                             { backgroundColor: cardBg, borderColor: OP.border },
-                            squareCards && styles.squareCard,
                           ]}
                         >
                           <LinearGradient
                             colors={cardHighlightColors}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 0, y: 1 }}
-                            style={[styles.slotsCardHighlight, squareCards && styles.squareCard]}
+                            style={styles.slotsCardHighlight}
                           />
                           <Ionicons
                             name="logo-instagram"
@@ -5395,7 +5397,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     colors={cardHighlightColors}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 0, y: 1 }}
-                    style={styles.cardHighlight}
+                    style={[styles.cardHighlight, squareCards && styles.squareCard]}
                   />
                   {/* Tab switcher — only show if there are policy rows */}
                   {(() => {
@@ -6438,8 +6440,14 @@ const styles = StyleSheet.create({
     elevation: 0,
     marginBottom: 12,
   },
+  // Every corner, not just borderRadius: the top highlight strips set their
+  // own top-corner radii, which borderRadius: 0 alone doesn't override.
   squareCard: {
     borderRadius: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   serviceCardBlur: {
     flex: 1,

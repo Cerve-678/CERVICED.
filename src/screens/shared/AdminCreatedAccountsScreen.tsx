@@ -13,7 +13,12 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { useAppDialog } from '../../components/AppDialog';
+import { useSignInAsAccount } from '../../features/admin/useSignInAsAccount';
+import { toUserMessage } from '../../utils/userFacingError';
 import {
+  adminOpenBlankAccount,
+  AdminCreateAccountRefused,
   listAdminCreatedAccounts,
   type AdminCreatedAccount,
   type AdminCreatedProviderStatus,
@@ -25,6 +30,8 @@ import { logger } from '../../utils/logger';
 // Every account opened from Admin → Create an account, newest first, with
 // who made it and, for providers, how far they've got. Read from
 // admin_created_accounts(), which refuses anyone who isn't an admin.
+// A blank provider (Start a provider now) shows "Details not added yet" with
+// a way back into its provider side and a way to add its owner's details.
 // Internal tool, so its copy is English only.
 
 const PROVIDER_STATUS_LABEL: Record<AdminCreatedProviderStatus, string> = {
@@ -41,6 +48,48 @@ export default function AdminCreatedAccountsScreen({ navigation }: any) {
   const [accounts, setAccounts] = useState<AdminCreatedAccount[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  const signInAs = useSignInAsAccount();
+
+  const openProviderSide = useCallback((account: AdminCreatedAccount) => {
+    Haptics.selectionAsync().catch(() => {});
+    showConfirm(
+      'Open their provider side?',
+      "This signs you out of your own account and into this one, so you can carry on setting it up. Sign back into your own account when you're done.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Open',
+          onPress: () => {
+            void (async () => {
+              setOpeningId(account.userId);
+              try {
+                const login = await adminOpenBlankAccount(account.userId);
+                // Takes this screen away; nothing after it may touch state.
+                await signInAs(login.email, login.password);
+              } catch (err) {
+                setOpeningId(null);
+                showAlert(
+                  "Couldn't open it",
+                  err instanceof AdminCreateAccountRefused
+                    ? err.message
+                    : toUserMessage(err, 'Something went wrong. Please try again.', 'AdminCreatedAccountsScreen.adminOpenBlankAccount'),
+                  'center',
+                );
+              }
+            })();
+          },
+        },
+      ],
+      'center',
+    );
+  }, [showAlert, showConfirm, signInAs]);
+
+  const addDetails = useCallback((account: AdminCreatedAccount) => {
+    Haptics.selectionAsync().catch(() => {});
+    navigation.navigate('AdminCreateAccount', { addDetailsForUserId: account.userId });
+  }, [navigation]);
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -87,7 +136,10 @@ export default function AdminCreatedAccountsScreen({ navigation }: any) {
       <FlatList
         data={accounts ?? []}
         keyExtractor={item => item.userId}
-        renderItem={({ item }) => <AccountCard P={P} account={item} />}
+        renderItem={({ item }) => (
+          <AccountCard P={P} account={item} opening={openingId === item.userId}
+            onOpen={openProviderSide} onAddDetails={addDetails} />
+        )}
         ListHeaderComponent={header}
         ListEmptyComponent={
           accounts === null && !loadError ? (
@@ -106,12 +158,20 @@ export default function AdminCreatedAccountsScreen({ navigation }: any) {
         contentContainerStyle={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40, paddingHorizontal: 20 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={P.accent} />}
       />
+      <DialogHost />
     </ThemedBackground>
   );
 }
 
-function AccountCard({ P, account }: { P: Palette; account: AdminCreatedAccount }) {
+function AccountCard({ P, account, opening, onOpen, onAddDetails }: {
+  P: Palette;
+  account: AdminCreatedAccount;
+  opening: boolean;
+  onOpen: (account: AdminCreatedAccount) => void;
+  onAddDetails: (account: AdminCreatedAccount) => void;
+}) {
   const deleted = account.name === null && account.email === null;
+  const pending = !deleted && account.detailsPending;
   const created = `Created ${formatShortDate(account.createdAt)}${account.createdByName ? ` by ${account.createdByName}` : ''}`;
   return (
     <View style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -125,7 +185,10 @@ function AccountCard({ P, account }: { P: Palette; account: AdminCreatedAccount 
           </Text>
         </View>
       </View>
-      {!deleted && !!account.email && (
+      {pending && (
+        <Text style={[styles.body, { color: P.sub }]}>Details not added yet: nobody can sign in to this but you.</Text>
+      )}
+      {!deleted && !pending && !!account.email && (
         <Text selectable style={[styles.body, { color: P.text }]}>{account.email}</Text>
       )}
       {account.providerStatus && (
@@ -134,6 +197,29 @@ function AccountCard({ P, account }: { P: Palette; account: AdminCreatedAccount 
         </Text>
       )}
       <Text style={[styles.small, { color: P.sub }]}>{created}</Text>
+      {pending && (
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: P.border, opacity: opening ? 0.7 : 1 }]}
+            onPress={() => onOpen(account)}
+            disabled={opening}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            {opening
+              ? <ActivityIndicator color={P.accent} />
+              : <Text style={[styles.link, { color: P.accentText }]}>OPEN THEIR PROVIDER SIDE</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: P.accent, borderColor: P.accent }]}
+            onPress={() => onAddDetails(account)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.link, { color: P.onAccent }]}>ADD THEIR DETAILS</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -149,6 +235,8 @@ const styles = StyleSheet.create({
   body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20 },
   small: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18 },
   link: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1.5 },
+  actions: { gap: 8, marginTop: 8 },
+  actionBtn: { borderRadius: 100, borderWidth: 1, minHeight: 44, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   pill: { borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 4, paddingHorizontal: 10 },
   pillText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.2 },
 });

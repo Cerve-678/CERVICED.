@@ -35,6 +35,8 @@ interface SectionPalette {
   blurTint: "dark" | "light";
   blurIntensity: number;
   highlightColors: [string, string];
+  /** Branding → Card Shape: square corners on the section cards. Photos stay round. */
+  squareCards?: boolean;
 }
 
 /** A link-only profile's own Specialities section. Link-only profiles carry
@@ -83,7 +85,7 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
     <BlurView
       intensity={palette.blurIntensity}
       tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
+      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
       <Text style={[styles.cardTitle, { color: palette.text }]}>Reviews</Text>
@@ -132,7 +134,7 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
 }) {
   if (loading) {
     return (
-      <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }]}>
+      <View style={[styles.loadingSection, { borderColor: palette.border, backgroundColor: palette.cardBackground }, palette.squareCards && styles.square]}>
         <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
         <View style={[styles.loadingLine, { backgroundColor: palette.separator }]} />
         <View style={[styles.loadingLine, styles.loadingLineShort, { backgroundColor: palette.separator }]} />
@@ -145,7 +147,7 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
     <BlurView
       intensity={palette.blurIntensity}
       tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
+      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
       <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
@@ -209,7 +211,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
     <BlurView
       intensity={palette.blurIntensity}
       tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
+      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
       <Text style={[styles.cardTitle, { color: palette.text }]}>Contact</Text>
@@ -273,7 +275,7 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
     <BlurView
       intensity={palette.blurIntensity}
       tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }]}
+      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
     >
       <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
       <Text style={[styles.cardTitle, { color: palette.text }]}>Additional Information</Text>
@@ -507,6 +509,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
+  square: { borderRadius: 0 },
   highlight: { ...StyleSheet.absoluteFill },
   cardTitle: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   bodyText: { fontFamily: "Jura-VariableFont_wght", fontSize: 12, lineHeight: 18, marginTop: 7 },
