@@ -52,14 +52,17 @@ import {
 } from '../../features/social/people';
 import type { PersonListEntry, PersonSummary, SocialSettingsUpdate } from '../../features/social/types';
 import {
-  cachedContactMatches,
+  cachedContacts,
   findContactsOnCerviced,
   getContactsAccess,
+  inviteContact,
   isContactsLimitError,
-  rememberContactMatches,
+  rememberContacts,
   requestContactsAccess,
   type ContactMatchResult,
+  type InviteContact,
 } from '../../features/social/contacts';
+import { logger } from '../../utils/logger';
 import {
   FONT_BODY,
   FONT_DISPLAY,
@@ -78,10 +81,14 @@ import type { ProfileScreenProps } from '../../navigation/types';
 const SEARCH_DEBOUNCE_MS = 350;
 const MIN_QUERY = 2;
 const FACE = 42;
+/** Invite rows shown at first, and added per "Show more". */
+const INVITES_PAGE = 25;
 
 type Row =
   | { kind: 'result'; key: string; person: PersonSummary }
   | { kind: 'contacts'; key: string }
+  | { kind: 'invite'; key: string; contact: InviteContact }
+  | { kind: 'moreInvites'; key: string; left: number }
   | { kind: 'request'; key: string; entry: PersonListEntry }
   | { kind: 'following'; key: string; entry: PersonListEntry }
   | { kind: 'follower'; key: string; entry: PersonListEntry }
@@ -144,9 +151,12 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
   // kept in memory for the app session (contacts.ts), since the server
   // allows 3000 numbers a day and a re-send would spend it again.
   type ContactsState = 'idle' | 'checking' | 'done' | 'off' | 'error' | 'dismissed';
-  const cachedContacts = userId ? cachedContactMatches(userId) : null;
-  const [contactsState, setContactsState] = useState<ContactsState>(cachedContacts ? 'done' : 'idle');
-  const [contactMatches, setContactMatches] = useState<ContactMatchResult[]>(cachedContacts ?? []);
+  const cachedContactsResult = userId ? cachedContacts(userId) : null;
+  const [contactsState, setContactsState] = useState<ContactsState>(cachedContactsResult ? 'done' : 'idle');
+  const [contactMatches, setContactMatches] = useState<ContactMatchResult[]>(cachedContactsResult?.matches ?? []);
+  // Address-book names, on the phone only (contacts.ts): never sent anywhere.
+  const [contactInvites, setContactInvites] = useState<InviteContact[]>(cachedContactsResult?.invites ?? []);
+  const [invitesShown, setInvitesShown] = useState(INVITES_PAGE);
   const [contactsError, setContactsError] = useState<string | null>(null);
   // Set the instant the button is tapped, so a double tap can't run two checks.
   const contactsInFlight = useRef(false);
@@ -515,8 +525,9 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       const found = await findContactsOnCerviced();
       // Signed into a different account meanwhile: this result isn't theirs.
       if (userIdRef.current !== forUser) return;
-      rememberContactMatches(forUser, found);
-      setContactMatches(found);
+      rememberContacts(forUser, found);
+      setContactMatches(found.matches);
+      setContactInvites(found.invites);
       setContactsState('done');
     } catch (err) {
       if (userIdRef.current !== forUser) return;
@@ -555,12 +566,19 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     if (contactsState === 'done') {
       out.push({
         key: 'contacts',
-        title: `IN YOUR CONTACTS · ${contactMatches.length}`,
+        title: `ON CERVICED · ${contactMatches.length}`,
         data:
           contactMatches.length > 0
             ? contactMatches.map((person) => ({ kind: 'result', key: `c-${person.userId}`, person }))
-            : [{ kind: 'note', key: 'c-empty', text: 'Nobody in your contacts is on CERVICED yet, or they’ve chosen not to be found by number.' }],
+            : [{ kind: 'note', key: 'c-empty', text: 'None of your contacts are on CERVICED yet.' }],
       });
+      if (contactInvites.length > 0) {
+        const shown = contactInvites.slice(0, invitesShown);
+        const left = contactInvites.length - shown.length;
+        const data: Row[] = shown.map((contact) => ({ kind: 'invite', key: `i-${contact.key}`, contact }));
+        if (left > 0) data.push({ kind: 'moreInvites', key: 'i-more', left });
+        out.push({ key: 'invites', title: `INVITE · ${contactInvites.length}`, data });
+      }
     } else if (contactsState !== 'dismissed') {
       out.push({ key: 'contacts', title: 'CONTACTS', data: [{ kind: 'contacts', key: 'contacts' }] });
     }
@@ -598,7 +616,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       });
     }
     return out;
-  }, [inSearch, results, searching, searchError, trimmed, requests, contactsState, contactMatches, listsState, following, followers, blocked]);
+  }, [inSearch, results, searching, searchError, trimmed, requests, contactsState, contactMatches, contactInvites, invitesShown, listsState, following, followers, blocked]);
 
   // ── Rendering ─────────────────────────────────────────────────────────────
 
@@ -663,8 +681,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           title="Show where I go"
           sub={
             settings.showWhereIGo
-              ? "People who follow you see your face on providers you recommend, or book after turning this on, and how many times you've been. Never which service you had."
-              : 'Nobody sees where you go, recommends included.'
+              ? 'Your followers see your face on providers you go to or recommend. Never what you had done.'
+              : 'Nobody sees where you go.'
           }
           value={settings.showWhereIGo}
           onChange={onShowWhereIGoChange}
@@ -676,8 +694,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           title="Private account"
           sub={
             settings.isPrivate
-              ? 'People ask to follow you, and you choose who. Anyone already following you stays until you remove them.'
-              : 'Anyone can follow you without asking.'
+              ? 'People ask to follow you, and you choose who.'
+              : 'Anyone can follow you.'
           }
           value={settings.isPrivate}
           onChange={onPrivateChange}
@@ -687,7 +705,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         <View style={[styles.divider, { backgroundColor: P.sep }]} />
         <SwitchRow
           title="Findable by phone number"
-          sub="People who have the number on your profile in their contacts can find you."
+          sub="People who have your number can find you."
           value={settings.findableByPhone}
           onChange={(v) => void saveSetting({ findableByPhone: v })}
           disabled={savingSetting || settings.isMinor}
@@ -696,7 +714,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         {settings.isMinor ? (
           <Note
             icon="lock-closed-outline"
-            text="Because you're under 18, your account stays private and people can't find you by your number."
+            text="As you're under 18, your account stays private and can't be found by number."
             P={P}
           />
         ) : null}
@@ -731,7 +749,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         <Text style={[styles.contactsKick, { color: P.onAccent }]}>CONTACTS</Text>
         <Text style={[styles.contactsTitle, { color: P.onAccent }]}>See who you know here</Text>
         <Text style={[ui.body, { color: P.onAccent, opacity: 0.9 }]}>
-          Find friends who are already on CERVICED. Your address book is never saved.
+          See who's already here, and invite the rest. Your address book is never saved.
         </Text>
         {contactsState === 'error' && contactsError ? (
           <Text style={[ui.body, { color: P.onAccent }]}>{contactsError}</Text>
@@ -766,6 +784,31 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         return renderSharing();
       case 'contacts':
         return renderContactsCard();
+      case 'invite':
+        return personRow(
+          item.contact.key,
+          item.contact.name,
+          null,
+          null,
+          <GhostButton
+            small
+            label="Invite"
+            onPress={() => { void inviteContact(item.contact).catch((err: unknown) => logger.warn('[circle] invite failed', err)); }}
+            P={P}
+            accessibilityLabel={`Invite ${item.contact.name}`}
+          />,
+        );
+      case 'moreInvites':
+        return (
+          <TouchableOpacity
+            style={styles.moreInvites}
+            onPress={() => { hapticLight(); setInvitesShown((n) => n + INVITES_PAGE * 2); }}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+          >
+            <Text style={[ui.body, { color: P.accentText, fontWeight: '700' }]}>Show more ({item.left})</Text>
+          </TouchableOpacity>
+        );
       case 'note':
         return <Text style={[ui.body, styles.note, { color: P.sub }]}>{item.text}</Text>;
       case 'retry':
@@ -951,6 +994,7 @@ const styles = StyleSheet.create({
   faceInitials: { alignItems: 'center', justifyContent: 'center' },
   faceInitialsText: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 0.6 },
   note: { paddingVertical: 8 },
+  moreInvites: { paddingVertical: 14, alignItems: 'center' },
   contactsCard: { borderRadius: 20, padding: 16, gap: 8 },
   contactsKick: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4, opacity: 0.8 },
   contactsTitle: { fontFamily: FONT_DISPLAY, fontSize: 19, letterSpacing: 0.6 },
