@@ -48,7 +48,10 @@ import { logger } from '../../utils/logger';
 import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
 import { shuffle } from '../../utils/shuffle';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
-import { CircleMomentsHost } from '../../features/social/CircleMomentsHost';
+import { useCircleMoment } from '../../features/social/useCircleMoment';
+import { RecommendHomeCard } from '../../features/social/RecommendHomeCard';
+import { WhereIGoIntroSheet } from '../../features/social/WhereIGoIntroSheet';
+import { semanticColors } from '../../features/maintenance/ui';
 import { tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
 import { PortfolioCard } from '../../components/PortfolioCard';
@@ -203,7 +206,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { palette: P } = useTheme();
+  const { palette: P, isDarkMode } = useTheme();
   // Measured per render, not read once inside the memo: the coach-mark tour
   // spotlights the floating tab bar by absolute coordinates, so a stale screen
   // size puts the highlight in the wrong place.
@@ -329,6 +332,15 @@ export default function HomeScreen() {
   // available, they just shouldn't be presented as exact.
   const [locationIsCoarse, setLocationIsCoarse] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  // The Recommend card / Show where I go intro, once Home is clear.
+  const circleMomentsActive = isFocused && !showTour && !showLocationModal;
+  const circleMoment = useCircleMoment(user?.id ?? null, bookings, circleMomentsActive);
+  const recommendProviderId = circleMoment.moment?.kind === 'recommend' ? circleMoment.moment.providerId : null;
+  const openRecommendProvider = useCallback(() => {
+    if (!recommendProviderId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    navigation.navigate('ProviderProfile', { providerId: recommendProviderId, source: 'home' });
+  }, [navigation, recommendProviderId]);
   // Miles. Saved, so the client's choice survives a restart.
   const [locationRadius, setLocationRadius] = useState(DEFAULT_NEARBY_RADIUS_MILES);
   useEffect(() => {
@@ -1268,6 +1280,21 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* After a recent visit that wasn't rated: ask to Recommend (circleMoments.ts). */}
+        {!selectedService && circleMoment.moment?.kind === 'recommend' && (
+          <RecommendHomeCard
+            providerName={circleMoment.moment.providerName}
+            bookingDate={circleMoment.moment.bookingDate}
+            busy={circleMoment.busy}
+            error={circleMoment.error}
+            onRecommend={circleMoment.recommend}
+            onBookAgain={openRecommendProvider}
+            onNotNow={circleMoment.notNow}
+            P={P}
+            errorColour={semanticColors(isDarkMode).bad}
+          />
+        )}
+
         {/* § config-driven — see src/config/homeSections.ts (id: 'your-providers') */}
         {/* Your Providers Section - Only show if there are bookmarked providers */}
         {!selectedService && providersData.yourProviders.length > 0 && (
@@ -2052,12 +2079,16 @@ export default function HomeScreen() {
       </ScrollView>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
-      {/* After a completed booking: the one-time Show where I go notice, or
-          "Send people their way?". Waits for Home to be clear. */}
-      <CircleMomentsHost
-        userId={user?.id ?? null}
-        bookings={bookings}
-        active={isFocused && !showTour && !showLocationModal}
+      {/* The one-time Show where I go intro; the Recommend card sits in the feed. */}
+      <WhereIGoIntroSheet
+        visible={circleMoment.moment?.kind === 'notice' && circleMomentsActive}
+        busy={circleMoment.busy}
+        error={circleMoment.error}
+        onGotIt={() => circleMoment.finishIntro(false)}
+        onTurnOff={() => circleMoment.finishIntro(true)}
+        onClose={circleMoment.closeIntro}
+        P={P}
+        errorColour={semanticColors(isDarkMode).bad}
       />
     </View>
   );
