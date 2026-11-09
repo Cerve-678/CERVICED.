@@ -86,7 +86,7 @@
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
 - `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale**
-- `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · **isDarkColor** · isHeroFinish · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
+- `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · isCardShape · **isDarkColor** · isHeroFinish · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
 - `reschedule.ts` — changes
 - `skinTones.ts` — **matchesSkinTone**
 - `support.ts` — **supportMailtoUrl**

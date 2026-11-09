@@ -86,13 +86,14 @@ describe('hero finish in profile_theme', () => {
       base: 'emeraldgold',
       sheet: '#FBF6EC',
       finish: 'split',
+      shape: 'rounded',
     });
   });
 
   it('reads keys saved before the finish existed as a blend', () => {
-    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend' });
-    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend' });
-    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend' });
+    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded' });
+    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
+    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
   });
 
   it('round-trips Sheen, which builds before it read as a blend', () => {
@@ -100,6 +101,7 @@ describe('hero finish in profile_theme', () => {
       base: 'blackgold',
       sheet: '#EBEBEA',
       finish: 'sheen',
+      shape: 'rounded',
     });
   });
 
@@ -110,7 +112,7 @@ describe('hero finish in profile_theme', () => {
   it('keeps a custom set readable with a finish on the end', () => {
     const base = encodeCustomTheme('#1D4A3C', '#FCFBFA', '#A98235');
     const key = encodeThemeKey(base, '#FBF6EC', 'solid');
-    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid' });
+    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded' });
     expect(resolveProviderTheme(key).accent).toBe('#A98235');
   });
 
@@ -154,5 +156,27 @@ describe('content areas', () => {
     const smoke = SHEET_OPTIONS.find(o => o.key === 'smoke')!.color;
     expect(contrast('#655A57', smoke)).toBeGreaterThanOrEqual(4);
     expect(lum(smoke)).toBeLessThan(lum(SHEET_OPTIONS.find(o => o.key === 'dove')!.color));
+  });
+});
+
+describe('card shape in profile_theme', () => {
+  it('leaves the stored value as it was when the shape is the default rounded', () => {
+    expect(encodeThemeKey('clay', '#F8ECF0', 'glow', 'rounded')).toBe('clay|#F8ECF0|glow');
+    expect(encodeThemeKey('clay', SHEET_BG, 'blend', 'rounded')).toBe('clay');
+  });
+
+  it('round-trips square, writing the sheet and finish out so the parts never shift', () => {
+    expect(encodeThemeKey('clay', SHEET_BG, 'blend', 'square')).toBe(`clay|${SHEET_BG}|blend|square`);
+    expect(parseThemeKey(encodeThemeKey('custom:#D8C6AF:#FFFFFF:#7A5A43', '#F8ECF0', 'glow', 'square'))).toEqual({
+      base: 'custom:#D8C6AF:#FFFFFF:#7A5A43',
+      sheet: '#F8ECF0',
+      finish: 'glow',
+      shape: 'square',
+    });
+  });
+
+  it('reads keys saved before the shape existed, or an unknown shape, as rounded', () => {
+    expect(parseThemeKey('clay|#F8ECF0|glow').shape).toBe('rounded');
+    expect(parseThemeKey('clay|#F8ECF0|glow|wobbly').shape).toBe('rounded');
   });
 });
