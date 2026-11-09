@@ -15,7 +15,7 @@
 // contacts" heading — never the name the client saved (decided 2026-11-08:
 // echoing it would let a fake account borrow it).
 
-import type * as ContactsModule from 'expo-contacts';
+import type * as ContactsModule from 'expo-contacts/legacy';
 import type * as CryptoModule from 'expo-crypto';
 import { matchContactHashes } from '../../services/databaseService';
 import { normalisePhoneForMatching } from '../../utils/phoneMatching';
@@ -26,7 +26,7 @@ import type { PersonSummary } from './types';
 // importing them at the top would crash it on launch; this way only the
 // contacts check fails there (and the screen shows that it couldn't check).
 /* eslint-disable @typescript-eslint/no-require-imports */
-const loadContacts = (): typeof ContactsModule => require('expo-contacts') as typeof ContactsModule;
+const loadContacts = (): typeof ContactsModule => require('expo-contacts/legacy') as typeof ContactsModule;
 const loadCrypto = (): typeof CryptoModule => require('expo-crypto') as typeof CryptoModule;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
