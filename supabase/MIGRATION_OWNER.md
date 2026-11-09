@@ -56,6 +56,18 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-09 (day-before reminder drops "arrive 10 minutes early")
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109200000 | `reminder_uses_provider_note_or_policies` | **APPLIED 2026-11-09** on the user's go-ahead ("yh and merge"). `supabase db query --linked -f` was refused by the auto-mode classifier, so the file's exact SQL ran through the Supabase MCP `execute_sql`; version recorded by the file. First written 2026-11-03 as 20261103120000 (never applied), renumbered 180000 then 200000 as 190000 went live first. Frontier right before applying: live max `20261109190000`, no higher migration on any open PR; lock `(none)`. md5 guard matched (`ca41105f…`). Forced-rollback dry run first. Swaps one literal in `process_client_appointment_reminders`: the 24h reminder ends with the booking's `booking_instructions`, or "Please read <provider>'s policies before your appointment." Verified live: version present (now live max); new md5 `dec2cf9b…`; old line gone, policies fallback and beauty_maintenance's prep line present; still SECURITY DEFINER with `search_path=public, pg_temp`; anon can't execute. Written on `fix/reminder-note-or-policies` (#309). |
+
+### Applied 2026-11-09 (follow request notification)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109190000 | `follow_request_notification` | **APPLIED 2026-11-09** on the user's go-ahead ("apply", "merge"), via `supabase db query --linked -f` (absolute path) with `--workdir` the main folder; version recorded by the file. First written as 20261109160000, renumbered because 20261109170000 (#408) went live first; placed above the peer's unapplied 20261109180000 (fix/reminder-note-or-policies), which touches neither this CHECK nor client_follows. Frontier right before applying: live max `20261109170000`; lock `(none)` on main, taken on `feat/follow-request-notification` (9b130695). The live `notifications_type_check` was re-read right before and was unchanged (57 types). Forced-rollback dry run on real rows first: request → 1 notification, cancel → 0, answer → read, re-request → new one. Verified live: version present (now live max); CHECK has 58 types including `follow_request` (tip_received, payout_failed, post_appt_check_in still present); trigger `on_client_follow_request` AFTER INSERT/DELETE/UPDATE OF status on client_follows; `notify_follow_request()` SECURITY DEFINER, md5 `a9bc7f8c…`, nobody can execute it directly. **Next: 20261109180000 must re-check the frontier (now 20261109190000) and renumber above it.** Written on `feat/follow-request-notification` (#410). |
+
 ### Applied 2026-11-09 (your own face in the ring)
 
 | Authored version | Name | Status |

@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **358 files**
 ## Notifications
 Curated: [[Notifications]] · **186 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(343)_
+- `src/screens/shared/NotificationsScreen.tsx` _(344)_
 - `src/services/databaseService.ts` _(194)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_
@@ -154,8 +154,8 @@ Curated: [[Notifications]] · **186 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(61)_
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(54)_
+- `src/services/notificationTapHandler.ts` _(51)_
 - `supabase/automation_jobs.sql` _(51)_
-- `src/services/notificationTapHandler.ts` _(50)_
 - `src/services/becca/capabilities/client.ts` _(46)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_

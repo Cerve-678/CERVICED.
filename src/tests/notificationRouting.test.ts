@@ -449,3 +449,41 @@ describe('notification routing — tip received', () => {
     expect(insert.slice(0, insert.indexOf('EXCEPTION'))).not.toMatch(/stripe/i);
   });
 });
+
+describe('notification routing — follow request', () => {
+  const migration = () => read('supabase', 'migrations', '20261109190000_follow_request_notification.sql');
+
+  it('declares follow_request everywhere a notification type has to exist', () => {
+    // Memory: new-notification-type-is-four-places.
+    const check = migration().slice(migration().indexOf('ADD CONSTRAINT notifications_type_check'));
+    expect(check).toContain("'follow_request'");
+    expect(read('src', 'types', 'database.ts')).toContain('| "follow_request"');
+    expect(notificationsScreen()).toContain("'follow_request'");
+    expect(tapHandler()).toContain("'follow_request'");
+  });
+
+  it('keeps every live type when it widens the CHECK', () => {
+    const check = migration().slice(migration().indexOf('ADD CONSTRAINT notifications_type_check'));
+    for (const type of ['tip_received', 'provider_saved', 'terms_updated', 'payout_failed', 'payment_refunded', 'maintenance_due']) {
+      expect(check).toContain(`'${type}'`);
+    }
+  });
+
+  it('opens Your circle from both entry points, client-only', () => {
+    expect(tapHandler()).toContain("navigateNested('Profile', 'Circle')");
+    expect(notificationsScreen()).toContain("navigateNested('Profile', 'Circle')");
+    const source = notificationsScreen();
+    const clientOnly = source.slice(
+      source.indexOf('const CLIENT_ONLY_TYPES'),
+      source.indexOf(']);', source.indexOf('const CLIENT_ONLY_TYPES')),
+    );
+    expect(clientOnly).toContain("'follow_request'");
+  });
+
+  it('never outlives the request: answered marks it read, cancelled deletes it', () => {
+    const sql = migration();
+    expect(sql).toContain('AFTER INSERT OR UPDATE OF status OR DELETE ON public.client_follows');
+    expect(sql).toMatch(/OLD\.status = 'pending'[\s\S]*DELETE FROM public\.notifications/);
+    expect(sql).toMatch(/SET is_read = true, is_actionable = false/);
+  });
+});

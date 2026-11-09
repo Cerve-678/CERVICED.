@@ -96,6 +96,7 @@ import { supportMailtoUrl } from '../../constants/support';
 import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
 import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
+import { hairTreatmentHistory } from '../../features/beauty-profile/options';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -1812,9 +1813,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         );
 
                         const CR = (items: string[], color?: string) => chipRow(items, color);
+                        const hairHistory = hairTreatmentHistory(clientProfile.treatmentHistory);
 
                         const hasSkin = (clientProfile.skinType.length > 0) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
-                        const hasHair = (clientProfile.hairType) || (clientProfile.scalpCondition) || (clientProfile.hairGoals.length > 0) || (clientProfile.treatmentHistory.length > 0);
+                        const hasHair = (clientProfile.hairType) || (clientProfile.scalpCondition) || (clientProfile.hairGoals.length > 0) || (hairHistory.length > 0);
                         const hasNails = (clientProfile.nailLength) || (clientProfile.nailShape);
                         const hasLashesBrows = (clientProfile.lashStyle) || (clientProfile.lashStatus) || (clientProfile.browStyle) || (clientProfile.browCondition);
                         const hasMakeup = (clientProfile.makeupCoverage) || (clientProfile.makeupFinish) || (clientProfile.makeupEyes) || (clientProfile.makeupLips);
@@ -1865,10 +1867,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                                 {catLabel('Hair')}
                                 {clientProfile.hairType ? <Row label="Hair type" value={clientProfile.hairType} textColor={P.text} divColor={rowDiv} /> : null}
                                 {clientProfile.scalpCondition ? <Row label="Scalp condition" value={clientProfile.scalpCondition} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.treatmentHistory.length > 0 && (
+                                {hairHistory.length > 0 && (
                                   <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
                                     <Text style={[styles.rowLabel, { color: P.text }]}>Treatment history</Text>
-                                    {CR(clientProfile.treatmentHistory)}
+                                    {CR(hairHistory)}
                                   </View>
                                 )}
                                 {clientProfile.hairGoals.length > 0 && (
