@@ -738,6 +738,10 @@ const WK_MIN_BLOCK_H = 24;
 // the last hour/booking plus the bottom tab-bar clearance instead of
 // truncating the scrollable range short of the real content.
 const WK_TOP_INSET  = 14;
+// The day letters and date circles sit this far left of their column's
+// centre (asked for 2026-11-09: on a phone they read as slightly right of
+// the days below). All seven move by the same amount, taps included.
+const WK_HEADER_NUDGE_LEFT = 8;
 
 /** First word of the client's name for a week card, "Client" when there's none. */
 function firstNameOf(name: string | null | undefined): string {
@@ -856,8 +860,9 @@ function WeekView({
         <View style={{ width: WK_TIME_COL_W }} />
         {/* Same spacer + flex:1-wrapper-of-flex:1-columns nesting as the grid
             below, so the two rows resolve to pixel-identical column widths
-            instead of two separately-computed flex layouts that could drift. */}
-        <View style={{ flex: 1, flexDirection: 'row' }}>
+            instead of two separately-computed flex layouts that could drift.
+            The nudge is a transform so those widths stay identical. */}
+        <View style={{ flex: 1, flexDirection: 'row', transform: [{ translateX: -WK_HEADER_NUDGE_LEFT }] }}>
           {weekDates.map(dateStr => {
             const dt      = new Date(dateStr + 'T00:00:00');
             const dayName = ['S','M','T','W','T','F','S'][dt.getDay()] ?? '';
