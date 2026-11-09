@@ -42,9 +42,12 @@ interface PortfolioCardProps {
   // After a heart, slide up Explore's "Add to a collection" bar. Only the
   // Explore grid draws that bar, so other screens leave this off.
   offersCollections?: boolean;
+  // Off for a card a collection's look is flying onto: the look is its
+  // entrance. Only read when the card mounts, so the memo below skips it.
+  entrance?: boolean;
 }
 
-const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef, offersCollections = false }: PortfolioCardProps) => {
+const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef, offersCollections = false, entrance = true }: PortfolioCardProps) => {
   const { theme, palette: P } = useTheme();
   // Blue-grey secondary — the highlight for the saved-heart and category chip
   // over photos. Hat-aware via palette; on the client hat this is the blue-grey
@@ -53,7 +56,7 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
   // A short entrance on the initial viewport keeps the intended polish.
   // Animating every offscreen card in an unvirtualized masonry ScrollView
   // creates dozens of native animation nodes for work the user cannot see.
-  const shouldAnimate = index < 10;
+  const shouldAnimate = entrance && index < 10;
   const fadeAnim = useRef(new Animated.Value(shouldAnimate ? 0 : 1)).current;
   const slideAnim = useRef(new Animated.Value(shouldAnimate ? 30 : 0)).current;
   const { isPortfolioSaved, savePortfolioItem, unsavePortfolioItem } = useBookmarkStore();

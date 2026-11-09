@@ -66,9 +66,9 @@ import { AddToCollectionSheet } from '../../components/collections/AddToCollecti
 import { CollectionEditorSheet } from '../../components/collections/CollectionEditorSheet';
 import type { FolderPaperRect } from '../../components/collections/CollectionFolder';
 import {
+  CollectionFlight,
   CollectionFlightTarget,
   CollectionOpenFlight,
-  type FlightRect,
 } from '../../components/collections/CollectionOpenFlight';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
@@ -424,30 +424,16 @@ const ExploreScreen = memo(() => {
     });
     return () => sub.remove();
   }, []);
-  const [flight, setFlight] = useState<{
-    key: number;
-    papers: FolderPaperRect[];
-    targets: (FlightRect | null)[];
-  } | null>(null);
+  // Cards report where they are to the flight object itself, not to this
+  // screen's state, so measuring doesn't re-render Explore mid-flight.
+  const [flight, setFlight] = useState<CollectionFlight | null>(null);
   const handleOpenCollection = useCallback((collection: ExploreCollection, papers: FolderPaperRect[]) => {
     const flying = papers.filter(p => p.uri);
-    setFlight(
-      !reduceMotionRef.current && flying.length > 0
-        ? { key: Date.now(), papers: flying, targets: flying.map(() => null) }
-        : null,
-    );
+    setFlight(!reduceMotionRef.current && flying.length > 0 ? new CollectionFlight(flying) : null);
     setOpenCollectionId(collection.id);
     favouritesGridRef.current?.scrollToTop();
   }, []);
-  const handleFlightMeasured = useCallback((index: number, rect: FlightRect) => {
-    setFlight(current => {
-      if (!current || index >= current.targets.length || current.targets[index]) return current;
-      const targets = current.targets.slice();
-      targets[index] = rect;
-      return { ...current, targets };
-    });
-  }, []);
-  const handleFlightLanded = useCallback(() => setFlight(null), []);
+  const handleFlightDone = useCallback(() => setFlight(null), []);
   const handleCloseCollection = useCallback(() => {
     setFlight(null);
     setOpenCollectionId(null);
@@ -1159,14 +1145,17 @@ const ExploreScreen = memo(() => {
   // same number (see masonryHeight.ts), and only this screen holds the
   // measured-ratio cache both sides need to agree on.
   // While a folder's looks are flying in, the cards they land on wait hidden.
-  const flightCount = flight?.papers.length ?? 0;
+  // Those cards skip their own fade-in: the flying look is their entrance.
+  const flightCount = flight?.count ?? 0;
   const renderPortfolioCard = useCallback(
     (item: PortfolioItem, index: number) => {
+      const imageHeight = getItemHeight(item, columnWidth);
       const card = (
         <PortfolioCard
           item={item}
           columnWidth={columnWidth}
-          imageHeight={getItemHeight(item, columnWidth)}
+          imageHeight={imageHeight}
+          entrance={index >= flightCount}
           onPress={handleImagePress}
           index={index}
           offersCollections
@@ -1174,12 +1163,12 @@ const ExploreScreen = memo(() => {
         />
       );
       return (
-        <CollectionFlightTarget index={index} active={index < flightCount} onMeasured={handleFlightMeasured}>
+        <CollectionFlightTarget index={index} flight={flight} landHeight={imageHeight}>
           {card}
         </CollectionFlightTarget>
       );
     },
-    [columnWidth, handleImagePress, getItemHeight, tourCardId, flightCount, handleFlightMeasured]
+    [columnWidth, handleImagePress, getItemHeight, tourCardId, flight, flightCount]
   );
 
 
@@ -1397,12 +1386,7 @@ const ExploreScreen = memo(() => {
       </Animated.View>
 
       {flight && (
-        <CollectionOpenFlight
-          key={flight.key}
-          papers={flight.papers}
-          targets={flight.targets}
-          onLanded={handleFlightLanded}
-        />
+        <CollectionOpenFlight key={flight.key} flight={flight} onDone={handleFlightDone} />
       )}
 
       {/* After a heart: offer to put the look in a collection. */}
