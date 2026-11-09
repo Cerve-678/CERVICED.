@@ -285,6 +285,17 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Follow request (client-only) ────────────────────────────────────────────
+  // Accept / Decline are in Your circle, in the Profile tab's stack.
+  if (type === 'follow_request') {
+    if (isProvider) {
+      openNotifications();
+      return;
+    }
+    navigateNested('Profile', 'Circle');
+    return;
+  }
+
   // ── Provider-destination types ───────────────────────────────────────────────
   // These point at a provider rather than a booking. Client-only: a provider
   // deep-linked into ProviderProfile would land in the client navigator.
