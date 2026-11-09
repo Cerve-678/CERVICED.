@@ -76,7 +76,7 @@ Curated: [[Availability & Slots]] · **195 files**
 ## Payments
 Curated: [[Payments]] · **160 files**
 - `src/screens/client/CartScreen.tsx` _(530)_
-- `src/services/databaseService.ts` _(227)_
+- `src/services/databaseService.ts` _(228)_
 - `src/screens/provider/PaymentsScreen.tsx` _(173)_
 - `src/components/ProviderStripePayments.tsx` _(112)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -109,7 +109,7 @@ Curated: [[Payments]] · **160 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **347 files**
-- `src/services/databaseService.ts` _(1084)_
+- `src/services/databaseService.ts` _(1109)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_

@@ -12,6 +12,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { ActivityItem, ActivityPulse } from './activityCentre';
 
@@ -76,6 +77,10 @@ export function LiveDot({ pulse, animate, size = 10, ringMs }: LiveDotProps) {
 
   const dot = { width: size, height: size, borderRadius: size / 2 };
 
+  if (pulse === 'done') {
+    return <Ionicons name="checkmark" size={size + 4} color={P.sub} style={st.doneTick} />;
+  }
+
   if (waiting) {
     const breathing = animate
       ? {
@@ -134,8 +139,9 @@ export function ActivityTile({ item, index, animate, enter, onPress }: ActivityT
   const { palette: P, isDarkMode } = useTheme();
   const entrance = useEntrance(index, enter);
   const waiting = item.pulse === 'waiting';
+  const done = item.pulse === 'done';
   return (
-    <Animated.View style={entrance}>
+    <Animated.View style={[entrance, done && st.tileDoneFade]}>
       <TouchableOpacity
         style={[
           st.tile,
@@ -145,17 +151,19 @@ export function ActivityTile({ item, index, animate, enter, onPress }: ActivityT
             shadowColor: isDarkMode ? '#000000' : P.accent,
             shadowOpacity: isDarkMode ? 0.45 : 0.2,
           },
+          // Done sits flat: no lift, so it reads as settled.
+          done && st.tileDone,
         ]}
         activeOpacity={0.7}
         onPress={() => onPress(item)}
         accessibilityRole="button"
-        accessibilityLabel={`${waiting ? '' : 'Needs you. '}${item.title}. ${item.detail}${item.caption ? ` ${item.caption}.` : ''}`}
+        accessibilityLabel={`${done ? 'Done. ' : waiting ? '' : 'Needs you. '}${item.title}. ${item.detail}${item.caption ? ` ${item.caption}.` : ''}`}
       >
         <View style={st.tileDot}>
           <LiveDot pulse={item.pulse} animate={animate} />
         </View>
         <View style={st.tileText}>
-          <Text style={[st.tileTitle, { color: waiting ? P.sub : P.text }]}>{item.title}</Text>
+          <Text style={[st.tileTitle, { color: waiting || done ? P.sub : P.text }, done && st.struck]}>{item.title}</Text>
           <Text style={[st.tileDetail, { color: P.sub }]}>{item.detail}</Text>
           {!!item.caption && <Text style={[st.tileCaption, { color: P.accentText }]}>{item.caption}</Text>}
         </View>
@@ -291,6 +299,10 @@ const st = StyleSheet.create({
     elevation: 2,
   },
   tileDot: { marginTop: 6 },
+  tileDone: { shadowOpacity: 0, elevation: 0 },
+  tileDoneFade: { opacity: 0.7 },
+  struck: { textDecorationLine: 'line-through' },
+  doneTick: { marginTop: -4, marginLeft: -2 },
   tileText: { flex: 1 },
   tileTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   tileDetail: { fontSize: 13, lineHeight: 18, marginTop: 2 },
