@@ -844,12 +844,12 @@ user's decisions:
     matching was built. It is back on `feat/follow-people-contacts`, where
     contacts matching now exists. The server default is still on for adults.
 - **Decided by the user on 2026-11-08 (`feat/follow-people-decisions`,
-  migration `20261109130000`, written and dry-run, NOT applied):**
+  migration `20261109130000`, APPLIED live 2026-11-09):**
   - **Visits count only from the notice onwards.** Only appointments that end
     after the client saw the notice (or turned Show where I go on) count. Past
     bookings are never shared. The notice now says "From now on… Appointments
-    you've already had aren't shown." That wording is only true once the
-    migration is applied, so the PR must not merge before it.
+    you've already had aren't shown." That is true now the migration is
+    applied.
   - **Under-18s get a confirm** before Show where I go turns on.
   - **Blocks can be undone** from a Blocked list in Your circle. The block
     confirm now says where.
