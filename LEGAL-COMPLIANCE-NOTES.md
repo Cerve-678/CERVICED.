@@ -797,7 +797,8 @@ user's decisions:
   of this, plus the "findable by number" switch.
 - **Privacy Policy and Terms say nothing about this yet.** Both need text
   before launch: what is shared and with whom, the default, contact
-  matching, search by name, blocking, retention and deletion. That means
+  matching, blocking, retention and deletion. (There is no search by name
+  since 2026-11-09, see below.) That means
   `waitlist/legal/index.html` and the in-app About text, which still names the
   dead privacy@ address (§13). Provider Terms should say clients can show
   they've visited.
@@ -821,13 +822,18 @@ user's decisions:
   until they switch it on.
 - **Security review mitigations (2026-11-08).** Contact matching is limited
   to 3000 numbers a day and 20 checks an hour per account, at most 1000 per
-  call. A number on two accounts matches neither. Name search is limited to
-  120 an hour. Follow requests are limited to 100 a day, and a declined
+  call. A number on two accounts matches neither. Follow requests are limited to 100 a day, and a declined
   request can't be re-sent for 30 days; the decline is never shown. All of
-  this is client-hat only. Under-18s only appear in name search to people
-  they're already connected with. Open question: should "findable by phone
+  this is client-hat only. Open question: should "findable by phone
   number" default to off? Both the security review and the legal flagger
   suggest it. It is on now so the feature works.
+- **Contacts only, no name search (user decision 2026-11-09).** People can
+  only be found through phone contacts. The name search box was removed and
+  `search_people` is dropped by migration 20261109240000. So "findable by
+  phone number" is now the only way anyone finds you: with it off (and
+  always for under-18s), nobody can find you, though people you follow
+  still see you in Followers with a Follow back button. This makes the
+  findable-default question above more consequential than it was.
 - **Raised on the client screens (`feat/follow-people-find`, 2026-11-08).**
   These are not resolved:
   - **"Never which service you had" is literally true, but the provider's name
