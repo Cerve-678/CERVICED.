@@ -506,7 +506,14 @@ intent.
   ("recommend something") uses it. It is deliberately honest about thin
   history: `hasUsefulHistory()` gates it, and below the threshold Becca says
   she doesn't know your taste yet rather than dressing a generic list up as a
-  personal recommendation.
+  personal recommendation. Since 2026-11-09 it also reads the client's Beauty
+  Profile through `features/beauty-profile/suitedIdeas.ts` (the same ideas as
+  the profile's "Suited to you" card): with thin history but a filled-in
+  profile it answers from the profile ("Hair type: 4C" → silk press, knotless
+  braids…), each row saying which answer it came from, and with real history
+  it adds up to three profile ideas as chips. Preference answers only:
+  `suitedIdeas` never reads skin tone, skin concerns, sensitive areas,
+  allergies or medical notes (§2.1).
 - **Booking mutations still never happen in chat.** Cancel and reschedule
   deep-link into the screen that owns the write, with the record preloaded.
   The `pendingAction` mechanism exists and could carry them, but a

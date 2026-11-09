@@ -66,6 +66,8 @@ import { buildRebookCartItem, rebookAddOns } from "../../../features/bookings/re
 import { CATEGORY_LABELS, SERVICE_CATALOGUE } from "../serviceCatalogue";
 import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
 import { formatPickList, toPickList } from "../../../features/beauty-profile/pickList";
+import { beautyDataFromRow } from "../../../features/beauty-profile/profileRow";
+import { allSuitedIdeas, type SuitedIdea } from "../../../features/beauty-profile/suitedIdeas";
 import {
   chip,
   navChip,
@@ -3721,10 +3723,43 @@ const forMe: Capability = {
     "surprise me", "what do you suggest", "suggest something",
     "based on what i like", "my usual", "the usual", "what do i usually",
   ],
-  async run({ personal }): Promise<CapabilityResult> {
-    // Without real history, say so rather than dressing a generic list up as
-    // a personal recommendation — a fake "just for you" is worse than none.
+  async run({ personal, userId }): Promise<CapabilityResult> {
+    // What the client's Beauty Profile says suits them (hair type, goals,
+    // nails, lashes, brows, makeup; never health answers, see suitedIdeas.ts).
+    // A profile that can't be read just means no profile ideas.
+    let ideas: SuitedIdea[] = [];
+    if (userId) {
+      try {
+        ideas = allSuitedIdeas(beautyDataFromRow(await getUserBeautyProfile(userId)), 2).slice(0, 6);
+      } catch {
+        ideas = [];
+      }
+    }
+    const ideaChips = ideas.slice(0, 3).map((idea, i) =>
+      askChip(`suits-${i}`, idea.label, `Who does ${idea.query}?`),
+    );
+
+    // Without booking history, the profile is the honest basis. Without
+    // either, say so rather than dressing a generic list up as a personal
+    // recommendation — a fake "just for you" is worse than none.
     if (!hasUsefulHistory(personal)) {
+      if (ideas.length > 0) {
+        return {
+          text: oneOf(
+            "Going by your beauty profile, these could suit you.",
+            "From what's on your beauty profile, these could be worth a look.",
+          ),
+          card: {
+            title: "SUITED TO YOU",
+            rows: ideas.map((idea) => ({ title: idea.label, detail: idea.because })),
+          },
+          work: ["Read your beauty profile"],
+          suggestions: [
+            ...ideaChips,
+            navChip("profile", "Edit beauty profile", "Profile", { profileScreen: "BeautyProfile" }),
+          ],
+        };
+      }
       return {
         text:
           `I don't know your taste well enough yet. ` +
@@ -3772,6 +3807,7 @@ const forMe: Capability = {
       providers: rows.slice(0, 12).map(providerFromDb),
       suggestions: [
         askChip("free", `Who's free soon?`, `Which ${label} providers are free this week?`),
+        ...ideaChips,
       ],
     };
   },
