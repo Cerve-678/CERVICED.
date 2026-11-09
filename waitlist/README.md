@@ -109,7 +109,15 @@ that links every policy on `/legal` by its section id (`#terms`,
 `#community`, `#reviews`, `#complaints`) plus `/about` (the About page, `about/index.html`) and the home page's
 `#for-you` and `#join`. The app's About row opens `/about` too, so it is the
 only copy of the About text. If you rename or add a policy section, update both
-footers. The footer contact is support@cerviced.co, the address the legal page
+footers. Every page has a light/dark switch in the header (`#theme-toggle`). A
+visitor's choice is saved in localStorage as `cerviced-theme` and applied by a
+small script in `<head>` before first paint; with no choice saved, the page
+follows the device. The About page's animations (hero, "one client's month",
+the one-cart demo, scroll reveals) run only under `html.motion`, which that
+same script sets when the device allows motion; otherwise everything is simply
+shown. The one-cart markup is the finished cart, and the script empties it and
+plays it in, so a visitor without script still sees the whole thing.
+The footer contact is support@cerviced.co, the address the legal page
 uses (the old footer said hello@cerviced.com).
 
 **2. The form stores nothing.** `WAITLIST` at the top of the page script has
