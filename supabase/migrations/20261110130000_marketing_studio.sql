@@ -23,8 +23,11 @@
 -- edge function with the vault service key, same shape as
 -- process_money_daily_summary().
 --
--- Lock: supabase/MIGRATION_OWNER.md on feat/marketing-studio. Frontier when
--- written: live max 20261109200000, no higher migration on any open PR.
+-- Lock: supabase/MIGRATION_OWNER.md on feat/marketing-studio. First written
+-- 2026-11-09 as 20261109210000, then 20261109260000; renumbered as peers'
+-- migrations went live first (240000, 250000, 20261110100000) and
+-- cerviced-2d's 20261110120000 is being applied. Re-check the live max and
+-- open PRs right before applying, and renumber again if needed.
 
 BEGIN;
 
@@ -356,7 +359,7 @@ SELECT cron.unschedule('marketing-weekly') WHERE EXISTS (SELECT 1 FROM cron.job 
 SELECT cron.schedule('marketing-weekly', '0 6 * * 1', 'SELECT public.process_marketing_weekly();');
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261109210000', 'marketing_studio')
+VALUES ('20261110130000', 'marketing_studio')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

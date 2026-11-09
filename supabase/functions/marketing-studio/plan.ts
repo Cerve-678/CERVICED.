@@ -5,7 +5,7 @@
 // The planner returns its week by calling the save_week tool with
 // SAVE_WEEK_SCHEMA. Strict tool use already holds the shape, but this file
 // still re-checks it: the tool input arrives as model output, and the CHECK
-// constraints in 20261109210000_marketing_studio.sql would otherwise reject
+// constraints in 20261110130000_marketing_studio.sql would otherwise reject
 // the whole insert over one bad value.
 
 export const PLATFORMS = ['tiktok', 'instagram', 'youtube_shorts', 'pinterest', 'paid_ad'] as const;

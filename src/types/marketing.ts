@@ -1,5 +1,5 @@
 // What admin_marketing_overview() returns:
-// supabase/migrations/20261109210000_marketing_studio.sql. Admin-only.
+// supabase/migrations/20261110130000_marketing_studio.sql. Admin-only.
 // Drafts are written by the marketing-studio edge function; the playbook it
 // follows is supabase/functions/marketing-studio/playbook.ts.
 

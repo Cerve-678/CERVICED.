@@ -879,7 +879,7 @@ user's decisions:
 
 ## 24. Marketing Studio: AI-drafted social content (2026-11-09)
 
-Branch `feat/marketing-studio` (migration `20261109210000`). Every Monday
+Branch `feat/marketing-studio` (migration `20261110130000`). Every Monday
 Claude (Anthropic API, with web search) drafts social ideas into Admin →
 Marketing; an admin approves and posts them by hand. Nothing auto-posts. The
 planner's rules are `supabase/functions/marketing-studio/playbook.ts`, which

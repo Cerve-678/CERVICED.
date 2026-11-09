@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  feat/marketing-studio (Claude, 2026-11-09) — 20261109210000_marketing_studio, written, NOT applied
+OWNER:  feat/marketing-studio (Claude, 2026-11-09) — 20261110130000_marketing_studio, written, NOT applied
 ```
 
 ### Applied 2026-11-09 (day-before reminder drops "arrive 10 minutes early")
