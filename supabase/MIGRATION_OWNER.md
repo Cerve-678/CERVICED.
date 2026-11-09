@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/circle-follow-back-contacts-only (Claude cerviced-f3, 2026-11-09) — 20261109240000_drop_people_name_search, applying
 ```
 
 ### Applied 2026-11-09 (accounts you created, admin)
