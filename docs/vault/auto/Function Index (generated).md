@@ -5,7 +5,7 @@
 
 #generated
 
-**3540 functions** across **503 files**.
+**3542 functions** across **503 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -265,7 +265,7 @@
 - `searchResultsLayout.ts` — **highlightSearchTerms** · isWordChar · pushServices · **scatterServicesBetweenProviders**
 - `ServiceBookingCharts.tsx` — MostBookedCard · onLayout · ServiceBookingCharts · ticks · TrendCard · xFor · yFor
 - `serviceBookingSummary.ts` — busiestFirst · **chartTicks** · **summariseServiceBookings**
-- `ServiceEditorSheet.tsx` — descriptionHint · findabilityProblem · handleSave · push · ServiceEditorSheet · suggestion · tagLabel · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
+- `ServiceEditorSheet.tsx` — descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · push · ServiceEditorSheet · **splitDuration** · suggestion · tagLabel · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
 - `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · optionsFor · readWords · sameWord · **suggestServiceDetails** · words
 - `todaySchedule.ts` — **buildTodaySchedule** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **shortClientName** · todosFrom
 - `TodayScheduleCards.tsx` — handleScrollEnd · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
