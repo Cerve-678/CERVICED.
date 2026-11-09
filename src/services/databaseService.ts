@@ -84,6 +84,7 @@ import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
 import type { AdminDashboardOverview, AdminDashboardPeriod } from "../types/adminDashboard";
+import type { MarketingOverview, MarketingResultsInput } from "../types/marketing";
 import type { ProviderAchievements } from "../types/achievements";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
@@ -12358,6 +12359,69 @@ export async function getAdminDashboardOverview(days: AdminDashboardPeriod): Pro
     throw new Error('The dashboard came back in an unexpected shape.');
   }
   return overview as AdminDashboardOverview;
+}
+
+// ── Marketing Studio (admin only) ───────────────────────────────────────────
+// Drafts come from the marketing-studio edge function; every write goes
+// through an admin_marketing_* function that refuses non-admins.
+
+/** The review queue, posted ideas, what the planner has learned, and its last run. */
+export async function getAdminMarketingOverview(): Promise<MarketingOverview> {
+  const { data, error } = await supabase.rpc('admin_marketing_overview');
+  if (error) throw error;
+  const overview = data as Partial<MarketingOverview> | null;
+  if (!overview || !Array.isArray(overview.posts) || !Array.isArray(overview.learnings)) {
+    throw new Error('Marketing came back in an unexpected shape.');
+  }
+  return { ...overview, last_run: overview.last_run ?? null } as MarketingOverview;
+}
+
+/** Approve an idea, turn it down (the note teaches the planner), or put it back to review. */
+export async function reviewMarketingPost(
+  postId: string, decision: 'approved' | 'rejected' | 'draft', note?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('admin_marketing_review', {
+    p_post_id: postId, p_decision: decision, p_note: note ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function editMarketingCaption(postId: string, caption: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_marketing_edit_caption', { p_post_id: postId, p_caption: caption });
+  if (error) throw error;
+}
+
+export async function markMarketingPostPosted(postId: string, url: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_marketing_mark_posted', { p_post_id: postId, p_url: url });
+  if (error) throw error;
+}
+
+/** The post's numbers from the platform's own analytics. */
+export async function recordMarketingResults(postId: string, results: MarketingResultsInput): Promise<void> {
+  const { error } = await supabase.rpc('admin_marketing_record_results', {
+    p_post_id: postId,
+    p_views: results.views, p_likes: results.likes, p_comments: results.comments,
+    p_shares: results.shares, p_saves: results.saves, p_follows: results.follows,
+    p_note: results.note,
+  });
+  if (error) throw error;
+}
+
+export async function retireMarketingLearning(learningId: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_marketing_retire_learning', { p_learning_id: learningId });
+  if (error) throw error;
+}
+
+/**
+ * Starts the planner now instead of waiting for Monday. It runs in the
+ * background; 'already_running' when a plan is mid-draft.
+ */
+export async function startMarketingPlan(): Promise<'started' | 'already_running'> {
+  const { error } = await supabase.functions.invoke('marketing-studio', { body: { trigger: 'admin' } });
+  if (!error) return 'started';
+  const status = (error as { context?: { status?: number } }).context?.status;
+  if (status === 409) return 'already_running';
+  throw error;
 }
 
 /** Puts a failed or waiting payout back as due now; the next release run sends it. */

@@ -494,3 +494,9 @@ verify_jwt = true
 # Provider-only (their JWT): charge or refund a late/no-show fee.
 [functions.booking-fee]
 verify_jwt = true
+
+# Woken weekly by pg_cron (process_marketing_weekly) with the service_role key,
+# or by an admin's own session from Admin → Marketing ("Plan a new week").
+# The function confirms one or the other before spending anything.
+[functions.marketing-studio]
+verify_jwt = true

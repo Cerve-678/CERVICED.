@@ -64,6 +64,7 @@ Curated overview: [[Screens & Navigation]].
 - `ReportProblem`
 - `AdminDashboard`
 - `AdminMoney`
+- `AdminMarketing`
 - `Points`
 - `Messages`
 - `DevSettings`

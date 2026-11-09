@@ -17,7 +17,7 @@ import { logger } from '../../utils/logger';
 
 // ── Admin dashboard ────────────────────────────────────────────────────────
 // The home for admin accounts (admin_users): how CERVICED is growing, how the
-// marketplace is doing, and what's broken, plus the way into Money and the
+// marketplace is doing, and what's broken, plus the way into Money, Marketing and the
 // developer tools. Every number comes from admin_dashboard_overview(), which
 // refuses anyone else. Internal tool, so its copy is English only.
 
@@ -90,7 +90,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     ? describeDelta(data.money.paid_in_pence, data.money.paid_in_prev_pence, span, { format: pounds })
     : null;
 
-  const go = (route: 'AdminMoney' | 'DevSettings') => {
+  const go = (route: 'AdminMoney' | 'AdminMarketing' | 'DevSettings') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     navigation.navigate(route);
   };
@@ -269,6 +269,9 @@ export default function AdminDashboardScreen({ navigation }: any) {
             <View style={card}>
               <ToolRow P={P} icon="cash-outline" title="Money" subtitle="Failed payments, money owed, refund requests"
                 badge={moneyBadge} onPress={() => go('AdminMoney')} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <ToolRow P={P} icon="megaphone-outline" title="Marketing" subtitle="This week's TikTok and Instagram ideas to approve, post and learn from"
+                onPress={() => go('AdminMarketing')} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <ToolRow P={P} icon="construct-outline" title="Developer tools" subtitle="Test pushes and emails, debug logs, resets for your own account"
                 onPress={() => go('DevSettings')} />
