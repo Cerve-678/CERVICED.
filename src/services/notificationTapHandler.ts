@@ -12,6 +12,7 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { markNotificationRead, getProviderBasicById } from './databaseService';
 import { logger } from '../utils/logger';
 import { openLegalPage } from '../utils/legalPage';
+import { REVIEW_PROMPT_TYPES } from '../features/notifications/notificationPresentation';
 
 export interface NotificationTapData {
   type?: string;
@@ -54,6 +55,11 @@ const BOOKING_TYPES = new Set([
   'booking_cancelled',
   'payment_success',
   'review_request',
+  // The provider's automated "how are you getting on?" the day after. Opens
+  // that appointment with the review form ready (BookingsScreen skips the
+  // form if it's already been reviewed), which is something the client can
+  // actually do from here — the provider's profile wasn't.
+  'post_appt_check_in',
   'reschedule_request',
   'reschedule_response',
   'reschedule_provider_response',
@@ -159,7 +165,7 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
         openReschedule,
         // Matches the in-app list: "Rate Now" must land on the rating form,
         // not on the booking with the rating control left to be found.
-        openReview: type === 'review_request',
+        openReview: REVIEW_PROMPT_TYPES.has(type),
         highlightBookingId: booking_id,
       });
     }
@@ -279,14 +285,24 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Follow request (client-only) ────────────────────────────────────────────
+  // Accept / Decline are in Your circle, in the Profile tab's stack.
+  if (type === 'follow_request') {
+    if (isProvider) {
+      openNotifications();
+      return;
+    }
+    navigateNested('Profile', 'Circle');
+    return;
+  }
+
   // ── Provider-destination types ───────────────────────────────────────────────
   // These point at a provider rather than a booking. Client-only: a provider
   // deep-linked into ProviderProfile would land in the client navigator.
   if (
     type === 'new_provider' ||
     type === 'announcement' ||
-    type === 'birthday_greeting' ||
-    type === 'post_appt_check_in'
+    type === 'birthday_greeting'
   ) {
     if (!isProvider && provider_id) {
       navigateNested('Home', 'ProviderProfile', { providerId: provider_id, source: 'notification' });

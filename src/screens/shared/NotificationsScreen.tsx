@@ -61,6 +61,7 @@ import {
   notificationAmount,
   notificationDayHeadings,
   notificationKindLabel,
+  REVIEW_PROMPT_TYPES,
 } from '../../features/notifications/notificationPresentation';
 
 interface Notification {
@@ -86,7 +87,7 @@ interface Notification {
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
       | 'schedule_fully_booked' | 'points_earned'
       | 'maintenance_due'    | 'aftercare_available'
-      | 'provider_saved';
+      | 'provider_saved'     | 'follow_request';
   title: string;
   message: string;
   timestamp: string;
@@ -575,6 +576,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       'points_earned',
       'maintenance_due',
       'aftercare_available',
+      'follow_request',
     ]);
     if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
       logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
@@ -606,6 +608,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'booking_cancelled' ||
         notification.type === 'payment_success' ||
         notification.type === 'review_request' ||
+        notification.type === 'post_appt_check_in' ||
         notification.type === 'reschedule_request' ||
         notification.type === 'reschedule_provider_response' ||
         notification.type === 'reschedule_confirmed' ||
@@ -625,7 +628,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // to the generic booking deep-link and opened BookingDetail, leaving the
       // client to go and find the rate control themselves — the button promised
       // an action the destination didn't offer.
-      const openReview = notification.type === 'review_request';
+      const openReview = REVIEW_PROMPT_TYPES.has(notification.type);
 
       defer(() => {
         if (isProviderRef.current) {
@@ -712,10 +715,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       logger.log('Promotion — dismissing notifications');
       defer(dismissOnly, 300);
     } else if (notification.type === 'announcement' ||
-               notification.type === 'birthday_greeting' ||
-               notification.type === 'post_appt_check_in') {
-      // Provider broadcast (or an automated birthday/check-in message from
-      // them) — open that provider's profile if we know them
+               notification.type === 'birthday_greeting') {
+      // Provider broadcast (or an automated birthday message from them) —
+      // open that provider's profile if we know them
       if (notification.providerId) {
         const providerId = notification.providerId;
         defer(() => {
@@ -797,6 +799,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         dismissThenNavigate(() =>
           navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
         );
+      }, 300);
+    } else if (notification.type === 'follow_request') {
+      // Accept / Decline live in Your circle (Profile tab). Client-only,
+      // guarded above via CLIENT_ONLY_TYPES.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Circle'));
       }, 300);
     } else if (notification.type === 'terms_updated') {
       // The Terms live on cerviced.co/legal, opened over this screen.
@@ -909,7 +917,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved'].includes(type)) return P.accentText;
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved', 'follow_request'].includes(type)) return P.accentText;
     return '#FF9800';
   };
 
@@ -986,8 +994,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Read Info';
       case 'announcement':
       case 'birthday_greeting':
-      case 'post_appt_check_in':
         return 'View Provider';
+      case 'post_appt_check_in':
+        return 'Rate Visit';
       case 'provider_message':
         return 'Open Inbox';
       case 'new_message':
@@ -1008,6 +1017,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Maintenance';
       case 'aftercare_available':
         return 'Read Aftercare';
+      case 'follow_request':
+        return 'See Request';
       default:
         return 'View';
     }

@@ -66,6 +66,7 @@ import {
 } from "../types/booking";
 import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
+import { isProviderProfileUuid } from "../utils/providerProfileDeepLink";
 import { resolveDepositMode } from "../utils/depositPolicy";
 import { groupCircleRows, type CircleRow } from "../features/social/presentation";
 import type {
@@ -1517,6 +1518,17 @@ function mapProviderProfileJoinRow(row: ProviderProfileJoinRow): ProviderWithSer
 }
 
 /**
+ * The profile screen is opened with either key: the public slug (Explore,
+ * Search, cart, QR codes) or the provider's UUID (notifications, the
+ * booked-elsewhere list), because a notification row and a booking only store
+ * the UUID. Matching on slug alone left every UUID caller on "Provider not
+ * found" even for a live provider.
+ */
+function providerProfileKeyColumn(key: string): "id" | "slug" {
+  return isProviderProfileUuid(key) ? "id" : "slug";
+}
+
+/**
  * Fetch the lightweight, public part of a provider profile. The full
  * catalogue remains a separate request so a client can see who they opened
  * before every service image and add-on has loaded.
@@ -1541,7 +1553,7 @@ export async function getProviderProfilePreviewBySlug(
     const { data, error } = await supabase
       .from("providers")
       .select(`${PROVIDER_PROFILE_PUBLIC_FIELDS}, hair_types_catered`)
-      .eq("slug", normalizedSlug)
+      .eq(providerProfileKeyColumn(normalizedSlug), normalizedSlug)
       .eq("is_active", true)
       .eq("has_gone_live", true)
       .single();
@@ -1640,7 +1652,7 @@ export async function getProviderBySlug(
       })
       .eq("services.is_active", true)
       .eq("services.service_add_ons.is_active", true)
-      .eq("slug", normalizedSlug)
+      .eq(providerProfileKeyColumn(normalizedSlug), normalizedSlug)
       .eq("is_active", true)
       .eq("has_gone_live", true)
       .single();
