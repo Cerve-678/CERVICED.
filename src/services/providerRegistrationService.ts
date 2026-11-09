@@ -407,11 +407,17 @@ export async function uploadToStorage(
   }
 }
 
-function parseDurationToMinutes(duration: string): number {
+/**
+ * A service's duration label (the sign-up picker's "1 hr 30", or older
+ * "1 hr 30 mins" / "1.5 hours" / "90") to minutes. A number after the hours is
+ * minutes whether or not it says so: reading "1 hr 30" as 1 hr saved every
+ * half-hour preset half an hour short.
+ */
+export function serviceDurationToMinutes(duration: string): number {
   if (!duration) return 60;
   const lower = duration.toLowerCase().trim();
-  // "1 hr 30 mins" / "2 hours 15 min"
-  const hrMin = lower.match(/(\d+)\s*h(?:r|our)?s?\s*(\d+)\s*m/);
+  // "1 hr 30" / "1 hr 30 mins" / "2 hours 15 min" / "1h30"
+  const hrMin = lower.match(/(\d+)\s*h[a-z]*\s*(\d+)/);
   if (hrMin) return parseInt(hrMin[1] ?? '0') * 60 + parseInt(hrMin[2] ?? '0');
   // "1.5 hours" / "2hrs"
   const decHr = lower.match(/^(\d+\.?\d*)\s*h/);
@@ -422,12 +428,12 @@ function parseDurationToMinutes(duration: string): number {
   return 60;
 }
 
-function minutesToDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} mins`;
+/** Minutes back to a label in the picker's own format, so a saved preset reloads selected. */
+export function minutesToServiceDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
   const hrs = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  if (mins === 0) return `${hrs} hr${hrs > 1 ? 's' : ''}`;
-  return `${hrs} hr ${mins} mins`;
+  return mins === 0 ? `${hrs} hr` : `${hrs} hr ${mins}`;
 }
 
 function generateSlug(name: string): string {
@@ -871,7 +877,7 @@ export async function saveProviderToSupabase(
         name: svc.name,
         description: svc.description || null,
         price: svc.price,
-        duration_minutes: parseDurationToMinutes(svc.duration),
+        duration_minutes: serviceDurationToMinutes(svc.duration),
         buffer_before_mins: svc.bufferBeforeMins ?? null,
         buffer_after_mins: svc.bufferAfterMins ?? null,
         sort_order: sortOrder,
@@ -1160,7 +1166,7 @@ export async function loadProviderFromSupabase(
       dbId: svc.id ?? null,
       name: svc.name,
       price: Number(svc.price),
-      duration: minutesToDuration(svc.duration_minutes),
+      duration: minutesToServiceDuration(svc.duration_minutes),
       bufferBeforeMins: svc.buffer_before_mins ?? null,
       bufferAfterMins: svc.buffer_after_mins ?? null,
       description: svc.description || '',
