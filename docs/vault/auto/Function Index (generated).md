@@ -5,7 +5,7 @@
 
 #generated
 
-**3518 functions** across **500 files**.
+**3520 functions** across **500 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -277,7 +277,7 @@
 
 ### `src/features/social/` (11)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
-- `contacts.ts` — **cachedContactMatches** · **collectContactNumbers** · **findContactsOnCerviced** · **getContactsAccess** · **hashNormalisedNumber** · **isContactsLimitError** · **rememberContactMatches** · **requestContactsAccess**
+- `contacts.ts` — **buildInviteList** · **cachedContacts** · **collectContactNumbers** · **findContactsOnCerviced** · **getContactsAccess** · **hashNormalisedNumber** · **inviteContact** · **isContactsLimitError** · **rememberContacts** · **requestContactsAccess**
 - `momentsMemory.ts` — **readMomentsMemory** · **updateMomentsMemory**
 - `people.ts` — **personAction** · **withMyStatus** · **withoutPerson** · **withPersonFirst**
 - `presentation.ts` — **circleLine** · **compareCirclePeople** · **firstName** · **groupCircleRows** · **initialsFor** · **stackAccessibilityLabel** · **stackLayout**
