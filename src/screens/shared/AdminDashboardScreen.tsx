@@ -90,7 +90,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     ? describeDelta(data.money.paid_in_pence, data.money.paid_in_prev_pence, span, { format: pounds })
     : null;
 
-  const go = (route: 'AdminMoney' | 'DevSettings') => {
+  const go = (route: 'AdminMoney' | 'AdminCreateAccount' | 'DevSettings') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     navigation.navigate(route);
   };
@@ -269,6 +269,9 @@ export default function AdminDashboardScreen({ navigation }: any) {
             <View style={card}>
               <ToolRow P={P} icon="cash-outline" title="Money" subtitle="Failed payments, money owed, refund requests"
                 badge={moneyBadge} onPress={() => go('AdminMoney')} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <ToolRow P={P} icon="person-add-outline" title="Create an account" subtitle="Open a provider or client account that's ready to sign in to, with no emails"
+                onPress={() => go('AdminCreateAccount')} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <ToolRow P={P} icon="construct-outline" title="Developer tools" subtitle="Test pushes and emails, debug logs, resets for your own account"
                 onPress={() => go('DevSettings')} />
