@@ -14,8 +14,8 @@ import {
   DevSettings,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SafeAreaView } from '../../components/SafeArea';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -1096,6 +1096,9 @@ function DevTools({ navigation }: { navigation: any }) {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowLogs(false)}
       >
+        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
         <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{ flex: 1, backgroundColor: P.bg }}>
           <View style={[styles.header, { borderBottomColor: P.sep, paddingTop: 12 }]}>
             <Text style={[styles.title, { color: P.text, fontFamily: 'BakbakOne-Regular' }]}>
@@ -1150,6 +1153,8 @@ function DevTools({ navigation }: { navigation: any }) {
             <Text style={[styles.dangerButtonText, { color: danger }]}>Clear Logs</Text>
           </TouchableOpacity>
         </SafeAreaView>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
       </Modal>
     </ThemedBackground>
   );

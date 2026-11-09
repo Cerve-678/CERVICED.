@@ -447,6 +447,9 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
         presentationStyle="pageSheet"
         onRequestClose={onClose}
       >
+        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
         <View style={styles.modalBackground}>
           <LinearGradient
             colors={providerGradient}
@@ -534,6 +537,8 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
             />
           </SafeAreaView>
         </View>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
       </Modal>
     );
   },

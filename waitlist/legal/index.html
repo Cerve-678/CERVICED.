@@ -7,6 +7,11 @@
 <meta name="robots" content="noindex">
 <title>Cerviced Terms &amp; Policies</title>
 <meta name="description" content="The Terms & Conditions, Privacy Policy and other policies that apply when you use Cerviced.">
+<script>
+/* A visitor's own light/dark choice (the header switch) wins over the device
+   setting; applied before first paint so the page never flashes. */
+(function(){try{var t=localStorage.getItem('cerviced-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@500;600;700&display=swap">
@@ -99,10 +104,29 @@ td:first-child{ font-weight:650; min-width:8.5em }
 
 .topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px 24px; flex-wrap:wrap }
 .brandline a.wordmark{ text-decoration:none }
-.sitenav{ display:flex; flex-wrap:wrap; gap:4px 22px; font-family:var(--label); font-size:13px; letter-spacing:.08em; text-transform:uppercase; font-weight:700 }
+.sitenav{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 22px; font-family:var(--label); font-size:13px; letter-spacing:.08em; text-transform:uppercase; font-weight:700 }
 .sitenav a{ color:var(--ink); text-decoration:none; padding:4px 0 }
 .sitenav a:hover{ color:var(--accent) }
 
+
+/* ── Theme switch ─────────────────────────────────────────────────── */
+.theme-toggle{
+  width:36px;height:36px;border-radius:50%;display:inline-grid;place-items:center;
+  border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;padding:0;
+  transition:background .2s ease,color .2s ease,transform .3s ease;
+}
+.theme-toggle:hover{background:var(--accent-soft);color:var(--accent);}
+.theme-toggle:active{transform:rotate(-20deg) scale(.94);}
+.theme-toggle svg{width:17px;height:17px;}
+.theme-toggle .moon{display:none;}
+:root[data-theme="light"] .theme-toggle .sun,
+:root:not([data-theme]) .theme-toggle .sun{display:none;}
+:root[data-theme="light"] .theme-toggle .moon,
+:root:not([data-theme]) .theme-toggle .moon{display:block;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]) .theme-toggle .sun{display:block;}
+  :root:not([data-theme]) .theme-toggle .moon{display:none;}
+}
 .site-foot{ background:var(--band); border-top:1px solid var(--line); font-size:14px; color:var(--muted) }
 .site-foot > .wrap{ padding-block:44px 32px }
 .foot-cols{ display:grid; grid-template-columns:1.3fr repeat(3, 1fr); gap:32px }
@@ -136,6 +160,10 @@ td:first-child{ font-weight:650; min-width:8.5em }
         <a href="/about">About us</a>
         <a href="#safety">Health &amp; safety</a>
         <a href="/#join">Join the waitlist</a>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>
+      </button>
       </nav>
     </div>
     <h1>Terms &amp; policies</h1>
@@ -1258,6 +1286,18 @@ td:first-child{ font-weight:650; min-width:8.5em }
     });
   }, { rootMargin: '-15% 0px -75% 0px' });
   document.querySelectorAll('section.policy').forEach(function (s) { observer.observe(s); });
+})();
+</script>
+<script>
+(function(){
+  var d=document.documentElement, tg=document.getElementById('theme-toggle');
+  if(!tg)return;
+  tg.addEventListener('click',function(){
+    var cur=d.getAttribute('data-theme')||((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');
+    var next=cur==='dark'?'light':'dark';
+    d.setAttribute('data-theme',next);
+    try{localStorage.setItem('cerviced-theme',next);}catch(e){}
+  });
 })();
 </script>
 </body>
