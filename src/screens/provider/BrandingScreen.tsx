@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -44,6 +44,8 @@ import { getMyProviderBranding, updateProviderBranding } from '../../services/da
 import { toUserMessage } from '../../utils/userFacingError';
 import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
 import { ImageCropModal } from '../../components/ImageCropModal';
+import { coloursFromPhoto } from '../../features/provider-registration/photoColours';
+import { logger } from '../../utils/logger';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -107,6 +109,15 @@ export default function BrandingScreen({ navigation }: any) {
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
   const [lockedOpen, setLockedOpen]           = useState(false);
   const [imageToCrop, setImageToCrop]         = useState<string | null>(null);
+  // Custom → "From your photos": colours found in the logo and background
+  // photo, plus any photo chosen just for its colours.
+  const [logoUrl, setLogoUrl]                 = useState<string | null>(null);
+  const [photoColours, setPhotoColours]       = useState<string[]>([]);
+  const [photoColoursLoading, setPhotoColoursLoading] = useState(false);
+  const photoColoursFor = useRef<string | null>(null);
+  // The colour square and hue bar take a vertical drag, so the page stops
+  // scrolling while a finger is on them.
+  const [colourDragging, setColourDragging]   = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -120,6 +131,7 @@ export default function BrandingScreen({ navigation }: any) {
         setGradient(cached.gradient);
         setAccentColor(cached.accentColor);
         setBackgroundImage(cached.backgroundImage);
+        setLogoUrl(cached.logo);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
         const { base, sheet, finish, shape } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
@@ -147,6 +159,7 @@ export default function BrandingScreen({ navigation }: any) {
           }
           if (data.accent_color) setAccentColor(data.accent_color);
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
+          if (data.logo_url) setLogoUrl(data.logo_url);
           if (data.brand_font) setBrandFont(data.brand_font);
           const { base, sheet, finish, shape } = parseThemeKey(data.profile_theme);
           setCardShape(shape);
@@ -189,6 +202,53 @@ export default function BrandingScreen({ navigation }: any) {
     if (result.canceled || !result.assets[0]) return;
     setImageToCrop(result.assets[0].uri);
   }, [userId]);
+
+  // Read colours out of the logo and background photo the first time Custom
+  // is open, and again only if either photo changes. Nothing is fetched for a
+  // provider who never opens Custom.
+  useEffect(() => {
+    if (themeChoice !== 'custom' || limited) return;
+    const sources = [logoUrl, backgroundImage].filter((u): u is string => !!u);
+    const key = sources.join('|');
+    if (sources.length === 0 || photoColoursFor.current === key) return;
+    photoColoursFor.current = key;
+    let active = true;
+    setPhotoColoursLoading(true);
+    void Promise.allSettled(sources.map(uri => coloursFromPhoto(uri, 5))).then(results => {
+      if (!active) return;
+      const found: string[] = [];
+      for (const result of results) {
+        if (result.status === 'fulfilled') found.push(...result.value);
+        else logger.warn('[Branding] could not read colours from a photo:', result.reason);
+      }
+      setPhotoColours([...new Set(found)].slice(0, 8));
+      setPhotoColoursLoading(false);
+    });
+    return () => { active = false; };
+  }, [themeChoice, limited, logoUrl, backgroundImage]);
+
+  // Any photo from the library, used only for its colours (nothing uploads).
+  const chooseColourPhoto = useCallback(async () => {
+    let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+    if (!permission.granted) permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow access to your photo library to take colours from a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5 });
+    if (result.canceled || !result.assets[0]) return;
+    setPhotoColoursLoading(true);
+    try {
+      const found = await coloursFromPhoto(result.assets[0].uri, 6);
+      // The chosen photo's colours lead; the logo/background ones follow.
+      setPhotoColours(existing => [...new Set([...found, ...existing])].slice(0, 10));
+    } catch (e) {
+      logger.warn('[Branding] could not read colours from the chosen photo:', e);
+      Alert.alert('Couldn\u2019t read that photo', 'Try a different photo, or pick a colour on the square below.');
+    } finally {
+      setPhotoColoursLoading(false);
+    }
+  }, []);
 
   const handleImageCropped = useCallback(async (localUri: string) => {
     setImageToCrop(null);
@@ -309,7 +369,7 @@ export default function BrandingScreen({ navigation }: any) {
         onDone={handleImageCropped}
       />
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} scrollEnabled={!colourDragging}>
 
           {/* Header */}
           <TouchableOpacity
@@ -363,6 +423,10 @@ export default function BrandingScreen({ navigation }: any) {
               sepColor={P.sep}
               unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
               onLockedPress={showLocked}
+              photoColours={photoColours}
+              photoColoursLoading={photoColoursLoading}
+              onChoosePhoto={chooseColourPhoto}
+              onColourDraggingChange={setColourDragging}
             />
           </View>
 

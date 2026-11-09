@@ -9988,10 +9988,14 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
   background_image_url: string | null;
   profile_theme: string | null;
   brand_font: string | null;
+  logo_url: string | null;
 } | null> {
+  // The provider's own row, read by their own user id — Branding edits it, so
+  // there's no has_gone_live filter. logo_url is read only so Custom can offer
+  // colours from the logo.
   const { data, error } = await supabase
     .from("providers")
-    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font")
+    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font, logo_url")
     .eq("user_id", userId)
     .order("is_active", { ascending: false })
     .order("created_at", { ascending: true })
@@ -10005,6 +10009,7 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
     background_image_url: string | null;
     profile_theme: string | null;
     brand_font: string | null;
+    logo_url: string | null;
   };
 }
 
