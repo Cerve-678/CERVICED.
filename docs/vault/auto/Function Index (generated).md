@@ -5,7 +5,7 @@
 
 #generated
 
-**3444 functions** across **487 files**.
+**3443 functions** across **488 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -392,8 +392,7 @@
 - `SchedulingScreen.tsx` — chooseHorizonMode · flash · handleSave · releaseStatus · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
 
-### `src/screens/shared/` (13)
-- `AboutScreen.tsx` — AboutScreen · ExpandableSection
+### `src/screens/shared/` (12)
 - `AdminDashboardScreen.tsx` — AdminDashboardScreen · deltaColor · go · load · onRefresh · problems · Row · StatTile · statusColors · ToolRow · WeeklyChart
 - `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · decline · failed · load · now · onRefresh · owed · RefundReview · refunds · retry
 - `BeccaScreen.tsx` — beat · BeccaScreen · buildWelcomeMessage · chatAnimStyle · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · isActiveTurn · persistResponse · refreshSessions · scheduleNextTick · showReveal · showSteps
@@ -456,7 +455,8 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (61)
+### `src/utils/` (62)
+- `aboutPage.ts` — **openAboutPage**
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart

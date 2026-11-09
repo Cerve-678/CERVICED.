@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { TodoMark } from '../../components/TodoMark';
 import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -44,7 +45,7 @@ const PILL_MAX_MESSAGES = 6;
 type Props = { navigation: NativeStackNavigationProp<HomeStackParamList, 'ActivityCentre'> };
 
 export default function ActivityCentreScreen({ navigation }: Props) {
-  const { palette: P } = useTheme();
+  const { palette: P, isDarkMode } = useTheme();
   const bottomGap = useSystemBottomInset() + 24;
   const { showAlert, DialogHost } = useAppDialog();
   const { activity, loaded, failed, refresh } = useClientActivity();
@@ -55,11 +56,14 @@ export default function ActivityCentreScreen({ navigation }: Props) {
   const enter = reduceMotion === false;
 
   useLayoutEffect(() => {
+    // The header sits over the top safe area, so it takes the page's own
+    // background; the stacks' shared header colour is the provider palette's.
     navigation.setOptions({
+      headerStyle: { backgroundColor: P.bg },
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 22, color: P.text },
       headerTintColor: P.text,
     });
-  }, [navigation, P.text]);
+  }, [navigation, P.bg, P.text]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -157,6 +161,7 @@ export default function ActivityCentreScreen({ navigation }: Props) {
 
   return (
     <ThemedBackground>
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[st.content, { paddingBottom: bottomGap }]}
