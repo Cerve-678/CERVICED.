@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-09 (accounts you created, admin)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109220000 | `admin_created_accounts` | **APPLIED 2026-11-09** on the user's go-ahead ("apply", "deploy", "merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109200000`; the only higher migration on an open PR is `20261109210000_marketing_studio` (feat/marketing-studio), which doesn't touch `admin_actions`, so **it must re-check the frontier (now 20261109220000) and renumber above it**. Lock taken on `feat/admin-accounts-dob-signin-list` (6dc26778). Forced-rollback dry run first. Adds `create_account` to `admin_actions_action_check` and the new `admin_created_accounts(integer)`. Verified live: version present (now live max); CHECK has the four actions; SECURITY DEFINER, md5 `1f1ddf1a…`; anon can't execute, authenticated can, and a non-admin is refused. `admin-create-account` was redeployed straight after (it writes the `create_account` rows). Written on `feat/admin-accounts-dob-signin-list` (#416). |
+
 ### Applied 2026-11-09 (day-before reminder drops "arrive 10 minutes early")
 
 | Authored version | Name | Status |

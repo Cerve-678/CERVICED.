@@ -12343,6 +12343,8 @@ export interface AdminCreateAccountInput {
   name: string;
   email: string;
   phone?: string;
+  /** YYYY-MM-DD; at least 16, the same rule as sign-up. */
+  dob: string;
   /** Required for a provider. */
   businessName?: string;
   /** Leave blank to have the server make one up (returned as generatedPassword). */
@@ -12386,6 +12388,43 @@ export async function adminCreateAccount(input: AdminCreateAccountInput): Promis
     accountType: result.accountType === 'client' ? 'client' : 'provider',
     ...(typeof result.generatedPassword === 'string' ? { generatedPassword: result.generatedPassword } : {}),
   };
+}
+
+export type AdminCreatedProviderStatus = 'live' | 'setting_up' | 'not_started';
+
+export interface AdminCreatedAccount {
+  userId: string;
+  createdAt: string;
+  accountType: 'provider' | 'client';
+  createdByName: string | null;
+  /** Null once the account has been deleted. */
+  name: string | null;
+  email: string | null;
+  /** Providers only. */
+  providerStatus: AdminCreatedProviderStatus | null;
+}
+
+/** Accounts opened from Admin → Create an account, newest first. Throws for a non-admin. */
+export async function listAdminCreatedAccounts(limit = 200): Promise<AdminCreatedAccount[]> {
+  const { data, error } = await supabase.rpc('admin_created_accounts', { p_limit: limit });
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error('admin_created_accounts returned no list.');
+  type Row = {
+    user_id?: unknown; created_at?: unknown; account_type?: unknown; created_by_name?: unknown;
+    name?: unknown; email?: unknown; provider_status?: unknown;
+  };
+  return (data as Row[]).map(row => {
+    const status = row.provider_status;
+    return {
+      userId: String(row.user_id),
+      createdAt: String(row.created_at),
+      accountType: row.account_type === 'client' ? 'client' : 'provider',
+      createdByName: typeof row.created_by_name === 'string' ? row.created_by_name : null,
+      name: typeof row.name === 'string' ? row.name : null,
+      email: typeof row.email === 'string' ? row.email : null,
+      providerStatus: status === 'live' || status === 'setting_up' || status === 'not_started' ? status : null,
+    };
+  });
 }
 
 /** Failed payouts, money providers owe and open refund requests. Throws for a non-admin. */

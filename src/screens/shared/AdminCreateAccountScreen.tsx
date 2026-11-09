@@ -18,12 +18,16 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useAppDialog } from '../../components/AppDialog';
+import { DobField } from '../../components/signup/FormKit';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   adminCreateAccount,
   AdminCreateAccountRefused,
+  signInWithEmailPassword,
   type AdminCreateAccountInput,
 } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
+import { validateDob } from '../../utils/validation';
 import { logger } from '../../utils/logger';
 
 // ── Create an account (admin) ──────────────────────────────────────────────
@@ -31,6 +35,8 @@ import { logger } from '../../utils/logger';
 // onboarding a provider in person, so it's ready before they leave. The email
 // is already confirmed and nothing is emailed: the admin hands over the login.
 // The server (admin-create-account) refuses anyone who isn't an admin.
+// "Set up their profile now" signs the admin out and into the new account,
+// which they can do only because they hold its password at this moment.
 // Internal tool, so its copy is English only.
 
 type AccountType = AdminCreateAccountInput['accountType'];
@@ -45,13 +51,15 @@ interface CreatedAccount {
 export default function AdminCreateAccountScreen({ navigation }: any) {
   const { isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
-  const { showAlert, DialogHost } = useAppDialog();
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  const { logout } = useAuth();
 
   const [accountType, setAccountType] = useState<AccountType>('provider');
   const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [dob, setDob] = useState({ day: '', month: '', year: '' });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,6 +81,7 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
     setBusinessName('');
     setEmail('');
     setPhone('');
+    setDob({ day: '', month: '', year: '' });
     setPassword('');
     setShowPassword(false);
     setCreated(null);
@@ -82,6 +91,8 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
     if (!name.trim()) return showAlert('Missing name', 'Add their name.', 'center');
     if (isProvider && !businessName.trim()) return showAlert('Missing business name', 'Add the business name.', 'center');
     if (!email.trim()) return showAlert('Missing email', 'Add the email address they will sign in with.', 'center');
+    const dobError = validateDob(dob.day, dob.month, dob.year);
+    if (dobError) return showAlert('Date of birth', dobError === 'You must be at least 16' ? 'They must be at least 16.' : dobError, 'center');
     if (password.length > 0 && password.length < 8) {
       return showAlert('Password too short', 'Use at least 8 characters, or leave it blank to have one made up.', 'center');
     }
@@ -93,6 +104,7 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
         accountType,
         name: name.trim(),
         email: email.trim(),
+        dob: `${dob.year}-${dob.month.padStart(2, '0')}-${dob.day.padStart(2, '0')}`,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
         ...(isProvider ? { businessName: businessName.trim() } : {}),
         ...(password ? { password } : {}),
@@ -128,6 +140,36 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
         `Email: ${account.email}\nPassword: ${account.password}\n\n` +
         'Sign in on the CERVICED app, then change your password in Settings.',
     }).catch(err => logger.error('[AdminCreateAccount] share failed:', err));
+  };
+
+  const signInAsThem = (account: CreatedAccount) => {
+    Haptics.selectionAsync().catch(() => {});
+    showConfirm(
+      'Sign in as them?',
+      `This signs you out of your own account and into ${account.name}'s, so you can set things up for them. ` +
+        "Send them their login first: you won't see the password again. Sign back into your own account when you're done.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign in as them',
+          onPress: () => {
+            void (async () => {
+              // logout() takes this screen away with the rest of the signed-in
+              // app, so nothing below may touch screen state. If the sign-in
+              // fails, the admin is left on the sign-in screen, where they can
+              // type the same details.
+              await logout();
+              try {
+                await signInWithEmailPassword(account.email, account.password);
+              } catch (err) {
+                logger.error('[AdminCreateAccount] signing in as the new account failed:', err);
+              }
+            })();
+          },
+        },
+      ],
+      'center',
+    );
   };
 
   const back = () => {
@@ -167,7 +209,7 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
                 <View style={[styles.sep, { backgroundColor: P.sep }]} />
                 <Text style={[styles.small, { color: P.sub }]}>
                   {created.accountType === 'provider'
-                    ? 'They sign in with these, then set up their profile the usual way. Nothing shows to clients until they go live.'
+                    ? 'They sign in with these, then set up their profile the usual way, or you can set it up for them now. Nothing shows to clients until they go live.'
                     : 'They sign in with these and can book straight away.'}
                   {' '}Ask them to change the password in Settings.
                 </Text>
@@ -180,6 +222,16 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
                 accessibilityRole="button"
               >
                 <Text style={[styles.primaryText, { color: P.onAccent }]}>SEND THEM THEIR LOGIN</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.secondaryBtn, { borderColor: P.border }]}
+                onPress={() => signInAsThem(created)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.secondaryText, { color: P.accentText }]}>
+                  {created.accountType === 'provider' ? 'SET UP THEIR PROFILE NOW' : 'SIGN IN AS THEM'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.secondaryBtn, { borderColor: P.border }]}
@@ -234,6 +286,10 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
               <Field label="PHONE (OPTIONAL)" labelColor={P.sub} rowStyle={rowStyle}>
                 <TextInput style={inputStyle} value={phone} onChangeText={setPhone} placeholder="07…"
                   placeholderTextColor={P.sub} keyboardType="phone-pad" textContentType="none" autoComplete="off" />
+              </Field>
+
+              <Field label="DATE OF BIRTH" labelColor={P.sub} rowStyle={styles.dobRow}>
+                <DobField value={dob} onChange={setDob} onDone={() => {}} />
               </Field>
 
               <Field label="PASSWORD (OPTIONAL)" labelColor={P.sub} rowStyle={rowStyle}
@@ -296,6 +352,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, paddingVertical: 14, fontSize: 15, fontFamily: 'Jura-VariableFont_wght' },
   eyeBtn: { paddingLeft: 8, minHeight: 44, justifyContent: 'center' },
   eyeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600' },
+  dobRow: { flexDirection: 'row' },
   segment: { flexDirection: 'row', gap: 8, marginBottom: 20 },
   segmentBtn: { flex: 1, minHeight: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   segmentText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1.5 },
