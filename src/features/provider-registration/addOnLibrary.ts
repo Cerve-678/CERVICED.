@@ -51,6 +51,20 @@ export function newAddOnKey(): string {
   return `new:${Date.now()}-${newKeyCounter}`;
 }
 
+/**
+ * The library with `added` on the end, skipping any already in it. The service
+ * editor's own new add-ons join the library when the service saves, and stay
+ * in the editor's list until its next render, so a plain concatenation showed
+ * them twice (duplicate React keys); a double tap on Save appended them twice.
+ */
+export function mergeAddOns(
+  library: readonly AddOnLibraryItem[],
+  added: readonly AddOnLibraryItem[],
+): AddOnLibraryItem[] {
+  const keys = new Set(library.map(item => item.key));
+  return [...library, ...added.filter(item => !keys.has(item.key))];
+}
+
 /** Whether the rule alone (no exceptions) puts this add-on on a service in
  *  `categoryName`. */
 export function ruleCovers(
