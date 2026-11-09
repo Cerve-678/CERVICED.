@@ -45,7 +45,6 @@ import { buildPaymentSheetAppearance } from '../../features/payments/paymentShee
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
-import { bookingTodoCounts } from '../../features/bookings/activityCentre';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
@@ -366,10 +365,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // Shared with the client Settings card, so both count the same things.
   const {
     activity,
-    remote: activityRemote,
+    todoCounts: bookingActionItems,
     refresh: refreshActivity,
   } = useClientActivity();
-  const bookingActionItems = useMemo(() => bookingTodoCounts(activityRemote), [activityRemote]);
   const activityNeedsYouCount = activity.needsYou.length;
 
   const openActivityCentre = useCallback(() => {
