@@ -103,7 +103,7 @@ Curated: [[Payments]] · **163 files**
 - `src/types/booking.ts` _(32)_
 - `src/features/bookings/BookingFeeCard.tsx` _(30)_
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
-- `src/screens/provider/InfoRegScreen.tsx` _(28)_
+- `src/screens/provider/InfoRegScreen.tsx` _(29)_
 - `supabase/phase1_schema.sql` _(28)_
 - … +133 more
 

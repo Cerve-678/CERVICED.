@@ -6,10 +6,12 @@
 // _shared/extractProviderProfile.ts, shared with the batch run-scrape-job
 // pipeline, which calls it in-process rather than through this endpoint.
 //
-// Each read is a paid Claude call, so only provider accounts (including an
-// admin signed in as a provider they're setting up) and admins may call it.
-// That also keeps this from being an open fetch proxy for anyone with the
-// anon key.
+// Each read is a paid Claude call. Only provider accounts (including an admin
+// signed in as a provider they're setting up) and admins may call it, but
+// users.role is chosen at sign-up, so that only keeps clients out. The real
+// limit is per account: MAX_READS_PER_HOUR/DAY, counted in
+// profile_import_reads (service role only). Links are fetched through
+// _shared/safeFetch.ts, which refuses anything but public websites.
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import {
   extractProviderProfile,
@@ -36,6 +38,10 @@ function json(body: unknown, status = 200): Response {
 const MAX_FILES = 20;
 /** Total base64 across every upload, about 18 MB of real file. */
 const MAX_TOTAL_BASE64_CHARS = 24 * 1024 * 1024;
+/** Refused before parsing: the uploads plus a little JSON around them. */
+const MAX_BODY_BYTES = MAX_TOTAL_BASE64_CHARS + 64 * 1024;
+const MAX_READS_PER_HOUR = 10;
+const MAX_READS_PER_DAY = 30;
 
 function parseFiles(raw: unknown): UploadedFile[] | string {
   if (!Array.isArray(raw) || raw.length === 0) return 'Add at least one photo or PDF.';
@@ -86,17 +92,58 @@ Deno.serve(async (req) => {
       return json({ error: 'Only business accounts can import a price list.' }, 403);
     }
 
-    const body = (await req.json().catch(() => null)) as { url?: unknown; files?: unknown } | null;
-    let extracted: ExtractedProviderProfile;
+    const declaredLength = Number(req.headers.get('content-length') ?? '');
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+      return json({ error: 'Those files are too big together. Try fewer pages at a time.' }, 413);
+    }
+    const rawBody = await req.text();
+    if (rawBody.length > MAX_BODY_BYTES) {
+      return json({ error: 'Those files are too big together. Try fewer pages at a time.' }, 413);
+    }
+    let body: { url?: unknown; files?: unknown } | null = null;
+    try { body = JSON.parse(rawBody); } catch { /* handled below */ }
+
+    let source: { kind: 'link'; url: string } | { kind: 'files'; files: UploadedFile[] };
     if (typeof body?.url === 'string' && body.url.trim()) {
-      extracted = await extractProviderProfile(body.url.trim());
+      source = { kind: 'link', url: body.url.trim().slice(0, 2048) };
     } else if (body?.files !== undefined) {
       const files = parseFiles(body.files);
       if (typeof files === 'string') return json({ error: files }, 400);
-      extracted = await extractProviderProfileFromFiles(files);
+      source = { kind: 'files', files };
     } else {
       return json({ error: 'Add a link, photos or a PDF.' }, 400);
     }
+
+    // Counted before reading, so a read that fails after reaching Claude
+    // (and still costs) counts too.
+    const now = Date.now();
+    const { data: recent, error: recentError } = await admin
+      .from('profile_import_reads')
+      .select('created_at')
+      .eq('user_id', caller.id)
+      .gte('created_at', new Date(now - 24 * 60 * 60 * 1000).toISOString())
+      .limit(MAX_READS_PER_DAY);
+    if (recentError) {
+      console.error('[extract-provider-profile] could not count recent reads:', recentError);
+      return json({ error: 'Something went wrong. Please try again.' }, 500);
+    }
+    const lastHour = (recent ?? []).filter(r => Date.parse(r.created_at as string) > now - 60 * 60 * 1000).length;
+    if ((recent ?? []).length >= MAX_READS_PER_DAY || lastHour >= MAX_READS_PER_HOUR) {
+      return json({ error: "You've imported a lot today. Please try again later." }, 429);
+    }
+    const { error: logError } = await admin.from('profile_import_reads').insert({
+      user_id: caller.id,
+      source: source.kind === 'link' ? 'link' : 'files',
+      file_count: source.kind === 'files' ? source.files.length : 0,
+    });
+    if (logError) {
+      console.error('[extract-provider-profile] could not record the read:', logError);
+      return json({ error: 'Something went wrong. Please try again.' }, 500);
+    }
+
+    const extracted: ExtractedProviderProfile = source.kind === 'link'
+      ? await extractProviderProfile(source.url)
+      : await extractProviderProfileFromFiles(source.files);
 
     console.log(`[extract-provider-profile] ${caller.id} read ${Object.values(extracted.categories ?? {}).flat().length} services`);
     return json({ extracted });

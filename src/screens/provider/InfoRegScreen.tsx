@@ -2065,7 +2065,7 @@ const ImportProfileModal: React.FC<ImportProfileModalProps> = ({
             <>
               <Text style={styles.transferTitle}>Import a price list</Text>
               <Text style={styles.transferSubtitle}>
-                Choose screenshots or photos of the price list, a PDF, or paste a link. We'll read the services, prices, add-ons and policies, and show you before anything is added.
+                Choose screenshots or photos of the price list, a PDF, or paste a link. We'll read the services, prices, add-ons and policies, and show you before anything is added. Crop out clients' names, messages and faces first.
               </Text>
 
               <View style={styles.transferButtons}>
@@ -2138,6 +2138,9 @@ const ImportProfileModal: React.FC<ImportProfileModalProps> = ({
                 {p && p.policyLines.length > 0 ? (
                   <>
                     <Text style={styles.importLabel}>POLICIES</Text>
+                    <Text style={styles.importNote}>
+                      Copied from the price list by AI. Check the wording says exactly what you mean before you save.
+                    </Text>
                     {p.policyLines.map(line => <Text key={line} style={styles.importLine}>{line}</Text>)}
                   </>
                 ) : null}
@@ -2145,7 +2148,7 @@ const ImportProfileModal: React.FC<ImportProfileModalProps> = ({
                   <>
                     <Text style={styles.importLabel}>FEES AND DEPOSITS: NOT SET</Text>
                     <Text style={styles.importNote}>
-                      These charge clients' cards, so they're never set from an import. Set them yourself in Business Profile → Policies and Payments after saving.
+                      These charge clients' cards, so no fee or deposit is switched on from an import. Set them yourself in Business Profile → Policies and Payments after saving. If the policy notes mention a fee, check they match what you set.
                     </Text>
                     {p.feesAndDeposits.map(line => <Text key={line} style={styles.importLine}>{line}</Text>)}
                   </>

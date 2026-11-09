@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/import-from-photo-pdf-link (Claude session, 2026-11-09) — 20261109230000_profile_import_reads
 ```
 
 ### Applied 2026-11-09 (accounts you created, admin)
