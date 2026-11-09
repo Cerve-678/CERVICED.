@@ -396,6 +396,7 @@ const ExploreScreen = memo(() => {
   useEffect(() => {
     if (activeTab !== 'favourites') {
       setOpenCollectionId(null);
+      flownCountRef.current = 0;
       setFlight(null);
     }
   }, [activeTab]);
@@ -427,14 +428,20 @@ const ExploreScreen = memo(() => {
   // Cards report where they are to the flight object itself, not to this
   // screen's state, so measuring doesn't re-render Explore mid-flight.
   const [flight, setFlight] = useState<CollectionFlight | null>(null);
+  // How many looks flew in when the open collection opened. The rest of its
+  // cards wait for them to land, then follow straight on.
+  const flownCountRef = useRef(0);
   const handleOpenCollection = useCallback((collection: ExploreCollection, papers: FolderPaperRect[]) => {
     const flying = papers.filter(p => p.uri);
-    setFlight(!reduceMotionRef.current && flying.length > 0 ? new CollectionFlight(flying) : null);
+    const next = !reduceMotionRef.current && flying.length > 0 ? new CollectionFlight(flying) : null;
+    flownCountRef.current = next?.count ?? 0;
+    setFlight(next);
     setOpenCollectionId(collection.id);
     favouritesGridRef.current?.scrollToTop();
   }, []);
   const handleFlightDone = useCallback(() => setFlight(null), []);
   const handleCloseCollection = useCallback(() => {
+    flownCountRef.current = 0;
     setFlight(null);
     setOpenCollectionId(null);
   }, []);
@@ -921,9 +928,15 @@ const ExploreScreen = memo(() => {
       .map(id => byId.get(id))
       .filter((card): card is PortfolioItem => card !== undefined);
   }, [favouriteItems, openCollection]);
+  // While a collection's looks fly in, only the cards they land on are built.
+  // Building the whole window at once (photos, gradients, fade-ins) in the
+  // same frames made the flight stutter in a folder with lots of looks. The
+  // masonry packs in order, so those first cards don't move when the rest
+  // arrive.
+  const favouritesWindow = flight ? Math.min(flight.count, favouritesVisibleCount) : favouritesVisibleCount;
   const visibleFavouriteItems = useMemo(
-    () => shownFavouriteItems.slice(0, favouritesVisibleCount),
-    [shownFavouriteItems, favouritesVisibleCount],
+    () => shownFavouriteItems.slice(0, favouritesWindow),
+    [shownFavouriteItems, favouritesWindow],
   );
   // Folders draw the saved photos themselves, so hand the store every photo
   // this screen has resolved.
@@ -1172,6 +1185,11 @@ const ExploreScreen = memo(() => {
           columnWidth={columnWidth}
           imageHeight={imageHeight}
           entrance={index >= flightCount}
+          // Cards after the flown-in looks fade in one after another from
+          // the moment those land, not after the usual per-position wait.
+          {...(flownCountRef.current > 0
+            ? { entranceDelayMs: Math.max(0, index - flownCountRef.current) * 60 }
+            : {})}
           onPress={handleImagePress}
           index={index}
           offersCollections
