@@ -17,7 +17,7 @@ describe('beautyDataFromRow with multi-pick columns', () => {
       ...base, hair_type: ['4B', '4C'], scalp_condition: ['Dry'], nail_length: ['Short', 'Long'],
       nail_shape: ['Almond'], lash_style: ['Wispy'], brow_style: null, brow_condition: [],
       makeup_coverage: ['Full glam'], makeup_finish: null, makeup_eyes: null, makeup_lips: ['Gloss', 'Nude'],
-    } as UserBeautyProfileRow);
+    } as unknown as UserBeautyProfileRow);
     expect(d.hairType).toEqual(['4B', '4C']);
     expect(d.nailLength).toEqual(['Short', 'Long']);
     expect(d.browStyle).toEqual([]);
@@ -29,7 +29,7 @@ describe('beautyDataFromRow with multi-pick columns', () => {
       ...base, hair_type: '4C', scalp_condition: '', nail_length: null, nail_shape: 'Coffin',
       lash_style: null, brow_style: 'Fluffy', brow_condition: null, makeup_coverage: null,
       makeup_finish: 'Dewy', makeup_eyes: null, makeup_lips: null,
-    } as UserBeautyProfileRow);
+    } as unknown as UserBeautyProfileRow);
     expect(d.hairType).toEqual(['4C']);
     expect(d.scalpCondition).toEqual([]);
     expect(d.nailShape).toEqual(['Coffin']);
