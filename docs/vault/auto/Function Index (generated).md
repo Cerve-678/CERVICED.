@@ -5,7 +5,7 @@
 
 #generated
 
-**3606 functions** across **516 files**.
+**3611 functions** across **516 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -78,13 +78,13 @@
 - `AnalyticsKit.tsx` — **accentColor** · **AnalyticsHeader** · **AnimatedNumber** · **BarChart** · **DeckCard** · handlePress · **HeroGradient** · **InsightStrip** · **LivePulse** · pressIn · pressOut · **PressScale** · **RangeSelector** · **Reveal** · **SectionLabel** · **StatTile** · **tileWidth**
 
 ### `src/components/collections/` (8)
-- `AddToCollectionSheet.tsx` — **AddToCollectionSheet** · ensureSaved · handleCreate · handleToggle
+- `AddToCollectionSheet.tsx` — **AddToCollectionSheet** · ensureSaved · handleCreate · handleToggle · SheetFolder
 - `CollectionEditorSheet.tsx` — **CollectionEditorSheet** · handleDelete · handleSave
 - `CollectionFolder.tsx` — animatePress · **CollectionFolder** · Paper
 - `CollectionForm.tsx` — **CollectionForm**
 - `CollectionOfferBar.tsx` — **CollectionOfferBar**
 - `CollectionSheetFrame.tsx` — **CollectionSheetFrame**
-- `CollectionsRow.tsx` — **CollectionsRow** · tap
+- `CollectionsRow.tsx` — **CollectionsRow** · handleLongPress · handlePress · RowFolder · tap
 - `OpenCollectionHeader.tsx` — **OpenCollectionHeader** · tap
 
 ### `src/components/signup/` (2)
@@ -473,8 +473,9 @@
 - `provider.ts` — cutoff · inRange
 - `shared.ts` — **askChip** · **chip** · **dayLabel** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
 
-### `src/stores/` (1)
+### `src/stores/` (2)
 - `useCircleStore.ts` — **useCircleEnabledSync** · **useCircleFor**
+- `useCollectionsStore.ts` — **useFolderPhotos**
 
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles

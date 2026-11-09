@@ -51,9 +51,6 @@ CREATE TABLE public.explore_collection_items (
   PRIMARY KEY (collection_id, item_id)
 );
 
-CREATE INDEX explore_collection_items_item_idx
-  ON public.explore_collection_items (item_id);
-
 -- ── Housekeeping triggers ────────────────────────────────
 
 CREATE FUNCTION public.explore_collections_before_write()
@@ -63,6 +60,8 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
+    -- One insert at a time per account, so two quick taps can't make a 51st.
+    PERFORM pg_advisory_xact_lock(hashtext('explore_collections:' || NEW.user_id::text));
     IF (SELECT count(*) FROM public.explore_collections WHERE user_id = NEW.user_id) >= 50 THEN
       RAISE EXCEPTION 'You can have up to 50 collections.' USING ERRCODE = 'P0001';
     END IF;

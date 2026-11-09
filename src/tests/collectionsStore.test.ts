@@ -72,11 +72,10 @@ describe('collections store', () => {
     expect(useCollectionsStore.getState().collections.map(c => c.id)).toEqual(['c1']);
   });
 
-  it('makes a collection with the look already in it', async () => {
+  it('adds a new collection to the end of the row', async () => {
     mockCreate.mockResolvedValue({ id: 'c2', name: 'Hair', color: 'blue', createdAt: 'x', itemIds: [] });
-    mockAdd.mockResolvedValue(undefined);
-    const made = await useCollectionsStore.getState().create('Hair', 'blue', 'p9');
-    expect(made.itemIds).toEqual(['p9']);
+    const made = await useCollectionsStore.getState().create('Hair', 'blue');
+    expect(made.id).toBe('c2');
     expect(useCollectionsStore.getState().collections.map(c => c.name)).toEqual(['Nails', 'Hair']);
   });
 

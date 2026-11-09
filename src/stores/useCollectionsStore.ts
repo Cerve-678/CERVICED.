@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import {
   addItemToCollection,
   createCollection,
@@ -32,7 +33,7 @@ interface CollectionsStore {
   load: (userId: string | null) => Promise<void>;
 
   /** Each mutation updates the screen first and puts it back if the save fails, then throws. */
-  create: (name: string, color: CollectionColor, firstItemId?: string) => Promise<ExploreCollection>;
+  create: (name: string, color: CollectionColor) => Promise<ExploreCollection>;
   update: (collectionId: string, changes: { name?: string; color?: CollectionColor }) => Promise<void>;
   remove: (collectionId: string) => Promise<void>;
   toggleItem: (collectionId: string, itemId: string) => Promise<void>;
@@ -56,6 +57,19 @@ interface CollectionsStore {
 
 let offerKey = 0;
 
+/** How many of a folder's newest looks stick out of it. */
+export const FOLDER_PHOTO_COUNT = 4;
+
+/**
+ * The newest looks a folder draws, with their photos. Subscribes to just
+ * those few photos, so remembering others doesn't re-draw every folder.
+ */
+export function useFolderPhotos(itemIds: string[]): { id: string; uri: string | null }[] {
+  const ids = itemIds.slice(-FOLDER_PHOTO_COUNT);
+  const uris = useCollectionsStore(useShallow(s => ids.map(id => s.photos[id] ?? null)));
+  return ids.map((id, i) => ({ id, uri: uris[i] ?? null }));
+}
+
 export const useCollectionsStore = create<CollectionsStore>((set, get) => ({
   collections: [],
   loadedForUserId: null,
@@ -75,11 +89,10 @@ export const useCollectionsStore = create<CollectionsStore>((set, get) => ({
     }
   },
 
-  create: async (name, color, firstItemId) => {
+  create: async (name, color) => {
     const created = await createCollection(name, color);
     set({ collections: [...get().collections, created] });
-    if (firstItemId) await get().toggleItem(created.id, firstItemId);
-    return get().collections.find(c => c.id === created.id) ?? created;
+    return created;
   },
 
   update: async (collectionId, changes) => {

@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import Svg, { ClipPath, Defs, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { COLLECTION_PALETTES } from '../../constants/collectionColors';
 import type { CollectionColor } from '../../types/collections';
+import { FOLDER_PHOTO_COUNT } from '../../stores/useCollectionsStore';
 
 /**
  * A pastel "jelly" folder for an Explore collection (design chosen
@@ -21,7 +22,6 @@ const FRONT_H = 84;
 // Front panel: high on the left, curving down to a lower right shoulder.
 const FRONT_PATH =
   'M0 18 Q0 0 18 0 H56 C66 0 70 4 76 12 C82 20 86 24 98 24 H132 Q150 24 150 42 V66 Q150 84 132 84 H18 Q0 84 0 66 Z';
-const MAX_PHOTOS = 4;
 // Where the 1st…4th newest-but-oldest photo sits. The latest one added is
 // always drawn last, so it is on top.
 const FAN = [
@@ -43,7 +43,7 @@ interface CollectionFolderProps {
   name: string;
   count: number;
   color: CollectionColor;
-  /** Oldest first; only the newest four are shown. */
+  /** Oldest first; only the newest FOLDER_PHOTO_COUNT are shown. */
   photos: CollectionFolderPhoto[];
   width?: number;
   /** Hides the name and count, for small folders next to a text label. */
@@ -124,7 +124,7 @@ export const CollectionFolder = memo(function CollectionFolder({
   // Photos already in the folder when it first draws sit still; only ones
   // added while it's on screen spring in.
   const seenRef = useRef<Set<string> | null>(null);
-  const shown = photos.slice(-MAX_PHOTOS);
+  const shown = photos.slice(-FOLDER_PHOTO_COUNT);
   if (seenRef.current === null) seenRef.current = new Set(shown.map(p => p.id));
   const seen = seenRef.current;
   useEffect(() => {

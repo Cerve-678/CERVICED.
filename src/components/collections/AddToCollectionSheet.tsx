@@ -3,9 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TouchableOp
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useCollectionsStore, type CollectionHost } from '../../stores/useCollectionsStore';
+import { useCollectionsStore, useFolderPhotos, type CollectionHost } from '../../stores/useCollectionsStore';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
-import { COLLECTION_COLORS, type CollectionColor } from '../../types/collections';
+import { COLLECTION_COLORS, type CollectionColor, type ExploreCollection } from '../../types/collections';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { CollectionFolder } from './CollectionFolder';
 import { CollectionForm } from './CollectionForm';
@@ -27,7 +27,6 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
   const closeSheet = useCollectionsStore(s => s.closeSheet);
   const toggleItem = useCollectionsStore(s => s.toggleItem);
   const createCollection = useCollectionsStore(s => s.create);
-  const photos = useCollectionsStore(s => s.photos);
 
   const visible = sheet?.host === host;
   const itemId = visible ? sheet.itemId : null;
@@ -83,17 +82,30 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setBusyId('new');
     setError(null);
+    let made: { id: string; name: string } | null = null;
     try {
       await ensureSaved(itemId);
-      await createCollection(name, color, itemId);
+      made = await createCollection(name, color);
+      await toggleItem(made.id, itemId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       closeSheet();
     } catch (e) {
-      setError(toUserMessageAllowingDbGuard(e, "Couldn't make that collection. Try again.", 'collections.create'));
+      if (made) {
+        // The folder exists; only adding the look failed. Show the folders
+        // so a retry taps the new one rather than making a second.
+        setCreating(false);
+        setError(toUserMessageAllowingDbGuard(
+          e,
+          `Made ${made.name}, but couldn't add this look. Tap it to try again.`,
+          'collections.createAdd',
+        ));
+      } else {
+        setError(toUserMessageAllowingDbGuard(e, "Couldn't make that collection. Try again.", 'collections.create'));
+      }
     } finally {
       setBusyId(null);
     }
-  }, [busyId, closeSheet, color, createCollection, ensureSaved, itemId, name]);
+  }, [busyId, closeSheet, color, createCollection, ensureSaved, itemId, name, toggleItem]);
 
   return (
     <CollectionSheetFrame
@@ -115,14 +127,7 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
                 accessibilityState={{ checked: inside, busy: busyId === collection.id }}
                 accessibilityLabel={collection.name}
               >
-                <CollectionFolder
-                  name={collection.name}
-                  count={collection.itemIds.length}
-                  color={collection.color}
-                  photos={collection.itemIds.map(id => ({ id, uri: photos[id] ?? null }))}
-                  width={64}
-                  hideLabel
-                />
+                <SheetFolder collection={collection} />
                 <View style={styles.rowText}>
                   <Text style={[styles.rowName, { color: P.text }]} numberOfLines={1}>{collection.name}</Text>
                   <Text style={[styles.rowCount, { color: P.sub }]}>
@@ -196,6 +201,20 @@ export function AddToCollectionSheet({ host }: AddToCollectionSheetProps) {
         </TouchableOpacity>
       </View>
     </CollectionSheetFrame>
+  );
+}
+
+function SheetFolder({ collection }: { collection: ExploreCollection }) {
+  const photos = useFolderPhotos(collection.itemIds);
+  return (
+    <CollectionFolder
+      name={collection.name}
+      count={collection.itemIds.length}
+      color={collection.color}
+      photos={photos}
+      width={64}
+      hideLabel
+    />
   );
 }
 

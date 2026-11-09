@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useCollectionsStore } from '../../stores/useCollectionsStore';
+import { useFolderPhotos } from '../../stores/useCollectionsStore';
 import type { ExploreCollection } from '../../types/collections';
 import { CollectionFolder } from './CollectionFolder';
 
@@ -21,8 +21,6 @@ interface CollectionsRowProps {
 /** The swipeable row of jelly folders at the top of Explore → Favourites. */
 export function CollectionsRow({ collections, onOpen, onEdit, onNew, inset }: CollectionsRowProps) {
   const { palette: P } = useTheme();
-  const photos = useCollectionsStore(s => s.photos);
-  const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
   return (
     <View style={styles.wrap}>
@@ -45,19 +43,7 @@ export function CollectionsRow({ collections, onOpen, onEdit, onNew, inset }: Co
         contentContainerStyle={[styles.rail, { paddingHorizontal: inset }]}
       >
         {collections.map(collection => (
-          <CollectionFolder
-            key={collection.id}
-            name={collection.name}
-            count={collection.itemIds.length}
-            color={collection.color}
-            photos={collection.itemIds.map(id => ({ id, uri: photos[id] ?? null }))}
-            width={FOLDER_WIDTH}
-            onPress={() => { tap(); onOpen(collection); }}
-            onLongPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              onEdit(collection);
-            }}
-          />
+          <RowFolder key={collection.id} collection={collection} onOpen={onOpen} onEdit={onEdit} />
         ))}
         {collections.length === 0 && (
           <TouchableOpacity
@@ -74,6 +60,37 @@ export function CollectionsRow({ collections, onOpen, onEdit, onNew, inset }: Co
     </View>
   );
 }
+
+const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+/** One folder in the row; re-draws only when its own collection or photos change. */
+const RowFolder = memo(function RowFolder({
+  collection,
+  onOpen,
+  onEdit,
+}: {
+  collection: ExploreCollection;
+  onOpen: (collection: ExploreCollection) => void;
+  onEdit: (collection: ExploreCollection) => void;
+}) {
+  const photos = useFolderPhotos(collection.itemIds);
+  const handlePress = useCallback(() => { tap(); onOpen(collection); }, [collection, onOpen]);
+  const handleLongPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    onEdit(collection);
+  }, [collection, onEdit]);
+  return (
+    <CollectionFolder
+      name={collection.name}
+      count={collection.itemIds.length}
+      color={collection.color}
+      photos={photos}
+      width={FOLDER_WIDTH}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+    />
+  );
+});
 
 const styles = StyleSheet.create({
   wrap: { paddingTop: 4, paddingBottom: 6 },

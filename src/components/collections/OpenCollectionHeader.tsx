@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useCollectionsStore } from '../../stores/useCollectionsStore';
+import { useFolderPhotos } from '../../stores/useCollectionsStore';
 import type { ExploreCollection } from '../../types/collections';
 import { CollectionFolder } from './CollectionFolder';
 
@@ -16,7 +16,7 @@ interface OpenCollectionHeaderProps {
 /** Top of the Favourites grid while one collection is open. */
 export function OpenCollectionHeader({ collection, onBack, onEdit }: OpenCollectionHeaderProps) {
   const { palette: P } = useTheme();
-  const photos = useCollectionsStore(s => s.photos);
+  const photos = useFolderPhotos(collection.itemIds);
   const count = collection.itemIds.length;
   const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
@@ -48,7 +48,7 @@ export function OpenCollectionHeader({ collection, onBack, onEdit }: OpenCollect
           name={collection.name}
           count={count}
           color={collection.color}
-          photos={collection.itemIds.map(id => ({ id, uri: photos[id] ?? null }))}
+          photos={photos}
           width={74}
           hideLabel
         />
