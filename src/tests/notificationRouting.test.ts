@@ -116,13 +116,43 @@ describe('notification routing — deep-link payload', () => {
   it('routes review_request to the rating form, not just the booking', () => {
     // "Rate Now" landed on BookingDetail, leaving the client to find the
     // rating control themselves.
-    expect(tapHandler()).toContain("openReview: type === 'review_request'");
+    expect(tapHandler()).toContain('openReview: REVIEW_PROMPT_TYPES.has(type)');
     expect(notificationsScreen()).toContain(
-      "const openReview = notification.type === 'review_request'",
+      'const openReview = REVIEW_PROMPT_TYPES.has(notification.type)',
     );
     expect(read('src', 'screens', 'client', 'BookingsScreen.tsx')).toContain(
       'setShowRatingModal(true)',
     );
+  });
+
+  it("opens a provider's day-after check-in on that booking's review, not their profile", () => {
+    // The check-in invites the client to reply about the appointment; landing
+    // on the provider's profile gave them nothing to do there (and, before the
+    // UUID lookup fix below, showed "Provider not found").
+    const { REVIEW_PROMPT_TYPES } = require('../features/notifications/notificationPresentation');
+    expect(REVIEW_PROMPT_TYPES.has('post_appt_check_in')).toBe(true);
+    expect(REVIEW_PROMPT_TYPES.has('review_request')).toBe(true);
+
+    const tap = tapHandler();
+    const bookingTypes = tap.slice(tap.indexOf('const BOOKING_TYPES'), tap.indexOf(']);', tap.indexOf('const BOOKING_TYPES')));
+    expect(bookingTypes).toContain("'post_appt_check_in'");
+    expect(tap).not.toContain("type === 'post_appt_check_in'");
+    expect(notificationsScreen()).not.toMatch(/birthday_greeting' \|\|\s*notification\.type === 'post_appt_check_in'/);
+
+    // An already-reviewed booking opens as itself, not a second rating form.
+    expect(read('src', 'screens', 'client', 'BookingsScreen.tsx')).toContain(
+      'alreadyReviewed = await hasReviewedBooking(booking.id)',
+    );
+  });
+
+  it('opens a provider profile from either its slug or its UUID', () => {
+    // Notifications and bookings only carry provider_id (a UUID), but both
+    // profile lookups matched on slug alone, so every notification that
+    // opened a provider's profile showed "Provider not found".
+    const source = databaseService();
+    expect(source).toContain('isProviderProfileUuid(key) ? "id" : "slug"');
+    expect(source).not.toContain('.eq("slug", normalizedSlug)');
+    expect(source.match(/\.eq\(providerProfileKeyColumn\(normalizedSlug\), normalizedSlug\)/g)).toHaveLength(2);
   });
 
   it('sends a fully booked provider to their profile, where the certificate shows', () => {

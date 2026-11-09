@@ -1074,9 +1074,24 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             logger.log('Navigating to Reschedule screen');
             navigation.navigate('Reschedule', { bookingId: booking.id });
           } else if (shouldOpenReview) {
-            // review_request's "Rate Now" — open the rating sheet directly on
-            // this screen rather than pushing BookingDetail. The modal already
-            // lives here and reads selectedBooking, which is set above.
+            // review_request's "Rate Now" and the provider's day-after check-in
+            // — open the rating sheet directly on this screen rather than
+            // pushing BookingDetail. The modal already lives here and reads
+            // selectedBooking, which is set above. A booking that's already
+            // been reviewed opens as itself instead: a second form would only
+            // be thrown away by handleRatingSubmit's own duplicate check.
+            let alreadyReviewed = false;
+            try {
+              alreadyReviewed = await hasReviewedBooking(booking.id);
+            } catch (err) {
+              // Can't tell — show the form; submitting is still guarded.
+              logger.warn('[Bookings] review check failed, opening the form anyway:', err);
+            }
+            if (alreadyReviewed) {
+              logger.log('Booking already reviewed, opening BookingDetail:', booking.id);
+              navigation.navigate('BookingDetail', { bookingId: booking.id });
+              return;
+            }
             logger.log('Opening rating modal for booking:', booking.id);
             setRating(0);
             setReviewText('');

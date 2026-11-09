@@ -109,14 +109,14 @@ Curated: [[Payments]] · **162 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **353 files**
-- `src/services/databaseService.ts` _(1109)_
+- `src/services/databaseService.ts` _(1110)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(588)_
 - `src/services/becca/capabilities/client.ts` _(585)_
 - `src/screens/client/BookingDetailScreen.tsx` _(499)_
-- `src/screens/client/BookingsScreen.tsx` _(399)_
+- `src/screens/client/BookingsScreen.tsx` _(408)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(252)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
@@ -145,7 +145,7 @@ Curated: [[Booking Flow]] · **353 files**
 Curated: [[Notifications]] · **185 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(343)_
-- `src/services/databaseService.ts` _(192)_
+- `src/services/databaseService.ts` _(194)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_
 - `supabase/notification_recipient_role.sql` _(91)_
@@ -155,7 +155,7 @@ Curated: [[Notifications]] · **185 files**
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(54)_
 - `supabase/automation_jobs.sql` _(51)_
-- `src/services/notificationTapHandler.ts` _(48)_
+- `src/services/notificationTapHandler.ts` _(50)_
 - `src/services/becca/capabilities/client.ts` _(46)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_
@@ -348,7 +348,7 @@ Curated: [[Services]] · **53 files**
 ## Cart & checkout
 Curated: [[Payments]] · **86 files**
 - `src/screens/client/CartScreen.tsx` _(441)_
-- `src/services/databaseService.ts` _(107)_
+- `src/services/databaseService.ts` _(108)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/components/BookingSheet.tsx` _(34)_
