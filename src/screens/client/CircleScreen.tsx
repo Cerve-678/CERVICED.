@@ -1,8 +1,10 @@
 // src/screens/client/CircleScreen.tsx
 //
-// Your circle: find people by name, answer follow requests, see who you
-// follow and who follows you, and the three sharing switches (Private
-// account, Show where I go, Findable by phone). Reached from Beauty Profile.
+// Your circle: find people by name or from your contacts, answer follow
+// requests, see who you follow and who follows you, and the three sharing
+// switches (Private account, Show where I go, Findable by phone number).
+// Reached from Beauty Profile. Contacts are only read after a tap on
+// "Allow contacts" — see src/features/social/contacts.ts.
 //
 // Every rule — who's private, under-18s, blocks, what a follower can see —
 // is enforced by the server (migration 20261108220000); this screen only
@@ -12,6 +14,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
+  Linking,
   SectionList,
   StyleSheet,
   Text,
@@ -47,6 +51,15 @@ import {
 } from '../../features/social/people';
 import type { PersonListEntry, PersonSummary, SocialSettingsUpdate } from '../../features/social/types';
 import {
+  cachedContactMatches,
+  findContactsOnCerviced,
+  getContactsAccess,
+  isContactsLimitError,
+  rememberContactMatches,
+  requestContactsAccess,
+  type ContactMatchResult,
+} from '../../features/social/contacts';
+import {
   FONT_BODY,
   FONT_DISPLAY,
   GhostButton,
@@ -67,6 +80,7 @@ const FACE = 42;
 
 type Row =
   | { kind: 'result'; key: string; person: PersonSummary }
+  | { kind: 'contacts'; key: string }
   | { kind: 'request'; key: string; entry: PersonListEntry }
   | { kind: 'following'; key: string; entry: PersonListEntry }
   | { kind: 'follower'; key: string; entry: PersonListEntry }
@@ -120,6 +134,32 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PersonSummary[]>([]);
+
+  // Contacts: nothing is read until "Allow contacts". The last result is
+  // kept in memory for the app session (contacts.ts), since the server
+  // allows 3000 numbers a day and a re-send would spend it again.
+  type ContactsState = 'idle' | 'checking' | 'done' | 'off' | 'error' | 'dismissed';
+  const cachedContacts = userId ? cachedContactMatches(userId) : null;
+  const [contactsState, setContactsState] = useState<ContactsState>(cachedContacts ? 'done' : 'idle');
+  const [contactMatches, setContactMatches] = useState<ContactMatchResult[]>(cachedContacts ?? []);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+  // Set the instant the button is tapped, so a double tap can't run two checks.
+  const contactsInFlight = useRef(false);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+
+  // Back from Settings with access now granted: offer the check again
+  // (still only on a tap, never automatically).
+  useEffect(() => {
+    if (contactsState !== 'off') return;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      getContactsAccess()
+        .then((access) => { if (access === 'granted') setContactsState('idle'); })
+        .catch(() => {});
+    });
+    return () => sub.remove();
+  }, [contactsState]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const searchSeq = useRef(0);
@@ -225,6 +265,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       runForRow(person.userId, "Couldn't follow", '[circle] request follow', async () => {
         const status = await requestFollow(person.userId);
         setResults((list) => withMyStatus(list, person.userId, status));
+        setContactMatches((list) => withMyStatus(list, person.userId, status));
         setFollowing((list) =>
           withPersonFirst(list, {
             userId: person.userId,
@@ -260,6 +301,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
               void runForRow(personId, "Couldn't unfollow", '[circle] unfollow', async () => {
                 await unfollowPerson(personId);
                 setResults((list) => withMyStatus(list, personId, null));
+                setContactMatches((list) => withMyStatus(list, personId, null));
                 setFollowing((list) => withoutPerson(list, personId));
                 afterFollowChange();
               }),
@@ -303,6 +345,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
                 await removeFollower(entry.userId);
                 setFollowers((list) => withoutPerson(list, entry.userId));
                 setResults((list) => list.map((p) => (p.userId === entry.userId ? { ...p, followsMe: null } : p)));
+                setContactMatches((list) => list.map((p) => (p.userId === entry.userId ? { ...p, followsMe: null } : p)));
                 afterFollowChange();
               }),
           },
@@ -327,6 +370,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
               void runForRow(personId, "Couldn't block", '[circle] block person', async () => {
                 await blockPerson(personId);
                 setResults((list) => withoutPerson(list, personId));
+                setContactMatches((list) => withoutPerson(list, personId));
                 setRequests((list) => withoutPerson(list, personId));
                 setFollowing((list) => withoutPerson(list, personId));
                 setFollowers((list) => withoutPerson(list, personId));
@@ -393,6 +437,39 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
 
   // ── Sections ──────────────────────────────────────────────────────────────
 
+  /** Asks for contacts only now, on the tap, then checks them. */
+  const checkContacts = useCallback(async () => {
+    if (contactsInFlight.current || !userId) return;
+    contactsInFlight.current = true;
+    const forUser = userId;
+    setContactsError(null);
+    try {
+      let access = await getContactsAccess();
+      if (access === 'undetermined' || access === 'denied') access = await requestContactsAccess();
+      if (access !== 'granted') {
+        setContactsState('off');
+        return;
+      }
+      setContactsState('checking');
+      const found = await findContactsOnCerviced();
+      // Signed into a different account meanwhile: this result isn't theirs.
+      if (userIdRef.current !== forUser) return;
+      rememberContactMatches(forUser, found);
+      setContactMatches(found);
+      setContactsState('done');
+    } catch (err) {
+      if (userIdRef.current !== forUser) return;
+      setContactsError(
+        isContactsLimitError(err)
+          ? "You've checked a lot of contacts today. Please try again tomorrow."
+          : toUserMessageAllowingDbGuard(err, "Couldn't check your contacts just now. Please try again.", '[circle] contacts'),
+      );
+      setContactsState('error');
+    } finally {
+      contactsInFlight.current = false;
+    }
+  }, [userId]);
+
   const sections = useMemo<Section[]>(() => {
     if (inSearch) {
       const data: Row[] = results.map((person) => ({ kind: 'result', key: `r-${person.userId}`, person }));
@@ -413,6 +490,18 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         title: `REQUESTS · ${requests.length}`,
         data: requests.map((entry) => ({ kind: 'request', key: `q-${entry.userId}`, entry })),
       });
+    }
+    if (contactsState === 'done') {
+      out.push({
+        key: 'contacts',
+        title: `IN YOUR CONTACTS · ${contactMatches.length}`,
+        data:
+          contactMatches.length > 0
+            ? contactMatches.map((person) => ({ kind: 'result', key: `c-${person.userId}`, person }))
+            : [{ kind: 'note', key: 'c-empty', text: 'Nobody in your contacts is on CERVICED yet, or they’ve chosen not to be found by number.' }],
+      });
+    } else if (contactsState !== 'dismissed') {
+      out.push({ key: 'contacts', title: 'CONTACTS', data: [{ kind: 'contacts', key: 'contacts' }] });
     }
     out.push({ key: 'sharing', title: 'YOUR SHARING', data: [{ kind: 'sharing', key: 'sharing' }] });
     if (listsState === 'error') {
@@ -441,7 +530,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           : [{ kind: 'note', key: 'f-empty', text: 'Nobody follows you yet.' }],
     });
     return out;
-  }, [inSearch, results, searching, searchError, trimmed, requests, listsState, following, followers]);
+  }, [inSearch, results, searching, searchError, trimmed, requests, contactsState, contactMatches, listsState, following, followers]);
 
   // ── Rendering ─────────────────────────────────────────────────────────────
 
@@ -527,15 +616,78 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           disabled={savingSetting || settings.isMinor}
           P={P}
         />
-        {/* "Findable by phone number" joins these once finding people from
-            contacts is built; until then nothing in the app uses it. */}
+        <View style={[styles.divider, { backgroundColor: P.sep }]} />
+        <SwitchRow
+          title="Findable by phone number"
+          sub="People who have the number on your profile in their contacts can find you."
+          value={settings.findableByPhone}
+          onChange={(v) => void saveSetting({ findableByPhone: v })}
+          disabled={savingSetting || settings.isMinor}
+          P={P}
+        />
         {settings.isMinor ? (
           <Note
             icon="lock-closed-outline"
-            text="Because you're under 18, your account stays private."
+            text="Because you're under 18, your account stays private and people can't find you by your number."
             P={P}
           />
         ) : null}
+      </View>
+    );
+  };
+
+  const renderContactsCard = () => {
+    if (contactsState === 'checking') {
+      return (
+        <View style={[styles.contactsCard, { backgroundColor: P.accent }]}>
+          <ActivityIndicator color={P.onAccent} />
+          <Text style={[ui.body, { color: P.onAccent, textAlign: 'center' }]}>Checking your contacts…</Text>
+        </View>
+      );
+    }
+    if (contactsState === 'off') {
+      return (
+        <View style={[ui.card, styles.contactsOff, { backgroundColor: P.card, borderColor: P.border }]}>
+          <Text style={[ui.body, { color: P.text }]}>
+            CERVICED can't see your contacts. You can let it in Settings, or find people by name above.
+          </Text>
+          <View style={styles.pair}>
+            <GhostButton small label="Open Settings" onPress={() => { void Linking.openSettings(); }} P={P} />
+            <GhostButton small label="Not now" onPress={() => setContactsState('dismissed')} P={P} />
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.contactsCard, { backgroundColor: P.accent }]}>
+        <Text style={[styles.contactsKick, { color: P.onAccent }]}>CONTACTS</Text>
+        <Text style={[styles.contactsTitle, { color: P.onAccent }]}>See who you know here</Text>
+        <Text style={[ui.body, { color: P.onAccent, opacity: 0.9 }]}>
+          Find friends who are already on CERVICED. Your address book is never saved.
+        </Text>
+        {contactsState === 'error' && contactsError ? (
+          <Text style={[ui.body, { color: P.onAccent }]}>{contactsError}</Text>
+        ) : null}
+        <View style={styles.pair}>
+          <TouchableOpacity
+            style={[styles.contactsBtn, { backgroundColor: P.onAccent, borderColor: P.onAccent }]}
+            onPress={() => { hapticLight(); void checkContacts(); }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.contactsBtnText, { color: P.accent }]}>
+              {contactsState === 'error' ? 'TRY AGAIN' : 'ALLOW CONTACTS'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.contactsBtn, { borderColor: P.onAccent }]}
+            onPress={() => { hapticLight(); setContactsState('dismissed'); }}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.contactsBtnText, { color: P.onAccent }]}>NOT NOW</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -544,6 +696,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     switch (item.kind) {
       case 'sharing':
         return renderSharing();
+      case 'contacts':
+        return renderContactsCard();
       case 'note':
         return <Text style={[ui.body, styles.note, { color: P.sub }]}>{item.text}</Text>;
       case 'retry':
@@ -719,5 +873,11 @@ const styles = StyleSheet.create({
   faceInitials: { alignItems: 'center', justifyContent: 'center' },
   faceInitialsText: { fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 0.6 },
   note: { paddingVertical: 8 },
+  contactsCard: { borderRadius: 20, padding: 16, gap: 8 },
+  contactsKick: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4, opacity: 0.8 },
+  contactsTitle: { fontFamily: FONT_DISPLAY, fontSize: 19, letterSpacing: 0.6 },
+  contactsBtn: { borderWidth: 1.5, borderRadius: 100, paddingVertical: 9, paddingHorizontal: 14, marginTop: 4 },
+  contactsBtnText: { fontFamily: FONT_DISPLAY, fontSize: 11.5, letterSpacing: 1 },
+  contactsOff: { padding: 14, gap: 10 },
   footerSpinner: { marginTop: 24 },
 });

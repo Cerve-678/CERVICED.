@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **100 files**
+Curated: [[Address Release]] · **102 files**
 - `src/services/databaseService.ts` _(198)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **100 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(18)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
-- … +70 more
+- … +72 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **195 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **206 files**
 - … +176 more
 
 ## Auth
-Curated: [[Contexts]] · **212 files**
+Curated: [[Contexts]] · **213 files**
 - `src/services/databaseService.ts` _(315)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **212 files**
 - `src/services/authProfileSnapshot.ts` _(12)_
 - `supabase/booking_flow_fixes.sql` _(12)_
 - `supabase/delete_account.sql` _(12)_
-- … +182 more
+- … +183 more
 
 ## Becca / AI
 Curated: [[Services]] · **53 files**

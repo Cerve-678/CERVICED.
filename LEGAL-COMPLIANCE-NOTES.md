@@ -849,6 +849,23 @@ user's decisions:
     so. It needs either a Blocked list or a support route.
   - **Dismissing the notice.** It is marked seen only when the client taps
     "Got it" or "Turn it off". Swiping it away hides it for that session.
-  - **The "Findable by phone number" switch is hidden** until finding people
-    from contacts is built, because nothing in the app uses it yet. The
-    server default (on for adults) still applies.
+  - **The "Findable by phone number" switch was hidden** until contacts
+    matching was built. It is back on `feat/follow-people-contacts`, where
+    contacts matching now exists. The server default is still on for adults.
+- **Contacts matching built (`feat/follow-people-contacts`, 2026-11-08).**
+  - iOS `NSContactsUsageDescription`, chosen by the user on 2026-11-08: "Find
+    friends who are already on CERVICED. Your address book is never saved."
+    It gives the reason, which App Store review (guideline 5.1.1) expects. It
+    replaced an earlier line that said "scrambles", which promised more than
+    unsalted hashing gives.
+  - Android requests `READ_CONTACTS` only; `WRITE_CONTACTS` is blocked.
+  - The permission is asked only when the client taps "Allow contacts" in Your
+    circle.
+  - Only hashes leave the phone. At most 3000 numbers are checked per day.
+    Nothing is kept on the device or logged.
+  - **Matches show only the account's own name,** under an "In your
+    contacts" heading. The user decided on 2026-11-08 not to show the name the
+    client saved, so a fake account can't borrow it to look confirmed. Only
+    numbers are read from the address book, never names.
+  - Still open: the App Store privacy label (Contacts), the Play Data safety
+    form, and the Privacy text above.
