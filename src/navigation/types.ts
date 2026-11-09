@@ -204,6 +204,8 @@ export type ProfileStackParamList = {
   AdminMoney: undefined;
   /** Admin accounts only: open a ready-to-use account with no emails. */
   AdminCreateAccount: undefined;
+  /** Admin accounts only: every account opened from Create an account. */
+  AdminCreatedAccounts: undefined;
   Points: undefined;
   ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
@@ -415,6 +417,8 @@ export type ProviderAccountStackParamList = {
   AdminMoney: undefined;
   /** Admin accounts only: open a ready-to-use account with no emails. */
   AdminCreateAccount: undefined;
+  /** Admin accounts only: every account opened from Create an account. */
+  AdminCreatedAccounts: undefined;
   DevSettings: undefined;
 };
 
