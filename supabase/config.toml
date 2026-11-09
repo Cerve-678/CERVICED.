@@ -13,6 +13,11 @@ verify_jwt = true
 [functions.send-account-email]
 verify_jwt = true
 
+# Admins only (checked inside against admin_users): opens a ready-to-use,
+# already-confirmed account without sending any email.
+[functions.admin-create-account]
+verify_jwt = true
+
 # Called by the database (queue_booking_confirmation_email) with the
 # service_role key, never by a user session — the function checks for that key
 # explicitly on top of this.

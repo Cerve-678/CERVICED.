@@ -12338,6 +12338,56 @@ export async function isCervicedAdmin(): Promise<boolean> {
   return data === true;
 }
 
+export interface AdminCreateAccountInput {
+  accountType: 'provider' | 'client';
+  name: string;
+  email: string;
+  phone?: string;
+  /** Required for a provider. */
+  businessName?: string;
+  /** Leave blank to have the server make one up (returned as generatedPassword). */
+  password?: string;
+}
+
+export interface AdminCreateAccountResult {
+  userId: string;
+  email: string;
+  accountType: 'provider' | 'client';
+  /** Only present when the server made the password up. */
+  generatedPassword?: string;
+}
+
+/** The server said no for a reason written to be shown as-is ("An account with this email already exists…"). */
+export class AdminCreateAccountRefused extends Error {}
+
+/**
+ * Admins only: opens an account that is ready to sign in to straight away —
+ * email already confirmed, no email sent. See
+ * supabase/functions/admin-create-account/index.ts.
+ */
+export async function adminCreateAccount(input: AdminCreateAccountInput): Promise<AdminCreateAccountResult> {
+  const { data, error } = await supabase.functions.invoke('admin-create-account', { body: input });
+  if (error) {
+    // 4xx bodies are written to be shown; a 5xx body never is.
+    const res = (error as { context?: Response }).context;
+    if (res && res.status >= 400 && res.status < 500) {
+      const body = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof body?.error === 'string' && body.error) throw new AdminCreateAccountRefused(body.error);
+    }
+    throw error;
+  }
+  const result = data as Partial<AdminCreateAccountResult> | null;
+  if (typeof result?.userId !== 'string' || typeof result.email !== 'string') {
+    throw new Error('admin-create-account returned no account.');
+  }
+  return {
+    userId: result.userId,
+    email: result.email,
+    accountType: result.accountType === 'client' ? 'client' : 'provider',
+    ...(typeof result.generatedPassword === 'string' ? { generatedPassword: result.generatedPassword } : {}),
+  };
+}
+
 /** Failed payouts, money providers owe and open refund requests. Throws for a non-admin. */
 export async function getAdminMoneyOverview(): Promise<AdminMoneyOverview> {
   const { data, error } = await supabase.rpc('admin_money_overview');

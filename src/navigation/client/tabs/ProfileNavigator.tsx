@@ -17,6 +17,7 @@ import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
 import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
 import PointsScreen from '../../../screens/client/PointsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
 import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
@@ -118,6 +119,11 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="AdminMoney"
         component={AdminMoneyScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="AdminCreateAccount"
+        component={AdminCreateAccountScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
