@@ -56,6 +56,13 @@ import type { PortfolioItemWithProvider, DiscoverServiceWithProvider } from '../
 
 // Stores
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
+import { useCollectionsStore } from '../../stores/useCollectionsStore';
+import type { ExploreCollection } from '../../types/collections';
+import { CollectionsRow } from '../../components/collections/CollectionsRow';
+import { OpenCollectionHeader } from '../../components/collections/OpenCollectionHeader';
+import { CollectionOfferBar } from '../../components/collections/CollectionOfferBar';
+import { AddToCollectionSheet } from '../../components/collections/AddToCollectionSheet';
+import { CollectionEditorSheet } from '../../components/collections/CollectionEditorSheet';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
@@ -291,7 +298,11 @@ const ExploreScreen = memo(() => {
     useCallback(() => {
       resetExplorePillTracking();
       setExploreFocused(true);
-      return () => setExploreFocused(false);
+      return () => {
+        setExploreFocused(false);
+        // Don't leave the "Add to a collection" bar waiting for when you come back.
+        useCollectionsStore.getState().dismissHost('explore');
+      };
     }, [setExploreFocused])
   );
 
@@ -365,6 +376,47 @@ const ExploreScreen = memo(() => {
   // on the first visit to Explore instead of piggy-backing on the other.
   // ---------------------------------------------------------------------
   const { user } = useAuth();
+
+  // Collections: folders of hearted looks at the top of Favourites.
+  const collections = useCollectionsStore(s => s.collections);
+  const loadCollections = useCollectionsStore(s => s.load);
+  const rememberPhotos = useCollectionsStore(s => s.rememberPhotos);
+  const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
+  const [collectionEditor, setCollectionEditor] = useState<{ collection?: ExploreCollection } | null>(null);
+  useEffect(() => {
+    void loadCollections(user?.id ?? null);
+  }, [loadCollections, user?.id]);
+  useEffect(() => {
+    if (activeTab !== 'favourites') setOpenCollectionId(null);
+  }, [activeTab]);
+  const openCollection = useMemo(
+    () => collections.find(c => c.id === openCollectionId) ?? null,
+    [collections, openCollectionId],
+  );
+  // The editor reads the live collection, so a rename shows straight away.
+  const editingCollection = useMemo(
+    // Falls back to the snapshot so a just-deleted folder doesn't flip the
+    // sheet to "New collection" while it closes.
+    () => (collectionEditor?.collection
+      ? collections.find(c => c.id === collectionEditor.collection?.id) ?? collectionEditor.collection
+      : undefined),
+    [collectionEditor, collections],
+  );
+  const handleOpenCollection = useCallback((collection: ExploreCollection) => {
+    setOpenCollectionId(collection.id);
+    favouritesGridRef.current?.scrollToTop();
+  }, []);
+  const handleCloseCollection = useCallback(() => setOpenCollectionId(null), []);
+  const handleEditCollection = useCallback(
+    (collection: ExploreCollection) => setCollectionEditor({ collection }),
+    [],
+  );
+  const handleNewCollection = useCallback(() => setCollectionEditor({}), []);
+  const handleCloseEditor = useCallback(() => setCollectionEditor(null), []);
+  const handleCollectionDeleted = useCallback((collectionId: string) => {
+    setOpenCollectionId(current => (current === collectionId ? null : current));
+  }, []);
+
   const [showTour, setShowTour] = useState(false);
   // Explore is a tab screen — it stays mounted after you tap a card through to
   // a provider profile, and CoachMarkTour is a full-screen Modal. Without this
@@ -813,10 +865,29 @@ const ExploreScreen = memo(() => {
   const discoverHasMore =
     discoverVisibleCount < portfolioItems.length ||
     (discoverPageCursors.current.get(selectedFilter)?.hasMore ?? false);
+  // An open collection narrows Favourites to its looks, newest added first.
+  const shownFavouriteItems = useMemo(() => {
+    if (!openCollection) return favouriteItems;
+    const byId = new Map(favouriteItems.map(card => [card.id, card]));
+    return [...openCollection.itemIds]
+      .reverse()
+      .map(id => byId.get(id))
+      .filter((card): card is PortfolioItem => card !== undefined);
+  }, [favouriteItems, openCollection]);
   const visibleFavouriteItems = useMemo(
-    () => favouriteItems.slice(0, favouritesVisibleCount),
-    [favouriteItems, favouritesVisibleCount],
+    () => shownFavouriteItems.slice(0, favouritesVisibleCount),
+    [shownFavouriteItems, favouritesVisibleCount],
   );
+  // Folders draw the saved photos themselves, so hand the store every photo
+  // this screen has resolved.
+  useEffect(() => {
+    rememberPhotos(
+      [...favouriteItems, ...portfolioItems].map(card => ({
+        id: card.id,
+        uri: (card.image as { uri?: string } | undefined)?.uri,
+      })),
+    );
+  }, [favouriteItems, portfolioItems, rememberPhotos]);
 
   // Only measure visible cards whose ratio is a fallback. Upload-time ratios
   // are already trustworthy, and probing every offscreen URL on mount was
@@ -914,15 +985,15 @@ const ExploreScreen = memo(() => {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
       updateBackToTop(event);
-      if (favouritesVisibleCount >= favouriteItems.length || !isNearGridEnd(event)) return;
+      if (favouritesVisibleCount >= shownFavouriteItems.length || !isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - favouritesLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
       favouritesLoadMoreAtRef.current = now;
       setFavouritesVisibleCount(current =>
-        Math.min(favouriteItems.length, current + EXPLORE_BATCH_SIZE),
+        Math.min(shownFavouriteItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [favouriteItems.length, favouritesVisibleCount, updateBackToTop],
+    [shownFavouriteItems.length, favouritesVisibleCount, updateBackToTop],
   );
 
   const handleBackToTop = useCallback(() => {
@@ -1050,6 +1121,7 @@ const ExploreScreen = memo(() => {
         imageHeight={getItemHeight(item, columnWidth)}
         onPress={handleImagePress}
         index={index}
+        offersCollections
         {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
       />
     ),
@@ -1197,20 +1269,49 @@ const ExploreScreen = memo(() => {
               onScrollEndDrag={handleFavouritesScrollSettled}
               onMomentumScrollEnd={handleFavouritesScrollSettled}
               ListHeaderComponent={
-                <View style={styles.gridHeader}>
-                  <Text style={[styles.gridCount, { color: P.sub }]}>
-                    {favouriteItems.length} saved
-                  </Text>
-                </View>
+                openCollection ? (
+                  <OpenCollectionHeader
+                    collection={openCollection}
+                    onBack={handleCloseCollection}
+                    onEdit={() => handleEditCollection(openCollection)}
+                  />
+                ) : (
+                  <View style={styles.gridHeader}>
+                    {/* Bleeds past the grid's side padding so the row can
+                        scroll edge to edge. */}
+                    <View style={styles.collectionsBleed}>
+                      <CollectionsRow
+                        collections={collections}
+                        onOpen={handleOpenCollection}
+                        onEdit={handleEditCollection}
+                        onNew={handleNewCollection}
+                        inset={spacing.lg}
+                      />
+                    </View>
+                    <Text style={[styles.gridCount, { color: P.sub }]}>
+                      {favouriteItems.length} saved
+                    </Text>
+                  </View>
+                )
               }
               ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <TabIcon name="heart" size={48} color={P.sub} />
-                  <Text style={[styles.emptyText, { color: P.text }]}>No favourites yet</Text>
-                  <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                    Tap the heart on any look, provider or service to save it here
-                  </Text>
-                </View>
+                openCollection ? (
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>Nothing in {openCollection.name} yet</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Heart a look, then tap Add to a collection
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>No favourites yet</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Tap the heart on any look, provider or service to save it here
+                    </Text>
+                  </View>
+                )
               }
             />
           )
@@ -1241,7 +1342,17 @@ const ExploreScreen = memo(() => {
         </TouchableOpacity>
       </Animated.View>
 
+      {/* After a heart: offer to put the look in a collection. */}
+      <CollectionOfferBar host="explore" bottom={FLOATING_TAB_BAR_CLEARANCE} />
+
       {/* Modals */}
+      <AddToCollectionSheet host="explore" />
+      <CollectionEditorSheet
+        visible={collectionEditor !== null}
+        collection={editingCollection}
+        onClose={handleCloseEditor}
+        onDeleted={handleCollectionDeleted}
+      />
       <ImageDetailModal
         visible={isDetailVisible}
         item={selectedImage}
@@ -1338,6 +1449,10 @@ const styles = StyleSheet.create({
   // Grid
   gridHeader: {
     paddingBottom: spacing.sm,
+  },
+  collectionsBleed: {
+    marginHorizontal: -spacing.lg,
+    marginBottom: spacing.xs,
   },
   gridCount: {
     fontSize: fonts.body.small,

@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
+import { useCollectionsStore } from '../stores/useCollectionsStore';
 import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import { dimensions } from '../constants/PlatformDimensions';
@@ -38,9 +39,12 @@ interface PortfolioCardProps {
   // Every other card gets neither and is unaffected.
   heartRef?: React.RefObject<ViewInstance | null>;
   priceRef?: React.RefObject<ViewInstance | null>;
+  // After a heart, slide up Explore's "Add to a collection" bar. Only the
+  // Explore grid draws that bar, so other screens leave this off.
+  offersCollections?: boolean;
 }
 
-const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef }: PortfolioCardProps) => {
+const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef, offersCollections = false }: PortfolioCardProps) => {
   const { theme, palette: P } = useTheme();
   // Blue-grey secondary — the highlight for the saved-heart and category chip
   // over photos. Hat-aware via palette; on the client hat this is the blue-grey
@@ -85,8 +89,9 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
       unsavePortfolioItem(item.id);
     } else {
       savePortfolioItem(item.id);
+      if (offersCollections) useCollectionsStore.getState().offerFor(item.id, 'explore');
     }
-  }, [isSaved, item.id, savePortfolioItem, unsavePortfolioItem]);
+  }, [isSaved, item.id, offersCollections, savePortfolioItem, unsavePortfolioItem]);
 
   return (
     <Animated.View
@@ -214,7 +219,8 @@ export const PortfolioCard = React.memo(PortfolioCardInner, (prev, next) => {
     // target moves to a different card — which must re-render both the card
     // losing the refs and the one gaining them.
     prev.heartRef === next.heartRef &&
-    prev.priceRef === next.priceRef
+    prev.priceRef === next.priceRef &&
+    prev.offersCollections === next.offersCollections
   );
 });
 

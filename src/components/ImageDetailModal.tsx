@@ -21,6 +21,7 @@ import { Image } from 'expo-image';
 import { LogoCircle } from './FramedLogo';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import {
   SafeAreaProvider,
@@ -28,6 +29,9 @@ import {
 } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
+import { useCollectionsStore } from '../stores/useCollectionsStore';
+import { CollectionOfferBar } from './collections/CollectionOfferBar';
+import { AddToCollectionSheet } from './collections/AddToCollectionSheet';
 import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import Icon from './IconLibrary';
@@ -143,6 +147,12 @@ export const ImageDetailModal = ({
     }
   };
 
+  // The bar and folder sheet live inside this modal; don't leave either open
+  // behind it once it's gone.
+  useEffect(() => {
+    if (!visible) useCollectionsStore.getState().dismissHost('imageDetail');
+  }, [visible]);
+
   if (!item) return null;
 
   const hasProvider = !!item.providerName;
@@ -157,6 +167,7 @@ export const ImageDetailModal = ({
       unsavePortfolioItem(savedItemId);
     } else {
       savePortfolioItem(savedItemId);
+      useCollectionsStore.getState().offerFor(savedItemId, 'imageDetail');
     }
   };
 
@@ -520,6 +531,14 @@ function ModalBody({
 
   const activeSavedItemId = savedCarouselImageId(item, activeImageIndex);
   const isSaved = isPortfolioSaved(activeSavedItemId);
+  const inACollection = useCollectionsStore(s =>
+    s.collections.some(c => c.itemIds.includes(activeSavedItemId)),
+  );
+  // Folders show the photo that was saved, wherever they're drawn.
+  const rememberActivePhoto = () => {
+    const uri = (images[activeImageIndex] as { uri?: string } | undefined)?.uri;
+    useCollectionsStore.getState().rememberPhotos([{ id: activeSavedItemId, uri }]);
+  };
 
   const handleSheetScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -617,9 +636,12 @@ function ModalBody({
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
             () => {},
           );
+          rememberActivePhoto();
           handleBookmark(activeSavedItemId);
         }}
         activeOpacity={0.65}
+        accessibilityRole="button"
+        accessibilityLabel={isSaved ? 'Remove from Favourites' : 'Save to Favourites'}
       >
         <BlurView
           intensity={60}
@@ -635,6 +657,35 @@ function ModalBody({
           />
         </BlurView>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.collectionsButton, { top: insets.top + 12 }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+            () => {},
+          );
+          rememberActivePhoto();
+          useCollectionsStore.getState().openSheet(activeSavedItemId, 'imageDetail');
+        }}
+        activeOpacity={0.65}
+        accessibilityRole="button"
+        accessibilityLabel="Add to a collection"
+      >
+        <BlurView
+          intensity={60}
+          tint={isDarkMode ? 'dark' : 'light'}
+          style={styles.iconBlur}
+        >
+          <Ionicons
+            name={inACollection ? 'folder' : 'folder-outline'}
+            size={16}
+            color="#FFFFFF"
+          />
+        </BlurView>
+      </TouchableOpacity>
+
+      <CollectionOfferBar host="imageDetail" bottom={insets.bottom + 96} />
+      <AddToCollectionSheet host="imageDetail" />
 
       {/* Pagination dots — pinned to a constant screen position, a sibling
           of the ScrollView rather than inside it, so they're always in the
@@ -1076,6 +1127,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 12,
     left: 12,
+    zIndex: 10,
+  },
+  collectionsButton: {
+    position: 'absolute',
+    top: 12,
+    left: 54,
     zIndex: 10,
   },
   infoCard: {

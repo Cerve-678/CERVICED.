@@ -85,6 +85,11 @@ import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
 import type { AdminDashboardOverview, AdminDashboardPeriod } from "../types/adminDashboard";
 import type { ProviderAchievements } from "../types/achievements";
+import {
+  COLLECTION_COLORS,
+  type CollectionColor,
+  type ExploreCollection,
+} from "../types/collections";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
@@ -8338,6 +8343,146 @@ export async function unsavePortfolioItemFromDb(itemId: string): Promise<void> {
     p_user_id: user.id,
     p_item_id: itemId,
   });
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────
+// EXPLORE COLLECTIONS
+// Folders of hearted Explore photos. RLS keeps every row owner-only, only
+// accepts an item that's in the owner's saved_portfolio, and a trigger takes
+// an un-hearted photo out of every collection — so none of that is
+// re-checked here.
+// ─────────────────────────────────────────────────────────
+
+const COLLECTIONS_QUERY_LIMIT = 50; // the database caps an account at 50
+const COLLECTION_ITEMS_QUERY_LIMIT = 2000;
+
+interface ExploreCollectionRow {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+function toCollectionColor(value: string): CollectionColor {
+  return (COLLECTION_COLORS as readonly string[]).includes(value)
+    ? (value as CollectionColor)
+    : "pink";
+}
+
+function mapCollectionRow(
+  row: ExploreCollectionRow,
+  itemIds: string[],
+): ExploreCollection {
+  return {
+    id: row.id,
+    name: row.name,
+    color: toCollectionColor(row.color),
+    createdAt: row.created_at,
+    itemIds,
+  };
+}
+
+/** The signed-in account's collections, oldest first, with their item ids. */
+export async function getMyCollections(): Promise<ExploreCollection[]> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) return [];
+  const { data: rows, error } = await supabase
+    .from("explore_collections")
+    .select("id, name, color, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(COLLECTIONS_QUERY_LIMIT);
+  if (error) throw error;
+  const collections = (rows ?? []) as ExploreCollectionRow[];
+  if (collections.length === 0) return [];
+
+  const { data: items, error: itemsError } = await supabase
+    .from("explore_collection_items")
+    .select("collection_id, item_id, added_at")
+    .in(
+      "collection_id",
+      collections.map((c) => c.id),
+    )
+    .order("added_at", { ascending: true })
+    .limit(COLLECTION_ITEMS_QUERY_LIMIT);
+  if (itemsError) throw itemsError;
+
+  const byCollection = new Map<string, string[]>();
+  for (const item of (items ?? []) as { collection_id: string; item_id: string }[]) {
+    const list = byCollection.get(item.collection_id) ?? [];
+    list.push(item.item_id);
+    byCollection.set(item.collection_id, list);
+  }
+  return collections.map((row) =>
+    mapCollectionRow(row, byCollection.get(row.id) ?? []),
+  );
+}
+
+export async function createCollection(
+  name: string,
+  color: CollectionColor,
+): Promise<ExploreCollection> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) throw new Error("Sign in to make a collection");
+  const { data, error } = await supabase
+    .from("explore_collections")
+    .insert({ user_id: user.id, name: name.trim(), color })
+    .select("id, name, color, created_at")
+    .single();
+  if (error) throw error;
+  return mapCollectionRow(data as ExploreCollectionRow, []);
+}
+
+export async function updateCollection(
+  collectionId: string,
+  changes: { name?: string; color?: CollectionColor },
+): Promise<void> {
+  const patch: { name?: string; color?: CollectionColor } = {};
+  if (changes.name !== undefined) patch.name = changes.name.trim();
+  if (changes.color !== undefined) patch.color = changes.color;
+  const { error } = await supabase
+    .from("explore_collections")
+    .update(patch)
+    .eq("id", collectionId);
+  if (error) throw error;
+}
+
+/** Deletes the folder only — its photos stay in Favourites. */
+export async function deleteCollection(collectionId: string): Promise<void> {
+  const { error } = await supabase
+    .from("explore_collections")
+    .delete()
+    .eq("id", collectionId);
+  if (error) throw error;
+}
+
+export async function addItemToCollection(
+  collectionId: string,
+  itemId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("explore_collection_items")
+    .upsert(
+      { collection_id: collectionId, item_id: itemId },
+      { onConflict: "collection_id,item_id", ignoreDuplicates: true },
+    );
+  if (error) throw error;
+}
+
+export async function removeItemFromCollection(
+  collectionId: string,
+  itemId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("explore_collection_items")
+    .delete()
+    .eq("collection_id", collectionId)
+    .eq("item_id", itemId);
   if (error) throw error;
 }
 
