@@ -197,7 +197,16 @@ function DeleteSwipeAction({
 
 // Types whose whole point is "go and look at this booking" — the row shows the
 // action itself. Every row opens the full message when tapped.
-const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'booking_pending']);
+const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'booking_pending', 'follow_request']);
+
+/**
+ * Whether a notification offers its button. A follow request keeps it after
+ * the request is answered: the trigger clears is_actionable then, but Your
+ * circle is still where you follow that person back, and without the button
+ * the tap only opened the message and went nowhere.
+ */
+const opensSomewhere = (n: { type: string; actionable: boolean }): boolean =>
+  n.actionable || n.type === 'follow_request';
 // Providers need a direct route to act on an incoming booking and to inspect a
 // cancellation. Clients keep their existing notification treatment, because a
 // provider cancellation is informative rather than a client-side action.
@@ -1028,7 +1037,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const actionLabelFor = (item: Notification) =>
     item.type === 'schedule_fully_booked' && !item.certificate
       ? 'Open My Profile'
-      : getActionButtonText(item.type);
+      // Answered already: nothing to accept, but Your circle is still the place.
+      : item.type === 'follow_request' && !item.actionable
+        ? 'Open Your Circle'
+        : getActionButtonText(item.type);
 
   // Warm shadow on an unread row; read rows have none.
   const liftedShadow = {
@@ -1047,7 +1059,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const renderNotification = ({ item }: { item: Notification }) => {
     const heading = dayHeadings.get(item.id);
     const amount = notificationAmount(item.type, item.title, item.message);
-    const showInlineAction = item.actionable && (
+    const showInlineAction = opensSomewhere(item) && (
       INLINE_ACTION_TYPES.has(item.type)
       || (isProvider && PROVIDER_INLINE_BOOKING_ACTION_TYPES.has(item.type))
     );
@@ -1332,7 +1344,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                       <Text style={[textStyles.body, styles.certificateMessage, { color: quietText }]}>
                         {selectedNotification.message}
                       </Text>
-                      {selectedNotification.actionable && (
+                      {opensSomewhere(selectedNotification) && (
                         <TouchableOpacity
                           style={[styles.popupActionButton, { backgroundColor: P.accent }]}
                           onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
@@ -1400,7 +1412,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                               {formatTimestamp(selectedNotification.timestamp)}
                             </Text>
 
-                            {selectedNotification.actionable && (
+                            {opensSomewhere(selectedNotification) && (
                               <TouchableOpacity
                                 style={[
                                   styles.popupActionButton,
