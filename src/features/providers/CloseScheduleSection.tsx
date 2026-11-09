@@ -25,16 +25,14 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useFocusEffect } from '@react-navigation/native';
 import {
   closeMySchedule,
-  getMyProviderProfile,
   getMyScheduleClosure,
   getProviderBookings,
-  mergeProviderAutomationSettings,
   reopenMySchedule,
 } from '../../services/databaseService';
 import type { MyScheduleClosure } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
 import { isDarkColor } from '../../constants/providerThemes';
-import { canAutoCloseWhenFull, closureReasonForClient, CLOSURE_REASONS, type ClosureReason } from './scheduleClosure';
+import { closureReasonForClient, CLOSURE_REASONS, type ClosureReason } from './scheduleClosure';
 import {
   dateToYMD,
   formatLongDateNoYear,
@@ -106,8 +104,6 @@ export default function CloseScheduleSection({
   const [loaded, setLoaded] = useState(lastClosure.has(providerId));
   const [reason, setReason] = useState<ClosureReason | null>(null);
   const [tellClients, setTellClients] = useState(false);
-  const [autoClose, setAutoClose] = useState(false);
-  const [waitlistEnabled, setWaitlistEnabled] = useState<boolean | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -176,22 +172,7 @@ export default function CloseScheduleSection({
     setTellClients(false);
     setSheetVisible(true);
     loadUpcoming();
-    getMyProviderProfile()
-      .then((profile) => {
-        setAutoClose(profile?.automation_settings?.autoCloseWhenFull === true);
-        setWaitlistEnabled(profile?.automation_settings?.waitlistEnabled);
-      })
-      .catch((err) => logger.error('[Schedule] close settings load failed:', err));
   }, [loadUpcoming]);
-
-  const toggleAutoClose = useCallback((next: boolean) => {
-    setAutoClose(next);
-    mergeProviderAutomationSettings(providerId, { autoCloseWhenFull: next }).catch((err) => {
-      logger.error('[Schedule] auto close save failed:', err);
-      setAutoClose(!next);
-      showToast("Couldn't save that. Please try again.", 'error');
-    });
-  }, [providerId, showToast]);
 
   const handleClose = useCallback(async () => {
     setBusy(true);
@@ -381,24 +362,6 @@ export default function CloseScheduleSection({
                 />
               )}
               <Text style={[st.hint, { color: P.sub }]}>You can reopen any time.</Text>
-
-              <Text style={[st.sectionLabel, st.sectionGap, { color: P.sub }]}>WHEN YOU FILL UP</Text>
-              <View style={[st.switchRow, { backgroundColor: P.card, borderColor: P.border }]}>
-                <View style={st.switchText}>
-                  <Text style={[st.optionText, { color: P.text }]}>Close by itself when I'm fully booked</Text>
-                  <Text style={[st.hint, { color: P.sub }]}>
-                    {canAutoCloseWhenFull(waitlistEnabled)
-                      ? "A slot that frees up won't be bookable until you reopen, or until your next release day if you have one."
-                      : 'For when you don\'t use a waitlist. Turn your waitlist off in Automations to use this.'}
-                  </Text>
-                </View>
-                <Switch
-                  value={autoClose && canAutoCloseWhenFull(waitlistEnabled)}
-                  onValueChange={toggleAutoClose}
-                  disabled={!canAutoCloseWhenFull(waitlistEnabled)}
-                  trackColor={{ true: P.accent }}
-                />
-              </View>
 
               <Text style={[st.sectionLabel, st.sectionGap, { color: P.sub }]}>YOUR UPCOMING BOOKINGS</Text>
               {upcoming === null ? (

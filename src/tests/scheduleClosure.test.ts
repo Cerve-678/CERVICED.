@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { canAutoCloseWhenFull, closureReasonForClient, CLOSURE_REASONS } from '../features/providers/scheduleClosure';
+import { canAutoCloseWhenFull, chooseFullyBookedResponse, closureReasonForClient, CLOSURE_REASONS } from '../features/providers/scheduleClosure';
 
 it('tells a client the reason in plain words, and nothing for an unknown one', () => {
   expect(closureReasonForClient('holiday')).toBe('On holiday');
@@ -13,6 +13,14 @@ it('only closes automatically once the waitlist is explicitly off', () => {
   expect(canAutoCloseWhenFull(true)).toBe(false);
   expect(canAutoCloseWhenFull(undefined)).toBe(false);
   expect(canAutoCloseWhenFull(null)).toBe(false);
+});
+
+it('keeps both fully-booked choices available and turns off the other when one is chosen', () => {
+  const initial = { waitlistEnabled: true, autoCloseWhenFull: false, autoAcceptWaitlist: true };
+  const closed = chooseFullyBookedResponse(initial, 'autoCloseWhenFull', true);
+  expect(closed).toEqual({ ...initial, waitlistEnabled: false, autoCloseWhenFull: true });
+  expect(chooseFullyBookedResponse(closed, 'waitlistEnabled', true)).toEqual(initial);
+  expect(chooseFullyBookedResponse(closed, 'autoCloseWhenFull', false)).toEqual({ ...closed, autoCloseWhenFull: false });
 });
 
 const migration = readFileSync(

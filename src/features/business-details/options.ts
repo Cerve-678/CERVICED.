@@ -141,29 +141,11 @@ export const STYLE_AESTHETIC_MAP: Record<string, string[]> = {
   OTHER:      STYLE_OPTS,
 };
 
-/** The generic products hint, used for OTHER-category and unknown values. */
-export const PRODUCTS_PLACEHOLDER_DEFAULT = 'e.g. the brands and products you work with...';
-
-/** Category-tailored hint for the free-text "Products & brands you use" field. */
-export const PRODUCTS_PLACEHOLDER_MAP: Record<string, string> = {
-  HAIR:       "e.g. Olaplex, KÉRASTASE, Redken, Wella, L'Oréal...",
-  NAILS:      'e.g. The GelBottle, Mylee, OPI, Gelish, CND...',
-  LASHES:     'e.g. Lash FX, London Lash, SL Lashes, Sugarlash...',
-  BROWS:      'e.g. Brow Code, HD Brows, Everlasting Brows, henna...',
-  MUA:        'e.g. Charlotte Tilbury, MAC, NARS, Huda Beauty...',
-  AESTHETICS: 'e.g. Dermalogica, ZO Skin Health, Environ, Obagi...',
-  OTHER:      PRODUCTS_PLACEHOLDER_DEFAULT,
-};
-
 /** Style-aesthetic options for a category, falling back to the generic list. */
 export function styleAestheticOptions(serviceCategory: string | null | undefined): string[] {
   return (serviceCategory ? STYLE_AESTHETIC_MAP[serviceCategory] : undefined) ?? STYLE_OPTS;
 }
 
-/** Products placeholder for a category, falling back to the generic hint. */
-export function productsPlaceholder(serviceCategory: string | null | undefined): string {
-  return (serviceCategory ? PRODUCTS_PLACEHOLDER_MAP[serviceCategory] : undefined) ?? PRODUCTS_PLACEHOLDER_DEFAULT;
-}
 export const ACCESSIBILITY_OPTS = ['Wheelchair accessible', 'Parking available', 'Ground floor access', 'Home visits for mobility', 'Step-free entrance'];
 
 // NOTE: there is no SETTING_OPTS list here on purpose. The old "Where You

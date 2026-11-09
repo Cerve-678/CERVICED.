@@ -188,9 +188,13 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
   const remainingBalance = Math.max(0, payment.remainingBalance);
   const providerName = booking.providerName?.trim() || 'your provider';
 
-  // Paid (what left the card, fee included) and Due at Appointment. Nothing else.
+  // Paid (what left the card, fee included) and Due at Appointment, with a
+  // paid deposit listed first. The deposit is part of the price, so it sits
+  // here under Total, never in the lines above it; Paid says it includes the
+  // fee whenever the deposit is beside it, so the two don't look contradictory.
   const paymentRows: PaymentRow[] = [
-    { label: 'Paid', amount: payment.paidAmount, strong: remainingBalance <= 0 },
+    ...(payment.depositPaid > 0 ? [{ label: 'Deposit paid', amount: payment.depositPaid }] : []),
+    { label: payment.depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', amount: payment.paidAmount, strong: remainingBalance <= 0 },
     { label: 'Due at Appointment', amount: remainingBalance, strong: remainingBalance > 0 },
   ];
 

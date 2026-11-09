@@ -29,9 +29,9 @@ and it should be the same number in both places.
 | # | Deadline | Applies to | What happens when it passes | Enforced by | Told to the user? |
 |---|---|---|---|---|---|
 | 1 | **48 hours** from the booking request, or the appointment time, whichever first | A provider who hasn't accepted a booking request | Booking is **cancelled** | `process_expire_stale_pending_bookings()`, cron every 30 min | ❌ Nowhere |
-| 2 | The **provider's own reschedule-notice setting** (min 24h), capped at the start of the appointment day (min 4h, never past the appointment time) | A provider who hasn't answered a reschedule request | Request **expires**; booking stays as originally scheduled | `process_expire_stale_reschedule_requests()`, cron `:17`/`:47` | ⚠️ Only after the fact, by notification |
-| 3 | Same window as #2 | A client who hasn't picked from the dates their provider offered | Request **expires**; offered times released; both sides told | as #2 | ⚠️ Only after the fact |
-| 4 | **10 minutes** | A client at checkout, between reserving times and paying | Held times are released to everyone else | `hold_cart_booking_slots()` TTL + `expire_cart_holds()` | ⚠️ Partially — a countdown is shown at checkout |
+| 2 | **45 minutes** from when it became their turn (never past the appointment time), since 2026-11-08 | Whoever hasn't answered a reschedule request or offer (provider or client) | Request **expires**; booking stays as originally scheduled; both sides notified | `process_expire_stale_reschedule_requests()` + `reschedule_reply_window()`, cron every minute | ✅ Stated in the notification and on both booking screens |
+| 3 | Same window as #2: **45 minutes** from when the provider offered the times | A client who hasn't picked from the times their provider offered (whoever started the reschedule) | Offer **expires**; offered times released; booking stays as originally scheduled; both sides told | as #2 | ✅ Stated in the offer notification and on the booking screen |
+| 4 | **5 minutes** (was 10 until 2026-11-08) | A client at checkout, between reserving times and paying | Held times are released to everyone else | `prepare_checkout()` / `hold_cart_booking_slots()` TTL + `expire_cart_holds()`, cron every minute | ⚠️ Partially — a countdown is shown at checkout |
 | 5 | **15 minutes** (was 3 hours until 2026-08-27) | A client offered a slot from a waitlist | Hold lapses, slot passes to the next person in the queue | `expire_waitlist_holds()`, cron every minute | ✅ In the offer notification |
 | 6 | The appointment's **end time** (or start + 1h where no end time is recorded) | Any confirmed/in-progress booking | Automatically marked **completed** | `process_auto_complete_bookings()`, cron every 30 min | ❌ Nowhere |
 | 7 | The **provider's cancellation-notice setting** (24h / 48h / 72h) | A client wanting to cancel | Cancellation is **refused** | `cancel_own_booking()` | ✅ Shown on the provider's profile and at booking |
@@ -67,25 +67,34 @@ behaviour rather than trusting either.
 flow — a booking request that took a deposit and is then auto-cancelled has no
 refund path in the app today (see Part C).*
 
-### B2. Provider response to a reschedule request
+### B2. Answering a request to move an appointment
 
-> If you ask to move an appointment, your provider has a limited time to
-> respond — the same amount of notice they ask you to give when rescheduling,
-> and never later than the start of your appointment day. If they do not
-> respond in time, your request expires and **your original appointment stands
-> unchanged**. We will tell you when this happens.
+> When a client asks to move an appointment, the provider has **45 minutes**
+> to reply with new times. If the provider doesn't reply within 45 minutes, or
+> the appointment starts first, the request expires and **the original
+> appointment stands unchanged**. When the request is sent, we tell both the
+> client and the provider how long there is to reply, and we tell both of them
+> again if it expires.
 
-*Describes #2. Deliberately doesn't quote a fixed number of hours, because the
-window is derived from each provider's own setting.*
+*Describes #2. Revised 2026-11-08 (was: "the same amount of notice they ask you
+to give when rescheduling"). It now quotes a number because the window is one
+fixed value for everyone, `reschedule_reply_window()`, no longer derived from
+each provider's settings. If that function changes, this must change with it.*
 
-### B3. Your response to dates a provider offers
+### B3. Answering new times a provider offers
 
-> If your provider offers you alternative times, those times are held for you
-> until the same deadline. If you have not chosen one by then, the offer
-> expires, the times are released, and your original appointment stands
-> unchanged.
+> When a provider offers new times for an appointment, whether the client asked
+> to move it or the provider did, the client has **45 minutes** to choose one.
+> If the client doesn't choose within 45 minutes, or the appointment starts
+> first, the offer expires, the offered times are released, and **the original
+> appointment stands unchanged**. We tell both the client and the provider how
+> long there is to choose when the times are offered, and we tell both of them
+> again if the offer expires.
 
-*Describes #3.*
+*Describes #3. Revised 2026-11-08 (was: "held for you until the same
+deadline"). Expiry never cancels the booking, even when the provider set the
+offer to cancel the booking if the client declines: that only happens on an
+actual decline (`decline_reschedule_offer()`), not on silence.*
 
 ### B4. Times held during checkout and from a waitlist
 
@@ -124,7 +133,10 @@ provider-set policies — included so all deadlines appear in one place.*
 
 Three things a lawyer should see, because no drafting resolves them:
 
-1. **Reschedule expiry can consume a client's cancellation right.** A client
+1. **Reschedule expiry can consume a client's cancellation right.**
+   *Much smaller since 2026-11-08:* a request now expires within 45 minutes,
+   so this only bites a client who asks within 45 minutes of their
+   cancellation window closing. The original description follows. A client
    who asks to reschedule while they still have the right to cancel can find
    that right gone by the time the provider's silence resolves — the two
    windows are unrelated and nothing connects them. Full worked examples in
@@ -164,3 +176,8 @@ Three things a lawyer should see, because no drafting resolves them:
    automatically from silence?
 5. Must deadlines be stated as fixed numbers, or is "the notice period shown on
    the provider's profile" sufficient where the value is per-provider?
+6. Is **45 minutes** to answer a reschedule (B2/B3) a fair term for a consumer?
+   A client who is asleep, at work or driving, or a provider who is
+   mid-appointment, can miss it without meaning to. The booking falls back to
+   the original time rather than being lost, which may be what makes it fair,
+   but that is a judgement for the lawyer, not engineering.

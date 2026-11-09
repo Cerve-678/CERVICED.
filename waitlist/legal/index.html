@@ -97,9 +97,25 @@ td:first-child{ font-weight:650; min-width:8.5em }
 .policy-foot{ margin-top:30px }
 .policy-foot a{ font-family:var(--label); letter-spacing:.08em; text-transform:uppercase; font-size:12.5px; font-weight:700; text-decoration:none }
 
-.site-foot .wrap{ padding-block:32px 40px; font-size:14px; color:var(--muted); display:flex; flex-direction:column; gap:6px }
-.site-foot .wordmark{ font-size:17px }
-.site-foot{ background:var(--band); border-top:1px solid var(--line) }
+.topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px 24px; flex-wrap:wrap }
+.brandline a.wordmark{ text-decoration:none }
+.sitenav{ display:flex; flex-wrap:wrap; gap:4px 22px; font-family:var(--label); font-size:13px; letter-spacing:.08em; text-transform:uppercase; font-weight:700 }
+.sitenav a{ color:var(--ink); text-decoration:none; padding:4px 0 }
+.sitenav a:hover{ color:var(--accent) }
+
+.site-foot{ background:var(--band); border-top:1px solid var(--line); font-size:14px; color:var(--muted) }
+.site-foot > .wrap{ padding-block:44px 32px }
+.foot-cols{ display:grid; grid-template-columns:1.3fr repeat(3, 1fr); gap:32px }
+.foot-brand{ display:flex; flex-direction:column; gap:10px; align-items:flex-start }
+.foot-brand p{ margin:0; max-width:30ch }
+.site-foot .wordmark{ font-size:17px; text-decoration:none }
+.site-foot h2{ font-family:var(--label); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink); margin:0 0 12px; font-weight:700 }
+.site-foot ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px }
+.site-foot a{ color:var(--muted); text-decoration:none }
+.site-foot a:hover{ color:var(--accent); text-decoration:underline }
+.foot-base{ margin-top:36px; padding-top:18px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px 24px; font-size:13px }
+@media (max-width:880px){ .foot-cols{ grid-template-columns:1fr 1fr } .foot-brand{ grid-column:1 / -1 } }
+@media (max-width:420px){ .foot-cols{ grid-template-columns:1fr } }
 
 @media (max-width: 900px){
   .layout{ grid-template-columns:minmax(0,1fr); gap:36px; padding-block:28px 64px }
@@ -113,11 +129,19 @@ td:first-child{ font-weight:650; min-width:8.5em }
 <body>
 <header class="band" id="top">
   <div class="wrap masthead">
-    <div class="brandline"><span class="wordmark">CERVICED</span><span class="sep" aria-hidden="true"></span><span>Legal</span></div>
+    <div class="topbar">
+      <div class="brandline"><a class="wordmark" href="/">CERVICED</a><span class="sep" aria-hidden="true"></span><span>Legal</span></div>
+      <nav class="sitenav" aria-label="Main">
+        <a href="/">Home</a>
+        <a href="/about">About us</a>
+        <a href="#safety">Health &amp; safety</a>
+        <a href="/#join">Join the waitlist</a>
+      </nav>
+    </div>
     <h1>Terms &amp; policies</h1>
     <p class="lede">The rules and promises that apply when you use Cerviced, whether you book treatments or offer them. Each policy opens with a short summary, followed by the full text.</p>
     <dl class="facts">
-      <div><dt>Last updated</dt><dd>19 October 2026</dd></div>
+      <div><dt>Last updated</dt><dd>8 November 2026</dd></div>
       <div><dt>Questions</dt><dd><a href="mailto:support@cerviced.co">support@cerviced.co</a></dd></div>
       <div><dt>Operated by</dt><dd>Cerviced Ltd, registered in England and Wales</dd></div>
     </dl>
@@ -223,7 +247,7 @@ td:first-child{ font-weight:650; min-width:8.5em }
       </article>
       <article class="clause" id="terms-12">
         <h3><span class="n">12</span>Rescheduling</h3>
-        <p>You can ask to move a booking from the booking itself. The provider can accept your new time or suggest another, and providers can also suggest a new time to you. A request that isn't answered in time expires, and your original booking stays as it was. Providers may limit how close to the appointment you can reschedule; this is shown in their policy.</p>
+        <p>You can ask to move a booking from the booking itself. The provider can accept your new time or suggest another, and providers can also suggest a new time to you. Whoever needs to answer has 45 minutes to do so: the provider when you ask to move a booking, and you when a provider offers new times. If there's no answer within 45 minutes, or the appointment starts first, the request expires and your original booking stays as it was. We tell both of you how long there is to answer when the request is sent, and again if it expires. Providers may limit how close to the appointment you can reschedule; this is shown in their policy.</p>
       </article>
       <article class="clause" id="terms-13">
         <h3><span class="n">13</span>Cancellations by You</h3>
@@ -417,7 +441,7 @@ td:first-child{ font-weight:650; min-width:8.5em }
           <li>Respond to booking requests before they expire. If a request expires, the client is refunded in full.</li>
           <li>Honour every booking you accept, at the price and on the terms shown when the client booked.</li>
           <li>If you have to cancel, do it as early as you can. The client is refunded in full automatically, including the service fee.</li>
-          <li>Clients can ask to reschedule. You can accept, suggest another time, or let the request expire, in which case the original booking stands.</li>
+          <li>Clients can ask to reschedule, and you can offer a client new times. Whoever needs to answer has 45 minutes: you when a client asks, the client when you offer times. If there's no answer within 45 minutes, or the appointment starts first, the request expires and the original booking stands. We tell both of you how long there is when the request is sent, and again if it expires.</li>
         </ul>
       </article>
 
@@ -820,7 +844,7 @@ td:first-child{ font-weight:650; min-width:8.5em }
 
       <article class="clause" id="fees-6">
         <h3><span class="n">6</span>Rescheduling</h3>
-        <p>You can ask to move a booking from the booking itself. The provider can accept your new time or suggest another, and providers can also suggest a new time to you. A request that isn't answered in time expires, and your original booking stays as it was. Providers may limit how close to the appointment you can reschedule. This is shown in their policy.</p>
+        <p>You can ask to move a booking from the booking itself. The provider can accept your new time or suggest another, and providers can also suggest a new time to you. Whoever needs to answer has 45 minutes to do so: the provider when you ask to move a booking, and you when a provider offers new times. If there's no answer within 45 minutes, or the appointment starts first, the request expires and your original booking stays as it was. We tell both of you how long there is to answer when the request is sent, and again if it expires. Providers may limit how close to the appointment you can reschedule. This is shown in their policy.</p>
       </article>
 
       <article class="clause" id="fees-7">
@@ -1174,9 +1198,47 @@ td:first-child{ font-weight:650; min-width:8.5em }
 
 <footer class="site-foot">
   <div class="wrap">
-    <span class="wordmark">CERVICED</span>
-    <span>Cerviced Ltd, registered in England and Wales.</span>
-    <span>Contact: <a href="mailto:support@cerviced.co">support@cerviced.co</a></span>
+    <div class="foot-cols">
+      <div class="foot-brand">
+        <a class="wordmark" href="/">CERVICED</a>
+        <p>Booking for independent beauty &amp; wellness providers across the UK.</p>
+        <a href="mailto:support@cerviced.co">support@cerviced.co</a>
+      </div>
+      <nav aria-labelledby="foot-cerviced">
+        <h2 id="foot-cerviced">Cerviced</h2>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/about">About us</a></li>
+          <li><a href="/#for-you">For providers &amp; clients</a></li>
+          <li><a href="/#join">Join the waitlist</a></li>
+          <li><a href="mailto:support@cerviced.co">Contact us</a></li>
+        </ul>
+      </nav>
+      <nav aria-labelledby="foot-legal">
+        <h2 id="foot-legal">Legal</h2>
+        <ul>
+          <li><a href="#terms">Terms &amp; Conditions</a></li>
+          <li><a href="#provider-terms">Provider Terms of Business</a></li>
+          <li><a href="#privacy">Privacy Policy</a></li>
+          <li><a href="#cookies">Cookies</a></li>
+          <li><a href="#fees">Fees, cancellations &amp; refunds</a></li>
+        </ul>
+      </nav>
+      <nav aria-labelledby="foot-safety">
+        <h2 id="foot-safety">Safety &amp; community</h2>
+        <ul>
+          <li><a href="#safety">Health &amp; Safety</a></li>
+          <li><a href="#providers">Provider Standards</a></li>
+          <li><a href="#community">Community Guidelines</a></li>
+          <li><a href="#reviews">Reviews Policy</a></li>
+          <li><a href="#complaints">Complaints &amp; reporting</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="foot-base">
+      <span>© 2026 Cerviced Ltd, registered in England and Wales.</span>
+      <span>United Kingdom</span>
+    </div>
   </div>
 </footer>
 

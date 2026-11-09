@@ -2018,7 +2018,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
    * back early was the payment sheet's own × button. Every other way out of
    * a checkout — switching tabs, a tapped notification, the screen
    * unmounting, a dev reload — left the row sitting there for the full
-   * 10-minute TTL, and since get_provider_busy_spans counts held slots as
+   * 5-minute TTL, and since get_provider_busy_spans counts held slots as
    * busy, the client who placed the hold was then told their own slot was
    * unavailable when they went back to pick it again. That is the bug this
    * closes: two abandoned holds were reproduced live on 2026-09-07
@@ -4628,7 +4628,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 onClose={() => {
                   // User backed out via the × close button without paying —
                   // free the held slots immediately rather than making the
-                  // next client wait out the 10-minute TTL. Best-effort:
+                  // next client wait out the 5-minute TTL. Best-effort:
                   // releaseCartCheckoutSlots never throws.
                   if (holdBatchId) {
                     releaseCartCheckoutSlots(holdBatchId);

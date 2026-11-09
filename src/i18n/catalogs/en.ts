@@ -146,7 +146,7 @@ export const en = {
 
   'profile.section.appInfo': 'App Info & Legal',
   'profile.appInfo.about.title': 'About Cerviced',
-  'profile.appInfo.about.sub': 'Mission, version',
+  'profile.appInfo.about.sub': 'Who we are and what we build',
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
   'profile.appInfo.terms.title': 'Terms & Conditions',
   'profile.appInfo.terms.sub': 'Legal info',
@@ -240,7 +240,7 @@ export const en = {
 
   'providerAccount.section.appInfo': 'APP INFO & LEGAL',
   'providerAccount.appInfo.about.title': 'About Cerviced',
-  'providerAccount.appInfo.about.sub': 'Mission, version',
+  'providerAccount.appInfo.about.sub': 'Who we are and what we build',
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
   'providerAccount.appInfo.terms.title': 'Terms & Conditions',
   'providerAccount.appInfo.terms.sub': 'Legal info',
