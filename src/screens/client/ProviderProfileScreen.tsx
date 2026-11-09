@@ -507,7 +507,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
                     colors={["rgba(255,255,255,0.4)", "transparent"]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 0, y: 1 }}
-                    style={styles.modalCardHighlight}
+                    style={[styles.modalCardHighlight, squareCards && styles.squareCard]}
                   />
                   <View style={styles.modalReviewHeader}>
                     <Text style={styles.modalReviewerName}>{review.name}</Text>
@@ -1713,6 +1713,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     blurTint: cardBlurTint,
     blurIntensity: cardBlurIntensity,
     highlightColors: cardHighlightColors,
+    squareCards,
   }), [
     OP.text,
     OP.sub,
@@ -1724,6 +1725,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     cardBlurTint,
     cardBlurIntensity,
     cardHighlightColors,
+    squareCards,
   ]);
 
   // Venue/workspace shots are stamped with their own category by
@@ -3744,7 +3746,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               colors={cardHighlightColors}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
-              style={styles.cardHighlight}
+              style={[styles.cardHighlight, squareCards && styles.squareCard]}
             />
             <View style={styles.serviceCardBlur}>
               <View style={styles.serviceItem}>
@@ -5395,7 +5397,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     colors={cardHighlightColors}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 0, y: 1 }}
-                    style={styles.cardHighlight}
+                    style={[styles.cardHighlight, squareCards && styles.squareCard]}
                   />
                   {/* Tab switcher — only show if there are policy rows */}
                   {(() => {
@@ -6438,8 +6440,14 @@ const styles = StyleSheet.create({
     elevation: 0,
     marginBottom: 12,
   },
+  // Every corner, not just borderRadius: the top highlight strips set their
+  // own top-corner radii, which borderRadius: 0 alone doesn't override.
   squareCard: {
     borderRadius: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   serviceCardBlur: {
     flex: 1,
