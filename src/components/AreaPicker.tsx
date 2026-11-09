@@ -22,7 +22,7 @@ import { samePlace } from '../utils/providerCity';
  *   - client Account "Your area"       -> users.client_area
  *   - client sign-up "Where are you based?" (Step 5) -> users.client_area
  *   - provider InfoReg "Where you're based" -> providers.location_text (geocoded)
- *   - provider InfoReg "Areas you cover" (variant 'cover', one place per pick)
+ *   - provider About You "Areas you cover" (variant 'cover', one place per pick)
  *     -> providers.service_locations, via AreasYouCoverPicker
  *
  * It is deliberately the ONE component for this — a client's "Camden, London"

@@ -23,6 +23,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { TapToEditTextInput } from '../../components/TapToEditTextInput';
 import type { ViewInstance } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -99,7 +100,6 @@ import {
   selectedBookingInstructions,
   toggleBookingInstruction,
 } from '../../features/business-details/bookingInstructions';
-import AreasYouCoverPicker from '../../components/AreasYouCoverPicker';
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
@@ -150,7 +150,6 @@ import {
   ADDRESS_RELEASE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
-  providerTravelsToClient,
   ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
   SERVICE_TYPE_OPTS,
@@ -2238,7 +2237,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <FocusAwareStatusBar barStyle="light-content" />
+      {/* The clock sits on the hero, which is pale for light presets with no
+          cover photo — white there was unreadable. */}
+      <FocusAwareStatusBar barStyle={heroIsDark ? 'light-content' : 'dark-content'} />
       <View style={[styles.previewContainer, { backgroundColor: PP.bg }]}>
         {/* Hero photo/gradient backdrop — mirror ProviderProfileScreen: a real
             cover photo (with a dark gradient overlay for legible text) when
@@ -2721,10 +2722,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // reads useTheme().isDarkMode or branches on device/app appearance) — but
   // its chrome DOES follow the provider's own chosen branding once they're
   // editing an existing profile (see chromeTheme below, computed once
-  // isEditMode/providerData are known). statusBarStyle stays pinned to
-  // 'dark-content' regardless — every provider theme's card/sheet surfaces
-  // stay pale enough for dark status-bar content to read fine on top.
-  const statusBarStyle = 'dark-content' as const;
+  // isEditMode/providerData are known). The status bar follows that too: see
+  // statusBarStyle next to chromeTheme.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { user, myBookingMode } = useAuth();
   // Link-only providers (own booking page) only fill in Identity, About &
@@ -2974,6 +2973,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     () => resolveChromeTheme(isEditMode, providerData.profileTheme),
     [isEditMode, providerData.profileTheme],
   );
+  // The clock and battery sit straight on chromeTheme.bg (nothing frosted
+  // behind them), so they flip with it. Pinning 'dark-content' left them
+  // black-on-black for a provider with a dark theme (Black, Charcoal…).
+  const statusBarStyle = chromeTheme.isDark ? 'light-content' : 'dark-content';
   const styles = useMemo(
     () => makeStyles(chromeTheme, screenWidth, screenHeight),
     [chromeTheme, screenWidth, screenHeight],
@@ -2991,10 +2994,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Header/inline icons can't read a StyleSheet colour, so they take the same
   // palette token the sheet above is built from.
   const chromeText = chromeTheme.text;
-  const coverPalette = useMemo(
-    () => ({ text: chromeTheme.text, sub: chromeTheme.sub, surface: chromeTheme.surface, border: chromeTheme.border }),
-    [chromeTheme],
-  );
 
   // Set when a pending "claim your business" code (from ClaimProviderScreen)
   // fails to confirm here — expired, already used, or wrong by the time the
@@ -4728,8 +4727,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     It is also what the client Search "City" filter goes by:
                     src/utils/providerCity.ts reads "Shoreditch, London" (or a
                     bare "Shoreditch") up to London. A mobile provider's other
-                    places live in "Areas you cover" just below
-                    (serviceLocations → providers.service_locations).
+                    places live in "Areas you cover", which is edited in
+                    Business Details → About You (providers.service_locations),
+                    not here.
 
                     Same stepped city → region → area picker the client uses for
                     "Your area" (AreaPicker) — "Other city…" / "Other…" fall back
@@ -4744,30 +4744,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   subtitle="Shown on your public profile and used to place you in local searches — not your exact address."
                 />
               </View>
-
-              {/* Areas you cover → providers.service_locations, which Search's
-                  City filter matches (an area by name and by its town; a
-                  whole town for every area in it — src/utils/providerCity.ts).
-                  Mobile only: they travel, so where they're based isn't where
-                  they work. Other types still round-trip whatever was saved
-                  before, untouched. Removing every chip saves an empty list. */}
-              {providerTravelsToClient(providerData.businessType || null) && (
-                <View style={styles.inputGroup} ref={registerField('serviceLocations')}>
-                  <Text style={styles.inputLabel}>Areas you cover</Text>
-                  <Text style={[styles.inputHint, styles.coverHelper]}>
-                    Clients who filter Search by these places will find you.
-                  </Text>
-                  <AreasYouCoverPicker
-                    value={providerData.serviceLocations}
-                    onChange={(serviceLocations) =>
-                      setProviderData(prev => ({ ...prev, serviceLocations }))
-                    }
-                    basedIn={providerData.location}
-                    accentColor={adaptiveAccentColor}
-                    palette={coverPalette}
-                  />
-                </View>
-              )}
 
               {/* Jump-to-next affordance at the foot of the section, once
                   there's nothing left to fill in above it — not a "confirm
@@ -4841,7 +4817,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               >
                 <Text style={styles.inputLabel}>Description</Text>
                 <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
-                  <TextInput
+                  {/* Opens the keyboard on a real tap only, not when a scroll
+                      down the page happens to start on top of it. */}
+                  <TapToEditTextInput
                     style={[styles.textInput, styles.textInputMultiline]}
                     value={providerData.aboutText}
                     onChangeText={(text) =>
@@ -6718,11 +6696,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontWeight: '700',
     color: fg(0.86),
     marginTop: 6,
-  },
-  // Helper line between a label and its control, rather than under it.
-  coverHelper: {
-    marginTop: 0,
-    marginBottom: 10,
   },
   // Bright, well-defined text-box card — was a near-invisible 0.2-alpha
   // white fill that washed out against the modal's own light background.

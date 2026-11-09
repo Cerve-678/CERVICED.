@@ -836,7 +836,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
           </ScrollView>
         ) : (
           <>
-            <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
+            {activeTab === 'history' && <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
               <SlidingTabs
                 tabs={HISTORY_FILTERS}
                 activeKey={historyFilter}
@@ -847,7 +847,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                 height={30}
                 gap={8}
               />
-            </View>
+            </View>}
             <FlatList
               ref={listRef}
               data={items}
@@ -875,7 +875,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   <Ionicons name="calendar-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
                   <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
                   <Text style={[s.emptySub, { color: P.sub }]}>
-                    {historyFilter === 'all' ? tabEmptyText[activeTab] : `No ${HISTORY_FILTERS.find(f => f.key === historyFilter)?.label.toLowerCase()} bookings`}
+                    {activeTab !== 'history' || historyFilter === 'all' ? tabEmptyText[activeTab] : `No ${HISTORY_FILTERS.find(f => f.key === historyFilter)?.label.toLowerCase()} bookings`}
                   </Text>
                 </View>
               }

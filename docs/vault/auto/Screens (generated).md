@@ -59,6 +59,7 @@
 - `src/screens/auth/SignUpStep4Screen.tsx`
 - `src/screens/auth/SignUpStep5Screen.tsx`
 - `src/screens/auth/WelcomeScreen.tsx`
+- `src/screens/client/ActivityCentreScreen.tsx`
 - `src/screens/client/BeautyBillingScreen.tsx`
 - `src/screens/client/BeautyProfileScreen.tsx`
 - `src/screens/client/BookingDetailScreen.tsx`
@@ -80,7 +81,6 @@
 - `src/screens/client/SearchScreen.tsx`
 - `src/screens/client/SubscriptionScreen.tsx`
 - `src/screens/client/UserProfileScreen.tsx`
-- `src/screens/shared/AboutScreen.tsx`
 - `src/screens/shared/AdminDashboardScreen.tsx`
 - `src/screens/shared/AdminMoneyScreen.tsx`
 - `src/screens/shared/BeccaScreen.tsx`

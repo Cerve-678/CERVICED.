@@ -323,7 +323,26 @@ Postgres error ([RescheduleScreen.tsx](src/screens/client/RescheduleScreen.tsx)'
 submit `catch`, which is the single place client-facing reschedule copy is
 decided — see §7b).
 
-### 7a. Response deadlines — BUILT 2026-08-26
+### 7a. Response deadlines — BUILT 2026-08-26, window changed 2026-11-08
+
+> **Current rule (2026-11-08, `20261109120000_reschedule_reply_45_minutes.sql`):
+> whoever is waiting has 45 minutes to answer**, the provider for a client's
+> request, the client for times the provider offered. The clock starts when it
+> becomes their turn (`updated_at`), and never runs past the appointment start.
+> The 45 minutes lives in `public.reschedule_reply_window()` (mirrored by
+> `src/constants/reschedule.ts`). The cron runs every minute.
+>
+> **Both people are told**: the "your turn" notification says "You have 45
+> minutes to reply/choose, or the booking stays as it is", the sender's "sent"
+> screen says the same, and both booking-detail screens show "until 3:45pm".
+> When it lapses, **both** client and provider get a `reschedule_expired`
+> notice in either direction (one pair per group reschedule).
+>
+> Superseded by this: the provider-`rescheduleNotice`-based window (24h floor,
+> day-start backstop, 4h floor, worked-examples table), the cancellation-window
+> bound from `20260901150000`, the "pending expires → client only" rule, and
+> `process_provider_stale_reschedule_reminders()` (cron removed, function
+> dropped). The history below is kept for context.
 
 **A reschedule request now has a deadline.** Migration
 `20260826090555_reschedule_request_expiry.sql`, cron job `reschedule-request-expiry`

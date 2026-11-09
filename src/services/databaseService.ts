@@ -1451,6 +1451,8 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   group_bookings_available,
   vegan_cruelty_free,
   products_used,
+  clientele,
+  skin_tones_catered,
   preferred_payment_methods
 `;
 
@@ -3829,7 +3831,7 @@ export async function claimCartBookingSlots(
 /** Best-effort immediate release when the user backs out of payment
  *  (close button, booking failure, Stripe Payment Sheet 'Canceled'). Not
  *  the source of truth for cleanup — expire_cart_holds() cron sweep is —
- *  this just frees the slot sooner than the 10-minute TTL. Callers should
+ *  this just frees the slot sooner than the 5-minute TTL. Callers should
  *  catch-and-log, never let a release failure surface as a user error. */
 export async function releaseCartBookingSlots(
   holdBatchId: string,
@@ -4490,6 +4492,33 @@ export async function getProviderUpcomingBookings(
     .in("status", ["pending", "confirmed", "in_progress"])
     .order("booking_date", { ascending: true })
     .order("booking_time", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as BookingWithAddOns[];
+}
+
+/** A provider's bookings by when they were made, newest first, for the
+ *  Recent activity card on My Profile and its See all list. A provider
+ *  reading their own diary, so no has_gone_live filter. Unclaimed waitlist
+ *  holds aren't bookings yet, so they're left out (as getProviderBookings). */
+export async function getProviderRecentBookings(
+  providerId: string,
+  limit: number,
+): Promise<BookingWithAddOns[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(
+      `
+      *,
+      add_ons: booking_add_ons ( * ),
+      booking_venue_details ( address, directions, coordinates ),
+      booking_client_addresses ( address )
+    `,
+    )
+    .eq("provider_id", providerId)
+    .neq("status", "on_hold")
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
@@ -5680,8 +5709,8 @@ export async function getActiveRescheduleRequestsForBookings(
   return out;
 }
 
-/** Provider responds with their available slots. Routed through
- *  respond_to_reschedule_request() so the caller's provider ownership of
+/** Provider responds with their available slots. Routed through the policy
+ *  wrapper around respond_to_reschedule_request() so provider ownership of
  *  the booking and the request's 'pending' status are re-verified
  *  server-side — RLS on booking_reschedule_requests is SELECT-only, a
  *  direct .update() can no longer write this row at all. responseNote
@@ -5691,12 +5720,24 @@ export async function respondToRescheduleRequest(
   bookingId: string,
   availableSlots: { date: string; times: string[] }[],
   responseNote?: string,
+  cancelIfDeclined = false,
 ): Promise<void> {
-  const { error } = await supabase.rpc("respond_to_reschedule_request", {
+  const { error } = await supabase.rpc("respond_to_reschedule_request_with_policy", {
     p_booking_id: bookingId,
     p_available_slots: availableSlots,
     p_response_note: responseNote ?? null,
+    p_cancel_if_declined: cancelIfDeclined,
   });
+  if (error?.code === 'PGRST202') {
+    if (cancelIfDeclined) throw new Error('Cancel if declined is not available yet. Please try again after the database update.');
+    const legacy = await supabase.rpc("respond_to_reschedule_request", {
+      p_booking_id: bookingId,
+      p_available_slots: availableSlots,
+      p_response_note: responseNote ?? null,
+    });
+    if (legacy.error) throw legacy.error;
+    return;
+  }
   if (error) throw error;
 }
 
@@ -5730,18 +5771,40 @@ export async function confirmRescheduleOwnBooking(
 }
 
 /** Provider initiates a reschedule by proposing new slots directly.
- *  Routed through provider_initiate_reschedule() so the caller's provider
+ *  Routed through the policy wrapper around provider_initiate_reschedule() so the caller's provider
  *  ownership of the booking is re-verified server-side (original_date/time
  *  are read from the booking row itself, not trusted from the client) —
  *  same reasoning as respondToRescheduleRequest above. */
 export async function upsertProviderRescheduleRequest(params: {
   booking_id: string;
   proposed_slots: { date: string; times: string[] }[];
+  cancel_if_declined?: boolean;
+  note?: string;
 }): Promise<void> {
-  const { error } = await supabase.rpc("provider_initiate_reschedule", {
+  const note = params.note?.trim() || null;
+  const { error } = await supabase.rpc("provider_initiate_reschedule_with_note", {
     p_booking_id: params.booking_id,
     p_proposed_slots: params.proposed_slots,
+    p_cancel_if_declined: params.cancel_if_declined ?? false,
+    p_note: note,
   });
+  if (error?.code === 'PGRST202') {
+    if (note) throw new Error('Reschedule notes are not available yet. Please try again after the database update.');
+    const current = await supabase.rpc("provider_initiate_reschedule_with_policy", {
+      p_booking_id: params.booking_id,
+      p_proposed_slots: params.proposed_slots,
+      p_cancel_if_declined: params.cancel_if_declined ?? false,
+    });
+    if (!current.error) return;
+    if (current.error.code !== 'PGRST202') throw current.error;
+    if (params.cancel_if_declined) throw new Error('Cancel if declined is not available yet. Please try again after the database update.');
+    const legacy = await supabase.rpc("provider_initiate_reschedule", {
+      p_booking_id: params.booking_id,
+      p_proposed_slots: params.proposed_slots,
+    });
+    if (legacy.error) throw legacy.error;
+    return;
+  }
   if (error) throw error;
 }
 
@@ -5764,8 +5827,9 @@ export async function rejectRescheduleRequest(
 }
 
 /** Client declines a provider's offered reschedule times instead of
- *  silently abandoning the screen. The booking is untouched; only the
- *  request row closes. Routed through decline_reschedule_offer() so
+ *  silently abandoning the screen. The booking stays at its original time
+ *  unless this offer opted into cancellation and a full refund. Routed through
+ *  decline_reschedule_offer() so
  *  client ownership and the request's 'provider_responded' status are
  *  re-verified server-side. Requires supabase/fix_reschedule_flow_completion.sql. */
 export async function declineRescheduleOffer(bookingId: string): Promise<void> {
@@ -6884,6 +6948,15 @@ export async function getMyBookingActionItems(): Promise<
   return counts;
 }
 
+export type ClientActivityDone =
+  | { kind: 'form_sent'; id: string; bookingId: string; doneAt: string }
+  | { kind: 'pack_read'; id: string; bookingId: string; doneAt: string }
+  | { kind: 'fee_paid'; id: string; bookingId: string; doneAt: string; feeKind: BookingFeeKind; amountPence: number }
+  | { kind: 'refund_decided'; id: string; bookingId: string; doneAt: string; outcome: 'refunded' | 'declined' };
+
+/** How long a finished item stays struck through in the Activity Centre. */
+export const ACTIVITY_DONE_DAYS = 7;
+
 /** Everything the client's Activity Centre needs that isn't already on the
  *  bookings in BookingContext — one round of parallel reads, each capped.
  *  features/bookings/activityCentre.ts turns this plus the bookings into the
@@ -6920,6 +6993,10 @@ export interface ClientActivityRemote {
     bookingTime: string;
     holdExpiresAt: string;
   }[];
+  /** What the client finished in the last ACTIVITY_DONE_DAYS days, so the
+   *  Activity Centre can strike it through instead of it just disappearing.
+   *  Only things with a recorded finish time are here. */
+  recentlyDone: ClientActivityDone[];
 }
 
 const ACTIVITY_QUERY_LIMIT = 50;
@@ -6929,10 +7006,11 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     data: { user },
   } = await getSessionUser();
   if (!user) {
-    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [] };
+    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [] };
   }
 
-  const [forms, packs, refunds, fees, holds] = await Promise.all([
+  const since = new Date(Date.now() - ACTIVITY_DONE_DAYS * 86_400_000).toISOString();
+  const [forms, packs, refunds, fees, holds, formsDone, packsDone, feesDone, refundsDone] = await Promise.all([
     supabase
       .from("booking_intake_forms")
       .select("booking_id")
@@ -6966,8 +7044,43 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
       .eq("status", "on_hold")
       .gt("hold_expires_at", new Date().toISOString())
       .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_intake_forms")
+      .select("id, booking_id, completed_at")
+      .eq("client_user_id", user.id)
+      .eq("status", "completed")
+      .gte("completed_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_info_packs")
+      .select("id, booking_id, viewed_at")
+      .eq("client_user_id", user.id)
+      .gte("viewed_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    // Only fees the client was asked to pay (they carry an invoice, whether
+    // the client paid it or a retry on their saved card did), not ones the
+    // card covered first time without them ever seeing a request.
+    supabase
+      .from("booking_fee_charges")
+      .select("id, booking_id, kind, amount_pence, charged_at")
+      .eq("client_user_id", user.id)
+      .eq("status", "succeeded")
+      .not("stripe_invoice_id", "is", null)
+      .gte("charged_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("refund_requests")
+      .select("id, booking_id, status, resolved_at")
+      .eq("client_id", user.id)
+      .in("status", ["refunded", "declined"])
+      .gte("resolved_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
   ]);
   if (forms.error) throw forms.error;
+  if (formsDone.error) throw formsDone.error;
+  if (packsDone.error) throw packsDone.error;
+  if (feesDone.error) throw feesDone.error;
+  if (refundsDone.error) throw refundsDone.error;
   if (packs.error) throw packs.error;
   if (refunds.error) throw refunds.error;
   if (fees.error) throw fees.error;
@@ -6980,7 +7093,23 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     booking_date: string; booking_time: string; hold_expires_at: string;
   };
 
+  type FormDoneRow = { id: string; booking_id: string; completed_at: string };
+  type PackDoneRow = { id: string; booking_id: string; viewed_at: string };
+  type FeeDoneRow = { id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; charged_at: string };
+  type RefundDoneRow = { id: string; booking_id: string; status: 'refunded' | 'declined'; resolved_at: string };
+  const recentlyDone: ClientActivityDone[] = [
+    ...((formsDone.data ?? []) as FormDoneRow[]).map(r => ({ kind: 'form_sent' as const, id: r.id, bookingId: r.booking_id, doneAt: r.completed_at })),
+    ...((packsDone.data ?? []) as PackDoneRow[]).map(r => ({ kind: 'pack_read' as const, id: r.id, bookingId: r.booking_id, doneAt: r.viewed_at })),
+    ...((feesDone.data ?? []) as FeeDoneRow[]).map(r => ({
+      kind: 'fee_paid' as const, id: r.id, bookingId: r.booking_id, doneAt: r.charged_at, feeKind: r.kind, amountPence: r.amount_pence,
+    })),
+    ...((refundsDone.data ?? []) as RefundDoneRow[]).map(r => ({
+      kind: 'refund_decided' as const, id: r.id, bookingId: r.booking_id, doneAt: r.resolved_at, outcome: r.status,
+    })),
+  ];
+
   return {
+    recentlyDone,
     pendingFormBookingIds: ((forms.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
     unreadPackBookingIds: ((packs.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
     openRefundRequests: ((refunds.data ?? []) as RefundRow[]).map(r => ({
@@ -10050,6 +10179,9 @@ export async function updateProviderContactDetails(
     price_bands?: string[];
     accessibility_notes?: string | null;
     languages_spoken?: string[] | null;
+    // "Areas you cover" (About You, mobile providers only). Matched by the
+    // client Search City filter — see src/utils/providerCity.ts.
+    service_locations?: string[];
     // Mirrors the live CHECK constraint providers_team_size_check
     // ('solo' | 'small_team' | 'large_team'). Clear with null — an empty string
     // violates the constraint and the update throws.
@@ -10083,6 +10215,7 @@ export async function updateProviderContactDetails(
     // = caters to all, same semantics as services.hair_types_suitable, so an
     // untouched value is a valid answer rather than an incomplete profile.
     hair_types_catered?: string[] | null;
+    skin_tones_catered?: string[] | null;
     availability_windows?: string[] | null;
     accepts_new_clients?: "yes" | "waitlist" | "no" | null;
     walk_ins_welcome?: boolean;
@@ -11914,7 +12047,12 @@ export interface ProviderPayout {
   booking_id: string;
   payout_amount: number;
   gross_amount: number;
-  booking?: { service_name_snapshot: string | null; customer_name: string | null; booking_date: string } | undefined;
+  /** `status` and `group_booking_id` let the refund sheet offer "Cancel
+   *  appointment too" on a booking that's still upcoming or pending. */
+  booking?: {
+    service_name_snapshot: string | null; customer_name: string | null; booking_date: string;
+    status: DbBooking['status']; group_booking_id: string | null;
+  } | undefined;
   platform_fee: number;
   currency: string;
   status: 'held' | 'transferred' | 'failed' | 'cancelled' | 'reversed';
@@ -11962,7 +12100,7 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   const bookingIds = data.map(row => row.booking_id);
   const [{ data: bookings, error: bookingsError }, { data: openRequests, error: requestsError }] = await Promise.all([
     supabase.from('bookings')
-      .select('id, service_name_snapshot, customer_name, booking_date')
+      .select('id, service_name_snapshot, customer_name, booking_date, status, group_booking_id')
       .eq('provider_id', provider.id).in('id', bookingIds),
     // At most one open request per booking, so the cap matches the payouts'.
     supabase.from('refund_requests')

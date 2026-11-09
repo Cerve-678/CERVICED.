@@ -43,6 +43,10 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const paidLabel = 'Paid';
   const paidAmount = isUnpaid ? 0 : amountPaidAtCheckout;
   const remainingBalance = Math.max(0, total - paidAmount);
+  // The deposit itself, shown as its own line in the breakdown (owner's call,
+  // 2026-11-08), only once it has actually been paid. It's part of the
+  // service price, not added on top, and Paid above already includes it.
+  const depositPaid = isDeposit && !isUnpaid ? depositAmount : 0;
 
   return {
     servicePrice,
@@ -60,6 +64,7 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     isUnpaid,
     paidLabel,
     paidAmount,
+    depositPaid,
   };
 }
 
@@ -101,6 +106,16 @@ export function describeRefundOutcome(
         : 'Your refund is being processed. This will update once it has gone through.',
       rows: kept > 0 ? [{ label: 'Kept under cancellation policy', amount: kept }] : [],
       providerStatus: 'Refund pending',
+    };
+  }
+  // The payment status can arrive before the refunded amount is refreshed in
+  // the booking detail. Keep the issued tag visible during that short window.
+  if ((booking.paymentStatus === PaymentStatus.REFUNDED || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED) && refunded <= 0 && kept <= 0) {
+    return {
+      title: 'Refunded',
+      message: 'Your refund has been issued. Banks usually take 5–10 working days to show it.',
+      rows: [],
+      providerStatus: 'Refund issued',
     };
   }
   if (kept > 0) {
@@ -158,6 +173,18 @@ export interface ProviderRefundPreview {
   error: string | null;
   /** Sent to the server as a full refund, so the client also gets the fee back. */
   isFull: boolean;
+}
+
+/**
+ * Whether the refund sheet's "Cancel appointment too" box is ticked. Only a
+ * full refund of a booking that can still be cancelled can cancel it. Ticked by
+ * default then: a fully refunded appointment left booked means the client can
+ * turn up having paid nothing, which is rarely what the provider meant. The
+ * provider's own tick or untick (`providerChoice`, null until they touch it)
+ * wins and survives switching between full and partial.
+ */
+export function cancelsWithRefund(isFull: boolean, canCancel: boolean, providerChoice: boolean | null): boolean {
+  return isFull && canCancel && (providerChoice ?? true);
 }
 
 /**
