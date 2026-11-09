@@ -65,6 +65,7 @@ Curated overview: [[Screens & Navigation]].
 - `AdminDashboard`
 - `AdminMoney`
 - `AdminCreateAccount`
+- `AdminCreatedAccounts`
 - `Points`
 - `Messages`
 - `DevSettings`

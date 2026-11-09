@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/admin-accounts-dob-signin-list — 20261109220000_admin_created_accounts (2026-11-09)
 ```
 
 ### Applied 2026-11-09 (day-before reminder drops "arrive 10 minutes early")
