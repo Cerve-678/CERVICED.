@@ -474,6 +474,9 @@ export interface DbProvider {
      *  notify_cron.sql) to notify provider_follows rows with
      *  notify_enabled = TRUE on that day each month. Unset = never fires. */
     scheduleReleaseDay?: number;
+    /** 'HH:MM', UK time, when the release day opens next month. Unset = 9am.
+     *  Read by provider_last_bookable_date() and the release-nudge cron. */
+    scheduleReleaseTime?: string;
   } | null;
   // Claimable-profile fields (supabase/claimable_provider_profiles.sql).
   // is_claimed=false rows are imported placeholders with no owner yet —
@@ -1042,7 +1045,7 @@ export type ProviderWithServices = Pick<
   /** Only the automation flags needed by the public profile UI. */
   automation_settings: Pick<
     NonNullable<DbProvider["automation_settings"]>,
-    "scheduleReleaseDay" | "waitlistEnabled"
+    "scheduleReleaseDay" | "scheduleReleaseTime" | "waitlistEnabled"
   > | null;
   services: (Pick<
     DbService,

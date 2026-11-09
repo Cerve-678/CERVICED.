@@ -840,7 +840,11 @@ export const AvailabilityService = {
     try {
       const settings = (await getAvailabilityProviderCore(providerId)).settings;
       return settings
-        ? { booking_window_days: settings.booking_window_days, schedule_release_day: settings.schedule_release_day }
+        ? {
+            booking_window_days: settings.booking_window_days,
+            schedule_release_day: settings.schedule_release_day,
+            schedule_release_time: settings.schedule_release_time,
+          }
         : null;
     } catch (error) {
       logger.error('Error reading booking horizon:', error);

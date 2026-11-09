@@ -56,6 +56,18 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-09 (release time)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109250000 | `release_time` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109240000`; the only higher unapplied migration on an open PR is `20261109260000_blank_provider_cannot_go_live` (#432), which touches only `check_and_set_provider_live`. md5 guards passed. Verified live: version present (now live max); cron 150 `*/5 * * * *`; `provider_release_time` not executable by anon or authenticated; all 7 release-day providers' `provider_last_bookable_date` identical to the pre-apply dry run; next releases still 09:00 UTC (9am GMT). Written on `feat/release-time` (#433). Frontier at authoring: live max `20261109240000` (cerviced-f3's `drop_people_name_search`, applied 2026-11-09); highest unapplied on an open PR also `20261109240000`. Re-check both and renumber above them if anything has landed. Redefines from live (md5 guards): `provider_last_bookable_date` (`ca8c8d4c…`), `provider_next_release_after` (`4b3f788c…`), `process_follow_schedule_release_nudges` (`b40e3485…`). Adds `provider_release_time(jsonb)` (not executable by anon/authenticated; only the SECURITY DEFINER functions call it). Reschedules cron job 150 to every five minutes. Release moment moves from 09:00 UTC to the provider's `scheduleReleaseTime`, UK time, 9am default; months are UK months. Read-only dry run 2026-11-09: all 7 release-day providers keep the same last bookable date. `provider_last_bookable_date` is the gate every booking passes through: re-diff against live right before applying. Apply before `feat/release-time` merges, or the app will show times the server doesn't use. |
+
+### Applied 2026-11-09 (find people through contacts only)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109240000 | `drop_people_name_search` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109220000`. Unapplied migrations on open PRs were `20261109210000_marketing_studio` (its owner, cerviced-6a, said ok and will renumber above the live max) and `20261109230000_profile_import_reads` (no running session owns it; it only creates `profile_import_reads`). **Both now sit below the frontier and must renumber above 20261109240000.** cerviced-5b's `20261109250000_release_time` is already above. Lock taken on `feat/circle-follow-back-contacts-only` (62646b9b). Forced-rollback dry run first (`search_people` 0, `match_contact_hashes` 1, version row 1; live unchanged). Only drops `public.search_people(text, integer)`. Verified live: version present (now live max); `search_people` gone; `match_contact_hashes` present, authenticated can execute and anon can't. Written on `feat/circle-follow-back-contacts-only` (#424). |
+
 ### Applied 2026-11-09 (accounts you created, admin)
 
 | Authored version | Name | Status |

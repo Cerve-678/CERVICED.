@@ -9,6 +9,7 @@ import { ProviderRegistrationData } from './providerRegistrationService';
 import { extractProviderProfileFromUrl } from './databaseService';
 import { reportError } from '../utils/logger';
 import { DEFAULT_PROVIDER_THEME, themeBrandingColours } from '../constants/providerThemes';
+import { DEFAULT_RELEASE_TIME } from '../utils/bookingHorizon';
 
 interface ExtractedProfile {
   providerName?: string;
@@ -80,6 +81,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     // Acuity has no equivalent concept to import — provider sets this
     // themselves afterward via InfoRegScreen/ProviderAutomationsScreen.
     scheduleReleaseDay: null,
+    scheduleReleaseTime: DEFAULT_RELEASE_TIME,
     // Nothing to import for branding, so start from the default theme's own
     // colours — the ones Branding shows — not a placeholder.
     ...themeBrandingColours(DEFAULT_PROVIDER_THEME),

@@ -16,6 +16,7 @@ import {
   relativeDayLabel,
   toLocalDate,
 } from "../../../utils/dateUtils";
+import { releaseTimeLabel } from "../../../utils/bookingHorizon";
 import {
   addBookmark,
   getActivePromotions,
@@ -2179,7 +2180,7 @@ const providerBookingTiming: Capability = {
     // Same horizon shapes as utils/bookingHorizon: a release day replaces the
     // rolling window, and a 0 window has no limit at all.
     const bookAhead = rules.scheduleReleaseDay != null
-      ? `a month at a time — next month opens on the **${ordinalSuffix(rules.scheduleReleaseDay)}**`
+      ? `a month at a time — next month opens on the **${ordinalSuffix(rules.scheduleReleaseDay)} at ${releaseTimeLabel(rules.scheduleReleaseTime)}**`
       : rules.bookingWindowDays > 0
         ? `up to **${rules.bookingWindowDays} days**`
         : "**no limit**";

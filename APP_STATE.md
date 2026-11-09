@@ -336,14 +336,15 @@ group-booking notification dedup bug happened (fixed 2026-08-08, keyed on
 Three different things that are easy to merge in your head. All three are
 worked out from the clock or live data, so none of them can get stuck.
 
-**Release day** (`automation_settings.scheduleReleaseDay`, set only in Edit
-Profile). A calendar day, not an event: nothing being booked up triggers it and
-the provider does nothing. Before the day at 09:00 UTC clients can book to the
-end of this month; from then, to the end of next month
+**Release day** (`automation_settings.scheduleReleaseDay` + `scheduleReleaseTime`
+'HH:MM', set in Scheduling & Availability or Edit Profile). A calendar day and a
+time, not an event: nothing being booked up triggers it and the provider does
+nothing. Before the day at the release time (UK time, 9am if never chosen)
+clients can book to the end of this UK month; from then, to the end of next month
 (`provider_last_bookable_date`, mirrored in `src/utils/bookingHorizon.ts`). A day
-past the month's end means its last day. At that moment bell followers get
-"December has opened up with X. Get booking now." once a month
-(`process_follow_schedule_release_nudges`). It checks the month is open, not that
+past the month's end means its last day. Within five minutes of that moment
+(cron job 150, every five minutes) bell followers get "December has opened up
+with X. Get booking now." once a month (`process_follow_schedule_release_nudges`). It checks the month is open, not that
 a slot is free, so a provider with every date blocked still triggers it: the
 user chose to keep that (2026-11-01). It stays silent while the schedule is
 closed by hand.
