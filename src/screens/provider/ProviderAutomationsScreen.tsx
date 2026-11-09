@@ -397,7 +397,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         <AutoCard
           title="Post-appointment check-in"
-          description="The day after a treatment, Cerviced sends a short follow-up asking the client how they're feeling."
+          description="The day after a treatment, Cerviced sends a short follow-up asking the client how they're getting on and inviting them to leave you personal feedback on their visit."
           value={d.postApptCheckIn}
           onToggle={v => set('postApptCheckIn', v)}
           C={C}

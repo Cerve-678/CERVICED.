@@ -61,6 +61,7 @@ import {
   notificationAmount,
   notificationDayHeadings,
   notificationKindLabel,
+  REVIEW_PROMPT_TYPES,
 } from '../../features/notifications/notificationPresentation';
 
 interface Notification {
@@ -607,6 +608,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'booking_cancelled' ||
         notification.type === 'payment_success' ||
         notification.type === 'review_request' ||
+        notification.type === 'post_appt_check_in' ||
         notification.type === 'reschedule_request' ||
         notification.type === 'reschedule_provider_response' ||
         notification.type === 'reschedule_confirmed' ||
@@ -626,7 +628,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // to the generic booking deep-link and opened BookingDetail, leaving the
       // client to go and find the rate control themselves — the button promised
       // an action the destination didn't offer.
-      const openReview = notification.type === 'review_request';
+      const openReview = REVIEW_PROMPT_TYPES.has(notification.type);
 
       defer(() => {
         if (isProviderRef.current) {
@@ -713,10 +715,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       logger.log('Promotion — dismissing notifications');
       defer(dismissOnly, 300);
     } else if (notification.type === 'announcement' ||
-               notification.type === 'birthday_greeting' ||
-               notification.type === 'post_appt_check_in') {
-      // Provider broadcast (or an automated birthday/check-in message from
-      // them) — open that provider's profile if we know them
+               notification.type === 'birthday_greeting') {
+      // Provider broadcast (or an automated birthday message from them) —
+      // open that provider's profile if we know them
       if (notification.providerId) {
         const providerId = notification.providerId;
         defer(() => {
@@ -993,8 +994,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Read Info';
       case 'announcement':
       case 'birthday_greeting':
-      case 'post_appt_check_in':
         return 'View Provider';
+      case 'post_appt_check_in':
+        return 'Rate Visit';
       case 'provider_message':
         return 'Open Inbox';
       case 'new_message':
