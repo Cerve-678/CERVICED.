@@ -1475,9 +1475,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
-  // Branding → Card Shape: square corners on every card on the profile (the
-  // service cards and category pills, the availability card, About, the
-  // sharing card and the reviews), or the rounded look it has always had.
+  // Branding → Card Shape: square corners on the profile's cards (the service
+  // cards and category pills, About/Policies, the sharing card, Reviews,
+  // Contact, Opening hours, Additional info), or the rounded look it has
+  // always had. The availability pill and Instagram button beside it stay
+  // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
@@ -5278,14 +5280,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       style={[
                         styles.slotsRow,
                         { backgroundColor: cardBg, borderColor: OP.border },
-                        squareCards && styles.squareCard,
                       ]}
                     >
                       <LinearGradient
                         colors={cardHighlightColors}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
-                        style={[styles.slotsCardHighlight, squareCards && styles.squareCard]}
+                        style={styles.slotsCardHighlight}
                       />
                       <Text style={[styles.slotsText, { color: OP.sub }]}>
                         {pillText}
@@ -5307,7 +5308,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     </BlurView>
                     {showInstagram ? (
                       <TouchableOpacity
-                        style={[styles.instagramButtonOutside, squareCards && styles.squareCard]}
+                        style={styles.instagramButtonOutside}
                         onPress={() => {
                           Haptics.selectionAsync().catch(() => {});
                           Linking.openURL(
@@ -5329,14 +5330,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           style={[
                             styles.instagramButtonSurface,
                             { backgroundColor: cardBg, borderColor: OP.border },
-                            squareCards && styles.squareCard,
                           ]}
                         >
                           <LinearGradient
                             colors={cardHighlightColors}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 0, y: 1 }}
-                            style={[styles.slotsCardHighlight, squareCards && styles.squareCard]}
+                            style={styles.slotsCardHighlight}
                           />
                           <Ionicons
                             name="logo-instagram"
