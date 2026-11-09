@@ -24,10 +24,11 @@ jest.mock('../services/databaseService', () => ({
 
 import {
   CONTACT_NUMBERS_PER_CHECK,
-  cachedContactMatches,
+  buildInviteList,
+  cachedContacts,
   collectContactNumbers,
   isContactsLimitError,
-  rememberContactMatches,
+  rememberContacts,
   findContactsOnCerviced,
   hashNormalisedNumber,
 } from '../features/social/contacts';
@@ -63,39 +64,69 @@ describe('contact numbers', () => {
 describe('findContactsOnCerviced', () => {
   beforeEach(() => { mockGetContactsAsync.mockReset(); mockMatchContactHashes.mockReset(); });
 
-  it('reads only phone numbers, sends only hashes, and returns just the account', async () => {
-    mockGetContactsAsync.mockResolvedValue({ data: [{ name: 'Mum', phoneNumbers: [{ number: '07700 900123' }] }] });
+  it('sends only hashes; a match shows the account, everyone else is to invite', async () => {
+    mockGetContactsAsync.mockResolvedValue({
+      data: [
+        { id: 'c1', name: 'Mum', phoneNumbers: [{ number: '07700 900123' }] },
+        { id: 'c2', name: 'Bea', phoneNumbers: [{ number: '07700 900456' }] },
+      ],
+    });
     mockMatchContactHashes.mockResolvedValue([
       { userId: 'u1', name: 'Amara Okafor', avatarUrl: null, myStatus: null, followsMe: null, phoneHash: SERVER_HASH_07700900123 },
     ]);
     const out = await findContactsOnCerviced();
-    expect(mockMatchContactHashes).toHaveBeenCalledWith([SERVER_HASH_07700900123]);
-    expect(JSON.stringify(mockMatchContactHashes.mock.calls)).not.toContain('7700');
-    expect(mockGetContactsAsync).toHaveBeenCalledWith({ fields: ['phoneNumbers'] });
-    expect(JSON.stringify(out)).not.toContain('Mum');
-    expect(out).toEqual([
+    const sent = JSON.stringify(mockMatchContactHashes.mock.calls);
+    expect(sent).not.toContain('7700');
+    expect(sent).not.toContain('Mum');
+    expect(sent).not.toContain('Bea');
+    expect(mockGetContactsAsync).toHaveBeenCalledWith({ fields: ['phoneNumbers', 'name'] });
+    // The match is the account's own name, never the saved one.
+    expect(out.matches).toEqual([
       { userId: 'u1', name: 'Amara Okafor', avatarUrl: null, myStatus: null, followsMe: null },
     ]);
+    expect(out.invites).toEqual([{ key: 'id:c2', name: 'Bea', number: '07700 900456' }]);
   });
 
   it('asks the server nothing when there are no usable numbers', async () => {
     mockGetContactsAsync.mockResolvedValue({ data: [{ name: 'Landline only', phoneNumbers: [{ number: '12' }] }] });
-    await expect(findContactsOnCerviced()).resolves.toEqual([]);
+    await expect(findContactsOnCerviced()).resolves.toEqual({ matches: [], invites: [] });
     expect(mockMatchContactHashes).not.toHaveBeenCalled();
   });
 });
 
 describe('session cache and the daily limit', () => {
   it('remembers the last result for the same account only', () => {
-    expect(cachedContactMatches('me')).toBeNull();
-    rememberContactMatches('me', []);
-    expect(cachedContactMatches('me')).toEqual([]);
-    expect(cachedContactMatches('someone-else')).toBeNull();
+    expect(cachedContacts('me')).toBeNull();
+    rememberContacts('me', { matches: [], invites: [] });
+    expect(cachedContacts('me')).toEqual({ matches: [], invites: [] });
+    expect(cachedContacts('someone-else')).toBeNull();
   });
 
   it("recognises the server's rate-limit message", () => {
     expect(isContactsLimitError({ code: 'P0001', message: "You've done that a lot just now. Please try again later." })).toBe(true);
     expect(isContactsLimitError(new Error('network down'))).toBe(false);
     expect(isContactsLimitError(null)).toBe(false);
+  });
+});
+
+describe('buildInviteList', () => {
+  it('lists named contacts not on CERVICED, A to Z, once each', () => {
+    const out = buildInviteList(
+      [
+        { id: '1', name: 'zara', phoneNumbers: [{ number: '07700 900111' }] },
+        { id: '2', name: 'Amy', phoneNumbers: [{ number: '07700 900222' }] },
+        { id: '2', name: 'Amy', phoneNumbers: [{ number: '07700 900222' }] },
+        { id: '3', name: '', phoneNumbers: [{ number: '07700 900333' }] },
+        { id: '4', name: 'Landline', phoneNumbers: [{ number: '12' }] },
+        { id: '5', name: 'On the app', phoneNumbers: [{ number: '07700 900999' }, { number: '07700 900555' }] },
+      ],
+      new Set(['447700900555']),
+    );
+    expect(out.map((c) => c.name)).toEqual(['Amy', 'zara']);
+  });
+
+  it('texts the first usable number as saved', () => {
+    const out = buildInviteList([{ name: 'Bea', phoneNumbers: [{ number: '1' }, { number: '+44 7700 900456' }] }], new Set());
+    expect(out).toEqual([{ key: 'n:Bea|447700900456', name: 'Bea', number: '+44 7700 900456' }]);
   });
 });

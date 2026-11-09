@@ -5,7 +5,7 @@
 
 #generated
 
-**3497 functions** across **495 files**.
+**3499 functions** across **495 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -278,7 +278,7 @@
 ### `src/features/social/` (6)
 - `circleMoments.ts` — dayStart · isCompleted · **nextCircleMoment** · **pickRecommendPromptBooking** · **shouldShowWhereIGoNotice**
 - `CircleMomentsHost.tsx` — addPrompted · **CircleMomentsHost** · close · finishNotice · readPrompted · recommend
-- `contacts.ts` — **cachedContactMatches** · **collectContactNumbers** · **findContactsOnCerviced** · **getContactsAccess** · **hashNormalisedNumber** · **isContactsLimitError** · **rememberContactMatches** · **requestContactsAccess**
+- `contacts.ts` — **buildInviteList** · **cachedContacts** · **collectContactNumbers** · **findContactsOnCerviced** · **getContactsAccess** · **hashNormalisedNumber** · **inviteContact** · **isContactsLimitError** · **rememberContacts** · **requestContactsAccess**
 - `people.ts` — **personAction** · **withMyStatus** · **withoutPerson** · **withPersonFirst**
 - `presentation.ts` — **circleLine** · **compareCirclePeople** · **firstName** · **groupCircleRows** · **initialsFor** · **stackAccessibilityLabel** · **stackLayout**
 - `ProviderSharingRow.tsx` — **ProviderSharingRow** · toggleHidden · toggleRecommend

@@ -864,9 +864,15 @@ user's decisions:
     circle.
   - Only hashes leave the phone. At most 3000 numbers are checked per day.
     Nothing is kept on the device or logged.
-  - **Matches show only the account's own name,** under an "In your
-    contacts" heading. The user decided on 2026-11-08 not to show the name the
-    client saved, so a fake account can't borrow it to look confirmed. Only
-    numbers are read from the address book, never names.
+  - **Matches show only the account's own name,** under an "On CERVICED"
+    heading. The user decided on 2026-11-08 not to show the name the client
+    saved, so a fake account can't borrow it to look confirmed.
+  - **Since 2026-11-09 (PR #407) contact names ARE read**, on the phone only,
+    to list everyone not on CERVICED with an Invite button (opens a text
+    message). Names are held in memory for the session and are never sent,
+    stored or logged; the server still only gets hashes. To raise: whether the
+    Privacy text, the App Store label and Play Data safety need to mention
+    on-device name reading (Apple generally treats on-device-only processing
+    as not "collected", but this hasn't been checked by a lawyer).
   - Still open: the App Store privacy label (Contacts), the Play Data safety
     form, and the Privacy text above.
