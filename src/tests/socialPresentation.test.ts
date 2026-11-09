@@ -92,3 +92,17 @@ describe('copy', () => {
     );
   });
 });
+
+describe('your own face in the ring', () => {
+  const me = { personId: 'me', name: 'Sam Lee', avatarUrl: null, recommends: true, visits: 0, isMe: true };
+  const amy = { personId: 'a', name: 'Amy Kent', avatarUrl: null, recommends: false, visits: 2 };
+
+  it('says you recommend them, never a service', () => {
+    expect(circleLine(me)).toBe('You recommend them');
+  });
+
+  it('reads you first, then the people you follow', () => {
+    expect(stackAccessibilityLabel([me])).toBe('You recommend them.');
+    expect(stackAccessibilityLabel([me, amy])).toBe('You recommend them. People you follow: Amy. have been here.');
+  });
+});

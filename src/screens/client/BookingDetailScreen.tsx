@@ -76,6 +76,8 @@ import { logger } from '../../utils/logger';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
+import { RecommendBookingButton } from '../../features/social/RecommendBookingButton';
+import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
 
 const useStripe: typeof import('@stripe/stripe-react-native').useStripe =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -190,6 +192,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   // Off by default: a review is named unless the client chooses otherwise.
   const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [hasRated, setHasRated] = useState(false);
+  // Recommend: the button on a completed booking, and the bar after a 4–5 star rating.
+  const [recommendRefresh, setRecommendRefresh] = useState(0);
+  const recommendAfterRating = useRecommendAfterRating(user?.id ?? null, () => setRecommendRefresh((n) => n + 1));
+  const showRecommendError = useCallback((title: string, message: string) => Alert.alert(title, message), []);
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [showTipModal, setShowTipModal] = useState(false);
   const [tipAmount, setTipAmount] = useState(0);
@@ -758,10 +764,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       }
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);
-      setTimeout(() => { setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false); }, 2000);
+      const ratedStars = rating;
+      setTimeout(() => {
+        setShowRatingModal(false); setRating(0); setReviewText(''); setReviewAnonymous(false);
+        recommendAfterRating.offer(providerId, booking.providerName, ratedStars);
+      }, 2000);
     } catch (err) { logger.error('[BookingDetail] submit rating failed:', err); Alert.alert('Rating Not Saved', 'Please try again in a moment.'); }
     finally { setIsLoading(false); }
-  }, [booking, rating, reviewText, reviewAnonymous, user]);
+  }, [booking, rating, reviewText, reviewAnonymous, user, recommendAfterRating]);
 
   /**
    * Record a tip. This previously only set local component state, so the tip was
@@ -1521,6 +1531,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </View>
             )}
+            {isCompleted && (
+              <RecommendBookingButton
+                userId={user?.id ?? null}
+                providerId={booking.providerId}
+                providerName={booking.providerName}
+                refreshKey={recommendRefresh}
+                textColour={C.text}
+                subColour={C.sub}
+                onError={showRecommendError}
+              />
+            )}
             {/* A no-show recorded against this client. The status itself is
                 terminal and stays exactly as it is — disputing does not undo
                 it. What it does is stop the no-show hardening into a
@@ -2157,6 +2178,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           </Pressable>
         </Modal>
       </SafeAreaView>
+      <RecommendAfterRatingBar {...recommendAfterRating.bar} P={C} />
     </ThemedBackground>
   );
 }

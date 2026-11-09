@@ -87,14 +87,17 @@ export function initialsFor(name: string): string {
  * that they recommend, or how many times they've been.
  */
 export function circleLine(person: CirclePerson): string {
+  if (person.isMe) return 'You recommend them';
   if (person.recommends) return 'Recommends';
   if (person.visits === 1) return 'Has been';
   return `Has been · ${person.visits} times`;
 }
 
 /** Accessibility label for the whole stack. */
-export function stackAccessibilityLabel(people: readonly CirclePerson[]): string {
-  if (people.length === 0) return '';
+export function stackAccessibilityLabel(allPeople: readonly CirclePerson[]): string {
+  const me = allPeople.some((p) => p.isMe) ? 'You recommend them.' : '';
+  const people = allPeople.filter((p) => !p.isMe);
+  if (people.length === 0) return me;
   const recommenders = people.filter((p) => p.recommends).length;
   const names = people.slice(0, 2).map((p) => firstName(p.name));
   const others = people.length - names.length;
@@ -106,5 +109,5 @@ export function stackAccessibilityLabel(people: readonly CirclePerson[]): string
     recommenders > 0
       ? `${recommenders} recommend${recommenders === 1 ? 's' : ''}`
       : 'have been here';
-  return `People you follow: ${who}. ${tail}.`;
+  return `${me ? `${me} ` : ''}People you follow: ${who}. ${tail}.`;
 }

@@ -44,6 +44,7 @@ import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
+import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
 import { bookingTodoCounts } from '../../features/bookings/activityCentre';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { TodoMark } from '../../components/TodoMark';
@@ -211,6 +212,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     [theme, isDarkMode, P, screenWidth, screenHeight],
   );
   const { user } = useAuth();
+  // After a 4–5 star rating, offer Recommend in a slim bar.
+  const recommendAfterRating = useRecommendAfterRating(user?.id ?? null);
   const { addToCart } = useCart();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
@@ -677,11 +680,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setHasRated(true);
       setIsLoading(false);
 
+      const ratedStars = rating;
+      const ratedProviderName = selectedBooking.providerName;
       setTimeout(() => {
         setShowRatingModal(false);
         setRating(0);
         setReviewText('');
         setReviewAnonymous(false);
+        recommendAfterRating.offer(providerId, ratedProviderName, ratedStars);
         setTimeout(() => {
           mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
           modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -691,7 +697,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert('Error', 'Failed to submit rating.');
       setIsLoading(false);
     }
-  }, [selectedBooking, rating, reviewText, reviewAnonymous, user]);
+  }, [selectedBooking, rating, reviewText, reviewAnonymous, user, recommendAfterRating]);
 
   // A tip is a distinct Stripe payment, not a number attached to a review.
   const handleTipSubmit = useCallback(async () => {
@@ -2298,6 +2304,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
         <DialogHost />
       </SafeAreaView>
+      <RecommendAfterRatingBar {...recommendAfterRating.bar} P={P} bottomOffset={FLOATING_TAB_BAR_CLEARANCE} />
     </ThemedBackground>
   );
 }
