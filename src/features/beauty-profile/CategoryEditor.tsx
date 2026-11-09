@@ -154,13 +154,13 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     case 'hair':
       return (
         <>
-          {sectionHead('HAIR TYPE', { selected: draft.hairType ? 1 : 0, total: 1 })}
-          {sub('Your hair texture')}
-          {renderChips(HAIR_TYPES, o => draft.hairType === o, o => setSingle('hairType', o))}
+          {sectionHead('HAIR TYPE', { selected: draft.hairType.length, total: HAIR_TYPES.length })}
+          {sub('Your hair texture. Pick more than one if it varies, like 4B and 4C.')}
+          {renderChips(withSaved(HAIR_TYPES, draft.hairType), o => draft.hairType.includes(o), o => toggleMulti('hairType', o))}
 
-          {sectionHead('SCALP CONDITION', { selected: draft.scalpCondition ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('Your scalp health')}
-          {renderChips(SCALP_CONDITIONS, o => draft.scalpCondition === o, o => setSingle('scalpCondition', o))}
+          {sectionHead('SCALP CONDITION', { selected: draft.scalpCondition.length, total: SCALP_CONDITIONS.length }, { optional: true })}
+          {sub('Your scalp. Pick all that apply.')}
+          {renderChips(withSaved(SCALP_CONDITIONS, draft.scalpCondition), o => draft.scalpCondition.includes(o), o => toggleMulti('scalpCondition', o))}
 
           {sectionHead('COLOUR & TREATMENT HISTORY', { selected: draft.treatmentHistory.length, total: TREATMENT_HISTORY.length })}
           {sub('Previous professional treatments')}
@@ -175,55 +175,55 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     case 'nails':
       return (
         <>
-          {sectionHead('PREFERRED LENGTH', { selected: draft.nailLength ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('How long do you like your nails?')}
-          {renderChips(NAIL_LENGTHS, o => draft.nailLength === o, o => setSingle('nailLength', o))}
+          {sectionHead('PREFERRED LENGTH', { selected: draft.nailLength.length, total: NAIL_LENGTHS.length }, { optional: true })}
+          {sub('How long you like your nails. Pick all you wear.')}
+          {renderChips(withSaved(NAIL_LENGTHS, draft.nailLength), o => draft.nailLength.includes(o), o => toggleMulti('nailLength', o))}
 
-          {sectionHead('PREFERRED SHAPE', { selected: draft.nailShape ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('Your go-to nail shape')}
-          {renderChips(NAIL_SHAPES, o => draft.nailShape === o, o => setSingle('nailShape', o))}
+          {sectionHead('PREFERRED SHAPE', { selected: draft.nailShape.length, total: NAIL_SHAPES.length }, { optional: true })}
+          {sub('Nail shapes you like. Pick as many as you want.')}
+          {renderChips(withSaved(NAIL_SHAPES, draft.nailShape), o => draft.nailShape.includes(o), o => toggleMulti('nailShape', o))}
         </>
       );
 
     case 'lashesBrows':
       return (
         <>
-          {sectionHead('LASH STYLE', { selected: draft.lashStyle ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('Your preferred lash look')}
-          {renderChips(LASH_STYLES, o => draft.lashStyle === o, o => setSingle('lashStyle', o))}
+          {sectionHead('LASH STYLE', { selected: draft.lashStyle.length, total: LASH_STYLES.length }, { optional: true })}
+          {sub('Lash looks you like. Pick as many as you want.')}
+          {renderChips(withSaved(LASH_STYLES, draft.lashStyle), o => draft.lashStyle.includes(o), o => toggleMulti('lashStyle', o))}
 
           {sectionHead('LASH STATUS', { selected: draft.lashStatus ? 1 : 0, total: 1 }, { optional: true })}
           {sub('Current situation')}
           {renderChips(LASH_STATUS, o => draft.lashStatus === o, o => setSingle('lashStatus', o))}
 
-          {sectionHead('BROW STYLE', { selected: draft.browStyle ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('Your preferred brow look')}
-          {renderChips(BROW_STYLES, o => draft.browStyle === o, o => setSingle('browStyle', o))}
+          {sectionHead('BROW STYLE', { selected: draft.browStyle.length, total: BROW_STYLES.length }, { optional: true })}
+          {sub('Brow looks you like. Pick as many as you want.')}
+          {renderChips(withSaved(BROW_STYLES, draft.browStyle), o => draft.browStyle.includes(o), o => toggleMulti('browStyle', o))}
 
-          {sectionHead('BROW CONDITION', { selected: draft.browCondition ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('Your natural brows')}
-          {renderChips(BROW_CONDITIONS, o => draft.browCondition === o, o => setSingle('browCondition', o))}
+          {sectionHead('BROW CONDITION', { selected: draft.browCondition.length, total: BROW_CONDITIONS.length }, { optional: true })}
+          {sub('Your natural brows. Pick all that apply.')}
+          {renderChips(withSaved(BROW_CONDITIONS, draft.browCondition), o => draft.browCondition.includes(o), o => toggleMulti('browCondition', o))}
         </>
       );
 
     case 'makeup':
       return (
         <>
-          {sectionHead('COVERAGE', { selected: draft.makeupCoverage ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('How much coverage do you prefer?')}
-          {renderChips(MAKEUP_COVERAGE, o => draft.makeupCoverage === o, o => setSingle('makeupCoverage', o))}
+          {sectionHead('COVERAGE', { selected: draft.makeupCoverage.length, total: MAKEUP_COVERAGE.length }, { optional: true })}
+          {sub('How much coverage you like. Pick all you wear.')}
+          {renderChips(withSaved(MAKEUP_COVERAGE, draft.makeupCoverage), o => draft.makeupCoverage.includes(o), o => toggleMulti('makeupCoverage', o))}
 
-          {sectionHead('FINISH', { selected: draft.makeupFinish ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('Your preferred skin finish')}
-          {renderChips(MAKEUP_FINISH, o => draft.makeupFinish === o, o => setSingle('makeupFinish', o))}
+          {sectionHead('FINISH', { selected: draft.makeupFinish.length, total: MAKEUP_FINISH.length }, { optional: true })}
+          {sub('Skin finishes you like. Pick all you wear.')}
+          {renderChips(withSaved(MAKEUP_FINISH, draft.makeupFinish), o => draft.makeupFinish.includes(o), o => toggleMulti('makeupFinish', o))}
 
-          {sectionHead('EYE STYLE', { selected: draft.makeupEyes ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('What eye look do you go for?')}
-          {renderChips(MAKEUP_EYES, o => draft.makeupEyes === o, o => setSingle('makeupEyes', o))}
+          {sectionHead('EYE STYLE', { selected: draft.makeupEyes.length, total: MAKEUP_EYES.length }, { optional: true })}
+          {sub('Eye looks you go for. Pick as many as you want.')}
+          {renderChips(withSaved(MAKEUP_EYES, draft.makeupEyes), o => draft.makeupEyes.includes(o), o => toggleMulti('makeupEyes', o))}
 
-          {sectionHead('LIP PREFERENCE', { selected: draft.makeupLips ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('Your go-to lip look')}
-          {renderChips(MAKEUP_LIPS, o => draft.makeupLips === o, o => setSingle('makeupLips', o))}
+          {sectionHead('LIP PREFERENCE', { selected: draft.makeupLips.length, total: MAKEUP_LIPS.length }, { optional: true })}
+          {sub('Lip looks you go for. Pick as many as you want.')}
+          {renderChips(withSaved(MAKEUP_LIPS, draft.makeupLips), o => draft.makeupLips.includes(o), o => toggleMulti('makeupLips', o))}
         </>
       );
 

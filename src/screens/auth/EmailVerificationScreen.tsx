@@ -139,7 +139,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         instagram:             meta['instagram']             ?? null,
         tiktok:                meta['tiktok']                ?? null,
         website:               meta['website']               ?? null,
-        hair_type:             meta['hair_type']             ?? null,
+        hair_type:             toPickColumn(meta['hair_type']),
         skin_type:             toPickColumn(meta['skin_type']),
         allergies:             meta['allergies']             ?? [],
         skin_concerns:         meta['skin_concerns']         ?? [],

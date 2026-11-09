@@ -19,6 +19,7 @@
 //  - Every idea says which answer it came from.
 
 import type { BeautyData, CategoryKey } from '../../types/beautyProfile';
+import { formatPickList } from './pickList';
 
 /** The categories that have ideas. Skin has none on purpose (see above). */
 export type SuitedCategory = 'hair' | 'nails' | 'lashesBrows' | 'makeup';
@@ -67,9 +68,11 @@ const EXTENSIONS = idea('Extensions maintenance', 'extensions');
 const SCALP_TREATMENT = idea('Scalp treatment', 'scalp');
 
 function hairIdeas(d: BeautyData): [Idea, string][] {
-  const type = d.hairType;
-  const coily = COILY.has(type);
-  const curly = type === 'Curly';
+  // Hair type is multi-pick (4B and 4C, say). Any coily pick counts as
+  // coily, so mixed coily/curly hair never gets the straight-hair ideas.
+  const types = d.hairType;
+  const coily = types.some(t => COILY.has(t));
+  const curly = types.includes('Curly');
   const textured = coily || curly;
   const goals = new Set(d.hairGoals);
   const history = new Set(d.treatmentHistory);
@@ -116,11 +119,11 @@ function hairIdeas(d: BeautyData): [Idea, string][] {
   }
 
   // The hair type itself, last, so a stated goal always leads.
-  if (type) {
-    const because = `Hair type: ${type}`;
+  if (types.length) {
+    const because = `Hair type: ${formatPickList(types)}`;
     if (coily) add(because, SILK_PRESS, KNOTLESS, TWISTS, DEEP_CONDITION, TRIM);
     else if (curly) add(because, CURLY_CUT, WASH_AND_GO, DEEP_CONDITION, SILK_PRESS);
-    else if (type === 'Wavy') add(because, CURLY_CUT, BLOW_DRY);
+    else if (types.includes('Wavy')) add(because, CURLY_CUT, BLOW_DRY);
     else add(because, CUT_AND_BLOW_DRY, BLOW_DRY);
   }
   return out;
@@ -133,20 +136,21 @@ const QUIET_VIBES: ReadonlySet<string> = new Set(['Natural', 'Classic', 'Low-mai
 function nailIdeas(d: BeautyData): [Idea, string][] {
   const out: [Idea, string][] = [];
   const add = (because: string, ...ideas: Idea[]) => ideas.forEach(i => out.push([i, because]));
-  const length = d.nailLength;
-  const shape = d.nailShape;
-
-  if (length === 'Long' || length === 'Extra long') {
-    add(`Nail length: ${length}`, idea('Gel extensions', 'gel-x'), idea('Acrylic full set', 'acrylic'), idea('Infills', 'infill'));
-  } else if (length === 'Short' || length === 'Medium') {
-    add(`Nail length: ${length}`, idea('BIAB', 'biab'), idea('Gel manicure', 'gel'));
-  } else if (length === 'Natural / bare') {
-    add(`Nail length: ${length}`, idea('Russian manicure', 'manicure'), idea('BIAB', 'biab'));
+  for (const length of d.nailLength) {
+    if (length === 'Long' || length === 'Extra long') {
+      add(`Nail length: ${length}`, idea('Gel extensions', 'gel-x'), idea('Acrylic full set', 'acrylic'), idea('Infills', 'infill'));
+    } else if (length === 'Short' || length === 'Medium') {
+      add(`Nail length: ${length}`, idea('BIAB', 'biab'), idea('Gel manicure', 'gel'));
+    } else if (length === 'Natural / bare') {
+      add(`Nail length: ${length}`, idea('Russian manicure', 'manicure'), idea('BIAB', 'biab'));
+    }
   }
-  if (shape && LONG_SHAPES.has(shape)) {
-    add(`Nail shape: ${shape}`, idea('Acrylic full set', 'acrylic'), idea('Gel extensions', 'gel-x'), idea('Nail art', 'nail art'));
-  } else if (shape) {
-    add(`Nail shape: ${shape}`, idea('BIAB', 'biab'), idea('Gel manicure', 'gel'));
+  for (const shape of d.nailShape) {
+    if (LONG_SHAPES.has(shape)) {
+      add(`Nail shape: ${shape}`, idea('Acrylic full set', 'acrylic'), idea('Gel extensions', 'gel-x'), idea('Nail art', 'nail art'));
+    } else {
+      add(`Nail shape: ${shape}`, idea('BIAB', 'biab'), idea('Gel manicure', 'gel'));
+    }
   }
   const bold = d.styleVibe.find(v => BOLD_VIBES.has(v));
   const quiet = d.styleVibe.find(v => QUIET_VIBES.has(v));
@@ -195,8 +199,9 @@ const BROW_CONDITION_IDEAS: Record<string, Idea[]> = {
 
 function lashBrowIdeas(d: BeautyData): [Idea, string][] {
   const out: [Idea, string][] = [];
-  const from = (table: Record<string, Idea[]>, value: string, label: string) =>
-    (table[value] ?? []).forEach(i => out.push([i, `${label}: ${value}`]));
+  const from = (table: Record<string, Idea[]>, values: string | readonly string[], label: string) =>
+    (typeof values === 'string' ? [values] : values).forEach(value =>
+      (table[value] ?? []).forEach(i => out.push([i, `${label}: ${value}`])));
   from(LASH_STATUS_IDEAS, d.lashStatus, 'Lashes');
   from(LASH_IDEAS, d.lashStyle, 'Lash style');
   from(BROW_IDEAS, d.browStyle, 'Brow style');
@@ -207,19 +212,22 @@ function lashBrowIdeas(d: BeautyData): [Idea, string][] {
 function makeupIdeas(d: BeautyData): [Idea, string][] {
   const out: [Idea, string][] = [];
   const add = (because: string, ...ideas: Idea[]) => ideas.forEach(i => out.push([i, because]));
-  const coverage = d.makeupCoverage;
-  if (coverage === 'Full glam') add(`Coverage: ${coverage}`, idea('Full glam makeup', 'full glam'));
-  else if (coverage === 'Medium coverage') add(`Coverage: ${coverage}`, idea('Soft glam makeup', 'soft glam'));
-  else if (coverage === 'Sheer / natural') add(`Coverage: ${coverage}`, idea('Natural makeup', 'natural makeup'), idea('Soft glam makeup', 'soft glam'));
-  const eyes = d.makeupEyes;
-  if (eyes === 'Smoky') add(`Eyes: ${eyes}`, idea('Smoky eye', 'smokey eye'));
-  else if (eyes === 'Cut crease') add(`Eyes: ${eyes}`, idea('Cut crease', 'cut crease'));
-  else if (eyes === 'Graphic liner') add(`Eyes: ${eyes}`, idea('Graphic liner', 'graphic liner'));
-  else if (eyes === 'Bold / dramatic') add(`Eyes: ${eyes}`, idea('Full glam makeup', 'full glam'));
-  if (d.makeupFinish === 'Dewy' || d.makeupFinish === 'Glowy') add(`Finish: ${d.makeupFinish}`, idea('Dewy skin makeup', 'dewy'));
+  for (const coverage of d.makeupCoverage) {
+    if (coverage === 'Full glam') add(`Coverage: ${coverage}`, idea('Full glam makeup', 'full glam'));
+    else if (coverage === 'Medium coverage') add(`Coverage: ${coverage}`, idea('Soft glam makeup', 'soft glam'));
+    else if (coverage === 'Sheer / natural') add(`Coverage: ${coverage}`, idea('Natural makeup', 'natural makeup'), idea('Soft glam makeup', 'soft glam'));
+  }
+  for (const eyes of d.makeupEyes) {
+    if (eyes === 'Smoky') add(`Eyes: ${eyes}`, idea('Smoky eye', 'smokey eye'));
+    else if (eyes === 'Cut crease') add(`Eyes: ${eyes}`, idea('Cut crease', 'cut crease'));
+    else if (eyes === 'Graphic liner') add(`Eyes: ${eyes}`, idea('Graphic liner', 'graphic liner'));
+    else if (eyes === 'Bold / dramatic') add(`Eyes: ${eyes}`, idea('Full glam makeup', 'full glam'));
+  }
+  const dewy = d.makeupFinish.find(f => f === 'Dewy' || f === 'Glowy');
+  if (dewy) add(`Finish: ${dewy}`, idea('Dewy skin makeup', 'dewy'));
   if (d.styleVibe.includes('Editorial')) add('Style: Editorial', idea('Editorial makeup', 'editorial'));
   if (d.styleVibe.includes('Glam')) add('Style: Glam', idea('Full glam makeup', 'full glam'));
-  if (coverage || eyes) add('Your makeup answers', idea('Makeup lesson', 'makeup lesson'));
+  if (d.makeupCoverage.length || d.makeupEyes.length) add('Your makeup answers', idea('Makeup lesson', 'makeup lesson'));
   return out;
 }
 

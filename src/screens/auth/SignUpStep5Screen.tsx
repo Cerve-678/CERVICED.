@@ -307,7 +307,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             business_type: data.businessType || null,
             business_phone: data.businessPhone || null, instagram: data.instagram || null,
             tiktok: data.tiktok || null, website: data.website || null,
-            hair_type: data.hairType || null, skin_type: toPickColumn(data.skinType),
+            hair_type: toPickColumn(data.hairType), skin_type: toPickColumn(data.skinType),
             allergies: data.allergies, skin_concerns: data.skinConcerns,
             style_vibe: toPickColumn(data.styleVibe), treatment_history: data.treatmentHistory,
             medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,

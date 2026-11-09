@@ -3,7 +3,7 @@ import { EMPTY_BEAUTY_DATA, type BeautyData } from '../types/beautyProfile';
 
 const FILLED: BeautyData = {
   ...EMPTY_BEAUTY_DATA,
-  hairType: '4C',
+  hairType: ['4C'],
   skinType: ['Oily'],
   skinConcerns: ['Acne'],
   styleVibe: ['Natural'],
@@ -18,7 +18,7 @@ describe('beautyProfileTodo', () => {
   });
 
   it('ignores optional answers like medical notes, skin tone and nails', () => {
-    const optionalBlank: BeautyData = { ...FILLED, medicalNotes: '', skinTone: '', nailShape: '', hairGoals: [] };
+    const optionalBlank: BeautyData = { ...FILLED, medicalNotes: '', skinTone: '', nailShape: [], hairGoals: [] };
     expect(beautyProfileTodo(optionalBlank, CLIENT)).toEqual([]);
   });
 
