@@ -25,7 +25,7 @@ export const CITY_AREAS: CityAreaData[] = [
       },
       {
         region: 'East London',
-        areas: ['Barking', 'Barking and Dagenham', 'Bethnal Green', 'Bow', 'Canary Wharf', 'Canning Town', 'Chingford', 'Clapton', 'Dagenham', 'East Ham', 'Forest Gate', 'Hackney Wick', 'Havering', 'Homerton', 'Hornchurch', 'Ilford', 'Leyton', 'Leytonstone', 'Mile End', 'Newham', 'Plaistow', 'Poplar', 'Redbridge', 'Romford', 'Shoreditch', 'Stepney', 'Stratford', 'Tower Hamlets', 'Upton Park', 'Waltham Forest', 'Walthamstow', 'Wanstead', 'Whitechapel', 'Woodford'],
+        areas: ['Barking', 'Barking and Dagenham', 'Bethnal Green', 'Bow', 'Canary Wharf', 'Canning Town', 'Chingford', 'Clapton', 'Dagenham', 'East Ham', 'Forest Gate', 'Hackney Wick', 'Haggerston', 'Havering', 'Homerton', 'Hornchurch', 'Hoxton', 'Ilford', 'Leyton', 'Leytonstone', 'London Fields', 'Mile End', 'Newham', 'Plaistow', 'Poplar', 'Redbridge', 'Romford', 'Shoreditch', 'Stepney', 'Stratford', 'Tower Hamlets', 'Upton Park', 'Waltham Forest', 'Walthamstow', 'Wanstead', 'Whitechapel', 'Woodford'],
       },
       {
         region: 'West London',

@@ -19,6 +19,7 @@ import { useBookmarkStore } from '../stores/useBookmarkStore';
 import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import { dimensions } from '../constants/PlatformDimensions';
+import { CircleStack } from './CircleStack';
 
 interface PortfolioCardProps {
   item: PortfolioItem;
@@ -170,6 +171,15 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
           />
         </TouchableOpacity>
 
+        {/* Faces of people you follow who've been here, just left of the
+            heart on the same line (renders nothing otherwise). */}
+        <CircleStack
+          providerId={item.providerId}
+          providerName={item.providerName}
+          cardWidth={columnWidth}
+          style={styles.circle}
+        />
+
         {/* Bottom overlay info */}
         <View style={styles.overlay}>
           {/* Category chip — the blue-grey secondary fill (always pale, both
@@ -250,6 +260,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Vertically centred on the 30px heart (top 8) and 6px to its left.
+  circle: {
+    position: 'absolute',
+    top: 13,
+    right: 44,
   },
   priceBadge: {
     position: 'absolute',

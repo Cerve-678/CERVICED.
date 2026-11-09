@@ -474,6 +474,8 @@ export interface ConversationContext {
   entities: EntityBag;
   /** What Becca answered last, so "the first one" knows what list it means. */
   lastCapabilityId?: string;
+  /** Provider setting just located, for "how do I change this?" follow-ups. */
+  lastNavigationAsk?: string;
   /** The exact booking most recently discussed, for explicit follow-ups. */
   lastBooking?: NonNullable<EntityBag["booking"]>;
   /**
@@ -546,6 +548,12 @@ export interface CapabilityContext {
   addToCart?: (item: AddToCartParams) => void;
   /** Signed-in user id, when available. */
   userId?: string;
+  /**
+   * Client hat only: Account → Your area (users.client_area), from
+   * AuthContext. "Near me" answers measure from it when nothing was picked
+   * on this phone — see planClientLocation.
+   */
+  clientArea?: string;
   /**
    * Provider hat only: the provider is link-only (takes bookings on their own
    * booking site). Only capabilities marked `fitsLinkOnly` ever run with this

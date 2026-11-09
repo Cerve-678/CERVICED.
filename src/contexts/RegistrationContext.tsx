@@ -1,6 +1,7 @@
 // src/contexts/RegistrationContext.tsx
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { toPickList } from '../features/beauty-profile/pickList';
 import { AccountType, useAuth } from './AuthContext';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
@@ -30,16 +31,19 @@ export interface RegistrationData {
   businessType: string;
   // Beauty profile — shown to providers
   hairType: string;
-  skinType: string;
+  skinType: string[];
   allergies: string[];
   skinConcerns: string[];
-  styleVibe: string;
+  styleVibe: string[];
   treatmentHistory: string[];
   medicalNotes: string;
   photographyConsent: boolean;
   // Preferences — for matching / discovery only
   serviceInterests: string[];
   serviceLocations: string[];
+  // Client sign-up's "Where are you based?" (AreaPicker, "Camden, London").
+  // Saved to users.client_area — the same column Account > Your area edits.
+  clientArea: string;
   maintenanceFrequency: string;
   referralSource: string;
   // Personalisation — affects home feed gating
@@ -52,7 +56,7 @@ export interface RegistrationData {
   // Optional at signup (a brand-new provider can have 0 years). Kept as the raw
   // string the field types; parsed to an INT at the save boundary. Staged on
   // users.years_experience, then copied to providers.years_experience by
-  // InfoRegScreen's first-save prefill — same route as team_size/price_range.
+  // InfoRegScreen's prefill — same route as price_bands/price_range.
   yearsExperience: string;
   priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
   priceBands: string[];
@@ -98,16 +102,17 @@ const initialData: RegistrationData = {
   businessType: '',
   // Beauty profile
   hairType: '',
-  skinType: '',
+  skinType: [],
   allergies: [],
   skinConcerns: [],
-  styleVibe: '',
+  styleVibe: [],
   treatmentHistory: [],
   medicalNotes: '',
   photographyConsent: true,
   // Preferences
   serviceInterests: [],
   serviceLocations: [],
+  clientArea: '',
   maintenanceFrequency: '',
   referralSource: '',
   // Personalisation
@@ -157,6 +162,10 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
           setData(prev => ({
             ...prev,
             ...parsed,
+            // A draft saved before skin type / style vibe went multi-pick
+            // holds a single string; resume it as a one-answer list.
+            skinType: toPickList(parsed.skinType ?? prev.skinType),
+            styleVibe: toPickList(parsed.styleVibe ?? prev.styleVibe),
             fromClientSwitch: false,
             fromProviderSwitch: false,
           }));

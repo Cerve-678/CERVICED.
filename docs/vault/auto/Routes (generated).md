@@ -26,6 +26,7 @@ Curated overview: [[Screens & Navigation]].
 - `Search`
 - `Bookings`
 - `BookingDetail`
+- `ActivityCentre`
 - `ExternalBookingDetail`
 - `Reschedule`
 - `BookmarkedProviders`
@@ -43,12 +44,16 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderConversation`
 - `Promotions`
 - `InfoPacks`
+- `ProviderIntakeForm`
 - `Analytics`
 - `BookingHistory`
 - `Automations`
+- `Payments`
+- `Policies`
 - `ProfileMain`
 - `ProfileInfo`
 - `BeautyProfile`
+- `Circle`
 - `ChangePassword`
 - `NotificationsSettings`
 - `PaymentMethods`
@@ -56,7 +61,6 @@ Curated overview: [[Screens & Navigation]].
 - `HelpCentre`
 - `TextSizing`
 - `LanguageRegion`
-- `About`
 - `ReportProblem`
 - `AdminDashboard`
 - `AdminMoney`
@@ -71,10 +75,7 @@ Curated overview: [[Screens & Navigation]].
 - `BeccaStack`
 - `EditProfile`
 - `Branding`
-- `Policies`
-- `Payments`
 - `BusinessInfo`
-- `ProviderIntakeForm`
 - `ProviderServicesMain`
 - `ProviderAccountMain`
 - `MyPublicProfile`

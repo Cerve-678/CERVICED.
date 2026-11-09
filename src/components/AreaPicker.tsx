@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { type ReactNode, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -13,13 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { CITY_AREA_NAMES, COUNTY_TOWNS, getCityAreaData, searchPlaces } from '../data/cityAreas';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
+import { samePlace } from '../utils/providerCity';
 
 /**
  * Stepped city → region → area picker, composing "<Area>, <City>".
  *
  * Used by BOTH hats for the coarse-location question:
  *   - client Account "Your area"       -> users.client_area
+ *   - client sign-up "Where are you based?" (Step 5) -> users.client_area
  *   - provider InfoReg "Where you're based" -> providers.location_text (geocoded)
+ *   - provider About You "Areas you cover" (variant 'cover', one place per pick)
+ *     -> providers.service_locations, via AreasYouCoverPicker
  *
  * It is deliberately the ONE component for this — a client's "Camden, London"
  * and a provider's "Camden, London" mean the same thing, and there is no second
@@ -40,6 +44,15 @@ export type AreaPickerProps = {
   disabled?: boolean;
   /** Explanatory line under the modal heading. Defaults to the client wording. */
   subtitle?: string;
+  /** 'based' (default) answers "where are you"; 'cover' adds one place to a
+   *  list of places covered, so it also offers a whole town ("All of
+   *  London") and words its headings for adding. */
+  variant?: 'based' | 'cover';
+  /** Places already chosen, ticked in the lists so nobody adds one twice. */
+  picked?: readonly string[];
+  /** Replaces the default field with the caller's own control; call `open`
+   *  to show the picker. */
+  renderTrigger?: (open: () => void) => ReactNode;
 };
 
 type Step = 'city' | 'county' | 'region' | 'area';
@@ -60,7 +73,12 @@ export default function AreaPicker({
   accentColor = '#AF9197',
   disabled,
   subtitle = DEFAULT_SUBTITLE,
+  variant = 'based',
+  picked,
+  renderTrigger,
 }: AreaPickerProps) {
+  const covering = variant === 'cover';
+  const isPicked = (place: string) => !!picked?.some(p => samePlace(p, place));
   const bottomInset = useSystemBottomInset();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>('city');
@@ -146,6 +164,14 @@ export default function AreaPicker({
     setStep('area');
   };
 
+  // 'cover' only: the whole town rather than one area of it.
+  const pickWholeTown = () => {
+    if (!city || city === OTHER_CITY) return;
+    Haptics.selectionAsync().catch(() => {});
+    onChange(city);
+    setVisible(false);
+  };
+
   const pickArea = (name: string) => {
     Haptics.selectionAsync().catch(() => {});
     onChange(city && city !== OTHER_CITY ? `${name}, ${city}` : name);
@@ -187,31 +213,39 @@ export default function AreaPicker({
 
   const heading =
     step === 'city'
-      ? 'Where are you based?'
+      ? covering ? 'Add a place you cover' : 'Where are you based?'
       : step === 'county'
         ? `Which part of ${county}?`
         : step === 'region'
           ? `Whereabouts in ${city}?`
           : city === OTHER_CITY
-            ? 'Where are you based?'
-            : `Pick your area in ${region}`;
+            ? covering ? 'Which place?' : 'Where are you based?'
+            : covering ? `Pick an area in ${region}` : `Pick your area in ${region}`;
+
+  // Already on the list: a tick instead of the usual chevron.
+  const rowEnd = (place: string, chevronColor: string) =>
+    isPicked(place)
+      ? <Ionicons name="checkmark-circle" size={19} color={accentColor} accessibilityLabel="Already added" />
+      : <Ionicons name="chevron-forward" size={17} color={chevronColor} />;
 
   return (
     <>
-      <TouchableOpacity
-        style={[styles.field, disabled && styles.disabled]}
-        onPress={open}
-        disabled={disabled}
-        activeOpacity={0.75}
-        accessibilityRole="button"
-        accessibilityLabel="Choose your area"
-      >
-        <Ionicons name="map-outline" size={20} color={accentColor} />
-        <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
-          {value || 'Select your area'}
-        </Text>
-        <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
-      </TouchableOpacity>
+      {renderTrigger ? renderTrigger(open) : (
+        <TouchableOpacity
+          style={[styles.field, disabled && styles.disabled]}
+          onPress={open}
+          disabled={disabled}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Choose your area"
+        >
+          <Ionicons name="map-outline" size={20} color={accentColor} />
+          <Text style={[styles.fieldText, !value && styles.placeholder]} numberOfLines={2}>
+            {value || 'Select your area'}
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color="#8B8B95" />
+        </TouchableOpacity>
+      )}
 
       <Modal visible={visible} animationType="slide" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
         <View style={styles.modalRoot}>
@@ -276,7 +310,7 @@ export default function AreaPicker({
                   disabled={!freeText.trim()}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.confirmBtnText}>Use this area</Text>
+                  <Text style={styles.confirmBtnText}>{covering ? 'Add this place' : 'Use this area'}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -316,7 +350,9 @@ export default function AreaPicker({
                       <Text style={styles.rowText}>
                         {match.kind === 'area' ? `${match.name}, ${match.town}` : match.name}
                       </Text>
-                      <Ionicons name="chevron-forward" size={17} color={match.kind === 'area' ? accentColor : '#8B8B95'} />
+                      {match.kind === 'area'
+                        ? rowEnd(`${match.name}, ${match.town}`, accentColor)
+                        : <Ionicons name="chevron-forward" size={17} color="#8B8B95" />}
                     </TouchableOpacity>
                   ))}
 
@@ -335,6 +371,22 @@ export default function AreaPicker({
                     </TouchableOpacity>
                   ))}
 
+                {step === 'region' && covering && city && city !== OTHER_CITY ? (
+                  <TouchableOpacity
+                    style={styles.row}
+                    onPress={pickWholeTown}
+                    activeOpacity={0.5}
+                    accessibilityRole="button"
+                    accessibilityLabel={`All of ${city}`}
+                  >
+                    <View style={styles.wholeTownText}>
+                      <Text style={[styles.rowText, styles.wholeTownTitle, { color: accentColor }]}>All of {city}</Text>
+                      <Text style={styles.wholeTownSub}>Every area in {city}</Text>
+                    </View>
+                    {rowEnd(city, accentColor)}
+                  </TouchableOpacity>
+                ) : null}
+
                 {step === 'region' &&
                   cityData?.regions.map(r => (
                     <TouchableOpacity
@@ -352,7 +404,7 @@ export default function AreaPicker({
                     {regionData?.areas.map(a => (
                       <TouchableOpacity key={a} style={styles.row} onPress={() => pickArea(a)}>
                         <Text style={styles.rowText}>{a}</Text>
-                        <Ionicons name="chevron-forward" size={17} color={accentColor} />
+                        {rowEnd(city && city !== OTHER_CITY ? `${a}, ${city}` : a, accentColor)}
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity
@@ -395,6 +447,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#D1D1D6' },
   rowText: { flex: 1, color: '#1C1C1E', fontSize: 15, lineHeight: 21 },
   empty: { color: '#6B6B73', textAlign: 'center', marginTop: 30, fontSize: 14, lineHeight: 20 },
+  wholeTownText: { flex: 1 },
+  wholeTownTitle: { fontWeight: '700' },
+  wholeTownSub: { marginTop: 2, color: '#6B6B73', fontSize: 12, lineHeight: 16 },
   // "Other…" escape hatch — dashed accent pill, set apart from the plain rows.
   otherRow: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 100, borderWidth: 1, borderStyle: 'dashed', marginTop: 12, marginBottom: 4 },
   otherRowText: { fontSize: 13, fontWeight: '700' },

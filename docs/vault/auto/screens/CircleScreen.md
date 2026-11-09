@@ -1,10 +1,10 @@
 ---
 tags: [screen, client]
 ---
-# AboutScreen
-#screen · `src/screens/shared/AboutScreen.tsx`
+# CircleScreen
+#screen · `src/screens/client/CircleScreen.tsx`
 
-**Registered route(s):** `About`
+**Registered route(s):** `Circle`
 
 ## → Navigates to
 - _— none —_

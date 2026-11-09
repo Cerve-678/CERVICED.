@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The CERVICED Waitlist</title>
 <meta name="description" content="CERVICED is a UK beauty &amp; wellness marketplace built as a shopping experience — several providers, one cart, one checkout. Join the waitlist.">
+<script>
+/* A visitor's own light/dark choice (the header switch) wins over the device
+   setting; applied before first paint so the page never flashes. */
+(function(){try{var t=localStorage.getItem('cerviced-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;500;600;700&display=swap">
@@ -106,14 +111,6 @@ a{color:var(--accent-text);}
   font-size:20px;letter-spacing:0.26em;text-transform:uppercase;
   color:var(--text);text-decoration:none;
 }
-.tag{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:6px 12px;border-radius:999px;
-  background:var(--accent-dim);color:var(--accent-text);
-  font-family:'Bakbak One',sans-serif;
-  font-size:10px;letter-spacing:0.16em;text-transform:uppercase;
-}
-.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
 
 /* ── Hero ─────────────────────────────────────────────────────────── */
 .hero{
@@ -310,16 +307,74 @@ select{appearance:none;cursor:pointer;}
 }
 .status[data-shown="true"]{display:block;}
 
-footer{
-  border-top:1px solid var(--sep);padding:36px 0 56px;
-  display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;
-  font-size:13px;color:var(--sub);
+/* ── Header menu ──────────────────────────────────────────────────── */
+.sitenav{display:flex;align-items:center;gap:6px 22px;flex-wrap:wrap;justify-content:flex-end;}
+.sitenav a{
+  font-size:14px;font-weight:600;color:var(--text);text-decoration:none;
+  padding:6px 0;
+}
+.sitenav a:hover{color:var(--accent-text);}
+.sitenav a.join{
+  padding:8px 16px;border-radius:999px;
+  background:var(--accent);color:var(--on-accent);
+  font-family:'Bakbak One',sans-serif;font-weight:400;
+  font-size:12px;letter-spacing:0.12em;text-transform:uppercase;
+}
+.sitenav a.join:hover{color:var(--on-accent);opacity:0.9;}
+section[id]{scroll-margin-top:24px;}
+
+
+/* ── Theme switch ─────────────────────────────────────────────────── */
+.theme-toggle{
+  width:36px;height:36px;border-radius:50%;display:inline-grid;place-items:center;
+  border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;padding:0;
+  transition:background .2s ease,color .2s ease,transform .3s ease;
+}
+.theme-toggle:hover{background:var(--accent-dim);color:var(--accent-text);}
+.theme-toggle:active{transform:rotate(-20deg) scale(.94);}
+.theme-toggle svg{width:17px;height:17px;}
+.theme-toggle .moon{display:none;}
+:root[data-theme="light"] .theme-toggle .sun,
+:root:not([data-theme]) .theme-toggle .sun{display:none;}
+:root[data-theme="light"] .theme-toggle .moon,
+:root:not([data-theme]) .theme-toggle .moon{display:block;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]) .theme-toggle .sun{display:block;}
+  :root:not([data-theme]) .theme-toggle .moon{display:none;}
+}
+/* ── Footer ───────────────────────────────────────────────────────── */
+.site-foot{border-top:1px solid var(--sep);padding:48px 0 40px;font-size:14px;color:var(--sub);}
+.foot-cols{
+  display:grid;grid-template-columns:1.3fr repeat(3,1fr);gap:36px 32px;
+}
+.foot-brand{display:flex;flex-direction:column;gap:10px;align-items:flex-start;}
+.foot-brand p{max-width:30ch;}
+.site-foot h2{
+  font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--text);margin:0 0 14px;line-height:1.3;
+}
+.site-foot ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
+.site-foot a{color:var(--sub);text-decoration:none;}
+.site-foot a:hover{color:var(--accent-text);text-decoration:underline;text-underline-offset:3px;}
+.site-foot .wordmark{color:var(--text);}
+.foot-base{
+  margin-top:40px;padding-top:20px;border-top:1px solid var(--sep);
+  display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;font-size:13px;
 }
 
 @media (max-width:880px){
+  .foot-cols{grid-template-columns:1fr 1fr;}
+  .foot-brand{grid-column:1 / -1;}
   .hero{grid-template-columns:1fr;gap:44px;padding:56px 0 68px;}
   .three{grid-template-columns:1fr;gap:32px;}
   .audiences{grid-template-columns:1fr;}
+}
+@media (max-width:640px){
+  .masthead{flex-direction:column;align-items:flex-start;gap:14px;}
+  .sitenav{justify-content:flex-start;gap:4px 18px;}
+}
+@media (max-width:420px){
+  .foot-cols{grid-template-columns:1fr;}
 }
 </style>
 </head>
@@ -328,7 +383,17 @@ footer{
 <div class="wrap">
   <header class="masthead">
     <a class="wordmark" href="#top">Cerviced</a>
-    <span class="tag"><span class="dot"></span>United Kingdom · Pre-launch</span>
+    <nav class="sitenav" aria-label="Main">
+      <a href="/about">About us</a>
+      <a href="#for-you">How it works</a>
+      <a href="/legal#safety">Health &amp; safety</a>
+      <a href="/legal">Terms &amp; policies</a>
+      <a class="join" href="#join">Join the waitlist</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>
+      </button>
+    </nav>
   </header>
 
   <!-- ── Hero ────────────────────────────────────────────────────── -->
@@ -363,7 +428,7 @@ footer{
 </div>
 
 <!-- ── What it is ────────────────────────────────────────────────── -->
-<section>
+<section id="about">
   <div class="wrap">
     <div class="section-head reveal">
       <span class="label">What we're building</span>
@@ -377,7 +442,7 @@ footer{
 </section>
 
 <!-- ── Audiences ─────────────────────────────────────────────────── -->
-<section>
+<section id="for-you">
   <div class="wrap">
     <div class="section-head reveal">
       <span class="label">Two sides</span>
@@ -476,12 +541,50 @@ footer{
   </div>
 </section>
 
-<div class="wrap">
-  <footer>
-    <span>Cerviced Ltd · United Kingdom · <a href="/legal">Terms &amp; Policies</a> · <a href="/legal#privacy">Privacy</a></span>
-    <span>hello@cerviced.com</span>
-  </footer>
-</div>
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="foot-cols">
+      <div class="foot-brand">
+        <a class="wordmark" href="#top">Cerviced</a>
+        <p>Booking for independent beauty &amp; wellness providers across the UK. Pre-launch.</p>
+        <a href="mailto:support@cerviced.co">support@cerviced.co</a>
+      </div>
+      <nav aria-labelledby="foot-cerviced">
+        <h2 id="foot-cerviced">Cerviced</h2>
+        <ul>
+          <li><a href="/about">About us</a></li>
+          <li><a href="#for-you">For providers &amp; clients</a></li>
+          <li><a href="#join">Join the waitlist</a></li>
+          <li><a href="mailto:support@cerviced.co">Contact us</a></li>
+        </ul>
+      </nav>
+      <nav aria-labelledby="foot-legal">
+        <h2 id="foot-legal">Legal</h2>
+        <ul>
+          <li><a href="/legal#terms">Terms &amp; Conditions</a></li>
+          <li><a href="/legal#provider-terms">Provider Terms of Business</a></li>
+          <li><a href="/legal#privacy">Privacy Policy</a></li>
+          <li><a href="/legal#cookies">Cookies</a></li>
+          <li><a href="/legal#fees">Fees, cancellations &amp; refunds</a></li>
+        </ul>
+      </nav>
+      <nav aria-labelledby="foot-safety">
+        <h2 id="foot-safety">Safety &amp; community</h2>
+        <ul>
+          <li><a href="/legal#safety">Health &amp; Safety</a></li>
+          <li><a href="/legal#providers">Provider Standards</a></li>
+          <li><a href="/legal#community">Community Guidelines</a></li>
+          <li><a href="/legal#reviews">Reviews Policy</a></li>
+          <li><a href="/legal#complaints">Complaints &amp; reporting</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="foot-base">
+      <span>© 2026 Cerviced Ltd, registered in England and Wales.</span>
+      <span>United Kingdom</span>
+    </div>
+  </div>
+</footer>
 
 <script>
 /* ──────────────────────────────────────────────────────────────────────
@@ -735,6 +838,18 @@ var WAITLIST = {
     }, { rootMargin: '0px 0px -12% 0px' });
     targets.forEach(function (el) { io.observe(el); });
   }
+})();
+</script>
+<script>
+(function(){
+  var d=document.documentElement, tg=document.getElementById('theme-toggle');
+  if(!tg)return;
+  tg.addEventListener('click',function(){
+    var cur=d.getAttribute('data-theme')||((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');
+    var next=cur==='dark'?'light':'dark';
+    d.setAttribute('data-theme',next);
+    try{localStorage.setItem('cerviced-theme',next);}catch(e){}
+  });
 })();
 </script>
 </body>

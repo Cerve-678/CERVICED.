@@ -33,6 +33,7 @@ import {
   ConfirmedBooking,
 } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { DEFAULT_CALENDAR_VIEW, nextCalendarView, useCalendarViewPreference, type CalendarView } from '../../features/provider-bookings/calendarViewPreference';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { storage } from '../../utils/storage';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
@@ -53,7 +54,7 @@ import {
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../utils/scheduleIssues';
-import { resolveTimelineRange } from '../../utils/dayTimelineRange';
+import { assignOverlapColumns, resolveTimelineRange } from '../../utils/dayTimelineRange';
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
 import { withTimeout } from '../../utils/withTimeout';
@@ -63,7 +64,7 @@ import type {
   DbProviderAvailabilityWindow,
   DbProviderAvailabilityOverride,
 } from '../../types/database';
-import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes, overridesFromDate } from '../../utils/dateUtils';
+import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes, overridesFromDate, formatDayRangeShortMonth } from '../../utils/dateUtils';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import * as Haptics from 'expo-haptics';
 
@@ -396,6 +397,7 @@ const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
   stripe: 'Payments',
   portfolio: 'EditProfile',
   terms: 'EditProfile',
+  automations: 'Automations',
 };
 
 const ISSUE_COLOR = '#FF9500';
@@ -541,22 +543,12 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
     return { booking: b, top, height, col: 0, cols: 1, colorIdx: i % BLOCK_COLORS.length };
   });
 
-  // Simple overlap detection: assign columns
-  for (let i = 0; i < positioned.length; i++) {
-    const a = positioned[i]!;
-    let col = 0;
-    const usedCols = new Set<number>();
-    for (let j = 0; j < i; j++) {
-      const b = positioned[j]!;
-      const aEnd = a.top + a.height;
-      const bEnd = b.top + b.height;
-      if (a.top < bEnd && aEnd > b.top) usedCols.add(b.col);
-    }
-    while (usedCols.has(col)) col++;
-    a.col = col;
-  }
-  const maxCols = Math.max(1, ...positioned.map(p => p.col + 1));
-  positioned.forEach(p => { p.cols = maxCols; });
+  // Side-by-side columns for clashing bookings, counted per clash so the
+  // rest of the day stays full width.
+  assignOverlapColumns(positioned).forEach((c, i) => {
+    positioned[i]!.col = c.col;
+    positioned[i]!.cols = c.cols;
+  });
 
   const bookingAreaW = screenWidth - TIME_COL_W - 32;
 
@@ -729,19 +721,28 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
 
 // ─── Week view ────────────────────────────────────────────────────────────
 
-// Deliberately more compact than the day timeline's HOUR_H=64 — seven columns
-// have to share the width a single day timeline gets to itself.
-const WK_HOUR_H     = 56;
-const WK_TIME_COL_W = 44;
-// Right-hand spacer in both the day-header row and the grid; the header's
-// "next week" arrow lives in it so the columns stay pixel-aligned.
-const WK_ARROW_COL_W = 32;
+// Seven columns share the width one day timeline gets, so each day is only
+// about 46px wide. Space goes to the cards instead: hours are taller than the
+// day timeline's (a 30-minute booking gets 36px, room for a name and a line
+// of service), the time column is narrower with smaller labels, and the week
+// arrows sit in their own row above the days rather than in a gutter beside
+// them. The arrows used to take a 32px spacer at the right of every row,
+// which left each day about 40px and cut the cards' words off.
+const WK_HOUR_H     = 72;
+const WK_TIME_COL_W = 34;
+// Shortest a card draws, so a 15-minute booking still has room for a name.
+const WK_MIN_BLOCK_H = 24;
 // Headroom above the first hour line, mirroring the day timeline's own
 // TL_TOP_INSET — and the same generous +80 buffer it adds beyond the raw
 // hours height, so the ScrollView's reported content size actually covers
 // the last hour/booking plus the bottom tab-bar clearance instead of
 // truncating the scrollable range short of the real content.
 const WK_TOP_INSET  = 14;
+
+/** First word of the client's name for a week card, "Client" when there's none. */
+function firstNameOf(name: string | null | undefined): string {
+  return name?.trim().split(/\s+/)[0] || 'Client';
+}
 
 function getMondayOf(dateStr: string): Date {
   const d   = new Date(dateStr + 'T00:00:00');
@@ -830,27 +831,29 @@ function WeekView({
 
   const goPrevWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, -7)); }, [selectedDate, onSelectDate]);
   const goNextWeek = useCallback(() => { tap(); onSelectDate(shiftDateString(selectedDate, 7)); }, [selectedDate, onSelectDate]);
+  const weekRangeLabel = formatDayRangeShortMonth(weekDates[0] ?? selectedDate, weekDates[weekDates.length - 1] ?? selectedDate);
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Week title with the arrows either side. Arrows are the only way to
+          page: a swipe gesture on the grid was tried, but a PanResponder
+          wrapping the ScrollView made its own vertical scroll feel broken
+          even when gated to horizontal drags. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, marginHorizontal: 16, marginBottom: 8 }}>
+        <TouchableOpacity onPress={goPrevWeek} accessibilityLabel="Previous week" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+          <Ionicons name="chevron-back" size={18} color={P.sub} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 15, fontWeight: '700', color: P.text, minWidth: 120, textAlign: 'center' }}>{weekRangeLabel}</Text>
+        <TouchableOpacity onPress={goNextWeek} accessibilityLabel="Next week" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 4 }}>
+          <Ionicons name="chevron-forward" size={18} color={P.sub} />
+        </TouchableOpacity>
+      </View>
+
       {/* Day headers, aligned with the columns below — same date-circle
           treatment as the date strip and month grid so "selected" and
-          "today" read the same way in every view. The week arrows sit at
-          either end of this row, in the time gutter and in a spacer the grid
-          mirrors, so paging a week needs no row of its own. Arrows are the
-          only way to page: a swipe gesture on the grid was tried, but a
-          PanResponder wrapping the ScrollView made its own vertical scroll
-          feel broken even when gated to horizontal drags. */}
+          "today" read the same way in every view. */}
       <View style={{ flexDirection: 'row', marginHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: P.border }}>
-        {/* Bottom-aligned with a 5px lift: the date circle is 36 tall and the
-            arrow 26, so this centres the arrow on the numbers whatever height
-            the day-letter row above them ends up. flex-start keeps it clear of
-            Monday's circle, which overlaps the gutter by 8. */}
-        <View style={{ width: WK_TIME_COL_W, alignItems: 'flex-start', justifyContent: 'flex-end' }}>
-          <TouchableOpacity onPress={goPrevWeek} accessibilityLabel="Previous week" hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }} style={{ padding: 4, marginBottom: 5 }}>
-            <Ionicons name="chevron-back" size={18} color={P.sub} />
-          </TouchableOpacity>
-        </View>
+        <View style={{ width: WK_TIME_COL_W }} />
         {/* Same spacer + flex:1-wrapper-of-flex:1-columns nesting as the grid
             below, so the two rows resolve to pixel-identical column widths
             instead of two separately-computed flex layouts that could drift. */}
@@ -890,11 +893,6 @@ function WeekView({
             );
           })}
         </View>
-        <View style={{ width: WK_ARROW_COL_W, alignItems: 'flex-end', justifyContent: 'flex-end' }}>
-          <TouchableOpacity onPress={goNextWeek} accessibilityLabel="Next week" hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ padding: 4, marginBottom: 5 }}>
-            <Ionicons name="chevron-forward" size={18} color={P.sub} />
-          </TouchableOpacity>
-        </View>
       </View>
 
       <ScrollView
@@ -910,8 +908,8 @@ function WeekView({
               const hh = h % 24;
               const label = hh === 0 ? '12am' : hh < 12 ? `${hh}am` : hh === 12 ? '12pm' : `${hh - 12}pm`;
               return (
-                <View key={h} style={{ position: 'absolute', top: i * WK_HOUR_H - 8, width: WK_TIME_COL_W, alignItems: 'flex-end', paddingRight: 6 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '500', color: P.sub }} numberOfLines={1}>{label}</Text>
+                <View key={h} style={{ position: 'absolute', top: i * WK_HOUR_H - 7, width: WK_TIME_COL_W, alignItems: 'flex-end', paddingRight: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '500', color: P.sub }} numberOfLines={1}>{label}</Text>
                 </View>
               );
             })}
@@ -930,24 +928,15 @@ function WeekView({
                 const startMin = parseTimeToMinutes(b.bookingTime);
                 const dur      = parseDurationToMinutes(b.duration);
                 const top      = Math.max(0, ((startMin - WK_START_HOUR * 60) / 60) * WK_HOUR_H);
-                const height   = Math.max(16, (dur / 60) * WK_HOUR_H);
+                const height   = Math.max(WK_MIN_BLOCK_H, (dur / 60) * WK_HOUR_H);
                 return { booking: b, top, height, col: 0, cols: 1, colorIdx: i % BLOCK_COLORS.length };
               });
-              // Same simple overlap-column assignment as the day timeline.
-              for (let i = 0; i < positioned.length; i++) {
-                const a = positioned[i]!;
-                let col = 0;
-                const used = new Set<number>();
-                for (let j = 0; j < i; j++) {
-                  const b = positioned[j]!;
-                  const aEnd = a.top + a.height, bEnd = b.top + b.height;
-                  if (a.top < bEnd && aEnd > b.top) used.add(b.col);
-                }
-                while (used.has(col)) col++;
-                a.col = col;
-              }
-              const maxCols = Math.max(1, ...positioned.map(p => p.col + 1));
-              positioned.forEach(p => { p.cols = maxCols; });
+              // Same overlap columns as the day timeline: only bookings that
+              // actually clash share the width.
+              assignOverlapColumns(positioned).forEach((c, i) => {
+                positioned[i]!.col = c.col;
+                positioned[i]!.cols = c.cols;
+              });
 
               return (
                 <View
@@ -987,6 +976,8 @@ function WeekView({
                     const topIssue = primaryIssue(issues);
                     const blockW   = 100 / cols;
                     const left     = col * blockW;
+                    // 4px of card padding, a 12px name line, then 11px per service line.
+                    const serviceLines = Math.max(0, Math.floor((height - 4 - 12) / 11));
                     return (
                       <TouchableOpacity
                         key={booking.id}
@@ -1005,13 +996,14 @@ function WeekView({
                           overflow: 'hidden',
                           opacity: past ? 0.5 : 1,
                         }}>
-                          {height > 22 && (
-                            <Text style={{ fontSize: 9, fontWeight: '700', color: color.dark }} numberOfLines={1}>
-                              {booking.bookingTime}
-                            </Text>
-                          )}
-                          {height > 32 && (
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: P.text }} numberOfLines={1}>
+                          {/* No start time: the card's place on the grid already
+                              says it. The client's first name, then the service
+                              wrapping onto as many lines as the card has room for. */}
+                          <Text style={{ fontSize: 10, lineHeight: 12, fontWeight: '700', color: P.text }} numberOfLines={1}>
+                            {firstNameOf(booking.customerName)}
+                          </Text>
+                          {serviceLines > 0 && (
+                            <Text style={{ fontSize: 9.5, lineHeight: 11, fontWeight: '500', color: P.text, opacity: 0.85 }} numberOfLines={serviceLines}>
                               {booking.serviceName}
                             </Text>
                           )}
@@ -1023,13 +1015,12 @@ function WeekView({
               );
             })}
           </View>
-          <View style={{ width: WK_ARROW_COL_W }} />
 
           {/* Now line — spans the full grid width, not just today's column,
               so it reads as "this moment" across the whole week rather than
               a mark stuck inside one day's box. */}
           {todayInWeek && showNowLine && (
-            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: WK_ARROW_COL_W, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
+            <View style={{ position: 'absolute', top: nowTop, left: WK_TIME_COL_W, right: 0, height: 1.5, backgroundColor: P.accent, zIndex: 10 }} />
           )}
         </View>
       </ScrollView>
@@ -1119,8 +1110,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // Expansion states per booking
   const [expansionStates, setExpansionStates] = useState<Record<string, ExpansionState>>({});
 
-  // View mode: list, timeline, or full week (timeline is default — Apple Calendar style)
-  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'week'>('timeline');
+  // View mode: list, timeline (full day), or week. Opens in the provider's
+  // saved choice (My Profile → Manage → Calendar view); the view button below
+  // changes that same saved choice, so the two never disagree.
+  const [viewMode, setViewMode] = useState<CalendarView>(DEFAULT_CALENDAR_VIEW);
 
   // Month calendar toggle
   const [showMonth, setShowMonth]   = useState(false);
@@ -1225,7 +1218,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       {
         key: 'view-mode',
         title: 'Three ways to see your bookings',
-        body: 'Switch between the hour-by-hour timeline for one day, a plain list, and the full week at a glance.',
+        body: 'Switch between the hour-by-hour timeline for one day, a plain list, and the full week at a glance. It opens in the last one you picked, which you can also set in My Profile under Manage.',
         target: { ref: viewModeBtnRef },
         radius: 17,
         icon: 'list',
@@ -1387,12 +1380,28 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // The daily-recap notification ("Today's Schedule") lands here in list view:
   // it summarises the day as a list, so the timeline would answer a different
   // question. Cleared after use so a later re-focus doesn't force the mode again.
+  // A one-off: it doesn't change the saved view, and the saved view loading
+  // late doesn't undo it.
+  const viewModeForcedRef = useRef(false);
   useEffect(() => {
     const requested = route.params?.viewMode;
     if (!requested) return;
+    viewModeForcedRef.current = true;
     setViewMode(requested);
     navigation.setParams({ viewMode: undefined });
   }, [route.params?.viewMode, navigation]);
+
+  const [savedViewMode, saveViewMode] = useCalendarViewPreference(user?.id);
+  const lastSavedViewModeRef = useRef<CalendarView | null>(null);
+  useEffect(() => {
+    if (!savedViewMode) return;
+    // The first load yields to a notification's forced view; a later change
+    // (made in My Profile) always applies.
+    const isFirstLoad = lastSavedViewModeRef.current === null;
+    lastSavedViewModeRef.current = savedViewMode;
+    if (isFirstLoad && viewModeForcedRef.current) return;
+    setViewMode(savedViewMode);
+  }, [savedViewMode]);
 
   // Fetch bookings. `providerId`, when the caller already has it (the
   // combined focus effect below fetches the profile once for both this and
@@ -1833,7 +1842,12 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             <TouchableOpacity
               ref={viewModeBtnRef}
               // Tap order: timeline (the default) → list → week → back to timeline.
-              onPress={() => { tap(); setViewMode(v => v === 'timeline' ? 'list' : v === 'list' ? 'week' : 'timeline'); }}
+              onPress={() => {
+                tap();
+                const next = nextCalendarView(viewMode);
+                setViewMode(next);
+                saveViewMode(next);
+              }}
               style={[s.iconBtn, { backgroundColor: P.accent }]}
             >
               <Ionicons

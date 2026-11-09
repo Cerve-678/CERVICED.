@@ -50,3 +50,25 @@ test('outside a navigator it behaves like a plain StatusBar', () => {
   const ui = render(<FocusAwareStatusBar barStyle="dark-content" />);
   expect(ui.UNSAFE_queryByType(StatusBar)?.props['barStyle']).toBe('dark-content');
 });
+
+// iOS only sends a colour the stack thinks has changed, so something native
+// turning the clock white left it white. The focused screen re-sends its own.
+test('re-sends its colour to the phone when its screen regains focus', () => {
+  const spy = jest.spyOn(StatusBar, 'setBarStyle').mockImplementation(() => {});
+  const nav = fakeNavigation(true);
+  renderWith(nav);
+  expect(spy).toHaveBeenLastCalledWith('light-content', false);
+
+  act(() => nav.emit('blur'));
+  spy.mockClear();
+  act(() => nav.emit('focus'));
+  expect(spy).toHaveBeenCalledWith('light-content', false);
+  spy.mockRestore();
+});
+
+test('a blurred screen never re-sends its colour', () => {
+  const spy = jest.spyOn(StatusBar, 'setBarStyle').mockImplementation(() => {});
+  renderWith(fakeNavigation(false));
+  expect(spy).not.toHaveBeenCalled();
+  spy.mockRestore();
+});

@@ -3,8 +3,6 @@ import React, { useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -23,6 +21,7 @@ import { normalizeExternalBookingUrl } from '../../features/providers/externalBo
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep1'>;
 
@@ -89,7 +88,7 @@ export default function SignUpStep1Screen({ navigation }: Props) {
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 }]}
           keyboardShouldPersistTaps="handled"
@@ -142,9 +141,14 @@ export default function SignUpStep1Screen({ navigation }: Props) {
                   </Text>
                   <View style={[styles.caveat, { backgroundColor: t.accentDim }]} accessibilityRole="text">
                     <Ionicons name="information-circle-outline" size={18} color={t.accentText} style={styles.caveatIcon} />
-                    <Text style={[styles.caveatText, { color: t.text }]}>
-                      Some features are limited with your own link. Book through CERVICED for the full experience.
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.caveatTitle, { color: t.text }]}>
+                        You can't take bookings in the app
+                      </Text>
+                      <Text style={[styles.caveatText, { color: t.text }]}>
+                        Clients book on your own page. Become a full member any time from your Home screen for the full CERVICED experience.
+                      </Text>
+                    </View>
                   </View>
                 </>
               )}
@@ -160,7 +164,7 @@ export default function SignUpStep1Screen({ navigation }: Props) {
             <Text style={[styles.continueBtnText, { color: t.onAccent }]}>CONTINUE</Text>
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }
@@ -179,7 +183,8 @@ const styles = StyleSheet.create({
   linkDesc: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, marginTop: 2 },
   caveat: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 },
   caveatIcon: { marginTop: 1 },
-  caveatText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', lineHeight: 19 },
+  caveatTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', lineHeight: 19, marginBottom: 2 },
+  caveatText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', lineHeight: 19 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 52, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 14 },
   input: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '600' },
   continueBtn: { borderRadius: 100, paddingVertical: 17, alignItems: 'center', marginTop: 20 },

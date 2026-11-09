@@ -29,9 +29,11 @@
  * Product rules: docs/vault/Link-Only Providers.md. Design B (chosen
  * 2026-10-19): https://claude.ai/artifact/MJfLyQ2BLudDpneHpqbVMx
  */
+import { policyImageUrls } from '../../features/providers/policyImages';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from '../../components/FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -79,7 +81,7 @@ import {
 } from '../../features/providers/goLiveStatus';
 import { DiaryCard } from '../../features/providers/DiaryCard';
 import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
-import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS, FULL_MEMBER_MONTHLY_PRICE } from '../../constants/fullMembership';
+import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS } from '../../constants/fullMembership';
 import { joinNudgeBarDismissedKey } from '../../utils/storageKeys';
 import { logger } from '../../utils/logger';
 import type { ProviderHomeStackParamList } from '../../navigation/types';
@@ -259,7 +261,7 @@ export default function LinkOnlyHomeScreen() {
       instagram: profile.instagram,
       policiesSet:
         buildPolicyDisplayRows(profile.booking_policies, profile.cancellation_notice_hours, { linkOnly: true }).length > 0 ||
-        !!profile.booking_policies?.policyImageUrl,
+        policyImageUrls(profile.booking_policies).length > 0,
       accessibilityNotes: profile.accessibility_notes,
       paymentMethods: profile.preferred_payment_methods,
     });
@@ -354,7 +356,7 @@ export default function LinkOnlyHomeScreen() {
               <Ionicons name="notifications-outline" size={18} color={P.sub} />
             </TouchableOpacity>
             {logoUrl ? (
-              <Image source={{ uri: logoUrl }} style={styles.avatar} contentFit="cover" transition={0} />
+              <LogoCircle uri={logoUrl} framing={profile?.logo_framing} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, styles.avatarEmpty]}>
                 <Text style={styles.avatarText}>{initials}</Text>
@@ -649,7 +651,6 @@ export default function LinkOnlyHomeScreen() {
               </View>
               <View style={styles.offerLine}>
                 <View style={styles.offerChip}><Text style={styles.offerChipText}>{FULL_MEMBER_FREE_MONTHS} MONTHS FREE</Text></View>
-                <Text style={styles.footnote}>then {FULL_MEMBER_MONTHLY_PRICE} a month</Text>
               </View>
               <TouchableOpacity style={styles.primary} onPress={openFullMemberSheet} activeOpacity={0.85} accessibilityRole="button">
                 <Text style={styles.primaryText}>Become a full member</Text>

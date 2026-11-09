@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
+import { LogoCircle } from './FramedLogo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { AnswerCard, AnswerHeadline, BeccaAnswer, BeccaInspiration, ChatMessage, ChatSuggestion } from '../services/becca/types';
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatTime12 } from '../utils/dateUtils';
+import { CircleStack } from './CircleStack';
 
 // Colours come from useTheme().palette (hat-aware — client vs provider),
 // not a local literal copy. accentShadow mirrors the palette's accentDim.
@@ -564,7 +566,9 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
                 // `cover`, not `contain` — the image now fills the circle
                 // edge-to-edge, and `contain` would letterbox any non-square
                 // logo with bands of container colour inside the round crop.
-                <Image source={provider.logo} style={styles.providerLogo} contentFit="cover" transition={0} />
+                provider.logo.uri
+                  ? <LogoCircle uri={provider.logo.uri} framing={provider.logoFraming} style={styles.providerLogo} />
+                  : <Image source={provider.logo} style={styles.providerLogo} contentFit="cover" transition={0} />
               ) : (
                 <Text style={[styles.providerLogoFallback, { color: P.accentText }]}>
                   {provider.name?.trim().charAt(0).toUpperCase() || '?'}
@@ -577,6 +581,12 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
             <Text style={[styles.providerService, { color: P.sub }]} numberOfLines={1}>
               {provider.service}
             </Text>
+            <CircleStack
+              providerId={provider.providerId}
+              providerName={provider.name}
+              cardWidth={104}
+              style={styles.providerCircle}
+            />
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -730,7 +740,9 @@ function CardView({
             {row.provider && (
               <View style={[answerStyles.rowLogo, { backgroundColor: P.iconBg }]}>
                 {row.provider.logo ? (
-                  <Image source={row.provider.logo} style={answerStyles.rowLogoImage} contentFit="cover" transition={0} />
+                  row.provider.logo.uri
+                    ? <LogoCircle uri={row.provider.logo.uri} framing={row.provider.logoFraming} style={answerStyles.rowLogoImage} />
+                    : <Image source={row.provider.logo} style={answerStyles.rowLogoImage} contentFit="cover" transition={0} />
                 ) : (
                   <Text style={[answerStyles.rowLogoText, { color: P.accentText }]}>
                     {row.title.trim().charAt(0).toUpperCase() || '?'}
@@ -1291,6 +1303,7 @@ const styles = StyleSheet.create({
   // them distinct stops a provider's avatar reading as another Becca mark.
   // borderRadius must stay exactly half of width/height, or it degrades back
   // into a squircle the moment the size changes.
+  providerCircle: { position: 'absolute', top: 6, right: 6 },
   logoContainer: {
     width: 52,
     height: 52,

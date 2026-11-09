@@ -6,6 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import { useBookmarkStore } from "../../stores/useBookmarkStore";
+import { ProviderSharingRow } from "../../features/social/ProviderSharingRow";
 import {
   View,
   Text,
@@ -35,6 +36,7 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
+import { LogoCircle } from "../../components/FramedLogo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -42,6 +44,9 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
+import { FullImageViewer } from "../../components/FullImageViewer";
+import { LogoZoomViewer } from "../../components/LogoZoomViewer";
+import { policyImageUrls } from "../../features/providers/policyImages";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -64,7 +69,6 @@ import { navigationRef } from "../../navigation/navigationRef";
 import { useTheme } from "../../contexts/ThemeContext";
 import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
-import { DynamicText } from "../../components/DynamicText";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
@@ -106,6 +110,7 @@ import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
+import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
@@ -117,6 +122,7 @@ import {
   ProviderReviewPreviewSection,
   ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
+import { productsGroup, workWithGroups } from "../../features/providers/workWith";
 import { PAYMENT_OPTS } from "../../features/business-details/options";
 
 type ProviderProfileScreenProps = StackScreenProps<
@@ -441,6 +447,9 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
         presentationStyle="pageSheet"
         onRequestClose={onClose}
       >
+        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
         <View style={styles.modalBackground}>
           <LinearGradient
             colors={providerGradient}
@@ -528,6 +537,8 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
             />
           </SafeAreaView>
         </View>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
       </Modal>
     );
   },
@@ -1554,7 +1565,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // imperatively via setOptions in handleScroll.
   const isScrolledRef = useRef(false);
   const setStatusBarScrolledRef = useRef<((scrolled: boolean) => void) | null>(null);
-  const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
   // Ownership and viewer identity come from the hook's authenticated,
   // non-cacheable viewer request. viewerChecked remains a separate gate so
@@ -1638,6 +1648,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
   const scrollRef = useRef<ScrollViewInstance>(null);
   const servicesSectionRef = useRef<ViewInstance>(null);
+  // Where the About/Policy card sits, and how far down the reader is, so
+  // collapsing a long About from its bottom can bring the card back into view
+  // instead of leaving them stranded further down the page. A ref, like
+  // isScrolledRef, so tracking it never re-renders this screen.
+  const aboutCardRef = useRef<ViewInstance>(null);
+  const scrollYRef = useRef(0);
+  const handleAboutCollapse = useCallback(() => {
+    revealIfScrolledPast({
+      scroll: scrollRef.current,
+      target: aboutCardRef.current,
+      scrollY: scrollYRef.current,
+      // Same clearance the Services jump uses for the floating header.
+      topInset: 90,
+    });
+  }, []);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -1761,6 +1786,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // Who they work with (clients, skin tones, hair types) from About You's
+    // "I Work With" — here, not in the About/Policy card, which is the bio.
+    groups.push(...workWithGroups(provider));
+    // Its own section, from Services & Pricing's "Products I Work With".
+    const products = productsGroup(provider);
+    if (products) groups.push(products);
     if (provider.languagesSpoken.length > 0) {
       groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
     }
@@ -1798,7 +1829,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [provider]);
 
   // One natural-language paragraph rather than a label/value dump — these are
-  // five unrelated one-liners, and as rows they read like a spec sheet for
+  // unrelated one-liners, and as rows they read like a spec sheet for
   // facts a client only skims.
   const goodToKnowText = useMemo(() => {
     if (!provider) return "";
@@ -1806,15 +1837,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.walkInsWelcome) sentences.push("Walk-ins are welcome");
     if (provider.groupBookingsAvailable) {
       sentences.push("Group bookings are available");
-    }
-    if (provider.veganCrueltyFree) {
-      sentences.push("Products used are vegan and cruelty-free");
-    }
-    if (provider.travelRadius.trim()) {
-      sentences.push(`Travels up to ${provider.travelRadius.trim()}`);
-    }
-    if (provider.productsUsed.trim()) {
-      sentences.push(`Works with ${provider.productsUsed.trim()}`);
     }
     return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
   }, [provider]);
@@ -2104,6 +2126,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // (e.g. tapping a different portfolio photo) would silently keep showing
   // wherever the list last scrolled to. Bumping `key` on every open forces a
   // fresh FlatList each time so it lands on the right image.
+  const [showPolicyImage, setShowPolicyImage] = useState(false);
+  // Every page of the detailed policy, in order (the old single image too).
+  const policyPages = useMemo(() => policyImageUrls(provider?.bookingPolicies), [provider?.bookingPolicies]);
+  const [showFullLogo, setShowFullLogo] = useState(false);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
       visible: true,
@@ -2603,6 +2629,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   ]);
   const handleScroll = useCallback(
     (event: any) => {
+      scrollYRef.current = event.nativeEvent.contentOffset.y;
       const scrolled = event.nativeEvent.contentOffset.y > 100;
       if (scrolled === isScrolledRef.current) return; // only act on threshold cross
       isScrolledRef.current = scrolled;
@@ -4238,6 +4265,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             visible={didYouBookVisible}
             providerName={provider.displayName}
             logoUrl={provider.providerLogo?.uri ?? null}
+            logoFraming={provider.providerLogoFraming}
             services={provider.specialties}
             accentColor={adaptiveAccentColor}
             tokens={{ text: OP.text, sub: OP.sub, border: OP.border, surface: OP.surface, bg: OP.bg }}
@@ -4364,6 +4392,24 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           themeTokens={OP}
           canBookProvider={canBookProvider}
           onBookOffer={handleBookOffer}
+        />
+
+        {/* The provider's detailed policy document, scrollable when it's
+            long — the same viewer the client's booking detail opens. */}
+        <FullImageViewer
+          uris={policyPages}
+          visible={showPolicyImage}
+          onClose={() => setShowPolicyImage(false)}
+          label="Policy document"
+        />
+
+        {/* A tap on the profile circle zooms the logo in over the page. */}
+        <LogoZoomViewer
+          uri={provider.providerLogo?.uri}
+          framing={provider.providerLogoFraming}
+          visible={showFullLogo}
+          onClose={() => setShowFullLogo(false)}
+          accessibilityName={provider.displayName}
         />
 
         {/* Fullscreen service image carousel modal — hidden whenever the "All
@@ -4962,13 +5008,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               {/* Provider Logo - Bigger */}
               <View style={styles.logoContainer}>
                 <View style={styles.logoWrapper}>
-                  {provider.providerLogo ? (
-                    <Image
-                      source={provider.providerLogo}
-                      style={styles.providerLogo}
-                      contentFit="cover"
-                      transition={0}
-                    />
+                  {provider.providerLogo?.uri ? (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setShowFullLogo(true);
+                      }}
+                      accessibilityRole="imagebutton"
+                      accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
+                    >
+                      <LogoCircle
+                        uri={provider.providerLogo.uri}
+                        framing={provider.providerLogoFraming}
+                        style={styles.providerLogo}
+                      />
+                    </TouchableOpacity>
                   ) : (
                     <View
                       style={[
@@ -4996,6 +5051,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </Text>
                     </View>
                   )}
+                  {/* Sits on top of the logo, so it must let taps through
+                      to the logo's tap-to-see-it-in-full. */}
                   <LinearGradient
                     colors={
                       ["rgba(255,255,255,0.3)", "transparent"] as [
@@ -5005,6 +5062,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       ]
                     }
                     style={styles.logoGloss}
+                    pointerEvents="none"
                   />
                 </View>
               </View>
@@ -5292,14 +5350,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 provider.backgroundImage ? styles.contentSheetFloating : null,
               ]}
             >
+              {/* Recommend + "Don't show me" — only for a client who has had
+                  a completed appointment here; renders nothing otherwise. */}
+              <ProviderSharingRow
+                providerId={providerDbId}
+                providerName={provider.displayName}
+                enabled={canSaveProvider && hatState.active === "client"}
+                tokens={OP}
+                accent={adaptiveAccentColor}
+                cardBg={cardBg}
+                onError={showAlert}
+              />
+
               {/* About / Policy tabbed card */}
-              <View style={styles.aboutCardShadowWrap}>
+              <View ref={aboutCardRef} style={styles.aboutCardShadowWrap}>
                 <BlurView
                   intensity={cardBlurIntensity}
                   tint={cardBlurTint}
                   style={[
                     styles.aboutCard,
                     { backgroundColor: cardBg, borderColor: OP.border },
+                    // Room under the last line for the policy button, so it
+                    // never sits on top of the text.
+                    policyPages.length > 0 && styles.aboutCardWithPolicyFab,
                   ]}
                 >
                   <LinearGradient
@@ -5369,28 +5442,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           Relevant Information
                         </Text>
                       )}
-                      {/* Provider-WRITTEN bio: rendered via DynamicText so it
+                      {/* Provider-WRITTEN bio: `translate` renders it via DynamicText so it
                           translates live to the active language when the paid
                           translation feature is enabled, and shows the original
                           English otherwise (the default in every current
                           build). Not legal/health copy, so routing it through
                           the dynamic path is safe. */}
-                      <DynamicText
-                        style={[styles.aboutText, { color: OP.sub }]}
-                        text={showFullAbout
-                          ? provider.aboutText
-                          : `${provider.aboutText.substring(0, 150)}...`}
+                      <ExpandableAboutText
+                        text={provider.aboutText}
+                        translate
+                        textStyle={[styles.aboutText, { color: OP.sub }]}
+                        linkStyle={styles.moreButton}
+                        linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
+                        onCollapse={handleAboutCollapse}
                       />
-
-                      <TouchableOpacity
-                        onPress={() => setShowFullAbout(!showFullAbout)}
-                        style={styles.moreButton}
-                        activeOpacity={0.6}
-                      >
-                        <Text style={[styles.moreButtonText, { color: OP.text }]}>
-                          {showFullAbout ? "Show Less" : "More"}
-                        </Text>
-                      </TouchableOpacity>
                     </>
                   ) : (
                     /* Policy tab content */
@@ -5473,20 +5538,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       is the only way in for a provider who uploaded this photo
                       but filled in none of the structured fields above (which
                       is why the tab switcher itself doesn't gate on it). */}
-                  {provider.bookingPolicies?.policyImageUrl ? (
+                  {policyPages.length > 0 ? (
                     <TouchableOpacity
                       activeOpacity={0.85}
-                      onPress={() =>
-                        openImageViewer(
-                          [{ uri: provider.bookingPolicies!.policyImageUrl }],
-                          0,
-                        )
-                      }
+                      onPress={() => setShowPolicyImage(true)}
                       style={[
                         styles.policyImageFab,
                         { backgroundColor: adaptiveAccentColor },
                       ]}
-                      accessibilityLabel="View full policy details"
+                      accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
                       accessibilityRole="button"
                     >
                       <Ionicons
@@ -6215,6 +6275,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
+  // The policy button's height plus its bottom offset (policyImageFab), so the
+  // card's last line ends above the button instead of under it.
+  aboutCardWithPolicyFab: {
+    paddingBottom: 10 + 44,
+  },
   cardHighlight: {
     position: "absolute",
     top: 0,
@@ -6426,6 +6491,7 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
     fontWeight: "800",
+    textDecorationLine: "underline",
     marginBottom: 6,
   },
   serviceSafetyInline: {
@@ -6708,7 +6774,7 @@ const styles = StyleSheet.create({
   // structured policy fields at all, in which case it's the only way in).
   policyImageFab: {
     position: "absolute",
-    bottom: 14,
+    bottom: 10,
     right: 14,
     width: 44,
     height: 44,

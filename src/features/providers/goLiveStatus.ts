@@ -32,10 +32,11 @@
  *    the checklist would claim a block the DB doesn't yet enforce. While the
  *    flag is off the checklist is byte-for-byte its pre-Stripe self. See the
  *    auto-memory stripe-connect-payouts-build-handoff.
- *  - RECOMMENDED (`profile`, plus `portfolio`/`terms` for callers that
- *    supply them) is real setup worth finishing but that the server does
- *    not require to publish — writing an About/intro text, adding
- *    portfolio photos, or writing Terms & Conditions doesn't affect
+ *  - RECOMMENDED (`profile`, plus `portfolio`/`terms`/`automations` for
+ *    callers that supply them) is real setup worth finishing but that the
+ *    server does not require to publish — writing an About/intro text,
+ *    adding portfolio photos, writing Terms & Conditions or choosing
+ *    automations doesn't affect
  *    whether clients can find or book this provider (T&Cs blocks Add to
  *    Cart client-side, a different gate entirely — see
  *    provider-terms-are-a-form-not-a-column in auto-memory).
@@ -99,11 +100,17 @@ export interface GoLiveStatus {
    *  emits a step for these when the field is actually present. */
   portfolioSet?: boolean;
   termsSet?: boolean;
+  /** Recommended, Profile-Health-only, same rules as portfolioSet/termsSet:
+   *  true once the provider has saved Automations at least once (see
+   *  deriveAutomationsSet). Left undefined for a link-only provider, who has
+   *  no Automations screen. */
+  automationsSet?: boolean | undefined;
 }
 
 export type GoLiveStepKey =
   | 'profile' | 'schedule' | 'services' | 'address'
-  | 'policies' | 'payment' | 'logo' | 'stripe' | 'portfolio' | 'terms';
+  | 'policies' | 'payment' | 'logo' | 'stripe' | 'portfolio' | 'terms'
+  | 'automations';
 
 export interface GoLiveStep {
   key: GoLiveStepKey;
@@ -137,7 +144,7 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
     },
     {
       key: 'schedule',
-      label: 'Set your weekly schedule',
+      label: 'Set your schedule and availability',
       done: status.scheduleSet,
       required: true,
       blocking: true,
@@ -209,6 +216,15 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       key: 'terms',
       label: 'Set your Terms & Conditions',
       done: status.termsSet,
+      required: true,
+      blocking: false,
+    });
+  }
+  if (status.automationsSet !== undefined) {
+    steps.push({
+      key: 'automations',
+      label: 'Set your automations',
+      done: status.automationsSet,
       required: true,
       blocking: false,
     });
@@ -304,6 +320,14 @@ export function deriveRecommendedGoLiveFields(profile: DbProvider): {
     policiesSet: profile.booking_policies?.cancelNotice != null,
     paymentSet: resolveDepositMode(profile.booking_policies) !== null,
   };
+}
+
+/** Whether the provider has saved Automations. Every save there writes
+ *  clientReminderTiming to providers.automation_settings (other screens write
+ *  other keys into the same column, so "not empty" isn't the test). Until
+ *  then reminders and nudges run on defaults nobody chose. */
+export function deriveAutomationsSet(profile: DbProvider): boolean {
+  return profile.automation_settings?.clientReminderTiming !== undefined;
 }
 
 /** The Stripe go-live field, or `undefined` when the payouts feature is off.

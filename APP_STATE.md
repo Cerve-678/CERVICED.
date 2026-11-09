@@ -114,12 +114,13 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Provider profile creation/edit | ✅ | `src/screens/provider/ProviderMyProfileScreen.tsx` |
 | My Profile "Today" cards (day summary + swipeable booking cards) | ✅ code, ⚠️ not device-run | `src/features/providers/TodayScheduleCards.tsx`, timing rules in `todaySchedule.ts`. Summary leads the Dashboard until 2pm, booking cards lead from 2pm, summary leads again once the last client is done (cards then show tomorrow); the other card sits under Your work. "Needs a patch test" comes from `services.patch_test_required` — nothing records whether one was done |
 | Service management | ✅ | Provider profile / services screens |
+| Add-ons (universal, one list per provider) | ✅ code, ⚠️ migration `20261105223541` not applied, not device-run | InfoReg services page "Your add-ons" (`features/provider-registration/AddOnLibrarySection` + `AddOnEditorModal`), ticked per service in the service editor (`ServiceAddOnsField`, suggests existing add-ons as you type). Each add-on: one price, optional extra time (0–4 h, added to the appointment's length everywhere a time is found or an end time is written), pause switch, and a rule (every service / categories / picked services) with per-service exceptions. `provider_add_ons` is the source; `service_add_ons` rows are derived by `sync_provider_add_on_links()` so checkout and carts keep their ids. Rules live in `addOnLibrary.ts`, time in `features/bookings/addOnTime.ts` |
 | Portfolio photos | ✅ | Upload service, `portfolios/` storage bucket |
 | Weekly hours + blocked dates | ✅ | `src/screens/provider/ProviderScheduleScreen.tsx` → `provider_availability`, `provider_blocked_dates` |
 | Auto-accept bookings | ✅ | `ProviderAutomationsScreen.tsx` toggle → `providers.auto_accept_bookings` column, read by DB trigger `handle_new_booking()`. Confirmed still single source of truth — do not add a second toggle. |
 | Waitlist automation | ✅ | `ProviderAutomationsScreen.tsx` (`waitlistEnabled`, `autoAcceptWaitlist`) — DB-trigger-owned, see `WAITLIST.md` |
 | Promotions | ✅ | `ProviderPromotionsScreen.tsx` |
-| Provider automations (reminders, rebook nudge, review requests, buffer time, deposit requirement, max bookings/day) | ✅ | `ProviderAutomationsScreen.tsx` |
+| Provider automations (reminders, rebook nudge, review requests, check-ins, birthday greeting, daily recap, auto-accept, waitlist) | ✅ | `ProviderAutomationsScreen.tsx`. Buffer time and daily cap live on `SchedulingScreen`, deposits on `PaymentsScreen`, and the cancellation notice window on `PoliciesScreen` only (removed from Automations 2026-11-04). |
 | Provider analytics/revenue | ✅ | `ProviderAnalyticsScreen.tsx` — reads bookings/reviews |
 | Clientele view / inbox / conversations | ✅ | `ProviderClienteleScreen.tsx`, `ProviderInboxScreen.tsx`, `ProviderConversationScreen.tsx` |
 | Address release policy | ✅ | `providers.address_release_policy`, server-enforced via `client_bookings` view, not the app |
@@ -138,7 +139,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Date/time scheduling | ✅ | `ModernBeautyCalendar` → `AvailabilityService.getAvailableSlots()`, real provider hours from Supabase, filters booked slots via `get_provider_busy_spans` RPC |
 | Slot intervals, booking window, min notice, buffer time | ✅ | `providers.slot_interval_mins` / `booking_window_days` / `min_booking_notice_hrs` / `buffer_mins` |
 | Checkout availability re-check | ✅ | `AvailabilityService.isSlotAvailable()` queries Supabase at checkout |
-| Checkout slot hold | ✅ | 10-minute `on_hold` reservation during payment, TTL cron backstop (see memory `cart-checkout-slot-hold`) |
+| Checkout slot hold | ✅ | 5-minute `on_hold` reservation during payment, TTL cron backstop (see memory `cart-checkout-slot-hold`) |
 | Booking created in Supabase | ✅ | `BookingContext.createBookingsFromCart()` → `databaseService.createBooking()` |
 | Booking confirmation notification + email | ✅ | DB-trigger-owned notification + `sendEmail()` fire-and-forget |
 
@@ -167,7 +168,7 @@ both code paths exist simultaneously on purpose.**
 | Reschedule (RPC-only, forgery-hardened) | ✅ | `respond_to_reschedule_request`, `provider_initiate_reschedule` RPCs — see memory `reschedule-request-rls-forgery-fixed` |
 | Provider booking detail/history, accept/decline | ✅ | `ProviderBookingDetailScreen`, `ProviderBookingHistoryScreen` |
 | Real-time booking status sync | ✅ | `BookingContext` subscribes to Supabase realtime on `bookings` |
-| Leave a review | ✅ | `BookingsScreen` → `submitReview()` / `hasReviewedBooking()` |
+| Leave a review | ✅ | `BookingsScreen` / `BookingDetailScreen` → `submitReview()` / `hasReviewedBooking()`. Optional "Post anonymously" switch (off by default) hides the reviewer from everyone, the provider included; enforced in the DB (`20261108230000_anonymous_reviews.sql`, applied live 2026-11-08): direct table reads skip anonymous rows, and reviews are read through `get_provider_reviews` / `get_my_provider_reviews`, which blank reviewer, booking, service and tip |
 | Push notifications | ✅ | `pushNotificationService.ts`, edge function `send-push-notification`. Note: it reads the push *ticket*, not the delivery *receipt*, so failed deliveries are currently silent (memory `push-notification-receipt-blindspot`) |
 | Booking status values | ✅ | `BookingStatus` enum: `upcoming` / `in_progress` / `completed` / `cancelled` / `no_show` — always map raw DB status through `mapDbBookingStatus()`, never cast directly |
 | Notification types | ✅ | Real DB-backed enum in `src/types/database.ts`, far larger than the 6-item list in old `LOGIC.md`: booking pending/confirmed/declined, reschedule request/response/confirmed/declined, review request/received, promotion, waitlist_slot_available, address_released, and more |
@@ -176,7 +177,7 @@ both code paths exist simultaneously on purpose.**
 
 | Feature | Status | Where |
 |---|---|---|
-| Beauty Profile landing — two doors (Maintenance, My Profile) | ✅ code, ⚠️ not device-run | `BeautyProfileScreen` (state + single SAVE PROFILE) → `src/features/beauty-profile/` (`BeautyLanding`, `MyProfileView`, `CategoryEditor`). Completeness rules in `beautyProfileStats.ts` unchanged |
+| Beauty Profile landing — "Map of you" body map (approved 2026-11-08) | ✅ code, ⚠️ not device-run | `BeautyProfileScreen` (state + single SAVE PROFILE) → `src/features/beauty-profile/` (`BeautyMapLanding`, `BodyFigure` (4 outlines, Portrait + hands default, choice kept per account on the device), `bodyMap.ts` rules, `MyProfileView`, `CategoryEditor`). Maintenance's big card (`src/features/maintenance/NextUpCard`, Book / Done it / Snooze +7 days) sits above the map only while something is due, else a slim strip; also used on the Maintenance screen. "How Maintenance works" (`MaintenanceHowTo`, 4 frames) shows once per account (tour key `client_maintenance_howto`). Health & Safety, Maintenance and Circle strips under the map; Circle opens Your circle. Skin tone never shown. Completeness rules in `beautyProfileStats.ts` unchanged |
 | Maintenance list, item menu, add-my-own, setup flow | ✅ code, ⚠️ **migration unapplied** | `src/features/maintenance/`. Pure rules: `src/utils/maintenanceSuggestions.ts` + `src/constants/maintenanceServiceTypes.ts` (mirrored in SQL, parity-tested). Until `supabase/migrations/20261018180000_beauty_maintenance.sql` is applied, the Maintenance card shows "couldn't load / try again" and the Profile badge stays hidden |
 | Completed booking → service item | ⚠️ written, unapplied | `on_booking_completed_maintenance` trigger; keeps a client-edited interval and only moves the due date. Provider's `rebookingNudgeWeeks` wins over the default interval |
 | Maintenance / aftercare push | ⚠️ written, unapplied | `process_maintenance_reminders()` daily 09:30 + aftercare notice on completion. **Opt-in** (`notification_preferences.maintenanceReminders`, default false) — no row is written while off; the provider rebooking nudge only steps aside for a client who has opted in. Push copy is generic by design (legal-flagger 2026-10-10); detail is in-app only |

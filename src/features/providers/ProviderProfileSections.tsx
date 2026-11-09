@@ -3,7 +3,6 @@ import {
   FlatList,
   Modal,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,11 +13,13 @@ import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import TabIcon from "../../components/TabIcon";
+import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
-import type { ProviderReviewItem } from "./useProviderProfileData";
+import type { ProviderReviewItem } from "./reviewPresentation";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -435,6 +436,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
       </View>
 
       <Modal visible={showAll} animationType="slide" onRequestClose={() => setShowAll(false)}>
+        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
         <SafeAreaView style={[styles.modal, { backgroundColor: palette.background }]}>
           <View style={styles.modalHeader}>
             <View>
@@ -483,6 +487,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
             )}
           />
         </SafeAreaView>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
       </Modal>
     </View>
   );

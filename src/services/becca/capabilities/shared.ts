@@ -127,13 +127,16 @@ export function providerFromDb(
   p: Pick<
     DbProvider,
     'slug' | 'display_name' | 'service_category' | 'logo_url' | 'location_text'
-  >,
+  > & Partial<Pick<DbProvider, 'logo_framing' | 'id'>>,
 ): Provider {
   return {
     id: p.slug,
+    // The real providers.id, for the "people you follow" faces on the card.
+    ...(p.id ? { providerId: p.id } : {}),
     name: p.display_name,
     service: p.service_category as Provider["service"],
     logo: p.logo_url ? { uri: p.logo_url } : null,
+    ...(p.logo_framing ? { logoFraming: p.logo_framing } : {}),
     ...(p.location_text != null ? { location: p.location_text } : {}),
   };
 }
@@ -176,8 +179,9 @@ export interface ProximityResult<T> {
  * only one of them is "sorted by where you are":
  *
  *   • GPS         — a real position, so a real ranking.
- *   • saved city  — a centroid. Useful, and NOT where the client is standing,
- *                   so the reply says which city it used.
+ *   • saved place — the centre of an area or city the client picked on Home,
+ *                   or their Your area in Account. Useful, and NOT where
+ *                   they're standing, so the reply names it and says which.
  *   • unknown     — permission refused or nothing saved. The list is returned
  *                   unranked and the reply says so, rather than presenting an
  *                   arbitrary order as "nearest".
@@ -188,19 +192,19 @@ export interface ProximityResult<T> {
  */
 export async function sortByProximity<
   T extends { latitude: number | null; longitude: number | null },
->(providers: T[]): Promise<ProximityResult<T>> {
-  const location = await resolveClientLocation();
+>(providers: T[], accountArea?: string): Promise<ProximityResult<T>> {
+  const location = await resolveClientLocation({ accountArea: accountArea ?? null });
   const here = location.coords;
 
   if (!here) {
     return {
       providers,
       ranked: false,
-      // Names where the city actually gets set: the location picker on Home
-      // (HomeScreen's LocationModal, which writes STORAGE_KEYS.MANUAL_LOCATION
-      // — the same value this resolver reads back). Not "in your profile":
-      // there is no such control there, and sending someone to look for one
-      // is worse than not offering a fix at all.
+      // Names the location picker on Home (HomeScreen's LocationModal, which
+      // writes STORAGE_KEYS.MANUAL_LOCATION — the same value this resolver
+      // reads back). Account → Your area would also work (it's the fallback
+      // when nothing is picked on the phone), but reaching this branch means
+      // it's blank or couldn't be found, so Home is the one to point at.
       note:
         "I don't know where you are yet — turn on location access, or pick your area from the location button on Home, and I can sort by distance.",
     };
@@ -225,9 +229,11 @@ export async function sortByProximity<
     providers: withDistance.map((entry) => entry.p),
     ranked: true,
     note:
-      location.source === "saved-city" && location.cityLabel
-        ? `Sorted by distance from **${location.cityLabel}**, the city on your profile.`
-        : location.isCoarse
+      location.source === "saved-place" && location.placeLabel
+        ? `Sorted by distance from **${location.placeLabel.split(",")[0]}**, the area you picked on Home.`
+        : location.source === "account-area" && location.placeLabel
+          ? `Sorted by distance from **${location.placeLabel.split(",")[0]}**, your area in Account.`
+          : location.isCoarse
           ? "Sorted by distance, though your location is only approximate right now."
           : "Sorted by distance from you.",
   };

@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,6 +24,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { logger } from '../../utils/logger';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { validateDob, validatePhone } from '../../utils/validation';
 import { type BookingDetail, missingBookingDetails } from './beforeYouBook';
 
@@ -122,10 +121,10 @@ export function BeforeYouBookSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/* KeyboardDismissView, not a bare KeyboardAvoidingView: this used no
+          avoidance at all on Android, and the app is edge-to-edge there, so
+          the keyboard sat over the name and mobile fields. */}
+      <KeyboardDismissView style={styles.backdrop}>
         <TouchableOpacity style={styles.dismissArea} activeOpacity={1} onPress={onClose} accessibilityLabel="Close" />
         <View style={[styles.sheet, { backgroundColor: t.bg, paddingBottom: insets.bottom + 16 }]}>
           <TouchableOpacity
@@ -190,7 +189,7 @@ export function BeforeYouBookSheet({
             <PrimaryButton label="Continue" onPress={handleContinue} loading={saving} style={styles.button} />
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </Modal>
   );
 }

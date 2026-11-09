@@ -19,6 +19,11 @@ describe('describeRefundOutcome', () => {
     expect(done.providerStatus).toBe('Refund issued · £85.00');
   });
 
+  it('keeps the refund issued tag while the amount is refreshing', () => {
+    const outcome = describeRefundOutcome({ ...base, paymentStatus: PaymentStatus.REFUNDED, refundedAmount: 0 }, 24)!;
+    expect(outcome.providerStatus).toBe('Refund issued');
+  });
+
   it('tells the client what came back and what the policy kept', () => {
     const n = describeRefundOutcome({ ...base, paymentStatus: PaymentStatus.PARTIALLY_REFUNDED, refundedAmount: 60, policyRetainedAmount: 20 }, 24)!;
     expect(n.title).toBe('Refunded');

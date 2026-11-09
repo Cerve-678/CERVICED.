@@ -169,7 +169,7 @@ already reachable.
 | Proactive: "You usually rebook every 4 weeks — it's been 5" | interaction history + booking cadence |
 
 ⚠️ **Health-adjacent — handle with care, do not let Becca freelance:**
-`getUserHealthProfile`, `getClientBeautyProfile` hold patch-test requirements,
+`getUserHealthProfile`, `getUserBeautyProfile` hold patch-test requirements,
 pregnancy-safety flags and contraindications. Becca may **surface a provider's
 stated requirement** ("Lola requires a patch test 48h before") and **flag that
 a form is outstanding**. She must **never** give a safety opinion, interpret a

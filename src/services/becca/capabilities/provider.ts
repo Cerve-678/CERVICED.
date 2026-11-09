@@ -42,6 +42,7 @@ import {
 } from "../../../utils/dateUtils";
 import type { Capability, CapabilityResult } from "../types";
 import { navChip, askChip, dayLabel, money, oneOf } from "./shared";
+import { providerDestination } from "../providerNavigation";
 
 // Link-only providers (booking_mode 'external') take bookings on their own
 // booking site, so they only get capabilities marked `fitsLinkOnly`. Those
@@ -53,6 +54,41 @@ const linkOnlyInboxChip = askChip("inbox", "Any unread messages?", "Any unread m
 const linkOnlyUpdatesChip = askChip("notifs", "Anything I've missed?", "Any updates?");
 const linkOnlyHoursChip = askChip("hours", "What are my hours?", "What are my working hours?");
 const linkOnlyReachChip = askChip("reach", "How's my reach?", "How many followers have I got?");
+
+const appNavigation: Capability = {
+  id: "pv.app_navigation",
+  hat: "provider",
+  describe: "Where do I set or change a business setting in the app",
+  thinking: ["Finding the right setting…"],
+  phrases: ["where do i set", "where can i change", "how do i change", "how can i set", "take me to", "show me where"],
+  fitsLinkOnly: true,
+  async run({ rawMessage, linkOnly }): Promise<CapabilityResult> {
+    const destination = providerDestination(rawMessage);
+    if (!destination) {
+      return {
+        text: "Which setting would you like to find? I can take you to your schedule, walk-ins, booking rules or services.",
+        suggestions: [
+          askChip("find-schedule", "My schedule", "Where do I set my schedule?"),
+          ...(!linkOnly ? [askChip("find-walkins", "Walk-ins", "Where do I set walk-ins?")] : []),
+        ],
+      };
+    }
+    if (linkOnly && destination.fullBookingOnly) {
+      return {
+        text: `**${destination.title}** is managed on your own booking site for your current setup. You can change the opening hours shown on your CERVICED profile here.`,
+        suggestions: [navChip("opening-hours", "Open Opening Hours", "schedule")],
+      };
+    }
+    const title = linkOnly && destination.screen === "schedule" ? "Opening Hours" : destination.title;
+    const detail = linkOnly && destination.screen === "schedule"
+      ? "Change the opening hours shown on your About tab there."
+      : destination.detail;
+    return {
+      text: `## ${title}\nGo to **${destination.path}**. ${detail}`,
+      suggestions: [navChip(`open-${destination.screen}`, `Open ${title}`, destination.screen)],
+    };
+  },
+};
 
 const todaySchedule: Capability = {
   id: "pv.today",
@@ -937,7 +973,7 @@ const myAddress: Capability = {
         text: "You haven't set a full address yet — clients only see your general area.",
         suggestions: [
           navChip("services", "Set my address", "services"),
-          navChip("automations", "Address-release policy", "automations"),
+          navChip("policies", "Address-release policy", "policies"),
         ],
       };
     }
@@ -951,7 +987,7 @@ const myAddress: Capability = {
         `Clients only see it once your address-release policy allows it — not at booking time by default.`,
       suggestions: [
         navChip("services", "Change it", "services"),
-        navChip("automations", "Address-release policy", "automations"),
+        navChip("policies", "Address-release policy", "policies"),
       ],
     };
   },
@@ -1185,7 +1221,7 @@ const automations: Capability = {
     if (!profile) {
       return {
         text: "I couldn't load your provider profile just now.",
-        suggestions: [navChip("automations", "Open Automations", "automations")],
+        suggestions: [navChip("policies", "Open Policies", "policies")],
       };
     }
 
@@ -1197,7 +1233,7 @@ const automations: Capability = {
           "You haven't set any booking policies yet — no deposit, and no notice period for cancellations or reschedules. " +
           "Setting these protects you against late drop-outs.",
         suggestions: [
-          navChip("automations", "Set my policies", "automations"),
+          navChip("policies", "Set my policies", "policies"),
           navChip("infopacks", "Info Packs", "infopacks"),
         ],
       };
@@ -1252,7 +1288,7 @@ const automations: Capability = {
       card: { title: "BOOKING POLICIES", rows },
       work: ["Read your booking policies"],
       suggestions: [
-        navChip("automations", "Edit my policies", "automations"),
+        navChip("policies", "Edit my policies", "policies"),
         navChip("infopacks", "Info Packs", "infopacks"),
         askChip("capacity", "What's my booking cap?", "Am I full today?"),
       ],
@@ -1363,6 +1399,7 @@ const help: Capability = {
 };
 
 export const PROVIDER_CAPABILITIES: Capability[] = [
+  appNavigation,
   todaySchedule,
   weekAhead,
   scheduleGaps,

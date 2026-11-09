@@ -56,6 +56,88 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-09 (your own face in the ring)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109150000 | `get_my_recommended_providers` | **APPLIED 2026-11-09** on the user's go-ahead ("apply"), via `supabase db query --linked -f` (absolute path) with `--workdir` the main folder; version recorded by the file. Frontier before applying: live max `20261109130000`, no higher migration on any open PR; lock `(none)` on main, taken on `feat/circle-own-face` (95cfe1de). New function only, nothing redefined. Forced-rollback dry run first. Verified live: version present (now live max); SECURITY DEFINER, `search_path=public, pg_temp`, md5 `3f386b5b…`; anon can't execute, authenticated can; a read-only smoke test as a recommending client returned their name and 4 provider ids. Written on `feat/circle-own-face` (#406). |
+
+### Applied 2026-11-09 (follow people: visits only from the notice, Blocked list)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109130000 | `follow_people_visits_from_notice_and_blocked_list` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge safely"), via `supabase db query --linked -f` with `--workdir` the main folder; version recorded by the file. Frontier before applying: live max `20261109120000`, and no higher migration on any open PR; lock `(none)` on main, taken on `feat/follow-people-decisions` (add7effe). md5 guards matched (`get_circle_for_providers` `f93b00e9…`, `get_my_people` `cdcd89d8…`). Forced-rollback dry run first (2026-11-08). Both functions rebuilt from #358's applied source with only these changes: a completed booking counts as a visit only if the appointment ended after `where_i_go_notice_seen_at`, and `get_my_people` gains a `'blocked'` kind. Verified live: version present (now live max); new md5s circle `044a3734…`, people `fece334d…`; the cutoff and the blocked kind are in the bodies; anon can't execute either, authenticated can. Written on `feat/follow-people-decisions` (#395). |
+
+### Applied 2026-11-08 (reschedule: 45 minutes to answer, both people told)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109120000 | `reschedule_reply_45_minutes` | **APPLIED 2026-11-08** on the user's go-ahead, straight after 20261109110000, via `supabase db query --linked -f` from the main folder; version recorded by the file. Frontier before applying: live max `20261109110000`; lock `(none)`; md5 guards matched (`handle_reschedule_request_change` `63a4aaa1…`, `process_expire_stale_reschedule_requests` `717bdca9…`); 0 open reschedule requests. Forced-rollback dry run first. Adds `reschedule_reply_window()` (45 minutes; anon can't execute); expiry = LEAST(appointment start, updated_at + window), both sides notified, one pair per group; "your turn" notifications quote the window; cron `reschedule-request-expiry` every minute; cron `provider-stale-reschedule-reminders` unscheduled and `process_provider_stale_reschedule_reminders()` dropped. Verified live: version present; window `00:45:00`; new md5s trigger `ffe7e1f7…` / expiry `af9f271a…`; expiry still SECURITY DEFINER; trigger still attached. Written on `feat/reschedule-reply-45-minutes` (#387). |
+
+### Applied 2026-11-08 (cart checkout holds slots for 5 minutes)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109110000 | `cart_hold_five_minutes` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Frontier before applying: live max `20261109100000`; lock `(none)`; md5 guards matched (`prepare_checkout` `31bcc5e0…`, `hold_cart_booking_slots` `2e5b099f…`). Forced-rollback dry run first. `prepare_checkout()` and `hold_cart_booking_slots()` copied from live with only the hold interval changed 10 → 5 minutes; `checkout_batches.expires_at` default 5 minutes; cron `expire-cart-holds` `*/5` → every minute. Verified live: version present; both functions say 5 minutes (new md5s `b781dde0…` / `fac4fd25…`); default `now() + 00:05:00`; anon can't execute `prepare_checkout`, authenticated can. Written on `fix/cart-hold-five-minutes` (#386). |
+
+### Applied 2026-11-08 (provider "I work with" skin tones)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 202611091000| 20261109100000 | `provider_skin_tones_catered` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Rollback-only dry run first (succeeded, nothing kept). Adds nullable `providers.skin_tones_catered text[]`, nothing else. Verified live: version present and is the new max; column `ARRAY`; anon can select, authenticated can update; RLS still on; 16 rows. Written on `feat/products-and-who-you-work-with` (#381), whose public profile select names the column. |2026-11-08 (client beauty profile: skin type and style vibe are multi-pick)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108240000 | `beauty_profile_skin_type_and_style_vibe_multi_pick` | **APPLIED 2026-11-08** by cerviced-17 on the user's go-ahead, straight after 20261108230000, via `supabase db query --linked -f` from the main folder; version recorded by the file. Renumbered 140000 → 150000 → 170000 → 210000 → 240000 as other migrations landed. Rollback-only dry run first (succeeded, nothing kept). Converts `users.skin_type` and `users.style_vibe` text → text[] (a single answer becomes a one-item list; blank → NULL), and rebuilds `get_client_beauty_profile_for_booking(uuid)` from its live definition with only those two OUT columns changed to text[]. Guard refuses if any other function reads the columns; #342's `beauty_profile_fields_for_category` is allowed because it only names them as labels. Verified live: version present; both columns `_text`; function returns `skin_type text[]` / `style_vibe text[]`, still SECURITY DEFINER with `search_path=public, pg_temp`, anon can't execute, authenticated can; 7 users with a skin type, 6 with a style vibe. **The app must ship #352 with it**: builds without #352 write a plain string here. Written on `feat/beauty-profile-multi-pick` (#352). |
+
+### Applied 2026-11-08 (anonymous reviews)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108230000 | `anonymous_reviews` | **APPLIED 2026-11-08** by cerviced-17 on the user's go-ahead, via `supabase db query --linked -f` from the main folder; version recorded by the file. Renumbered 140000 → 160000 → 200000 → 230000 as 141616, #340, #342 and #358 (220000) landed. Frontier before applying: live max `20261108220000`; lock `(none)`; md5 guard on `handle_review_received` (`2184a117…`) matched. Adds `reviews.is_anonymous BOOLEAN NOT NULL DEFAULT false`; `reviews_public_read` / `reviews_owner_read` skip anonymous rows; new `reviews_reviewer_read` lets the author read their own; adds `get_provider_reviews(uuid,integer)` and `get_my_provider_reviews(integer)` (blank reviewer/booking/service/tip on anonymous rows); rebuilds `handle_review_received` so an anonymous review's notification has no booking link. Verified live: version present; column default false / NOT NULL; six reviews policies incl. `reviews_reviewer_read`; both readers authenticated-only (anon can't execute); new `handle_review_received` md5 `a6f572b1…`. Written on `feat/anonymous-reviews` (#350). |
+
+### Applied 2026-11-08 (following people + Recommend)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108220000 | `follow_people_and_recommend` | **APPLIED 2026-11-08** on the user's go-ahead, via `supabase db query --linked -f` from the worktree (absolute path, `--workdir` the main folder). Frontier before applying: live max `20261108190000` (#340 at 180000 and #342 at 190000 applied); #350 at 200000 and #352 at 210000 are held on the user's decisions and will renumber above this one. Lock was `(none)` on main. Additive only: no existing function, view or constraint redefined. Verified live: version present; 7 tables with RLS, 0 policies, no anon/authenticated table grants; the 16 app RPCs are executable by authenticated only; the 12 helpers aren't executable by authenticated; every SECURITY DEFINER function has search_path set; both `users` triggers are present; 16 phone hashes backfilled; trigram index present. A read-only smoke test as a client returned the expected defaults. Written on `feat/follow-people-backend` (#358). |
+
+### Applied 2026-11-08 (a provider only gets the beauty-profile fields for the booked service)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108190000 | `beauty_profile_shared_by_booked_service` | **APPLIED 2026-11-08** by cerviced-82 on the user's go-ahead, straight after 20261108180000, via `supabase db query --linked -f` from the main folder. Renumbered 100000 → 110000 → 180000 → 190000 as #340 and 20261108141616 landed. Forced-rollback dry run first. Adds `get_client_beauty_profile_for_booking(uuid)` (SECURITY DEFINER, search_path set, authenticated only; answers only that booking's provider; nulls fields the booked service's category doesn't get) and `beauty_profile_fields_for_category(text)` (nobody may execute it), and DROPs `get_client_beauty_profile_for_provider(uuid)`. Starts with a guard that refuses if `users.skin_type`/`style_vibe` aren't text. #352 (multi-pick, now 20261108240000) must rebuild this function with text[]. Verified live: version present; old function gone; anon can't execute, authenticated can; helper not executable by authenticated; NAILS → allergies, medical_notes, photography_consent, nail_length, nail_shape. Lock released. Written on `feat/beauty-profile-by-booked-service` (#342). |
+
+### Applied 2026-11-08 (provider venue moved off bookings so clients can't read it early)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261108180000 | `booking_venue_details_private` | **APPLIED 2026-11-08** by cerviced-82 on the user's go-ahead, after the authoring session ended, via `supabase db query --linked -f` from the main folder; `send-booking-confirmation` deployed straight after from the PR worktree (`--project-ref ztrfpfvvejzaysrelmfm`). Live max before: `20261108141616`. Forced-rollback dry run first (131 venue rows = 131 non-mobile bookings, columns dropped, view intact). Verified live: version present; 3 columns gone; 131 venue rows; RLS on with one policy (provider SELECT, authenticated); anon can't select, authenticated can't insert; `booking_released_venue` not executable by authenticated; `client_booking_venue` authenticated only; old stamp function dropped, `trg_stamp_booking_venue_details` present; `client_bookings` still security_invoker; table not in realtime. Original notes: the edge function `send-booking-confirmation` must be deployed in the same window (it reads the new `booking_released_venue()`; the old one selects a column this drops). Renumbered from 20261108100000: above live max `20261108141616` and above the unapplied #350 (160000) and #352 (170000); #342 follows at 20261108190000. md5 guards on `client_bookings` (`46b52e14…`), `claim_cart_booking_slots` (`5feeca61…`), `stamp_booking_address_snapshot` (`67801162…`). Creates `booking_venue_details` (provider-read RLS only), `booking_released_venue()` (service_role), `client_booking_venue()` (authenticated, own client/provider + released), rebuilds `client_bookings` on it, replaces the stamp trigger with AFTER INSERT `stamp_booking_venue_details()`, drops the venue lines from the claim, copies 126 venues, then DROPS `bookings.provider_address_snapshot`, `provider_directions_snapshot`, `provider_coordinates`. Dry-run on live 2026-11-08, rolled back: client lost raw access (column gone, 0 venue rows), released view addresses unchanged except 10 mobile bookings that no longer show the provider's base; provider still reads its 37 venues. |
+
+### Applied 2026-11-06 (bookings carry exact venue coordinates)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261106130000 | `bookings_stamp_exact_venue_coordinates` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f` from the main folder (worktrees aren't linked). Frontier before applying: live max `20261106113000`, nothing unapplied above it; md5 guard `2143cc34…` matched. Redefines `stamp_booking_address_snapshot()` so non-mobile bookings also get the provider's exact private coordinates, and backfilled active bookings with none. Verified live: version present; 0 active venue bookings without coordinates; 0 mobile bookings with them; function keeps `SET search_path`, not executable by anon or authenticated; `trg_stamp_booking_address_snapshot` still BEFORE INSERT. New md5 `67801162…`. Written on `fix/booking-exact-coordinates` (#331). |
+
+### Applied 2026-11-06 (info pack send-to-upcoming is a choice)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261106113000 | `info_pack_send_to_upcoming_is_a_choice` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f`; version recorded by the file. Frontier before applying: live max `20261105223541`, no open PR branch above it. Lock was `(none)`. Adds `info_packs.send_to_upcoming BOOLEAN NOT NULL DEFAULT TRUE` and recreates `on_info_pack_created` with `WHEN (NEW.send_to_upcoming)`; `handle_new_info_pack()` not redefined. Verified live: trigger def carries the WHEN clause, column default `true` / NOT NULL, every existing row TRUE, version present. Written on `feat/info-packs-redesign` (#330). |
+
+### Applied 2026-11-06 (universal add-ons)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261105223541 | `universal_add_ons` | **APPLIED 2026-11-06** on the user's go-ahead, via `supabase db query --linked -f`. Codex's `directory-listings-admin` lock was still claimed in the main folder's uncommitted copy of this file, but all its migrations were already live and touch none of these functions. The md5 guards on `prepare_checkout`, `provider_create_manual_booking` and `replace_provider_services` passed. Verified live: version recorded; `provider_add_ons` has RLS with one owner-read policy, anon can't read it and authenticated can't write it; 17 shared add-ons, all 53 `service_add_ons` rows linked; `replace_provider_add_ons` executable by authenticated only, `sync_provider_add_on_links` by neither; `prepare_checkout` adds add-on minutes to the end time; `replace_provider_services` calls the sync. |
+
+### Applied 2026-11-05 (booking requests answered by an hour before)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261105090833 | `booking_requests_answer_by_an_hour_before` | **APPLIED 2026-11-05** (authored as 20261104120000, renumbered above the directory-listing migrations, file renamed to the version `apply_migration` recorded). Applied while Codex's `directory-listings-admin` held the lock, with the user's go-ahead: its two migrations were already live and touch none of these functions. Verified live: version recorded; `handle_new_booking`, `claim_cart_booking_slots`, `finalize_checkout` and `claim_waitlist_hold` call `booking_request_title` / `booking_request_answer_note` and keep their `SET search_path`; the four new helpers aren't executable by anon or authenticated; `process_expire_stale_pending_bookings` uses `booking_request_deadline`; `expire-stale-pending-bookings` runs `*/5 * * * *`. |
+
 ### Applied 2026-11-03 (admin dashboard, developer tools admin-only)
 
 | Authored version | Name | Status |

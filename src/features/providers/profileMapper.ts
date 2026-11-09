@@ -46,6 +46,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
           name: addOn.name,
           price: Number(addOn.price),
           description: addOn.description ?? '',
+          extraMinutes: Number(addOn.extra_minutes ?? 0),
         })),
       // null = never stated → treated as safe (no warning), matching the
       // provider toggle's off-by-default meaning. Only an explicit false shows
@@ -85,6 +86,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     providerName: provider.display_name.toUpperCase(),
     providerService: provider.service_category,
     providerLogo: provider.logo_url ? { uri: provider.logo_url } : null,
+    providerLogoFraming: provider.logo_framing ?? null,
     location: provider.location_text ?? '',
     publicDirections: provider.public_directions?.trim() ?? '',
     businessType: provider.business_type ?? null,
@@ -127,8 +129,10 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     walkInsWelcome: provider.walk_ins_welcome ?? false,
     groupBookingsAvailable: provider.group_bookings_available ?? false,
     veganCrueltyFree: provider.vegan_cruelty_free ?? false,
-    travelRadius: provider.travel_radius ?? '',
     productsUsed: provider.products_used ?? '',
+    clientele: provider.clientele ?? [],
+    skinTonesCatered: provider.skin_tones_catered ?? [],
+    hairTypesCatered: provider.hair_types_catered ?? [],
     bookingPolicies: provider.booking_policies ?? null,
     cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
     waitlistEnabled: provider.automation_settings?.waitlistEnabled !== false,

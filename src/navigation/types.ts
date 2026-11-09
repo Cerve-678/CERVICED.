@@ -49,6 +49,8 @@ export type HomeStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
@@ -95,6 +97,8 @@ export type BeccaStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
@@ -132,9 +136,15 @@ export type ProviderBeccaStackParamList = {
   };
   Promotions: undefined;
   InfoPacks: undefined;
+  ProviderIntakeForm:
+    | { bookingId: string; clientUserId: string; serviceName: string; formId?: string }
+    | { openTerms: true }
+    | undefined;
   Analytics: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Automations: undefined;
+  Payments: undefined;
+  Policies: undefined;
 };
 
 // Cart Stack
@@ -157,6 +167,8 @@ export type CartStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
@@ -175,6 +187,9 @@ export type ProfileStackParamList = {
   /** `openMaintenance` lands on the Maintenance view (a maintenance push or
    *  in-app notification); `focusItemId` scrolls to that item. */
   BeautyProfile: { openMaintenance?: boolean; focusItemId?: string } | undefined;
+  /** Your circle: find people, follow requests, followers/following and the
+   *  sharing switches. Reached from Beauty Profile. */
+  Circle: undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;
   PaymentMethods: undefined;
@@ -182,7 +197,6 @@ export type ProfileStackParamList = {
   HelpCentre: undefined;
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;
@@ -207,6 +221,8 @@ export type ProfileStackParamList = {
       }
     | undefined;
   BookingDetail: { bookingId: string };
+  /** The client's Activity Centre page (Bookings' tray button, Settings → For you). */
+  ActivityCentre: undefined;
   ExternalBookingDetail: { externalBookingId: string };
   // knownPolicy: the booking screen already has it, so the picker needn't wait to re-read it.
   Reschedule: { bookingId: string; knownPolicy?: ProviderReschedulePolicy | undefined };
@@ -246,6 +262,7 @@ export type ProviderHomeStackParamList = {
   Branding: undefined;
   Policies: undefined;
   Payments: undefined;
+  Automations: undefined;
   // Pushed from the link-only Dashboard's Profile strength rows (Instagram,
   // accessibility, payment methods), same reasoning as EditProfile above.
   BusinessInfo: undefined;
@@ -298,6 +315,8 @@ export type ProviderServicesStackParamList = {
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
+  // My Profile → Recent activity → See all opens History → All.
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   // Pushed from the Clientele screen's Message button, for the same reason
   // ProviderSchedule is registered here — a cross-tab navigate would land the
   // conversation at a bare tab root and its back button would fire an
@@ -320,6 +339,8 @@ export type ProviderServicesStackParamList = {
   Policies: undefined;
   Payments: undefined;
   Branding: undefined;
+  // Pushed from the Profile Health checklist's automations step.
+  Automations: undefined;
   // Pushed from the dashboard's saved-by-clients tile, same reasoning.
   Analytics: undefined;
   AddBooking: undefined;
@@ -385,7 +406,6 @@ export type ProviderAccountStackParamList = {
   // both hats reach the same single setting.
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;

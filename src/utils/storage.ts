@@ -53,4 +53,7 @@ LIKED_VIDEOS: 'liked_videos',
 BOOKMARKED_VIDEOS: 'bookmarked_videos',
 SAVED_PORTFOLIO: 'saved_portfolio_items',
 MANUAL_LOCATION: '@manual_location',
+// Set by Home's "Use my location": GPS on purpose, ahead of Your area.
+NEAR_YOU_USE_DEVICE: '@near_you_use_device',
+NEAR_YOU_RADIUS: '@near_you_radius_miles',
 } as const;

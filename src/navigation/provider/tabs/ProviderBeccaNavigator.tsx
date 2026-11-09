@@ -11,9 +11,12 @@ import ProviderInboxScreen from "../../../screens/provider/ProviderInboxScreen";
 import ProviderConversationScreen from "../../../screens/provider/ProviderConversationScreen";
 import ProviderPromotionsScreen from "../../../screens/provider/ProviderPromotionsScreen";
 import ProviderInfoPackScreen from "../../../screens/provider/ProviderInfoPackScreen";
+import ProviderIntakeFormScreen from "../../../screens/provider/ProviderIntakeFormScreen";
 import ProviderAnalyticsScreen from "../../../screens/provider/ProviderAnalyticsScreen";
 import ProviderBookingHistoryScreen from "../../../screens/provider/ProviderBookingHistoryScreen";
 import ProviderAutomationsScreen from "../../../screens/provider/ProviderAutomationsScreen";
+import PaymentsScreen from "../../../screens/provider/PaymentsScreen";
+import PoliciesScreen from "../../../screens/provider/PoliciesScreen";
 import { ProviderBeccaStackParamList } from "../../types";
 
 const ProviderBeccaStack =
@@ -112,6 +115,14 @@ export default function ProviderBeccaNavigator() {
         options={{ headerShown: false, presentation: "card" }}
       />
 
+      {/* BookingDetail (above) opens a booking's forms and offers to create
+          one; without this route those taps had nowhere to go from Becca. */}
+      <ProviderBeccaStack.Screen
+        name="ProviderIntakeForm"
+        component={ProviderIntakeFormScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
       <ProviderBeccaStack.Screen
         name="Analytics"
         component={ProviderAnalyticsScreen}
@@ -127,6 +138,18 @@ export default function ProviderBeccaNavigator() {
       <ProviderBeccaStack.Screen
         name="Automations"
         component={ProviderAutomationsScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      <ProviderBeccaStack.Screen
+        name="Payments"
+        component={PaymentsScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      <ProviderBeccaStack.Screen
+        name="Policies"
+        component={PoliciesScreen}
         options={{ headerShown: false, presentation: "card" }}
       />
     </ProviderBeccaStack.Navigator>

@@ -10,6 +10,8 @@ tags: [screen, client]
 - [[ProviderProfileScreen\|ProviderProfile]]
 - [[MessagesScreen\|Messages]]
 - [[BookingsScreen\|Bookings]]
+- [[CircleScreen\|Circle]]
+- [[ProfileInfoScreen\|ProfileInfo]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

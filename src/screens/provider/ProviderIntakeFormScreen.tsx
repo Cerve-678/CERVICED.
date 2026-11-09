@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
+  Animated,
   View,
   Text,
   StyleSheet,
@@ -12,11 +13,12 @@ import {
   Keyboard,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SafeAreaView } from '../../components/SafeArea';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, WindowControlsInsetProvider } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import {
   getIntakeFormByBooking,
@@ -42,6 +44,11 @@ import {
   detectTemplate,
   getRelevantTemplates,
 } from '../../features/intake-forms/formTemplates';
+import { FormsWelcome } from '../../features/intake-forms/FormsWelcome';
+import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { useHowItWorks } from '../../components/HowItWorksSheet';
+import { logger } from '../../utils/logger';
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
 
@@ -147,6 +154,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
   const { showToast, DialogHost } = useAppDialog();
+  const { user } = useAuth();
 
   // ── Global state ──────────────────────────────────────────────────────────
   const [mode, setMode]           = useState<Mode>('picker');
@@ -189,6 +197,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const [pickingBookingFor, setPickingBookingFor] = useState<string | null>(null); // library form id
   const [pickableBookings, setPickableBookings] = useState<BookingWithAddOns[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+
+  // ── How Forms work (first visit, then the ⓘ) ──────────────────────────────
+  const welcome = useHowItWorks();
+  const welcomeCheckedRef = useRef(false);
 
   const autoTemplate = detectTemplate(serviceName, relevantTemplates);
 
@@ -299,6 +311,25 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     }
     init();
   }, [bookingId, existingFormId, openTerms, openBuilderFromLibrary, openBuilderFromTemplate]);
+
+  // First visit to the library: the welcome, once per account
+  // (users.seen_tours). Only when the screen lands on the library itself —
+  // opening straight into a client's answers or the terms editor is the
+  // wrong moment, and the welcome waits for the next library visit.
+  useEffect(() => {
+    if (loading || !user?.id || welcomeCheckedRef.current) return;
+    welcomeCheckedRef.current = true;
+    if (mode !== 'picker') return;
+    let alive = true;
+    resolveTourForUser(TOUR_KEYS.PROVIDER_FORMS, [{ key: 'welcome' }], user.id)
+      .then(decision => {
+        if (!alive || !decision.show) return;
+        welcome.showOnArrival();
+        void recordTourSeen(TOUR_KEYS.PROVIDER_FORMS, user.id);
+      })
+      .catch(error => logger.error('[Forms] welcome check failed:', error));
+    return () => { alive = false; };
+  }, [loading, mode, user?.id, welcome.showOnArrival]);
 
 
   const toggleService = useCallback((name: string) => {
@@ -462,6 +493,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   }
 
   const canSave = questions.length > 0 && questions.every(q => q.label.trim());
+  // The welcome's example is this provider's own best template, if any.
+  const welcomeExample = autoTemplate ?? relevantTemplates[0];
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
@@ -482,6 +515,17 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 : mode === 'builder' ? (editingId ? 'Edit Form' : 'Create Form')
                 : 'Forms'}
             </Text>
+            {mode === 'picker' && (
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); welcome.show(); }}
+                hitSlop={10}
+                activeOpacity={0.7}
+                style={[styles.infoBtn, { backgroundColor: P.iconBg }]}
+                accessibilityLabel="How Forms work"
+              >
+                <Ionicons name="information" size={13} color={P.text} />
+              </TouchableOpacity>
+            )}
             {mode === 'builder' && questions.length > 0 && (
               <View style={[styles.qPill, { backgroundColor: P.surface, borderColor: P.border }]}>
                 <Text style={[styles.qPillText, { color: P.sub }]}>{questions.length}q</Text>
@@ -549,10 +593,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                     </Text>
                   </View>
                 ) : (
-                  libraryForms.map(f => (
+                  libraryForms.map((f, i) => (
                     <LibraryFormCard
                       key={f.id}
                       form={f}
+                      index={i}
                       P={P}
                       onSend={() => handleSendToClient(f.id)}
                       onEdit={() => openBuilderFromLibrary(f)}
@@ -886,6 +931,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
       {/* ── Form Preview Modal ── */}
       <Modal visible={showPreview} animationType="none" presentationStyle="pageSheet" onRequestClose={() => setShowPreview(false)}>
+        {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
         <SafeAreaView style={[styles.previewRoot, { backgroundColor: P.bg }]} edges={['top', 'bottom']}>
           <View style={[styles.previewHeader, { borderBottomColor: P.border }]}>
             <View style={{ width: 36 }} />
@@ -960,6 +1008,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             )}
           </ScrollView>
         </SafeAreaView>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
       </Modal>
 
       {/* ── Booking picker — shown when "Send to Client" is tapped from the
@@ -1009,6 +1059,16 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         </View>
       </Modal>
 
+      <FormsWelcome
+        visible={welcome.open}
+        P={P}
+        exampleTitle={welcomeExample?.label ?? 'Consultation Form'}
+        exampleQuestions={welcomeExample ? welcomeExample.questions.filter(q => q.type !== 'policy' && q.label.trim()) : []}
+        serviceChips={providerServiceNames}
+        onStart={() => { welcome.hide(); setPickerTab('templates'); }}
+        onClose={welcome.hide}
+      />
+
       <DialogHost />
     </View>
   );
@@ -1016,15 +1076,28 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
 // ── LibraryFormCard ──────────────────────────────────────────────────────────
 
-function LibraryFormCard({ form, P, onSend, onEdit, onDelete }: {
+function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
   form:     LibraryForm;
+  index:    number;
   P:        typeof DARK;
   onSend:   () => void;
   onEdit:   () => void;
   onDelete: () => void;
 }) {
+  // Eases in on mount, a short stagger down the list — same motion as the
+  // Info Packs cards.
+  const fade = useRef(new Animated.Value(0)).current;
+  const lift = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    const delay = Math.min(index * 50, 250);
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 260, delay, useNativeDriver: true }),
+      Animated.spring(lift, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
+    ]).start();
+  }, [fade, index, lift]);
+
   return (
-    <View style={[styles.libraryCard, { backgroundColor: P.card, borderColor: P.border }]}>
+    <Animated.View style={[styles.libraryCard, { backgroundColor: P.card, borderColor: P.border, opacity: fade, transform: [{ translateY: lift }] }]}>
       {/* Top row */}
       <View style={styles.libraryCardTop}>
         <View style={{ flex: 1 }}>
@@ -1073,7 +1146,7 @@ function LibraryFormCard({ form, P, onSend, onEdit, onDelete }: {
         <Ionicons name="send-outline" size={14} color={P.accent} />
         <Text style={[styles.librarySendBtnText, { color: P.accent }]}>Send to Client</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1185,6 +1258,7 @@ const styles = StyleSheet.create({
   },
   iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  infoBtn: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   headerTitle:  { fontSize: 17, fontWeight: '600', letterSpacing: -0.3 },
   qPill: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, paddingHorizontal: 7, paddingVertical: 2 },
   qPillText: { fontSize: 11, fontWeight: '600' },

@@ -103,7 +103,9 @@ describe('provider management performance contracts', () => {
     expect(source).toContain('scrollRef.current?.scrollToEnd');
     expect(source).toContain('keyboardShouldPersistTaps="handled"');
     expect(source).toContain('Issue a refund');
-    expect(source).toContain('>Cancel</Text>');
+    // The way out stays on screen: "Cancel", or "Go back" once the provider
+    // has tapped the refund button and is confirming.
+    expect(source).toContain(`{confirming ? 'Go back' : 'Cancel'}</Text>`);
   });
 
   it('saves the full weekly schedule through one atomic RPC', () => {

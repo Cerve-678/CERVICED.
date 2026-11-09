@@ -2,12 +2,14 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BeccaScreen from '../../../screens/shared/BeccaScreen';
 import BookingDetailScreen from '../../../screens/client/BookingDetailScreen';
+import { BOOKING_DETAIL_OPTIONS } from '../bookingDetailOptions';
 import ExternalBookingDetailScreen from '../../../screens/client/ExternalBookingDetailScreen';
 import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
+import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
 import CartScreen from '../../../screens/client/CartScreen';
 import { BeccaStackParamList } from '../../types';
@@ -94,6 +96,24 @@ export default function BeccaNavigator() {
           headerTintColor: theme.text,
         }}
       />
+
+      <BeccaStack.Screen
+        name="ActivityCentre"
+        component={ActivityCentreScreen}
+        options={{
+          title: 'Activity Centre',
+          presentation: 'card',
+          headerTransparent: false,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
+          headerTitleStyle: {
+            fontFamily: 'BakbakOne',
+            fontSize: 22,
+            color: theme.text,
+          },
+          headerTintColor: theme.text,
+        }}
+      />
       <BeccaStack.Screen
         name="ClientIntakeForm"
         component={ClientIntakeFormScreen}
@@ -102,7 +122,9 @@ export default function BeccaNavigator() {
       <BeccaStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: true, presentation: 'card' }}
+        // Set here, not only in the screen's own setOptions, so the first
+        // frame of the push has no back-button text or route-name title.
+        options={BOOKING_DETAIL_OPTIONS}
       />
       <BeccaStack.Screen
         name="ExternalBookingDetail"

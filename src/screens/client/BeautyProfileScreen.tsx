@@ -1,13 +1,16 @@
 // src/screens/client/BeautyProfileScreen.tsx
 //
-// Beauty Profile: a landing with two doors (Maintenance, My Profile), each a
-// full view swapped in by screen state. The views live in
-// src/features/beauty-profile/ and src/features/maintenance/; this file owns
-// the state they share — the profile draft and its single SAVE PROFILE
-// transaction, and the maintenance data.
+// Beauty Profile: the "Map of you" landing (body map, Maintenance's big card,
+// Health & Safety / Maintenance / Circle strips), plus full views swapped in
+// by screen state: one category's editor, every category, Maintenance and its
+// setup. The views live in src/features/beauty-profile/ and
+// src/features/maintenance/; this file owns the state they share — the
+// profile draft and its single SAVE PROFILE transaction, and the maintenance
+// data.
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../i18n';
@@ -20,19 +23,25 @@ import { navigateNested } from '../../navigation/rootNavigate';
 import {
   type BeautyData,
   type CategoryKey,
-  type Gender,
   EMPTY_BEAUTY_DATA,
 } from '../../types/beautyProfile';
 import type { MaintenanceItem } from '../../types/maintenance';
 import { computeBeautyProfileStats } from '../../utils/beautyProfileStats';
+import { beautyProfileTodo, TODO_FIELD_CATEGORY, type BeautyTodoField } from '../../utils/beautyProfileTodo';
+import { beautyDataFromRow } from '../../features/beauty-profile/profileRow';
 import { getMaintenanceServiceType } from '../../constants/maintenanceServiceTypes';
-import { BeautyLanding } from '../../features/beauty-profile/BeautyLanding';
+import { BeautyMapLanding } from '../../features/beauty-profile/BeautyMapLanding';
+import { useFigurePrefs } from '../../features/beauty-profile/useFigurePrefs';
+import { doneOutcome, snoozedDueOn } from '../../features/maintenance/presentation';
+import { dateToYMD } from '../../utils/dateUtils';
 import { MyProfileView } from '../../features/beauty-profile/MyProfileView';
 import { MaintenanceView } from '../../features/maintenance/MaintenanceView';
 import { SetupFlow, type Step } from '../../features/maintenance/SetupFlow';
 import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS } from '../../utils/maintenanceSuggestions';
 import { useMaintenance } from '../../features/maintenance/useMaintenance';
 import type { ItemAction } from '../../features/maintenance/MaintenanceItemCard';
+import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
+import { toPickColumn } from '../../features/beauty-profile/pickList';
 
 type BeautyView = 'landing' | 'maintenance' | 'setup' | 'profile';
 
@@ -69,6 +78,29 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   const [view, setView] = useState<BeautyView>(route.params?.openMaintenance ? 'maintenance' : 'landing');
   const focusItemId = route.params?.focusItemId;
   const maintenance = useMaintenance(user?.id ?? null);
+
+  // Follow requests waiting, for the Your circle strip. Refetched on each
+  // return so a request answered in Your circle clears the dot. A failure only
+  // loses the hint, so it's logged rather than shown.
+  const circleRequests = useSocialSettingsStore(s =>
+    s.ownerId === user?.id && s.settings ? s.settings.requests : 0,
+  );
+  const circleIsPrivate = useSocialSettingsStore(s =>
+    s.ownerId === user?.id && s.settings ? s.settings.isPrivate : null,
+  );
+  const circle = useMemo(() => ({ requests: circleRequests, isPrivate: circleIsPrivate }), [circleRequests, circleIsPrivate]);
+  const [figurePrefs, setFigurePrefs] = useFigurePrefs(user?.id ?? null);
+  // A category opened from the body map goes back to the map, not the tiles.
+  const [fromMap, setFromMap] = useState(false);
+  const [cardBusyId, setCardBusyId] = useState<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      useSocialSettingsStore.getState().load(user.id, true).catch((err: unknown) => {
+        logger.warn('[beauty-profile] could not load circle settings', err);
+      });
+    }, [user?.id]),
+  );
   const [rebookingId, setRebookingId] = useState<string | null>(null);
   // Setup opens on step 1, or straight on the suggestions from "Picked for you".
   const [setupStart, setSetupStart] = useState<Step>(1);
@@ -95,6 +127,12 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   const closeCategory = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSelectedCategory(null);
+    if (fromMap) {
+      // Same as leaving My Profile: unsaved edits are dropped, not kept for later.
+      if (editing) { setDraft(saved); setEditing(false); }
+      setFromMap(false);
+      setView('landing');
+    }
   };
 
   // ── Load ─────────────────────────────────────────────────────────────────
@@ -116,21 +154,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     try {
       const m = await getUserBeautyProfile(userId);
       if (requestId !== loadRequestRef.current || activeUserIdRef.current !== userId) return;
-      const profile: BeautyData = {
-        hairType: m?.hair_type ?? '', scalpCondition: m?.scalp_condition ?? '',
-        hairGoals: m?.hair_goals ?? [], treatmentHistory: m?.treatment_history ?? [],
-        skinType: m?.skin_type ?? '', skinTone: m?.skin_tone ?? '',
-        skinConcerns: m?.skin_concerns ?? [], sensitiveAreas: m?.sensitive_areas ?? [],
-        nailLength: m?.nail_length ?? '', nailShape: m?.nail_shape ?? '',
-        lashStyle: m?.lash_style ?? '', lashStatus: m?.lash_status ?? '',
-        browStyle: m?.brow_style ?? '', browCondition: m?.brow_condition ?? '',
-        makeupCoverage: m?.makeup_coverage ?? '', makeupFinish: m?.makeup_finish ?? '',
-        makeupEyes: m?.makeup_eyes ?? '', makeupLips: m?.makeup_lips ?? '',
-        styleVibe: m?.style_vibe ?? '', serviceInterests: m?.service_interests ?? [],
-        gender: (m?.gender as Gender | null) ?? null, has_kids: m?.has_kids ?? false,
-        allergies: m?.allergies ?? [], medicalNotes: m?.medical_notes ?? '',
-        photographyConsent: m?.photography_consent ?? true,
-      };
+      const profile = beautyDataFromRow(m);
       setProfileOwnerId(userId);
       setSaved(profile);
       setDraft(profile);
@@ -183,7 +207,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           hair_type:           draftSnapshot.hairType            || null,
           scalp_condition:     draftSnapshot.scalpCondition      || null,
           hair_goals:          draftSnapshot.hairGoals,
-          skin_type:           draftSnapshot.skinType            || null,
+          skin_type:           toPickColumn(draftSnapshot.skinType),
           skin_tone:           draftSnapshot.skinTone            || null,
           skin_concerns:       draftSnapshot.skinConcerns,
           sensitive_areas:     draftSnapshot.sensitiveAreas,
@@ -198,7 +222,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           makeup_eyes:         draftSnapshot.makeupEyes          || null,
           makeup_lips:         draftSnapshot.makeupLips          || null,
           allergies:           draftSnapshot.allergies,
-          style_vibe:          draftSnapshot.styleVibe           || null,
+          style_vibe:          toPickColumn(draftSnapshot.styleVibe),
           medical_notes:       draftSnapshot.medicalNotes        || null,
           photography_consent: draftSnapshot.photographyConsent,
           treatment_history:   draftSnapshot.treatmentHistory,
@@ -240,6 +264,47 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   // Every number on My Profile comes from here; recomputed only when the
   // draft changes.
   const stats = useMemo(() => computeBeautyProfileStats(draft), [draft]);
+
+  // What's still to do, from what is actually SAVED (not the draft) — the same
+  // rule as the red "!" on the Settings row, so the two always agree.
+  const todo = useMemo(
+    () => beautyProfileTodo(saved, { dob: user?.dob, hasClientProfile: user?.hasClientProfile }),
+    [saved, user?.dob, user?.hasClientProfile],
+  );
+  // Opens ready to answer — the card promises a fix, not a read-only view.
+  const openTodoField = (field: BeautyTodoField) => {
+    openCategoryFromMap(TODO_FIELD_CATEGORY[field]);
+  };
+
+  // From the map (or a to-do card): straight into that category, ready to answer.
+  const openCategoryFromMap = (key: CategoryKey) => {
+    setDraft(saved);
+    setEditing(true);
+    setFromMap(true);
+    setView('profile');
+    setSelectedCategory(key);
+  };
+
+  // The big card on the landing: Done it and Snooze +7 days.
+  const runCardAction = useCallback(async (item: MaintenanceItem, kind: 'done' | 'snooze') => {
+    const today = dateToYMD(new Date());
+    setCardBusyId(item.id);
+    try {
+      if (kind === 'snooze') {
+        await maintenance.updateItem(item.id, { dueOn: snoozedDueOn(item, today) });
+      } else {
+        const outcome = doneOutcome(item, today);
+        if (outcome.kind === 'update') await maintenance.updateItem(item.id, outcome.patch);
+        else await maintenance.deleteItem(item.id);
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (err) {
+      logger.error(`[Maintenance] ${kind} from the landing failed:`, err);
+      showAlert(t('maintenance.error.title'), t('maintenance.error.save'));
+    } finally {
+      setCardBusyId(null);
+    }
+  }, [maintenance, showAlert, t]);
 
   // ── Maintenance actions ───────────────────────────────────────────────────
 
@@ -331,17 +396,19 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           editing={editing}
           saving={saving}
           selectedCategory={selectedCategory}
-          onBack={() => { if (editing) handleCancel(); setView('landing'); }}
+          onBack={() => { if (editing) handleCancel(); setFromMap(false); setView('landing'); }}
           onOpenCategory={openCategory}
           onCloseCategory={closeCategory}
           onToggleEdit={toggleEdit}
           onSave={handleSave}
+          categoryBackLabel={fromMap ? t('profile.forYou.beauty.title') : undefined}
         />
       );
       break;
     case 'maintenance':
       content = (
         <MaintenanceView
+          userId={user?.id ?? null}
           state={maintenance}
           focusItemId={focusItemId}
           busyItemId={rebookingId}
@@ -368,15 +435,27 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
       break;
     default:
       content = (
-        <BeautyLanding
+        <BeautyMapLanding
           profile={draft}
           stats={stats}
           maintenance={maintenance}
+          figurePrefs={figurePrefs}
+          onFigurePrefsChange={setFigurePrefs}
+          circle={circle}
           onBack={() => navigation.goBack()}
+          onEditCategory={openCategoryFromMap}
+          onOpenHealth={() => openCategoryFromMap('health')}
+          onOpenAllProfile={() => { setFromMap(false); setSelectedCategory(null); setView('profile'); }}
           onOpenMaintenance={() => setView('maintenance')}
           onOpenSetup={() => openSetup(1)}
-          onOpenProfile={() => { setSelectedCategory(null); setView('profile'); }}
-          onOpenHealth={() => { setView('profile'); setSelectedCategory('health'); }}
+          onOpenCircle={() => navigation.navigate('Circle')}
+          onBook={item => { void handleItemAction(item, item.kind === 'service' && item.providerId ? 'rebook' : 'find'); }}
+          onDone={item => { void runCardAction(item, 'done'); }}
+          onSnooze={item => { void runCardAction(item, 'snooze'); }}
+          busyItemId={cardBusyId ?? rebookingId}
+          todo={todo}
+          onOpenTodoField={openTodoField}
+          onOpenAccountDetails={() => navigation.navigate('ProfileInfo')}
         />
       );
   }

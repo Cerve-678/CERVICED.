@@ -1,12 +1,59 @@
 // How long a provider has to answer a booking request. The database decides
-// (process_expire_stale_pending_bookings); this keeps every line of copy
-// saying the same number, and a test holds the two together.
+// (booking_request_deadline, used by process_expire_stale_pending_bookings);
+// this keeps every line of copy saying the same thing, and a test holds the
+// two together.
+//
+// The answer is due 24 hours after the request, or an hour before the
+// appointment if that comes sooner. A request made with less than an hour to
+// go has until the appointment starts.
+import { formatShortDayDate, formatTime12 } from '../../utils/dateUtils';
+
 export const REQUEST_RESPONSE_HOURS = 24;
+/** A short-notice request must be answered this long before it starts. */
+export const REQUEST_ANSWER_LEAD_HOURS = 1;
+
+const HOUR_MS = 60 * 60 * 1000;
+
+export interface RequestDeadline {
+  /** When an unanswered request is declined automatically. */
+  answerBy: Date;
+  /** True when the appointment, not the 24 hours, sets the deadline. */
+  urgent: boolean;
+}
+
+export function requestAnswerDeadline(requestedAt: Date, appointmentStart: Date): RequestDeadline {
+  const dayLater = requestedAt.getTime() + REQUEST_RESPONSE_HOURS * HOUR_MS;
+  const beforeStart = appointmentStart.getTime() - REQUEST_ANSWER_LEAD_HOURS * HOUR_MS;
+  if (beforeStart <= requestedAt.getTime()) {
+    return { answerBy: appointmentStart, urgent: true };
+  }
+  return beforeStart < dayLater
+    ? { answerBy: new Date(beforeStart), urgent: true }
+    : { answerBy: new Date(dayLater), urgent: false };
+}
+
+/** "3:00pm today", "9:30am tomorrow", "3:00pm on Fri 7 Nov". */
+export function formatAnswerBy(answerBy: Date, now: Date = new Date()): string {
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((day(answerBy) - day(now)) / (24 * HOUR_MS));
+  const when = diffDays === 0 ? 'today' : diffDays === 1 ? 'tomorrow' : `on ${formatShortDayDate(answerBy)}`;
+  return `${formatTime12(answerBy)} ${when}`;
+}
 
 /** The client's note on a booking waiting for an answer. */
-export function clientRequestNote(providerName: string): string {
-  return `${providerName} has ${REQUEST_RESPONSE_HOURS} hours to accept this request. If they don't answer by then, or by your appointment time if that's sooner, it's cancelled automatically and anything you paid is refunded in full.`;
+export function clientRequestNote(providerName: string, deadline: RequestDeadline, now?: Date): string {
+  const by = formatAnswerBy(deadline.answerBy, now);
+  const lead = deadline.urgent
+    ? `Your appointment is soon, so ${providerName} has until ${by} to accept this request.`
+    : `${providerName} has ${REQUEST_RESPONSE_HOURS} hours to accept this request, until ${by}.`;
+  return `${lead} If they don't answer by then, it's declined automatically and anything you paid is refunded in full.`;
 }
 
 /** The provider's note on a request they haven't answered. */
-export const PROVIDER_REQUEST_NOTE = `You have ${REQUEST_RESPONSE_HOURS} hours to answer. After that, or at the appointment time if that's sooner, it's cancelled automatically and the client is refunded.`;
+export function providerRequestNote(deadline: RequestDeadline, now?: Date): string {
+  const by = formatAnswerBy(deadline.answerBy, now);
+  const lead = deadline.urgent
+    ? `Needs your answer soon: accept or decline by ${by}, before the appointment.`
+    : `You have ${REQUEST_RESPONSE_HOURS} hours to answer, until ${by}.`;
+  return `${lead} After that it's declined automatically and the client is refunded.`;
+}

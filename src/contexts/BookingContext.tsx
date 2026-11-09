@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
+import { durationWithAddOns } from '../features/bookings/addOnTime';
 import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, getServiceIdsByNames, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow, getCurrentAuthUserId, subscribeToUserBookingChanges, subscribeToRescheduleRequestChanges } from '../services/databaseService';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
@@ -24,6 +25,7 @@ import { logger } from '../utils/logger';
 import { env } from '../utils/env';
 import { applyCancellationRefund } from '../services/databaseService';
 import { formatTime12, formatLongDate } from '../utils/dateUtils';
+import type { DbBookingRescheduleRequest } from '../types/database';
 
 export class BookingError extends Error {
   succeededCartItemIds: string[];
@@ -104,7 +106,7 @@ export interface BookingContextType {
   createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], mobileClientAddress?: MobileClientAddress, holdBatchId?: string) => Promise<void>;
   validateBookingsBeforeCheckout: (cartItems: CartItem[], appointmentData: AppointmentData[]) => Promise<BookingConflictResult>;
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
-  // for the 10-minute window while the user is on the payment screen —
+  // for the 5-minute window while the user is on the payment screen —
   // closes the gap between "committed to paying" and "booking actually
   // inserted" that the claim RPC's insert-time-only conflict check can't
   // cover on its own. Only needs date/time per item (not full
@@ -124,7 +126,7 @@ export interface BookingContextType {
   ) => Promise<string>;
   // Best-effort release of a hold batch when the user backs out of payment
   // before claiming it (close button, payment failure/cancel). Never throws
-  // — the 10-minute TTL cron sweep is the real backstop, this just frees the
+  // — the 5-minute TTL cron sweep is the real backstop, this just frees the
   // slot sooner. Safe to call on an already-claimed or already-expired batch.
   releaseCartCheckoutSlots: (holdBatchId: string) => Promise<void>;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => Promise<void>;
@@ -160,7 +162,7 @@ export interface BookingContextType {
 
   // Reschedule functions
   requestReschedule: (bookingId: string, preferredDates: string[]) => Promise<void>;
-  providerRespondToReschedule: (bookingId: string, availableDates: AvailableDate[]) => Promise<void>;
+  providerRespondToReschedule: (bookingId: string, availableDates: AvailableDate[], request?: DbBookingRescheduleRequest) => Promise<void>;
   confirmReschedule: (bookingId: string, newDate: string, newTime: string) => Promise<void>;
   declineReschedule: (bookingId: string) => Promise<void>;
   // Group reschedule — confirm/decline every sibling booking sharing a
@@ -904,7 +906,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   const providerRespondToReschedule = useCallback(async (
     bookingId: string,
-    availableDates: AvailableDate[]
+    availableDates: AvailableDate[],
+    request?: DbBookingRescheduleRequest,
   ) => {
     try {
       logger.log('Step 2: Provider responding with available dates for:', bookingId);
@@ -918,8 +921,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       if (!targetBooking) throw new Error('Booking not found');
 
-      // ✅ FIX: Skip if provider already responded (prevent duplicate responses)
-      if (targetBooking.rescheduleRequest?.providerAvailableDates) {
+      // A second realtime event may carry the note/policy after the initial
+      // offer. Skip only once that metadata also matches the database row.
+      if (targetBooking.rescheduleRequest?.providerAvailableDates &&
+          (!request || (targetBooking.rescheduleRequest.requestedBy === request.requested_by &&
+            targetBooking.rescheduleRequest.cancelIfDeclined === (request.cancel_if_declined === true) &&
+            (targetBooking.rescheduleRequest.providerNote ?? null) === (request.response_note ?? null)))) {
         logger.log(`[${targetBooking.providerName}] Skipping - provider already responded for booking ${bookingId}`);
         return;
       }
@@ -956,6 +963,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           lastRescheduledAt: targetBooking.rescheduleRequest?.lastRescheduledAt,
           providerAvailableDates: availableDates, // ✅ Explicitly set
           providerRespondedAt: new Date().toISOString(),
+          requestedBy: request?.requested_by ?? targetBooking.rescheduleRequest?.requestedBy,
+          cancelIfDeclined: request?.cancel_if_declined === true,
+          providerNote: request?.response_note ?? targetBooking.rescheduleRequest?.providerNote,
         },
         updatedAt: new Date().toISOString(),
       };
@@ -988,11 +998,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
     const applyProviderResponse = async (
       bookingId: string,
-      slots: AvailableDate[] | null | undefined
+      slots: AvailableDate[] | null | undefined,
+      request?: DbBookingRescheduleRequest,
     ) => {
       if (!slots || slots.length === 0) return;
       try {
-        await providerRespondToReschedule(bookingId, slots);
+        await providerRespondToReschedule(bookingId, slots, request);
       } catch {
         // Booking not on this device or already applied — safe to ignore
       }
@@ -1004,7 +1015,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     // provider" for a request that's actually closed. The notification
     // explaining WHY is trigger-owned and arrives separately; this just
     // keeps the booking's local state from going stale.
-    const applyRejection = async (bookingId: string) => {
+    const applyRejection = async (bookingId: string, request?: DbBookingRescheduleRequest) => {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (!stored) return;
@@ -1013,6 +1024,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         if (!booking || !booking.isPendingReschedule) return;
         const updated: ConfirmedBooking = {
           ...booking,
+          ...(request?.cancel_if_declined ? { status: BookingStatus.CANCELLED } : {}),
           isPendingReschedule: false,
           rescheduleRequest: {
             ...(booking.rescheduleRequest?.rescheduleCount != null
@@ -1058,7 +1070,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           if (req?.status === 'provider_responded') {
             await applyProviderResponse(
               b.id,
-              req.provider_available_slots as AvailableDate[] | null
+              req.provider_available_slots as AvailableDate[] | null,
+              req,
             );
           } else if (!req && b.isPendingReschedule) {
             // No active (pending/provider_responded) row remains for a
@@ -1083,9 +1096,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         (row) => {
           if (!row?.booking_id || !bookingIdsRef.current.has(row.booking_id)) return;
           if (row.status === 'provider_responded') {
-            applyProviderResponse(row.booking_id, row.provider_available_slots);
+            applyProviderResponse(row.booking_id, row.provider_available_slots, row);
           } else if (row.status === 'rejected') {
-            applyRejection(row.booking_id);
+            applyRejection(row.booking_id, row);
           }
         },
     );
@@ -1190,10 +1203,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [saveBookings]);
 
-  // Client declines a provider's offered reschedule times. The booking
-  // itself is untouched server-side (decline_reschedule_offer only closes
-  // the request row) — clear the local pending flags to match, so the
-  // booking falls back to displaying its original, still-confirmed date/time.
+  // Declining normally keeps the original time. A provider can instead set
+  // cancel_if_declined on this offer, in which case the RPC cancels the booking
+  // and starts a full refund; mirror that booking status locally after success.
   const declineReschedule = useCallback(async (bookingId: string) => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -1207,6 +1219,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       const updatedBooking: ConfirmedBooking = {
         ...booking,
+        ...(booking.rescheduleRequest?.cancelIfDeclined ? { status: BookingStatus.CANCELLED } : {}),
         isPendingReschedule: false,
         rescheduleRequest: {
           ...(booking.rescheduleRequest?.rescheduleCount != null
@@ -1501,7 +1514,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           providerName: item.providerDisplayName ?? item.providerName,
           date: appointment?.date || '',
           time: appointment?.time || '',
-          duration: item.duration,
+          duration: durationWithAddOns(item.duration, item.addOns),
           cartItemId: item.id,
           serviceId: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : undefined,
           // Without this the item is re-checked against the very rules the
@@ -1695,7 +1708,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         // providerLocations is keyed by provider id (display names aren't unique)
         const itemProviderId = providerIdCache[item.providerName];
         const groupInfo = groupInfoForItem(item);
-        const endTime = calculateEndTime(appointment.time, item.duration);
+        // The appointment's length includes its add-ons' extra time.
+        const endTime = calculateEndTime(appointment.time, durationWithAddOns(item.duration, item.addOns));
         const initialStatus = providerCapCache[item.providerName]?.auto_accept
           ? BookingStatus.UPCOMING
           : BookingStatus.PENDING;
@@ -1745,7 +1759,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           serviceName: item.serviceName,
           serviceDescription: item.serviceDescription,
           price: item.price,
-          duration: item.duration,
+          duration: durationWithAddOns(item.duration, item.addOns),
           quantity: item.quantity,
           bookingDate: appointment.date,
           bookingTime: appointment.time,
@@ -1830,7 +1844,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   if (!apt || !providerId) return null;
                   const pgTime = timeTo24(apt.time);
                   if (!pgTime) return null;
-                  const endTimeStr = calculateEndTime(apt.time, item.duration);
+                  const endTimeStr = calculateEndTime(apt.time, durationWithAddOns(item.duration, item.addOns));
                   const pgEndTime = timeTo24(endTimeStr);
                   const groupInfo = groupInfoForItem(item);
                   const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
@@ -1874,16 +1888,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                     service_name_snapshot: item.serviceName,
                     service_category_snapshot: item.providerService || null,
                     provider_logo_snapshot: logoUrl,
-                    provider_address_snapshot: isMobile
-                      ? null
-                      : providerLocations[providerId]?.address ?? apt.address ?? null,
+                    // No venue here: the server stamps it into
+                    // booking_venue_details when the slot is held.
                     provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
-                    provider_coordinates: isMobile
-                      ? null
-                      : (() => {
-                          const c = providerLocations[providerId]?.coordinates;
-                          return c ? { lat: c.latitude, lng: c.longitude } : null;
-                        })(),
                     customer_name: apt.customerName,
                     customer_email: apt.customerEmail,
                     customer_phone: apt.customerPhone,
@@ -2148,7 +2155,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         throw new BookingError("Missing appointment details — please pick your time again.");
       }
       const pgTime = timeTo24(schedule.selectedTime);
-      const endTimeStr = calculateEndTime(schedule.selectedTime, item.duration);
+      const endTimeStr = calculateEndTime(schedule.selectedTime, durationWithAddOns(item.duration, item.addOns));
       const pgEndTime = timeTo24(endTimeStr);
       if (!pgTime || !pgEndTime) {
         throw new BookingError("Couldn't confirm this time is still available — please try again.");
@@ -2194,7 +2201,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // Best-effort release when the user backs out of payment before claiming
-  // a hold batch. Never throws — the 10-minute TTL cron sweep
+  // a hold batch. Never throws — the 5-minute TTL cron sweep
   // (expire_cart_holds) is the real backstop, since no reliable
   // client-side "abandoned checkout" signal exists (see design notes in
   // fix_cart_checkout_slot_hold.sql). This just frees the slot sooner.

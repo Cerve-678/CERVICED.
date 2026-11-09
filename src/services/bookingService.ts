@@ -10,7 +10,7 @@ import {
   AvailableDate,
   mapDbBookingStatus,
 } from '../types/booking';
-import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../types/database';
+import type { BookingWithAddOns, DbBookingRescheduleRequest, DbBookingVenue } from '../types/database';
 import type { ProviderLocationData } from './databaseService';
 import { getMyBookings } from './databaseService';
 import { logger } from '../utils/logger';
@@ -284,12 +284,36 @@ export class BookingService {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * The provider's venue for a booking row, from whichever read produced it.
+ *
+ * A client reads client_bookings, whose three venue columns are null until
+ * the address is released. A provider reads bookings with a
+ * booking_venue_details embed (their own venue, always). The bookings table
+ * itself has no venue columns (migration 20261108180000), so a plain
+ * select('*') gets neither and the venue is simply empty.
+ */
+export function readBookingVenue(db: Pick<BookingWithAddOns,
+  'provider_address_snapshot' | 'provider_directions_snapshot' | 'provider_coordinates' | 'booking_venue_details'>,
+): DbBookingVenue {
+  const e = db.booking_venue_details;
+  // booking_id is that table's primary key, so PostgREST returns one object,
+  // but handle an array too rather than guess (see booking_client_addresses).
+  const embedded = Array.isArray(e) ? e[0] : e;
+  return {
+    address: db.provider_address_snapshot ?? embedded?.address ?? null,
+    directions: db.provider_directions_snapshot ?? embedded?.directions ?? null,
+    coordinates: db.provider_coordinates ?? embedded?.coordinates ?? null,
+  };
+}
+
+/**
  * Map a Supabase BookingWithAddOns row → ConfirmedBooking shape for local display.
  * This is the SINGLE SOURCE OF TRUTH for the DB→local mapping.
  * Screens and contexts import this from here, never redefine it.
  */
 export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
   const toDisplayTime = (t: string): string => formatTime12(t);
+  const venue = readBookingVenue(db);
 
   const mapPay = (s: string): PaymentStatus => {
     switch (s) {
@@ -344,14 +368,14 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     bookingTime: startTime,
     endTime,
     status: mapDbBookingStatus(db.status),
-    address: db.provider_address_snapshot ?? '',
-    howToGetThere: db.provider_directions_snapshot ?? undefined,
-    // provider_coordinates is stored as { lat, lng } (see CartClaimItem), but the
-    // whole app reads coordinates.latitude/.longitude — normalize both shapes so
-    // the map marker + Directions work after a DB reload (and only once the
-    // address-release view returns non-null coordinates).
+    address: venue.address ?? '',
+    howToGetThere: venue.directions ?? undefined,
+    // Coordinates are stored as { lat, lng }, but the whole app reads
+    // coordinates.latitude/.longitude — normalize both shapes so the map
+    // marker works after a DB reload (and only once the address-release view
+    // returns non-null coordinates).
     coordinates: (() => {
-      const c = db.provider_coordinates as any;
+      const c = venue.coordinates as any;
       if (!c) return null as unknown as BookingCoordinates;
       const latitude = c.latitude ?? c.lat;
       const longitude = c.longitude ?? c.lng;
@@ -473,6 +497,9 @@ export function applyRescheduleRequestRow(
       ...(row.requested_dates ? { requestedDates: row.requested_dates } : {}),
       ...(row.requested_times ? { requestedTimes: row.requested_times } : {}),
       requestedAt: row.created_at,
+      requestedBy: row.requested_by,
+      cancelIfDeclined: row.cancel_if_declined === true,
+      ...(row.response_note ? { providerNote: row.response_note } : {}),
       ...(responded
         ? {
             providerAvailableDates: row.provider_available_slots as AvailableDate[],

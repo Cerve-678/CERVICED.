@@ -29,6 +29,15 @@ export const TOUR_KEYS = {
   CLIENT_HOME: 'client_home',
   CLIENT_EXPLORE: 'client_explore',
   PROVIDER_HOME: 'provider_home',
+  /** The Info Packs welcome (how packs work), shown on the first visit and
+   *  reopened any time from the screen's ⓘ. */
+  PROVIDER_INFO_PACKS: 'provider_info_packs',
+  /** The Forms welcome (how intake forms work), shown on the first visit to
+   *  the Forms library and reopened from the screen's ⓘ. */
+  PROVIDER_FORMS: 'provider_forms',
+  /** "How Maintenance works", shown on the first visit to Maintenance and
+   *  replayed from its "How this works" link. */
+  CLIENT_MAINTENANCE_HOWTO: 'client_maintenance_howto',
 } as const;
 
 export type TourKey = (typeof TOUR_KEYS)[keyof typeof TOUR_KEYS];
@@ -46,6 +55,9 @@ export const TOUR_CURRENT_VERSION: Record<TourKey, number> = {
   client_home: 1,
   client_explore: 1,
   provider_home: 1,
+  provider_info_packs: 1,
+  provider_forms: 1,
+  client_maintenance_howto: 1,
 };
 
 /** A step's shape as far as this module cares — the real CoachMarkStep adds

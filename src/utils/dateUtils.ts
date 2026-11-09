@@ -85,10 +85,30 @@ export function formatLongDateNoYear(input: string | Date): string {
   return `${weekday} ${day} ${month}`;
 }
 
+/** "Thursday 3rd Oct" — the full day with a short month, for a booking's
+ *  headline where the weekday matters and the year is noise. */
+export function formatDayOrdinalShortMonth(input: string | Date): string {
+  const date = toLocalDate(input);
+  return `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())} ${MONTH_NAMES_ABBREV[date.getMonth()]}`;
+}
+
 /** "Sat 3 Oct" — compact weekday + date for dense card headers. */
 export function formatShortDayDate(input: string | Date): string {
   const date = toLocalDate(input);
   return `${DAY_NAMES_ABBREV[date.getDay()]} ${date.getDate()} ${MONTH_NAMES_ABBREV[date.getMonth()]}`;
+}
+
+/**
+ * "9 – 15 Nov", or "30 Nov – 6 Dec" when the range crosses a month — the
+ * week view's title. The year is left out: the screen header already shows it.
+ */
+export function formatDayRangeShortMonth(start: string | Date, end: string | Date): string {
+  const a = toLocalDate(start);
+  const b = toLocalDate(end);
+  const endPart = `${b.getDate()} ${MONTH_NAMES_ABBREV[b.getMonth()]}`;
+  return a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
+    ? `${a.getDate()} – ${endPart}`
+    : `${a.getDate()} ${MONTH_NAMES_ABBREV[a.getMonth()]} – ${endPart}`;
 }
 
 /**

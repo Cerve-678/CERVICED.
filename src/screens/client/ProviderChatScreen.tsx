@@ -13,6 +13,7 @@ import {
   Modal,
   Alert,
 } from "react-native";
+import type { ViewInstance } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { HomeStackParamList } from "../../navigation/types";
@@ -106,6 +107,26 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       hideSub.remove();
     };
   }, []);
+
+  // Keyboard events report where the keyboard starts in WINDOW coordinates,
+  // but KeyboardAvoidingView only knows its own frame relative to its parent —
+  // and here that parent starts below the stack header (opaque in most tabs,
+  // transparent in the Cart tab). Without this offset the composer was lifted
+  // by the keyboard's height MINUS the header's, which left the message box
+  // under the keyboard. Measure where the area really sits rather than
+  // assuming a header height, so it holds in every stack that opens this.
+  const keyboardAreaRef = useRef<ViewInstance>(null);
+  const [keyboardAreaTop, setKeyboardAreaTop] = useState(0);
+  const measureKeyboardArea = useCallback(() => {
+    keyboardAreaRef.current?.measureInWindow((_x, y) => {
+      if (Number.isFinite(y)) setKeyboardAreaTop(Math.max(0, Math.round(y)));
+    });
+  }, []);
+  // onLayout can fire mid push-animation; measure again once it has settled.
+  useEffect(
+    () => navigation.addListener("transitionEnd", measureKeyboardArea),
+    [navigation, measureKeyboardArea],
+  );
 
   useEffect(() => {
     if (!providerDbId) return;
@@ -457,264 +478,267 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      {/* This view starts below the native stack header, so it already knows
-          its screen position. Adding the header height as an extra keyboard
-          offset would lift the composer by that amount a second time. */}
-      <KeyboardDismissView style={{ flex: 1 }}>
-        <FlatList
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          ref={flatListRef}
-          data={visibleMessages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={[
-            styles.listContent,
-            visibleMessages.length === 0 && { flex: 1 },
-          ]}
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: false })
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyTitle, { color: OP.accentText }]}>
-                {providerName}
-              </Text>
-              <Text style={[styles.emptyBody, { color: OP.sub }]}>
-                {conversationError ?? "Send a message to start a conversation"}
-              </Text>
-            </View>
-          }
-        />
-
-        {addressSettings?.business_type === "mobile" && (
-          <TouchableOpacity
-            style={[
-              styles.addressBtn,
-              { backgroundColor: OP.surface, borderColor: OP.border },
-            ]}
-            onPress={openAddressModal}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="location-outline" size={14} color={OP.accentText} />
-            <Text style={[styles.addressBtnText, { color: OP.accentText }]}>
-              Send my address
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <View
-          style={[
-            styles.quickPromptRow,
-            { borderTopColor: OP.border, backgroundColor: OP.bg },
-          ]}
-        >
-          <ScrollView
+      <View
+        ref={keyboardAreaRef}
+        style={{ flex: 1 }}
+        onLayout={measureKeyboardArea}
+      >
+        <KeyboardDismissView style={{ flex: 1 }} extraOffset={keyboardAreaTop}>
+          <FlatList
             keyboardShouldPersistTaps="handled"
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickPromptScrollContent}
-          >
-            {quickPrompts.map((prompt) => (
-              <TouchableOpacity
-                key={prompt.label}
-                style={[
-                  styles.quickPrompt,
-                  { backgroundColor: OP.surface, borderColor: OP.border },
-                ]}
-                onPress={() => setInputText(prompt.text)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.quickPromptText, { color: OP.accentText }]}>
-                  {prompt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Input bar */}
-        <View
-          style={[
-            styles.inputRow,
-            {
-              backgroundColor: OP.bg,
-              borderTopColor: OP.border,
-              paddingBottom: keyboardVisible
-                ? 12
-                : tabBarHidden
-                  ? Math.max(insets.bottom, 12)
-                  : FLOATING_TAB_BAR_CLEARANCE,
-            },
-          ]}
-        >
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: OP.surface,
-                color: OP.text,
-                borderColor: OP.border,
-              },
+            keyboardDismissMode="on-drag"
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            ref={flatListRef}
+            data={visibleMessages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessage}
+            contentContainerStyle={[
+              styles.listContent,
+              visibleMessages.length === 0 && { flex: 1 },
             ]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Message..."
-            placeholderTextColor={OP.sub}
-            multiline
-            maxLength={1000}
-            returnKeyType="default"
+            onContentSizeChange={() =>
+              flatListRef.current?.scrollToEnd({ animated: false })
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={[styles.emptyTitle, { color: OP.accentText }]}>
+                  {providerName}
+                </Text>
+                <Text style={[styles.emptyBody, { color: OP.sub }]}>
+                  {conversationError ?? "Send a message to start a conversation"}
+                </Text>
+              </View>
+            }
           />
-          <TouchableOpacity
+
+          {addressSettings?.business_type === "mobile" && (
+            <TouchableOpacity
+              style={[
+                styles.addressBtn,
+                { backgroundColor: OP.surface, borderColor: OP.border },
+              ]}
+              onPress={openAddressModal}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="location-outline" size={14} color={OP.accentText} />
+              <Text style={[styles.addressBtnText, { color: OP.accentText }]}>
+                Send my address
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <View
             style={[
-              styles.sendBtn,
+              styles.quickPromptRow,
+              { borderTopColor: OP.border, backgroundColor: OP.bg },
+            ]}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickPromptScrollContent}
+            >
+              {quickPrompts.map((prompt) => (
+                <TouchableOpacity
+                  key={prompt.label}
+                  style={[
+                    styles.quickPrompt,
+                    { backgroundColor: OP.surface, borderColor: OP.border },
+                  ]}
+                  onPress={() => setInputText(prompt.text)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.quickPromptText, { color: OP.accentText }]}>
+                    {prompt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Input bar */}
+          <View
+            style={[
+              styles.inputRow,
               {
-                backgroundColor: OP.accent,
-                opacity: !inputText.trim() || sending ? 0.4 : 1,
+                backgroundColor: OP.bg,
+                borderTopColor: OP.border,
+                paddingBottom: keyboardVisible
+                  ? 12
+                  : tabBarHidden
+                    ? Math.max(insets.bottom, 12)
+                    : FLOATING_TAB_BAR_CLEARANCE,
               },
             ]}
-            onPress={sendMessage}
-            disabled={!inputText.trim() || sending}
-            activeOpacity={0.75}
           >
-            {sending ? (
-              <ActivityIndicator size="small" color={OP.onAccent} />
-            ) : (
-              <Text style={[styles.sendIcon, { color: OP.onAccent }]}>↑</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <Modal
-          visible={showAddressModal}
-          transparent statusBarTranslucent navigationBarTranslucent
-          animationType="fade"
-          onRequestClose={closeAddressModal}
-        >
-          <KeyboardDismissView style={styles.modalOverlay}>
-            <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
-              <Text style={[styles.modalTitle, { color: OP.text }]}>
-                Send your address
-              </Text>
-
-              {loadingAddressBookings ? (
-                <ActivityIndicator
-                  color={OP.accent}
-                  style={{ marginVertical: 20 }}
-                />
-              ) : addressBookings.length === 0 ? (
-                <Text style={[styles.modalEmpty, { color: OP.sub }]}>
-                  No upcoming bookings with {providerName} yet.
-                </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: OP.surface,
+                  color: OP.text,
+                  borderColor: OP.border,
+                },
+              ]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Message..."
+              placeholderTextColor={OP.sub}
+              multiline
+              maxLength={1000}
+              returnKeyType="default"
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                {
+                  backgroundColor: OP.accent,
+                  opacity: !inputText.trim() || sending ? 0.4 : 1,
+                },
+              ]}
+              onPress={sendMessage}
+              disabled={!inputText.trim() || sending}
+              activeOpacity={0.75}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={OP.onAccent} />
               ) : (
-                <>
-                  {addressBookings.length > 1 && (
-                    <FlatList
-                      data={addressBookings}
-                      keyExtractor={(b) => b.id}
-                      style={styles.bookingList}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={[
-                            styles.bookingOption,
-                            {
-                              borderColor:
-                                selectedBooking?.id === item.id
-                                  ? OP.accent
-                                  : OP.border,
-                            },
-                          ]}
-                          onPress={() => selectAddressBooking(item)}
-                          activeOpacity={0.75}
-                        >
-                          <Text
-                            style={[
-                              styles.bookingOptionService,
-                              { color: OP.text },
-                            ]}
-                          >
-                            {item.service_name_snapshot}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.bookingOptionDate,
-                              { color: OP.sub },
-                            ]}
-                          >
-                            {formatShortDate(item.booking_date)} •{" "}
-                            {formatTime12(item.booking_time)}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  )}
+                <Text style={[styles.sendIcon, { color: OP.onAccent }]}>↑</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
-                  <TextInput
-                    style={[
-                      styles.addressInput,
-                      {
-                        backgroundColor: OP.surface,
-                        color: OP.text,
-                        borderColor: OP.border,
-                      },
-                    ]}
-                    value={addressText}
-                    onChangeText={setAddressText}
-                    placeholder="Enter the address for this appointment"
-                    placeholderTextColor={OP.sub}
-                    multiline
-                    editable={!!selectedBooking}
+          <Modal
+            visible={showAddressModal}
+            transparent statusBarTranslucent navigationBarTranslucent
+            animationType="fade"
+            onRequestClose={closeAddressModal}
+          >
+            <KeyboardDismissView style={styles.modalOverlay}>
+              <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
+                <Text style={[styles.modalTitle, { color: OP.text }]}>
+                  Send your address
+                </Text>
+
+                {loadingAddressBookings ? (
+                  <ActivityIndicator
+                    color={OP.accent}
+                    style={{ marginVertical: 20 }}
                   />
+                ) : addressBookings.length === 0 ? (
+                  <Text style={[styles.modalEmpty, { color: OP.sub }]}>
+                    No upcoming bookings with {providerName} yet.
+                  </Text>
+                ) : (
+                  <>
+                    {addressBookings.length > 1 && (
+                      <FlatList
+                        data={addressBookings}
+                        keyExtractor={(b) => b.id}
+                        style={styles.bookingList}
+                        renderItem={({ item }) => (
+                          <TouchableOpacity
+                            style={[
+                              styles.bookingOption,
+                              {
+                                borderColor:
+                                  selectedBooking?.id === item.id
+                                    ? OP.accent
+                                    : OP.border,
+                              },
+                            ]}
+                            onPress={() => selectAddressBooking(item)}
+                            activeOpacity={0.75}
+                          >
+                            <Text
+                              style={[
+                                styles.bookingOptionService,
+                                { color: OP.text },
+                              ]}
+                            >
+                              {item.service_name_snapshot}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.bookingOptionDate,
+                                { color: OP.sub },
+                              ]}
+                            >
+                              {formatShortDate(item.booking_date)} •{" "}
+                              {formatTime12(item.booking_time)}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      />
+                    )}
 
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[styles.modalBtn, { backgroundColor: OP.surface }]}
-                      onPress={closeAddressModal}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.modalBtnText, { color: OP.text }]}>
-                        Cancel
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    <TextInput
                       style={[
-                        styles.modalBtn,
+                        styles.addressInput,
                         {
-                          backgroundColor: OP.accent,
-                          opacity:
-                            !addressText.trim() ||
-                            !selectedBooking ||
-                            sendingAddress
-                              ? 0.5
-                              : 1,
+                          backgroundColor: OP.surface,
+                          color: OP.text,
+                          borderColor: OP.border,
                         },
                       ]}
-                      onPress={handleSendAddress}
-                      disabled={
-                        !addressText.trim() ||
-                        !selectedBooking ||
-                        sendingAddress
-                      }
-                      activeOpacity={0.75}
-                    >
-                      {sendingAddress ? (
-                        <ActivityIndicator size="small" color={OP.onAccent} />
-                      ) : (
-                        <Text
-                          style={[styles.modalBtnText, { color: OP.onAccent }]}
-                        >
-                          Send
+                      value={addressText}
+                      onChangeText={setAddressText}
+                      placeholder="Enter the address for this appointment"
+                      placeholderTextColor={OP.sub}
+                      multiline
+                      editable={!!selectedBooking}
+                    />
+
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        style={[styles.modalBtn, { backgroundColor: OP.surface }]}
+                        onPress={closeAddressModal}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.modalBtnText, { color: OP.text }]}>
+                          Cancel
                         </Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </KeyboardDismissView>
-        </Modal>
-      </KeyboardDismissView>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.modalBtn,
+                          {
+                            backgroundColor: OP.accent,
+                            opacity:
+                              !addressText.trim() ||
+                              !selectedBooking ||
+                              sendingAddress
+                                ? 0.5
+                                : 1,
+                          },
+                        ]}
+                        onPress={handleSendAddress}
+                        disabled={
+                          !addressText.trim() ||
+                          !selectedBooking ||
+                          sendingAddress
+                        }
+                        activeOpacity={0.75}
+                      >
+                        {sendingAddress ? (
+                          <ActivityIndicator size="small" color={OP.onAccent} />
+                        ) : (
+                          <Text
+                            style={[styles.modalBtnText, { color: OP.onAccent }]}
+                          >
+                            Send
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </View>
+            </KeyboardDismissView>
+          </Modal>
+        </KeyboardDismissView>
+      </View>
     </ThemedBackground>
   );
 }

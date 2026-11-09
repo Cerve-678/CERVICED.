@@ -36,6 +36,7 @@ import { OFFERS_ENABLED } from '../../constants/featureFlags';
 import { useIsCervicedAdmin } from '../../features/admin/useIsCervicedAdmin';
 import { dobToParts } from '../../utils/dateUtils';
 import { openLegalPage } from '../../utils/legalPage';
+import { openAboutPage } from '../../utils/aboutPage';
 import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
 
 // ─── Brand palette (unchanged — provider hat's real theme.ts values) ─────────
@@ -540,7 +541,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
             {/* ── App Info & Legal ────────────────────────────────────────── */}
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: P.sub }]}>{t('providerAccount.section.appInfo')}</Text>
-              <SettingsOption icon="info" title={t('providerAccount.appInfo.about.title')} subtitle={t('providerAccount.appInfo.about.sub')} onPress={() => navigation.navigate('About')} P={P} />
+              <SettingsOption icon="info" title={t('providerAccount.appInfo.about.title')} subtitle={t('providerAccount.appInfo.about.sub')} onPress={openAboutPage} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
               {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
               <SettingsOption icon="gavel" title={t('providerAccount.appInfo.terms.title')} subtitle={t('providerAccount.appInfo.terms.sub')} onPress={() => openLegalPage('provider-terms')} P={P} />

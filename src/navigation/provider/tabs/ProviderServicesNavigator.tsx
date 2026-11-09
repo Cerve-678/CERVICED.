@@ -5,6 +5,7 @@ import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
+import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
@@ -13,6 +14,7 @@ import SchedulingScreen from '../../../screens/provider/SchedulingScreen';
 import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
 import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
 import BrandingScreen from '../../../screens/provider/BrandingScreen';
+import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
@@ -61,6 +63,13 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="Clientele"
         component={ProviderClienteleScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      {/* My Profile → Recent activity → See all opens History → All here,
+          so back returns to My Profile rather than another tab's root. */}
+      <ProviderServicesStack.Screen
+        name="BookingHistory"
+        component={ProviderBookingHistoryScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
       <ProviderServicesStack.Screen
@@ -124,6 +133,13 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="Branding"
         component={BrandingScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      {/* Reached from Profile Health's "Set your automations" step. */}
+      <ProviderServicesStack.Screen
+        name="Automations"
+        component={ProviderAutomationsScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

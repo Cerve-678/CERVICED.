@@ -27,7 +27,7 @@ import type {
   ChatSuggestion,
   ConversationContext,
 } from "../../services/becca/types";
-import { converse as beccaConverse } from "../../services/becca/engine";
+import { converse as beccaConverse, isConfirmToken } from "../../services/becca/engine";
 import { getBeccaAIInterpreter } from "../../services/becca/aiRuntime";
 import {
   CLIENT_BECCA_SCREENS,
@@ -64,6 +64,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAppDialog } from "../../components/AppDialog";
 import { logger } from '../../utils/logger';
+import { openLegalPage } from '../../utils/legalPage';
+import { openAboutPage } from '../../utils/aboutPage';
 
 // "Wednesday 5th" — compact day+date for the hero screen's top-right label.
 // No such formatter exists in dateUtils.ts (formatLongDate also includes
@@ -465,7 +467,9 @@ export default function BeccaScreen({
     }
   };
 
-  const handleSend = async (messageText?: string, selectedBookingId?: string) => {
+  // displayText is what the person sees as their own bubble when it differs
+  // from what Becca is sent (a confirm chip sends an internal token).
+  const handleSend = async (messageText?: string, selectedBookingId?: string, displayText?: string) => {
     const textToSend = messageText || inputText.trim();
     const imageToSend = selectedImage;
     // A second send while a reply is visibly typing would interleave two
@@ -486,7 +490,7 @@ export default function BeccaScreen({
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: textToSend || "Sent an image",
+      content: displayText || textToSend || "Sent an image",
       timestamp: new Date(),
     };
     if (imageToSend) userMessage.imageUri = imageToSend;
@@ -569,6 +573,8 @@ export default function BeccaScreen({
         // puts the service straight into the cart.
         ...(requestIsProvider ? {} : { addToCart }),
         ...(user?.id ? { userId: user.id } : {}),
+        // Client hat only: "near me" falls back to it, like Home's Near You.
+        ...(!requestIsProvider && user?.clientArea ? { clientArea: user.clientArea } : {}),
         // What the last turn established. Without this every follow-up
         // ("what about Saturday?", "the first one", "are they any good?")
         // arrives with no idea what came before and matches nothing.
@@ -866,7 +872,13 @@ export default function BeccaScreen({
       // `message` is only present on the message-shaped payload; a navigate
       // chip that reached here would have no message to send.
       if (data.message) {
-        handleSend(data.message, data.bookingId);
+        // A confirm chip ("Add to my cart") sends a token, not words, so the
+        // bubble shows the chip's own label instead of the token.
+        handleSend(
+          data.message,
+          data.bookingId,
+          isConfirmToken(data.message) ? suggestion.text : undefined,
+        );
         // handleSend clears a stale selection for typed messages; restore it
         // for this deliberate chip tap so the action visibly reads as used.
         setUsedSuggestionId(suggestion.id);
@@ -943,7 +955,12 @@ export default function BeccaScreen({
       // Account settings live on the Profile tab's own stack. Switching tabs
       // with its nested route opens the exact page Becca named, instead of
       // dropping the client at the Profile landing page to search again.
-      if (typeof profileScreen === "string") {
+      // Terms and About are website pages now, not screens on that stack.
+      if (profileScreen === "Terms") {
+        openLegalPage("terms");
+      } else if (profileScreen === "About") {
+        openAboutPage();
+      } else if (typeof profileScreen === "string") {
         navigation.getParent()?.navigate("Profile", { screen: profileScreen });
       }
       return;

@@ -7,8 +7,9 @@
  * it's now focused sub-screens, each owning its own save:
  *
  *   BusinessInfoScreen      — name, links, emails, external booking, → T&Cs
- *   ServicesPricingScreen   — specialties, clientele, pricing, style
- *   AboutYouScreen          — credentials, patch test, cities covered, access
+ *   ServicesPricingScreen   — specialties, pricing, style, products
+ *   AboutYouScreen          — who you work with, credentials, patch test,
+ *                             languages, access
  *   SchedulingScreen        — availability, booking rules, → working hours
  *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
@@ -92,7 +93,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="pricetags-outline"
             title="Services & Pricing"
-            subtitle="Specialties, clientele, pricing & style"
+            subtitle="Specialties, pricing, style & products you use"
             onPress={() => navigation.navigate('ServicesPricing')}
             C={C}
           />
@@ -106,7 +107,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="shield-checkmark-outline"
             title="About You"
-            subtitle="Credentials, patch test policy, cities covered & accessibility"
+            subtitle="Areas you cover, who you work with, credentials, patch test policy, languages & accessibility"
             onPress={() => navigation.navigate('AboutYou')}
             C={C}
           />
