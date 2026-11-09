@@ -421,7 +421,7 @@ describe('notification routing — tip received', () => {
 });
 
 describe('notification routing — follow request', () => {
-  const migration = () => read('supabase', 'migrations', '20261109160000_follow_request_notification.sql');
+  const migration = () => read('supabase', 'migrations', '20261109190000_follow_request_notification.sql');
 
   it('declares follow_request everywhere a notification type has to exist', () => {
     // Memory: new-notification-type-is-four-places.

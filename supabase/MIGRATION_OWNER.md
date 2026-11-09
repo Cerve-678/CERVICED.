@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  session on branch feat/follow-request-notification (applying 20261109190000)
 ```
 
 ### Applied 2026-11-09 (your own face in the ring)

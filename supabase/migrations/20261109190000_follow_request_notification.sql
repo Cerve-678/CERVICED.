@@ -1,4 +1,4 @@
--- 20261109160000_follow_request_notification.sql
+-- 20261109190000_follow_request_notification.sql
 --
 -- "Amy wants to follow you" (decided 2026-11-09): when someone asks to
 -- follow a private account, the person they asked gets a notification (and
@@ -14,8 +14,12 @@
 --   -> it's deleted, so "wants to follow you" never outlives the request.
 -- A failed notification never blocks the follow itself.
 --
--- The CHECK list is the live one (57 types, read 2026-11-09) plus
--- 'follow_request'. Live max before this: 20261109150000.
+-- The CHECK list is the live one (57 types, re-read 2026-11-09 just before
+-- applying) plus 'follow_request'. First written as 20261109160000; renumbered
+-- because 20261109170000 (post_appt_check_in_asks_for_feedback, #408) went
+-- live first, and it sits above the peer's unapplied 20261109180000
+-- (reminder_uses_provider_note_or_policies). Neither touches this CHECK or
+-- client_follows.
 
 BEGIN;
 
@@ -103,7 +107,7 @@ CREATE TRIGGER on_client_follow_request
   FOR EACH ROW EXECUTE FUNCTION public.notify_follow_request();
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261109160000', 'follow_request_notification')
+VALUES ('20261109190000', 'follow_request_notification')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
