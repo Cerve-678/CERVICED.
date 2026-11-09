@@ -113,7 +113,7 @@ import ServiceBookingCharts from '../../features/providers/ServiceBookingCharts'
 import { SERVICE_BOOKING_LOOKBACK_DAYS, summariseServiceBookings, type ServiceBookingSummary } from '../../features/providers/serviceBookingSummary';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
 import { formatDurationMinutes } from '../../utils/dateUtils';
-import { toReleaseDay, type BookingHorizonSettings } from '../../utils/bookingHorizon';
+import { toReleaseDay, toReleaseTime, type BookingHorizonSettings } from '../../utils/bookingHorizon';
 import { describeReleaseQuickView } from '../../features/providers/releaseQuickView';
 import { ManageScheduleRows } from '../../features/providers/ManageScheduleRows';
 import { RecentBookingRow } from '../../features/providers/RecentBookingRow';
@@ -922,6 +922,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           setBookingHorizon({
             booking_window_days: profile.booking_window_days,
             schedule_release_day: toReleaseDay(profile.automation_settings?.scheduleReleaseDay),
+            schedule_release_time: toReleaseTime(profile.automation_settings?.scheduleReleaseTime),
           });
           setIsLoading(false);
           setProviderId(profile.id);
