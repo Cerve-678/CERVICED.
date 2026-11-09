@@ -25,7 +25,7 @@ import {
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { STORAGE_KEYS as LOCATION_STORAGE_KEYS } from '../utils/storage';
 import { logger } from '../utils/logger';
-import { recommendPromptedStorageKey } from '../features/social/circleMoments';
+import { momentsMemoryStorageKey } from '../features/social/momentsMemory';
 import { figurePrefsStorageKey } from '../features/beauty-profile/bodyMap';
 import { useSocialSettingsStore } from '../stores/useSocialSettingsStore';
 import { withTimeout } from '../utils/withTimeout';
@@ -958,7 +958,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(loggedOutUserId ? [`@provider_reg_data_${loggedOutUserId}`] : []),
       // Which providers this account was asked to recommend — a list of
       // places they've booked, so it doesn't stay on a handed-on phone.
-      ...(loggedOutUserId ? [recommendPromptedStorageKey(loggedOutUserId)] : []),
+      ...(loggedOutUserId ? [momentsMemoryStorageKey(loggedOutUserId)] : []),
       ...(loggedOutUserId ? [figurePrefsStorageKey(loggedOutUserId)] : []),
       'bookmarked_videos',
       'saved_portfolio_items',
