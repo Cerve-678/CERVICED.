@@ -5,9 +5,9 @@
 
 #generated
 
-**3400 functions** across **480 files**.
+**3409 functions** across **481 files**.
 
-### `src/components/` (63)
+### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -21,6 +21,7 @@
 - `CartTabBadge.tsx` — **useCartBadge**
 - `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
 - `ChatComponents.tsx` — ActionCard · along · **AmbientMark** · animatedStyle · **AnswerAfter** · **AnswerBefore** · **answerListsProviders** · **answerRevealStart** · Appear · CardView · **ChatBubble** · **ChatInput** · content · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · HeadlineView · **InspirationGallery** · **Mark** · PillChip · press · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator** · toggle · WorkFold · WorkSteps
+- `CircleStack.tsx` — CircleSheet · CircleStackInner · Face · label · layout · onClose · onOpen
 - `CityMultiSelect.tsx` — add · addArea · addCounty · addOther · **CityMultiSelect** · close · filtered · placeMatches · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
 - `DynamicText.tsx` — **DynamicText**
@@ -439,6 +440,9 @@
 - `client.ts` — addToCartAndSay · availabilityThinking · bookingChoiceMessage · bookingChoices · bookingTicket · categoryWords · providerRow · soleUpcoming · sortUpcoming · ticketStamp
 - `provider.ts` — cutoff · inRange
 - `shared.ts` — **askChip** · **chip** · **dayLabel** · **money** · **navChip** · **oneOf** · **possessive** · **providerFromDb** · **providerWords** · **resolveProviderDbId** · **serviceWords** · **sortByProximity**
+
+### `src/stores/` (1)
+- `useCircleStore.ts` — **useCircleEnabledSync** · **useCircleFor**
 
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles
