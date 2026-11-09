@@ -106,6 +106,7 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
@@ -3480,7 +3481,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // up after they're fully booked (process_follow_openings_alerts), their
       // offers and announcements, and — with a release day — each new month.
       return releaseDay != null
-        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their announcements and offers`
+        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)} at ${releaseTimeLabel(provider?.scheduleReleaseTime)}, when space opens up, and about their announcements and offers`
         : `Stay updated — you'll hear when ${fullName} has space open up, and about their announcements and offers`;
     } else {
       return providerIsBookmarked
@@ -3493,6 +3494,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     providerIsBookmarked,
     provider?.providerName,
     provider?.scheduleReleaseDay,
+    provider?.scheduleReleaseTime,
   ]);
 
   if (loading || !provider) {
@@ -5242,7 +5244,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </View>
                     );
                   }
-                  const pillText = slotsPillText(provider.scheduleReleaseDay);
+                  const pillText = slotsPillText(provider.scheduleReleaseDay, provider.scheduleReleaseTime);
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every

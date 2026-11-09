@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-09, NOT applied (release time)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109250000 | `release_time` | **Written, NOT applied** (branch `feat/release-time`). Frontier at authoring: live max `20261109240000` (cerviced-f3's `drop_people_name_search`, applied 2026-11-09); highest unapplied on an open PR also `20261109240000`. Re-check both and renumber above them if anything has landed. Redefines from live (md5 guards): `provider_last_bookable_date` (`ca8c8d4c…`), `provider_next_release_after` (`4b3f788c…`), `process_follow_schedule_release_nudges` (`b40e3485…`). Adds `provider_release_time(jsonb)` (not executable by anon/authenticated; only the SECURITY DEFINER functions call it). Reschedules cron job 150 to every five minutes. Release moment moves from 09:00 UTC to the provider's `scheduleReleaseTime`, UK time, 9am default; months are UK months. Read-only dry run 2026-11-09: all 7 release-day providers keep the same last bookable date. `provider_last_bookable_date` is the gate every booking passes through: re-diff against live right before applying. Apply before `feat/release-time` merges, or the app will show times the server doesn't use. |
+
 ### Applied 2026-11-09 (accounts you created, admin)
 
 | Authored version | Name | Status |

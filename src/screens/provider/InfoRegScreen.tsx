@@ -62,13 +62,14 @@ import { normalizeExternalBookingUrl } from '../../features/providers/externalBo
 import { ExpandableAboutText, revealIfScrolledPast } from '../../features/providers/ExpandableAboutText';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderReleaseDay } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderRelease } from '../../services/databaseService';
 import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo, LogoCircle } from '../../components/FramedLogo';
 import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
 import { slotsPillText } from '../../utils/slotsRowText';
+import { DEFAULT_RELEASE_TIME, releaseTimeLabel } from '../../utils/bookingHorizon';
 import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
 import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
@@ -2395,7 +2396,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     never shows text the live screen wouldn't. The day itself
                     is set in Scheduling & Availability. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
-                  {slotsPillText(providerData.scheduleReleaseDay)}
+                  {slotsPillText(providerData.scheduleReleaseDay, providerData.scheduleReleaseTime)}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
                   <BellIcon size={16} color={PP.sub} />
@@ -2871,6 +2872,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     location: '',
     aboutText: '',
     scheduleReleaseDay: null,
+    scheduleReleaseTime: DEFAULT_RELEASE_TIME,
     // The default theme's own colours, which is what this signup saves, so a
     // new provider's profile matches Branding until they choose something.
     // (Was a coral/teal/blue placeholder gradient, saved for real and shown
@@ -2954,6 +2956,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // it's changed here; until then the save leaves it alone and focus
   // re-reads it, so this screen never writes back an older day.
   const releaseDayEditedRef = useRef(false);
+  const releaseTimeEditedRef = useRef(false);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
@@ -3018,11 +3021,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!user?.id) return;
     const userId = user.id;
     return navigation.addListener('focus', () => {
-      if (releaseDayEditedRef.current) return;
-      getMyProviderReleaseDay(userId)
-        .then(day => {
-          if (releaseDayEditedRef.current) return;
-          setProviderData(prev => (prev.scheduleReleaseDay === day ? prev : { ...prev, scheduleReleaseDay: day }));
+      if (releaseDayEditedRef.current || releaseTimeEditedRef.current) return;
+      getMyProviderRelease(userId)
+        .then(({ day, time }) => {
+          if (releaseDayEditedRef.current || releaseTimeEditedRef.current) return;
+          setProviderData(prev => (prev.scheduleReleaseDay === day && prev.scheduleReleaseTime === time
+            ? prev
+            : { ...prev, scheduleReleaseDay: day, scheduleReleaseTime: time }));
         })
         .catch(err => logger.warn('InfoReg: release day refresh failed:', err?.message ?? err));
     });
@@ -3780,10 +3785,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             : providerData.externalBookingUrl,
           bookingMode: isLinkOnly ? 'external' : 'cerviced',
           scheduleReleaseDayEdited: releaseDayEditedRef.current,
+          scheduleReleaseTimeEdited: releaseTimeEditedRef.current,
         },
         !isEditMode && termsAccepted,
       );
       releaseDayEditedRef.current = false;
+      releaseTimeEditedRef.current = false;
       // First save only: the providers row now exists, so the specialities
       // answered at sign-up can finally be attached to it. Without this they
       // never reached the profile hero or Search's Speciality filter.
@@ -4866,7 +4873,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 >
                   <Text style={styles.releaseDayBtnText}>
                     {providerData.scheduleReleaseDay != null
-                      ? `Day ${providerData.scheduleReleaseDay} of every month`
+                      ? `Day ${providerData.scheduleReleaseDay} of every month at ${releaseTimeLabel(providerData.scheduleReleaseTime)}`
                       : 'Choose a day'}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
@@ -5979,6 +5986,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
             value={providerData.scheduleReleaseDay ?? new Date().getDate()}
+            time={providerData.scheduleReleaseTime}
+            onSelectTime={(time) => { releaseTimeEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseTime: time })); }}
             accentColor={adaptiveAccentColor}
             cardColor={editTheme.card}
             textColor={editTheme.text}
