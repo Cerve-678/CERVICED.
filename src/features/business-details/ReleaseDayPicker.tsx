@@ -5,18 +5,25 @@ import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
 import { ordinalSuffix } from '../../utils/dateUtils';
 import { isDarkColor } from '../../constants/providerThemes';
+import { releaseTimeLabel } from '../../utils/bookingHorizon';
 
 const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+/** On the hour, midnight to 11pm. A stored time off the hour (none today)
+ *  is still offered, so opening the picker never changes it. */
+const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
 
 interface ReleaseDayPickerProps {
   visible: boolean;
   value: number;
+  /** 'HH:MM', UK time. */
+  time: string;
   accentColor: string;
   cardColor: string;
   textColor: string;
   subColor: string;
   borderColor: string;
   onSelect: (day: number) => void;
+  onSelectTime: (time: string) => void;
   onClose: () => void;
   /** Show an action that unsets the day (back to a rolling window). Edit
    *  Profile uses it, because there the picker IS the control. Scheduling
@@ -25,8 +32,9 @@ interface ReleaseDayPickerProps {
   onClear?: () => void;
 }
 
-/** Chooses the monthly release day: next month opens for booking on this day
- *  (utils/bookingHorizon), and followers with the bell on are told. Used by
+/** Chooses the monthly release day and time: next month opens for booking on
+ *  this day at this time, UK time (utils/bookingHorizon), and followers with
+ *  the bell on are told within a few minutes. Used by
  *  both screens that edit it: SchedulingScreen and InfoRegScreen (Edit
  *  Profile). They save the same stored value, so a change on either shows
  *  on the other.
@@ -39,16 +47,28 @@ interface ReleaseDayPickerProps {
 export function ReleaseDayPicker({
   visible,
   value,
+  time,
   accentColor,
   cardColor,
   textColor,
   subColor,
   borderColor,
   onSelect,
+  onSelectTime,
   onClose,
   allowClear = false,
   onClear,
 }: ReleaseDayPickerProps) {
+  const hours = HOURS.includes(time) ? HOURS : [time, ...HOURS];
+  // iOS-only itemStyle is the only way to colour the wheel's own rows — the
+  // native picker doesn't inherit text colour from its container, so without
+  // it the rows render black on a dark provider theme. Android renders a
+  // dropdown rather than an inline wheel, so it takes the container's colours.
+  const wheelProps = {
+    itemStyle: [localStyles.item, { color: textColor }],
+    dropdownIconColor: accentColor,
+    style: Platform.OS === 'android' ? { color: textColor } : localStyles.wheel,
+  };
   return (
     <Modal transparent statusBarTranslucent navigationBarTranslucent animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="overFullScreen">
       <View style={styles.releasePickerOverlay}>
@@ -57,33 +77,49 @@ export function ReleaseDayPicker({
           <View style={styles.releasePickerHeader}>
             <View>
               <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING RULES</Text>
-              <Text style={[styles.releasePickerTitle, { color: textColor }]}>Choose release day</Text>
+              <Text style={[styles.releasePickerTitle, { color: textColor }]}>Choose release day & time</Text>
             </View>
             <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onClose(); }} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel="Close release day picker">
               <Ionicons name="close" size={20} color={textColor} />
             </TouchableOpacity>
           </View>
           <Text style={[styles.releasePickerSubtext, { color: subColor }]}>{RELEASE_DAY_EXPLAINER}</Text>
-          <Picker
-            selectedValue={value}
-            onValueChange={(day) => {
-              if (day === value) return;
-              Haptics.selectionAsync().catch(() => {});
-              onSelect(day);
-            }}
-            // iOS-only, and the only way to colour the wheel's own rows — the
-            // native picker doesn't inherit text colour from its container, so
-            // without this it renders black on a dark provider theme.
-            itemStyle={[localStyles.item, { color: textColor }]}
-            // Android renders a dropdown rather than an inline wheel, so it
-            // takes the container's colours here instead of itemStyle.
-            dropdownIconColor={accentColor}
-            style={Platform.OS === 'android' ? { color: textColor } : localStyles.wheel}
-          >
-            {DAYS.map(day => (
-              <Picker.Item key={day} label={`${ordinalSuffix(day)} of the month`} value={day} color={textColor} />
-            ))}
-          </Picker>
+          <View style={localStyles.wheels}>
+            <View style={localStyles.dayColumn}>
+              <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>DAY</Text>
+              <Picker
+                selectedValue={value}
+                onValueChange={(day) => {
+                  if (day === value) return;
+                  Haptics.selectionAsync().catch(() => {});
+                  onSelect(day);
+                }}
+                accessibilityLabel="Release day"
+                {...wheelProps}
+              >
+                {DAYS.map(day => (
+                  <Picker.Item key={day} label={`${ordinalSuffix(day)} of the month`} value={day} color={textColor} />
+                ))}
+              </Picker>
+            </View>
+            <View style={localStyles.timeColumn}>
+              <Text style={[styles.releasePickerEyebrow, localStyles.wheelLabel, { color: subColor }]}>TIME</Text>
+              <Picker
+                selectedValue={time}
+                onValueChange={(next) => {
+                  if (next === time) return;
+                  Haptics.selectionAsync().catch(() => {});
+                  onSelectTime(next);
+                }}
+                accessibilityLabel="Release time"
+                {...wheelProps}
+              >
+                {hours.map(hour => (
+                  <Picker.Item key={hour} label={releaseTimeLabel(hour)} value={hour} color={textColor} />
+                ))}
+              </Picker>
+            </View>
+          </View>
           {allowClear && onClear && (
             <TouchableOpacity
               style={styles.releasePickerClearButton}
@@ -104,7 +140,7 @@ export function ReleaseDayPicker({
 
 /** What a release day does, in one place for every screen that sets it. */
 export const RELEASE_DAY_EXPLAINER =
-  'On this day each month, next month opens for booking at 9am (10am in summer) and followers with the bell on are told. Until then clients can book up to the end of this month.';
+  'On this day each month, at this time (UK time), next month opens for booking and followers with the bell on are told. Until then clients can book up to the end of this month.';
 
 // Geometry/typography only — every colour comes from the caller's theme
 // tokens via props. (Same pattern as LocationPicker's localStyles.)
@@ -185,6 +221,19 @@ const styles = StyleSheet.create({
 });
 
 const localStyles = StyleSheet.create({
+  wheels: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dayColumn: {
+    flex: 3,
+  },
+  timeColumn: {
+    flex: 2,
+  },
+  wheelLabel: {
+    textAlign: 'center',
+  },
   wheel: {
     width: '100%',
   },

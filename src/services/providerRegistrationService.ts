@@ -10,6 +10,7 @@ import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
 import { geocodeUkPlace, isInUk } from './ukGeocode';
 import { themeBrandingColours } from '../constants/providerThemes';
+import { toReleaseTime } from '../utils/bookingHorizon';
 import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import { normalizeServiceImages } from '../utils/serviceImageDraft';
 export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
@@ -106,6 +107,9 @@ export interface ProviderRegistrationData {
    *  since it loaded. The save writes the day only then, so saving Edit
    *  Profile never puts back an older day over one just set in Scheduling. */
   scheduleReleaseDayEdited?: boolean;
+  /** 'HH:MM', UK time, the release day opens. Same edited-here rule. */
+  scheduleReleaseTime: string;
+  scheduleReleaseTimeEdited?: boolean;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
   // computed BEFORE the `gradient` field above gets its hardcoded fallback
@@ -771,13 +775,20 @@ export async function saveProviderToSupabase(
     }
   }
 
-  // The release day, only if it was changed on this screen (see
+  // The release day and time, only what was changed on this screen (see
   // scheduleReleaseDayEdited). Merged server-side so no other key in
-  // automation_settings is touched.
+  // automation_settings is touched. Clearing the day keeps the time.
+  const releaseSet: { scheduleReleaseDay?: number; scheduleReleaseTime?: string } = {};
+  const releaseRemove: 'scheduleReleaseDay'[] = [];
   if (data.scheduleReleaseDayEdited) {
-    await (data.scheduleReleaseDay != null
-      ? mergeProviderAutomationSettings(providerId, { scheduleReleaseDay: data.scheduleReleaseDay })
-      : mergeProviderAutomationSettings(providerId, {}, ['scheduleReleaseDay']));
+    if (data.scheduleReleaseDay != null) releaseSet.scheduleReleaseDay = data.scheduleReleaseDay;
+    else releaseRemove.push('scheduleReleaseDay');
+  }
+  if (data.scheduleReleaseTimeEdited && data.scheduleReleaseDay != null) {
+    releaseSet.scheduleReleaseTime = data.scheduleReleaseTime;
+  }
+  if (Object.keys(releaseSet).length || releaseRemove.length) {
+    await mergeProviderAutomationSettings(providerId, releaseSet, releaseRemove);
   }
 
   // Now that the new logo_url is durably saved, remove the old versioned
@@ -1025,6 +1036,7 @@ export function providerRowToRegistrationData(
     publicDirections: provider.public_directions || '',
     aboutText: provider.about_text || '',
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
+    scheduleReleaseTime: toReleaseTime(provider.automation_settings?.scheduleReleaseTime),
     // Unset colours fall back to the provider's own theme, never a
     // placeholder: this object is saved back on the next profile save.
     gradient: (provider.gradient || themeBrandingColours(provider.profile_theme).gradient) as [string, string, ...string[]],
