@@ -8,6 +8,7 @@ import { AnswerCard, AnswerHeadline, BeccaAnswer, BeccaInspiration, ChatMessage,
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatTime12 } from '../utils/dateUtils';
+import { CircleStack } from './CircleStack';
 
 // Colours come from useTheme().palette (hat-aware — client vs provider),
 // not a local literal copy. accentShadow mirrors the palette's accentDim.
@@ -580,6 +581,12 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
             <Text style={[styles.providerService, { color: P.sub }]} numberOfLines={1}>
               {provider.service}
             </Text>
+            <CircleStack
+              providerId={provider.providerId}
+              providerName={provider.name}
+              cardWidth={104}
+              style={styles.providerCircle}
+            />
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -1296,6 +1303,7 @@ const styles = StyleSheet.create({
   // them distinct stops a provider's avatar reading as another Becca mark.
   // borderRadius must stay exactly half of width/height, or it degrades back
   // into a squircle the moment the size changes.
+  providerCircle: { position: 'absolute', top: 6, right: 6 },
   logoContainer: {
     width: 52,
     height: 52,

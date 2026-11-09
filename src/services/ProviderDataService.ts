@@ -4,6 +4,8 @@ import type { LogoFraming } from '../types/database';
 // Define the Provider type if not imported
 export type Provider = {
   id: string;
+  /** providers.id (uuid) when known; `id` above is the slug. */
+  providerId?: string;
   name: string;
   service: string;
   logo: any;
