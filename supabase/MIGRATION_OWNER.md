@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-09 (more Beauty Profile multi-pick)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110120000 | `beauty_profile_more_multi_pick` | **APPLIED 2026-11-09** on the user's go-ahead ("apply"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261110100000` (explore_collections); nothing higher on any open PR. cerviced-03, cerviced-c2 and cerviced-fa (marketing-studio, whose lock covers only its own `marketing_*` migration) all confirmed they weren't applying. Forced-rollback dry run first; `get_client_beauty_profile_for_booking` md5 `d38f76c0…` unchanged between dry run and apply. Turns `users.hair_type`, `scalp_condition`, `nail_length`, `nail_shape`, `lash_style`, `brow_style`, `brow_condition`, `makeup_coverage`, `makeup_finish`, `makeup_eyes`, `makeup_lips` into `text[]` (old answers kept as one-item lists) and rebuilds `get_client_beauty_profile_for_booking(uuid)` from its live definition. `delete_client_profile()` only sets `hair_type = NULL` of these, fine for text[]. Verified live: version present (now live max); the eleven are `_text`, `skin_tone`/`lash_status` still `text`; function returns text[] for them; anon can't execute, authenticated can; 8 hair-type rows, no empty lists. Written on `feat/beauty-profile-multi-pick-all` (#439). |
+
 ### Applied 2026-11-09 (Explore collections)
 
 | Authored version | Name | Status |
