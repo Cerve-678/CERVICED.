@@ -1435,3 +1435,46 @@ Decide whether access should end when a booking is cancelled or declined, and
 whether it should lapse after a set time (for example, some months after the
 appointment). Parked by the user on 2026-11-08: "leave for now but put in to
 do review future". Raised by the security review of #342.
+
+## 33. Import a price list — built, not switched on yet (2026-11-09)
+
+Info Reg → Services → **Import a price list** reads screenshots, a PDF or a
+link with Claude and fills in a provider's services, add-ons, details and
+policies after a "Here's what we found" check. It is also the admin onboarding
+path: Admin → Create an account → *Set up their profile now*. Built on
+`feat/import-from-photo-pdf-link`, PR #420.
+
+### 33a. To switch it on, in this order
+
+1. Add `ANTHROPIC_API_KEY` as a Supabase secret. It is a new paid cost of
+   about 2–10p a read, and Marketing Studio (#415) needs the same key. Set a
+   spend limit on the key in the Anthropic console.
+2. Apply migration `20261109230000_profile_import_reads`. Its lock is held on
+   the branch. The function refuses every read until this table exists.
+3. Deploy `extract-provider-profile` and `run-scrape-job`. They share the
+   reader, and the scraper moves from Haiku 4.5 to Opus 5.5, so it costs more
+   per page.
+4. Merge #420. Release the migration lock once it's applied.
+5. Make a new native build for the PDF button (`expo-document-picker`).
+   Screenshots and links work on the current build.
+6. Run it on a phone: a screenshot price list, a long screenshot, a PDF, a
+   booking-page link, and an Instagram link (which should say to use
+   screenshots).
+
+### 33b. Legal questions to decide (flagged by the legal review, not lawyer-reviewed)
+
+- The privacy notice (cerviced.co/legal §5 and the processor table) says
+  Anthropic reads *web pages*. It doesn't say that photos and PDFs uploaded
+  from a phone go to Anthropic too. Does the in-app About privacy text name
+  Anthropic at all?
+- Check Anthropic's API data retention and data-processing agreement (DPA)
+  terms. This is the same US-transfer question that is already open for NVIDIA.
+- Screenshots can contain clients' names, messages and faces. The Import box
+  now asks people to crop these out, but nothing stops them. Should this be
+  recorded as a known gap?
+- When an admin imports on a provider's behalf, the admin fills in policy
+  wording and notice periods that clients later agree to. Should
+  admin-assisted imports be recorded? Should the provider confirm before
+  their profile goes live?
+- Ownership: nothing checks that the imported price list belongs to the
+  person importing it. Should they tick "this is my own price list"?
