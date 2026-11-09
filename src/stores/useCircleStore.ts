@@ -2,16 +2,19 @@
 //
 // The people you follow who recommend or have been to each provider, for the
 // face stack on cards — plus your own face first on providers you recommend
-// (your screen only; get_my_recommended_providers, read once per session).
-// Cards ask for their own provider with useCircleFor(providerId); requests made in the same moment are gathered and
-// sent as ONE get_circle_for_providers call (up to 300 ids), so a screen full
+// (your screen only; get_my_recommended_providers).
+// Cards ask for their own provider with useCircleFor(providerId); requests
+// made in the same moment are gathered and sent as ONE get_circle_for_providers call (up to 300 ids), so a screen full
 // of cards costs one round trip, not one per card.
 //
-// Only active on the client hat while signed in (see useCircleEnabledSync).
+// Only active on the client hat while signed in (see useCircleEnabledSync),
+// which also re-reads everything when the app comes back to the front, so a
+// friend's new recommend shows without restarting the app.
 // It's decoration: a failed fetch logs and leaves cards without a stack
 // rather than showing an error.
 
 import { useEffect, useMemo } from 'react';
+import { AppState } from 'react-native';
 import { create } from 'zustand';
 import { CIRCLE_BATCH_LIMIT, getCircleForProviders, getMyRecommendedProviders } from '../services/databaseService';
 import type { CirclePerson } from '../features/social/types';
@@ -23,6 +26,8 @@ const CIRCLE_TTL_MS = 5 * 60 * 1000;
 const CIRCLE_RETRY_MS = 60 * 1000;
 /** Gather requests from cards mounting together into one call. */
 const CIRCLE_BATCH_DELAY_MS = 40;
+/** Coming back to the app re-reads the stacks at most this often. */
+const FOREGROUND_REFRESH_MIN_MS = 30 * 1000;
 
 /** Shared empty list so cards with nobody keep a stable reference. */
 export const NO_CIRCLE: readonly CirclePerson[] = Object.freeze([]);
@@ -41,6 +46,8 @@ interface CircleStore {
   setMyRecommend: (providerId: string, on: boolean) => void;
   /** Re-read which providers you recommend (e.g. after hiding one). */
   reloadMine: () => void;
+  /** Re-read every stack already loaded, keeping what's shown until the answer comes. */
+  refresh: () => void;
 }
 
 const pending = new Set<string>();
@@ -131,6 +138,13 @@ export const useCircleStore = create<CircleStore>((set, get) => {
     reloadMine: () => {
       if (get().enabled) void loadMine();
     },
+    refresh: () => {
+      if (!get().enabled) return;
+      freshUntil.clear();
+      Object.keys(get().byProvider).forEach((id) => pending.add(id));
+      if (pending.size > 0 && !timer) timer = setTimeout(() => void flush(), CIRCLE_BATCH_DELAY_MS);
+      void loadMine();
+    },
     request: (providerId) => {
       if (!get().enabled || !providerId) return;
       if ((freshUntil.get(providerId) ?? 0) > Date.now() || inFlight.has(providerId)) return;
@@ -164,5 +178,21 @@ export function useCircleFor(providerId: string | null | undefined): readonly Ci
 export function useCircleEnabledSync(enabled: boolean): void {
   useEffect(() => {
     useCircleStore.getState().setEnabled(enabled);
+  }, [enabled]);
+
+  // Back from the background: someone you follow may have recommended or
+  // visited meanwhile, so re-read rather than wait out the 5-minute cache.
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let last = Date.now();
+    let previous = AppState.currentState;
+    const sub = AppState.addEventListener('change', (next) => {
+      const cameBack = previous !== 'active' && next === 'active';
+      previous = next;
+      if (!cameBack || Date.now() - last < FOREGROUND_REFRESH_MIN_MS) return;
+      last = Date.now();
+      useCircleStore.getState().refresh();
+    });
+    return () => sub.remove();
   }, [enabled]);
 }
