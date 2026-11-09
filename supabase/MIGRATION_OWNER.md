@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  cerviced session on fix/notification-provider-profile-not-found (20261109170000), 2026-11-09
+OWNER:  (none)
 ```
 
 ### Applied 2026-11-09 (your own face in the ring)
@@ -61,6 +61,12 @@ OWNER:  cerviced session on fix/notification-provider-profile-not-found (2026110
 | Authored version | Name | Status |
 |---|---|---|
 | 20261109150000 | `get_my_recommended_providers` | **APPLIED 2026-11-09** on the user's go-ahead ("apply"), via `supabase db query --linked -f` (absolute path) with `--workdir` the main folder; version recorded by the file. Frontier before applying: live max `20261109130000`, no higher migration on any open PR; lock `(none)` on main, taken on `feat/circle-own-face` (95cfe1de). New function only, nothing redefined. Forced-rollback dry run first. Verified live: version present (now live max); SECURITY DEFINER, `search_path=public, pg_temp`, md5 `3f386b5b…`; anon can't execute, authenticated can; a read-only smoke test as a recommending client returned their name and 4 provider ids. Written on `feat/circle-own-face` (#406). |
+
+### Applied 2026-11-09 (day-after check-in asks for personal feedback)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109170000 | `post_appt_check_in_asks_for_feedback` | **APPLIED 2026-11-09** on the user's go-ahead ("apply"), via `supabase db query --linked -f` from the main folder; version recorded by the file. Frontier before applying: live max `20261109150000`; open PRs had unapplied `20261109160000` (#follow-request-notification) below it and `20261109180000` (fix/reminder-note-or-policies) above it, neither touching this function and neither holding the lock. Lock taken on `fix/notification-provider-profile-not-found` (efd2e877). md5 guard matched (`process_post_appt_check_ins` `57641a16…`). Forced-rollback dry run first. Copied from live with only the message changed, to "If you have a moment, leave <provider> some personal feedback on your visit." It deliberately doesn't ask for *good* feedback (UK DMCC Act 2024 fake-review rules). Verified live: version present (now live max); new md5 `65477876…`; still SECURITY DEFINER; anon and authenticated can't execute; cron `client-post-appt-check-ins` still active. Written on `fix/notification-provider-profile-not-found` (#408). **Next: 20261109180000 must re-check the frontier; 20261109160000 is now below it and needs renumbering above 170000.** |
 
 ### Applied 2026-11-09 (follow people: visits only from the notice, Blocked list)
 
