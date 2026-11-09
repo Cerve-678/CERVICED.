@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../i18n';
@@ -354,6 +354,39 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     }
   }, [maintenance, findProvider, navigation, showAlert, showConfirm, t]);
 
+  // ── Back inside the screen ───────────────────────────────────────────────
+  // The body map, All profile, a category, Maintenance and setup are views of
+  // this one screen, so a back-swipe (or Android back) would leave Beauty
+  // Profile altogether. While one is open, back goes one step instead, the
+  // same step as that view's own back button. usePreventRemove, not a
+  // beforeRemove listener: it's the one that holds native-stack's swipe.
+  const setupBackRef = useRef<(() => void) | null>(null);
+  const innerOpen = view !== 'landing' || selectedCategory !== null;
+  // Anything that isn't a plain back (a tab re-tap, sign-out, a hat switch)
+  // still leaves: close the views, then let it through once that has landed.
+  const [leaving, setLeaving] = useState<NavigationAction | null>(null);
+  const stepBack = () => {
+    if (view === 'setup') { setupBackRef.current?.(); return; }
+    if (selectedCategory !== null) { closeCategory(); return; }
+    if (view === 'profile' && editing) handleCancel();
+    setFromMap(false);
+    setView('landing');
+  };
+  usePreventRemove(innerOpen && leaving === null, ({ data }) => {
+    const { type } = data.action;
+    if (type === 'GO_BACK' || type === 'POP') { stepBack(); return; }
+    setLeaving(data.action);
+  });
+  useEffect(() => {
+    if (!leaving) return;
+    // A frame later, so the prevention above has been switched off first.
+    const id = setTimeout(() => {
+      navigation.dispatch(leaving);
+      setLeaving(null);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [leaving, navigation]);
+
   // ── Loading ───────────────────────────────────────────────────────────────
 
   if (fetching || profileOwnerId !== (user?.id ?? null)) {
@@ -430,6 +463,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           onClose={() => setView(maintenance.items.length > 0 ? 'maintenance' : 'landing')}
           onDone={() => setView('maintenance')}
           startStep={setupStart}
+          backRef={setupBackRef}
         />
       );
       break;
