@@ -1,10 +1,11 @@
 // src/screens/client/CircleScreen.tsx
 //
-// Your circle: find people by name or from your contacts, answer follow
-// requests, see who you follow and who follows you, and the three sharing
-// switches (Private account, Show where I go, Findable by phone number).
-// Reached from Beauty Profile. Contacts are only read after a tap on
-// "Allow contacts" — see src/features/social/contacts.ts.
+// Your circle: find people from your contacts (the only way to find anyone:
+// there is no name search), answer follow requests, follow back the people
+// who follow you, and the three sharing switches (Private account, Show
+// where I go, Findable by phone number). Reached from Beauty Profile.
+// Contacts are only read after a tap on "Allow contacts" — see
+// src/features/social/contacts.ts.
 //
 // Every rule — who's private, under-18s, blocks, what a follower can see —
 // is enforced by the server (migration 20261108220000); this screen only
@@ -19,7 +20,6 @@ import {
   SectionList,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -37,7 +37,6 @@ import {
   removeFollower,
   requestFollow,
   respondFollowRequest,
-  searchPeople,
   unfollowPerson,
 } from '../../services/databaseService';
 import { useCircleStore } from '../../stores/useCircleStore';
@@ -50,7 +49,7 @@ import {
   withoutPerson,
   withPersonFirst,
 } from '../../features/social/people';
-import type { PersonListEntry, PersonSummary, SocialSettingsUpdate } from '../../features/social/types';
+import type { FollowStatus, PersonListEntry, PersonSummary, SocialSettingsUpdate } from '../../features/social/types';
 import {
   cachedContacts,
   findContactsOnCerviced,
@@ -78,8 +77,6 @@ import type { AppTheme } from '../../constants/theme';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import type { ProfileScreenProps } from '../../navigation/types';
 
-const SEARCH_DEBOUNCE_MS = 350;
-const MIN_QUERY = 2;
 const FACE = 42;
 /** Invite rows shown at first, and added per "Show more". */
 const INVITES_PAGE = 25;
@@ -144,9 +141,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
   const [blocked, setBlocked] = useState<PersonListEntry[]>([]);
   const loadSeq = useRef(0);
 
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<PersonSummary[]>([]);
-
   // Contacts: nothing is read until "Allow contacts". The last result is
   // kept in memory for the app session (contacts.ts), since the server
   // allows 3000 numbers a day and a re-send would spend it again.
@@ -175,15 +169,19 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     });
     return () => sub.remove();
   }, [contactsState]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const searchSeq = useRef(0);
 
   // userId of the row whose button is mid-request, so it can't be double-tapped.
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const trimmed = query.trim();
-  const inSearch = trimmed.length >= MIN_QUERY;
+  // My follow of each person, so a follower's row can offer Follow back.
+  const myStatusById = useMemo(
+    () => {
+      const byId = new Map<string, FollowStatus>();
+      for (const entry of following) if (entry.status !== 'blocked') byId.set(entry.userId, entry.status);
+      return byId;
+    },
+    [following],
+  );
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
@@ -236,33 +234,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     }, [loadLists, loadBlocked, loadSettings]),
   );
 
-  // ── Search ────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const seq = ++searchSeq.current;
-    if (!inSearch) {
-      setResults([]);
-      setSearching(false);
-      setSearchError(null);
-      return;
-    }
-    setSearching(true);
-    const timer = setTimeout(async () => {
-      try {
-        const found = await searchPeople(trimmed);
-        if (seq !== searchSeq.current) return;
-        setResults(found);
-        setSearchError(null);
-      } catch (err) {
-        if (seq !== searchSeq.current) return;
-        setSearchError(toUserMessageAllowingDbGuard(err, "Couldn't search just now. Please try again.", '[circle] search people'));
-      } finally {
-        if (seq === searchSeq.current) setSearching(false);
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [trimmed, inSearch]);
-
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const afterFollowChange = useCallback(() => {
@@ -289,7 +260,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
     (person: PersonSummary) =>
       runForRow(person.userId, "Couldn't follow", '[circle] request follow', async () => {
         const status = await requestFollow(person.userId);
-        setResults((list) => withMyStatus(list, person.userId, status));
         setContactMatches((list) => withMyStatus(list, person.userId, status));
         setFollowing((list) =>
           withPersonFirst(list, {
@@ -325,7 +295,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
             onPress: () =>
               void runForRow(personId, "Couldn't unfollow", '[circle] unfollow', async () => {
                 await unfollowPerson(personId);
-                setResults((list) => withMyStatus(list, personId, null));
                 setContactMatches((list) => withMyStatus(list, personId, null));
                 setFollowing((list) => withoutPerson(list, personId));
                 afterFollowChange();
@@ -369,7 +338,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
               void runForRow(entry.userId, "Couldn't remove", '[circle] remove follower', async () => {
                 await removeFollower(entry.userId);
                 setFollowers((list) => withoutPerson(list, entry.userId));
-                setResults((list) => list.map((p) => (p.userId === entry.userId ? { ...p, followsMe: null } : p)));
                 setContactMatches((list) => list.map((p) => (p.userId === entry.userId ? { ...p, followsMe: null } : p)));
                 afterFollowChange();
               }),
@@ -394,7 +362,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
             onPress: () =>
               void runForRow(personId, "Couldn't block", '[circle] block person', async () => {
                 await blockPerson(personId);
-                setResults((list) => withoutPerson(list, personId));
                 setContactMatches((list) => withoutPerson(list, personId));
                 setRequests((list) => withoutPerson(list, personId));
                 setFollowing((list) => withoutPerson(list, personId));
@@ -543,18 +510,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
   }, [userId]);
 
   const sections = useMemo<Section[]>(() => {
-    if (inSearch) {
-      const data: Row[] = results.map((person) => ({ kind: 'result', key: `r-${person.userId}`, person }));
-      if (data.length === 0 && !searching) {
-        data.push({
-          kind: 'note',
-          key: 'r-empty',
-          text: searchError ?? `Nobody called "${trimmed}" yet. Try their first name, or check the spelling.`,
-        });
-      }
-      return [{ key: 'results', title: 'PEOPLE', data }];
-    }
-
     const out: Section[] = [];
     if (requests.length > 0) {
       out.push({
@@ -598,7 +553,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       data:
         following.length > 0
           ? following.map((entry) => ({ kind: 'following', key: `g-${entry.userId}`, entry }))
-          : [{ kind: 'note', key: 'g-empty', text: 'Search for someone by name to follow them.' }],
+          : [{ kind: 'note', key: 'g-empty', text: 'Find people you know from your contacts.' }],
     });
     out.push({
       key: 'followers',
@@ -616,7 +571,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       });
     }
     return out;
-  }, [inSearch, results, searching, searchError, trimmed, requests, contactsState, contactMatches, contactInvites, invitesShown, listsState, following, followers, blocked]);
+  }, [requests, contactsState, contactMatches, contactInvites, invitesShown, listsState, following, followers, blocked]);
 
   // ── Rendering ─────────────────────────────────────────────────────────────
 
@@ -735,7 +690,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       return (
         <View style={[ui.card, styles.contactsOff, { backgroundColor: P.card, borderColor: P.border }]}>
           <Text style={[ui.body, { color: P.text }]}>
-            CERVICED can't see your contacts. You can let it in Settings, or find people by name above.
+            CERVICED can't see your contacts, so it can't show you who's here. You can let it in Settings.
           </Text>
           <View style={styles.pair}>
             <GhostButton small label="Open Settings" onPress={() => { void Linking.openSettings(); }} P={P} />
@@ -883,13 +838,40 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       }
       case 'follower': {
         const e = item.entry;
+        // They follow me, so the same rule as a contact row: Follow back until I do.
+        const action = personAction({ myStatus: myStatusById.get(e.userId) ?? null, followsMe: 'accepted' });
+        const remove = (
+          <GhostButton small label="Remove" onPress={() => confirmRemoveFollower(e)} P={P} accessibilityLabel={`Remove ${e.name}`} />
+        );
+        if (action === 'followBack') {
+          return personRow(
+            e.userId,
+            e.name,
+            e.avatarUrl,
+            'Follows you',
+            <>
+              <View style={styles.pair}>
+                <PrimaryButton
+                  small
+                  label={PERSON_ACTION_LABEL.followBack}
+                  onPress={() => void follow({ userId: e.userId, name: e.name, avatarUrl: e.avatarUrl, myStatus: null, followsMe: 'accepted' })}
+                  P={P}
+                  accessibilityLabel={`Follow back ${e.name}`}
+                />
+                {remove}
+              </View>
+              {moreButton(e.userId, e.name)}
+            </>,
+            true,
+          );
+        }
         return personRow(
           e.userId,
           e.name,
           e.avatarUrl,
-          null,
+          action === 'following' ? 'You follow each other' : 'Your request is waiting',
           <>
-            <GhostButton small label="Remove" onPress={() => confirmRemoveFollower(e)} P={P} accessibilityLabel={`Remove ${e.name}`} />
+            {remove}
             {moreButton(e.userId, e.name)}
           </>,
         );
@@ -909,27 +891,9 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
 
   const header = (
     <View style={styles.header}>
-      <View style={[styles.search, { backgroundColor: P.card, borderColor: P.border }]}>
-        <Ionicons name="search" size={17} color={P.sub} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Find people by name"
-          placeholderTextColor={P.sub}
-          style={[styles.searchInput, { color: P.text }]}
-          autoCapitalize="words"
-          autoCorrect={false}
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-          accessibilityLabel="Find people by name"
-        />
-        {searching ? <ActivityIndicator size="small" color={P.sub} /> : null}
-      </View>
-      {!inSearch ? (
-        <Text style={[ui.body, { color: P.sub }]}>
-          Faces of people you follow show on the providers they recommend or have booked.
-        </Text>
-      ) : null}
+      <Text style={[ui.body, { color: P.sub }]}>
+        Faces of people you follow show on the providers they recommend or have booked.
+      </Text>
     </View>
   );
 
@@ -944,11 +908,9 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
         )}
         ListHeaderComponent={header}
         ListFooterComponent={
-          listsState === 'loading' && !inSearch ? <ActivityIndicator color={P.sub} style={styles.footerSpinner} /> : undefined
+          listsState === 'loading' ? <ActivityIndicator color={P.sub} style={styles.footerSpinner} /> : undefined
         }
         stickySectionHeadersEnabled={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       />
@@ -960,16 +922,6 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 48 },
   header: { gap: 10, paddingTop: 12, paddingBottom: 6 },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-  },
-  searchInput: { flex: 1, fontFamily: FONT_BODY, fontSize: 15, paddingVertical: 10 },
   sectionLabel: { marginTop: 22, marginBottom: 6 },
   sharingCard: { padding: 14, gap: 12 },
   sharingRetry: { flexDirection: 'row', alignItems: 'center', gap: 12 },
