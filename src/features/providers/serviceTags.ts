@@ -500,6 +500,46 @@ export function hasNoTags(service: Partial<Record<keyof ServiceTagGroups, string
   return TAG_GROUP_KEYS.every(group => (service[group]?.length ?? 0) === 0);
 }
 
+// ─── Typed tags ─────────────────────────────────────────────────────────────
+
+/** How a tag reads on a chip: "date-night" → "date night". Only the label
+ *  changes; the stored form stays hyphenated like every preset. */
+export function tagLabel(tag: string): string {
+  return tag.replace(/-/g, ' ');
+}
+
+/** Most characters a typed tag keeps. Anything longer is a sentence, and
+ *  sentences belong in the description. */
+export const MAX_TAG_LENGTH = 30;
+
+/** A typed tag in the form every preset is stored in: lower case, words joined
+ *  by hyphens, no stray punctuation. So "Box Braids" is the same tag as the
+ *  preset "box-braids" (ticking it rather than adding a near-copy), and Explore's
+ *  exact tag matching sees one word, not two spellings of it. Accented Latin
+ *  letters are kept; Search strips accents itself. */
+export function normalizeTag(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[\s_/.,;:+|]+/g, '-')
+    .replace(/[^-a-z0-9À-ɏ]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_TAG_LENGTH)
+    .replace(/-+$/, '');
+}
+
+/** What a provider typed into a tag box → the tags it means. Commas or new
+ *  lines separate several ("box braids, knotless"); blanks and repeats drop. */
+export function parseTypedTags(raw: string): string[] {
+  const out: string[] = [];
+  for (const part of raw.split(/[,\n]+/)) {
+    const tag = normalizeTag(part);
+    if (tag && !out.includes(tag)) out.push(tag);
+  }
+  return out;
+}
+
 /** Every tag in `extra` not already in `base`, group by group. */
 export function mergeTagGroups(base: ServiceTagGroups, extra: ServiceTagGroups): ServiceTagGroups {
   const out = { ...base };

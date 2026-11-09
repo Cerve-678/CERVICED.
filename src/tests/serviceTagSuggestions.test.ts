@@ -1,8 +1,12 @@
 import {
   descriptionProblem,
   hasNoTags,
+  MAX_TAG_LENGTH,
   mergeTagGroups,
+  normalizeTag,
+  parseTypedTags,
   suggestServiceDetails,
+  tagLabel,
 } from '../features/providers/serviceTags';
 
 // Every case is a real live service name + menu heading from 2026-10-25 that
@@ -116,5 +120,32 @@ describe('descriptionProblem', () => {
     expect(descriptionProblem('Short white French tips over a natural base', 'Classic French')).toBeNull();
     expect(descriptionProblem('Strengthening builder gel overlay for stronger, healthier natural nails.', 'BIAB Overlay')).toBeNull();
     expect(descriptionProblem('Gentle exfoliation that removes peach fuzz for smoother, brighter skin', 'Dermaplaning')).toBeNull();
+  });
+});
+
+describe('typed tags', () => {
+  it('stores what a provider types in the same form as the presets', () => {
+    expect(normalizeTag('Box Braids')).toBe('box-braids');
+    expect(normalizeTag('  Glazed   Donut! ')).toBe('glazed-donut');
+    expect(normalizeTag('contour & highlight')).toBe('contour-and-highlight');
+    expect(normalizeTag('3D art')).toBe('3d-art');
+    expect(normalizeTag('wig_install / frontal')).toBe('wig-install-frontal');
+    expect(normalizeTag('ombré')).toBe('ombré');
+    expect(normalizeTag('!!!')).toBe('');
+  });
+
+  it('cuts a sentence down without leaving a dangling hyphen', () => {
+    const tag = normalizeTag('a really long description of the whole service and more');
+    expect(tag.length).toBeLessThanOrEqual(MAX_TAG_LENGTH);
+    expect(tag.endsWith('-')).toBe(false);
+  });
+
+  it('reads commas and new lines as separate tags and drops repeats', () => {
+    expect(parseTypedTags('knotless, Box Braids,box braids,\n, boho')).toEqual(['knotless', 'box-braids', 'boho']);
+    expect(parseTypedTags(' , ')).toEqual([]);
+  });
+
+  it('shows hyphenated tags as words', () => {
+    expect(tagLabel('date-night')).toBe('date night');
   });
 });
