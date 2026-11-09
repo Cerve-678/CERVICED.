@@ -44,10 +44,8 @@ describe('suggestServiceDetails', () => {
     expect(suggest('Pixi Cut', 'Cuts & Styling').techniqueTags).toContain('haircut');
     expect(suggest('My ex Blowout', 'Blow Dry Bar').techniqueTags).toContain('blow-dry');
     expect(suggest('Tap ins', 'Extensions', 'HAIR').techniqueTags).toContain('tape-ins');
-    expect(suggest('Lace Frontal 13x6', 'Wig Installation')).toMatchObject({
-      techniqueTags: ['frontal'],
-      alsoConsider: expect.objectContaining({ techniqueTags: ['wig-install'] }),
-    });
+    // "Lace" / "frontal" mean a wig install on their own, so the name ticks it.
+    expect(suggest('Lace Frontal 13x6', 'Wig Installation').techniqueTags).toEqual(['frontal', 'wig-install']);
     expect(suggest('Feet ONLY - Full set Acrylic', 'Acrylic', 'NAILS').techniqueTags)
       .toEqual(expect.arrayContaining(['acrylic', 'pedicure']));
     expect(suggest('Smokey Makeup', 'Smoky makeup').techniqueTags).toContain('smokey-eye');
@@ -82,7 +80,7 @@ describe('suggestServiceDetails', () => {
 
   it('does not read "hair" as "haircut" or "twist" as "retwist"', () => {
     expect(suggest('Wash & Go', 'Hair Treatments').techniqueTags).not.toContain('haircut');
-    expect(suggest('Barrel twist', "Men's Hair").techniqueTags).toEqual(['twists']);
+    expect(suggest('Barrel twist', "Men's Hair").techniqueTags).toEqual(['twists', 'barrel-twists']);
   });
 
   it('never ticks a whole row of chips', () => {
@@ -120,6 +118,30 @@ describe('descriptionProblem', () => {
     expect(descriptionProblem('Short white French tips over a natural base', 'Classic French')).toBeNull();
     expect(descriptionProblem('Strengthening builder gel overlay for stronger, healthier natural nails.', 'BIAB Overlay')).toBeNull();
     expect(descriptionProblem('Gentle exfoliation that removes peach fuzz for smoother, brighter skin', 'Dermaplaning')).toBeNull();
+  });
+});
+
+describe('tags for what clients actually search', () => {
+  // Live names that had no tags on 2026-11-09, and Search's own misses then.
+  it('reads the names that used to come back with nothing', () => {
+    expect(suggest('Wash & Go', 'Hair Treatments').techniqueTags).toContain('wash-and-go');
+    expect(suggest('Layered', 'Cuts', 'HAIR').techniqueTags).toEqual(expect.arrayContaining(['haircut', 'layers']));
+    expect(suggest('Deep conditioning treatment', 'Treatments', 'HAIR').techniqueTags).toContain('deep-conditioning');
+    expect(suggest('Short French tip', 'Gel', 'NAILS').techniqueTags).toEqual(expect.arrayContaining(['french', 'french-tip', 'short-nails']));
+    expect(suggest('Luxury pedicure (gel polish)', 'Pedicures', 'NAILS').techniqueTags).toEqual(expect.arrayContaining(['pedicure', 'gel-polish']));
+    expect(suggest('Lash lift & tint', 'Lashes').techniqueTags).toEqual(expect.arrayContaining(['lash-lift', 'lash-tint']));
+    expect(suggest('Nikah makeup', 'Bridal', 'MUA').techniqueTags).toContain('asian-bridal');
+  });
+
+  it('offers trend names clients type', () => {
+    expect(suggest('Italian bob', 'Cuts', 'HAIR').trendNames).toContain('italian-bob');
+    expect(suggest('Micro French', 'Gel', 'NAILS').trendNames).toContain('micro-french');
+    expect(suggest('Cloud skin glam', 'Makeup').trendNames).toContain('cloud-skin');
+  });
+
+  it('gives waxing, tanning and massage their own tags', () => {
+    expect(suggest('Hollywood wax', 'Waxing', 'OTHER').techniqueTags).toEqual(expect.arrayContaining(['waxing', 'hollywood-wax']));
+    expect(suggest('Spray tan', 'Tanning', 'OTHER').techniqueTags).toContain('spray-tan');
   });
 });
 
