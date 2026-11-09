@@ -3354,8 +3354,9 @@ BEGIN
       r.user_id,
       'announcement',
       COALESCE(r.display_name, 'Your provider') || ' — Checking In',
-      'How are you getting on after your ' || r.service_name_snapshot ||
-        '? If you have any questions or need aftercare advice, just send a message.',
+      'How are you getting on after your ' || COALESCE(r.service_name_snapshot, 'appointment') ||
+        '? If you have a moment, leave ' || COALESCE(r.display_name, 'them') ||
+        ' some personal feedback on your visit.',
       'low',
       TRUE,
       r.booking_id,

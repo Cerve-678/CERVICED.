@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced session on fix/notification-provider-profile-not-found (20261109170000), 2026-11-09
 ```
 
 ### Applied 2026-11-09 (your own face in the ring)
