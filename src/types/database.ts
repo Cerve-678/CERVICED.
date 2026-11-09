@@ -131,7 +131,9 @@ export type NotificationType =
    *  notes. Generic copy; the notes are shown in-app, quoted and credited. */
   | "aftercare_available"
   /** Provider: a daily count of the people who saved them. Never names. */
-  | "provider_saved";
+  | "provider_saved"
+  /** Client: someone asked to follow their private account. metadata.follower_id says who. */
+  | "follow_request";
 
 export type NotificationPriority = "high" | "medium" | "low";
 

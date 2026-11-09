@@ -116,13 +116,43 @@ describe('notification routing — deep-link payload', () => {
   it('routes review_request to the rating form, not just the booking', () => {
     // "Rate Now" landed on BookingDetail, leaving the client to find the
     // rating control themselves.
-    expect(tapHandler()).toContain("openReview: type === 'review_request'");
+    expect(tapHandler()).toContain('openReview: REVIEW_PROMPT_TYPES.has(type)');
     expect(notificationsScreen()).toContain(
-      "const openReview = notification.type === 'review_request'",
+      'const openReview = REVIEW_PROMPT_TYPES.has(notification.type)',
     );
     expect(read('src', 'screens', 'client', 'BookingsScreen.tsx')).toContain(
       'setShowRatingModal(true)',
     );
+  });
+
+  it("opens a provider's day-after check-in on that booking's review, not their profile", () => {
+    // The check-in invites the client to reply about the appointment; landing
+    // on the provider's profile gave them nothing to do there (and, before the
+    // UUID lookup fix below, showed "Provider not found").
+    const { REVIEW_PROMPT_TYPES } = require('../features/notifications/notificationPresentation');
+    expect(REVIEW_PROMPT_TYPES.has('post_appt_check_in')).toBe(true);
+    expect(REVIEW_PROMPT_TYPES.has('review_request')).toBe(true);
+
+    const tap = tapHandler();
+    const bookingTypes = tap.slice(tap.indexOf('const BOOKING_TYPES'), tap.indexOf(']);', tap.indexOf('const BOOKING_TYPES')));
+    expect(bookingTypes).toContain("'post_appt_check_in'");
+    expect(tap).not.toContain("type === 'post_appt_check_in'");
+    expect(notificationsScreen()).not.toMatch(/birthday_greeting' \|\|\s*notification\.type === 'post_appt_check_in'/);
+
+    // An already-reviewed booking opens as itself, not a second rating form.
+    expect(read('src', 'screens', 'client', 'BookingsScreen.tsx')).toContain(
+      'alreadyReviewed = await hasReviewedBooking(booking.id)',
+    );
+  });
+
+  it('opens a provider profile from either its slug or its UUID', () => {
+    // Notifications and bookings only carry provider_id (a UUID), but both
+    // profile lookups matched on slug alone, so every notification that
+    // opened a provider's profile showed "Provider not found".
+    const source = databaseService();
+    expect(source).toContain('isProviderProfileUuid(key) ? "id" : "slug"');
+    expect(source).not.toContain('.eq("slug", normalizedSlug)');
+    expect(source.match(/\.eq\(providerProfileKeyColumn\(normalizedSlug\), normalizedSlug\)/g)).toHaveLength(2);
   });
 
   it('sends a fully booked provider to their profile, where the certificate shows', () => {
@@ -417,5 +447,43 @@ describe('notification routing — tip received', () => {
   it('never names Stripe to the provider', () => {
     const insert = migration().slice(migration().indexOf('INSERT INTO public.notifications'));
     expect(insert.slice(0, insert.indexOf('EXCEPTION'))).not.toMatch(/stripe/i);
+  });
+});
+
+describe('notification routing — follow request', () => {
+  const migration = () => read('supabase', 'migrations', '20261109190000_follow_request_notification.sql');
+
+  it('declares follow_request everywhere a notification type has to exist', () => {
+    // Memory: new-notification-type-is-four-places.
+    const check = migration().slice(migration().indexOf('ADD CONSTRAINT notifications_type_check'));
+    expect(check).toContain("'follow_request'");
+    expect(read('src', 'types', 'database.ts')).toContain('| "follow_request"');
+    expect(notificationsScreen()).toContain("'follow_request'");
+    expect(tapHandler()).toContain("'follow_request'");
+  });
+
+  it('keeps every live type when it widens the CHECK', () => {
+    const check = migration().slice(migration().indexOf('ADD CONSTRAINT notifications_type_check'));
+    for (const type of ['tip_received', 'provider_saved', 'terms_updated', 'payout_failed', 'payment_refunded', 'maintenance_due']) {
+      expect(check).toContain(`'${type}'`);
+    }
+  });
+
+  it('opens Your circle from both entry points, client-only', () => {
+    expect(tapHandler()).toContain("navigateNested('Profile', 'Circle')");
+    expect(notificationsScreen()).toContain("navigateNested('Profile', 'Circle')");
+    const source = notificationsScreen();
+    const clientOnly = source.slice(
+      source.indexOf('const CLIENT_ONLY_TYPES'),
+      source.indexOf(']);', source.indexOf('const CLIENT_ONLY_TYPES')),
+    );
+    expect(clientOnly).toContain("'follow_request'");
+  });
+
+  it('never outlives the request: answered marks it read, cancelled deletes it', () => {
+    const sql = migration();
+    expect(sql).toContain('AFTER INSERT OR UPDATE OF status OR DELETE ON public.client_follows');
+    expect(sql).toMatch(/OLD\.status = 'pending'[\s\S]*DELETE FROM public\.notifications/);
+    expect(sql).toMatch(/SET is_read = true, is_actionable = false/);
   });
 });
