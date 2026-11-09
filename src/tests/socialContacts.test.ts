@@ -8,7 +8,8 @@ jest.mock('expo-crypto', () => ({
 }));
 
 const mockGetContactsAsync = jest.fn();
-jest.mock('expo-contacts', () => ({
+// The legacy entry: in SDK 58 the top-level getContactsAsync throws.
+jest.mock('expo-contacts/legacy', () => ({
   Fields: { PhoneNumbers: 'phoneNumbers', Name: 'name' },
   PermissionStatus: { UNDETERMINED: 'undetermined', GRANTED: 'granted', DENIED: 'denied' },
   getContactsAsync: (...args: unknown[]) => mockGetContactsAsync(...args),
