@@ -20,6 +20,7 @@ import PointsScreen from '../../../screens/client/PointsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
 import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import BookingDetailScreen from '../../../screens/client/BookingDetailScreen';
+import { BOOKING_DETAIL_OPTIONS } from '../bookingDetailOptions';
 import ExternalBookingDetailScreen from '../../../screens/client/ExternalBookingDetailScreen';
 import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
@@ -190,7 +191,9 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: true, presentation: 'card' }}
+        // Set here, not only in the screen's own setOptions, so the first
+        // frame of the push has no back-button text or route-name title.
+        options={BOOKING_DETAIL_OPTIONS}
       />
       <ProfileStack.Screen
         name="ExternalBookingDetail"
