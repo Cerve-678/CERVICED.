@@ -1,3 +1,5 @@
+-- 20261109180000_reminder_uses_provider_note_or_policies.sql
+--
 -- The client's "Appointment Tomorrow" reminder ended with a fixed
 -- ". Please arrive 10 minutes early." for every booking with every provider,
 -- whatever the provider had written, and providers had no way to change it.
@@ -8,11 +10,17 @@
 -- can pick, so it still appears when they picked it. With no note, the
 -- reminder asks the client to read the provider's policies instead.
 --
+-- Written 2026-11-03 as 20261103120000 but never applied; renumbered
+-- 2026-11-09 above the live frontier (20261109150000) and the unapplied
+-- migrations on open PRs (20261109160000, 20261109170000).
+--
 -- Redefined FROM LIVE, per supabase/MIGRATION_OWNER.md: this reads the live
--- function, swaps exactly that one literal, and re-creates it. Anything else
--- another migration has since changed in the function is kept. If the literal
--- isn't there exactly once, the live function isn't the one this was written
--- against, and the migration stops rather than guess.
+-- function, swaps exactly that one literal, and re-creates it. The md5 guard
+-- is the live definition read on 2026-11-09 (which already carries
+-- beauty_maintenance's prep line); if it has changed, or the literal isn't
+-- there exactly once, the migration stops rather than guess.
+
+BEGIN;
 
 DO $mig$
 DECLARE
@@ -26,6 +34,10 @@ DECLARE
           ), ' Please read ' || r.provider_name_snapshot || '''s policies before your appointment.')$new$;
   v_count INT;
 BEGIN
+  IF md5(v_def) <> 'ca41105fdf21780ce5a961fc86c507d2' THEN
+    RAISE EXCEPTION 'process_client_appointment_reminders changed live (md5 %). Re-read it before applying.', md5(v_def);
+  END IF;
+
   v_count := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'process_client_appointment_reminders: expected the fixed arrival line once, found % times. Live has changed; re-read it before applying.', v_count;
@@ -34,3 +46,9 @@ BEGIN
   EXECUTE replace(v_def, v_old, v_new);
 END
 $mig$;
+
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261109180000', 'reminder_uses_provider_note_or_policies')
+ON CONFLICT (version) DO NOTHING;
+
+COMMIT;
