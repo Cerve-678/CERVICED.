@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>About Cerviced</title>
 <meta name="description" content="Beauty is run by independent specialists, and clients keep a routine across several of them. Cerviced is built for that: one cart for every provider, a beauty profile that remembers you, and real tools for providers' businesses.">
+<script>
+/* Theme: a visitor's own choice (the header switch) wins over the device
+   setting. Applied before first paint so the page never flashes the other
+   theme. Motion: the "motion" class turns on scroll and cart animations only
+   when the device allows motion; without it everything simply shows. */
+(function(){
+  var d=document.documentElement;
+  try{var t=localStorage.getItem('cerviced-theme');if(t==='light'||t==='dark')d.setAttribute('data-theme',t);}catch(e){}
+  if('IntersectionObserver' in window && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches))d.classList.add('motion');
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;500;600;700&display=swap">
@@ -216,7 +227,245 @@ section[id]{scroll-margin-top:24px;}
 
 .sitenav a[aria-current="page"]{color:var(--accent-text);}
 
+/* ── Theme switch ─────────────────────────────────────────────────── */
+.theme-toggle{
+  width:36px;height:36px;border-radius:50%;display:inline-grid;place-items:center;
+  border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;padding:0;
+  transition:background .2s ease,color .2s ease,transform .3s ease;
+}
+.theme-toggle:hover{background:var(--accent-dim);color:var(--accent-text);}
+.theme-toggle:active{transform:rotate(-20deg) scale(.94);}
+.theme-toggle svg{width:17px;height:17px;}
+.theme-toggle .moon{display:none;}
+:root[data-theme="light"] .theme-toggle .sun,
+:root:not([data-theme]) .theme-toggle .sun{display:none;}
+:root[data-theme="light"] .theme-toggle .moon,
+:root:not([data-theme]) .theme-toggle .moon{display:block;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]) .theme-toggle .sun{display:block;}
+  :root:not([data-theme]) .theme-toggle .moon{display:none;}
+}
+body{transition:background-color .35s ease,color .35s ease;}
+
+/* ── One cart section ─────────────────────────────────────────────────
+   Services from several providers drop into one cart. The markup is the
+   finished cart, so with no script or no motion the result simply shows;
+   the script empties it and plays it in when the section scrolls into view. */
+.onecart{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:start;}
+.onecart-copy{display:flex;flex-direction:column;gap:22px;min-width:0;}
+.onecart h2{font-size:clamp(30px,4.4vw,52px);text-transform:uppercase;line-height:1.02;}
+.onecart h2 span{display:block;}
+.onecart h2 span:nth-child(2){color:var(--accent-text);}
+.onecart h2 span:nth-child(3){color:var(--sub);}
+.onecart-copy > p{color:var(--sub);max-width:46ch;}
+.picks{display:flex;flex-direction:column;gap:10px;}
+.pick{
+  display:grid;grid-template-columns:1fr auto 28px;gap:12px;align-items:center;
+  padding:12px 14px;border-radius:14px;border:1px dashed var(--border);
+  transition:border-color .35s ease,background .35s ease,opacity .35s ease;
+}
+.pick .svc{font-size:15px;}
+.pick .who{display:block;}
+.pick .price{font-family:'Bakbak One',sans-serif;font-size:14px;font-variant-numeric:tabular-nums;color:var(--text);}
+.pick .tick{
+  width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:var(--accent);color:var(--on-accent);font-size:13px;line-height:1;
+  transition:transform .35s cubic-bezier(.34,1.56,.64,1),opacity .25s ease;
+}
+.pick.is-added{border-style:solid;border-color:var(--accent);background:var(--accent-dim);}
+.motion .pick:not(.is-added) .tick{transform:scale(0);opacity:0;}
+
+.bag{
+  background:var(--card);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);
+  padding:22px;min-width:0;
+}
+.bag-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:2px 4px 14px;}
+.bag-counts{display:flex;gap:14px;font-family:'Bakbak One',sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--secondary-text);}
+.bag-counts b{font-weight:400;font-size:15px;letter-spacing:0;font-variant-numeric:tabular-nums;color:var(--text);margin-right:3px;display:inline-block;}
+.bag-counts b.bump{animation:bump .4s ease;}
+@keyframes bump{40%{transform:scale(1.35);color:var(--accent-text);}}
+.line{
+  display:grid;grid-template-columns:38px 1fr auto;gap:14px;align-items:center;
+  padding:12px 4px;border-top:1px solid var(--sep);
+}
+.avatar{
+  width:38px;height:38px;border-radius:12px;background:var(--secondary);color:var(--secondary-text);
+  display:grid;place-items:center;font-family:'Bakbak One',sans-serif;font-size:13px;letter-spacing:0.04em;
+}
+.line .price{font-family:'Bakbak One',sans-serif;font-size:15px;font-variant-numeric:tabular-nums;}
+.onecart.is-empty .line{display:none;}
+.line.is-new{animation:drop .55s cubic-bezier(.22,.68,.35,1) both;}
+@keyframes drop{from{opacity:0;transform:translateY(-14px) scale(.97);}to{opacity:1;transform:none;}}
+.bag-empty{display:none;padding:22px 4px;border-top:1px solid var(--sep);color:var(--sub);font-size:14px;text-align:center;}
+.onecart.is-empty .bag-empty{display:block;}
+.bag-total{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:16px 4px 4px;border-top:1.5px solid var(--border);}
+.bag-total .k{font-family:'Bakbak One',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--sub);}
+.bag-total .v{font-family:'Bakbak One',sans-serif;font-size:26px;font-variant-numeric:tabular-nums;}
+.bag-cta{
+  margin-top:14px;padding:13px;border-radius:14px;text-align:center;
+  background:var(--accent);color:var(--on-accent);
+  font-family:'Bakbak One',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;
+  transition:opacity .3s ease,transform .3s ease;
+}
+.onecart.is-empty .bag-cta{opacity:.35;}
+.bag-cta.ready{animation:ready 1.4s ease 1;}
+@keyframes ready{0%{box-shadow:0 0 0 0 var(--ring);}60%{box-shadow:0 0 0 12px rgba(0,0,0,0);}100%{box-shadow:none;}}
+.bag-note{margin-top:12px;text-align:center;font-size:12px;color:var(--sub);}
+.replay{
+  margin-top:4px;align-self:flex-start;background:none;border:0;padding:6px 0;cursor:pointer;
+  font-family:'Jura',sans-serif;font-size:14px;font-weight:600;color:var(--accent-text);
+  text-decoration:underline;text-underline-offset:3px;
+}
+.replay[hidden]{display:none !important;}
+
+/* ── From the feed section ────────────────────────────────────────────
+   The providers people find on social media, bookable in one app. The
+   headline rotates the platform; the right side is a DM thread that never
+   got answered beside the booking that replaces it. */
+.feed{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,0.95fr);gap:56px;align-items:center;}
+.feed-copy{display:flex;flex-direction:column;gap:22px;min-width:0;}
+.feed h2{font-size:clamp(30px,4.4vw,52px);text-transform:uppercase;line-height:1.04;}
+.feed h2 > span{display:block;}
+.feed h2 .then{color:var(--sub);}
+.rotator{display:inline-grid;color:var(--accent-text);}
+.rotator > span{grid-area:1/1;}
+.rotator .alt{visibility:hidden;}
+.feed-copy > p{color:var(--sub);max-width:48ch;}
+.feed-copy > p strong{color:var(--text);font-weight:600;}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+.chat{display:flex;flex-direction:column;gap:12px;min-width:0;}
+.dm{
+  background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:18px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.dm-head{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px;}
+.bubble{max-width:82%;padding:10px 14px;border-radius:18px;font-size:14.5px;line-height:1.4;}
+.bubble.me{align-self:flex-end;background:var(--accent);color:var(--on-accent);border-bottom-right-radius:6px;}
+.bubble.them{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:6px;}
+.seen{align-self:flex-end;font-size:12px;color:var(--sub);padding-right:6px;}
+.booked{
+  background:var(--card);border:1.5px solid var(--accent);border-radius:22px;box-shadow:var(--shadow);
+  padding:18px 20px;display:grid;grid-template-columns:auto 1fr;gap:4px 16px;align-items:center;
+}
+.booked .when{grid-row:span 2;font-family:'Bakbak One',sans-serif;text-transform:uppercase;font-size:12px;letter-spacing:0.12em;color:var(--sub);text-align:center;line-height:1.15;}
+.booked .when b{display:block;font-weight:400;font-size:26px;letter-spacing:0;color:var(--text);}
+.booked .svc{font-size:15.5px;}
+.booked .meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;}
+
+/* ── Client showcases: circle, beauty profile, maintenance ─────────── */
+.shows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-bottom:56px;}
+.show{
+  background:var(--card);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);
+  padding:22px;display:flex;flex-direction:column;gap:16px;min-width:0;
+}
+/* Line the three cards up: demo, heading and text share rows across cards. */
+@supports (grid-template-rows: subgrid){
+  .shows{grid-template-rows:auto auto auto;row-gap:0;}
+  .show{display:grid;grid-row:span 3;grid-template-rows:subgrid;gap:16px;align-content:start;}
+}
+.show h3{font-size:20px;text-transform:uppercase;letter-spacing:0.01em;}
+.show > p{font-size:15px;color:var(--sub);}
+.demo{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:178px;}
+
+.prov{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.prov .svc{font-size:14.5px;}
+.faces{display:flex;align-items:center;}
+.face{
+  width:30px;height:30px;border-radius:50%;display:grid;place-items:center;position:relative;
+  font-family:'Bakbak One',sans-serif;font-size:10.5px;letter-spacing:0.03em;
+  background:var(--secondary);color:var(--secondary-text);border:2px solid var(--card);margin-left:-8px;
+}
+.face:first-child{margin-left:0;}
+.face:nth-child(1){z-index:4;} .face:nth-child(2){z-index:3;} .face:nth-child(3){z-index:2;} .face:nth-child(4){z-index:1;}
+.face.more{background:var(--accent);color:var(--on-accent);}
+.face .heart{position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;background:var(--card);display:grid;place-items:center;color:var(--accent-text);font-size:9px;line-height:1;}
+.circle-rows{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--sep);padding-top:10px;}
+.circle-rows div{display:flex;justify-content:space-between;gap:10px;font-size:13px;}
+.circle-rows .who{font-size:13px;}
+.rec{
+  align-self:flex-start;margin-top:auto;padding:7px 14px;border-radius:999px;border:1px solid var(--accent);color:var(--accent-text);
+  font-family:'Bakbak One',sans-serif;font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;
+}
+
+.areas{display:flex;flex-wrap:wrap;gap:6px;}
+.area{padding:6px 11px;border-radius:999px;border:1px solid var(--border);font-size:12.5px;color:var(--sub);}
+.area.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+.answers{display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--sep);padding-top:10px;font-size:13px;}
+.answers div{display:flex;justify-content:space-between;gap:10px;}
+.answers span:first-child{color:var(--sub);}
+.shared{font-size:12px;color:var(--sub);margin-top:auto;}
+.shared b{font-weight:600;color:var(--accent-text);}
+
+.due{background:var(--card);border:1.5px solid var(--accent);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.due-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+.due-top .svc{font-size:15px;}
+.count-n{font-family:'Bakbak One',sans-serif;font-size:22px;font-variant-numeric:tabular-nums;color:var(--text);line-height:1;}
+.count-n small{font-family:'Jura',sans-serif;font-size:12px;color:var(--sub);margin-left:3px;}
+.due-acts{display:flex;gap:6px;flex-wrap:wrap;}
+.due-acts span{padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);color:var(--sub);}
+.due-acts span:first-child{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+.next{display:flex;flex-direction:column;gap:6px;font-size:13px;}
+.next div{display:flex;justify-content:space-between;gap:10px;}
+.next span:last-child{color:var(--sub);font-variant-numeric:tabular-nums;}
+
+.motion .show .face,.motion .show .area,.motion .show .answers div,.motion .show .due,.motion .show .next div,.motion .show .rec,.motion .show .circle-rows div{
+  opacity:0;transform:translateY(8px) scale(.96);transition:opacity .45s ease,transform .5s cubic-bezier(.34,1.56,.64,1);
+  transition-delay:calc(var(--d,0) * 110ms + .3s);
+}
+.motion .show.is-in .face,.motion .show.is-in .area,.motion .show.is-in .answers div,.motion .show.is-in .due,.motion .show.is-in .next div,.motion .show.is-in .rec,.motion .show.is-in .circle-rows div{opacity:1;transform:none;}
+.motion .show.is-in .area.on{animation:pick 2.8s ease 1.4s infinite;}
+@keyframes pick{50%{box-shadow:0 0 0 5px var(--accent-dim);}}
+
+/* ── Text animation ───────────────────────────────────────────────── */
+.mark{background-image:linear-gradient(var(--accent-dim),var(--accent-dim));background-repeat:no-repeat;background-size:100% 100%;padding:0 .12em;border-radius:3px;}
+.motion .mark{background-size:0% 100%;transition:background-size .9s cubic-bezier(.22,.68,.35,1) .35s;}
+.motion .is-in .mark{background-size:100% 100%;}
+.motion .split .w{display:inline-block;opacity:0;transform:translateY(.55em) rotate(2deg);transition:opacity .5s ease,transform .65s cubic-bezier(.22,.68,.35,1);transition-delay:calc(var(--w) * 55ms + 80ms);}
+.motion .is-in .split .w{opacity:1;transform:none;}
+.motion .rotator > span{transition:opacity .45s ease,transform .55s cubic-bezier(.22,.68,.35,1);}
+.motion .rotator > span.out{opacity:0;transform:translateY(-.45em);}
+.motion .rotator > span.in-start{opacity:0;transform:translateY(.45em);transition:none;}
+.motion .feed .bubble,.motion .feed .seen{opacity:0;transform:translateY(10px);transition:opacity .45s ease,transform .45s ease;}
+.motion .feed.is-in .bubble,.motion .feed.is-in .seen{opacity:1;transform:none;}
+.motion .feed.is-in .bubble:nth-of-type(2){transition-delay:.35s;}
+.motion .feed.is-in .bubble:nth-of-type(3){transition-delay:.9s;}
+.motion .feed.is-in .bubble:nth-of-type(4){transition-delay:1.5s;}
+.motion .feed.is-in .seen{transition-delay:2s;}
+.motion .feed .dm{transition:opacity .6s ease 2.6s;}
+.motion .feed.is-in .dm{opacity:.55;}
+.motion .feed .booked{opacity:0;transform:translateY(16px) scale(.97);transition:opacity .6s ease 2.9s,transform .7s cubic-bezier(.34,1.56,.64,1) 2.9s;}
+.motion .feed.is-in .booked{opacity:1;transform:none;}
+
+/* ── Motion ───────────────────────────────────────────────────────────
+   Only under html.motion (set in <head> when the device allows motion), so
+   with reduced motion or no script every element is simply visible. */
+.motion .hero h1 > span{display:inline-block;animation:rise .7s cubic-bezier(.22,.68,.35,1) both;}
+.motion .hero h1 > span:nth-of-type(2){animation-delay:.12s;}
+.motion .hero h1 > span:nth-of-type(3){animation-delay:.24s;}
+.motion .hero .lede{animation:rise .7s ease .38s both;}
+.motion .hero .btn{animation:rise .7s ease .5s both;}
+.motion .month{animation:rise .8s cubic-bezier(.22,.68,.35,1) .3s both;}
+.motion .visit{animation:rise .55s cubic-bezier(.22,.68,.35,1) both;}
+.motion .visit:nth-of-type(2){animation-delay:.55s;}
+.motion .visit:nth-of-type(3){animation-delay:.7s;}
+.motion .visit:nth-of-type(4){animation-delay:.85s;}
+.motion .visit:nth-of-type(5){animation-delay:1s;}
+.motion .visit .pill.soft{animation:breathe 2.4s ease-in-out 1.8s infinite;}
+@keyframes rise{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:none;}}
+@keyframes breathe{50%{border-color:var(--accent);color:var(--accent-text);}}
+
+.motion .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s cubic-bezier(.22,.68,.35,1);transition-delay:calc(var(--i,0) * 90ms);}
+.motion .reveal.is-in{opacity:1;transform:none;}
+.motion .point .rule{width:0;transition:width .6s cubic-bezier(.22,.68,.35,1);transition-delay:calc(var(--i,0) * 90ms + .25s);}
+.motion .point.is-in .rule{width:34px;}
+.point h3{transition:color .2s ease;}
+.point:hover h3{color:var(--accent-text);}
+
 @media (max-width:880px){
+  .onecart{grid-template-columns:1fr;gap:36px;}
+  .feed{grid-template-columns:1fr;gap:36px;}
+  .shows{grid-template-columns:1fr;max-width:560px;}
   .hero{grid-template-columns:1fr;gap:44px;padding:56px 0 64px;}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .foot-cols{grid-template-columns:1fr 1fr;}
@@ -232,7 +481,7 @@ section[id]{scroll-margin-top:24px;}
   .visit{grid-template-columns:46px 1fr;}
   .visit .pill{grid-column:2;justify-self:start;}
 }
-@media (prefers-reduced-motion: reduce){ .btn:hover{transform:none;} }
+@media (prefers-reduced-motion: reduce){ .btn:hover{transform:none;} body{transition:none;} }
 </style>
 </head>
 <body>
@@ -246,13 +495,17 @@ section[id]{scroll-margin-top:24px;}
       <a href="/legal#safety">Health &amp; safety</a>
       <a href="/legal">Terms &amp; policies</a>
       <a class="join" href="/#join">Join the waitlist</a>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch between light and dark">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>
+      </button>
     </nav>
   </header>
 
   <div class="hero" id="top">
     <div class="hero-copy">
       <span class="label">About Cerviced</span>
-      <h1>Beauty has changed.<br>Booking hasn't.<br><span class="quiet">Until now.</span></h1>
+      <h1><span>Beauty has changed.</span><br><span>Booking hasn't.</span><br><span class="quiet">Until now.</span></h1>
       <p class="lede">The best work in beauty is done by independent specialists: the nail tech with a home studio, the braider who travels to you, the aesthetician building a name one client at a time. Their clients don't book one appointment. They keep a routine, across several people, every few weeks. Cerviced is built for that routine.</p>
       <a class="btn" href="/#join">Join the waitlist</a>
     </div>
@@ -271,15 +524,83 @@ section[id]{scroll-margin-top:24px;}
   </div>
 </div>
 
+<section id="from-the-feed">
+  <div class="wrap">
+    <div class="feed reveal" id="feed">
+      <div class="feed-copy">
+        <span class="label">From the feed</span>
+        <h2>
+          <span>Found them on</span>
+          <span><span class="sr-only">Instagram, TikTok or Facebook?</span><span class="rotator" aria-hidden="true"><span class="cur">Instagram?</span><span class="alt">your feed?</span></span></span>
+          <span class="then">Book them here.</span>
+        </h2>
+        <p>Book your favourite Instagram and social media providers, <span class="mark">all in one app</span>.</p>
+        <p>Independent beauty grows on social media, but booking it still happens in DMs, comment threads and link-in-bio forms. On Cerviced a provider's real availability, prices, deposits and policies sit on their profile, so <strong>you book in a few taps instead of waiting for a reply.</strong></p>
+      </div>
+
+      <div class="chat" aria-label="Example: a DM asking for an appointment, and the same appointment booked on Cerviced">
+        <div class="dm">
+          <div class="dm-head"><span class="label">Direct message</span><span class="label">Nia Hair</span></div>
+          <div class="bubble me">Hi! Do you have anything this Saturday for knotless braids?</div>
+          <div class="bubble them">Let me check and get back to you x</div>
+          <div class="bubble me">Any update? Need to know for my holiday</div>
+          <span class="seen">Seen 2 days ago</span>
+        </div>
+        <div class="booked">
+          <span class="when">Sat<b>11:00</b></span>
+          <span class="svc">Knotless braids · Nia Hair</span>
+          <span class="meta"><span class="pill">Booked</span><span class="who">Deposit paid · policies agreed</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="one-cart">
+  <div class="wrap">
+    <div class="onecart reveal" id="onecart">
+      <div class="onecart-copy">
+        <span class="label">How it works</span>
+        <h2><span>One cart.</span><span>Multiple providers.</span><span>Multiple services.</span></h2>
+        <p>Pick services from as many independent providers as you like. They all land in one cart, the times are checked together, and you pay once.</p>
+        <div class="picks" aria-label="Services being added">
+          <div class="pick is-added" data-i="0"><span><span class="svc">Silk press</span><span class="who">Nia Hair · Brixton</span></span><span class="price">£55</span><span class="tick" aria-hidden="true">✓</span></div>
+          <div class="pick is-added" data-i="1"><span><span class="svc">Lash refill</span><span class="who">Studio Ren · Camberwell</span></span><span class="price">£38</span><span class="tick" aria-hidden="true">✓</span></div>
+          <div class="pick is-added" data-i="2"><span><span class="svc">Lash tint</span><span class="who">Studio Ren · Camberwell</span></span><span class="price">£15</span><span class="tick" aria-hidden="true">✓</span></div>
+          <div class="pick is-added" data-i="3"><span><span class="svc">Gel infill</span><span class="who">Amara Nails · comes to you</span></span><span class="price">£32</span><span class="tick" aria-hidden="true">✓</span></div>
+          <div class="pick is-added" data-i="4"><span><span class="svc">Brow lamination</span><span class="who">Bea Brows · Peckham</span></span><span class="price">£40</span><span class="tick" aria-hidden="true">✓</span></div>
+        </div>
+        <button class="replay" type="button" id="replay" hidden>Play it again</button>
+      </div>
+
+      <div class="bag" aria-live="polite">
+        <div class="bag-head">
+          <span class="label">Your cart</span>
+          <span class="bag-counts"><span><b id="n-prov">4</b>providers</span><span><b id="n-svc">5</b>services</span></span>
+        </div>
+        <div class="bag-empty">Your cart is empty</div>
+        <div class="line" data-i="0"><span class="avatar">NH</span><span><span class="svc">Silk press</span><br><span class="who">Nia Hair</span></span><span class="price">£55</span></div>
+        <div class="line" data-i="1"><span class="avatar">SR</span><span><span class="svc">Lash refill</span><br><span class="who">Studio Ren</span></span><span class="price">£38</span></div>
+        <div class="line" data-i="2"><span class="avatar">SR</span><span><span class="svc">Lash tint</span><br><span class="who">Studio Ren</span></span><span class="price">£15</span></div>
+        <div class="line" data-i="3"><span class="avatar">AN</span><span><span class="svc">Gel infill</span><br><span class="who">Amara Nails</span></span><span class="price">£32</span></div>
+        <div class="line" data-i="4"><span class="avatar">BB</span><span><span class="svc">Brow lamination</span><br><span class="who">Bea Brows</span></span><span class="price">£40</span></div>
+        <div class="bag-total"><span class="k">Total</span><span class="v" id="bag-total">£180</span></div>
+        <div class="bag-cta" id="bag-cta">Checkout once</div>
+        <p class="bag-note">Names and prices are examples. A small service fee is shown at checkout.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section>
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="label">Why we exist</span>
       <h2>Booking was built for the salon front desk</h2>
     </div>
-    <div class="prose">
+    <div class="prose reveal">
       <p>Most booking software started with one business, one diary and one checkout. That made sense when a salon did everything under one roof.</p>
-      <p>It doesn't fit beauty today. A client sees a different expert for hair, lashes, nails and skin, and each of those experts runs a business of one. <strong>The client has a routine. The provider has a business. Nothing connected the two.</strong></p>
+      <p>It doesn't fit beauty today. A client sees a different expert for hair, lashes, nails and skin, and each of those experts runs a business of one. <strong>The client has a routine. The provider has a business. <span class="mark">Nothing connected the two.</span></strong></p>
       <p>Cerviced starts from both ends at once: the client's whole routine, and the independent provider's whole business. Every feature we build joins them up.</p>
     </div>
   </div>
@@ -287,42 +608,84 @@ section[id]{scroll-margin-top:24px;}
 
 <section>
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="label">For clients</span>
       <h2>Your whole routine, in one place</h2>
     </div>
+    <div class="shows">
+      <div class="show reveal" style="--i:0">
+        <div class="demo" aria-label="Example: faces of people you follow on a provider">
+          <div class="prov"><span><span class="svc">Studio Ren</span><br><span class="who">Lashes · Camberwell</span></span>
+            <span class="faces"><span class="face" style="--d:0">AK<span class="heart" aria-hidden="true">♥</span></span><span class="face" style="--d:1">JO</span><span class="face" style="--d:2">TB</span><span class="face more" style="--d:3">+2</span></span></div>
+          <div class="circle-rows">
+            <div style="--d:4"><span>Ama</span><span class="who">Recommends</span></div>
+            <div style="--d:5"><span>Jo</span><span class="who">Has been · 3 times</span></div>
+          </div>
+          <span class="rec" style="--d:6">Recommend</span>
+        </div>
+        <h3>See who's been to who</h3>
+        <p>Follow friends and see their faces on the providers they recommend or have been to. Recommend the ones you love. You decide whether your followers see where you go.</p>
+      </div>
+
+      <div class="show reveal" style="--i:1">
+        <div class="demo" aria-label="Example: a beauty profile">
+          <div class="areas"><span class="area on" style="--d:0">Hair</span><span class="area" style="--d:1">Lashes &amp; Brows</span><span class="area" style="--d:2">Skin</span><span class="area" style="--d:3">Makeup</span><span class="area" style="--d:4">Nails</span><span class="area" style="--d:5">Style</span></div>
+          <div class="answers">
+            <div style="--d:6"><span>Hair type</span><span>4C</span></div>
+            <div style="--d:7"><span>Scalp</span><span>Sensitive</span></div>
+            <div style="--d:8"><span>Hair goals</span><span>Length retention</span></div>
+            <div style="--d:9"><span>Allergies</span><span>Noted</span></div>
+          </div>
+          <p class="shared">Shared with <b>Nia Hair</b> for this booking: hair answers and allergies only.</p>
+        </div>
+        <h3>A beauty profile that's yours</h3>
+        <p>Hair, lashes and brows, skin, makeup, nails and style, mapped once. A provider sees only what their service needs, and only once you've booked them.</p>
+      </div>
+
+      <div class="show reveal" style="--i:2">
+        <div class="demo" aria-label="Example: maintenance reminders">
+          <div class="due" style="--d:0">
+            <div class="due-top"><span><span class="svc">Lash refill</span><br><span class="who">Studio Ren</span></span><span class="count-n">3<small>days</small></span></div>
+            <div class="due-acts"><span>Book</span><span>Done it</span><span>Snooze +7 days</span></div>
+          </div>
+          <div class="next">
+            <div style="--d:1"><span>Gel infill</span><span>9 days</span></div>
+            <div style="--d:2"><span>Silk press</span><span>3 weeks</span></div>
+          </div>
+        </div>
+        <h3>Maintenance reminders</h3>
+        <p>After each appointment, Cerviced works out when you're due again and reminds you on the day. Book, mark it done or snooze a week. If you've already booked, it stays quiet.</p>
+      </div>
+    </div>
     <div class="grid">
-      <div class="point"><span class="rule"></span><h3>One cart, every provider</h3><p>Add hair in one postcode, lashes in another and nails at home, then pay once. Book back-to-back and the times line up for you.</p></div>
-      <div class="point"><span class="rule"></span><h3>A profile that remembers you</h3><p>Your hair type, skin, allergies and preferences, saved once. A provider sees only what their service needs, and only once you've booked them.</p></div>
-      <div class="point"><span class="rule"></span><h3>Maintenance that keeps time</h3><p>Cerviced works out when your infills, refills and touch-ups are due and reminds you on the day. If you've already booked, it stays quiet.</p></div>
-      <div class="point"><span class="rule"></span><h3>Becca, your assistant</h3><p>Ask in your own words. Becca finds providers, answers questions about your bookings and puts your last appointment back in your cart in one tap.</p></div>
-      <div class="point"><span class="rule"></span><h3>Waitlists that move</h3><p>When a time you wanted frees up, it's held for you and you're told straight away. If you pass, it goes to the next person in line.</p></div>
-      <div class="point"><span class="rule"></span><h3>Rescheduling on a clock</h3><p>Ask to move an appointment and the other side has 45 minutes to answer. You both see the deadline, so nobody waits days for a reply.</p></div>
+      <div class="point reveal" style="--i:0"><span class="rule"></span><h3>Becca, your assistant</h3><p>Ask in your own words. Becca finds providers, answers questions about your bookings and puts your last appointment back in your cart in one tap.</p></div>
+      <div class="point reveal" style="--i:1"><span class="rule"></span><h3>Waitlists that move</h3><p>When a time you wanted frees up, it's held for you and you're told straight away. If you pass, it goes to the next person in line.</p></div>
+      <div class="point reveal" style="--i:2"><span class="rule"></span><h3>Rescheduling on a clock</h3><p>Ask to move an appointment and the other side has 45 minutes to answer. You both see the deadline, so nobody waits days for a reply.</p></div>
     </div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="label">For providers</span>
       <h2>Your business, run like one</h2>
       <p>A profile on Cerviced is the whole business behind the chair: your rules, your brand, your diary and your money.</p>
     </div>
     <div class="grid">
-      <div class="point"><span class="rule"></span><h3>Your rules, applied for you</h3><p>Set your own deposits, cancellation and rescheduling policies, and late and no-show fees. Clients agree to them before they pay, and the app applies them.</p></div>
-      <div class="point"><span class="rule"></span><h3>Your brand, not a template</h3><p>Choose from curated colour collections and business-name fonts so your profile looks like your business.</p></div>
-      <div class="point"><span class="rule"></span><h3>Your diary, your release day</h3><p>Let clients book a set time ahead, or open a month at a time on the day you choose.</p></div>
-      <div class="point"><span class="rule"></span><h3>Clients who arrive ready</h3><p>Send info packs and forms before each appointment, so you know what you need to before anyone sits down.</p></div>
-      <div class="point"><span class="rule"></span><h3>Paid properly</h3><p>Clients pay by card, Apple Pay, Google Pay or PayPal. Payouts go to your bank on the schedule you choose, and every tip goes to you in full.</p></div>
-      <div class="point"><span class="rule"></span><h3>Found by the right people</h3><p>Clients search by what they actually want, typos and all, and find you by service, area and the details that matter to them.</p></div>
+      <div class="point reveal" style="--i:0"><span class="rule"></span><h3>Your rules, applied for you</h3><p>Set your own deposits, cancellation and rescheduling policies, and late and no-show fees. Clients agree to them before they pay, and the app applies them.</p></div>
+      <div class="point reveal" style="--i:1"><span class="rule"></span><h3>Your brand, not a template</h3><p>Choose from curated colour collections and business-name fonts so your profile looks like your business.</p></div>
+      <div class="point reveal" style="--i:2"><span class="rule"></span><h3>Your diary, your release day</h3><p>Let clients book a set time ahead, or open a month at a time on the day you choose.</p></div>
+      <div class="point reveal" style="--i:3"><span class="rule"></span><h3>Clients who arrive ready</h3><p>Send info packs and forms before each appointment, so you know what you need to before anyone sits down.</p></div>
+      <div class="point reveal" style="--i:4"><span class="rule"></span><h3>Paid properly</h3><p>Clients pay by card, Apple Pay, Google Pay or PayPal. Payouts go to your bank on the schedule you choose, and every tip goes to you in full.</p></div>
+      <div class="point reveal" style="--i:5"><span class="rule"></span><h3>Found by the right people</h3><p>Clients find you by the service they want, where they are and the details that matter to them.</p></div>
     </div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <div class="manifesto">
+    <div class="manifesto reveal">
       <span class="label">Where this goes</span>
       <h2>The future of beauty is independent</h2>
       <p>More specialists are going it alone, building loyal clients and real businesses on their own terms. They deserve tools as good as their work. Their clients deserve one place for everything they do to look and feel like themselves.</p>
@@ -380,5 +743,116 @@ section[id]{scroll-margin-top:24px;}
   </div>
 </footer>
 
+<script>
+(function(){
+  var d=document.documentElement;
+
+  /* Theme switch: flips light/dark and remembers it on this device. */
+  var tg=document.getElementById('theme-toggle');
+  if(tg){
+    tg.addEventListener('click',function(){
+      var cur=d.getAttribute('data-theme')||((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');
+      var next=cur==='dark'?'light':'dark';
+      d.setAttribute('data-theme',next);
+      try{localStorage.setItem('cerviced-theme',next);}catch(e){}
+    });
+  }
+
+  if(!d.classList.contains('motion'))return;
+  var started=false, box=null;
+
+  /* Section headlines rise in word by word. */
+  document.querySelectorAll('.section-head h2, .manifesto h2').forEach(function(h){
+    var words=h.textContent.trim().split(/\s+/); h.setAttribute('aria-label',h.textContent.trim());
+    h.textContent=''; h.classList.add('split');
+    words.forEach(function(w,i){
+      var sp=document.createElement('span'); sp.className='w'; sp.style.setProperty('--w',i); sp.setAttribute('aria-hidden','true'); sp.textContent=w;
+      h.appendChild(sp); if(i<words.length-1)h.appendChild(document.createTextNode(' '));
+    });
+  });
+
+  /* "Found them on ___?" cycles through the platforms. */
+  var rot=document.querySelector('.rotator .cur');
+  if(rot){
+    var names=['Instagram?','TikTok?','Facebook?','your feed?'], ni=0;
+    setInterval(function(){
+      if(document.hidden)return;
+      rot.classList.add('out');
+      setTimeout(function(){
+        ni=(ni+1)%names.length; rot.textContent=names[ni];
+        rot.classList.remove('out'); rot.classList.add('in-start');
+        void rot.offsetWidth; rot.classList.remove('in-start');
+      },320);
+    },2300);
+  }
+
+  /* Scroll reveals. */
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('is-in'); io.unobserve(e.target);} });
+  },{rootMargin:'0px 0px -8% 0px',threshold:0.12});
+  var rv=[].slice.call(document.querySelectorAll('.reveal'));
+  rv.forEach(function(el){io.observe(el);});
+  /* Backup for the observer: on load and on every scroll, show whatever is
+     already on screen, so a section can never stay invisible. */
+  function sweep(){
+    var h=window.innerHeight||document.documentElement.clientHeight;
+    rv=rv.filter(function(el){
+      if(el.classList.contains('is-in'))return false;
+      if(el.getBoundingClientRect().top<h*0.95){el.classList.add('is-in');return false;}
+      return true;
+    });
+    if(!started && box && box.getBoundingClientRect().top<h*0.7){ started=true; play(); }
+  }
+  window.addEventListener('scroll',sweep,{passive:true});
+  window.addEventListener('resize',sweep);
+  setTimeout(sweep,60);
+
+  /* One cart: empty it, then add each service in turn when it's on screen. */
+  box=document.getElementById('onecart'); if(!box){sweep();return;}
+  var picks=box.querySelectorAll('.pick'), lines=box.querySelectorAll('.line');
+  var nP=document.getElementById('n-prov'), nS=document.getElementById('n-svc'), tot=document.getElementById('bag-total');
+  var cta=document.getElementById('bag-cta'), replay=document.getElementById('replay');
+  var prices=[55,38,15,32,40], prov=['NH','SR','SR','AN','BB'], timers=[];
+
+  function set(el,v){ if(el.textContent!==String(v)){ el.textContent=v; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } }
+  var run=0;
+  function countTo(from,to){
+    /* Each count-up cancels the one before it, so a late frame from an
+       earlier step can never overwrite a newer total. */
+    var me=++run, t0=null;
+    function step(ts){ if(me!==run)return; if(!t0)t0=ts; var k=Math.min(1,(ts-t0)/450); tot.textContent='£'+Math.round(from+(to-from)*k); if(k<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+    /* Animation frames can stall (a background tab); always land on the real total. */
+    timers.push(setTimeout(function(){ if(me===run)tot.textContent='£'+to; },500));
+  }
+  function reset(){
+    timers.forEach(clearTimeout); timers=[];
+    box.classList.add('is-empty'); replay.hidden=true; cta.classList.remove('ready');
+    picks.forEach(function(p){p.classList.remove('is-added');});
+    lines.forEach(function(l){l.style.display='none';l.classList.remove('is-new');});
+    run++; nP.textContent='0'; nS.textContent='0'; tot.textContent='£0';
+  }
+  function play(){
+    reset();
+    var sum=0, seen={};
+    picks.forEach(function(p,i){
+      timers.push(setTimeout(function(){
+        box.classList.remove('is-empty');
+        p.classList.add('is-added');
+        var l=lines[i]; l.style.display=''; l.classList.add('is-new');
+        seen[prov[i]]=1;
+        set(nP,Object.keys(seen).length); set(nS,i+1);
+        countTo(sum,sum+prices[i]); sum+=prices[i];
+        if(i===picks.length-1){ timers.push(setTimeout(function(){ cta.classList.add('ready'); replay.hidden=false; },500)); }
+      },500+i*700));
+    });
+  }
+  reset();
+  new IntersectionObserver(function(es,o){
+    if(es[0].isIntersecting&&!started){ started=true; o.disconnect(); play(); }
+  },{threshold:0.35}).observe(box);
+  replay.addEventListener('click',play);
+})();
+</script>
 </body>
 </html>
