@@ -53,4 +53,8 @@ $$;
 REVOKE ALL ON FUNCTION public.get_my_recommended_providers() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_my_recommended_providers() TO authenticated;
 
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261109150000', 'get_my_recommended_providers')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;

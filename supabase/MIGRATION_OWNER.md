@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  session on branch feat/circle-own-face (applying 20261109150000)
+OWNER:  (none)
 ```
+
+### Applied 2026-11-09 (your own face in the ring)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109150000 | `get_my_recommended_providers` | **APPLIED 2026-11-09** on the user's go-ahead ("apply"), via `supabase db query --linked -f` (absolute path) with `--workdir` the main folder; version recorded by the file. Frontier before applying: live max `20261109130000`, no higher migration on any open PR; lock `(none)` on main, taken on `feat/circle-own-face` (95cfe1de). New function only, nothing redefined. Forced-rollback dry run first. Verified live: version present (now live max); SECURITY DEFINER, `search_path=public, pg_temp`, md5 `3f386b5b…`; anon can't execute, authenticated can; a read-only smoke test as a recommending client returned their name and 4 provider ids. Written on `feat/circle-own-face` (#406). |
 
 ### Applied 2026-11-09 (follow people: visits only from the notice, Blocked list)
 
