@@ -187,6 +187,9 @@ export type ProfileStackParamList = {
   /** `openMaintenance` lands on the Maintenance view (a maintenance push or
    *  in-app notification); `focusItemId` scrolls to that item. */
   BeautyProfile: { openMaintenance?: boolean; focusItemId?: string } | undefined;
+  /** Your circle: find people, follow requests, followers/following and the
+   *  sharing switches. Reached from Beauty Profile. */
+  Circle: undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;
   PaymentMethods: undefined;
@@ -194,7 +197,6 @@ export type ProfileStackParamList = {
   HelpCentre: undefined;
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;
@@ -404,7 +406,6 @@ export type ProviderAccountStackParamList = {
   // both hats reach the same single setting.
   TextSizing: undefined;
   LanguageRegion: undefined;
-  About: undefined;
   ReportProblem: undefined;
   /** Admin accounts only (admin_users); reached from the hidden settings row. */
   AdminDashboard: undefined;

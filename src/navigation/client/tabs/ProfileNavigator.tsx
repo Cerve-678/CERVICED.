@@ -6,6 +6,7 @@ import ProviderChatScreen from '../../../screens/client/ProviderChatScreen';
 import MessagesScreen from '../../../screens/client/MessagesScreen';
 import ProfileInfoScreen from '../../../screens/client/ProfileInfoScreen';
 import BeautyProfileScreen from '../../../screens/client/BeautyProfileScreen';
+import CircleScreen from '../../../screens/client/CircleScreen';
 import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import NotificationsSettingsScreen from '../../../screens/client/NotificationsSettingsScreen';
 import PaymentMethodsScreen from '../../../screens/client/PaymentMethodsScreen';
@@ -13,7 +14,6 @@ import SubscriptionScreen from '../../../screens/client/SubscriptionScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
-import AboutScreen from '../../../screens/shared/AboutScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
 import AdminDashboardScreen from '../../../screens/shared/AdminDashboardScreen';
 import AdminMoneyScreen from '../../../screens/shared/AdminMoneyScreen';
@@ -21,6 +21,7 @@ import PointsScreen from '../../../screens/client/PointsScreen';
 import BookingsScreen from '../../../screens/client/BookingsScreen';
 import ActivityCentreScreen from '../../../screens/client/ActivityCentreScreen';
 import BookingDetailScreen from '../../../screens/client/BookingDetailScreen';
+import { BOOKING_DETAIL_OPTIONS } from '../bookingDetailOptions';
 import ExternalBookingDetailScreen from '../../../screens/client/ExternalBookingDetailScreen';
 import RescheduleScreen from '../../../screens/client/RescheduleScreen';
 import ClientIntakeFormScreen from '../../../screens/client/ClientIntakeFormScreen';
@@ -35,7 +36,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 export default function ProfileNavigator() {
-  const { theme } = useTheme();
+  const { theme, palette } = useTheme();
 
   return (
     <ProfileStack.Navigator>
@@ -53,6 +54,21 @@ export default function ProfileNavigator() {
         name="BeautyProfile"
         component={BeautyProfileScreen}
         options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="Circle"
+        component={CircleScreen}
+        options={{
+          title: 'Your circle',
+          presentation: 'card',
+          headerBackTitle: 'Back',
+          headerShadowVisible: false,
+          // palette.bg is what ThemedBackground paints, so the header and
+          // the screen read as one surface (theme.background differs).
+          headerStyle: { backgroundColor: palette.bg },
+          headerTintColor: palette.text,
+          headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, color: palette.text },
+        }}
       />
       <ProfileStack.Screen
         name="ChangePassword"
@@ -87,11 +103,6 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="LanguageRegion"
         component={LanguageRegionScreen}
-        options={{ headerShown: false }}
-      />
-      <ProfileStack.Screen
-        name="About"
-        component={AboutScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen
@@ -196,7 +207,9 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: true, presentation: 'card' }}
+        // Set here, not only in the screen's own setOptions, so the first
+        // frame of the push has no back-button text or route-name title.
+        options={BOOKING_DETAIL_OPTIONS}
       />
       <ProfileStack.Screen
         name="ExternalBookingDetail"

@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { TodoMark } from '../../components/TodoMark';
 import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -44,7 +45,7 @@ const PILL_MAX_MESSAGES = 6;
 type Props = { navigation: NativeStackNavigationProp<HomeStackParamList, 'ActivityCentre'> };
 
 export default function ActivityCentreScreen({ navigation }: Props) {
-  const { palette: P } = useTheme();
+  const { palette: P, isDarkMode } = useTheme();
   const bottomGap = useSystemBottomInset() + 24;
   const { showAlert, DialogHost } = useAppDialog();
   const { activity, loaded, failed, refresh } = useClientActivity();
@@ -55,11 +56,14 @@ export default function ActivityCentreScreen({ navigation }: Props) {
   const enter = reduceMotion === false;
 
   useLayoutEffect(() => {
+    // The header sits over the top safe area, so it takes the page's own
+    // background; the stacks' shared header colour is the provider palette's.
     navigation.setOptions({
+      headerStyle: { backgroundColor: P.bg },
       headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 22, color: P.text },
       headerTintColor: P.text,
     });
-  }, [navigation, P.text]);
+  }, [navigation, P.bg, P.text]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -120,6 +124,13 @@ export default function ActivityCentreScreen({ navigation }: Props) {
     </View>
   );
 
+  const doneSection = () => activity.done.length > 0 && (
+    <View style={st.section}>
+      {sectionHead('DONE', false)}
+      {activity.done.map(tile)}
+    </View>
+  );
+
   const renderList = () => {
     if (timeline) {
       return (
@@ -132,6 +143,11 @@ export default function ActivityCentreScreen({ navigation }: Props) {
           {timeline.inProgress.length > 0 && (
             <TimelineGroup label="IN PROGRESS" waiting animate={animate}>
               {timeline.inProgress.map(tile)}
+            </TimelineGroup>
+          )}
+          {timeline.done.length > 0 && (
+            <TimelineGroup label="DONE" waiting animate={animate}>
+              {timeline.done.map(tile)}
             </TimelineGroup>
           )}
         </TimelineRail>
@@ -151,12 +167,14 @@ export default function ActivityCentreScreen({ navigation }: Props) {
             {activity.inProgress.map(tile)}
           </View>
         )}
+        {doneSection()}
       </>
     );
   };
 
   return (
     <ThemedBackground>
+      <FocusAwareStatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[st.content, { paddingBottom: bottomGap }]}
@@ -175,13 +193,16 @@ export default function ActivityCentreScreen({ navigation }: Props) {
           <>
             <StatusPill messages={pillMessages} animate={animate} />
             {empty ? (
-              <View style={st.empty}>
-                <LiveDot pulse="waiting" animate={animate} size={18} />
-                <Text style={[st.emptyTitle, { color: P.text }]}>You're all caught up</Text>
-                <Text style={[st.emptyBody, { color: P.sub }]}>
-                  Refunds, reschedules, forms to fill in and anything else to do with your bookings will show up here.
-                </Text>
-              </View>
+              <>
+                <View style={st.empty}>
+                  <LiveDot pulse="waiting" animate={animate} size={18} />
+                  <Text style={[st.emptyTitle, { color: P.text }]}>You're all caught up</Text>
+                  <Text style={[st.emptyBody, { color: P.sub }]}>
+                    Refunds, reschedules, forms to fill in and anything else to do with your bookings will show up here.
+                  </Text>
+                </View>
+                <View style={st.doneAfterEmpty}>{doneSection()}</View>
+              </>
             ) : (
               renderList()
             )}
@@ -202,6 +223,7 @@ const st = StyleSheet.create({
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, marginBottom: 8, marginHorizontal: 4 },
   sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1.5 },
   empty: { alignItems: 'center', paddingTop: 56, paddingHorizontal: 24, gap: 10 },
+  doneAfterEmpty: { marginTop: 32 },
   emptyTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, marginTop: 8 },
   emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });

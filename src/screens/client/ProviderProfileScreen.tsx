@@ -6,6 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import { useBookmarkStore } from "../../stores/useBookmarkStore";
+import { ProviderSharingRow } from "../../features/social/ProviderSharingRow";
 import {
   View,
   Text,
@@ -5344,6 +5345,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 provider.backgroundImage ? styles.contentSheetFloating : null,
               ]}
             >
+              {/* Recommend + "Don't show me" — only for a client who has had
+                  a completed appointment here; renders nothing otherwise. */}
+              <ProviderSharingRow
+                providerId={providerDbId}
+                providerName={provider.displayName}
+                enabled={canSaveProvider && hatState.active === "client"}
+                tokens={OP}
+                accent={adaptiveAccentColor}
+                cardBg={cardBg}
+                onError={showAlert}
+              />
+
               {/* About / Policy tabbed card */}
               <View ref={aboutCardRef} style={styles.aboutCardShadowWrap}>
                 <BlurView

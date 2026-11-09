@@ -33,6 +33,7 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordOTPScreen from '../screens/auth/ResetPasswordOTPScreen';
 import NewPasswordScreen from '../screens/auth/NewPasswordScreen';
 import ReactivateAccountScreen from '../screens/auth/ReactivateAccountScreen';
+import { useCircleEnabledSync } from '../stores/useCircleStore';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -44,6 +45,8 @@ const PROVIDER_LINK_ALERTS: Record<Exclude<ProviderProfileLinkOutcome, 'opened'>
 export default function RootNavigation() {
   const { isLoggedIn, isLoading, hatState, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const activeMode = hatState.active;
+  // Faces of people you follow on provider cards: client hat, signed in only.
+  useCircleEnabledSync(isLoggedIn && activeMode === 'client' && hatState.owned.client);
   const { isDarkMode } = useTheme();
   const { showAlert, DialogHost } = useAppDialog();
 

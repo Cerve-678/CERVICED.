@@ -20,6 +20,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { CircleStack } from '../../components/CircleStack';
 import { Image } from 'expo-image';
 import { ProviderLogoCircle } from '../../features/providers/ProviderLogoCircle';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -328,6 +329,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P, wid
         {/* Provider image */}
         <View style={styles.imageWrap}>
           <Image source={provider.logo} style={styles.cardImage} contentFit="cover" transition={0} />
+          <CircleStack providerId={provider.providerId} providerName={provider.name} style={styles.cardCircle} />
         </View>
 
         {/* Info column */}
@@ -453,7 +455,10 @@ const ServiceResultCard = memo<ServiceResultCardProps>(({ service, imageUrl, rat
         accessibilityRole="button"
         accessibilityLabel={`${service.name} with ${service.providerName}`}
       >
-        <Text style={[styles.serviceEyebrow, { color: P.sub }]}>SERVICE</Text>
+        <View style={styles.serviceEyebrowRow}>
+          <Text style={[styles.serviceEyebrow, { color: P.sub }]}>SERVICE</Text>
+          <CircleStack providerId={service.providerId} providerName={service.providerName} />
+        </View>
         <View style={styles.serviceCardTop}>
           <Image
             source={thumb ? { uri: thumb } : require('../../../assets/icon.png')}
@@ -2467,6 +2472,13 @@ const styles = StyleSheet.create({
   imageWrap: {
     position: 'relative',
     width: '100%',
+  },
+  cardCircle: { position: 'absolute', top: 7, right: 7 },
+  serviceEyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 20,
   },
   cardImage: {
     width: '100%',

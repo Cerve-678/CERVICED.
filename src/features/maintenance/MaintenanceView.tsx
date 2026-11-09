@@ -22,14 +22,19 @@ import { dateToYMD, formatShortDate, formatShortDayDate, formatTime12Safe, toLoc
 import { toUserMessage } from '../../utils/userFacingError';
 import type { MaintenanceSearchCategory } from '../../constants/maintenanceServiceTypes';
 import {
-  categoryOf, groupMaintenanceItems, rhythmLineFor, snoozedDueOn, type PresentedItem, type RhythmLine,
+  categoryOf, doneOutcome, groupMaintenanceItems, nextUpFrom, presentMaintenanceItem, snoozedDueOn, type PresentedItem,
 } from './presentation';
-import { itemPill, MaintenanceItemCard, primaryActionFor, type ItemAction } from './MaintenanceItemCard';
+import { MaintenanceItemCard, primaryActionFor, type ItemAction } from './MaintenanceItemCard';
+import { NextUpCard } from './NextUpCard';
+import { MaintenanceHowTo } from './MaintenanceHowTo';
+import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { logger } from '../../utils/logger';
 import { ItemMenuSheet } from './ItemMenuSheet';
 import { AddReminderSheet } from './AddReminderSheet';
 import type { MaintenanceState } from './useMaintenance';
 import {
-  Chip, FONT_BODY, FONT_DISPLAY, GhostButton, Note, Pill, PrimaryButton, SectionLabel,
+  Chip, FONT_BODY, FONT_DISPLAY, GhostButton, Note, PrimaryButton, SectionLabel,
   semanticColors, ui, hapticError, hapticLight,
 } from './ui';
 import type { TranslationKey } from '../../i18n';
@@ -49,12 +54,9 @@ const FILTERS: { key: Filter; label: TranslationKey }[] = [
 
 const filterOf = (item: MaintenanceItem): Filter => categoryOf(item) ?? 'OTHER';
 
-/** 3.5 → "3½": learned gaps are read to the half week. */
-function weeksText(weeks: number): string {
-  return Number.isInteger(weeks) ? String(weeks) : `${Math.floor(weeks)}½`;
-}
-
 interface Props {
+  /** For showing "How Maintenance works" once per account. */
+  userId: string | null;
   state: MaintenanceState;
   focusItemId?: string | undefined;
   /** Item id currently resolving a rebook, so its button can show busy. */
@@ -70,7 +72,7 @@ interface Props {
 }
 
 export function MaintenanceView({
-  state, focusItemId, busyItemId, onBack, onItemAction, onOpenSetup, pickedCount, onOpenPicked,
+  userId, state, focusItemId, busyItemId, onBack, onItemAction, onOpenSetup, pickedCount, onOpenPicked,
   onMessageProviders, onViewBooking,
 }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
@@ -90,10 +92,29 @@ export function MaintenanceView({
     [state.items, today],
   );
   // "Next up" looks across everything; the chips only narrow the list below.
-  const nextUp = useMemo(() => {
-    const all = groupMaintenanceItems(visibleItems, today, state.coverage);
-    return all.next ?? all.comingUp[0] ?? null;
-  }, [visibleItems, today, state.coverage]);
+  const nextUp = useMemo(
+    () => nextUpFrom(groupMaintenanceItems(visibleItems, today, state.coverage)),
+    [visibleItems, today, state.coverage],
+  );
+
+  // "How Maintenance works": once per account on the first visit, then from
+  // the link under the title.
+  const [howTo, setHowTo] = useState(false);
+  const howToChecked = useRef(false);
+  useEffect(() => {
+    if (howToChecked.current || !userId) return;
+    howToChecked.current = true;
+    let alive = true;
+    resolveTourForUser(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, [{ key: 'howto' }], userId)
+      .then((decision) => {
+        if (!alive || !decision.show) return;
+        setHowTo(true);
+        void recordTourSeen(TOUR_KEYS.CLIENT_MAINTENANCE_HOWTO, userId);
+      })
+      .catch((err: unknown) => logger.error('[Maintenance] how-to check failed:', err));
+    return () => { alive = false; };
+  }, [userId]);
+  const [doneBusyId, setDoneBusyId] = useState<string | null>(null);
   const filterCounts = useMemo(() => {
     const counts = new Map<Filter, number>([['ALL', visibleItems.length]]);
     for (const i of visibleItems) counts.set(filterOf(i), (counts.get(filterOf(i)) ?? 0) + 1);
@@ -209,63 +230,22 @@ export function MaintenanceView({
     });
   };
 
-  const rhythmText = (line: RhythmLine): string | null => {
-    if (!line) return null;
-    const weeks = weeksText(line.weeks);
-    switch (line.kind) {
-      case 'learned': return t('maintenance.rhythm.learned', { from: line.from, weeks });
-      case 'provider': return t('maintenance.rhythm.provider', { provider: line.provider, weeks });
-      case 'client': return t('maintenance.rhythm.client', { weeks });
-    }
+  const markDone = (item: MaintenanceItem) => {
+    setBannerError(null);
+    setDoneBusyId(item.id);
+    const outcome = doneOutcome(item, today);
+    const work = outcome.kind === 'update' ? state.updateItem(item.id, outcome.patch) : state.deleteItem(item.id);
+    work
+      .catch(err => {
+        hapticError();
+        setBannerError(toUserMessage(err, t('maintenance.error.save'), '[Maintenance] done it'));
+      })
+      .finally(() => setDoneBusyId(null));
   };
 
-  const renderNextUp = ({ item, view }: PresentedItem) => {
-    const pill = itemPill(item, view, t);
-    const action = primaryActionFor(item, view);
-    const rhythm = rhythmText(rhythmLineFor(item));
-    const canSnooze = item.kind !== 'event' && view.state !== 'booked' && view.state !== 'paused';
-    return (
-      <View style={[styles.next, { backgroundColor: P.accent }]}>
-        <View style={styles.nextTop}>
-          <Text style={[styles.nextEyebrow, { color: P.onAccent }]}>{t('maintenance.next.title').toUpperCase()}</Text>
-          <Pill text={pill.text} tone={pill.tone} P={P} S={S} />
-        </View>
-        <Text style={[styles.nextTitle, { color: P.onAccent }]} numberOfLines={2}>{item.title}</Text>
-        {rhythm && (
-          <View style={styles.nextRhythm}>
-            <Ionicons name="repeat" size={15} color={P.onAccent} />
-            <Text style={[styles.nextRhythmText, { color: P.onAccent }]}>{rhythm}</Text>
-          </View>
-        )}
-        {(action || canSnooze) && (
-          <View style={styles.nextFoot}>
-            {action && (
-              <TouchableOpacity
-                style={[styles.nextBtn, { backgroundColor: P.onAccent }]}
-                onPress={() => { hapticLight(); onItemAction(item, action); }}
-                disabled={busyItemId === item.id}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.nextBtnText, { color: P.accent }]}>
-                  {t(action === 'rebook' ? 'maintenance.action.rebook' : action === 'find' ? 'maintenance.action.find' : 'maintenance.action.resume').toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {canSnooze && (
-              <TouchableOpacity
-                style={[styles.nextBtn, styles.nextGhost, { borderColor: P.onAccent }]}
-                onPress={() => { hapticLight(); snooze(item); }}
-                activeOpacity={0.6}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.nextBtnText, { color: P.onAccent }]}>{t('maintenance.action.snooze').toUpperCase()}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
-    );
+  const book = (item: MaintenanceItem) => {
+    const action = primaryActionFor(item, presentMaintenanceItem(item, today, state.coverage));
+    onItemAction(item, action === 'rebook' ? 'rebook' : 'find');
   };
 
   const isEmpty = visibleItems.length === 0 && state.context.prep.length === 0 && state.context.aftercare.length === 0 && !patchDate;
@@ -292,6 +272,15 @@ export function MaintenanceView({
           <View style={{ flex: 1 }} />
           <GhostButton small P={P} icon="add" label={t('maintenance.addMine')} onPress={() => setAdding(true)} />
         </View>
+        <TouchableOpacity
+          onPress={() => { hapticLight(); setHowTo(true); }}
+          activeOpacity={0.5}
+          hitSlop={8}
+          accessibilityRole="button"
+          style={styles.howLink}
+        >
+          <Text style={[styles.howLinkText, { color: P.accentText }]}>{t('maintenance.howto.link').toUpperCase()} ›</Text>
+        </TouchableOpacity>
 
         {state.loading && state.items.length === 0 ? (
           <ActivityIndicator color={P.accent} style={{ marginTop: 40 }} />
@@ -346,7 +335,15 @@ export function MaintenanceView({
               </View>
             ) : (
               <>
-                {nextUp && renderNextUp(nextUp)}
+                <NextUpCard
+                  nextUp={nextUp}
+                  onBook={book}
+                  onDone={markDone}
+                  onSnooze={snooze}
+                  busyItemId={doneBusyId ?? busyItemId}
+                  P={P}
+                  t={t}
+                />
                 {/* Chips only when there's more than one kind of thing to filter. */}
                 {filterCounts.size > 2 && (
                   <View style={ui.chips}>
@@ -432,6 +429,7 @@ export function MaintenanceView({
         onUpdate={state.updateItem}
         onDelete={state.deleteItem}
       />
+      <MaintenanceHowTo visible={howTo} onClose={() => setHowTo(false)} P={P} S={S} t={t} />
       <AddReminderSheet
         visible={adding}
         pastProviders={state.context.pastProviders}
@@ -451,20 +449,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
   circ: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   title: { fontFamily: FONT_DISPLAY, fontSize: 24, letterSpacing: 1 },
+  howLink: { alignSelf: 'flex-start', marginTop: -6 },
+  howLinkText: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.2 },
   errorBlock: { marginTop: 40, gap: 16, paddingHorizontal: 12 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, padding: 12 },
   empty: { padding: 16, gap: 8 },
   emptyTitle: { fontFamily: FONT_DISPLAY, fontSize: 17, letterSpacing: 0.8 },
-  next: { borderRadius: 20, padding: 18, gap: 10 },
-  nextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  nextEyebrow: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.4, opacity: 0.85 },
-  nextTitle: { fontFamily: FONT_DISPLAY, fontSize: 22, letterSpacing: 0.8, lineHeight: 26 },
-  nextRhythm: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  nextRhythmText: { flex: 1, fontFamily: FONT_BODY, fontSize: 14, lineHeight: 19, opacity: 0.92 },
-  nextFoot: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  nextBtn: { flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  nextGhost: { flex: 0, paddingHorizontal: 16, borderWidth: 1, backgroundColor: 'transparent' },
-  nextBtnText: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1.1 },
   ctx: { padding: 14, gap: 8 },
   when: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   whenText: { fontFamily: FONT_DISPLAY, fontSize: 10.5, letterSpacing: 1.4 },

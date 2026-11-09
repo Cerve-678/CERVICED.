@@ -53,6 +53,7 @@ Curated overview: [[Screens & Navigation]].
 - `ProfileMain`
 - `ProfileInfo`
 - `BeautyProfile`
+- `Circle`
 - `ChangePassword`
 - `NotificationsSettings`
 - `PaymentMethods`
@@ -60,7 +61,6 @@ Curated overview: [[Screens & Navigation]].
 - `HelpCentre`
 - `TextSizing`
 - `LanguageRegion`
-- `About`
 - `ReportProblem`
 - `AdminDashboard`
 - `AdminMoney`

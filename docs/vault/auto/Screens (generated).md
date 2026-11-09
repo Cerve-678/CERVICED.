@@ -66,6 +66,7 @@
 - `src/screens/client/BookingsScreen.tsx`
 - `src/screens/client/BookmarkedProvidersScreen.tsx`
 - `src/screens/client/CartScreen.tsx`
+- `src/screens/client/CircleScreen.tsx`
 - `src/screens/client/ClientIntakeFormScreen.tsx`
 - `src/screens/client/ExploreScreen.tsx`
 - `src/screens/client/ExternalBookingDetailScreen.tsx`
@@ -80,7 +81,6 @@
 - `src/screens/client/SearchScreen.tsx`
 - `src/screens/client/SubscriptionScreen.tsx`
 - `src/screens/client/UserProfileScreen.tsx`
-- `src/screens/shared/AboutScreen.tsx`
 - `src/screens/shared/AdminDashboardScreen.tsx`
 - `src/screens/shared/AdminMoneyScreen.tsx`
 - `src/screens/shared/BeccaScreen.tsx`

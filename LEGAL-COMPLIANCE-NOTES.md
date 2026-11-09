@@ -746,3 +746,127 @@ a late cancellation.
   year), a sixth of every fee is VAT. Not a Terms question, but it changes
   what the fee earns. Ask an accountant. (Assumes the fee is VAT-inclusive; confirm.)
 - **Not lawyer-reviewed**, like the rest of this list.
+
+## 23. Following people and "Show where I go" (2026-11-08)
+
+Being built on `feat/follow-people-backend` (migration `20261108220000`, applied
+live 2026-11-08), with the client screens on `feat/follow-people-find`. Clients can follow other clients. People who follow you and are
+approved see your face on the cards of providers you've recommended or
+booked with. Raised by `cerviced-legal-flagger` on 2026-11-08. These are the
+user's decisions:
+
+- **"Show where I go" is on by default for adults.** It is one switch: off
+  means you appear on no cards at all, recommends included. For under-18s it
+  starts off.
+- **There is no choice screen at sign-up.** A one-time notice comes after the
+  client's first completed booking. Their bookings don't show anyone anything
+  until they've seen it. Recommends are a deliberate tap, so they show before
+  the notice.
+- **Follows need approval by default.** An open account accepts everyone, and
+  every follower of an open account sees where they go. Under-18s are always
+  private.
+- **Contacts are matched on unverified numbers.** `users.phone` is typed in
+  and never checked, and 0 of 18 accounts are verified. So someone can enter
+  a friend's number and appear in their friends' contacts as a match. The user
+  chose this over SMS verification.
+- **Clients can hide any provider.** Aesthetics visits never show unless the
+  client recommends that provider.
+- **Cards never name a service,** only that someone recommends or has been and
+  how many times.
+
+**Gaps to raise (not resolved):**
+- **Art. 25 (data protection by default).** Booking history is shared by
+  default with no choice at sign-up. The flagger rated a two-button choice at
+  sign-up as most defensible. The user chose the post-booking notice instead.
+  Record the reasoning in a DPIA.
+- **No DPIA.** Sharing behaviour and uploading contact hashes is likely
+  high-risk under Art. 35. A one-page DPIA is needed before launch, and it
+  must cover 16–17 year olds.
+- **Children's Code.** Under-18s get default-off, always-private and are not
+  findable by phone. Open questions: should adults be able to follow a 16 or
+  17 year old at all, and does a request from an adult need extra friction?
+- **Special-category inference.** A provider's name alone can reveal health
+  or sex life (laser, medical aesthetics, intimate waxing). Mitigations are
+  Aesthetics hidden unless recommended, plus a per-provider hide. Waxing
+  isn't a separate category, so intimate waxing under BROWS/AESTHETICS etc. is
+  not auto-hidden.
+- **Hashing is not anonymisation.** UK mobiles are a small space, so
+  `match_contact_hashes` can be brute-forced into a "who is on CERVICED"
+  oracle. Hashes are compared in-query and never stored. Edge, Supabase and
+  Sentry logs must not capture the request body. Privacy text must say all
+  of this, plus the "findable by number" switch.
+- **Privacy Policy and Terms say nothing about this yet.** Both need text
+  before launch: what is shared and with whom, the default, contact
+  matching, search by name, blocking, retention and deletion. That means
+  `waitlist/legal/index.html` and the in-app About text, which still names the
+  dead privacy@ address (§13). Provider Terms should say clients can show
+  they've visited.
+- **Store requirements.** iOS needs an `NSContactsUsageDescription`, with
+  wording to be decided by the user. Android needs `READ_CONTACTS` and an
+  update to the Data safety form. The App Store privacy label needs Contacts
+  added, plus booking history shared with other users.
+- **Accuracy.** "Has been" counts completed bookings, which are
+  auto-completed (§12), so a visit that didn't happen can still show.
+- **Deletion.** Removing the client hat deletes every follow, block,
+  recommend, hide and setting by trigger. Account deletion cascades. During
+  the 30-day grace period the person disappears from cards, search and
+  matching straight away.
+- **Reporting.** There is no report route for harassment, impersonation or a
+  stranger following a minor. Decide whether support@cerviced.co covers it
+  at launch.
+- **Age is self-declared.** `users.dob` can be edited by its owner (the
+  `users_owner_update` policy), so a 16-year-old could change it and unlock
+  open accounts and phone matching. Unknown age counts as under 18.
+  Someone who joined under 18 keeps "Show where I go" off after turning 18
+  until they switch it on.
+- **Security review mitigations (2026-11-08).** Contact matching is limited
+  to 3000 numbers a day and 20 checks an hour per account, at most 1000 per
+  call. A number on two accounts matches neither. Name search is limited to
+  120 an hour. Follow requests are limited to 100 a day, and a declined
+  request can't be re-sent for 30 days; the decline is never shown. All of
+  this is client-hat only. Under-18s only appear in name search to people
+  they're already connected with. Open question: should "findable by phone
+  number" default to off? Both the security review and the legal flagger
+  suggest it. It is on now so the feature works.
+- **Raised on the client screens (`feat/follow-people-find`, 2026-11-08).**
+  These are not resolved:
+  - **"Never which service you had" is literally true, but the provider's name
+    can still say a lot** (see Special-category inference above). The copy
+    used to say "never what you had done", which claimed more than this.
+  - **Turning the switch on counts as the notice.** If someone turns Show where
+    I go on in Your circle, that marks the notice seen, so their visits count.
+    Without this, an under-18 who opts in later would never have visits shown.
+    Under-18s now get a confirm first (decided 2026-11-08). Still open: is
+    the switch's own subtitle enough for adults?
+  - **Dismissing the notice.** It is marked seen only when the client taps
+    "Got it" or "Turn it off". Swiping it away hides it for that session.
+  - **The "Findable by phone number" switch was hidden** until contacts
+    matching was built. It is back on `feat/follow-people-contacts`, where
+    contacts matching now exists. The server default is still on for adults.
+- **Decided by the user on 2026-11-08 (`feat/follow-people-decisions`,
+  migration `20261109130000`, APPLIED live 2026-11-09):**
+  - **Visits count only from the notice onwards.** Only appointments that end
+    after the client saw the notice (or turned Show where I go on) count. Past
+    bookings are never shared. The notice now says "From now on… Appointments
+    you've already had aren't shown." That is true now the migration is
+    applied.
+  - **Under-18s get a confirm** before Show where I go turns on.
+  - **Blocks can be undone** from a Blocked list in Your circle. The block
+    confirm now says where.
+- **Contacts matching built (`feat/follow-people-contacts`, 2026-11-08).**
+  - iOS `NSContactsUsageDescription`, chosen by the user on 2026-11-08: "Find
+    friends who are already on CERVICED. Your address book is never saved."
+    It gives the reason, which App Store review (guideline 5.1.1) expects. It
+    replaced an earlier line that said "scrambles", which promised more than
+    unsalted hashing gives.
+  - Android requests `READ_CONTACTS` only; `WRITE_CONTACTS` is blocked.
+  - The permission is asked only when the client taps "Allow contacts" in Your
+    circle.
+  - Only hashes leave the phone. At most 3000 numbers are checked per day.
+    Nothing is kept on the device or logged.
+  - **Matches show only the account's own name,** under an "In your
+    contacts" heading. The user decided on 2026-11-08 not to show the name the
+    client saved, so a fake account can't borrow it to look confirmed. Only
+    numbers are read from the address book, never names.
+  - Still open: the App Store privacy label (Contacts), the Play Data safety
+    form, and the Privacy text above.

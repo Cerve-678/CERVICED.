@@ -67,6 +67,18 @@ import {
 import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { resolveDepositMode } from "../utils/depositPolicy";
+import { groupCircleRows, type CircleRow } from "../features/social/presentation";
+import type {
+  CircleByProvider,
+  ContactMatch,
+  FollowStatus,
+  PeopleListKind,
+  PersonListEntry,
+  PersonSummary,
+  ProviderSharing,
+  SocialSettings,
+  SocialSettingsUpdate,
+} from "../features/social/types";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
@@ -6936,6 +6948,15 @@ export async function getMyBookingActionItems(): Promise<
   return counts;
 }
 
+export type ClientActivityDone =
+  | { kind: 'form_sent'; id: string; bookingId: string; doneAt: string }
+  | { kind: 'pack_read'; id: string; bookingId: string; doneAt: string }
+  | { kind: 'fee_paid'; id: string; bookingId: string; doneAt: string; feeKind: BookingFeeKind; amountPence: number }
+  | { kind: 'refund_decided'; id: string; bookingId: string; doneAt: string; outcome: 'refunded' | 'declined' };
+
+/** How long a finished item stays struck through in the Activity Centre. */
+export const ACTIVITY_DONE_DAYS = 7;
+
 /** Everything the client's Activity Centre needs that isn't already on the
  *  bookings in BookingContext — one round of parallel reads, each capped.
  *  features/bookings/activityCentre.ts turns this plus the bookings into the
@@ -6972,6 +6993,10 @@ export interface ClientActivityRemote {
     bookingTime: string;
     holdExpiresAt: string;
   }[];
+  /** What the client finished in the last ACTIVITY_DONE_DAYS days, so the
+   *  Activity Centre can strike it through instead of it just disappearing.
+   *  Only things with a recorded finish time are here. */
+  recentlyDone: ClientActivityDone[];
 }
 
 const ACTIVITY_QUERY_LIMIT = 50;
@@ -6981,10 +7006,11 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     data: { user },
   } = await getSessionUser();
   if (!user) {
-    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [] };
+    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [] };
   }
 
-  const [forms, packs, refunds, fees, holds] = await Promise.all([
+  const since = new Date(Date.now() - ACTIVITY_DONE_DAYS * 86_400_000).toISOString();
+  const [forms, packs, refunds, fees, holds, formsDone, packsDone, feesDone, refundsDone] = await Promise.all([
     supabase
       .from("booking_intake_forms")
       .select("booking_id")
@@ -7018,8 +7044,43 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
       .eq("status", "on_hold")
       .gt("hold_expires_at", new Date().toISOString())
       .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_intake_forms")
+      .select("id, booking_id, completed_at")
+      .eq("client_user_id", user.id)
+      .eq("status", "completed")
+      .gte("completed_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("booking_info_packs")
+      .select("id, booking_id, viewed_at")
+      .eq("client_user_id", user.id)
+      .gte("viewed_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    // Only fees the client was asked to pay (they carry an invoice, whether
+    // the client paid it or a retry on their saved card did), not ones the
+    // card covered first time without them ever seeing a request.
+    supabase
+      .from("booking_fee_charges")
+      .select("id, booking_id, kind, amount_pence, charged_at")
+      .eq("client_user_id", user.id)
+      .eq("status", "succeeded")
+      .not("stripe_invoice_id", "is", null)
+      .gte("charged_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
+    supabase
+      .from("refund_requests")
+      .select("id, booking_id, status, resolved_at")
+      .eq("client_id", user.id)
+      .in("status", ["refunded", "declined"])
+      .gte("resolved_at", since)
+      .limit(ACTIVITY_QUERY_LIMIT),
   ]);
   if (forms.error) throw forms.error;
+  if (formsDone.error) throw formsDone.error;
+  if (packsDone.error) throw packsDone.error;
+  if (feesDone.error) throw feesDone.error;
+  if (refundsDone.error) throw refundsDone.error;
   if (packs.error) throw packs.error;
   if (refunds.error) throw refunds.error;
   if (fees.error) throw fees.error;
@@ -7032,7 +7093,23 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     booking_date: string; booking_time: string; hold_expires_at: string;
   };
 
+  type FormDoneRow = { id: string; booking_id: string; completed_at: string };
+  type PackDoneRow = { id: string; booking_id: string; viewed_at: string };
+  type FeeDoneRow = { id: string; booking_id: string; kind: BookingFeeKind; amount_pence: number; charged_at: string };
+  type RefundDoneRow = { id: string; booking_id: string; status: 'refunded' | 'declined'; resolved_at: string };
+  const recentlyDone: ClientActivityDone[] = [
+    ...((formsDone.data ?? []) as FormDoneRow[]).map(r => ({ kind: 'form_sent' as const, id: r.id, bookingId: r.booking_id, doneAt: r.completed_at })),
+    ...((packsDone.data ?? []) as PackDoneRow[]).map(r => ({ kind: 'pack_read' as const, id: r.id, bookingId: r.booking_id, doneAt: r.viewed_at })),
+    ...((feesDone.data ?? []) as FeeDoneRow[]).map(r => ({
+      kind: 'fee_paid' as const, id: r.id, bookingId: r.booking_id, doneAt: r.charged_at, feeKind: r.kind, amountPence: r.amount_pence,
+    })),
+    ...((refundsDone.data ?? []) as RefundDoneRow[]).map(r => ({
+      kind: 'refund_decided' as const, id: r.id, bookingId: r.booking_id, doneAt: r.resolved_at, outcome: r.status,
+    })),
+  ];
+
   return {
+    recentlyDone,
     pendingFormBookingIds: ((forms.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
     unreadPackBookingIds: ((packs.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
     openRefundRequests: ((refunds.data ?? []) as RefundRow[]).map(r => ({
@@ -12488,4 +12565,222 @@ export async function applyCancellationRefund(
     throw new Error('The cancellation refund could not be confirmed.');
   }
   return data.status;
+}
+
+// ─────────────────────────────────────────────────────────
+// FOLLOWING PEOPLE, RECOMMEND, "SHOW WHERE I GO"
+// ─────────────────────────────────────────────────────────
+// Every rule (approval, under-18 defaults, blocks, who shows on a card) is
+// enforced by the SECURITY DEFINER functions in migration
+// 20261108220000_follow_people_and_recommend.sql. The tables have no RLS
+// policies, so these RPCs are the only way in.
+
+interface SocialSettingsRow {
+  is_minor: boolean;
+  is_private: boolean;
+  show_where_i_go: boolean;
+  findable_by_phone: boolean;
+  where_i_go_notice_seen: boolean;
+  followers: number;
+  following: number;
+  requests: number;
+}
+
+function mapSocialSettings(row: SocialSettingsRow): SocialSettings {
+  return {
+    isMinor: row.is_minor,
+    isPrivate: row.is_private,
+    showWhereIGo: row.show_where_i_go,
+    findableByPhone: row.findable_by_phone,
+    whereIGoNoticeSeen: row.where_i_go_notice_seen,
+    followers: Number(row.followers) || 0,
+    following: Number(row.following) || 0,
+    requests: Number(row.requests) || 0,
+  };
+}
+
+interface PersonRow {
+  user_id: string;
+  name: string | null;
+  avatar_url: string | null;
+  my_status: FollowStatus | null;
+  follows_me: FollowStatus | null;
+}
+
+function mapPerson(row: PersonRow): PersonSummary {
+  return {
+    userId: row.user_id,
+    name: (row.name ?? '').trim() || 'CERVICED member',
+    avatarUrl: row.avatar_url || null,
+    myStatus: row.my_status,
+    followsMe: row.follows_me,
+  };
+}
+
+export async function getMySocialSettings(): Promise<SocialSettings> {
+  const { data, error } = await supabase.rpc('get_my_social_settings');
+  if (error) throw error;
+  return mapSocialSettings(data as SocialSettingsRow);
+}
+
+export async function updateMySocialSettings(
+  update: SocialSettingsUpdate,
+): Promise<SocialSettings> {
+  const { data, error } = await supabase.rpc('update_my_social_settings', {
+    p_is_private: update.isPrivate ?? null,
+    p_show_where_i_go: update.showWhereIGo ?? null,
+    p_findable_by_phone: update.findableByPhone ?? null,
+  });
+  if (error) throw error;
+  return mapSocialSettings(data as SocialSettingsRow);
+}
+
+export async function markWhereIGoNoticeSeen(): Promise<void> {
+  const { error } = await supabase.rpc('mark_where_i_go_notice_seen');
+  if (error) throw error;
+}
+
+/** Returns 'pending' on a private account, 'accepted' on an open one. */
+export async function requestFollow(personId: string): Promise<FollowStatus> {
+  if (!isUuid(personId)) throw new Error('This person isn’t available to follow.');
+  const { data, error } = await supabase.rpc('request_follow', { p_target: personId });
+  if (error) throw error;
+  return data as FollowStatus;
+}
+
+export async function respondFollowRequest(followerId: string, accept: boolean): Promise<void> {
+  const { error } = await supabase.rpc('respond_follow_request', {
+    p_follower: followerId,
+    p_accept: accept,
+  });
+  if (error) throw error;
+}
+
+/** Unfollow, or cancel a request I sent. */
+export async function unfollowPerson(personId: string): Promise<void> {
+  const { error } = await supabase.rpc('unfollow_person', { p_target: personId });
+  if (error) throw error;
+}
+
+/** Remove someone who follows me. They aren't told. */
+export async function removeFollower(followerId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_follower', { p_follower: followerId });
+  if (error) throw error;
+}
+
+export async function blockPerson(personId: string): Promise<void> {
+  const { error } = await supabase.rpc('block_person', { p_target: personId });
+  if (error) throw error;
+}
+
+export async function unblockPerson(personId: string): Promise<void> {
+  const { error } = await supabase.rpc('unblock_person', { p_target: personId });
+  if (error) throw error;
+}
+
+/** Name search. The server ignores queries under 2 characters and caps at 50. */
+export async function searchPeople(query: string, limit = 25): Promise<PersonSummary[]> {
+  if (query.trim().length < 2) return [];
+  const { data, error } = await supabase.rpc('search_people', {
+    p_query: query.trim(),
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as PersonRow[]).map(mapPerson);
+}
+
+/**
+ * Compares sha256 hashes of the device's contact numbers (normalised with
+ * normalisePhoneForMatching) against accounts. Nothing sent is stored.
+ */
+/** Most hashes one match_contact_hashes call accepts (server cap). */
+export const CONTACT_HASH_BATCH_LIMIT = 1000;
+
+export async function matchContactHashes(hashes: readonly string[]): Promise<ContactMatch[]> {
+  const unique = Array.from(new Set(hashes));
+  if (unique.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += CONTACT_HASH_BATCH_LIMIT) {
+    chunks.push(unique.slice(i, i + CONTACT_HASH_BATCH_LIMIT));
+  }
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      const { data, error } = await supabase.rpc('match_contact_hashes', { p_hashes: chunk });
+      if (error) throw error;
+      return (data ?? []) as (PersonRow & { phone_hash: string })[];
+    }),
+  );
+  return results.flat().map((row) => ({
+    ...mapPerson(row),
+    phoneHash: row.phone_hash,
+  }));
+}
+
+export async function getMyPeople(kind: PeopleListKind): Promise<PersonListEntry[]> {
+  const { data, error } = await supabase.rpc('get_my_people', { p_kind: kind });
+  if (error) throw error;
+  return (
+    (data ?? []) as {
+      user_id: string;
+      name: string | null;
+      avatar_url: string | null;
+      status: FollowStatus | 'blocked';
+      since: string;
+    }[]
+  ).map((row) => ({
+    userId: row.user_id,
+    name: (row.name ?? '').trim() || 'CERVICED member',
+    avatarUrl: row.avatar_url || null,
+    status: row.status,
+    since: row.since,
+  }));
+}
+
+export async function getMyProviderSharing(providerId: string): Promise<ProviderSharing> {
+  const { data, error } = await supabase.rpc('get_my_provider_sharing', {
+    p_provider: providerId,
+  });
+  if (error) throw error;
+  const row = data as { can_recommend: boolean; recommended: boolean; hidden: boolean };
+  return {
+    canRecommend: row.can_recommend,
+    recommended: row.recommended,
+    hidden: row.hidden,
+  };
+}
+
+export async function setProviderRecommendation(providerId: string, on: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_provider_recommendation', {
+    p_provider: providerId,
+    p_on: on,
+  });
+  if (error) throw error;
+}
+
+/** "Don't show this one": keeps my face off this provider's cards. */
+export async function setProviderHidden(providerId: string, hidden: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_provider_hidden', {
+    p_provider: providerId,
+    p_hidden: hidden,
+  });
+  if (error) throw error;
+}
+
+/** Most provider ids one get_circle_for_providers call accepts (server cap). */
+export const CIRCLE_BATCH_LIMIT = 300;
+
+/**
+ * People I follow who recommend or have been to each provider, for the face
+ * stack on cards. One call per list of cards — never call it per card.
+ */
+export async function getCircleForProviders(
+  providerIds: readonly string[],
+): Promise<CircleByProvider> {
+  const ids = Array.from(new Set(providerIds.filter(isUuid))).slice(0, CIRCLE_BATCH_LIMIT);
+  if (ids.length === 0) return {};
+  const { data, error } = await supabase.rpc('get_circle_for_providers', {
+    p_provider_ids: ids,
+  });
+  if (error) throw error;
+  return groupCircleRows((data ?? []) as CircleRow[]);
 }

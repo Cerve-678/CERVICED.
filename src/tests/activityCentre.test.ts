@@ -5,7 +5,7 @@ import { BookingStatus, PaymentStatus } from '../types/booking';
 const NOW = new Date(2026, 10, 8, 12, 0); // Sun 8 Nov 2026, 12:00 local
 
 const none: ClientActivityRemote = {
-  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [],
+  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
 };
 
 function booking(id: string, over: Partial<ActivityBooking> = {}): ActivityBooking {
@@ -24,7 +24,7 @@ function booking(id: string, over: Partial<ActivityBooking> = {}): ActivityBooki
 describe('buildClientActivity', () => {
   it('is empty when nothing is waiting on anyone', () => {
     const result = buildClientActivity([booking('b1')], none, NOW);
-    expect(result).toEqual({ needsYou: [], inProgress: [] });
+    expect(result).toEqual({ needsYou: [], inProgress: [], done: [] });
   });
 
   it('asks the client to pick a time once the provider has sent some, and waits before that', () => {
@@ -47,7 +47,7 @@ describe('buildClientActivity', () => {
       isPendingReschedule: true,
       rescheduleRequest: { providerAvailableDates: [{ date: '2026-11-14', times: ['10:00'] }] },
     });
-    expect(buildClientActivity([cancelled], none, NOW)).toEqual({ needsYou: [], inProgress: [] });
+    expect(buildClientActivity([cancelled], none, NOW)).toEqual({ needsYou: [], inProgress: [], done: [] });
   });
 
   it('shows one row per booking for forms and packs, and only before the appointment', () => {
@@ -176,6 +176,44 @@ describe('live tiles: pulse, caption and status-pill line', () => {
       NOW,
     );
     expect(needsYou[0]!.pulse).toBe('urgent');
+  });
+});
+
+describe('done items', () => {
+  it('strikes through what was finished, newest first, with the outcome a refund was decided on', () => {
+    const remote: ClientActivityRemote = {
+      ...none,
+      recentlyDone: [
+        { kind: 'form_sent', id: 'fm1', bookingId: 'b1', doneAt: '2026-11-07T10:00:00Z' },
+        { kind: 'fee_paid', id: 'f1', bookingId: 'b1', doneAt: '2026-11-08T09:00:00Z', feeKind: 'late', amountPence: 1250 },
+        { kind: 'refund_decided', id: 'r1', bookingId: 'b1', doneAt: '2026-11-06T09:00:00Z', outcome: 'declined' },
+      ],
+    };
+    const { done, needsYou } = buildClientActivity([booking('b1')], remote, NOW);
+    expect(needsYou).toEqual([]);
+    expect(done.map(i => [i.key, i.pulse, i.kind])).toEqual([
+      ['done:fee:f1', 'done', 'done'],
+      ['done:form:fm1', 'done', 'done'],
+      ['done:refund:r1', 'done', 'done'],
+    ]);
+    expect(done[0]!.title).toBe('Pay your late fee · £12.50');
+    expect(done[0]!.detail).toBe('Paid on Sun 8 Nov.');
+    expect(done[1]!.detail).toBe('Sent to Braids by Amara for Knotless braids.');
+    expect(done[2]!.detail).toBe('Knotless braids with Braids by Amara. Decided: not refunded. Open the booking to see why.');
+  });
+
+  it("doesn't show a form or pack as done while that booking still has one waiting", () => {
+    const remote: ClientActivityRemote = {
+      ...none,
+      pendingFormBookingIds: ['b1'],
+      recentlyDone: [
+        { kind: 'form_sent', id: 'fm1', bookingId: 'b1', doneAt: '2026-11-07T10:00:00Z' },
+        { kind: 'pack_read', id: 'p1', bookingId: 'b1', doneAt: '2026-11-07T10:00:00Z' },
+        { kind: 'pack_read', id: 'p2', bookingId: 'b1', doneAt: '2026-11-06T10:00:00Z' },
+      ],
+    };
+    const { done } = buildClientActivity([booking('b1')], remote, NOW);
+    expect(done.map(i => i.key)).toEqual(['done:pack:p1']);
   });
 });
 
