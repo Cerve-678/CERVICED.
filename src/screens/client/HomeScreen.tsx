@@ -47,6 +47,8 @@ import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
 import { shuffle } from '../../utils/shuffle';
+import { keepShownOrder } from '../../utils/keepShownOrder';
+import { withTimeout } from '../../utils/withTimeout';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import { useCircleMoment } from '../../features/social/useCircleMoment';
 import { RecommendHomeCard } from '../../features/social/RecommendHomeCard';
@@ -159,6 +161,14 @@ const ProviderRail = React.memo(function ProviderRail({
 });
 
 const DEFAULT_NEARBY_RADIUS_MILES = 10;
+
+// Long enough for a pushed screen's slide-in to cover Home before Trending
+// gets its new order.
+const TRENDING_RESHUFFLE_AFTER_LEAVE_MS = 600;
+
+// Longest Recommended waits for its personalised order before showing the
+// plain one. Ranking is a local read, normally done well inside this.
+const RECOMMENDED_RANK_WAIT_MS = 400;
 
 const RoundProviderRail = React.memo(function RoundProviderRail({
   providers,
@@ -437,6 +447,11 @@ export default function HomeScreen() {
     kidsProviders: [] as Provider[],
   });
 
+  // False until Recommended has its ranked order for the loaded providers;
+  // the section shows its skeleton until then (see the provider-data effect).
+  const [recommendedReady, setRecommendedReady] = useState(false);
+  const recommendedPending = providersLoading || (liveProviders.length > 0 && !recommendedReady);
+
   // Phase 5.4 — new home sections
   const [newProviders,    setNewProviders]    = useState<Provider[]>([]);
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
@@ -444,19 +459,28 @@ export default function HomeScreen() {
   const [trending,        setTrending]        = useState<Provider[]>([]);
   // Trending is shuffled when Home loads, but Home stays mounted while the
   // client moves between tabs, so coming back used to show the same order.
-  // Reshuffle the rail every time Home comes back into view (not on its
-  // first focus, which the load above already shuffled). No refetch: the
-  // same trending providers, just a fresh order.
-  const trendingFocusSeen = useRef(false);
+  // The rail gets a fresh order for each return to Home (no refetch, the
+  // same trending providers). It's reshuffled just after Home is left, once
+  // the next screen has slid over it, never on focus: reshuffling on focus
+  // made the cards jump while Home was sliding back into view.
+  const trendingReshuffleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useFocusEffect(
     useCallback(() => {
-      if (!trendingFocusSeen.current) {
-        trendingFocusSeen.current = true;
-        return;
+      if (trendingReshuffleTimer.current) {
+        clearTimeout(trendingReshuffleTimer.current);
+        trendingReshuffleTimer.current = null;
       }
-      setTrending(current => (current.length > 1 ? shuffle(current) : current));
+      return () => {
+        trendingReshuffleTimer.current = setTimeout(() => {
+          trendingReshuffleTimer.current = null;
+          setTrending(current => (current.length > 1 ? shuffle(current) : current));
+        }, TRENDING_RESHUFFLE_AFTER_LEAVE_MS);
+      };
     }, []),
   );
+  useEffect(() => () => {
+    if (trendingReshuffleTimer.current) clearTimeout(trendingReshuffleTimer.current);
+  }, []);
   const [availabilityBySlug, setAvailabilityBySlug] = useState<Map<string, ProviderAvailabilityInfo>>(new Map());
 
   // Per-service audience refinement (services.audience) for the Male/Kids
@@ -676,11 +700,21 @@ export default function HomeScreen() {
         const yourProviderIds = new Set(bookmarkedProviders.map(p => p.id));
         const defaultRecommended = recommendationCandidates.filter(p => !yourProviderIds.has(p.id));
 
-        // Render browse sections immediately; personalisation must not hold
-        // every category behind its storage/initialisation work.
-        setProvidersData({
+        // Category rails fill straight away. Recommended is set once, after
+        // ranking: it used to show a plain order and swap in the personalised
+        // one a moment later, again every time more providers loaded, so it
+        // visibly reshuffled two or three times after first paint. Until it's
+        // ranked it keeps its skeleton (recommendedReady). Ranking reads one
+        // local store, warmed when Home mounts; if that's ever stuck, the
+        // plain order is used after RECOMMENDED_RANK_WAIT_MS.
+        setProvidersData(previous => ({
+          ...previous,
           yourProviders: bookmarkedProviders.length > 0 ? bookmarkedProviders : [],
-          recommended: defaultRecommended,
+          // Bookmarking or un-bookmarking moves a provider out of or back into
+          // Recommended now, not after ranking.
+          recommended: previous.recommended.length > 0
+            ? keepShownOrder(previous.recommended, defaultRecommended)
+            : previous.recommended,
           hairProviders: liveProviders.filter(p => p.service === 'HAIR'),
           nailProviders: liveProviders.filter(p => p.service === 'NAILS'),
           lashProviders: liveProviders.filter(p => p.service === 'LASHES'),
@@ -693,15 +727,28 @@ export default function HomeScreen() {
           maleProviders: liveProviders.filter(p => p.service === 'MALE' || maleServiceProviderIds.has(p.id)),
           // Kids providers — same widening via audience='kids'.
           kidsProviders: liveProviders.filter(p => p.service === 'KIDS' || kidsServiceProviderIds.has(p.id)),
-        });
+        }));
 
-        const personalizedRecommended = await userLearningService.getPersonalizedProviders(recommendationCandidates);
+        let ranked = defaultRecommended;
+        try {
+          const personalized = await withTimeout(
+            userLearningService.getPersonalizedProviders(recommendationCandidates),
+            RECOMMENDED_RANK_WAIT_MS,
+            'Recommended ranking',
+          );
+          const personalizedFiltered = personalized.filter(p => !yourProviderIds.has(p.id));
+          if (personalizedFiltered.length > 0) ranked = personalizedFiltered;
+        } catch (error) {
+          logger.error('Failed to personalise recommended providers:', error);
+        }
         if (cancelled) return;
-        const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
         setProvidersData(previous => ({
           ...previous,
-          recommended: recommendedFiltered.length > 0 ? recommendedFiltered : defaultRecommended,
+          // Cards already on screen stay where they are; providers that load
+          // later are added after them.
+          recommended: keepShownOrder(previous.recommended, ranked),
         }));
+        if (liveProviders.length > 0) setRecommendedReady(true);
 
         // Phase 5.4 — recently viewed from userLearningService interaction log.
         // Raw window is wider than the 15 we display, since repeat views of
@@ -1745,7 +1792,7 @@ export default function HomeScreen() {
                 bookmarked), matching the empty-state guard every sibling
                 section below already has. Without this it rendered a header
                 + empty scroller that looked broken. */}
-            {(providersLoading || providersData.recommended.length > 0) && (
+            {(recommendedPending || providersData.recommended.length > 0) && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>RECOMMENDED FOR YOU</Text>
@@ -1760,7 +1807,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {providersLoading ? (
+              {recommendedPending ? (
                 <SkeletonSection cardWidth={176} cardHeight={64} borderRadius={16} />
               ) : viewAllRecommended ? (
                 <View style={styles.expandedGrid}>

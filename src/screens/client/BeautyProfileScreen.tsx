@@ -490,6 +490,7 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
           todo={todo}
           onOpenTodoField={openTodoField}
           onOpenAccountDetails={() => navigation.navigate('ProfileInfo')}
+          onFindIdea={idea => navigateNested('Home', 'Search', { initialQuery: idea.query })}
         />
       );
   }

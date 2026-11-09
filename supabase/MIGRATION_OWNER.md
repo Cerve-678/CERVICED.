@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-09 (Explore collections)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110100000 | `explore_collections` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109260000` (blank_provider_cannot_go_live, applied by a peer meanwhile; touches neither `users.saved_portfolio` nor `delete_client_profile`); nothing higher on any open PR. Lock taken on `feat/explore-collections`. Forced-rollback dry run twice first (owner-only reads, unsaved id refused, un-heart prunes, anon no access). md5 guard on `delete_client_profile()` matched (`b2d7007a…`). Adds `explore_collections` + `explore_collection_items` (RLS on, 7 owner-only policies; an item must be in the owner's `saved_portfolio`; `authenticated` can UPDATE only `name`/`color`), the cap/trim trigger (50 per account, advisory lock), and `users_saved_portfolio_prunes_collections`. Verified live: version present (now live max); both tables RLS on; anon has no SELECT; nobody can EXECUTE the prune function; `delete_client_profile()` new md5 `99855999…` with the one added `DELETE FROM public.explore_collections` line. Written on `feat/explore-collections`. |
+
 ### Applied 2026-11-09 (release time)
 
 | Authored version | Name | Status |
@@ -67,6 +73,12 @@ OWNER:  (none)
 | Authored version | Name | Status |
 |---|---|---|
 | 20261109240000 | `drop_people_name_search` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109220000`. Unapplied migrations on open PRs were `20261109210000_marketing_studio` (its owner, cerviced-6a, said ok and will renumber above the live max) and `20261109230000_profile_import_reads` (no running session owns it; it only creates `profile_import_reads`). **Both now sit below the frontier and must renumber above 20261109240000.** cerviced-5b's `20261109250000_release_time` is already above. Lock taken on `feat/circle-follow-back-contacts-only` (62646b9b). Forced-rollback dry run first (`search_people` 0, `match_contact_hashes` 1, version row 1; live unchanged). Only drops `public.search_people(text, integer)`. Verified live: version present (now live max); `search_people` gone; `match_contact_hashes` present, authenticated can execute and anon can't. Written on `feat/circle-follow-back-contacts-only` (#424). |
+
+### Applied 2026-11-09 (blank providers can't go live)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261109260000 | `blank_provider_cannot_go_live` | **APPLIED 2026-11-09** on the user's "apply", via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109250000` (release_time, applied by a peer meanwhile); no higher migration on any open PR; lock `(none)` on main, taken on `feat/admin-blank-provider`. md5 guard matched (`2b0dd313…`). Forced-rollback dry run first: re-ran the check on every provider, 14 live before and after. Adds `AND NOT v_pending` (auth `app_metadata.details_pending`) to both branches of `check_and_set_provider_live`. Verified live: version present (now live max); new md5 `e274548a…`; term present; 14 providers still live; anon can't execute. `admin-create-account` (re-runs the check in `add_details`) was already deployed. Written on `feat/admin-blank-provider` (#432). |
 
 ### Applied 2026-11-09 (accounts you created, admin)
 

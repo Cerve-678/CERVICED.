@@ -9,6 +9,7 @@ import {
   unsavePortfolioItemFromDb,
 } from '../services/databaseService';
 import { logger } from '../utils/logger';
+import { useCollectionsStore } from './useCollectionsStore';
 
 interface BookmarkStore {
   // Provider bookmarks (existing)
@@ -106,6 +107,9 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
     try {
       await storage.setItem(STORAGE_KEYS.SAVED_PORTFOLIO, updated);
       await unsavePortfolioItemFromDb(id);
+      // The database has already taken it out of every collection (trigger
+      // on users.saved_portfolio); keep the folders on screen in step.
+      useCollectionsStore.getState().forgetItem(id);
     } catch (error) {
       logger.error('Failed to unsave portfolio item:', error);
       set({ savedPortfolioIds: current });
