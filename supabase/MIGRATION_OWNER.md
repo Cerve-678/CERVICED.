@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  follow-people session (feat/follow-people-decisions, #395) applying 20261109130000
 ```
 
 ### Applied 2026-11-08 (reschedule: 45 minutes to answer, both people told)
