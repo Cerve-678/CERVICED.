@@ -830,28 +830,29 @@ user's decisions:
   suggest it. It is on now so the feature works.
 - **Raised on the client screens (`feat/follow-people-find`, 2026-11-08).**
   These are not resolved:
-  - **Past bookings count straight away.** Once the notice is seen, the server
-    counts every completed booking the client has ever had, not just ones from
-    then on. The notice and the switch now say "including appointments you've
-    already had". A client with past bookings at launch will see the notice on
-    their next Home visit. Decide whether visits should count only from the
-    notice date instead.
   - **"Never which service you had" is literally true, but the provider's name
     can still say a lot** (see Special-category inference above). The copy
     used to say "never what you had done", which claimed more than this.
   - **Turning the switch on counts as the notice.** If someone turns Show where
     I go on in Your circle, that marks the notice seen, so their visits count.
     Without this, an under-18 who opts in later would never have visits shown.
-    Open questions: is the switch's own subtitle enough, and should a minor
-    turning it on get a confirm or the full notice first?
-  - **Blocks can't be undone in the app.** There is no blocked list yet
-    (`unblock_person` exists but nothing calls it). The block confirm now says
-    so. It needs either a Blocked list or a support route.
+    Under-18s now get a confirm first (decided 2026-11-08). Still open: is
+    the switch's own subtitle enough for adults?
   - **Dismissing the notice.** It is marked seen only when the client taps
     "Got it" or "Turn it off". Swiping it away hides it for that session.
   - **The "Findable by phone number" switch was hidden** until contacts
     matching was built. It is back on `feat/follow-people-contacts`, where
     contacts matching now exists. The server default is still on for adults.
+- **Decided by the user on 2026-11-08 (`feat/follow-people-decisions`,
+  migration `20261109130000`, APPLIED live 2026-11-09):**
+  - **Visits count only from the notice onwards.** Only appointments that end
+    after the client saw the notice (or turned Show where I go on) count. Past
+    bookings are never shared. The notice now says "From now on… Appointments
+    you've already had aren't shown." That is true now the migration is
+    applied.
+  - **Under-18s get a confirm** before Show where I go turns on.
+  - **Blocks can be undone** from a Blocked list in Your circle. The block
+    confirm now says where.
 - **Contacts matching built (`feat/follow-people-contacts`, 2026-11-08).**
   - iOS `NSContactsUsageDescription`, chosen by the user on 2026-11-08: "Find
     friends who are already on CERVICED. Your address book is never saved."

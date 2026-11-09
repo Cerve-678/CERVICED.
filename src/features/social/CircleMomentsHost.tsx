@@ -181,8 +181,9 @@ export function CircleMomentsHost({ userId, bookings, active }: Props) {
         <Text style={[ui.label, { color: P.sub }]}>SHOW WHERE I GO</Text>
         <Text style={[ui.sheetTitle, { color: P.text }]}>Your followers can see where you go</Text>
         <Text style={[ui.body, styles.body, { color: P.text }]}>
-          People who follow you will see your face on the providers you've booked, including appointments
-          you've already had, and how many times you've been. They never see which service you had.
+          From now on, people who follow you will see your face on the providers you book, and how many
+          times you've been. Appointments you've already had aren't shown. They never see which service
+          you had.
         </Text>
         <Text style={[ui.body, styles.body, { color: P.sub }]}>
           {!settings.isPrivate
