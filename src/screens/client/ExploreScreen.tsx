@@ -23,7 +23,7 @@ import { exploreScrollHandler, exploreScrollY, explorePillVisible, resetExploreP
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
-import { shuffle } from '../../utils/shuffle';
+import { roundRobinMix } from '../../utils/roundRobinMix';
 import { spreadApart, type SpreadRule } from '../../utils/spreadApart';
 import { pickTourCardId } from '../../utils/coachMarkTargets';
 import { mergeSavedExploreCards } from '../../utils/mergeSavedExploreCards';
@@ -95,7 +95,7 @@ const INITIAL_EXPLORE_ITEMS = 20;
 const EXPLORE_BATCH_SIZE = 18;
 const LOAD_MORE_THRESHOLD = 900;
 const LOAD_MORE_COOLDOWN_MS = 300;
-// The first load fetches a wide pool and shuffles all of it. Rows come back
+// The first load fetches a wide pool and mixes all of it. Rows come back
 // newest first, and providers upload in batches, so a first page of only the
 // 20 newest photos was routinely two or three providers' latest uploads —
 // the same handful of pictures at the top of Explore every time. The pool is
@@ -145,11 +145,17 @@ const EXPLORE_SPREAD: SpreadRule<PortfolioItem>[] = [
 // How much of the feed already on screen a new page is spread against.
 const EXPLORE_SPREAD_LOOKBACK = 8;
 
+// One card per provider per round, neighbouring providers in different
+// categories. See roundRobinMix.
+function mixExploreCards(cards: PortfolioItem[]): PortfolioItem[] {
+  return roundRobinMix(cards, card => card.providerSlug ?? card.providerId, card => card.category);
+}
+
 function interleaveDiscoverFeed(
   portfolioCards: PortfolioItem[],
   serviceCards: PortfolioItem[],
 ): PortfolioItem[] {
-  const bookable = shuffle(serviceCards);
+  const bookable = serviceCards;
   const total = portfolioCards.length + bookable.length;
   if (total === 0) return [];
 
@@ -556,19 +562,20 @@ const ExploreScreen = memo(() => {
 
     // Every getDiscover*/getPortfolioItems query is deterministically
     // ordered (created_at, rating, scraped_at — see databaseService.ts) so
-    // the DB always returns rows in the same order. Shuffling each source's
-    // own rows here, before interleaveDiscoverFeed mixes the two types
-    // together, is what actually randomizes the feed — without it the same
-    // provider's photos (or the same top-rated providers) reliably cluster/
-    // repeat in the same run every load. spreadApart then breaks up whatever
-    // still clumps — one provider's batch of uploads, one service's carousel
-    // photos, a run of one category (see EXPLORE_SPREAD).
+    // the DB always returns rows in the same order. Each source is mixed
+    // here (mixExploreCards) before interleaveDiscoverFeed puts the two types
+    // together: one photo per provider per round, in a random provider order
+    // each load, so every provider is on the first screen before anyone
+    // repeats. A plain shuffle gave a provider with 33 photos about a fifth
+    // of the top of the feed and one with two photos almost none of it.
+    // spreadApart then breaks up anything the interleave clumps (see
+    // EXPLORE_SPREAD).
     // Deduped across both sources before interleaving — the same photo
     // file can arrive from both (see dedupeByImageUri). Order matters:
     // portfolio cards are passed first so they win over a service photo
     // pointing at the same upload.
-    const portfolioCards = shuffle(portfolioData).map(mapDbPortfolioItem);
-    const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
+    const portfolioCards = mixExploreCards(portfolioData.map(mapDbPortfolioItem));
+    const serviceCards = mixExploreCards(serviceData.flatMap(mapDbServiceToCards));
     const deduped = dedupeByImageUri([...portfolioCards, ...serviceCards]);
     const keep = new Set(deduped.map(c => c.id));
     const feed = spreadApart(
@@ -632,8 +639,8 @@ const ExploreScreen = memo(() => {
         );
         // Shuffled and spread like the first page, and against the end of
         // what's already showing so the join doesn't clump either.
-        const portfolioCards = shuffle(portfolioData).map(mapDbPortfolioItem);
-        const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
+        const portfolioCards = mixExploreCards(portfolioData.map(mapDbPortfolioItem));
+        const serviceCards = mixExploreCards(serviceData.flatMap(mapDbServiceToCards));
         const nextCards = spreadApart(
           interleaveDiscoverFeed(portfolioCards, serviceCards)
             .filter(card => {
