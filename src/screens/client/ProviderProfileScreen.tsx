@@ -106,6 +106,7 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
@@ -421,6 +422,8 @@ interface ReviewsModalProps {
   providerName: string;
   adaptiveAccentColor: string;
   providerGradient: [string, string, ...string[]];
+  /** Branding → Card Shape. */
+  squareCards: boolean;
 }
 
 const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
@@ -431,6 +434,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
     providerName,
     adaptiveAccentColor,
     providerGradient,
+    squareCards,
   }) => {
     const allReviews = reviews;
 
@@ -497,7 +501,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
                 <BlurView
                   intensity={20}
                   tint="light"
-                  style={styles.modalReviewCard}
+                  style={[styles.modalReviewCard, squareCards && styles.squareCard]}
                 >
                   <LinearGradient
                     colors={["rgba(255,255,255,0.4)", "transparent"]}
@@ -1471,8 +1475,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
-  // Branding → Card Shape: square corners on the service cards and category
-  // pills, or the rounded look the profile has always had.
+  // Branding → Card Shape: square corners on every card on the profile (the
+  // service cards and category pills, the availability card, About, the
+  // sharing card and the reviews), or the rounded look it has always had.
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
@@ -3483,7 +3488,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // up after they're fully booked (process_follow_openings_alerts), their
       // offers and announcements, and — with a release day — each new month.
       return releaseDay != null
-        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their announcements and offers`
+        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)} at ${releaseTimeLabel(provider?.scheduleReleaseTime)}, when space opens up, and about their announcements and offers`
         : `Stay updated — you'll hear when ${fullName} has space open up, and about their announcements and offers`;
     } else {
       return providerIsBookmarked
@@ -3496,6 +3501,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     providerIsBookmarked,
     provider?.providerName,
     provider?.scheduleReleaseDay,
+    provider?.scheduleReleaseTime,
   ]);
 
   if (loading || !provider) {
@@ -3731,7 +3737,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             style={[
               styles.serviceItemCard,
               { backgroundColor: cardBg, borderColor: OP.border },
-              squareCards && styles.serviceItemCardSquare,
+              squareCards && styles.squareCard,
             ]}
           >
             <LinearGradient
@@ -4384,6 +4390,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerName={provider?.providerName ?? ""}
           adaptiveAccentColor={adaptiveAccentColor}
           providerGradient={provider?.gradient ?? OP.gradient}
+          squareCards={squareCards}
         />
 
         {/* Offers side panel */}
@@ -5247,7 +5254,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </View>
                     );
                   }
-                  const pillText = slotsPillText(provider.scheduleReleaseDay);
+                  const pillText = slotsPillText(provider.scheduleReleaseDay, provider.scheduleReleaseTime);
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every
@@ -5269,13 +5276,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       style={[
                         styles.slotsRow,
                         { backgroundColor: cardBg, borderColor: OP.border },
+                        squareCards && styles.squareCard,
                       ]}
                     >
                       <LinearGradient
                         colors={cardHighlightColors}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
-                        style={styles.slotsCardHighlight}
+                        style={[styles.slotsCardHighlight, squareCards && styles.squareCard]}
                       />
                       <Text style={[styles.slotsText, { color: OP.sub }]}>
                         {pillText}
@@ -5297,7 +5305,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     </BlurView>
                     {showInstagram ? (
                       <TouchableOpacity
-                        style={styles.instagramButtonOutside}
+                        style={[styles.instagramButtonOutside, squareCards && styles.squareCard]}
                         onPress={() => {
                           Haptics.selectionAsync().catch(() => {});
                           Linking.openURL(
@@ -5319,13 +5327,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           style={[
                             styles.instagramButtonSurface,
                             { backgroundColor: cardBg, borderColor: OP.border },
+                            squareCards && styles.squareCard,
                           ]}
                         >
                           <LinearGradient
                             colors={cardHighlightColors}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 0, y: 1 }}
-                            style={styles.slotsCardHighlight}
+                            style={[styles.slotsCardHighlight, squareCards && styles.squareCard]}
                           />
                           <Ionicons
                             name="logo-instagram"
@@ -5364,17 +5373,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 tokens={OP}
                 accent={adaptiveAccentColor}
                 cardBg={cardBg}
+                square={squareCards}
                 onError={showAlert}
               />
 
               {/* About / Policy tabbed card */}
-              <View ref={aboutCardRef} style={styles.aboutCardShadowWrap}>
+              <View ref={aboutCardRef} style={[styles.aboutCardShadowWrap, squareCards && styles.squareCard]}>
                 <BlurView
                   intensity={cardBlurIntensity}
                   tint={cardBlurTint}
                   style={[
                     styles.aboutCard,
                     { backgroundColor: cardBg, borderColor: OP.border },
+                    squareCards && styles.squareCard,
                     // Room under the last line for the policy button, so it
                     // never sits on top of the text.
                     policyPages.length > 0 && styles.aboutCardWithPolicyFab,
@@ -6427,7 +6438,7 @@ const styles = StyleSheet.create({
     elevation: 0,
     marginBottom: 12,
   },
-  serviceItemCardSquare: {
+  squareCard: {
     borderRadius: 0,
   },
   serviceCardBlur: {

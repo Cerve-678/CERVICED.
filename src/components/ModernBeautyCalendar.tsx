@@ -687,7 +687,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     // itself past the wall.
     const lastYmd = dateToYMD(last);
     if (!weekDays.some(day => day.dateString > lastYmd)) return null;
-    const next = nextReleaseMoment(horizon.schedule_release_day);
+    const next = nextReleaseMoment(horizon.schedule_release_day, new Date(), horizon.schedule_release_time);
     return `Dates after ${formatShortDayDate(last)} open on ${formatShortDayDate(next)} at ${formatTime12(next)}.`;
   })();
 

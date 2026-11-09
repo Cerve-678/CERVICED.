@@ -96,7 +96,7 @@ import {
   type PublicReviewRow,
 } from "../features/providers/reviewPresentation";
 export type { BookingReviewState } from "../features/bookings/reviewState";
-import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
+import { isReleaseTime, toReleaseDay, toReleaseTime, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -1394,6 +1394,7 @@ type ProviderProfileJoinRow = Omit<
   "services" | "specialties" | "automation_settings"
 > & {
   automation_schedule_release_day: number | null;
+  automation_schedule_release_time: string | null;
   automation_waitlist_enabled: boolean | null;
   services: ProviderProfileServiceJoin[] | null;
   provider_specialties: ProviderWithServices["specialties"] | null;
@@ -1441,6 +1442,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   online_consultations_available,
   cancellation_notice_hours,
   automation_schedule_release_day:automation_settings->scheduleReleaseDay,
+  automation_schedule_release_time:automation_settings->>scheduleReleaseTime,
   automation_waitlist_enabled:automation_settings->waitlistEnabled,
   accessibility_notes,
   languages_spoken,
@@ -1484,6 +1486,7 @@ const providerProfileRequestTokens = new Map<string, symbol>();
 function mapProviderProfileJoinRow(row: ProviderProfileJoinRow): ProviderWithServices {
   const {
     automation_schedule_release_day: scheduleReleaseDay,
+    automation_schedule_release_time: scheduleReleaseTime,
     automation_waitlist_enabled: waitlistEnabled,
     services: joinedServices,
     provider_specialties: providerSpecialties,
@@ -1493,6 +1496,7 @@ function mapProviderProfileJoinRow(row: ProviderProfileJoinRow): ProviderWithSer
     scheduleReleaseDay !== null || waitlistEnabled !== null
       ? {
           ...(scheduleReleaseDay !== null ? { scheduleReleaseDay } : {}),
+          ...(isReleaseTime(scheduleReleaseTime) ? { scheduleReleaseTime } : {}),
           ...(waitlistEnabled !== null ? { waitlistEnabled } : {}),
         }
       : null;
@@ -5195,16 +5199,18 @@ export async function getAvailabilityEmergencyPolicyRow(providerId: string): Pro
   return selectProviderColumns(providerId, EMERGENCY_POLICY_COLUMNS);
 }
 
-/** The two columns that decide how far ahead a provider can be booked —
- *  read together everywhere, since a release day overrides the window. */
+/** The columns that decide how far ahead a provider can be booked — read
+ *  together everywhere, since a release day (at its time) overrides the window. */
 const BOOKING_HORIZON_COLUMNS =
-  "booking_window_days, schedule_release_day:automation_settings->scheduleReleaseDay";
+  "booking_window_days, schedule_release_day:automation_settings->scheduleReleaseDay, schedule_release_time:automation_settings->>scheduleReleaseTime";
 
 export interface AvailabilityProviderSettingsRow {
   booking_window_days: number;
   /** automation_settings.scheduleReleaseDay — set = monthly release, which
    *  replaces booking_window_days. See utils/bookingHorizon. */
   schedule_release_day: number | null;
+  /** automation_settings.scheduleReleaseTime, 'HH:MM' UK time (9am default). */
+  schedule_release_time: string;
   slot_interval_mins: number;
   buffer_mins: number;
   min_booking_notice_hrs: number;
@@ -5281,7 +5287,11 @@ async function fetchAvailabilityProviderCore(providerId: string): Promise<{
     // The release day is a JSON value inside automation_settings — normalise it
     // to the number-or-null the row type promises.
     settings: settingsRow
-      ? { ...(settingsRow as unknown as AvailabilityProviderSettingsRow), schedule_release_day: toReleaseDay(settingsRow['schedule_release_day']) }
+      ? {
+          ...(settingsRow as unknown as AvailabilityProviderSettingsRow),
+          schedule_release_day: toReleaseDay(settingsRow['schedule_release_day']),
+          schedule_release_time: toReleaseTime(settingsRow['schedule_release_time']),
+        }
       : null,
     ...weeklyRows,
   };
@@ -5566,10 +5576,11 @@ export async function getProviderBookingHorizon(providerId: string): Promise<Boo
     .eq("id", providerId)
     .maybeSingle();
   if (error) throw error;
-  const row = data as { booking_window_days: number | null; schedule_release_day: unknown } | null;
+  const row = data as { booking_window_days: number | null; schedule_release_day: unknown; schedule_release_time: unknown } | null;
   return {
     booking_window_days: row?.booking_window_days ?? 60,
     schedule_release_day: toReleaseDay(row?.schedule_release_day),
+    schedule_release_time: toReleaseTime(row?.schedule_release_time),
   };
 }
 
@@ -8886,6 +8897,8 @@ export async function getProviderSchedulingConstraints(
   bookingWindowDays: number;
   /** Set = monthly release, which replaces bookingWindowDays. */
   scheduleReleaseDay: number | null;
+  /** 'HH:MM' UK time the release day opens next month. */
+  scheduleReleaseTime: string;
   minBookingNoticeHrs: number;
 }> {
   // Prefer the real UUID when the caller has one — exact display_name
@@ -8901,28 +8914,30 @@ export async function getProviderSchedulingConstraints(
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
     scheduleReleaseDay: toReleaseDay((data as any)?.schedule_release_day),
+    scheduleReleaseTime: toReleaseTime((data as any)?.schedule_release_time),
     minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,
   };
 }
 
 /**
- * The signed-in provider's own monthly release day (null = rolling window).
- * Lets a screen that edits it (Edit Profile) pick up a change made on the
- * other one (Scheduling & Availability) when it comes back into view.
- * Own record, so no has_gone_live filter. Same duplicate-row tie-break as
- * the provider lookup by user id above.
+ * The signed-in provider's own monthly release day (null = rolling window)
+ * and the time it opens. Lets a screen that edits them (Edit Profile) pick up
+ * a change made on the other one (Scheduling & Availability) when it comes
+ * back into view. Own record, so no has_gone_live filter. Same duplicate-row
+ * tie-break as the provider lookup by user id above.
  */
-export async function getMyProviderReleaseDay(userId: string): Promise<number | null> {
+export async function getMyProviderRelease(userId: string): Promise<{ day: number | null; time: string }> {
   const { data, error } = await supabase
     .from("providers")
-    .select("schedule_release_day:automation_settings->scheduleReleaseDay")
+    .select("schedule_release_day:automation_settings->scheduleReleaseDay, schedule_release_time:automation_settings->>scheduleReleaseTime")
     .eq("user_id", userId)
     .order("is_active", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return toReleaseDay((data as { schedule_release_day?: unknown } | null)?.schedule_release_day);
+  const row = data as { schedule_release_day?: unknown; schedule_release_time?: unknown } | null;
+  return { day: toReleaseDay(row?.schedule_release_day), time: toReleaseTime(row?.schedule_release_time) };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -9988,10 +10003,14 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
   background_image_url: string | null;
   profile_theme: string | null;
   brand_font: string | null;
+  logo_url: string | null;
 } | null> {
+  // The provider's own row, read by their own user id — Branding edits it, so
+  // there's no has_gone_live filter. logo_url is read only so Custom can offer
+  // colours from the logo.
   const { data, error } = await supabase
     .from("providers")
-    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font")
+    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font, logo_url")
     .eq("user_id", userId)
     .order("is_active", { ascending: false })
     .order("created_at", { ascending: true })
@@ -10005,6 +10024,7 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
     background_image_url: string | null;
     profile_theme: string | null;
     brand_font: string | null;
+    logo_url: string | null;
   };
 }
 

@@ -38,10 +38,12 @@ interface Props {
   tokens: ProviderThemeTokens;
   accent: string;
   cardBg: string;
+  /** Square corners instead of rounded (Branding → Card Shape). */
+  square?: boolean;
   onError: (title: string, message: string) => void;
 }
 
-export function ProviderSharingRow({ providerId, providerName, enabled, tokens: OP, accent, cardBg, onError }: Props) {
+export function ProviderSharingRow({ providerId, providerName, enabled, tokens: OP, accent, cardBg, square = false, onError }: Props) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
   // null until known, so the hint never claims who can see this on a guess.
@@ -122,7 +124,7 @@ export function ProviderSharingRow({ providerId, providerName, enabled, tokens: 
           : 'Send people who follow you their way.';
 
   return (
-    <View style={[styles.card, { backgroundColor: cardBg, borderColor: OP.border }]}>
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor: OP.border }, square && styles.cardSquare]}>
       <View style={styles.top}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.kicker, { color: OP.sub }]}>YOU'VE BEEN HERE</Text>
@@ -173,6 +175,7 @@ export function ProviderSharingRow({ providerId, providerName, enabled, tokens: 
 
 const styles = StyleSheet.create({
   card: { borderRadius: 18, borderWidth: 1, padding: 14, marginBottom: 14, gap: 10 },
+  cardSquare: { borderRadius: 0 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   kicker: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 1.6, marginBottom: 3 },
   body: { fontFamily: FONT_BODY, fontSize: 13, lineHeight: 18 },

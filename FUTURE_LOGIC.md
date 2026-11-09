@@ -978,15 +978,17 @@ shipped, and where it differs from the design below:
   `automation_settings.scheduleReleaseDay` set means monthly, and it replaces
   `booking_window_days` (which is kept, so clearing the day restores it).
 - **The horizon is computed from the clock, not stored** (deviation from
-  point 2 below). Before the Nth at 09:00 UTC: bookable to the end of this
+  point 2 below). Before the Nth at the release time (09:00 UTC until
+  2026-11-09; since then the provider's own time, UK time, 9am by default —
+  migration 20261109250000): bookable to the end of this
   month. From then: to the end of next month. A day past the month's end means
   its last day. Computing it means it can't fail to advance, which is the
   failure point 2 was guarding against. Server: `provider_last_bookable_date()`
   (used by `enforce_booking_bookability` and `get_services_availability`).
   App: `src/utils/bookingHorizon.ts` (used by every AvailabilityService horizon
   and Becca). Keep the two in step.
-- **The push is true when it's sent.** The cron still runs at 09:00 UTC, the
-  release minute, and `process_follow_schedule_release_nudges()` now only
+- **The push is true when it's sent.** The cron runs every five minutes
+  (was daily at 09:00 UTC, the old fixed release minute), and `process_follow_schedule_release_nudges()` now only
   sends once `provider_last_bookable_date()` reaches next month: "December has
   opened up with … Get booking now." (the user's wording). It skips providers
   who aren't live. A time-only change to an existing booking past the horizon

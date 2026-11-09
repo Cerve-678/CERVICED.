@@ -2,6 +2,7 @@
 // What the slots pill on a provider's profile says.
 
 import { ordinalSuffix } from './dateUtils';
+import { releaseTimeLabel } from './bookingHorizon';
 
 /**
  * A provider who publishes on a fixed day of the month says THAT. Everyone
@@ -13,8 +14,8 @@ import { ordinalSuffix } from './dateUtils';
  * Both answers come from the profile row itself, so the pill never waits on
  * a slower fetch.
  */
-export function slotsPillText(scheduleReleaseDay: number | null): string {
+export function slotsPillText(scheduleReleaseDay: number | null, scheduleReleaseTime?: string | null): string {
   return scheduleReleaseDay != null
-    ? `New slots drop on the ${ordinalSuffix(scheduleReleaseDay)}`
+    ? `New slots drop on the ${ordinalSuffix(scheduleReleaseDay)} at ${releaseTimeLabel(scheduleReleaseTime)}`
     : 'Stay updated';
 }
