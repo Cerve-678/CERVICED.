@@ -5,7 +5,7 @@
 
 #generated
 
-**3531 functions** across **502 files**.
+**3532 functions** across **502 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -305,7 +305,7 @@
 - `openProviderProfileLink.ts` — **openProviderProfileLink**
 - `rootNavigate.ts` — **navigateAfterDismiss** · **navigateNested** · **navigateTab** · **openProviderBookingOnCalendar**
 - `RootNavigation.tsx` — receive · RootNavigation
-- `settingsTabBar.ts` — **settingsStackHidesTabBar** · **useSettingsStackHidesTabBar**
+- `tabBarVisibility.ts` — **stackHidesTabBar** · **tabStackRouteNames** · **useStackHidesTabBar**
 - `useHideTabBar.ts` — **useHideTabBar**
 
 ### `src/navigation/client/` (1)
