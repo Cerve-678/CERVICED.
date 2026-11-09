@@ -5,9 +5,9 @@
 
 #generated
 
-**3539 functions** across **503 files**.
+**3553 functions** across **505 files**.
 
-### `src/components/` (64)
+### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -24,6 +24,7 @@
 - `CircleStack.tsx` — CircleSheet · CircleStackInner · Face · label · layout · onClose · onOpen
 - `CityMultiSelect.tsx` — add · addArea · addCounty · addOther · **CityMultiSelect** · close · filtered · placeMatches · remove · toggleExpand · toggleWholeCity
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goBack · goToStep · halo · skip · tap
+- `ColourWheelPicker.tsx` — ColourWheelPicker · commit · onBar · onHexText · onSquare
 - `DynamicText.tsx` — **DynamicText**
 - `EmergencyBookingPrompt.tsx` — **EmergencyBookingPrompt** · handleConfirm · reasonText
 - `FocusAwareStatusBar.tsx` — **FocusAwareStatusBar** · reassert
@@ -53,7 +54,7 @@
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · BookingPayment · cancelRefundBooking · chooseHoldDays · date · EmptyState · feeStatusLabel · handleRefunded · IconCard · load · loadMore · money · Notice · onRefundHold · openStripe · PaymentAction · payoutLabel · ProviderStripePayments · StatusBadge · tipGroups · tipStatusLabel
-- `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · ThemeSwatch · unlockedFirst
+- `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
 - `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
@@ -212,7 +213,7 @@
 - `calendarViewPreference.ts` — listener · **loadCalendarView** · **nextCalendarView** · **parseCalendarView** · save · **saveCalendarView** · **useCalendarViewPreference**
 - `tipPresentation.ts` — **formatTipAmount** · pounds · **providerTipNote**
 
-### `src/features/provider-registration/` (19)
+### `src/features/provider-registration/` (20)
 - `AddOnEditorModal.tsx` — **AddOnEditorModal** · categoryNames · handleDelete · handleSave · listNames · placementHint · setCategoryPicked · toggleCategory · toggleService
 - `AddOnGuide.tsx` — **AddOnGuide**
 - `addOnLibrary.ts` — **addOnAppliesTo** · **addOnKeysForSavedService** · **applyRuleToServices** · **buildAddOnSaveItems** · **defaultAddOnKeysForCategory** · **describeAddOnRule** · joinNames · **libraryItemFromRow** · mapServices · **newAddOnKey** · **removeAddOnFromServices** · **removeCategoryFromLibrary** · **renameCategoryInLibrary** · **ruleCovers** · **servicesWithAddOn** · **setAddOnOnService** · **suggestAddOns** · **validateAddOn** · withKey
@@ -224,6 +225,7 @@
 - `InfoRegPager.tsx` — handleMomentumEnd · **InfoRegPager** · recordEnd
 - `infoRegSections.ts` — **infoRegSectionIndex**
 - `LogoCardFramer.tsx` — animateTo · **LogoCardFramer**
+- `photoColours.ts` — base64ToBytes · **coloursFromPhoto** · toLocalUri
 - `RequiredLabel.tsx` — **RequiredLabel**
 - `SectionHeader.tsx` — **SectionHeader**
 - `ServiceAddOnsField.tsx` — all · create · removePending · reuseExisting · ruleNote · **ServiceAddOnsField** · suggestions · toggle
@@ -374,7 +376,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · handleImageCropped · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
@@ -483,7 +485,7 @@
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `clientArea.ts` — **serviceLocationsFromArea** · **townOfArea**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
-- `color.ts` — **toArgbHex**
+- `color.ts` — **hexToHsv** · **hsvToHex** · **paletteFromPixels** · **parseHexInput** · **toArgbHex**
 - `cropRect.ts` — clamp · **fitContain** · **moveCrop** · **moveHandle** · **toImageCrop**
 - `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDayOrdinalShortMonth** · **formatDayRangeShortMonth** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `dayTimelineRange.ts` — **assignOverlapColumns** · closeGroup · **resolveTimelineRange**

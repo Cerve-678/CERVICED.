@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,27 +8,14 @@ import {
   SHEET_OPTIONS,
   THEME_COLLECTIONS,
 } from '../constants/providerThemes';
+import ColourWheelPicker from './ColourWheelPicker';
 
-// Swatch options for the Custom colour set builder, drawn from the same
-// families as the collections so a home-made set sits as well as a preset.
-// A colour saved from the older, brighter lists still shows on the profile;
-// it just isn't offered here any more.
-// Backdrop = hero colour behind the profile top (becomes the gradient).
-export const CUSTOM_BACKDROP_OPTIONS = [
-  '#D8C6AF', '#C9B2A3', '#9C8F84', '#E6B3B9', '#B9CFE3',
-  '#B4807A', '#7F9A6E', '#D9703A', '#A92536', '#2747A0',
-  '#1D4A3C', '#1D2C52', '#3C1F3E', '#113A41', '#2D2D2D',
-];
-// Card tones — includes the beige (#F1EAE2).
-export const CUSTOM_CARD_OPTIONS = [
-  '#FFFFFF', '#FFFDFB', '#F1EAE2', '#F9E9EE', '#FDF5F7',
-  '#FCF8F0', '#F7FAF3', '#F9F6FD', '#F6FAFC',
-];
-export const CUSTOM_ACCENT_OPTIONS = [
-  '#7A5A43', '#8C5647', '#4A403A', '#23262E', '#6A3D3A',
-  '#3A211C', '#A98235', '#8A6438', '#B9643F', '#D9714F',
-  '#B8436A', '#B04A68', '#66805F', '#2C3527', '#2C5AA0',
-  '#1E2A4A',
+// The three colours Custom builds a set from, in the order they're offered.
+type CustomPart = 'accent' | 'card' | 'backdrop';
+const CUSTOM_PARTS: { key: CustomPart; label: string }[] = [
+  { key: 'accent', label: 'Accent' },
+  { key: 'card', label: 'Card' },
+  { key: 'backdrop', label: 'Backdrop' },
 ];
 
 export interface ThemeSelection {
@@ -52,6 +39,15 @@ interface ProviderThemePickerProps {
    *  and call onLockedPress instead. Leave out for every option. */
   unlockedThemes?: readonly string[] | undefined;
   onLockedPress?: () => void;
+  /** Colours found in the provider's own logo and background photo, offered
+   *  as one-tap swatches in Custom. */
+  photoColours?: readonly string[];
+  photoColoursLoading?: boolean;
+  /** Pick any photo to take colours from. Leave out to hide the button. */
+  onChoosePhoto?: () => void;
+  /** Forwarded from the colour square/bar, so the screen can stop scrolling
+   *  while a finger drags on them. */
+  onColourDraggingChange?: (dragging: boolean) => void;
 }
 
 /** One theme option's swatch: a small gradient chip (the real backdrop blend)
@@ -79,7 +75,9 @@ const ThemeSwatch: React.FC<{ accent: string; gradient: [string, string]; border
 
 const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
   value, onChange, onColorsResolved, textColor, subColor, borderColor, sepColor, unlockedThemes, onLockedPress,
+  photoColours = [], photoColoursLoading = false, onChoosePhoto, onColourDraggingChange,
 }) => {
+  const [editingPart, setEditingPart] = useState<CustomPart>('accent');
   const { themeChoice, customBackdrop, customCard, customAccent, sheetColor } = value;
   const isUnlocked = (key: string) => !unlockedThemes || unlockedThemes.includes(key);
   const customLocked = !!unlockedThemes;
@@ -192,55 +190,87 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
         </View>
       </View>
 
-      {/* Custom builder */}
-      {themeChoice === 'custom' && !customLocked && (
-        <View style={[styles.customPanel, { borderTopColor: sepColor }]}>
-          <Text style={[styles.rowLabel, { color: subColor }]}>ACCENT</Text>
-          <View style={styles.swatchRow}>
-            {CUSTOM_ACCENT_OPTIONS.map(c => (
-              <TouchableOpacity
-                key={`acc-${c}`}
-                onPress={() => select({ customAccent: c }, { accent: c, backdrop: customBackdrop })}
-                style={[
-                  styles.swatch,
-                  { backgroundColor: c, borderColor },
-                  customAccent === c && { borderColor: textColor, borderWidth: 2.5 },
-                ]}
-              />
-            ))}
-          </View>
+      {/* Custom builder: pick which of the three colours to set, then set it
+          from the provider's own photos, the shade square and hue bar, or a
+          typed hex code. */}
+      {themeChoice === 'custom' && !customLocked && (() => {
+        const partColour = { accent: customAccent, card: customCard, backdrop: customBackdrop };
+        const setPart = (hex: string) => {
+          if (editingPart === 'accent') onChange({ ...value, customAccent: hex });
+          else if (editingPart === 'card') onChange({ ...value, customCard: hex });
+          else onChange({ ...value, customBackdrop: hex });
+          onColorsResolved?.({
+            accent: editingPart === 'accent' ? hex : customAccent,
+            backdrop: editingPart === 'backdrop' ? hex : customBackdrop,
+          });
+        };
+        return (
+          <View style={[styles.customPanel, { borderTopColor: sepColor }]}>
+            <View style={styles.partRow}>
+              {CUSTOM_PARTS.map(part => {
+                const active = editingPart === part.key;
+                return (
+                  <TouchableOpacity
+                    key={part.key}
+                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setEditingPart(part.key); }}
+                    style={[styles.partChip, { borderColor: active ? textColor : borderColor }, active && styles.partChipOn]}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`Edit ${part.label} colour`}
+                  >
+                    <View style={[styles.partDot, { backgroundColor: partColour[part.key], borderColor }]} />
+                    <Text style={[styles.partLabel, { color: active ? textColor : subColor }]}>{part.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-          <Text style={[styles.rowLabel, { color: subColor }]}>CARD COLOUR</Text>
-          <View style={styles.swatchRow}>
-            {CUSTOM_CARD_OPTIONS.map(c => (
-              <TouchableOpacity
-                key={`card-${c}`}
-                onPress={() => select({ customCard: c }, { accent: customAccent, backdrop: customBackdrop })}
-                style={[
-                  styles.swatch,
-                  { backgroundColor: c, borderColor },
-                  customCard === c && { borderColor: customAccent, borderWidth: 2.5 },
-                ]}
-              />
-            ))}
-          </View>
+            {(photoColours.length > 0 || photoColoursLoading || onChoosePhoto) && (
+              <>
+                <Text style={[styles.rowLabel, { color: subColor }]}>FROM YOUR PHOTOS</Text>
+                <View style={styles.swatchRow}>
+                  {photoColours.map(c => (
+                    <TouchableOpacity
+                      key={`photo-${c}`}
+                      onPress={() => { Haptics.selectionAsync().catch(() => {}); setPart(c); }}
+                      style={[
+                        styles.swatch,
+                        { backgroundColor: c, borderColor },
+                        partColour[editingPart] === c && { borderColor: textColor, borderWidth: 2.5 },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Use ${c} from your photos`}
+                    />
+                  ))}
+                  {photoColoursLoading && <ActivityIndicator size="small" color={subColor} style={styles.swatchSpinner} />}
+                  {onChoosePhoto && (
+                    <TouchableOpacity
+                      onPress={() => { Haptics.selectionAsync().catch(() => {}); onChoosePhoto(); }}
+                      style={[styles.choosePhoto, { borderColor }]}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose a photo to take colours from"
+                    >
+                      <Ionicons name="image-outline" size={14} color={textColor} />
+                      <Text style={[styles.choosePhotoText, { color: textColor }]}>Choose a photo</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            )}
 
-          <Text style={[styles.rowLabel, { color: subColor }]}>BACKDROP</Text>
-          <View style={styles.swatchRow}>
-            {CUSTOM_BACKDROP_OPTIONS.map(c => (
-              <TouchableOpacity
-                key={`bg-${c}`}
-                onPress={() => select({ customBackdrop: c }, { accent: customAccent, backdrop: c })}
-                style={[
-                  styles.swatch,
-                  { backgroundColor: c, borderColor },
-                  customBackdrop === c && { borderColor: customAccent, borderWidth: 2.5 },
-                ]}
-              />
-            ))}
+            <ColourWheelPicker
+              value={partColour[editingPart]}
+              onChange={setPart}
+              onDraggingChange={onColourDraggingChange}
+              textColor={textColor}
+              subColor={subColor}
+              borderColor={borderColor}
+            />
           </View>
-        </View>
-      )}
+        );
+      })()}
 
       {/* Content-area colour (the page behind the cards) */}
       <View style={[styles.customPanel, { borderTopColor: sepColor }]}>
@@ -357,6 +387,48 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 8,
+  },
+  partRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  partChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  partChipOn: { borderWidth: 2 },
+  partDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  partLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  swatchSpinner: { marginHorizontal: 6 },
+  choosePhoto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  choosePhotoText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 12,
   },
   swatch: {
     width: 34,
