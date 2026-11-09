@@ -45,6 +45,9 @@ export interface FolderPaperRect {
   width: number;
   height: number;
   rotate: number;
+  /** Corner radius and white border, so the flying copy starts identical. */
+  radius: number;
+  border: number;
 }
 
 export interface CollectionFolderPhoto {
@@ -183,6 +186,8 @@ export const CollectionFolder = memo(function CollectionFolder({
           width: PAPER_W * scale,
           height: PAPER_H * scale,
           rotate: pos.rotate,
+          radius: 10 * scale,
+          border: Math.max(2, 3 * scale),
         };
       });
       onPress(papers.reverse());

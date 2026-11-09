@@ -57,7 +57,7 @@ describe('client screen performance contracts', () => {
     expect(source).toContain('shownFavouriteItems.slice(0, favouritesVisibleCount)');
     expect(source).toContain('.filter(i => i.aspectRatioIsFallback)');
     expect(source).toContain('data={visiblePortfolioItems}');
-    expect(cardSource).toContain('const shouldAnimate = index < 10');
+    expect(cardSource).toContain('const shouldAnimate = entrance && index < 10');
   });
 
   it('records only a settled Search query, not every keystroke', () => {
