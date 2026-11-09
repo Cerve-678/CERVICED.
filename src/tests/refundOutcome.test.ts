@@ -19,6 +19,16 @@ describe('describeRefundOutcome', () => {
     expect(done.providerStatus).toBe('Refund issued · £85.00');
   });
 
+  it("never counts the platform fee in the provider's refund badge", () => {
+    // Full refund: the client got £88.00 back, £3.00 of it the platform fee.
+    const full = describeRefundOutcome({ ...base, paymentStatus: PaymentStatus.REFUNDED, refundedAmount: 88, amountPaid: 88, serviceCharge: 3 }, 24)!;
+    expect(full.message).toBe('£88.00 refunded to you. Banks usually take 5–10 working days to show it.');
+    expect(full.providerStatus).toBe('Refund issued · £85.00');
+    // Partial refund comes out of the share only, so it shows as is.
+    const partial = describeRefundOutcome({ ...base, paymentStatus: PaymentStatus.PARTIALLY_REFUNDED, refundedAmount: 20, amountPaid: 88, serviceCharge: 3 }, 24)!;
+    expect(partial.providerStatus).toBe('Refund issued · £20.00');
+  });
+
   it('keeps the refund issued tag while the amount is refreshing', () => {
     const outcome = describeRefundOutcome({ ...base, paymentStatus: PaymentStatus.REFUNDED, refundedAmount: 0 }, 24)!;
     expect(outcome.providerStatus).toBe('Refund issued');
