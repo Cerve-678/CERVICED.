@@ -37,6 +37,9 @@ interface Props {
   onDone: () => void;
   /** 3 opens straight on the suggestions ("Picked for you" after setup). */
   startStep?: Step | undefined;
+  /** Filled with this flow's back step, so a back-swipe on the screen around
+   *  it does what the back button does: the previous step, then out. */
+  backRef?: React.MutableRefObject<(() => void) | null> | undefined;
 }
 
 export type Step = 1 | 2 | 3;
@@ -44,13 +47,15 @@ const STYLES: ProtectiveStyle[] = ['braids', 'twists', 'locs', 'wigs_weaves'];
 const DEFAULT_WEAR_WEEKS = 6;
 const MAX_EVENTS = 3;
 
-export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props) {
+export function SetupFlow({ profile, state, onClose, onDone, startStep, backRef }: Props) {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const S = useMemo(() => semanticColors(isDarkMode), [isDarkMode]);
 
   const [step, setStep] = useState<Step>(startStep ?? 1);
+  const goBack = () => { if (step === 1) onClose(); else setStep((step - 1) as Step); };
+  if (backRef) backRef.current = goBack;
   const [style, setStyle] = useState<ProtectiveStyle | null>(state.settings?.protectiveStyle ?? null);
   const [wearWeeks, setWearWeeks] = useState(state.settings?.protectiveWearWeeks ?? DEFAULT_WEAR_WEEKS);
   const [weeksIn, setWeeksIn] = useState<number | null>(null);
@@ -150,7 +155,7 @@ export function SetupFlow({ profile, state, onClose, onDone, startStep }: Props)
     <View style={styles.header}>
       <TouchableOpacity
         style={[styles.circ, { backgroundColor: P.card, borderColor: P.border }]}
-        onPress={() => { hapticLight(); if (step === 1) onClose(); else setStep((step - 1) as Step); }}
+        onPress={() => { hapticLight(); goBack(); }}
         activeOpacity={0.5}
         accessibilityRole="button"
         accessibilityLabel={t('maintenance.back')}

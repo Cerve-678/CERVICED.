@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-09 (Explore collections)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110100000 | `explore_collections` | **APPLIED 2026-11-09** on the user's go-ahead ("apply and merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261109260000` (blank_provider_cannot_go_live, applied by a peer meanwhile; touches neither `users.saved_portfolio` nor `delete_client_profile`); nothing higher on any open PR. Lock taken on `feat/explore-collections`. Forced-rollback dry run twice first (owner-only reads, unsaved id refused, un-heart prunes, anon no access). md5 guard on `delete_client_profile()` matched (`b2d7007a…`). Adds `explore_collections` + `explore_collection_items` (RLS on, 7 owner-only policies; an item must be in the owner's `saved_portfolio`; `authenticated` can UPDATE only `name`/`color`), the cap/trim trigger (50 per account, advisory lock), and `users_saved_portfolio_prunes_collections`. Verified live: version present (now live max); both tables RLS on; anon has no SELECT; nobody can EXECUTE the prune function; `delete_client_profile()` new md5 `99855999…` with the one added `DELETE FROM public.explore_collections` line. Written on `feat/explore-collections`. |
+
 ### Applied 2026-11-09 (release time)
 
 | Authored version | Name | Status |
