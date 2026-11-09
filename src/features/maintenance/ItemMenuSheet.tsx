@@ -12,7 +12,7 @@ import type { AppTheme } from '../../constants/theme';
 import { MAINTENANCE_MAX_WEEKS, MAINTENANCE_MIN_WEEKS } from '../../constants/maintenanceServiceTypes';
 import type { MaintenanceItem } from '../../types/maintenance';
 import type { MaintenanceItemPatch } from '../../services/databaseService';
-import { snoozedDueOn } from './presentation';
+import { addWeeksYMD, doneOutcome, snoozedDueOn } from './presentation';
 import type { TranslationKey, TranslationParams } from '../../i18n';
 import { dateToYMD, formatShortDayDate, toLocalDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -31,12 +31,6 @@ interface Props {
   onClose: () => void;
   onUpdate: (id: string, patch: MaintenanceItemPatch) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-}
-
-function addWeeksYMD(fromYMD: string, weeks: number): string {
-  const d = toLocalDate(fromYMD);
-  d.setDate(d.getDate() + weeks * 7);
-  return dateToYMD(d);
 }
 
 export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Props) {
@@ -101,12 +95,9 @@ export function ItemMenuSheet({ item, P, S, t, onClose, onUpdate, onDelete }: Pr
   }, t('maintenance.error.save'));
 
   const markDone = () => run(async () => {
-    if (repeating) {
-      await onUpdate(item.id, { lastDoneOn: today, dueOn: addWeeksYMD(today, item.repeatWeeks!) });
-    } else {
-      // A one-off that's done has nothing left to remind about.
-      await onDelete(item.id);
-    }
+    const outcome = doneOutcome(item, today);
+    if (outcome.kind === 'update') await onUpdate(item.id, outcome.patch);
+    else await onDelete(item.id);
   }, t('maintenance.error.save'));
 
   const onPickDate = (event: DateTimePickerEvent, date?: Date) => {
