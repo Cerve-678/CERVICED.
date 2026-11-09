@@ -7,6 +7,7 @@ import {
   buildAddOnSaveItems,
   defaultAddOnKeysForCategory,
   describeAddOnRule,
+  mergeAddOns,
   removeAddOnFromServices,
   removeCategoryFromLibrary,
   renameCategoryInLibrary,
@@ -233,5 +234,18 @@ describe('universal add-ons migration', () => {
   it('only touches a service\'s add-ons for an older app that still sends them', () => {
     expect(sql).toContain("IF v_svc ? 'add_ons' THEN");
     expect(sql).not.toContain('v_kept_addon_ids');
+  });
+});
+
+describe('mergeAddOns', () => {
+  it('adds new add-ons once, even when they are already in the library', () => {
+    const saved = item({ key: 'a1', name: 'Lash removal' });
+    const made = item({ key: 'new:1-1', name: 'Bottom lashes' });
+    // The render after a service saves: the library has the editor's add-on
+    // and the editor still lists it as pending.
+    expect(mergeAddOns([saved, made], [made]).map(a => a.key)).toEqual(['a1', 'new:1-1']);
+    // A double tap on Save appending the same add-ons again.
+    expect(mergeAddOns(mergeAddOns([saved], [made]), [made]).map(a => a.key)).toEqual(['a1', 'new:1-1']);
+    expect(mergeAddOns([saved], [made]).map(a => a.key)).toEqual(['a1', 'new:1-1']);
   });
 });
