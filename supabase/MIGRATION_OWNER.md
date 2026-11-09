@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  cerviced-44 (feat/explore-collections) — 20261110100000_explore_collections
 ```
+
+### Written 2026-11-09, NOT applied (Explore collections)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110100000 | `explore_collections` | **NOT APPLIED.** Waiting for the user's go-ahead. Frontier when written: live max `20261109240000`; nothing higher on any open PR. Adds `explore_collections` + `explore_collection_items` (owner-only RLS; an item must be in the owner's `saved_portfolio`), a trigger on `users.saved_portfolio` that takes un-hearted photos out of every collection, and one `DELETE` line in `delete_client_profile()` (md5-guarded, `b2d7007a…`). Written on `feat/explore-collections`. |
 
 ### Applied 2026-11-09 (accounts you created, admin)
 
