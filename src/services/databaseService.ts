@@ -16,6 +16,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
+import type { ImportedProfile, ProfileImportFile } from '../types/profileImport';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
@@ -11695,15 +11696,37 @@ export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unkn
   return data;
 }
 
-export async function extractProviderProfileFromUrl(
-  url: string,
-  sourceType: string,
-): Promise<unknown> {
-  const { data, error } = await supabase.functions.invoke("extract-provider-profile", {
-    body: { url, sourceType },
-  });
-  if (error) throw error;
-  return data;
+/** extract-provider-profile said no for a reason written to be shown as-is
+ *  ("Instagram doesn't let apps read its pages…"). */
+export class ProfileImportRefused extends Error {}
+
+async function invokeProfileImport(body: { url: string } | { files: ProfileImportFile[] }): Promise<ImportedProfile> {
+  const { data, error } = await supabase.functions.invoke('extract-provider-profile', { body });
+  if (error) {
+    // Every body the function writes itself carries `error` and is written to
+    // be shown. A gateway failure (timeout, crash) has a different shape and
+    // falls through to the caller's generic copy.
+    const res = (error as { context?: Response }).context;
+    if (res) {
+      const parsed = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof parsed?.error === 'string' && parsed.error) throw new ProfileImportRefused(parsed.error);
+    }
+    throw error;
+  }
+  const extracted = (data as { extracted?: ImportedProfile } | null)?.extracted;
+  if (!extracted || typeof extracted !== 'object') throw new Error('extract-provider-profile returned nothing.');
+  return extracted;
+}
+
+/** Reads a business's details, services, add-ons and policies from a web page,
+ *  or a link straight to a PDF or image. Nothing is saved. */
+export function readProfileFromLink(url: string): Promise<ImportedProfile> {
+  return invokeProfileImport({ url });
+}
+
+/** The same, from photos/screenshots/PDFs picked on the phone. */
+export function readProfileFromFiles(files: ProfileImportFile[]): Promise<ImportedProfile> {
+  return invokeProfileImport({ files });
 }
 
 // ── Provider registration persistence ──────────────────────────────────────

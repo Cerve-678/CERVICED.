@@ -18,6 +18,10 @@ verify_jwt = true
 [functions.admin-create-account]
 verify_jwt = true
 
+# Info Reg's Import a price list. Checks the caller itself too.
+[functions.extract-provider-profile]
+verify_jwt = true
+
 # Called by the database (queue_booking_confirmation_email) with the
 # service_role key, never by a user session — the function checks for that key
 # explicitly on top of this.

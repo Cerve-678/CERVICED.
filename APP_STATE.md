@@ -104,7 +104,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Forgot/reset password | ✅ | `ForgotPasswordScreen`, `ResetPasswordOTPScreen`, `NewPasswordScreen` |
 | Session persistence | ✅ | Envelope-encrypted via `largeSecureStore.ts` (not plaintext AsyncStorage — hardened Aug 2026) |
 | Provider claim flow | ✅ | `src/screens/auth/ClaimProviderScreen.tsx`, edge function `request-claim-verification` |
-| Provider Acuity Scheduling import | ✅ | `src/services/acuityTransferService.ts` — imports services + pricing from an Acuity link (not a generic provider ID), does not import availability hours |
+| Import a price list (Info Reg → Services) | ✅ built, needs `ANTHROPIC_API_KEY` | Screenshots/photos (long ones sliced), a PDF, or any link → `extract-provider-profile` (Claude Opus 5.5) reads details, services, add-ons and policies → "Here's what we found" review → fills only blanks / adds what's missing (`features/provider-registration/profileImport.ts`). Never sets fees, penalties or deposits; lists them for a person to set. Nothing saved until Save & Publish. Picking a PDF needs a build with `expo-document-picker`. Replaced the Acuity-only import, whose box was never reachable. |
 | Age verification (16+) | 🚧 | Enforced in sign-up per `LEGAL-COMPLIANCE-NOTES.md`; that file flags open legal questions around this — not a resolved item |
 
 ### Provider setup

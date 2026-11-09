@@ -905,9 +905,9 @@ decision only means something on the provider side, so scope it there first.
 
 ### Why it's worth building
 
-The app already has half of it. `acuityTransferService.ts` + the
-`extract-provider-profile` edge function import a provider's services from an
-Acuity link, and `ClaimProviderScreen` exists for unclaimed listings. Both
+The app already has half of it. Info Reg's Import box (`features/provider-registration/profileImport.ts`) + the
+`extract-provider-profile` edge function import a provider's services, add-ons and policies from a
+link, screenshots or a PDF, and `ClaimProviderScreen` exists for unclaimed listings. Both
 assume the provider then *migrates onto* Cerviced bookings. A provider who
 wants to keep their existing system has no honest option today — they either
 fake availability they won't honour, or they don't sign up. The second is
@@ -960,7 +960,7 @@ questions — several of which (availability, services) are only meaningful in
 
 ### Related
 
-- `acuityTransferService.ts` — existing import-from-Acuity path.
+- `features/provider-registration/profileImport.ts` + `extract-provider-profile` — existing import-from-a-price-list path.
 - Go-live gate: auto-memory `go-live-gate-is-three-things-not-four`.
 - `hat-switch-dob-is-the-client-hat-marker` — why this must be a real column.
 
