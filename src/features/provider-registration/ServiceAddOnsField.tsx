@@ -11,6 +11,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, ty
 import { withAlpha } from '../../constants/providerThemes';
 import type { ProviderAddOnAppliesTo } from '../../types/database';
 import {
+  mergeAddOns,
   newAddOnKey,
   ruleCovers,
   setAddOnOnService,
@@ -68,7 +69,7 @@ export function ServiceAddOnsField({
   const [where, setWhere] = useState<ProviderAddOnAppliesTo>('services');
   const [error, setError] = useState<string | null>(null);
 
-  const all = useMemo(() => [...(library ?? []), ...pending], [library, pending]);
+  const all = useMemo(() => mergeAddOns(library ?? [], pending), [library, pending]);
   const suggestions = useMemo(() => suggestAddOns(all, name, tickedKeys), [all, name, tickedKeys]);
 
   if (!library) {

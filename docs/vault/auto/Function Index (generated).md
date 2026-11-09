@@ -5,7 +5,7 @@
 
 #generated
 
-**3539 functions** across **503 files**.
+**3540 functions** across **503 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -215,7 +215,7 @@
 ### `src/features/provider-registration/` (19)
 - `AddOnEditorModal.tsx` — **AddOnEditorModal** · categoryNames · handleDelete · handleSave · listNames · placementHint · setCategoryPicked · toggleCategory · toggleService
 - `AddOnGuide.tsx` — **AddOnGuide**
-- `addOnLibrary.ts` — **addOnAppliesTo** · **addOnKeysForSavedService** · **applyRuleToServices** · **buildAddOnSaveItems** · **defaultAddOnKeysForCategory** · **describeAddOnRule** · joinNames · **libraryItemFromRow** · mapServices · **newAddOnKey** · **removeAddOnFromServices** · **removeCategoryFromLibrary** · **renameCategoryInLibrary** · **ruleCovers** · **servicesWithAddOn** · **setAddOnOnService** · **suggestAddOns** · **validateAddOn** · withKey
+- `addOnLibrary.ts` — **addOnAppliesTo** · **addOnKeysForSavedService** · **applyRuleToServices** · **buildAddOnSaveItems** · **defaultAddOnKeysForCategory** · **describeAddOnRule** · joinNames · **libraryItemFromRow** · mapServices · **mergeAddOns** · **newAddOnKey** · **removeAddOnFromServices** · **removeCategoryFromLibrary** · **renameCategoryInLibrary** · **ruleCovers** · **servicesWithAddOn** · **setAddOnOnService** · **suggestAddOns** · **validateAddOn** · withKey
 - `AddOnLibrarySection.tsx` — **AddOnLibrarySection**
 - `addOnUi.tsx` — **AddOnChip** · **addOnMetaLine** · **ExtraTimeChips** · **formatAddOnPrice** · **tapLight** · **tapMedium** · **tapSelect** · **tapWarn** · **TickBox**
 - `BufferPicker.tsx` — **BufferPicker**
@@ -436,7 +436,7 @@
 - `ImageLoader.ts` — **useImageLoader**
 - `notificationTapHandler.ts` — **handleNotificationTap** · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
-- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **patchCachedProviderBranding** · **providerRowToRegistrationData** · readLocalFileBytes · **saveProviderPolicies** · **saveProviderToSupabase** · shrinkImageForUpload · sniffImageType · **uploadToStorage** · used
+- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · **minutesToServiceDuration** · **patchCachedProviderBranding** · **providerRowToRegistrationData** · readLocalFileBytes · **saveProviderPolicies** · **saveProviderToSupabase** · **serviceDurationToMinutes** · shrinkImageForUpload · sniffImageType · **uploadToStorage** · used
 - `pushNotificationService.ts` — claimExpoGoMirror · **registerForPushNotifications** · registerPushToken · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 - `tourService.ts` — readLocalVersion · **recordTourSeen** · **resolveTourForUser**
