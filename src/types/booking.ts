@@ -324,6 +324,9 @@ export interface ConfirmedBooking {
     // time-of-day. See applyRescheduleRequestRow() in bookingService.ts.
     requestedTimes?: string[] | undefined;
     requestedAt?: string | undefined;
+    requestedBy?: 'user' | 'provider' | undefined;
+    cancelIfDeclined?: boolean | undefined;
+    providerNote?: string | undefined;
     providerAvailableDates?: AvailableDate[] | undefined;
     providerRespondedAt?: string | undefined;
     rescheduleCount?: number | undefined;

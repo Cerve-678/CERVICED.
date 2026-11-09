@@ -22,6 +22,7 @@ import {
 } from '../../services/databaseService';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import { formatLongDate, formatTime12, formatTime12Safe, dateToYMD } from '../../utils/dateUtils';
+import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
 import {
   rescheduleProbeStart, rescheduleCandidateDates, rescheduleWindowLabel, rescheduleRequestToken,
   RESCHEDULE_MAX_DATES,
@@ -465,9 +466,12 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   const handleDecline = useCallback(() => {
     if (!booking) return;
     const groupSuffix = isGroupReschedule ? ` This applies to all ${groupSiblings.length} of your services with them.` : '';
+    const cancelsBooking = !isGroupReschedule && booking.rescheduleRequest?.cancelIfDeclined === true;
     showConfirm(
       'Decline These Times?',
-      `None of these will work? ${booking.providerName} will be notified and your original appointment time stays as-is.${groupSuffix}`,
+      cancelsBooking
+        ? `If you decline, this booking will be cancelled and any payment refunded in full. ${booking.providerName} will be notified.`
+        : `If you decline, your original appointment on ${formatDisplayDate(booking.bookingDate)} at ${formatTime12(booking.bookingTime)} stays booked. ${booking.providerName} will be notified.${groupSuffix}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -550,7 +554,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               ? `All ${groupSiblings.length} of your services with ${booking.providerName} have been rescheduled to ${formatDisplayDate(selectedDate!)}.`
               : hasProviderResponse
               ? `Your appointment with ${booking.providerName} has been rescheduled to ${formatDisplayDate(selectedDate!)} at ${formatTime12(selectedTime!)}.`
-              : `Your reschedule request has been sent to ${booking.providerName}. You'll be notified when they respond with available times.`}
+              : `Your reschedule request has been sent to ${booking.providerName}. They have ${RESCHEDULE_REPLY_MINUTES} minutes to reply with available times. If they don't, your booking stays as it is.`}
           </Text>
           <TouchableOpacity style={[st.primaryBtn, { backgroundColor: C.accent, width: '100%' }]} onPress={() => {
             // popTo targets the Bookings route directly. This used to be two
@@ -696,6 +700,16 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 </Text>
                 <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>
                   Pick one of these provider-offered slots to confirm your new appointment.
+                </Text>
+                {!!booking.rescheduleRequest?.providerNote && (
+                  <Text style={{ fontSize: 13, color: C.text, lineHeight: 19, marginTop: 8 }}>
+                    Note from {booking.providerName}: {booking.rescheduleRequest.providerNote}
+                  </Text>
+                )}
+                <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 8 }}>
+                  {booking.rescheduleRequest?.cancelIfDeclined
+                    ? 'If you decline, this booking will be cancelled and any payment refunded in full.'
+                    : 'If you decline, your original appointment stays booked.'}
                 </Text>
               </View>
             ) : (

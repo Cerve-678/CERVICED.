@@ -72,6 +72,36 @@ describe('booking receipt', () => {
     expect(html).not.toContain('not through CERVICED');
   });
 
+  it('lists a paid deposit under the total, with the payment', () => {
+    const booking = {
+      id: 'dep12345-booking', serviceName: 'Balayage', providerName: 'Studio One',
+      bookingDate: '2026-08-10', bookingTime: '10:00', createdAt: '2026-08-01T12:00:00.000Z',
+      price: 100, serviceCharge: 0.99, depositAmount: 20, amountPaid: 20.99,
+      paymentType: 'deposit', paymentStatus: PaymentStatus.DEPOSIT_PAID,
+      status: BookingStatus.UPCOMING, addOns: [],
+    } as unknown as ConfirmedBooking;
+
+    expect(calculateBookingPaymentBreakdown(booking).depositPaid).toBe(20);
+    const html = buildClientReceiptHTML(booking);
+    expect(html).not.toContain('<span class="name">Deposit paid</span>');
+    expect(html).toMatch(/class="pline"><span>Deposit paid<\/span><span class="amt">£20\.00/);
+    expect(html).toContain('<span>Paid (incl. fee)</span>');
+  });
+
+  it('shows no deposit line until the deposit is paid, or on a full payment', () => {
+    const base = {
+      id: 'dep67890-booking', serviceName: 'Balayage', providerName: 'Studio One',
+      bookingDate: '2026-08-10', bookingTime: '10:00', createdAt: '2026-08-01T12:00:00.000Z',
+      price: 100, serviceCharge: 0.99, status: BookingStatus.UPCOMING, addOns: [],
+    };
+    const unpaid = { ...base, depositAmount: 20, amountPaid: 0, paymentType: 'deposit', paymentStatus: PaymentStatus.PENDING } as unknown as ConfirmedBooking;
+    const full = { ...base, depositAmount: 0, amountPaid: 100.99, paymentType: 'full', paymentStatus: PaymentStatus.PAID_IN_FULL } as unknown as ConfirmedBooking;
+    expect(calculateBookingPaymentBreakdown(unpaid).depositPaid).toBe(0);
+    expect(calculateBookingPaymentBreakdown(full).depositPaid).toBe(0);
+    expect(buildClientReceiptHTML(unpaid)).not.toContain('<span class="name">Deposit paid</span>');
+    expect(buildClientReceiptHTML(full)).not.toContain('<span class="name">Deposit paid</span>');
+  });
+
   it('does not add the checkout fee onto an unpaid deposit booking', () => {
     const booking = {
       id: 'fee67890-booking',

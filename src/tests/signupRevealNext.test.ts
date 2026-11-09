@@ -1,12 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import { REVEAL_BOTTOM_GAP, REVEAL_PEEK, revealOffset } from '../components/signup/useRevealNext';
+import { REVEAL_BOTTOM_GAP, REVEAL_MAX_STEP, REVEAL_PEEK, revealEase, revealOffset } from '../components/signup/useRevealNext';
 
 /**
  * Sign-up moves on gently after a single-pick answer (user, 2026-11-08:
  * "auth scroll should still work but not too drastic"): only when the next
  * question is below the visible area, and only by the minimum that brings
- * the top of its card into view at the bottom.
+ * the top of its card into view at the bottom. Then "slightly slower ... it
+ * was too big of a jump": no single answer moves the page more than
+ * REVEAL_MAX_STEP, and it glides rather than snapping.
  */
 describe('revealOffset', () => {
   const viewportHeight = 800;
@@ -16,11 +18,16 @@ describe('revealOffset', () => {
   });
 
   it('scrolls only far enough to show the top of a card below the screen', () => {
-    const next = { y: 1000, height: 400 };
+    const next = { y: 850, height: 400 };
     const y = revealOffset({ scrollY: 0, viewportHeight, next });
-    expect(y).toBe(1000 + REVEAL_PEEK + REVEAL_BOTTOM_GAP - viewportHeight);
+    expect(y).toBe(850 + REVEAL_PEEK + REVEAL_BOTTOM_GAP - viewportHeight);
     // The card lands near the bottom, not snapped to the top.
     expect(next.y - (y as number)).toBeGreaterThan(viewportHeight / 2);
+  });
+
+  it('never moves the page more than one small step for one answer', () => {
+    expect(revealOffset({ scrollY: 0, viewportHeight, next: { y: 1600, height: 400 } })).toBe(REVEAL_MAX_STEP);
+    expect(revealOffset({ scrollY: 300, viewportHeight, next: { y: 2000, height: 400 } })).toBe(300 + REVEAL_MAX_STEP);
   });
 
   it('nudges a little when the card is only partly cut off', () => {
@@ -38,6 +45,15 @@ describe('revealOffset', () => {
     expect(revealOffset({ scrollY: 900, viewportHeight, next: { y: 1000, height: 300 } })).toBeNull();
   });
 
+  it('glides: starts and settles softly, ending exactly where it was going', () => {
+    expect(revealEase(0)).toBe(0);
+    expect(revealEase(1)).toBe(1);
+    expect(revealEase(0.5)).toBeCloseTo(0.5);
+    expect(revealEase(0.1)).toBeLessThan(0.1);
+    expect(revealEase(0.9)).toBeGreaterThan(0.9);
+    expect(revealEase(1.4)).toBe(1);
+  });
+
   it('does nothing before the screen or card has been measured', () => {
     expect(revealOffset({ scrollY: 0, viewportHeight: 0, next: { y: 1000, height: 300 } })).toBeNull();
     expect(revealOffset({ scrollY: 0, viewportHeight, next: { y: 0, height: 0 } })).toBeNull();
@@ -45,6 +61,12 @@ describe('revealOffset', () => {
 });
 
 describe('sign-up only moves on after single-pick answers', () => {
+  it('lets a finger on the page stop the glide on both steps', () => {
+    for (const f of ['SignUpStep4Screen.tsx', 'SignUpStep5Screen.tsx']) {
+      expect(read(f)).toContain('onScrollBeginDrag={onScrollBeginDrag}');
+    }
+  });
+
   const read = (f: string) => fs.readFileSync(path.join(__dirname, '..', 'screens', 'auth', f), 'utf8');
 
   it('never reveals from inside a state updater or a multi-pick toggle', () => {

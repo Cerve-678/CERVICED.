@@ -1,8 +1,9 @@
 // src/features/providers/ManageScheduleRows.tsx
 //
 // Two rows under My Profile → Manage: a quick view of the release day (tap to
-// change it in Scheduling & Availability) and the Home calendar's view
-// (Full day / List / Week). The screen draws the card around them.
+// change it in Scheduling & Availability; only for a provider who has one)
+// and the Home calendar's view (Full day / List / Week). The screen draws the
+// card around them.
 
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -12,8 +13,9 @@ import { CALENDAR_VIEW_OPTIONS, type CalendarView } from '../provider-bookings/c
 import type { ReleaseQuickView } from './releaseQuickView';
 
 interface Props {
-  /** null while the profile hasn't loaded yet. */
-  release: ReleaseQuickView | null;
+  /** undefined while the profile hasn't loaded yet (the row holds its
+   *  place); null when the provider has no release day (no row at all). */
+  release: ReleaseQuickView | null | undefined;
   onOpenRelease: () => void;
   /** null until the saved choice has loaded. */
   calendarView: CalendarView | null;
@@ -33,28 +35,32 @@ export function ManageScheduleRows({
 }: Props) {
   return (
     <View>
-      <TouchableOpacity
-        style={st.releaseRow}
-        onPress={() => {
-          Haptics.selectionAsync().catch(() => {});
-          onOpenRelease();
-        }}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={release ? `${release.title}. ${release.lines.join('. ')}. Change in Scheduling.` : 'Release day. Change in Scheduling.'}
-      >
-        <Ionicons name="calendar-number-outline" size={18} color={accentColor} />
-        <View style={st.releaseText}>
-          <Text style={[st.label, { color: subTextColor }]}>RELEASE DATE</Text>
-          <Text style={[st.title, { color: textColor }]}>{release?.title ?? ' '}</Text>
-          {release?.lines.map(line => (
-            <Text key={line} style={[st.line, { color: subTextColor }]}>{line}</Text>
-          ))}
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={subTextColor} style={st.chevron} />
-      </TouchableOpacity>
+      {release !== null && (
+        <>
+          <TouchableOpacity
+            style={st.releaseRow}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onOpenRelease();
+            }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={release ? `${release.title}. ${release.lines.join('. ')}. Change in Scheduling.` : 'Release day. Change in Scheduling.'}
+          >
+            <Ionicons name="calendar-number-outline" size={18} color={accentColor} />
+            <View style={st.releaseText}>
+              <Text style={[st.label, { color: subTextColor }]}>RELEASE DATE</Text>
+              <Text style={[st.title, { color: textColor }]}>{release?.title ?? ' '}</Text>
+              {release?.lines.map(line => (
+                <Text key={line} style={[st.line, { color: subTextColor }]}>{line}</Text>
+              ))}
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={subTextColor} style={st.chevron} />
+          </TouchableOpacity>
 
-      <View style={[st.divider, { backgroundColor: borderColor }]} />
+          <View style={[st.divider, { backgroundColor: borderColor }]} />
+        </>
+      )}
 
       <Text style={[st.label, { color: subTextColor }]}>CALENDAR VIEW</Text>
       <Text style={[st.line, { color: subTextColor }]}>How your calendar on Home opens</Text>

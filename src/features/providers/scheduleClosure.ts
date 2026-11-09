@@ -20,3 +20,16 @@ export function closureReasonForClient(reason: string | null | undefined): strin
 export function canAutoCloseWhenFull(waitlistEnabled: boolean | null | undefined): boolean {
   return waitlistEnabled === false;
 }
+
+/** The two fully-booked responses share a slot, so choosing either one turns
+ * the other off. Keep both controls visible in Automations while editing. */
+export function chooseFullyBookedResponse<T extends { waitlistEnabled: boolean; autoCloseWhenFull: boolean }>(
+  current: T,
+  choice: 'waitlistEnabled' | 'autoCloseWhenFull',
+  enabled: boolean,
+): T {
+  if (choice === 'waitlistEnabled') {
+    return { ...current, waitlistEnabled: enabled, autoCloseWhenFull: enabled ? false : current.autoCloseWhenFull };
+  }
+  return { ...current, autoCloseWhenFull: enabled, waitlistEnabled: enabled ? false : current.waitlistEnabled };
+}
