@@ -7,7 +7,7 @@ tags: [screen, client]
 **Registered route(s):** `AdminCreatedAccounts`
 
 ## → Navigates to
-- _— none —_
+- [[AdminCreateAccountScreen\|AdminCreateAccount]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
