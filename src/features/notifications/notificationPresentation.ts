@@ -109,6 +109,7 @@ const KIND_LABELS: Readonly<Record<string, string>> = {
   promotion: 'Offer',
   new_provider: 'New provider',
   provider_saved: 'Saves',
+  follow_request: 'Follow request',
 };
 
 /** The small label at the top of the pop-up. */

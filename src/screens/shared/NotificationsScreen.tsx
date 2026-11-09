@@ -86,7 +86,7 @@ interface Notification {
       | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
       | 'schedule_fully_booked' | 'points_earned'
       | 'maintenance_due'    | 'aftercare_available'
-      | 'provider_saved';
+      | 'provider_saved'     | 'follow_request';
   title: string;
   message: string;
   timestamp: string;
@@ -575,6 +575,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       'points_earned',
       'maintenance_due',
       'aftercare_available',
+      'follow_request',
     ]);
     if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
       logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
@@ -798,6 +799,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           navigateNested('Profile', 'BeautyProfile', { openMaintenance: true, focusItemId }),
         );
       }, 300);
+    } else if (notification.type === 'follow_request') {
+      // Accept / Decline live in Your circle (Profile tab). Client-only,
+      // guarded above via CLIENT_ONLY_TYPES.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Circle'));
+      }, 300);
     } else if (notification.type === 'terms_updated') {
       // The Terms live on cerviced.co/legal, opened over this screen.
       defer(() => openLegalPage('terms'), 300);
@@ -909,7 +916,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved'].includes(type)) return P.accentText;
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in', 'maintenance_due', 'aftercare_available', 'provider_saved', 'follow_request'].includes(type)) return P.accentText;
     return '#FF9800';
   };
 
@@ -1008,6 +1015,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Maintenance';
       case 'aftercare_available':
         return 'Read Aftercare';
+      case 'follow_request':
+        return 'See Request';
       default:
         return 'View';
     }
