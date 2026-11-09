@@ -72,7 +72,8 @@ function handleContactSupport() {
 interface MoreAction { label: string; run: () => void; }
 
 // Every option here routes somewhere real: Contact Support opens a mail
-// composer to the support address, and the other three navigate to screens
+// composer to the support address, Terms and Privacy open the legal page,
+// and the other two navigate to screens
 // that exist in both navigators HelpCentre is registered in (client
 // ProfileNavigator and provider ProviderAccountNavigator), so it works from
 // either hat. No dead entries.
@@ -85,6 +86,7 @@ function buildMoreActions(
     { label: t('helpCentre.action.report'), run: () => navigation.navigate('ReportProblem') },
     // Held in English (legal reference) by the i18n do-not-translate guard.
     { label: t('helpCentre.action.terms'), run: () => openLegalPage('terms') },
+    { label: t('helpCentre.action.privacy'), run: () => openLegalPage('privacy') },
     { label: t('helpCentre.action.about'), run: openAboutPage },
   ];
 }
@@ -100,7 +102,7 @@ export default function HelpCentreScreen({ navigation }: any) {
   const actions = buildMoreActions(navigation, t);
 
   // iOS: the native action sheet handles any number of options. Android's
-  // Alert.alert silently caps at 3 buttons, so with four options + Cancel some
+  // Alert.alert silently caps at 3 buttons, so with five options + Cancel some
   // would vanish — and DESIGN_SYSTEM.md says not to use the OS Alert anyway.
   // So Android gets a small themed in-component menu instead.
   const openMore = () => {

@@ -546,6 +546,8 @@ export default function ProviderAccountScreen({ navigation }: any) {
               {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
               <SettingsOption icon="gavel" title={t('providerAccount.appInfo.terms.title')} subtitle={t('providerAccount.appInfo.terms.sub')} onPress={() => openLegalPage('provider-terms')} P={P} />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption icon="privacy-tip" title={t('providerAccount.appInfo.privacy.title')} subtitle={t('providerAccount.appInfo.privacy.sub')} onPress={() => openLegalPage('privacy')} P={P} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="bug-report" title={t('providerAccount.appInfo.report.title')} subtitle={t('providerAccount.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} P={P} />
               {/* Admin accounts only, so English only like the screen it opens. */}
               {isAdmin && (

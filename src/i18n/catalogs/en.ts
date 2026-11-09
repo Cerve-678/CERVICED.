@@ -87,6 +87,8 @@ export const en = {
   'helpCentre.action.report': 'Report a Problem',
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
   'helpCentre.action.terms': 'Terms & Conditions',
+  // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
+  'helpCentre.action.privacy': 'Privacy Policy',
   'helpCentre.action.about': 'About Cerviced',
 
   // ── Client Profile screen ────────────────────────────────────────────────────
@@ -150,6 +152,8 @@ export const en = {
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
   'profile.appInfo.terms.title': 'Terms & Conditions',
   'profile.appInfo.terms.sub': 'Legal info',
+  'profile.appInfo.privacy.title': 'Privacy Policy',
+  'profile.appInfo.privacy.sub': 'How your data is used',
   'profile.appInfo.report.title': 'Report a Problem',
   'profile.appInfo.report.sub': 'Bugs, feedback',
 
@@ -244,6 +248,8 @@ export const en = {
   // HELD IN ENGLISH (legal reference) — see DO_NOT_TRANSLATE.
   'providerAccount.appInfo.terms.title': 'Terms & Conditions',
   'providerAccount.appInfo.terms.sub': 'Legal info',
+  'providerAccount.appInfo.privacy.title': 'Privacy Policy',
+  'providerAccount.appInfo.privacy.sub': 'How your data is used',
   'providerAccount.appInfo.report.title': 'Report a Problem',
   'providerAccount.appInfo.report.sub': 'Bugs, feedback',
 

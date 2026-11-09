@@ -1435,3 +1435,62 @@ Decide whether access should end when a booking is cancelled or declined, and
 whether it should lapse after a set time (for example, some months after the
 appointment). Parked by the user on 2026-11-08: "leave for now but put in to
 do review future". Raised by the security review of #342.
+
+---
+
+## 33. App Store review readiness — what Apple will reject today (2026-11-09)
+
+Audit against the App Store Review Guidelines. Fixed in the same change as this
+note: photo-library purpose string (`expo-image-picker` had none of its own, so
+iOS would show Expo's generic "Allow $(PRODUCT_NAME)…" text), location limited
+to when-in-use (Expo's default also declared unused "Always" location, motion,
+full-accuracy and Reminders strings), and a Privacy Policy row in client
+Settings, provider Settings and the Help Centre (it was only linked from the
+signed-out welcome/sign-up screens). `src/tests/appStoreReviewConfig.test.ts`
+guards all three.
+
+### Likely rejections — need a decision or a migration, not done here
+
+- **1.2 User-generated content: no report or block.** Clients and providers
+  message each other (`ProviderChatScreen`, provider `MessagesScreen`), write
+  reviews, and upload portfolio/promotion images, but there is no way to report
+  a message, review or profile, or to block a user. Apple rejects any app with
+  user-to-user content that lacks all four of: filtering, reporting, blocking
+  and published contact info. Needs a reports table + `block` relationship,
+  SECURITY DEFINER RPCs, RLS so a blocked user cannot message, and a
+  moderation process with a response time. Schema work: check
+  `supabase/MIGRATION_OWNER.md` first. The Terms must also say there is zero
+  tolerance for objectionable content and abusive users — flag for
+  `cerviced-legal-flagger`, don't draft it.
+- **2.1 Completeness: payments use a Stripe TEST key in the `production`
+  EAS profile** (`pk_test_…` in `eas.json`). A reviewer's real card is
+  declined, so checkout fails. Needs the live publishable key, live edge-function
+  secrets, and items 1, 1b and 29 above resolved before real money.
+- **2.1 Demo accounts.** Review needs working sign-in details in App Store
+  Connect → App Review Information: one client account and one provider
+  account that has gone live, with bookable services, so both hats can be
+  exercised. Sign in with Apple can't be used for this.
+- **2.1 iPad.** `ios.supportsTablet` is `true`, so Apple reviews on iPad and
+  requires iPad screenshots. Either test every screen on iPad or set it to
+  `false` (still installable on iPad as an iPhone app). Product call.
+
+### Needed in App Store Connect, not code
+
+- **App Privacy labels** must match real collection: contact info, location,
+  photos, contacts (find friends), calendar, purchases, health-adjacent beauty
+  profile data (allergies, pregnancy, patch tests), crash data (Sentry), and
+  messages. Under-declaring is a rejection and a legal exposure.
+- **Privacy Policy URL** field (`https://www.cerviced.co/legal#privacy`) and a
+  support URL. The page has to be live and public at review time.
+- **Age rating questionnaire** — unrestricted user messaging affects the rating.
+- **If Becca's AI routing is turned on in a release build**
+  (`EXPO_PUBLIC_BECCA_AI_ENABLED`, currently off in `production`): 5.1.2(i)
+  requires telling users and getting consent before personal data goes to a
+  third-party AI provider.
+
+### Already fine
+
+Account deletion in the app (5.1.1(v), see `ACCOUNT_DELETION.md`); Sign in with
+Apple offered next to Google (4.8); physical services paid via Stripe rather
+than in-app purchase (3.1.3(e)); `ITSAppUsesNonExemptEncryption: false`; no
+App Tracking Transparency needed (no cross-app tracking SDKs found).

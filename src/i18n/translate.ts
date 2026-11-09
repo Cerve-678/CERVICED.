@@ -23,6 +23,11 @@ export const DO_NOT_TRANSLATE: ReadonlySet<TranslationKey> = new Set<Translation
   'profile.appInfo.terms.sub', // legal reference
   'providerAccount.appInfo.terms.title', // legal reference
   'providerAccount.appInfo.terms.sub', // legal reference
+  'helpCentre.action.privacy', // legal reference
+  'profile.appInfo.privacy.title', // legal reference
+  'profile.appInfo.privacy.sub', // legal reference
+  'providerAccount.appInfo.privacy.title', // legal reference
+  'providerAccount.appInfo.privacy.sub', // legal reference
   // Beauty Maintenance: health-adjacent (patch test, prep, aftercare) and the
   // UNREVIEWED reminders disclaimer.
   'maintenance.disclaimer',

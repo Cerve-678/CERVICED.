@@ -341,6 +341,7 @@ export default function UserProfileScreen({ navigation }: any) {
             <SettingsOption icon="info" title={t('profile.appInfo.about.title')} subtitle={t('profile.appInfo.about.sub')} onPress={openAboutPage} palette={P} />
             {/* Title + subtitle held in English (legal reference) by the i18n do-not-translate guard. */}
             <SettingsOption icon="gavel" title={t('profile.appInfo.terms.title')} subtitle={t('profile.appInfo.terms.sub')} onPress={() => openLegalPage('terms')} palette={P} />
+            <SettingsOption icon="privacy-tip" title={t('profile.appInfo.privacy.title')} subtitle={t('profile.appInfo.privacy.sub')} onPress={() => openLegalPage('privacy')} palette={P} />
             <SettingsOption icon="bug-report" title={t('profile.appInfo.report.title')} subtitle={t('profile.appInfo.report.sub')} onPress={() => navigation.navigate('ReportProblem')} palette={P} />
             {/* Admin accounts only, so English only like the screen it opens. */}
             {isAdmin && (
