@@ -1,8 +1,9 @@
 // src/stores/useCircleStore.ts
 //
 // The people you follow who recommend or have been to each provider, for the
-// face stack on cards. Cards ask for their own provider with
-// useCircleFor(providerId); requests made in the same moment are gathered and
+// face stack on cards — plus your own face first on providers you recommend
+// (your screen only; get_my_recommended_providers, read once per session).
+// Cards ask for their own provider with useCircleFor(providerId); requests made in the same moment are gathered and
 // sent as ONE get_circle_for_providers call (up to 300 ids), so a screen full
 // of cards costs one round trip, not one per card.
 //
@@ -10,9 +11,9 @@
 // It's decoration: a failed fetch logs and leaves cards without a stack
 // rather than showing an error.
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { create } from 'zustand';
-import { CIRCLE_BATCH_LIMIT, getCircleForProviders } from '../services/databaseService';
+import { CIRCLE_BATCH_LIMIT, getCircleForProviders, getMyRecommendedProviders } from '../services/databaseService';
 import type { CirclePerson } from '../features/social/types';
 import { logger } from '../utils/logger';
 
@@ -29,10 +30,17 @@ export const NO_CIRCLE: readonly CirclePerson[] = Object.freeze([]);
 interface CircleStore {
   enabled: boolean;
   byProvider: Record<string, readonly CirclePerson[]>;
+  /** Your own face, first on providers you recommend (your screen only). */
+  me: { name: string; avatarUrl: string | null } | null;
+  myRecommends: Record<string, true>;
   setEnabled: (enabled: boolean) => void;
   request: (providerId: string) => void;
   /** Forget everything, e.g. after following or unfollowing someone. */
   invalidate: () => void;
+  /** After you recommend, undo, or hide a provider. */
+  setMyRecommend: (providerId: string, on: boolean) => void;
+  /** Re-read which providers you recommend (e.g. after hiding one). */
+  reloadMine: () => void;
 }
 
 const pending = new Set<string>();
@@ -91,13 +99,37 @@ export const useCircleStore = create<CircleStore>((set, get) => {
     }
   };
 
+  const loadMine = async (): Promise<void> => {
+    const myGeneration = generation;
+    try {
+      const mine = await getMyRecommendedProviders();
+      if (myGeneration !== generation || !get().enabled) return;
+      const myRecommends: Record<string, true> = {};
+      mine.providerIds.forEach((id) => { myRecommends[id] = true; });
+      set({ me: { name: mine.name ?? '', avatarUrl: mine.avatarUrl }, myRecommends });
+    } catch (err) {
+      logger.warn('[circle] could not load the providers you recommend', err);
+    }
+  };
+
   return {
     enabled: false,
     byProvider: {},
+    me: null,
+    myRecommends: {},
     setEnabled: (enabled) => {
       if (get().enabled === enabled) return;
       reset();
-      set({ enabled, byProvider: {} });
+      set({ enabled, byProvider: {}, me: null, myRecommends: {} });
+      if (enabled) void loadMine();
+    },
+    setMyRecommend: (providerId, on) => {
+      const next = { ...get().myRecommends };
+      if (on) next[providerId] = true; else delete next[providerId];
+      set({ myRecommends: next });
+    },
+    reloadMine: () => {
+      if (get().enabled) void loadMine();
     },
     request: (providerId) => {
       if (!get().enabled || !providerId) return;
@@ -116,10 +148,16 @@ export const useCircleStore = create<CircleStore>((set, get) => {
 export function useCircleFor(providerId: string | null | undefined): readonly CirclePerson[] {
   const enabled = useCircleStore((s) => s.enabled);
   const people = useCircleStore((s) => (providerId ? s.byProvider[providerId] : undefined) ?? NO_CIRCLE);
+  const me = useCircleStore((s) => s.me);
+  const iRecommend = useCircleStore((s) => (providerId ? s.myRecommends[providerId] === true : false));
   useEffect(() => {
     if (enabled && providerId) useCircleStore.getState().request(providerId);
   }, [enabled, providerId]);
-  return people;
+  return useMemo(() => {
+    if (!iRecommend || !me) return people;
+    const mine: CirclePerson = { personId: 'me', name: me.name, avatarUrl: me.avatarUrl, recommends: true, visits: 0, isMe: true };
+    return [mine, ...people];
+  }, [people, me, iRecommend]);
 }
 
 /** Mount once under AuthProvider: turns the stacks on only for a signed-in client hat. */

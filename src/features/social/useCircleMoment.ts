@@ -8,7 +8,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getMyProviderSharing,
   hasReviewedBooking,
-  setProviderRecommendation,
 } from '../../services/databaseService';
 import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { logger } from '../../utils/logger';
@@ -23,6 +22,7 @@ import {
   type CompletedBookingLike,
 } from './circleMoments';
 import { readMomentsMemory, updateMomentsMemory } from './momentsMemory';
+import { recommendProvider } from './recommend';
 
 /** Let Home finish loading (and its own first-run tour decide) first. */
 const SETTLE_MS = 2000;
@@ -122,7 +122,7 @@ export function useCircleMoment(
     setBusy(true);
     setError(null);
     try {
-      await setProviderRecommendation(moment.providerId, true);
+      await recommendProvider(moment.providerId, true);
       hapticSuccess();
       void updateMomentsMemory(userId, (m) => withAnswer(m, true));
       clear();

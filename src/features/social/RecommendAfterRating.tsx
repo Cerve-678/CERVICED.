@@ -14,7 +14,8 @@ import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View }
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AppTheme } from '../../constants/theme';
-import { getMyProviderSharing, setProviderRecommendation } from '../../services/databaseService';
+import { getMyProviderSharing } from '../../services/databaseService';
+import { recommendProvider } from './recommend';
 import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { logger } from '../../utils/logger';
 import { FONT_BODY, FONT_DISPLAY, hapticLight, hapticSuccess } from '../maintenance/ui';
@@ -65,7 +66,7 @@ export function useRecommendAfterRating(userId: string | null, onRecommended?: (
     if (!offerState || busy) return;
     setBusy(true);
     try {
-      await setProviderRecommendation(offerState.providerId, true);
+      await recommendProvider(offerState.providerId, true);
       hapticSuccess();
       if (userId) void updateMomentsMemory(userId, (m) => withAnswer(m, true));
       onRecommendedRef.current?.(offerState.providerId);

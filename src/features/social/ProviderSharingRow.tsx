@@ -18,7 +18,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   getMyProviderSharing,
   setProviderHidden,
-  setProviderRecommendation,
 } from '../../services/databaseService';
 import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { isDarkColor, type ProviderThemeTokens } from '../../constants/providerThemes';
@@ -26,6 +25,8 @@ import { FONT_BODY, FONT_DISPLAY, hapticLight, hapticSelection, hapticSuccess } 
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
 import type { ProviderSharing } from './types';
+import { recommendProvider } from './recommend';
+import { useCircleStore } from '../../stores/useCircleStore';
 
 interface Props {
   /** providers.id; null while the profile is still resolving. */
@@ -72,7 +73,7 @@ export function ProviderSharingRow({ providerId, providerName, enabled, tokens: 
     const on = !sharing.recommended;
     setSaving('recommend');
     try {
-      await setProviderRecommendation(providerId, on);
+      await recommendProvider(providerId, on);
       setSharing((s) => (s ? { ...s, recommended: on } : s));
       if (on) hapticSuccess(); else hapticSelection();
     } catch (err) {
@@ -90,6 +91,8 @@ export function ProviderSharingRow({ providerId, providerName, enabled, tokens: 
     setSaving('hidden');
     try {
       await setProviderHidden(providerId, hidden);
+      // Hidden beats Recommend for your own face too.
+      useCircleStore.getState().reloadMine();
       setSharing((s) => (s ? { ...s, hidden } : s));
     } catch (err) {
       onError(

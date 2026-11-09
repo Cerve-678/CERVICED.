@@ -7,7 +7,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getMyProviderSharing, setProviderRecommendation } from '../../services/databaseService';
+import { getMyProviderSharing } from '../../services/databaseService';
+import { recommendProvider } from './recommend';
 import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { logger } from '../../utils/logger';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
@@ -54,7 +55,7 @@ export function RecommendBookingButton({ userId, providerId, providerName, refre
     const on = !sharing.recommended;
     setSaving(true);
     try {
-      await setProviderRecommendation(providerId, on);
+      await recommendProvider(providerId, on);
       setSharing((s) => (s ? { ...s, recommended: on } : s));
       if (on) hapticSuccess(); else hapticSelection();
     } catch (err) {
