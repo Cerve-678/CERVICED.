@@ -13,7 +13,7 @@ import { SKIN_TONES } from '../../constants/skinTones';
 import { HAIR_TYPES } from '../../constants/hairTypes';
 import type { BeautyData, CategoryKey, Gender } from '../../types/beautyProfile';
 import {
-  ALLERGENS, BROW_CONDITIONS, BROW_STYLES, GENDER_LABELS, HAIR_GOALS, LASH_STATUS, LASH_STYLES,
+  ALLERGENS, BROW_CONDITIONS, BROW_STYLES, GENDER_LABELS, HAIR_GOALS, LASH_STATUS, LASH_STYLES, hairGoalsFor,
   MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_LENGTHS, NAIL_SHAPES,
   SCALP_CONDITIONS, SENSITIVE_AREAS, SKIN_CONCERNS, SKIN_TYPES, STYLE_VIBES, TREATMENT_HISTORY,
 } from './options';
@@ -167,8 +167,8 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           {renderChips(TREATMENT_HISTORY, o => draft.treatmentHistory.includes(o), o => toggleExclusive('treatmentHistory', 'None', o))}
 
           {sectionHead('HAIR GOALS', { selected: draft.hairGoals.length, total: HAIR_GOALS.length }, { optional: true })}
-          {sub("What you're looking to achieve")}
-          {renderChips(HAIR_GOALS, o => draft.hairGoals.includes(o), o => toggleMulti('hairGoals', o))}
+          {sub("What you're looking to achieve. Pick as many as you like.")}
+          {renderChips(withSaved(hairGoalsFor(draft.hairType), draft.hairGoals), o => draft.hairGoals.includes(o), o => toggleMulti('hairGoals', o))}
         </>
       );
 

@@ -5,7 +5,7 @@
 
 #generated
 
-**3581 functions** across **506 files**.
+**3594 functions** across **508 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -117,17 +117,18 @@
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 - `useSignInAsAccount.ts` — **useSignInAsAccount**
 
-### `src/features/beauty-profile/` (12)
-- `BeautyMapLanding.tsx` — **BeautyMapLanding** · go · maintenanceStrip · nextUp · visibleItems
+### `src/features/beauty-profile/` (13)
+- `BeautyMapLanding.tsx` — **BeautyMapLanding** · go · ideas · maintenanceStrip · nextUp · visibleItems
 - `BodyFigure.tsx` — **BodyMap** · **FigureThumb** · LineFigure · onLayout · PortraitFigure · SegmentsFigure · zone · ZonesFigure
 - `bodyMap.ts` — **areaForMaintenanceItem** · **areaRows** · **dueDotsByArea** · **maintenanceForMap** · **parseFigurePrefs**
 - `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
 - `FigureSheet.tsx` — **FigureSheet**
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
-- `options.ts` — **hairTreatmentHistory**
+- `options.ts` — **hairGoalsFor** · **hairTreatmentHistory**
 - `pickList.ts` — **formatPickList** · parseJsonArray · **toPickColumn** · **toPickList**
 - `profileRow.ts` — **beautyDataFromRow**
+- `suitedIdeas.ts` — add · **allSuitedIdeas** · from · goal · hairIdeas · **isSuitedCategory** · lashBrowIdeas · makeupIdeas · nailIdeas · **suitedIdeas**
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
 - `useFigurePrefs.ts` — save · **useFigurePrefs**
 
@@ -474,7 +475,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (62)
+### `src/utils/` (63)
 - `aboutPage.ts` — **openAboutPage**
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
@@ -498,6 +499,7 @@
 - `fontScaleClamp.ts` — **applyFontScaleClamp** · components · **composeAppearanceStyle** · fontOnlyInjection · Wrapped
 - `fuzzyMatch.ts` — **editDistance** · levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar**
 - `hairTypeMatch.ts` — **matchesHairType**
+- `keepShownOrder.ts` — **keepShownOrder**
 - `learnedSpecialities.ts` — **learnSpecialities** · looksLikeASpeciality
 - `legalPage.ts` — **legalPageUrl** · **openLegalPage**
 - `logger.ts` — **clearLogBuffer** · formatArgs · **getLogBuffer** · **installAuthErrorFilter** · noop · pushToBuffer · **reportError** · **setErrorReporter** · **subscribeToLogBuffer**
