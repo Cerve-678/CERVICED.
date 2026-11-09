@@ -101,8 +101,6 @@ function previewText(content: string): string {
   return content.split('\n').map(l => l.trim()).filter(l => l && !isHeadingLine(l)).join(' ');
 }
 
-const RAIL_COUNT = 4;
-const STARTER_COUNT = 3;
 
 type Editing = { mode: 'create' } | { mode: 'edit'; pack: InfoPack };
 
@@ -210,7 +208,6 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const [sending, setSending] = useState<InfoPack | null>(null);
   const [sendingBookingId, setSendingBookingId] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<InfoPack | null>(null);
-  const [showAllExamples, setShowAllExamples] = useState(false);
   const welcome = useHowItWorks();
 
   const todayYmd = useMemo(() => dateToYMD(new Date()), []);
@@ -311,7 +308,6 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const closeForm = useCallback(() => {
     Keyboard.dismiss();
     setEditing(null);
-    setShowAllExamples(false);
   }, []);
 
   const applyTemplate = useCallback((tpl: PackTemplate) => {
@@ -320,7 +316,6 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     setContent(tpl.content);
     setSelectedServices(servicesForTemplate(tpl, myServices));
     setPickedTemplateId(tpl.id);
-    setShowAllExamples(false);
   }, [myServices]);
 
   const toggleService = useCallback((name: string) => {
@@ -527,7 +522,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                     <Text style={[s.emptySub, { color: P.sub }]}>Write aftercare, prep and what-to-bring notes once. They go to clients automatically.</Text>
                   </View>
                   <Text style={[s.label, { color: P.sub }]}>STARTER PACKS</Text>
-                  {starterTemplates.slice(0, STARTER_COUNT).map(tpl => (
+                  {starterTemplates.map(tpl => (
                     <TouchableOpacity
                       key={tpl.id}
                       style={[s.starter, { backgroundColor: P.card, borderColor: P.border }]}
@@ -544,11 +539,6 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                       </View>
                     </TouchableOpacity>
                   ))}
-                  {starterTemplates.length > STARTER_COUNT && (
-                    <TouchableOpacity style={s.textBtn} onPress={() => { openCreate(); setShowAllExamples(true); }} activeOpacity={0.7}>
-                      <Text style={[s.textBtnText, { color: P.accent }]}>See all {starterTemplates.length}</Text>
-                    </TouchableOpacity>
-                  )}
                   <TouchableOpacity style={s.textBtn} onPress={() => openCreate()} activeOpacity={0.7}>
                     <Text style={[s.textBtnText, { color: P.accent }]}>Write your own</Text>
                   </TouchableOpacity>
@@ -567,16 +557,9 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
             >
               {editing.mode === 'create' && rankedTemplates.length > 0 && (
                 <View>
-                  <View style={s.labelRow}>
-                    <Text style={[s.label, { color: P.sub, marginBottom: 0 }]}>START FROM AN EXAMPLE</Text>
-                    {rankedTemplates.length > RAIL_COUNT && (
-                      <TouchableOpacity onPress={() => setShowAllExamples(true)} activeOpacity={0.7} hitSlop={8}>
-                        <Text style={[s.labelAction, { color: P.accent }]}>See all {rankedTemplates.length}</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                  <Text style={[s.label, { color: P.sub }]}>START FROM AN EXAMPLE</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail} style={s.railWrap} keyboardShouldPersistTaps="handled">
-                    {rankedTemplates.slice(0, RAIL_COUNT).map(tpl => {
+                    {rankedTemplates.map(tpl => {
                       const picked = pickedTemplateId === tpl.id;
                       return (
                         <TouchableOpacity
@@ -765,32 +748,6 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
         onClose={() => { if (!sendingBookingId) setSending(null); }}
       />
 
-      {/* All examples for the provider's service types */}
-      <Modal visible={showAllExamples} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setShowAllExamples(false)}>
-        <View style={s.sheetOverlay}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowAllExamples(false)} />
-          <View style={[s.sheet, { backgroundColor: P.card, paddingBottom: Math.max(28, insets.bottom + 16) }]}>
-            <View style={[s.handle, { backgroundColor: P.border }]} />
-            <Text style={[s.sheetTitle, { color: P.text }]}>Examples</Text>
-            <Text style={[s.hint, { color: P.sub }]}>Pick one to start from. You can change every word.</Text>
-            <ScrollView style={{ flexGrow: 0 }} showsVerticalScrollIndicator={false}>
-              {rankedTemplates.map(tpl => (
-                <TouchableOpacity key={tpl.id} style={[s.sheetRow, { borderBottomColor: P.border }]} activeOpacity={0.75} onPress={() => applyTemplate(tpl)}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.exKind, { color: P.sub }]}>{tpl.kind.toUpperCase()}</Text>
-                    <Text style={[s.starterTitle, { color: P.text }]}>{tpl.title}</Text>
-                    <Text style={[s.starterPreview, { color: P.sub }]} numberOfLines={1}>{previewText(tpl.content)}</Text>
-                  </View>
-                  {pickedTemplateId === tpl.id
-                    ? <Ionicons name="checkmark" size={16} color={P.accent} />
-                    : <Ionicons name="chevron-forward" size={16} color={P.sub} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       {/* How the client sees it */}
       <Modal visible={!!previewing} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setPreviewing(null)}>
         <View style={s.sheetOverlay}>
@@ -902,8 +859,6 @@ const s = StyleSheet.create({
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: { maxHeight: '75%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  sheetTitle: { fontFamily: BAKBAK, fontSize: 20, marginBottom: 4 },
-  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   previewTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginTop: 6 },
   previewServices: { fontSize: 12, fontWeight: '600', marginTop: 4, marginBottom: 14 },
   previewHeading: { fontFamily: BAKBAK, fontSize: 11, letterSpacing: 1.3, marginTop: 10, marginBottom: 4 },
