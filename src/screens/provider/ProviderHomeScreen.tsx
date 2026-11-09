@@ -739,9 +739,9 @@ const WK_MIN_BLOCK_H = 24;
 // truncating the scrollable range short of the real content.
 const WK_TOP_INSET  = 14;
 // The day letters and date circles sit this far left of their column's
-// centre (asked for 2026-11-09: on a phone they read as slightly right of
+// centre (asked for 2026-11-09, 8 then 16: on a phone they read as right of
 // the days below). All seven move by the same amount, taps included.
-const WK_HEADER_NUDGE_LEFT = 8;
+const WK_HEADER_NUDGE_LEFT = 16;
 
 /** First word of the client's name for a week card, "Client" when there's none. */
 function firstNameOf(name: string | null | undefined): string {
