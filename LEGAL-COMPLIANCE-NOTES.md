@@ -876,3 +876,35 @@ user's decisions:
     as not "collected", but this hasn't been checked by a lawyer).
   - Still open: the App Store privacy label (Contacts), the Play Data safety
     form, and the Privacy text above.
+
+## 24. Marketing Studio: AI-drafted social content (2026-11-09)
+
+Branch `feat/marketing-studio` (migration `20261109210000`). Every Monday
+Claude (Anthropic API, with web search) drafts social ideas into Admin →
+Marketing; an admin approves and posts them by hand. Nothing auto-posts. The
+planner's rules are `supabase/functions/marketing-studio/playbook.ts`, which
+already bans fake accounts/reviews/engagement, AI beauty results, AI people
+posing as real ones, injectables/POM advertising, result-changing filters,
+superlative/comparative/price claims, payment and no-show promises, and
+undisclosed incentivised posts. Admin review is the only enforcement.
+
+**Gaps to raise (not resolved):**
+- **Privacy Policy:** it lists Anthropic only for "profile imports and
+  listings". The planner sends Anthropic aggregate counts (areas under 3
+  providers suppressed) plus admin-typed review/results notes. Decide whether
+  the policy needs a line; confirm the Anthropic API terms (retention, no
+  training) for the key used.
+- **Provider content licence:** do the Provider Terms let CERVICED reuse a
+  provider's portfolio photos or videos in marketing? Until confirmed, ideas
+  featuring a provider need their written OK, and nothing records it: there is
+  no permission field or gate before "mark posted".
+- **Provider-as-creator programme** (the Alo model in the playbook): any perks
+  for posting make it incentivised (DMCC Act 2024, CMA/ASA): it needs written
+  terms with disclosure duties before it starts.
+- **Aesthetics advertising:** the playbook bans injectables/POMs, but any
+  aesthetics advertising should be checked by a lawyer first.
+- **Audit trail:** posts record when they were reviewed and posted, not who
+  approved them, and an edited caption overwrites the draft. If the ASA asks
+  what ran and who approved it, there's no record beyond the platform itself.
+- **Cold outreach to providers** stays manual and is not built; sole traders
+  count as individuals under PECR.

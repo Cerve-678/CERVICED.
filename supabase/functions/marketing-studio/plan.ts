@@ -116,6 +116,11 @@ export const SAVE_WEEK_SCHEMA = {
   },
 } as const;
 
+/** https only, with a host and no user:password@ part. Mirrored by isOpenableUrl in the app. */
+export function isSafeHttpsUrl(raw: string): boolean {
+  return /^https:\/\/[^\s/?#@]+(?:[/?#][^\s]*)?$/i.test(raw);
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -138,7 +143,7 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[]): T | null {
 /**
  * Turns the planner's save_week input into rows that will pass the table's
  * CHECK constraints. Drops any idea missing the essentials (platform, format,
- * hook, concept) rather than failing the week; throws only when nothing usable
+ * hook, concept, a valid ai_use) rather than failing the week; throws only when nothing usable
  * is left, so a run never "succeeds" with an empty queue.
  */
 export function normalizeWeekPlan(raw: unknown, knownLearningIds: ReadonlySet<string>): WeekPlan {
@@ -151,7 +156,9 @@ export function normalizeWeekPlan(raw: unknown, knownLearningIds: ReadonlySet<st
     const format = oneOf(item.format, FORMATS);
     const hook = text(item.hook, 400);
     const concept = text(item.concept, 2000);
-    if (!platform || !format || !hook || !concept) continue;
+    // An unreadable ai_use drops the idea: "no AI" must never be a default.
+    const ai_use = oneOf(item.ai_use, AI_USES);
+    if (!platform || !format || !hook || !concept || !ai_use) continue;
     posts.push({
       platform,
       format,
@@ -168,8 +175,8 @@ export function normalizeWeekPlan(raw: unknown, knownLearningIds: ReadonlySet<st
         .map(p => oneOf(p, PLATFORMS))
         .filter((p): p is Platform => p !== null && p !== platform),
       why_now: text(item.why_now, 800),
-      sources: textList(item.sources, 8, 500).filter(u => /^https?:\/\//i.test(u)),
-      ai_use: oneOf(item.ai_use, AI_USES) ?? 'none',
+      sources: textList(item.sources, 8, 500).filter(isSafeHttpsUrl),
+      ai_use,
       needs: text(item.needs, 800),
       best_time: text(item.best_time, 120),
       ad_budget_note: platform === 'paid_ad' ? text(item.ad_budget_note, 500) : '',

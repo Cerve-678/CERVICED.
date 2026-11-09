@@ -9,7 +9,7 @@ function post(overrides: Record<string, unknown> = {}) {
     shots: ['Tray of powders', 'Buff', 'Reveal'], on_screen_text: 'the sound >>>',
     caption: 'chrome nails london', hashtags: ['#nails', 'londonnails'], sound_idea: 'Original audio',
     also_post_to: ['instagram', 'tiktok', 'myspace'], why_now: 'Chrome is back for party season',
-    sources: ['https://example.com/trend', 'not a url'], ai_use: 'none', needs: 'A nail tech who agrees to be filmed',
+    sources: ['https://example.com/trend', 'not a url', 'http://plain.example'], ai_use: 'none', needs: 'A nail tech who agrees to be filmed',
     best_time: 'Thu 7pm', ad_budget_note: 'should be dropped for organic posts',
     ...overrides,
   };
@@ -35,16 +35,20 @@ describe('normalizeWeekPlan', () => {
     expect(plan.posts).toHaveLength(1);
   });
 
+  it('drops an idea whose AI use it can\'t read, rather than calling it "no AI"', () => {
+    const plan = normalizeWeekPlan({ posts: [post({ ai_use: 'deepfake' }), post({ ai_use: undefined }), post()] }, new Set());
+    expect(plan.posts).toHaveLength(1);
+  });
+
   it('throws when nothing usable is left, so a run never saves an empty week', () => {
     expect(() => normalizeWeekPlan({ posts: [post({ concept: '' })] }, new Set())).toThrow('no usable ideas');
     expect(() => normalizeWeekPlan('nope', new Set())).toThrow();
   });
 
   it('caps the week and falls back to safe defaults', () => {
-    const many = Array.from({ length: MAX_POSTS_PER_WEEK + 5 }, () => post({ ai_use: 'deepfake', pillar: '' }));
+    const many = Array.from({ length: MAX_POSTS_PER_WEEK + 5 }, () => post({ pillar: '' }));
     const plan = normalizeWeekPlan({ posts: many }, new Set());
     expect(plan.posts).toHaveLength(MAX_POSTS_PER_WEEK);
-    expect(plan.posts[0]!.ai_use).toBe('none');
     expect(plan.posts[0]!.pillar).toBe('UNSORTED');
   });
 
@@ -56,5 +60,16 @@ describe('normalizeWeekPlan', () => {
     }, new Set([LEARNING_ID]));
     expect(plan.learnings).toEqual([{ kind: 'what_works', insight: 'Hands-only beats talking heads', evidence: '3 posts' }]);
     expect(plan.retire_learning_ids).toEqual([LEARNING_ID]);
+  });
+});
+
+describe('isSafeHttpsUrl', () => {
+  const { isSafeHttpsUrl } = jest.requireActual('./plan') as typeof import('./plan');
+  it('opens only plain https links', () => {
+    expect(isSafeHttpsUrl('https://newsroom.tiktok.com/en-gb/how-tiktok-recommends')).toBe(true);
+    expect(isSafeHttpsUrl('http://example.com')).toBe(false);
+    expect(isSafeHttpsUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeHttpsUrl('https://user:pass@evil.example/login')).toBe(false);
+    expect(isSafeHttpsUrl('intent://scan#Intent;end')).toBe(false);
   });
 });

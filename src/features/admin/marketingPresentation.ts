@@ -39,6 +39,11 @@ export const LEARNING_KIND_LABEL: Record<MarketingLearningKind, string> = {
   brand_rule: 'Brand rule',
 };
 
+/** Links the screen will open: https only, no user:password@. Mirrors isSafeHttpsUrl in the planner. */
+export function isOpenableUrl(raw: string | null | undefined): raw is string {
+  return !!raw && /^https:\/\/[^\s/?#@]+(?:[/?#][^\s]*)?$/i.test(raw.trim());
+}
+
 export function postsForTab(posts: MarketingPost[], tab: Exclude<MarketingTab, 'learned'>): MarketingPost[] {
   const status = tab === 'review' ? 'draft' : tab === 'ready' ? 'approved' : 'posted';
   return posts.filter(p => p.status === status);

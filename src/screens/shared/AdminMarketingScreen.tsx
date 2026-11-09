@@ -14,7 +14,7 @@ import {
   retireMarketingLearning, reviewMarketingPost, startMarketingPlan,
 } from '../../services/databaseService';
 import {
-  LEARNING_KIND_LABEL, MARKETING_TABS, PLATFORM_LABEL, PLATFORM_URL, parseResults, postsForTab, resultsSummary,
+  LEARNING_KIND_LABEL, MARKETING_TABS, isOpenableUrl, PLATFORM_LABEL, PLATFORM_URL, parseResults, postsForTab, resultsSummary,
   runStatusLine, shareableCaption, type MarketingTab, type ResultsDraft,
 } from '../../features/admin/marketingPresentation';
 import type { MarketingLearning, MarketingOverview, MarketingPost } from '../../types/marketing';
@@ -303,7 +303,7 @@ function PostCard({ P, post, act }: { P: Palette; post: MarketingPost; act: Act 
           {post.sources.length > 0 && (
             <View>
               <Text style={[styles.label, { color: P.sub }]}>SOURCES</Text>
-              {post.sources.map(src => (
+              {post.sources.filter(isOpenableUrl).map(src => (
                 <TouchableOpacity key={src} onPress={() => void Linking.openURL(src)} activeOpacity={0.7} accessibilityRole="link">
                   <Text style={[styles.small, { color: P.accentText }]} numberOfLines={1}>{src}</Text>
                 </TouchableOpacity>
@@ -348,8 +348,8 @@ function PostCard({ P, post, act }: { P: Palette; post: MarketingPost; act: Act 
           <Text style={[styles.body, { color: P.text }]}>{summary ?? 'No results yet. Add them after a couple of days.'}</Text>
           <View style={styles.actions}>
             <ActionBtn P={P} primary label={summary ? 'UPDATE RESULTS' : 'ADD RESULTS'} onPress={() => openForm('results')} />
-            {!!post.post_url && (
-              <ActionBtn P={P} label="OPEN POST" onPress={() => void Linking.openURL(post.post_url!)} />
+            {isOpenableUrl(post.post_url) && (
+              <ActionBtn P={P} label="OPEN POST" onPress={() => void Linking.openURL(post.post_url!.trim())} />
             )}
           </View>
         </>
@@ -358,7 +358,7 @@ function PostCard({ P, post, act }: { P: Palette; post: MarketingPost; act: Act 
       {/* ── forms ── */}
       {form === 'reject' && (
         <View style={{ gap: 8 }}>
-          <Text style={[styles.small, { color: P.sub }]}>Why not? The planner reads this and won’t repeat it.</Text>
+          <Text style={[styles.small, { color: P.sub }]}>Why not? The planner reads this and won’t repeat it. Leave out anyone’s name: it’s sent to the AI.</Text>
           <TextInput style={[field, styles.multiline]} value={note} onChangeText={setNote} multiline maxLength={500}
             placeholder="e.g. too salesy, not our vibe, we can't film this" placeholderTextColor={P.sub}
             accessibilityLabel="Why not" editable={!busy} />
@@ -386,7 +386,7 @@ function PostCard({ P, post, act }: { P: Palette; post: MarketingPost; act: Act 
       )}
       {form === 'results' && (
         <View style={{ gap: 8 }}>
-          <Text style={[styles.small, { color: P.sub }]}>From the app’s own analytics. Leave a box empty if you don’t know.</Text>
+          <Text style={[styles.small, { color: P.sub }]}>From the app’s own analytics. Leave a box empty if you don’t know. Notes go to the AI, so leave out names.</Text>
           <View style={styles.grid}>
             {(['views', 'likes', 'comments', 'shares', 'saves', 'follows'] as const).map(key => (
               <View key={key} style={styles.gridCell}>

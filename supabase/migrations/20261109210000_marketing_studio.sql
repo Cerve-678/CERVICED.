@@ -14,7 +14,8 @@
 --                        "drafting…" and a failure reason
 --
 -- marketing_app_snapshot() hands the planner aggregate facts only (counts by
--- category and area, booked categories). No provider or client is named:
+-- category and area, booked categories; an area with fewer than 3 providers
+-- is left out, since a count of 1 points at one person). No provider or client is named:
 -- featuring a real provider's work needs their permission, which doesn't
 -- exist as a setting yet.
 --
@@ -41,6 +42,11 @@ CREATE TABLE IF NOT EXISTS public.marketing_runs (
   error         text,
   usage         jsonb
 );
+
+-- At most one planner run at a time: a cron run and an admin tap (or a
+-- double tap) can't both spend on a week.
+CREATE UNIQUE INDEX IF NOT EXISTS marketing_runs_one_running
+  ON public.marketing_runs ((true)) WHERE status = 'running';
 
 CREATE TABLE IF NOT EXISTS public.marketing_posts (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -76,7 +82,7 @@ CREATE TABLE IF NOT EXISTS public.marketing_posts (
   review_note     text,
   reviewed_at     timestamptz,
   posted_at       timestamptz,
-  post_url        text,
+  post_url        text CONSTRAINT marketing_posts_post_url_check CHECK (post_url IS NULL OR post_url ~* '^https://[^[:space:]/?#@]+'),
   views           integer CONSTRAINT marketing_posts_views_check    CHECK (views    IS NULL OR views    >= 0),
   likes           integer CONSTRAINT marketing_posts_likes_check    CHECK (likes    IS NULL OR likes    >= 0),
   comments        integer CONSTRAINT marketing_posts_comments_check CHECK (comments IS NULL OR comments >= 0),
@@ -133,7 +139,7 @@ AS $function$
         SELECT location_text AS area, count(*) AS n
           FROM public.providers
          WHERE has_gone_live = true AND is_active = true AND COALESCE(location_text, '') <> ''
-         GROUP BY 1 ORDER BY 2 DESC LIMIT 10) a), '[]'::jsonb),
+         GROUP BY 1 HAVING count(*) >= 3 ORDER BY 2 DESC LIMIT 10) a), '[]'::jsonb),
     'booked_categories_30d', COALESCE((SELECT jsonb_object_agg(cat, n) FROM (
         SELECT COALESCE(service_category_snapshot, 'OTHER') AS cat, count(*) AS n
           FROM public.bookings
@@ -242,6 +248,10 @@ BEGIN
   END IF;
   IF v_status NOT IN ('approved', 'posted') THEN
     RAISE EXCEPTION 'Approve it before marking it posted.';
+  END IF;
+  IF NULLIF(btrim(COALESCE(p_url, '')), '') IS NOT NULL
+     AND btrim(p_url) !~* '^https://[^[:space:]/?#@]+' THEN
+    RAISE EXCEPTION 'The link needs to start with https://';
   END IF;
   UPDATE public.marketing_posts
      SET status = 'posted',

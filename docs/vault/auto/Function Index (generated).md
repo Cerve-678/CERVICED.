@@ -5,7 +5,7 @@
 
 #generated
 
-**3556 functions** across **504 files**.
+**3557 functions** across **504 files**.
 
 ### `src/components/` (64)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -112,7 +112,7 @@
 
 ### `src/features/admin/` (4)
 - `dashboardPresentation.ts` — **buildProblemRows** · **describeDelta** · **formatCount** · **pounds** · **updatedLabel** · **weekLabel**
-- `marketingPresentation.ts` — **parseCount** · **parseResults** · **per1k** · **postsForTab** · **resultsSummary** · **runStatusLine** · **shareableCaption**
+- `marketingPresentation.ts` — **isOpenableUrl** · **parseCount** · **parseResults** · **per1k** · **postsForTab** · **resultsSummary** · **runStatusLine** · **shareableCaption**
 - `moneyPresentation.ts` — day · **describeFailedPayout** · **describeOwed** · **describeRefundRequest** · **formatPence** · **parsePounds**
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 
