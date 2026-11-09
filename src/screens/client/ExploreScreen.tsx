@@ -478,6 +478,12 @@ const ExploreScreen = memo(() => {
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
   const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
   const [favouritesLoading, setFavouritesLoading] = useState(false);
+  // True while saved looks are being fetched, even when some already show.
+  // An open collection waits on this before saying it's empty.
+  const [favouritesHydrating, setFavouritesHydrating] = useState(false);
+  // Read by the fetch below so a re-run keeps what's already loaded.
+  const favouriteItemsRef = useRef<PortfolioItem[]>([]);
+  favouriteItemsRef.current = favouriteItems;
   const [favouritesVisibleCount, setFavouritesVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
 
   // Portfolio items from Supabase
@@ -836,6 +842,7 @@ const ExploreScreen = memo(() => {
     if (activeTab !== 'favourites') return;
     if (savedPortfolioIds.length === 0) {
       setFavouriteItems([]);
+      setFavouritesHydrating(false);
       return;
     }
 
@@ -845,8 +852,14 @@ const ExploreScreen = memo(() => {
     );
     // A card just hearted in Discover is already complete and visible. Put it
     // in Favourites now; the database fetch fills in older saves afterwards.
-    setFavouriteItems(localSavedCards);
-    setFavouritesLoading(localSavedCards.length === 0);
+    // Saves already loaded stay too. This runs again every time the tab opens
+    // and whenever the Discover feed changes, and dropping back to only the
+    // looks that happen to be in Discover made an open collection briefly
+    // claim it was empty.
+    const keptCards = mergeSavedExploreCards(savedPortfolioIds, localSavedCards, favouriteItemsRef.current);
+    setFavouriteItems(keptCards);
+    setFavouritesLoading(keptCards.length === 0);
+    setFavouritesHydrating(true);
 
     const load = async () => {
       try {
@@ -869,9 +882,12 @@ const ExploreScreen = memo(() => {
       } catch {
         // Retain current-session saves when the background hydration fails.
         // An empty state would falsely imply that a heart did not work.
-        if (!cancelled) setFavouriteItems(localSavedCards);
+        if (!cancelled) setFavouriteItems(keptCards);
       } finally {
-        if (!cancelled) setFavouritesLoading(false);
+        if (!cancelled) {
+          setFavouritesLoading(false);
+          setFavouritesHydrating(false);
+        }
       }
     };
     load();
@@ -1338,7 +1354,22 @@ const ExploreScreen = memo(() => {
                 )
               }
               ListEmptyComponent={
-                openCollection ? (
+                openCollection && openCollection.itemIds.length > 0 && favouritesHydrating ? (
+                  // Its looks are still on the way; it isn't empty.
+                  <View style={styles.emptyContainer}>
+                    <ActivityIndicator color={P.sub} />
+                  </View>
+                ) : openCollection && openCollection.itemIds.length > 0 ? (
+                  // It has looks, but none could be shown (for example, their
+                  // provider is no longer on CERVICED).
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>Can't show these looks right now</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Check back soon
+                    </Text>
+                  </View>
+                ) : openCollection ? (
                   <View style={styles.emptyContainer}>
                     <TabIcon name="heart" size={48} color={P.sub} />
                     <Text style={[styles.emptyText, { color: P.text }]}>Nothing in {openCollection.name} yet</Text>
