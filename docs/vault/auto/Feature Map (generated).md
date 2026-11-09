@@ -82,13 +82,13 @@ Curated: [[Payments]] · **162 files**
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/contexts/BookingContext.tsx` _(108)_
+- `src/screens/client/BookingDetailScreen.tsx` _(101)_
 - `src/services/bookingService.ts` _(101)_
-- `src/screens/client/BookingDetailScreen.tsx` _(98)_
 - `src/features/bookings/receipt.ts` _(93)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
+- `src/features/bookings/paymentPresentation.ts` _(65)_
 - `src/types/database.ts` _(59)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(58)_
-- `src/features/bookings/paymentPresentation.ts` _(53)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
 - `src/services/becca/capabilities/client.ts` _(46)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **360 files**
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(588)_
 - `src/services/becca/capabilities/client.ts` _(586)_
-- `src/screens/client/BookingDetailScreen.tsx` _(503)_
+- `src/screens/client/BookingDetailScreen.tsx` _(509)_
 - `src/screens/client/BookingsScreen.tsx` _(408)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(252)_
@@ -248,7 +248,7 @@ Curated: [[Booking Flow]] · **207 files**
 - `src/contexts/BookingContext.tsx` _(348)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(337)_
 - `src/services/databaseService.ts` _(271)_
-- `src/screens/client/BookingDetailScreen.tsx` _(213)_
+- `src/screens/client/BookingDetailScreen.tsx` _(223)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/RescheduleScreen.tsx` _(158)_

@@ -31,6 +31,9 @@ import {
   LINK_ONLY_HERO_FINISHES,
   LINK_ONLY_THEMES,
   type HeroFinish,
+  type CardShape,
+  CARD_SHAPES,
+  DEFAULT_CARD_SHAPE,
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
@@ -98,6 +101,7 @@ export default function BrandingScreen({ navigation }: any) {
   const [customAccent, setCustomAccent]       = useState('#D98BA6');
   const [sheetColor, setSheetColor]           = useState(SHEET_BG);
   const [heroFinish, setHeroFinish]           = useState<HeroFinish>(DEFAULT_HERO_FINISH);
+  const [cardShape, setCardShape]             = useState<CardShape>(DEFAULT_CARD_SHAPE);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
@@ -117,7 +121,8 @@ export default function BrandingScreen({ navigation }: any) {
         setAccentColor(cached.accentColor);
         setBackgroundImage(cached.backgroundImage);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
-        const { base, sheet, finish } = parseThemeKey(cached.profileTheme);
+        const { base, sheet, finish, shape } = parseThemeKey(cached.profileTheme);
+        setCardShape(shape);
         setSheetColor(sheet);
         setHeroFinish(finish);
         const custom = decodeCustomTheme(base);
@@ -143,7 +148,8 @@ export default function BrandingScreen({ navigation }: any) {
           if (data.accent_color) setAccentColor(data.accent_color);
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
           if (data.brand_font) setBrandFont(data.brand_font);
-          const { base, sheet, finish } = parseThemeKey(data.profile_theme);
+          const { base, sheet, finish, shape } = parseThemeKey(data.profile_theme);
+          setCardShape(shape);
           setSheetColor(sheet);
           setHeroFinish(finish);
           const custom = decodeCustomTheme(base);
@@ -226,7 +232,7 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish);
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape);
 
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
@@ -255,7 +261,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, brandFont, navigation]);
 
   // Both stacks that open Branding for a link-only pro (Home, Settings) have
   // the Full CERVICED experience page.
@@ -395,6 +401,49 @@ export default function BrandingScreen({ navigation }: any) {
                       )}
                     </View>
                     <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Card shape — corners of the service cards and category pills */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Card Shape</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              The corners of your service cards and category pills, where your service info sits.
+            </Text>
+            <View style={styles.finishRow}>
+              {CARD_SHAPES.map(shape => {
+                const selected = cardShape === shape.key;
+                const square = shape.key === 'square';
+                return (
+                  <TouchableOpacity
+                    key={shape.key}
+                    style={styles.finishOption}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setCardShape(shape.key);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${shape.name}: ${shape.description}`}
+                  >
+                    <View style={[styles.shapePreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                      <View style={styles.shapePillRow}>
+                        <View style={[styles.shapePill, { backgroundColor: accentColor }, square && styles.shapeSquare]} />
+                        <View style={[styles.shapePill, styles.shapePillIdle, square && styles.shapeSquare]} />
+                      </View>
+                      <View style={[styles.shapeCard, square && styles.shapeSquare]}>
+                        <View style={[styles.shapeThumb, { backgroundColor: accentColor }]} />
+                        <View style={styles.shapeLines}>
+                          <View style={styles.shapeLineLong} />
+                          <View style={styles.shapeLineShort} />
+                        </View>
+                      </View>
+                    </View>
+                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{shape.name}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -576,6 +625,34 @@ const styles = StyleSheet.create({
   finishLocked: { opacity: 0.55 },
   finishLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
   finishName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+
+  // Card Shape previews: a mini category-pill row over a mini service card.
+  shapePreview: {
+    width: '100%',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    gap: 10,
+  },
+  shapePillRow: { flexDirection: 'row', gap: 6 },
+  shapePill: { width: 44, height: 16, borderRadius: 8 },
+  shapePillIdle: { backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(0,0,0,0.12)' },
+  shapeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  shapeSquare: { borderRadius: 0 },
+  // The service photo stays a circle in both shapes, as on the profile.
+  shapeThumb: { width: 22, height: 22, borderRadius: 11, opacity: 0.7 },
+  shapeLines: { flex: 1, gap: 4 },
+  shapeLineLong: { height: 5, borderRadius: 2.5, backgroundColor: 'rgba(0,0,0,0.18)', width: '85%' },
+  shapeLineShort: { height: 5, borderRadius: 2.5, backgroundColor: 'rgba(0,0,0,0.1)', width: '50%' },
 
   imageRow:    { flexDirection: 'row', alignItems: 'center', gap: 14 },
   imageThumb:  { width: 80, height: 80, borderRadius: 12 },

@@ -1472,6 +1472,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
+  // Branding → Card Shape: square corners on the service cards and category
+  // pills, or the rounded look the profile has always had.
+  const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -3676,6 +3679,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 selectedCategory === category ? "transparent" : OP.border
               }
               textColor={selectedCategory === category ? "#FFFFFF" : OP.text}
+              square={squareCards}
             />
           )}
           keyExtractor={(item) => `cat-${item}`}
@@ -3729,6 +3733,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             style={[
               styles.serviceItemCard,
               { backgroundColor: cardBg, borderColor: OP.border },
+              squareCards && styles.serviceItemCardSquare,
             ]}
           >
             <LinearGradient
@@ -6423,6 +6428,9 @@ const styles = StyleSheet.create({
     // its shadow via shadow* above.
     elevation: 0,
     marginBottom: 12,
+  },
+  serviceItemCardSquare: {
+    borderRadius: 0,
   },
   serviceCardBlur: {
     flex: 1,
