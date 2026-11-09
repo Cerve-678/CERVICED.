@@ -1,4 +1,4 @@
-import { previewProviderRefund } from '../features/bookings/paymentPresentation';
+import { cancelsWithRefund, previewProviderRefund } from '../features/bookings/paymentPresentation';
 
 describe('previewProviderRefund', () => {
   it('a full refund moves everything the provider holds', () => {
@@ -21,5 +21,20 @@ describe('previewProviderRefund', () => {
     expect(previewProviderRefund(1000, 'custom', '10.01', false).error).toBe('You can refund at most £10.00.');
     expect(previewProviderRefund(1000, 'custom', '0', false).error).toBe('Enter an amount above £0.00.');
     expect(previewProviderRefund(1000, 'custom', '', false)).toMatchObject({ refundPence: 0, keepPence: 1000, error: null });
+  });
+});
+
+describe('cancelsWithRefund', () => {
+  it('ticks "Cancel appointment too" by default on a full refund of a cancellable booking', () => {
+    expect(cancelsWithRefund(true, true, null)).toBe(true);
+  });
+
+  it('keeps the appointment when the provider unticks it, even after switching back to full', () => {
+    expect(cancelsWithRefund(true, true, false)).toBe(false);
+  });
+
+  it('never cancels on a partial refund or a booking that cannot be cancelled', () => {
+    expect(cancelsWithRefund(false, true, true)).toBe(false);
+    expect(cancelsWithRefund(true, false, null)).toBe(false);
   });
 });

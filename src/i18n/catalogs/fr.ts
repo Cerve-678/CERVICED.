@@ -100,7 +100,7 @@ export const fr: Catalog = {
 
   'profile.section.appInfo': "Infos de l'app et mentions légales",
   'profile.appInfo.about.title': 'À propos de Cerviced',
-  'profile.appInfo.about.sub': 'Mission, version',
+  'profile.appInfo.about.sub': 'Qui nous sommes et ce que nous construisons',
   'profile.appInfo.report.title': 'Signaler un problème',
   'profile.appInfo.report.sub': 'Bugs, commentaires',
 
@@ -171,7 +171,7 @@ export const fr: Catalog = {
 
   'providerAccount.section.appInfo': "INFOS DE L'APP ET MENTIONS LÉGALES",
   'providerAccount.appInfo.about.title': 'À propos de Cerviced',
-  'providerAccount.appInfo.about.sub': 'Mission, version',
+  'providerAccount.appInfo.about.sub': 'Qui nous sommes et ce que nous construisons',
   'providerAccount.appInfo.report.title': 'Signaler un problème',
   'providerAccount.appInfo.report.sub': 'Bugs, commentaires',
 

@@ -26,6 +26,7 @@ Curated overview: [[Screens & Navigation]].
 - `Search`
 - `Bookings`
 - `BookingDetail`
+- `ActivityCentre`
 - `ExternalBookingDetail`
 - `Reschedule`
 - `BookmarkedProviders`
@@ -60,7 +61,6 @@ Curated overview: [[Screens & Navigation]].
 - `HelpCentre`
 - `TextSizing`
 - `LanguageRegion`
-- `About`
 - `ReportProblem`
 - `AdminDashboard`
 - `AdminMoney`

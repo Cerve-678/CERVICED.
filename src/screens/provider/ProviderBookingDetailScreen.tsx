@@ -93,6 +93,8 @@ import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings
 import { formatPickList } from '../../features/beauty-profile/pickList';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
+import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
+import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
@@ -223,6 +225,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [initInputError, setInitInputError] = useState('');
   const [initSent, setInitSent] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
+  const [cancelIfDeclined, setCancelIfDeclined] = useState(false);
+  const [offerNote, setOfferNote] = useState('');
 
   // Group reschedule-initiate: provider picks ONE new day for the whole
   // group; ModernBeautyCalendar (fed groupSlotResolver below) only offers
@@ -689,29 +693,35 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     // scope for hooks declared above it) directly off dbReschedule state —
     // same condition, same meaning: a still-pending client request.
     const respondingToClientRequest = dbReschedule?.status === 'pending';
+    const note = offerNote.trim();
     try {
       if (respondingToClientRequest) {
-        await respondToRescheduleRequest(booking.id, initRescheduleSlots, sendApology ? apologyText : undefined);
-        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots } : prev);
+        const responseNote = [sendApology ? apologyText.trim() : '', note].filter(Boolean).join('\n\n') || undefined;
+        await respondToRescheduleRequest(booking.id, initRescheduleSlots, responseNote, cancelIfDeclined);
+        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, cancel_if_declined: cancelIfDeclined, response_note: responseNote ?? null } : prev);
       } else {
         await upsertProviderRescheduleRequest({
           booking_id: booking.id,
           proposed_slots: initRescheduleSlots,
+          cancel_if_declined: cancelIfDeclined,
+          note,
         });
-        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, requested_by: 'provider' } : {
+        setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, requested_by: 'provider', cancel_if_declined: cancelIfDeclined, response_note: note || null } : {
           id: '', booking_id: booking.id, requested_by: 'provider', original_date: booking.bookingDate,
           original_time: booking.bookingTime, requested_dates: [], provider_available_slots: initRescheduleSlots,
-          status: 'provider_responded', reschedule_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          status: 'provider_responded', reschedule_count: 0, cancel_if_declined: cancelIfDeclined, response_note: note || null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         });
       }
       setInitSent(true);
     } catch (err) {
       logger.error('[ProviderBookingDetail] send reschedule response failed:', err);
-      setInitInputError(respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.');
+      setInitInputError(err instanceof Error && (err.message.startsWith('Cancel if declined is not available yet') || err.message.startsWith('Reschedule notes are not available yet'))
+        ? err.message
+        : respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.');
     } finally {
       setInitLoading(false);
     }
-  }, [initRescheduleSlots, booking, dbReschedule?.status, sendApology, apologyText]);
+  }, [initRescheduleSlots, booking, dbReschedule?.status, sendApology, apologyText, cancelIfDeclined, offerNote]);
 
   const closeInitRescheduleModal = useCallback(() => {
     setShowInitRescheduleModal(false);
@@ -719,6 +729,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setInitSuggestedTimes([]); setInitSelectedTimes([]); setInitCustomTimePickerVisible(false);
     setInitInputError(''); setInitSent(false);
     setSendApology(false);
+    setCancelIfDeclined(false);
+    setOfferNote('');
   }, []);
 
   // Decline a client's reschedule request outright — no alternative times
@@ -1107,8 +1119,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   // Issue a refund through the same Stripe-backed path the Payments screen
   // uses (IssueRefundSheet -> refund-payment edge function). This returns the
-  // client's money; it deliberately does NOT cancel the appointment —
-  // cancelling is the separate action below.
+  // client's money, and can optionally cancel the appointment too.
   const handleRefund = useCallback(() => { if (booking) setRefundOpen(true); }, [booking]);
 
   const handleRefunded = useCallback(({ completed, isFull, title, message }: RefundIssued) => {
@@ -1222,7 +1233,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }
 
   // Provider-side in-progress actions use the same purple as Booking History.
-  const statusColor = booking.status === BookingStatus.IN_PROGRESS
+  const statusColor = dbReschedule?.status === 'pending' || dbReschedule?.status === 'provider_responded'
+    ? '#FF9500'
+    : booking.status === BookingStatus.IN_PROGRESS
     ? PROVIDER_IN_PROGRESS_PURPLE
     : BOOKING_STATUS_COLORS[booking.status] || '#007AFF';
 
@@ -1341,7 +1354,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                    {BOOKING_STATUS_LABELS[booking.status]}{isPending ? '  ·  Reschedule Requested' : ''}
+                    {BOOKING_STATUS_LABELS[booking.status]}{dbReschedule?.status === 'provider_responded'
+                      ? '  ·  Reschedule Offer Pending'
+                      : isPending ? '  ·  Reschedule Requested' : ''}
                   </Text>
                 </View>
                 {/* Money after the fact, in one plain line: "Refund issued ·
@@ -2153,11 +2168,25 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: '#FF9500' }]}>
-                      {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : 'RESCHEDULE · RESPONDED'}
+                      {dbReschedule.status === 'pending' ? 'RESCHEDULE REQUEST' : dbReschedule.requested_by === 'provider' ? 'RESCHEDULE OFFER PENDING' : 'RESCHEDULE · RESPONDED'}
                     </Text>
                     <Text style={[styles.rescheduleNote, { color: P.sub }]}>
                       Requested {formatBookingDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at)}
                     </Text>
+                    {/* Whose turn it is and until when. updated_at moves when
+                        the provider offers times, which is when the client's
+                        window starts (same anchor the expiry cron uses). */}
+                    {(() => {
+                      const by = rescheduleReplyBy(dbReschedule.updated_at);
+                      if (!by) return null;
+                      return (
+                        <Text style={[styles.rescheduleNote, { color: '#FF9500', fontWeight: '600' }]}>
+                          {dbReschedule.status === 'pending'
+                            ? `Reply by ${by}, or the booking stays as it is.`
+                            : `${booking?.customerName ?? 'The client'} has until ${by} to choose, or the booking stays as it is.`}
+                        </Text>
+                      );
+                    })()}
                     {(dbReschedule.requested_dates ?? []).map((date: string, i: number) => {
                       const requestedTime = dbReschedule.requested_times?.[i];
                       return (
@@ -2172,6 +2201,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     {dbReschedule.status === 'provider_responded' && (dbReschedule.provider_available_slots ?? []).length > 0 && (
                       <View style={{ marginTop: 8 }}>
                         <Text style={[styles.rescheduleNote, { color: P.text + '77', marginBottom: 6 }]}>Your offered slots:</Text>
+                        <Text style={[styles.rescheduleNote, { color: P.sub, marginBottom: 6 }]}>
+                          {dbReschedule.cancel_if_declined
+                            ? 'If the client declines, this booking will be cancelled and any payment refunded in full.'
+                            : 'If the client declines, their original booking time stays in place.'}
+                        </Text>
+                        {!!dbReschedule.response_note && (
+                          <Text style={[styles.rescheduleNote, { color: P.text, marginBottom: 8 }]}>Your note: {dbReschedule.response_note}</Text>
+                        )}
                         {(dbReschedule.provider_available_slots ?? []).map((slot, i) => (
                           <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#34C75915', borderColor: '#34C75944' }]}>
                             <Ionicons name="checkmark-circle" size={14} color="#34C759" />
@@ -2436,7 +2473,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
                   {dbReschedule?.status === 'rejected'
                     ? 'The client has been notified. Their original appointment time stands.'
-                    : `${booking?.customerName ?? 'The client'} has been notified and can choose from your proposed times.`}
+                    : `${booking?.customerName ?? 'The client'} has been notified and has ${RESCHEDULE_REPLY_MINUTES} minutes to choose one of your times. If they don't, the booking stays as it is.`}
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
@@ -2520,6 +2557,34 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     <View style={[styles.divider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]} />
                   </>
                 )}
+
+                <TouchableOpacity
+                  style={[styles.apologyToggle, { backgroundColor: P.card, borderColor: P.border, marginBottom: 14 }]}
+                  onPress={() => setCancelIfDeclined(v => !v)}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: cancelIfDeclined }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.apologyCheck, { backgroundColor: cancelIfDeclined ? '#FF3B30' : 'transparent', borderColor: cancelIfDeclined ? '#FF3B30' : P.border }]}>
+                    {cancelIfDeclined && <Ionicons name="checkmark" size={12} color="#fff" />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.apologyToggleText, { color: P.text }]}>Cancel if declined</Text>
+                    <Text style={[styles.rescheduleNote, { color: P.sub, marginTop: 4 }]}>If the client declines these times, cancel the original booking and refund any payment in full.</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <Text style={[styles.inputLabel, { color: P.text + '77' }]}>NOTE TO CLIENT (OPTIONAL)</Text>
+                <TextInput
+                  style={[styles.respondInput, { color: P.text, borderColor: P.border, backgroundColor: P.card, marginBottom: 14 }]}
+                  value={offerNote}
+                  onChangeText={setOfferNote}
+                  placeholder="Add context for the new time"
+                  placeholderTextColor={P.sub}
+                  multiline
+                  maxLength={500}
+                  accessibilityLabel="Note to client about reschedule offer"
+                />
 
                 {/* Date picker */}
                 <Text style={[styles.inputLabel, { color: P.text + '77' }]}>DATE</Text>
@@ -2742,7 +2807,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={styles.sentIcon}>✓</Text>
                 <Text style={[styles.sentTitle, { color: P.text }]}>Request Sent</Text>
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  {booking?.customerName ?? 'The client'} has been notified and can choose from your proposed dates for all {groupSiblings.length} services.
+                  {booking?.customerName ?? 'The client'} has been notified and has {RESCHEDULE_REPLY_MINUTES} minutes to choose from your proposed dates for all {groupSiblings.length} services. If they don't, the bookings stay as they are.
                 </Text>
                 <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
                   <TouchableOpacity
@@ -3092,6 +3157,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           isDarkMode={isDarkMode}
           onClose={() => setRefundOpen(false)}
           onRefunded={handleRefunded}
+          onCancelAppointment={booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.PENDING ? () => cancelBooking(booking.id) : undefined}
         />
       )}
 

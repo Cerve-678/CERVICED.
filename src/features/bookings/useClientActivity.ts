@@ -1,8 +1,8 @@
 // src/features/bookings/useClientActivity.ts
 //
 // The client's Activity Centre list, for any screen that shows it or its "!":
-// the Bookings screen (the sheet itself) and the client Settings screen's
-// "For you" card. One hook so the two can never count differently.
+// the Activity Centre page, the "!" on Bookings' tray button, and the client
+// Settings screen's "For you" card. One hook so they can never count differently.
 //
 // Re-reads when the screen using it comes into focus and when the client's
 // bookings change, since an intake form filled in or a refund requested
@@ -17,7 +17,7 @@ import { logger } from '../../utils/logger';
 import { buildClientActivity, type ClientActivity } from './activityCentre';
 
 export const EMPTY_ACTIVITY_REMOTE: ClientActivityRemote = {
-  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [],
+  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
 };
 
 export interface ClientActivityState {
