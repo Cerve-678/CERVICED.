@@ -419,22 +419,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       .catch((err) => logger.error('[ProviderBookingDetail] booking user id load failed:', err));
   }, [bookingId, clientUserId]);
 
-  // Per booking, not per client: the server returns only the fields the
-  // booked service's category gets (plus the safety fields), so nothing on
-  // this screen filters the profile any more.
-  useEffect(() => {
-    if (!clientUserId || !bookingId) return;
-    getClientBeautyProfileForBooking(bookingId)
-      .then(p => {
-        setClientProfile(p);
-        // Auto-expand if allergies or medical notes are present
-        if (p && (p.allergies.length > 0 || p.medicalNotes)) {
-          setProfileExpanded(true);
-        }
-      })
-      .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
-  }, [clientUserId, bookingId]);
-
   useEffect(() => {
     if (!bookingId) return;
     let active = true;
@@ -492,6 +476,28 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       ...(liveBookingOverrides?.paymentStatus !== undefined && { paymentStatus: liveBookingOverrides.paymentStatus }),
     } as ConfirmedBooking;
   }, [baseBooking, liveBookingOverrides]);
+
+  // Per booking, not per client: the server returns only the fields the
+  // booked service's category gets (plus the safety fields), and only once
+  // this provider has accepted the booking. Reloads when the status changes,
+  // so accepting on this screen brings the profile in, and declining or a
+  // cancellation takes it away. null = not shared, not "nothing on file".
+  const bookingStatus = booking?.status;
+  useEffect(() => {
+    if (!clientUserId || !bookingId) return;
+    let active = true;
+    getClientBeautyProfileForBooking(bookingId)
+      .then(p => {
+        if (!active) return;
+        setClientProfile(p);
+        // Auto-expand if allergies or medical notes are present
+        if (p && (p.allergies.length > 0 || p.medicalNotes)) {
+          setProfileExpanded(true);
+        }
+      })
+      .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
+    return () => { active = false; };
+  }, [clientUserId, bookingId, bookingStatus]);
 
   // What this booking still hasn't been sent, from the provider's own packs
   // and forms that cover its service (an empty service list = every service).
@@ -1766,6 +1772,22 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
               {/* ── Perforated divider ── */}
               <Perf color={perf} notch={P.bg} edge={cardBorder} />
+
+              {/* ── CLIENT PROFILE, not yet shared: a request. The server only
+                    shares the profile once the provider accepts, so say that
+                    rather than show nothing (or an empty profile, which would
+                    read as "no allergies"). ── */}
+              {!clientProfile && isPendingConfirmation && (
+                <>
+                  <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: P.sub }]}>CLIENT PROFILE</Text>
+                    <Text style={[styles.tipNote, { color: P.sub, marginTop: 0 }]}>
+                      Shared with you once you accept this booking, including any allergies or medical notes.
+                    </Text>
+                  </View>
+                  <Perf color={perf} notch={P.bg} edge={cardBorder} />
+                </>
+              )}
 
               {/* ── CLIENT PROFILE section ── */}
               {clientProfile && (() => {

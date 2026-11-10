@@ -113,7 +113,7 @@ Curated: [[Booking Flow]] · **365 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(591)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(597)_
 - `src/services/becca/capabilities/client.ts` _(587)_
 - `src/screens/client/BookingDetailScreen.tsx` _(503)_
 - `src/screens/client/BookingsScreen.tsx` _(405)_
@@ -246,8 +246,8 @@ Curated: [[Booking Flow]] · **67 files**
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **208 files**
 - `src/contexts/BookingContext.tsx` _(348)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(337)_
-- `src/services/databaseService.ts` _(271)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(338)_
+- `src/services/databaseService.ts` _(272)_
 - `src/screens/client/BookingDetailScreen.tsx` _(223)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
