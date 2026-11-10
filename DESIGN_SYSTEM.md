@@ -320,33 +320,38 @@ Colour is picked deterministically by hashing the client's name.
 
 ## Typography
 
-Two fonts only. No others are used anywhere in the app.
+The app's own type is Josefin Sans (since 2026-11-10; it was Bakbak One + Jura,
+and the website at cerviced.co moved to Josefin Sans the same day).
 
 ### Fonts
 
 | Font | File | Used for |
 |---|---|---|
-| `BakbakOne-Regular` | `BakbakOne-Regular.ttf` | ALL headings, buttons, labels, section titles, caps text |
-| `Jura-VariableFont_wght` | `Jura-VariableFont_wght.ttf` | ALL body text, descriptions, subtitles, form input text |
+| `JosefinSans-Bold` | `@expo-google-fonts/josefin-sans` 700Bold | ALL headings, buttons, labels, section titles, prices, caps text |
+| `JosefinSans-VariableFont_wght` | `assets/fonts/JosefinSans-VariableFont_wght.ttf` | ALL body text, descriptions, subtitles, form input text (use `fontWeight` for 400–700) |
+| `BakbakOne-Regular` | `assets/fonts/BakbakOne-Regular.ttf` | **Only the CERVICED name** (Welcome wordmark + intro, provider receipt card, Fully Booked certificate) |
+| `Prata-Regular` | `assets/fonts/Prata-Regular.ttf` | Big "moment" titles (certificates, achievements) |
 
-**The rule is simple:** uppercase/display → BakbakOne. Sentences/descriptions → Jura.
+**The rule is simple:** uppercase/display → `JosefinSans-Bold`. Sentences/descriptions → `JosefinSans-VariableFont_wght`. The CERVICED name → `BakbakOne-Regular`.
+
+Not the app's own type, so don't use them for UI: the provider business-name fonts in `src/constants/providerFonts.ts` (applied only to a provider's name), and the account's body-font choice in Display settings (`src/utils/displaySettings.ts`, which still offers Jura and Bakbak One and only fills text with no `fontFamily` of its own). Receipts and booking emails still embed Bakbak One + Jura; they move together in a separate change so they keep matching.
 
 ### Common sizes used in screens
 
 | Usage | Size | Font |
 |---|---|---|
-| Large screen title | 32 | BakbakOne |
-| Section heading | 20–24 | BakbakOne |
-| Button text | 13–15 | BakbakOne |
-| Section label (caps) | 11–13 | BakbakOne |
-| Body / description | 14–16 | Jura |
-| Subtitle | 13–14 | Jura |
-| Fine print | 11–12 | Jura |
-| Input text | 15 | Jura |
+| Large screen title | 32 | JosefinSans-Bold |
+| Section heading | 20–24 | JosefinSans-Bold |
+| Button text | 13–15 | JosefinSans-Bold |
+| Section label (caps) | 11–13 | JosefinSans-Bold |
+| Body / description | 14–16 | JosefinSans-VariableFont_wght |
+| Subtitle | 13–14 | JosefinSans-VariableFont_wght |
+| Fine print | 11–12 | JosefinSans-VariableFont_wght |
+| Input text | 15 | JosefinSans-VariableFont_wght |
 
 ### Letter spacing
 
-BakbakOne headings almost always have `letterSpacing: 1` or higher. Labels in all-caps use `letterSpacing: 1.5` to `2`.
+Display headings almost always have `letterSpacing: 1` or higher. Labels in all-caps use `letterSpacing: 1.5` to `2`.
 
 ---
 
@@ -420,16 +425,16 @@ export default function MyScreen({ navigation }: Props) {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
           activeOpacity={0.5}
         >
-          <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 18, color: P.text }}>{'<'}</Text>
+          <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 18, color: P.text }}>{'<'}</Text>
         </TouchableOpacity>
 
         {/* Title */}
-        <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 32, color: P.text, letterSpacing: 1, marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 32, color: P.text, letterSpacing: 1, marginBottom: 8 }}>
           SCREEN TITLE
         </Text>
 
         {/* Subtitle */}
-        <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 14, color: P.sub, lineHeight: 20, marginBottom: 32 }}>
+        <Text style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, color: P.sub, lineHeight: 20, marginBottom: 32 }}>
           Description text here.
         </Text>
 
@@ -456,7 +461,7 @@ export default function MyScreen({ navigation }: Props) {
 
 ```tsx
 <Text style={{
-  fontFamily: 'BakbakOne-Regular',
+  fontFamily: 'JosefinSans-Bold',
   fontSize: 11,
   letterSpacing: 2,
   color: P.sub,
@@ -478,7 +483,7 @@ export default function MyScreen({ navigation }: Props) {
   }}
   activeOpacity={0.75}
 >
-  <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' }}>
+  <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' }}>
     BUTTON TEXT
   </Text>
 </TouchableOpacity>
@@ -498,7 +503,7 @@ export default function MyScreen({ navigation }: Props) {
   }}
   activeOpacity={0.55}
 >
-  <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: P.text }}>
+  <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 15, letterSpacing: 1, color: P.text }}>
     BUTTON TEXT
   </Text>
 </TouchableOpacity>
@@ -516,7 +521,7 @@ export default function MyScreen({ navigation }: Props) {
   paddingVertical: 12,
 }}>
   <TextInput
-    style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 15, color: P.text }}
+    style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 15, color: P.text }}
     placeholderTextColor={P.sub}
   />
 </View>

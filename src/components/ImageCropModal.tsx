@@ -230,12 +230,12 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone }: Imag
 const st = StyleSheet.create({
   root:    { flex: 1, backgroundColor: '#000000' },
   topBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12 },
-  cancel:  { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 15, color: '#FFFFFF' },
+  cancel:  { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 15, color: '#FFFFFF' },
   use:     { minWidth: 104, height: 38, borderRadius: 19, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
-  useText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  useText: { fontFamily: 'JosefinSans-Bold', fontSize: 13 },
   area:    { flex: 1, marginHorizontal: 24, marginVertical: 12 },
   dim:     { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.6)' },
   frame:   { position: 'absolute', borderWidth: StyleSheet.hairlineWidth, borderColor: '#FFFFFF' },
   handle:  { position: 'absolute', width: HANDLE_HIT, height: HANDLE_HIT, alignItems: 'center', justifyContent: 'center' },
-  hint:    { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingHorizontal: 28 },
+  hint:    { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '500', fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingHorizontal: 28 },
 });

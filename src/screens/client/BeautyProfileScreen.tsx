@@ -508,5 +508,5 @@ const styles = StyleSheet.create({
   bg:          { flex: 1 },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   saveBtn:     { borderRadius: 100, paddingVertical: 15, paddingHorizontal: 28, alignItems: 'center', borderWidth: 1.5 },
-  saveBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 1 },
+  saveBtnText: { fontFamily: 'JosefinSans-Bold', fontSize: 14, letterSpacing: 1 },
 });

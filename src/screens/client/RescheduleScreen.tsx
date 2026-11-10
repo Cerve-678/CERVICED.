@@ -132,7 +132,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       headerTransparent: false,
       headerTitle: 'Reschedule',
       headerTitleAlign: 'center',
-      headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 16, color: C.text },
+      headerTitleStyle: { fontFamily: 'JosefinSans-Bold', fontSize: 16, color: C.text },
       headerStyle: { backgroundColor: C.bg },
       headerShadowVisible: false,
       headerTintColor: C.accentText,

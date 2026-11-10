@@ -3730,12 +3730,12 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 20,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     letterSpacing: 1,
   },
   totalValue: {
     fontSize: 28,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
   },
   tipBlock: { marginTop: 14 },
   tipNote: { fontSize: 12, lineHeight: 17, marginTop: 4 },
@@ -3867,7 +3867,7 @@ const styles = StyleSheet.create({
   },
   respondModalTitle: {
     fontSize: 20,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     marginBottom: 6,
   },
   respondModalSub: {
@@ -3899,7 +3899,7 @@ const styles = StyleSheet.create({
   refundSheet: { maxHeight: '90%', borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingTop: 8 },
   refundHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 14 },
   refundHeadIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  refundTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 21 },
+  refundTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 21 },
   refundFoot: { paddingHorizontal: 18, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 2 },
   refundCta: { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   refundCtaText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
@@ -4354,7 +4354,7 @@ const addrStyles = StyleSheet.create({
     borderRadius: 4,
   },
   statusText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.3,

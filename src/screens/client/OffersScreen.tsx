@@ -219,7 +219,7 @@ export default function OffersScreen({ navigation }: Props) {
       headerBackVisible: true,
       headerTitle: 'OFFERS',
       headerTitleAlign: 'center',
-      headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
+      headerTitleStyle: { fontFamily: 'JosefinSans-Bold', fontSize: 19, color: P.text },
       headerStyle: { backgroundColor: P.bg },
       headerShadowVisible: false,
       headerTintColor: P.accentText,
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   countText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     borderRadius: 100,
   },
   discountText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 11,
     letterSpacing: 0.5,
   },
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoPlaceholderText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 26,
   },
   info: {
@@ -419,20 +419,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   providerName: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   title: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     letterSpacing: 0.2,
     lineHeight: 20,
   },
   description: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 16,
@@ -450,13 +450,13 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   servicePillText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 9,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   expiry: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 11,
     fontWeight: '500',
     opacity: 0.7,
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sortSheetTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 13,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   sortRowText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 14,
   },
   sortCheck: {
@@ -505,11 +505,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 17,
   },
   emptySub: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 13,
   },
 });
