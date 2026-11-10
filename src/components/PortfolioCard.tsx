@@ -42,9 +42,15 @@ interface PortfolioCardProps {
   // After a heart, slide up Explore's "Add to a collection" bar. Only the
   // Explore grid draws that bar, so other screens leave this off.
   offersCollections?: boolean;
+  // Off for a card a collection's look is flying onto: the look is its
+  // entrance. Only read when the card mounts, so the memo below skips it.
+  entrance?: boolean;
+  // Overrides the fade-in's wait, for cards that arrive after a collection's
+  // looks have landed and should follow straight on. Read on mount only.
+  entranceDelayMs?: number;
 }
 
-const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef, offersCollections = false }: PortfolioCardProps) => {
+const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef, offersCollections = false, entrance = true, entranceDelayMs }: PortfolioCardProps) => {
   const { theme, palette: P } = useTheme();
   // Blue-grey secondary — the highlight for the saved-heart and category chip
   // over photos. Hat-aware via palette; on the client hat this is the blue-grey
@@ -53,7 +59,7 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
   // A short entrance on the initial viewport keeps the intended polish.
   // Animating every offscreen card in an unvirtualized masonry ScrollView
   // creates dozens of native animation nodes for work the user cannot see.
-  const shouldAnimate = index < 10;
+  const shouldAnimate = entrance && index < 10;
   const fadeAnim = useRef(new Animated.Value(shouldAnimate ? 0 : 1)).current;
   const slideAnim = useRef(new Animated.Value(shouldAnimate ? 30 : 0)).current;
   const { isPortfolioSaved, savePortfolioItem, unsavePortfolioItem } = useBookmarkStore();
@@ -61,6 +67,7 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
   const isSaved = isPortfolioSaved(item.id);
   // aspectRatio is stored as width/height, so height = width / ratio.
 
+  const delay = entranceDelayMs ?? (index % 10) * 80;
   useEffect(() => {
     if (!shouldAnimate) {
       fadeAnim.setValue(1);
@@ -71,17 +78,17 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, he
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 400,
-        delay: (index % 10) * 80,
+        delay,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 400,
-        delay: (index % 10) * 80,
+        delay,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [fadeAnim, index, shouldAnimate, slideAnim]);
+  }, [delay, fadeAnim, shouldAnimate, slideAnim]);
 
   const handleBookmark = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});

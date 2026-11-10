@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useFolderPhotos } from '../../stores/useCollectionsStore';
 import type { ExploreCollection } from '../../types/collections';
@@ -20,8 +21,10 @@ export function OpenCollectionHeader({ collection, onBack, onEdit }: OpenCollect
   const count = collection.itemIds.length;
   const tap = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
+  // Fades in as the folder's looks fly out, rather than replacing the
+  // folder row in a single frame.
   return (
-    <View style={styles.wrap}>
+    <Animated.View entering={FadeIn.duration(220)} style={styles.wrap}>
       <View style={styles.topRow}>
         <TouchableOpacity
           onPress={() => { tap(); onBack(); }}
@@ -59,7 +62,7 @@ export function OpenCollectionHeader({ collection, onBack, onEdit }: OpenCollect
           </Text>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
