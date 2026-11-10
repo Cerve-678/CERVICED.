@@ -28,7 +28,7 @@ describe('client detail screen performance and safety contracts', () => {
     expect(todoLoader).toContain('useFocusEffect(useCallback(() =>');
     expect(todoLoader).toContain('Promise.allSettled([');
     expect(todoLoader).toContain('if (!active) return;');
-    expect(todoLoader).toContain('setBookingIntakeForm(null)');
+    expect(todoLoader).toContain('setBookingIntakeForms([])');
     expect(source).toContain('setTodoRetryNonce(value => value + 1)');
     expect(source).not.toContain("navigation.addListener('focus'");
   });
@@ -38,7 +38,7 @@ describe('client detail screen performance and safety contracts', () => {
 
     expect(source).not.toContain('{!isPast && !todoLoaded && (');
     expect(source).not.toContain('Loading appointment tasks');
-    expect(source).toContain('{!isPast && todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (');
+    expect(source).toContain('{!isPast && todoLoaded && (bookingIntakeForms.length > 0 || bookingInfoPacks.length > 0) && (');
   });
 
   it('opens the receipt without a position animation', () => {

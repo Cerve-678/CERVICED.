@@ -5,7 +5,7 @@ import { BookingStatus, PaymentStatus } from '../types/booking';
 const NOW = new Date(2026, 10, 8, 12, 0); // Sun 8 Nov 2026, 12:00 local
 
 const none: ClientActivityRemote = {
-  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
+  pendingFormBookingIds: [], pendingFormTitles: {}, unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
 };
 
 function booking(id: string, over: Partial<ActivityBooking> = {}): ActivityBooking {
@@ -248,7 +248,7 @@ describe('activityTimeline', () => {
 
 describe('bookingTodoCounts', () => {
   it('counts forms and unread packs per booking', () => {
-    expect(bookingTodoCounts({ pendingFormBookingIds: ['a', 'b'], unreadPackBookingIds: ['a'] }, [booking('a'), booking('b')])).toEqual({ a: 2, b: 1 });
+    expect(bookingTodoCounts({ pendingFormBookingIds: ['a', 'b'], unreadPackBookingIds: ['a'] }, [booking('a'), booking('b')], NOW)).toEqual({ a: 2, b: 1 });
   });
 
   it('gives no "!" to a booking that is finished, cancelled or under way', () => {
@@ -261,6 +261,7 @@ describe('bookingTodoCounts', () => {
         booking('now', { status: BookingStatus.IN_PROGRESS }),
         booking('ahead'),
       ],
+      NOW,
     );
     expect(counts).toEqual({ ahead: 1 });
   });
@@ -269,6 +270,46 @@ describe('bookingTodoCounts', () => {
     const bookings = [booking('done', { status: BookingStatus.COMPLETED }), booking('ahead')];
     const remote = { ...none, pendingFormBookingIds: ['done', 'ahead'], unreadPackBookingIds: ['done'] };
     const listed = new Set(buildClientActivity(bookings, remote, NOW).needsYou.map(i => i.target.bookingId));
-    expect(Object.keys(bookingTodoCounts(remote, bookings))).toEqual([...listed]);
+    expect(Object.keys(bookingTodoCounts(remote, bookings, NOW))).toEqual([...listed]);
+  });
+});
+
+describe('more than one form on a booking', () => {
+  // Live on 2026-11-08: a provider sent "Terms & Conditions" and a
+  // "Makeup Consultation Form" to one booking; the client did the second.
+  it('says how many are left', () => {
+    const remote = { ...none, pendingFormBookingIds: ['a', 'a'], pendingFormTitles: { a: ['Terms & Conditions', 'Makeup Consultation Form'] } };
+    const [item] = buildClientActivity([booking('a')], remote, NOW).needsYou;
+    expect(item).toMatchObject({ kind: 'intake_form', title: 'Fill in 2 forms' });
+    expect(item!.detail).not.toContain('“');
+  });
+
+  it('names the one still to do once the other is sent', () => {
+    const remote = { ...none, pendingFormBookingIds: ['a'], pendingFormTitles: { a: ['Terms & Conditions'] } };
+    const [item] = buildClientActivity([booking('a')], remote, NOW).needsYou;
+    expect(item!.title).toBe('Fill in your form');
+    expect(item!.detail.startsWith('“Terms & Conditions”.')).toBe(true);
+  });
+});
+
+describe('agrees with the booking page once the appointment time has passed', () => {
+  // The booking page hides its To Do at the start time (BookingDetailScreen
+  // isPast). The Activity Centre used to keep asking until the provider marked
+  // the booking done, so for a while it asked for a form nowhere to be found.
+  const remote = { ...none, pendingFormBookingIds: ['started'], pendingFormTitles: {}, unreadPackBookingIds: ['started', 'later'] };
+  const bookings = [
+    booking('started', { bookingDate: '2026-11-08', bookingTime: '11:00' }), // an hour before NOW, still "upcoming"
+    booking('later', { bookingDate: '2026-11-08', bookingTime: '13:00' }),
+  ];
+
+  it('drops forms and packs for a booking whose start time has gone by', () => {
+    const ids = buildClientActivity(bookings, remote, NOW).needsYou.map(i => i.key);
+    expect(ids).toEqual(['pack:later']);
+    expect(bookingTodoCounts(remote, bookings, NOW)).toEqual({ later: 1 });
+  });
+
+  it('keeps one whose date cannot be read, rather than hiding a real to-do', () => {
+    const odd = [booking('started', { bookingDate: '' })];
+    expect(buildClientActivity(odd, { ...none, pendingFormBookingIds: ['started'] }, NOW).needsYou).toHaveLength(1);
   });
 });
