@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-10 (Becca miss log)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110170000 | `becca_misses` | **APPLIED 2026-11-10** by the user ("apply migration"), running the file with `supabase db query --linked -f` themselves, after Claude's own apply was refused by the tool permission check and the Supabase MCP was disconnected; version recorded by the file. Frontier right before applying: live max `20261110150000`; only unapplied file above it on an open PR was this one. Lock `(none)` on main; stale claims on open PR branches (`feat/import-from-photo-pdf-link`, `feat/marketing-studio`, `fix/ship-account-hat-restore-fix`) whose migrations touch none of these objects. New objects only: table `becca_misses` (RLS on, all grants revoked), `becca_mentions_sensitive`, `record_becca_miss` (SECURITY DEFINER, `search_path ''`), `forget_becca_misses_with_chat` + trigger on `becca_chat_sessions`, cron job `purge-becca-misses` (jobid 174, `41 4 * * *`, 90 days). Two forced-rollback dry runs first (as a real account): sensitive strings from the security and legal reviews dropped, redaction worked, deleting a client chat cleared only client misses, live unchanged after. Verified live: version present (now live max); RLS on; authenticated can execute `record_becca_miss` only, anon nothing; trigger present; cron job present; 0 rows. Written on `feat/becca-learns-from-misses` (#459). |
+
 ### Applied 2026-11-10 (waitlist sign-ups)
 
 | Authored version | Name | Status |

@@ -64,6 +64,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAppDialog } from "../../components/AppDialog";
 import { logger } from '../../utils/logger';
+import { recordBeccaMiss } from '../../services/databaseService';
+import { abandonMiss, trackTurn, type MissRecord, type PendingMiss } from '../../services/becca/missLog';
 import { openLegalPage } from '../../utils/legalPage';
 import { openAboutPage } from '../../utils/aboutPage';
 
@@ -392,12 +394,36 @@ export default function BeccaScreen({
     };
   }, [bookings, isProviderMode, isLinkOnly]);
 
+  // The miss log (services/becca/missLog.ts): a question Becca didn't catch
+  // is held until the person's next move shows how it ended, then recorded
+  // once. Logging is best effort: a failed write never reaches the person.
+  const pendingMissRef = useRef<PendingMiss | null>(null);
+  const missUserIdRef = useRef(user?.id);
+  missUserIdRef.current = user?.id;
+  const sendMisses = useCallback((records: MissRecord[]) => {
+    if (!missUserIdRef.current) return;
+    for (const record of records) {
+      // Code and message only: a raw database error can echo the row back,
+      // and the row is what the person typed.
+      recordBeccaMiss(record).catch((err: { code?: string; message?: string }) =>
+        logger.error('[Becca] miss log write failed:', err?.code, err?.message));
+    }
+  }, []);
+  /** The conversation is ending (new chat, other hat, old chat, leaving): a held miss went unanswered. */
+  const flushMiss = useCallback(() => {
+    const records = abandonMiss(pendingMissRef.current);
+    pendingMissRef.current = null;
+    sendMisses(records);
+  }, [sendMisses]);
+  useEffect(() => flushMiss, [flushMiss]);
+
   // Initialize. The engine is stateless — hat and bookings are passed per
   // call rather than held on a singleton, so there's no cross-mode state to
   // pin before replying and no stale booking list to invalidate.
   useEffect(() => {
     if (initializedHatRef.current === beccaHat) return;
     initializedHatRef.current = beccaHat;
+    flushMiss();
     beccaHatRef.current = beccaHat;
     conversationEpochRef.current += 1;
     setMessages([buildWelcomeMessage()]);
@@ -407,7 +433,7 @@ export default function BeccaScreen({
     setStreamingResponse(null);
     setIsTyping(false);
     conversationRef.current = undefined;
-  }, [beccaHat, buildWelcomeMessage]);
+  }, [beccaHat, buildWelcomeMessage, flushMiss]);
 
   // Load sessions from Supabase on mount, and again whenever the hat changes.
   // History is per-hat: a provider must never see their client-side chats in
@@ -611,6 +637,18 @@ export default function BeccaScreen({
         persistResponse();
         return;
       }
+      if (textToSend) {
+        const tracked = trackTurn(pendingMissRef.current, {
+          hat: requestHat,
+          sent: textToSend,
+          // Typed messages come through the send button with no text
+          // argument; every chip passes its own message.
+          fromChip: messageText !== undefined,
+          reply: response,
+        });
+        pendingMissRef.current = tracked.pending;
+        sendMisses(tracked.records);
+      }
       conversationRef.current = context;
       // A fast local match should still feel intentional rather than making
       // the processing state flash by before a person can read it.
@@ -744,6 +782,7 @@ export default function BeccaScreen({
           // after this and overwrite the fresh chat with old messages.
           loadChatRequestRef.current += 1;
           conversationEpochRef.current += 1;
+          flushMiss();
           setCurrentSessionId(null);
           setMessages([buildWelcomeMessage()]);
           setReturnActions(null);
@@ -764,6 +803,7 @@ export default function BeccaScreen({
     // A history selection starts a distinct conversation, so a live answer
     // from the thread we just left must not append after this load finishes.
     conversationEpochRef.current += 1;
+    flushMiss();
     try {
       const msgs = await beccaStorageService.loadMessages(session.id);
       // A slower, earlier tap resolving after a newer one must not clobber

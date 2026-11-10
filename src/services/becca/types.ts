@@ -36,6 +36,13 @@ export interface ChatMessage {
    * BECCA_CAPABILITIES.md §3.3.
    */
   imageAnalysis?: string;
+  /**
+   * What Becca understood this turn: the capability that answered, or null
+   * when she didn't catch it (the honest fallback). Absent on replies that
+   * weren't an attempt to understand (small talk, confirmations, "which one
+   * did you mean"). Read by the miss log (missLog.ts); not saved with chats.
+   */
+  understood?: { capabilityId: string | null };
 }
 
 /**
