@@ -6376,41 +6376,24 @@ interface BookingBeautyProfileRow {
   photography_consent: boolean | null;
 }
 
+/**
+ * The client's Beauty Profile for one booking, or null when it isn't shared
+ * with this provider: the booking is still a request, or was declined,
+ * cancelled or missed, or the caller isn't its provider. Null means "not
+ * shared", never "nothing on file", so a caller must not render it as an
+ * empty profile (that would read as "no allergies").
+ */
 export async function getClientBeautyProfileForBooking(
   bookingId: string,
-): Promise<ClientBeautyProfile> {
-  const EMPTY_PROFILE: ClientBeautyProfile = {
-    hairType: [],
-    scalpCondition: [],
-    hairGoals: [],
-    treatmentHistory: [],
-    skinType: [],
-    skinTone: null,
-    skinConcerns: [],
-    sensitiveAreas: [],
-    nailLength: [],
-    nailShape: [],
-    lashStyle: [],
-    lashStatus: null,
-    browStyle: [],
-    browCondition: [],
-    makeupCoverage: [],
-    makeupFinish: [],
-    makeupEyes: [],
-    makeupLips: [],
-    styleVibe: [],
-    allergies: [],
-    medicalNotes: null,
-    // No answer is not a yes: unknown consent reads as "no photos".
-    photographyConsent: false,
-  };
-
+): Promise<ClientBeautyProfile | null> {
   // Goes through a SECURITY DEFINER RPC (not a direct table select). It
-  // only answers the provider on this booking, and returns null for every
-  // field the booked service's category doesn't get, so a nail booking never
-  // brings the client's hair, skin or makeup details onto the provider's
-  // phone. Allergies, medical notes and photography consent always come back.
-  // See 20261108190000_beauty_profile_shared_by_booked_service.sql.
+  // only answers the provider on this booking, once they have accepted it,
+  // and returns null for every field the booked service's category doesn't
+  // get, so a nail booking never brings the client's hair, skin or makeup
+  // details onto the provider's phone. Allergies, medical notes and
+  // photography consent always come back. See
+  // 20261108190000_beauty_profile_shared_by_booked_service.sql and
+  // 20261110131224_beauty_profile_after_accept.sql.
   const { data, error } = await supabase
     .rpc("get_client_beauty_profile_for_booking", { p_booking_id: bookingId })
     .maybeSingle();
@@ -6420,11 +6403,7 @@ export async function getClientBeautyProfileForBooking(
   // as an error, not silently read as a confirmed-clear profile. The caller
   // decides how to degrade (see CLAUDE.md).
   if (error) throw error;
-  // No row = legitimately no booking relationship with this client (the RPC
-  // is booking-gated) — EMPTY_PROFILE is the correct, non-error result here.
-  if (!data) {
-    return EMPTY_PROFILE;
-  }
+  if (!data) return null;
 
   const d = data as BookingBeautyProfileRow;
   return {
