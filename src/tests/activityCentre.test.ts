@@ -5,7 +5,7 @@ import { BookingStatus, PaymentStatus } from '../types/booking';
 const NOW = new Date(2026, 10, 8, 12, 0); // Sun 8 Nov 2026, 12:00 local
 
 const none: ClientActivityRemote = {
-  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
+  pendingFormBookingIds: [], pendingFormTitles: {}, unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
 };
 
 function booking(id: string, over: Partial<ActivityBooking> = {}): ActivityBooking {
@@ -270,5 +270,23 @@ describe('bookingTodoCounts', () => {
     const remote = { ...none, pendingFormBookingIds: ['done', 'ahead'], unreadPackBookingIds: ['done'] };
     const listed = new Set(buildClientActivity(bookings, remote, NOW).needsYou.map(i => i.target.bookingId));
     expect(Object.keys(bookingTodoCounts(remote, bookings))).toEqual([...listed]);
+  });
+});
+
+describe('more than one form on a booking', () => {
+  // Live on 2026-11-08: a provider sent "Terms & Conditions" and a
+  // "Makeup Consultation Form" to one booking; the client did the second.
+  it('says how many are left', () => {
+    const remote = { ...none, pendingFormBookingIds: ['a', 'a'], pendingFormTitles: { a: ['Terms & Conditions', 'Makeup Consultation Form'] } };
+    const [item] = buildClientActivity([booking('a')], remote, NOW).needsYou;
+    expect(item).toMatchObject({ kind: 'intake_form', title: 'Fill in 2 forms' });
+    expect(item!.detail).not.toContain('“');
+  });
+
+  it('names the one still to do once the other is sent', () => {
+    const remote = { ...none, pendingFormBookingIds: ['a'], pendingFormTitles: { a: ['Terms & Conditions'] } };
+    const [item] = buildClientActivity([booking('a')], remote, NOW).needsYou;
+    expect(item!.title).toBe('Fill in your form');
+    expect(item!.detail.startsWith('“Terms & Conditions”.')).toBe(true);
   });
 });

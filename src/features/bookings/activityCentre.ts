@@ -211,16 +211,22 @@ export function buildClientActivity(
     });
   }
 
-  for (const id of new Set(remote.pendingFormBookingIds)) {
+  // One row per booking, saying how many are left: with two sent and one done,
+  // "Fill in your form" read as if the finished one were still wanted.
+  const formCounts = new Map<string, number>();
+  for (const id of remote.pendingFormBookingIds) formCounts.set(id, (formCounts.get(id) ?? 0) + 1);
+  for (const [id, count] of formCounts) {
     const b = byId.get(id);
     if (!isStillAhead(b)) continue;
     const { service, provider } = names(b);
+    // Named when there's one left, so it can't be mistaken for one already sent.
+    const lastTitle = count === 1 ? remote.pendingFormTitles[id]?.[0] : undefined;
     needsYou.push({
       key: `form:${id}`,
       kind: 'intake_form',
-      title: 'Fill in your form',
-      detail: `${provider} needs it before ${service}${when(b) ? ` on ${when(b)}` : ''}.`,
-      summary: `${provider} needs your form`,
+      title: count > 1 ? `Fill in ${count} forms` : 'Fill in your form',
+      detail: `${lastTitle ? `“${lastTitle}”. ` : ''}${provider} needs ${count > 1 ? 'them' : 'it'} before ${service}${when(b) ? ` on ${when(b)}` : ''}.`,
+      summary: count > 1 ? `${provider} needs ${count} forms from you` : `${provider} needs your form`,
       caption: beforeDay(b),
       target: { type: 'booking', bookingId: id },
       sortAt: appointmentMs(b),
