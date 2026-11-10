@@ -6,7 +6,6 @@ Expo, no dependencies. Two files:
 | File | What it is |
 |---|---|
 | `index.html` | The entire site. All CSS and JS inlined. |
-| `waitlist_signups.sql` | The table the form wants to write to. **Never applied.** |
 
 Nothing here imports from `src/`, and nothing in `src/` imports from here.
 
@@ -120,18 +119,17 @@ plays it in, so a visitor without script still sees the whole thing.
 The footer contact is support@cerviced.co, the address the legal page
 uses (the old footer said hello@cerviced.com).
 
-**2. The form stores nothing.** `WAITLIST` at the top of the page script has
-`supabaseUrl` and `anonKey` blank, so submitting says *"Preview mode — nothing
-was sent."* No data has ever been captured.
-
-**3. `waitlist_signups.sql` was never run.** The table does not exist. Its
-`anon` policy is insert-only with **no** select policy on purpose, so the public
-page can write signups but cannot read them back out. If it goes ahead it should
-become a properly-timestamped migration, not an ad hoc run.
-
-**Undecided:** whether signups belong in the live app Supabase project, a
-separate marketing project, or a hosted form service. This was asked and never
-answered.
+**2. Where sign-ups go (since 2026-11-10).** The form posts to
+`public.waitlist_signups` in the app's live Supabase project, created by
+`supabase/migrations/20261110150000_waitlist_signups.sql` (the user chose the
+app's database over a separate project or a form service). `WAITLIST` at the top
+of the page script holds the project URL and the app's publishable anon key,
+the same one every app build ships. The table lets `anon` INSERT only, with
+length and shape checks in the policy; there is **no** select, update or delete
+for anon or authenticated, so the list can't be read back through the website.
+Read it in the Supabase dashboard (Table Editor → waitlist_signups). A repeat
+email on the same side is a 409, shown as "You're already on the list".
+Nothing was captured before 2026-11-10.
 
 Provider and client answers are already stored as separate columns, not one
 blob — `business_name`/`services`/`current_tool` are provider-only,

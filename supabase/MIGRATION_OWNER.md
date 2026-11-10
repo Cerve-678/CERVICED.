@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-10 (waitlist sign-ups)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110150000 | `waitlist_signups` | **APPLIED 2026-11-10** on the user's choice ("App's database") for where cerviced.co sign-ups go, via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261110140000`; highest unapplied on an open PR `20261110130000_marketing_studio` (#415, below the frontier already, unrelated); lock `(none)`. New standalone table, touches no app table or function. Forced-rollback dry run first, as `anon`: good insert saved; select, update, bad email and 30-day-old consent refused; duplicate email+role = unique_violation; live unchanged after. Verified live: version present (now live max); RLS on; grants `anon:INSERT` only; one policy `waitlist_signups_anon_insert` (INSERT, anon). End-to-end over REST with the app's anon key: insert 201, repeat 409, read 42501; probe row deleted, 0 rows. Replaces `waitlist/waitlist_signups.sql` (never applied, deleted). Written on `feat/waitlist-saves-signups`. |
+
 ### Applied 2026-11-10 (latest start per service)
 
 | Authored version | Name | Status |
