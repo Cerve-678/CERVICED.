@@ -3657,6 +3657,31 @@ export async function getOlderBookings(
 }
 
 /**
+ * The signed-in client's most recent completed appointment, however long ago.
+ * Becca's "rebook my last appointment" reads BookingContext's cache first, but
+ * that only holds getMyBookings()'s recent window — without this, a client
+ * whose last visit was more than 90 days ago is told they've never booked.
+ */
+export async function getMyLatestCompletedBooking(): Promise<BookingWithAddOns | null> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("client_bookings") // gated view, client-side only — see getMyBookings
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("status", "completed")
+    .order("booking_date", { ascending: false })
+    .order("booking_time", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return ((data ?? [])[0] as BookingWithAddOns | undefined) ?? null;
+}
+
+/**
  * Look up a provider's UUID by display_name (used at checkout to get provider_id).
  *
  * Deliberately NOT filtered on `has_gone_live` — the documented exception to
@@ -10603,17 +10628,6 @@ export interface RebookableService {
   addOns: { id: string; name: string; price: number; extraMinutes: number }[];
 }
 
-/**
- * Re-resolve a past booking's service against live data, for "Book Again".
- *
- * Rebooking used to copy the booking's snapshot straight into the cart with a
- * synthetic id (`rebook_<timestamp>`) and the ORIGINAL price — so a client could
- * re-book a deleted service, or at a price the provider had since changed, with
- * no real service_id attached. This returns the current row so the caller can
- * rebook at today's price or explain why it isn't possible.
- *
- * Returns null when the provider is no longer live/active or the service is gone.
- */
 /** Resolve real `services.id` UUIDs for a provider's services by name.
  *
  *  Cart items store whatever id the screen that added them happened to have —
@@ -10642,30 +10656,77 @@ export async function getServiceIdsByNames(
   return out;
 }
 
+/**
+ * Re-resolve a past booking's service against live data, for "Book Again".
+ *
+ * Rebooking used to copy the booking's snapshot straight into the cart with a
+ * synthetic id (`rebook_<timestamp>`) and the ORIGINAL price — so a client could
+ * re-book a deleted service, or at a price the provider had since changed, with
+ * no real service_id attached. This returns the current row so the caller can
+ * rebook at today's price or explain why it isn't possible.
+ *
+ * Found by the booking's own `service_id` first, so a service the provider has
+ * since renamed is still found. The name is the fallback, for old bookings with
+ * no service link; when two active services share that name, the newest wins
+ * (`.maybeSingle()` would error on two rows and read as "not available").
+ *
+ * Returns null when the provider is no longer live/active or the service is gone.
+ * Throws on a query error, so a caller never mistakes a failed lookup for a
+ * service that has gone.
+ */
 export async function getRebookableService(
   providerId: string,
   serviceName: string,
+  serviceId?: string | null,
 ): Promise<RebookableService | null> {
   // has_gone_live + is_active: never let a client re-book into a provider who
   // has taken their profile down (see the client-facing query rule at the top).
-  const { data: provider } = await supabase
+  const { data: provider, error: providerError } = await supabase
     .from("providers")
     .select("id, slug, display_name")
     .eq("id", providerId)
     .eq("is_active", true)
     .eq("has_gone_live", true)
     .maybeSingle();
+  if (providerError) throw providerError;
   if (!provider) return null;
 
-  const { data } = await supabase
-    .from("services")
-    .select(
-      "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active, extra_minutes )",
-    )
-    .eq("provider_id", providerId)
-    .eq("name", serviceName)
-    .eq("is_active", true)
-    .maybeSingle();
+  const columns =
+    "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active, extra_minutes )";
+  type RebookServiceRow = {
+    id: string;
+    name: string;
+    price: number | string;
+    duration_minutes: number | string;
+    category_name: string;
+    service_add_ons: { id: string; name: string; price: number | string; is_active: boolean; extra_minutes: number | null }[] | null;
+  };
+  let data: RebookServiceRow | null = null;
+  if (serviceId && UUID_RE.test(serviceId)) {
+    const byId = await supabase
+      .from("services")
+      .select(columns)
+      .eq("id", serviceId)
+      .eq("provider_id", providerId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (byId.error) throw byId.error;
+    data = byId.data as RebookServiceRow | null;
+  }
+  if (!data && serviceName) {
+    const byName = await supabase
+      .from("services")
+      .select(columns)
+      .eq("provider_id", providerId)
+      // Case-insensitive exact match: % and _ are escaped so a name is never
+      // read as a pattern.
+      .ilike("name", serviceName.trim().replace(/[\\%_]/g, "\\$&"))
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (byName.error) throw byName.error;
+    data = (byName.data?.[0] as RebookServiceRow | undefined) ?? null;
+  }
   if (!data) return null;
 
   return {
@@ -10676,9 +10737,9 @@ export async function getRebookableService(
     categoryName: data.category_name,
     providerSlug: provider.slug,
     providerDisplayName: provider.display_name,
-    addOns: ((data as any).service_add_ons ?? [])
-      .filter((a: any) => a.is_active)
-      .map((a: any) => ({
+    addOns: (data.service_add_ons ?? [])
+      .filter((a) => a.is_active)
+      .map((a) => ({
         id: a.id,
         name: a.name,
         price: Number(a.price),

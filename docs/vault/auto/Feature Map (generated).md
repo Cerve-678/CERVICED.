@@ -7,7 +7,7 @@
 
 ## Address release
 Curated: [[Address Release]] · **103 files**
-- `src/services/databaseService.ts` _(199)_
+- `src/services/databaseService.ts` _(200)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/provider/InfoRegScreen.tsx` _(92)_
@@ -41,7 +41,7 @@ Curated: [[Address Release]] · **103 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **198 files**
-- `src/services/databaseService.ts` _(327)_
+- `src/services/databaseService.ts` _(328)_
 - `src/services/AvailabilityService.ts` _(310)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/screens/provider/AddBookingScreen.tsx` _(161)_
@@ -109,14 +109,14 @@ Curated: [[Payments]] · **163 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **366 files**
-- `src/services/databaseService.ts` _(1113)_
+- `src/services/databaseService.ts` _(1120)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(597)_
-- `src/services/becca/capabilities/client.ts` _(587)_
-- `src/screens/client/BookingDetailScreen.tsx` _(503)_
-- `src/screens/client/BookingsScreen.tsx` _(405)_
+- `src/services/becca/capabilities/client.ts` _(596)_
+- `src/screens/client/BookingDetailScreen.tsx` _(504)_
+- `src/screens/client/BookingsScreen.tsx` _(407)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(252)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **209 files**
 
 ## Auth
 Curated: [[Contexts]] · **218 files**
-- `src/services/databaseService.ts` _(335)_
+- `src/services/databaseService.ts` _(336)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/screens/auth/LoginScreen.tsx` _(140)_
@@ -315,8 +315,8 @@ Curated: [[Contexts]] · **218 files**
 Curated: [[Services]] · **55 files**
 - `src/screens/shared/BeccaScreen.tsx` _(110)_
 - `src/services/becca/engine.ts` _(61)_
-- `src/services/becca/capabilities/client.ts` _(52)_
-- `src/services/databaseService.ts` _(51)_
+- `src/services/becca/capabilities/client.ts` _(53)_
+- `src/services/databaseService.ts` _(52)_
 - `src/services/becca/types.ts` _(42)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(37)_
 - `src/components/ChatComponents.tsx` _(36)_
