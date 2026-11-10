@@ -39,4 +39,16 @@ describe('ImageCropModal', () => {
     render(<ImageCropModal uri="file:///p.jpg" accent="#AF9197" onAccent="#FFFFFF" onCancel={jest.fn()} onDone={onDone} />);
     await waitFor(() => expect(onDone).toHaveBeenCalledWith('file:///p.jpg'));
   });
+
+  it('says Skip and which photo it is when cropping several in a row', async () => {
+    mockRender.mockResolvedValue({ width: 1000, height: 1000 });
+    const onCancel = jest.fn();
+    const { getByText } = render(
+      <ImageCropModal uri="file:///p.jpg" accent="#AF9197" onAccent="#FFFFFF" onCancel={onCancel} onDone={jest.fn()} cancelLabel="Skip" progressLabel="2 of 3" />,
+    );
+    await waitFor(() => expect(mockRender).toHaveBeenCalled());
+    expect(getByText('2 of 3')).toBeTruthy();
+    fireEvent.press(getByText('Skip'));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
 });

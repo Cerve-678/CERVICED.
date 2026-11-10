@@ -23,6 +23,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { ImageCropModal } from '../../components/ImageCropModal';
 import { TapToEditTextInput } from '../../components/TapToEditTextInput';
 import type { ViewInstance } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
@@ -1168,21 +1169,29 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     return problem ? DESCRIPTION_PROBLEM_COPY[problem] : null;
   }, [description, name]);
 
-  // Pick one photo, crop and adjust it in the iOS crop, done. One at a time
-  // because iOS offers no crop during a multi-select. The crop IS the framing,
+  // Pick several photos at once, then crop each one in ImageCropModal, in the
+  // order picked. iOS's own crop (allowsEditing) only does squares and isn't
+  // offered during a multi-select, so the free-shape crop runs after the
+  // picker. Each crop starts as the whole photo: Use Photo without dragging
+  // keeps it as it is, and Skip leaves that one out. The crop IS the framing,
   // so the photo fills its frame wherever it's shown.
+  const [cropQueue, setCropQueue] = useState<{ uris: string[]; total: number }>({ uris: [], total: 0 });
+  const cropping = cropQueue.uris[0] ?? null;
+  const nextCrop = () => setCropQueue(prev => ({ uris: prev.uris.slice(1), total: prev.uris.length > 1 ? prev.total : 0 }));
   const handleAddImage = async () => {
     try {
       // No permission request first: picking from the library needs none on
       // iOS or Android, and asking added a round trip before every picker.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        orderedSelection: true,
         quality: 0.8,
       });
-      const asset = result.assets?.[0];
-      if (result.canceled || !asset) return;
-      setImages(prev => [...prev, { uri: asset.uri, fit: 'cover' }]);
+      const uris = result.canceled ? [] : (result.assets ?? []).map(asset => asset.uri).filter(Boolean);
+      if (!uris.length) return;
+      setCropQueue({ uris, total: uris.length });
     } catch (e) {
       Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
     }
@@ -1794,6 +1803,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
           </SafeAreaView>
         </LinearGradient>
       </KeyboardDismissView>
+      <ImageCropModal
+        uri={cropping}
+        accent={accentColor}
+        onAccent={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'}
+        cancelLabel={cropQueue.total > 1 ? 'Skip' : 'Cancel'}
+        progressLabel={cropQueue.total > 1 ? `${cropQueue.total - cropQueue.uris.length + 1} of ${cropQueue.total}` : null}
+        onCancel={nextCrop}
+        onDone={uri => { setImages(prev => [...prev, { uri, fit: 'cover' }]); nextCrop(); }}
+      />
     </Modal>
   );
 };
