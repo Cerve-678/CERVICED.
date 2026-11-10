@@ -50,19 +50,20 @@ export const inferCategoryKind = (name: string, fallback: string = 'OTHER'): Cat
 
 // "Style / Vibe" — a shared core plus a few flavours that fit each kind.
 export const STYLE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['natural', 'glam', 'sleek', 'lived-in', 'boho', 'edgy', 'classic', 'bold', 'romantic', 'textured', 'polished', 'undone', 'vintage'],
-  NAILS:      ['natural', 'glam', 'minimalist', 'y2k', 'baddie', 'soft-girl', 'editorial', 'bold', 'chrome', 'french-inspired', 'grunge', 'coquette', 'clean-girl'],
-  LASHES:     ['natural', 'glam', 'wispy', 'doll', 'baddie', 'dramatic', 'classic', 'bold', 'fluffy', 'cat-eye', 'anime', 'soft-glam'],
-  BROWS:      ['natural', 'fluffy', 'defined', 'soft-girl', 'bold', 'editorial', 'classic', 'feathered', 'sculpted', 'arched', 'minimal'],
-  MUA:        ['natural', 'glam', 'editorial', 'soft-girl', 'clean-girl', 'bridal', 'bold', 'dewy', 'matte', 'sun-kissed', 'vintage-glam', 'monochrome'],
-  AESTHETICS: ['natural', 'glow-up', 'subtle', 'preventative', 'rejuvenating', 'clinical', 'natural-enhancement', 'restorative', 'youthful', 'refined'],
+  HAIR:       ['natural', 'glam', 'sleek', 'lived-in', 'boho', 'edgy', 'classic', 'bold', 'romantic', 'textured', 'polished', 'undone', 'vintage', 'protective', 'low-maintenance', 'sleek-back', 'curly', 'natural-hair', 'french-girl', 'old-money'],
+  NAILS:      ['natural', 'glam', 'minimalist', 'y2k', 'baddie', 'soft-girl', 'editorial', 'bold', 'chrome', 'french-inspired', 'grunge', 'coquette', 'clean-girl', 'quiet-luxury', 'cute', 'pastel', 'neutral', 'sparkly', 'abstract', '3d'],
+  LASHES:     ['natural', 'glam', 'wispy', 'doll', 'baddie', 'dramatic', 'classic', 'bold', 'fluffy', 'cat-eye', 'anime', 'soft-glam', 'open-eye', 'squirrel', 'textured', 'everyday'],
+  BROWS:      ['natural', 'fluffy', 'defined', 'soft-girl', 'bold', 'editorial', 'classic', 'feathered', 'sculpted', 'arched', 'minimal', 'brushed-up', 'soft-arch', 'straight', 'boyish'],
+  MUA:        ['natural', 'glam', 'editorial', 'soft-girl', 'clean-girl', 'bridal', 'bold', 'dewy', 'matte', 'sun-kissed', 'vintage-glam', 'monochrome', 'full-glam', 'soft-glam', 'no-makeup', 'glowy', 'bronzed', 'long-lasting'],
+  AESTHETICS: ['natural', 'glow-up', 'subtle', 'preventative', 'rejuvenating', 'clinical', 'natural-enhancement', 'restorative', 'youthful', 'refined', 'tweakment', 'medical-grade'],
   OTHER:      ['natural', 'glam', 'editorial', 'classic', 'minimalist', 'bold', 'modern', 'timeless'],
 };
 
 // "Best for (occasion)" — universal set, with a tailored list for aesthetics.
-export const OCCASION_TAGS_DEFAULT = ['bridal', 'everyday', 'date-night', 'prom', 'photoshoot', 'festival', 'birthday', 'event', 'party', 'graduation', 'holiday', 'girls-night', 'anniversary', 'vacation'];
+export const OCCASION_TAGS_DEFAULT = ['bridal', 'everyday', 'date-night', 'prom', 'photoshoot', 'festival', 'birthday', 'event', 'party', 'graduation', 'holiday', 'girls-night', 'anniversary', 'vacation',
+  'bridesmaid', 'mother-of-the-bride', 'wedding-guest', 'engagement', 'nikah', 'mehndi', 'walima', 'traditional-wedding', 'hen-do', 'baby-shower', 'christening', 'eid', 'diwali', 'christmas-party', 'new-years-eve', 'gala', 'awards', 'headshots', 'content-shoot', 'interview', 'back-to-school', 'self-care'];
 export const OCCASION_TAGS_BY_CATEGORY: Partial<Record<CategoryKind, string[]>> = {
-  AESTHETICS: ['pre-wedding', 'event-prep', 'maintenance', 'glow-up', 'confidence-boost', 'anti-ageing', 'everyday', 'special-occasion', 'seasonal-refresh', 'first-treatment'],
+  AESTHETICS: ['pre-wedding', 'event-prep', 'maintenance', 'glow-up', 'confidence-boost', 'anti-ageing', 'everyday', 'special-occasion', 'seasonal-refresh', 'first-treatment', 'holiday-prep', 'post-summer-repair', 'party-season'],
 };
 
 export const TECHNIQUE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
@@ -70,40 +71,56 @@ export const TECHNIQUE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
   // first line didn't cover (search_events, 2026-10-25): a provider can't be
   // found for "wig install" or "pedicure" if no service can be tagged it.
   HAIR:       ['balayage', 'highlights', 'ombre', 'keratin', 'relaxer', 'braids', 'locs', 'twists', 'extensions', 'colour', 'foilyage', 'colour-correction', 'perm', 'silk-press', 'weave', 'toner',
-               'haircut', 'trim', 'blow-dry', 'wig-install', 'frontal', 'closure', 'sew-in', 'knotless', 'box-braids', 'cornrows', 'faux-locs', 'retwist', 'ponytail', 'tape-ins', 'micro-rings', 'nano-rings', 'clip-ins', 'fade', 'beard', 'updo'],
+               'haircut', 'trim', 'blow-dry', 'wig-install', 'frontal', 'closure', 'sew-in', 'knotless', 'box-braids', 'cornrows', 'faux-locs', 'retwist', 'ponytail', 'tape-ins', 'micro-rings', 'nano-rings', 'clip-ins', 'fade', 'beard', 'updo',
+               'layers', 'pixie-cut', 'bob', 'fringe', 'wash-and-go', 'deep-conditioning', 'scalp-treatment', 'bond-repair', 'hair-treatment', 'barrel-twists', 'two-strand-twists', 'passion-twists', 'senegalese-twists', 'fulani-braids', 'goddess-braids', 'stitch-braids', 'feed-in-braids', 'french-curl-braids', 'starter-locs', 'loc-maintenance', 'interlocking', 'skin-fade', 'taper', 'line-up', 'beard-trim', 'buzz-cut', 'waves', 'quick-weave', 'u-part-wig', 'wig-customisation', 'curls', 'press-and-curl'],
   NAILS:      ['gel', 'acrylic', 'biab', 'nail-art', 'french', 'ombre', 'chrome', 'dip-powder', 'gel-x', 'polygel', 'encapsulated', 'hand-painted', '3d-art', 'cat-eye-gel',
-               'manicure', 'pedicure', 'infill', 'press-ons', 'extensions', 'removal', 'almond', 'stiletto', 'coffin', 'square', 'oval', 'toes'],
+               'manicure', 'pedicure', 'infill', 'press-ons', 'extensions', 'removal', 'almond', 'stiletto', 'coffin', 'square', 'oval', 'toes',
+               'gel-polish', 'shellac', 'builder-gel', 'structured-gel', 'rubber-base', 'russian-manicure', 'japanese-gel', 'french-tip', 'squoval', 'ballerina', 'short-nails', 'long-nails', 'overlay', 'nail-repair', 'cuticle-care', 'freestyle', 'charms', 'airbrush-nails', 'medical-pedicure'],
   LASHES:     ['classic', 'hybrid', 'volume', 'mega-volume', 'lash-lift', 'lash-tint', 'russian', 'wispy', 'mink', 'faux-mink', 'colored-lashes', 'bottom-lashes',
-               'lash-extensions', 'infill', 'removal', 'spikes', 'wet-look-lashes', 'strip-lashes'],
+               'lash-extensions', 'infill', 'removal', 'spikes', 'wet-look-lashes', 'strip-lashes',
+               'cluster-lashes', 'yy-lashes', 'wispy-hybrid', 'wispy-volume', 'keratin-lash-lift', 'lash-lift-and-tint', 'lash-and-brow-combo', 'brown-lashes', 'lower-lashes'],
   BROWS:      ['microblading', 'powder-brow', 'combo-brow', 'lamination', 'tinting', 'hd-brows', 'threading', 'waxing', 'nano-brows', 'brow-mapping', 'henna-brows', 'wax-and-thread',
-               'brow-shape', 'brow-tint', 'touch-up'],
+               'brow-shape', 'brow-tint', 'touch-up',
+               'ombre-brows', 'brow-wax', 'brow-thread', 'tint-and-shape', 'brow-lamination-and-tint', 'brow-sculpt', 'semi-permanent', 'pmu', 'brow-bleach'],
   MUA:        ['airbrush', 'full-glam', 'editorial', 'natural', 'bridal', 'sfx', 'cut-crease', 'dewy', 'contour-and-highlight', 'strobing', 'baking', 'graphic-liner',
-               'soft-glam', 'smokey-eye', 'bridal-trial', 'makeup-lesson', 'lashes-included', 'prom-makeup', 'party-makeup'],
+               'soft-glam', 'smokey-eye', 'bridal-trial', 'makeup-lesson', 'lashes-included', 'prom-makeup', 'party-makeup',
+               'hd-makeup', 'skin-prep', 'lash-application', 'hair-and-makeup', 'asian-bridal', 'african-bridal', 'mature-skin', 'melanin-makeup', 'natural-glam', 'photoshoot-makeup', 'gele-tying'],
   AESTHETICS: ['microneedling', 'chemical-peel', 'dermaplaning', 'hifu', 'filler', 'botox', 'laser', 'hydrafacial', 'mesotherapy', 'prp', 'led-therapy', 'radiofrequency', 'cryotherapy', 'lymphatic-drainage',
-               'anti-wrinkle', 'lip-filler', 'cheek-filler', 'skin-booster', 'fat-dissolving', 'thread-lift', 'facial', 'peel', 'massage', 'skin-consultation'],
-  OTHER:      [],
+               'anti-wrinkle', 'lip-filler', 'cheek-filler', 'skin-booster', 'fat-dissolving', 'thread-lift', 'facial', 'peel', 'massage', 'skin-consultation',
+               'profhilo', 'polynucleotides', 'tear-trough', 'jawline-filler', 'chin-filler', 'non-surgical-rhinoplasty', 'lip-flip', 'masseter-botox', 'rf-microneedling', 'laser-hair-removal', 'ipl', 'carbon-peel', 'skin-tag-removal', 'b12-injection', 'vitamin-drip', 'acne-treatment', 'pigmentation', 'lip-dissolve',
+               // A "Waxing" heading resolves here (CATEGORY_KEYWORDS 'wax'), not OTHER.
+               'waxing', 'brazilian-wax', 'hollywood-wax', 'leg-wax', 'sugaring'],
+  // Waxing, tanning, massage and the rest land here; without a list these
+  // providers had no technique chips at all and their Techniques section hid.
+  OTHER:      ['waxing', 'hot-wax', 'brazilian-wax', 'hollywood-wax', 'leg-wax', 'underarm-wax', 'sugaring', 'spray-tan', 'tanning', 'massage', 'deep-tissue', 'sports-massage', 'facial', 'body-treatment', 'teeth-whitening', 'ear-piercing', 'henna', 'semi-permanent-makeup'],
 };
 
 export const OUTCOME_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['volume', 'length', 'shine', 'grey-coverage', 'protection', 'growth', 'smoothness', 'definition', 'texture', 'colour-vibrancy', 'repair', 'bounce'],
-  NAILS:      ['length', 'art', 'colour', 'strength', 'natural-look', 'durability', 'shine', 'flexibility', 'precision'],
-  LASHES:     ['volume', 'length', 'definition', 'lift', 'curl', 'dramatic', 'natural-look', 'symmetry', 'longevity'],
-  BROWS:      ['definition', 'shape', 'fullness', 'natural', 'bold', 'arched', 'symmetry', 'longevity', 'precision'],
-  MUA:        ['glow', 'coverage', 'definition', 'lifted', 'natural-look', 'dramatic', 'longevity', 'radiance', 'flawless-finish', 'camera-ready'],
-  AESTHETICS: ['glow', 'firmness', 'smoothness', 'rejuvenation', 'definition', 'hydration', 'reduction', 'lifting', 'even-tone', 'collagen-boost', 'pore-refinement', 'radiance'],
-  OTHER:      ['results', 'enhancement', 'maintenance', 'confidence', 'refresh'],
+  HAIR:       ['volume', 'length', 'shine', 'grey-coverage', 'protection', 'growth', 'smoothness', 'definition', 'texture', 'colour-vibrancy', 'repair', 'bounce', 'frizz-free', 'hydration', 'healthy-hair', 'edges', 'low-tension'],
+  NAILS:      ['length', 'art', 'colour', 'strength', 'natural-look', 'durability', 'shine', 'flexibility', 'precision', 'growth', 'chip-free', 'soft-feet'],
+  LASHES:     ['volume', 'length', 'definition', 'lift', 'curl', 'dramatic', 'natural-look', 'symmetry', 'longevity', 'mascara-free', 'lightweight'],
+  BROWS:      ['definition', 'shape', 'fullness', 'natural', 'bold', 'arched', 'symmetry', 'longevity', 'precision', 'low-maintenance', 'fills-gaps'],
+  MUA:        ['glow', 'coverage', 'definition', 'lifted', 'natural-look', 'dramatic', 'longevity', 'radiance', 'flawless-finish', 'camera-ready', 'sweat-proof', 'tear-proof', 'skin-like'],
+  AESTHETICS: ['glow', 'firmness', 'smoothness', 'rejuvenation', 'definition', 'hydration', 'reduction', 'lifting', 'even-tone', 'collagen-boost', 'pore-refinement', 'radiance', 'clear-skin', 'fewer-lines', 'contour', 'volume'],
+  OTHER:      ['results', 'enhancement', 'maintenance', 'confidence', 'refresh', 'smooth-skin', 'relaxation', 'glow', 'hair-free', 'pain-relief'],
 };
 
 // Viral / trend names clients actually search for — now per kind so a lash artist
 // never sees "soap-brows" and a nail tech never sees "butterfly-lashes".
 export const TREND_NAMES_BY_CATEGORY: Record<CategoryKind, string[]> = {
-  HAIR:       ['butterfly-cut', 'money-piece', 'expensive-brunette', 'old-money', 'mob-wife', 'cherry-cola', 'copper', 'lived-in', 'curtain-bangs', 'jellyfish-cut', 'clean-girl-bun', 'wolf-cut', 'chocolate-cherry', 'buttery-blonde'],
-  NAILS:      ['glazed-donut', 'blueberry-milk', 'cherry-cola', 'chrome', 'aura-nails', 'milky-white', 'strawberry-girl', 'velvet', 'lip-gloss', 'jelly-nails', 'cat-eye', 'french-tip-revival', 'mob-wife-nails'],
-  LASHES:     ['butterfly-lashes', 'manga-lashes', 'anime-lashes', 'wet-look', 'fox-eye', 'natural-classic', 'kim-k', 'angel-lashes', 'clean-girl-lashes', 'doll-eye', 'colored-tips'],
-  BROWS:      ['soap-brows', 'brow-lamination', 'fluffy-brows', 'fox-brows', 'feathered', 'snatched-arch', 'nano-brows', 'skinny-brow-revival', 'laminated-and-tinted'],
-  MUA:        ['clean-girl', 'latte-makeup', 'strawberry-girl', 'sunburn-blush', 'cold-girl', 'douyin', 'siren-eyes', 'glazed', 'tomato-girl', 'mob-wife-glam', 'espresso-makeup'],
-  AESTHETICS: ['glass-skin', 'baby-botox', 'russian-lips', 'lip-flip', 'skinboosters', 'glazed-donut-skin', 'snatched', 'fox-eye-lift', 'preventative-botox', 'liquid-facelift', 'tear-trough-filler'],
-  OTHER:      ['clean-girl', 'old-money', 'that-girl', 'quiet-luxury', 'coastal-grandma', 'mob-wife'],
+  HAIR:       ['butterfly-cut', 'money-piece', 'expensive-brunette', 'old-money', 'mob-wife', 'cherry-cola', 'copper', 'lived-in', 'curtain-bangs', 'jellyfish-cut', 'clean-girl-bun', 'wolf-cut', 'chocolate-cherry', 'buttery-blonde',
+               'bixie', 'italian-bob', 'french-bob', 'boyfriend-bob', 'octopus-cut', 'hush-cut', 'bottleneck-bangs', '90s-blowout', 'bombshell-blowout', 'glass-hair', 'cowboy-copper', 'teddy-bear-blonde', 'mushroom-brown', 'strawberry-blonde', 'skunk-stripe', 'peekaboo', 'boho-knotless', 'french-curls', 'butterfly-locs', 'island-twists', 'sleek-ponytail', 'genie-ponytail', 'bubble-ponytail', 'scandi-hairline'],
+  NAILS:      ['glazed-donut', 'blueberry-milk', 'cherry-cola', 'chrome', 'aura-nails', 'milky-white', 'strawberry-girl', 'velvet', 'lip-gloss', 'jelly-nails', 'cat-eye', 'french-tip-revival', 'mob-wife-nails',
+               'micro-french', 'baby-boomer', 'chrome-french', 'mocha-mousse', 'butter-yellow', 'tortoiseshell', 'leopard-print', 'red-nail-theory', 'bubble-nails', 'blooming-gel', 'syrup-nails', 'pearl-nails', 'brown-french', 'coquette-bows', 'quiet-luxury-nails', 'duck-nails', '3d-chrome'],
+  LASHES:     ['butterfly-lashes', 'manga-lashes', 'anime-lashes', 'wet-look', 'fox-eye', 'natural-classic', 'kim-k', 'angel-lashes', 'clean-girl-lashes', 'doll-eye', 'colored-tips',
+               'wet-set', 'k-pop-lashes', 'mascara-look', 'eyeliner-effect', 'mermaid-lashes', 'squirrel-lashes', 'hybrid-wispy', 'kardashian'],
+  BROWS:      ['soap-brows', 'brow-lamination', 'fluffy-brows', 'fox-brows', 'feathered', 'snatched-arch', 'nano-brows', 'skinny-brow-revival', 'laminated-and-tinted',
+               'bleached-brows', 'boyish-brows', 'clean-girl-brows', 'brushed-up-brows', 'faux-freckles'],
+  MUA:        ['clean-girl', 'latte-makeup', 'strawberry-girl', 'sunburn-blush', 'cold-girl', 'douyin', 'siren-eyes', 'glazed', 'tomato-girl', 'mob-wife-glam', 'espresso-makeup',
+               'cloud-skin', 'boyfriend-blush', 'jelly-blush', 'blurred-lips', 'brownie-glazed-lips', '90s-lip', 'cherry-cola-lips', 'bronze-goddess', 'old-money-makeup', 'no-makeup-makeup', 'dolphin-skin', 'sunset-eyes'],
+  AESTHETICS: ['glass-skin', 'baby-botox', 'russian-lips', 'lip-flip', 'skinboosters', 'glazed-donut-skin', 'snatched', 'fox-eye-lift', 'preventative-botox', 'liquid-facelift', 'tear-trough-filler',
+               'polynucleotides', 'brotox', 'jawline-contouring', 'skin-cycling', 'k-beauty-facial', 'buccal-massage', 'face-sculpting', 'lip-hydration'],
+  OTHER:      ['clean-girl', 'old-money', 'that-girl', 'quiet-luxury', 'coastal-grandma', 'mob-wife', 'glass-skin', 'sun-kissed-tan', 'bronzed-glow'],
 };
 
 // Pre-built service starting points offered the moment a provider taps "Add
@@ -327,6 +344,48 @@ const TAG_HINTS: { words: RegExp; kind: CategoryKind; group: keyof ServiceTagGro
   { words: /\b(anti ?wrinkle|wrinkles?)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'botox' },
   { words: /\b(smok(e|ey|y))\b/, kind: 'MUA', group: 'techniqueTags', tag: 'smokey-eye' },
   { words: /\b(glam)\b/, kind: 'MUA', group: 'styleTags', tag: 'glam' },
+  // Added 2026-11-09 from live names that came back with no tags ("Wash & Go",
+  // "Layered") and Search's own misses ("deep conditioning", "short french tip").
+  { words: /\bwash (n |and )?go\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'wash-and-go' },
+  { words: /\b(layers?|layered|layred)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'layers' },
+  { words: /\b(pixie|pixi)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'pixie-cut' },
+  { words: /\b(condition|conditioning|hydrating|hair mask)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'deep-conditioning' },
+  { words: /\b(olaplex|k18|bond|bonds|plex)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'bond-repair' },
+  { words: /\b(line ?up|shape ?up|edge ?up)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'line-up' },
+  { words: /\b(skin fade|bald fade)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'skin-fade' },
+  { words: /\b(frontal|closure|lace)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'wig-install' },
+  { words: /\b(knotless|box braids?|fulani|goddess|stitch|cornrows?|feed ins?)\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'braids' },
+  { words: /\b(barrel|two strand|passion|senegalese|kinky) twists?\b/, kind: 'HAIR', group: 'techniqueTags', tag: 'twists' },
+  { words: /\b(shellac|gel polish|gel colour|gel color)\b/, kind: 'NAILS', group: 'techniqueTags', tag: 'gel-polish' },
+  { words: /\b(builder|structured|structure|biab)\b/, kind: 'NAILS', group: 'techniqueTags', tag: 'builder-gel' },
+  { words: /\b(freestyle|free style|design|designs)\b/, kind: 'NAILS', group: 'techniqueTags', tag: 'nail-art' },
+  { words: /\b(short|shorties|natural length)\b/, kind: 'NAILS', group: 'techniqueTags', tag: 'short-nails' },
+  { words: /\b(long|xl|xxl|extra long)\b/, kind: 'NAILS', group: 'techniqueTags', tag: 'long-nails' },
+  { words: /\b(clusters?)\b/, kind: 'LASHES', group: 'techniqueTags', tag: 'cluster-lashes' },
+  { words: /\b(lift)\b/, kind: 'LASHES', group: 'techniqueTags', tag: 'lash-lift' },
+  { words: /\b(tint)\b/, kind: 'LASHES', group: 'techniqueTags', tag: 'lash-tint' },
+  { words: /\b(refills?|top ?ups?|fill)\b/, kind: 'LASHES', group: 'techniqueTags', tag: 'infill' },
+  { words: /\b(wax|waxing)\b/, kind: 'BROWS', group: 'techniqueTags', tag: 'waxing' },
+  { words: /\b(thread|threaded)\b/, kind: 'BROWS', group: 'techniqueTags', tag: 'threading' },
+  { words: /\b(lami|laminate|laminated)\b/, kind: 'BROWS', group: 'techniqueTags', tag: 'lamination' },
+  { words: /\b(tint|tinted)\b/, kind: 'BROWS', group: 'techniqueTags', tag: 'tinting' },
+  { words: /\b(ombre|powder|pmu|semi permanent)\b/, kind: 'BROWS', group: 'techniqueTags', tag: 'powder-brow' },
+  { words: /\b(bride|brides|wedding)\b/, kind: 'MUA', group: 'occasionTags', tag: 'bridal' },
+  { words: /\b(bridesmaids?)\b/, kind: 'MUA', group: 'occasionTags', tag: 'bridesmaid' },
+  { words: /\b(photo ?shoots?|shoot|headshots?)\b/, kind: 'MUA', group: 'occasionTags', tag: 'photoshoot' },
+  { words: /\b(nikkah|nikah|mehndi|mehendi|walima|asian bridal)\b/, kind: 'MUA', group: 'techniqueTags', tag: 'asian-bridal' },
+  { words: /\b(gele)\b/, kind: 'MUA', group: 'techniqueTags', tag: 'gele-tying' },
+  { words: /\b(no makeup|natural)\b/, kind: 'MUA', group: 'styleTags', tag: 'natural' },
+  { words: /\b(jaw|jawline)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'jawline-filler' },
+  { words: /\b(tear ?trough|under eye)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'tear-trough' },
+  { words: /\b(hydra ?facial)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'hydrafacial' },
+  { words: /\b(peels?)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'peel' },
+  { words: /\b(profhilo|skin ?boosters?|seventy hyal)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'skin-booster' },
+  { words: /\b(polys?|polynucleotides?|salmon)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'polynucleotides' },
+  { words: /\b(wax|waxing|brazilian|hollywood)\b/, kind: 'AESTHETICS', group: 'techniqueTags', tag: 'waxing' },
+  { words: /\b(wax|waxing|brazilian|hollywood)\b/, kind: 'OTHER', group: 'techniqueTags', tag: 'waxing' },
+  { words: /\b(tan|tanning|spray tan)\b/, kind: 'OTHER', group: 'techniqueTags', tag: 'spray-tan' },
+  { words: /\b(massage|massages)\b/, kind: 'OTHER', group: 'techniqueTags', tag: 'massage' },
 ];
 
 const AUDIENCE_PATTERNS: { audience: Exclude<ServiceAudienceValue, '' | 'everyone'>; words: RegExp }[] = [
@@ -498,6 +557,46 @@ export function emptyTagGroups(): ServiceTagGroups {
 /** True when a service carries no tag in any group. */
 export function hasNoTags(service: Partial<Record<keyof ServiceTagGroups, string[] | null | undefined>>): boolean {
   return TAG_GROUP_KEYS.every(group => (service[group]?.length ?? 0) === 0);
+}
+
+// ─── Typed tags ─────────────────────────────────────────────────────────────
+
+/** How a tag reads on a chip: "date-night" → "date night". Only the label
+ *  changes; the stored form stays hyphenated like every preset. */
+export function tagLabel(tag: string): string {
+  return tag.replace(/-/g, ' ');
+}
+
+/** Most characters a typed tag keeps. Anything longer is a sentence, and
+ *  sentences belong in the description. */
+export const MAX_TAG_LENGTH = 30;
+
+/** A typed tag in the form every preset is stored in: lower case, words joined
+ *  by hyphens, no stray punctuation. So "Box Braids" is the same tag as the
+ *  preset "box-braids" (ticking it rather than adding a near-copy), and Explore's
+ *  exact tag matching sees one word, not two spellings of it. Accented Latin
+ *  letters are kept; Search strips accents itself. */
+export function normalizeTag(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[\s_/.,;:+|]+/g, '-')
+    .replace(/[^-a-z0-9À-ɏ]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_TAG_LENGTH)
+    .replace(/-+$/, '');
+}
+
+/** What a provider typed into a tag box → the tags it means. Commas or new
+ *  lines separate several ("box braids, knotless"); blanks and repeats drop. */
+export function parseTypedTags(raw: string): string[] {
+  const out: string[] = [];
+  for (const part of raw.split(/[,\n]+/)) {
+    const tag = normalizeTag(part);
+    if (tag && !out.includes(tag)) out.push(tag);
+  }
+  return out;
 }
 
 /** Every tag in `extra` not already in `base`, group by group. */

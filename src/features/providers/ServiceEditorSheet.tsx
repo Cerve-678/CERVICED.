@@ -44,7 +44,9 @@ import {
   emptyTagGroups,
   hasNoTags,
   mergeTagGroups,
+  parseTypedTags,
   suggestServiceDetails,
+  tagLabel,
   type ServiceAudienceValue,
   type ServiceTagGroups,
 } from './serviceTags';
@@ -146,8 +148,6 @@ const STARTER_CHIP_COUNT = 10;
 
 type TagChip = { group: keyof ServiceTagGroups; tag: string };
 
-const tagLabel = (tag: string) => tag.replace(/-/g, ' ');
-
 /** Null when the value is usable; otherwise the reason, phrased for the
  *  provider rather than for the column that would reject it. */
 function validateServiceValue(value: ServiceEditorValue): string | null {
@@ -222,6 +222,7 @@ export default function ServiceEditorSheet({
   // typed. After that they're the provider's, and typing changes nothing.
   const [tagsTouched, setTagsTouched] = useState(false);
   const [audienceTouched, setAudienceTouched] = useState(false);
+  const [ownTag, setOwnTag] = useState('');
 
   // Reseed every time the sheet opens. Without this the second service you
   // tapped would open showing the first one's values.
@@ -231,6 +232,7 @@ export default function ServiceEditorSheet({
       setError(null);
       setTagsTouched(false);
       setAudienceTouched(false);
+      setOwnTag('');
     }
   }, [visible, initial]);
 
@@ -282,6 +284,26 @@ export default function ServiceEditorSheet({
       return { ...v, tags: { ...tags, [chip.group]: next } };
     });
   }, [tags]);
+
+  // A word the chips don't have. Typed text that IS a chip ticks that chip;
+  // anything new goes in the style tags — the one group the full editor
+  // always shows, so it can be seen and unticked there too.
+  const addOwnTags = useCallback(() => {
+    const typed = parseTypedTags(ownTag);
+    setOwnTag('');
+    if (!typed.length) return;
+    Haptics.selectionAsync().catch(() => {});
+    setTagsTouched(true);
+    setValue(v => {
+      const next: ServiceTagGroups = { ...tags };
+      for (const tag of typed) {
+        const existing = chips.find(c => c.tag === tag);
+        const group = existing ? existing.group : 'styleTags';
+        if (!next[group].includes(tag)) next[group] = [...next[group], tag];
+      }
+      return { ...v, tags: next };
+    });
+  }, [ownTag, tags, chips]);
 
   const descriptionTopics = useDescriptionTopics(value.name, value.description);
 
@@ -481,6 +503,30 @@ export default function ServiceEditorSheet({
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+                <View style={styles.ownTagRow}>
+                  <TextInput
+                    value={ownTag}
+                    onChangeText={setOwnTag}
+                    onSubmitEditing={addOwnTags}
+                    placeholder="Add your own, commas for more"
+                    placeholderTextColor={palette.sub}
+                    returnKeyType="done"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Add your own tag"
+                    style={[styles.input, styles.ownTagInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
+                  />
+                  <TouchableOpacity
+                    style={[styles.ownTagButton, { backgroundColor: ownTag.trim() ? palette.accent : withAlpha(palette.text, 0.12) }]}
+                    onPress={addOwnTags}
+                    disabled={!ownTag.trim()}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add tag"
+                  >
+                    <Ionicons name="add" size={20} color={ownTag.trim() ? (isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740') : palette.sub} />
+                  </TouchableOpacity>
                 </View>
               </>
             ) : null}
@@ -698,6 +744,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
+  },
+  ownTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  ownTagInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  ownTagButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   footnote: {
     fontFamily: 'Jura-VariableFont_wght',

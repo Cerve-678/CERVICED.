@@ -5,7 +5,7 @@
 
 #generated
 
-**3649 functions** across **520 files**.
+**3652 functions** across **520 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -280,8 +280,8 @@
 - `searchResultsLayout.ts` — **highlightSearchTerms** · isWordChar · pushServices · **scatterServicesBetweenProviders**
 - `ServiceBookingCharts.tsx` — MostBookedCard · onLayout · ServiceBookingCharts · ticks · TrendCard · xFor · yFor
 - `serviceBookingSummary.ts` — busiestFirst · **chartTicks** · **summariseServiceBookings**
-- `ServiceEditorSheet.tsx` — descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · push · ServiceEditorSheet · **splitDuration** · suggestion · tagLabel · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
-- `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · optionsFor · readWords · sameWord · **suggestServiceDetails** · words
+- `ServiceEditorSheet.tsx` — addOwnTags · descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · push · ServiceEditorSheet · **splitDuration** · suggestion · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
+- `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · **normalizeTag** · optionsFor · **parseTypedTags** · readWords · sameWord · **suggestServiceDetails** · **tagLabel** · words
 - `todaySchedule.ts` — **buildTodaySchedule** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **shortClientName** · todosFrom
 - `TodayScheduleCards.tsx` — handleScrollEnd · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
 - `useDescriptionTopics.ts` — **useDescriptionTopics**
