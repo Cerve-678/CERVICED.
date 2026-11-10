@@ -97,6 +97,64 @@ export function tokensSimilar(a: string, b: string): boolean {
 }
 
 /**
+ * Optimal-string-alignment distance: Levenshtein, plus two neighbouring
+ * letters swapped counting as ONE edit rather than two. Swaps are the most
+ * common typing slip ("cancle", "appoitnment"), so for reading typed asks
+ * they have to be cheap.
+ */
+export function typoDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  // Three rolling rows: a swap looks two rows back.
+  let prev2: number[] = [];
+  let prev: number[] = [];
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    const row: number[] = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let d = Math.min(prev[j]! + 1, row[j - 1]! + 1, prev[j - 1]! + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d = Math.min(d, prev2[j - 2]! + 1);
+      }
+      row[j] = d;
+    }
+    prev2 = prev;
+    prev = row;
+  }
+  return prev[n]!;
+}
+
+/**
+ * Is `typed` a slip of the keyboard for `word`? Stricter than tokensSimilar
+ * on purpose: that one is for matching a provider's own labels, where a
+ * shared prefix ("blowouts" ~ "blowout") is the same thing. Here it is
+ * someone's question, where a shared prefix is often a different word
+ * ("book" is not "booking").
+ *
+ *   - Words of three letters or fewer never fuzz ("gel", "bob", "nxt").
+ *   - The first letter must match. People rarely mistype it, and this is
+ *     what keeps "cooking" from reading as "booking".
+ *   - One slip for words up to eight letters, two only for longer ones
+ *     ("appointment"). Two slips on a seven-letter word is a different
+ *     word too often: "booking" → "banking", "waiting" → "writing".
+ *
+ * The caller still has to make sure `typed` isn't a real word of its own:
+ * "cancer" is one slip from "cancel".
+ */
+export function isTypoOf(typed: string, word: string): boolean {
+  if (typed === word) return true;
+  if (typed.length <= 3 || word.length <= 3) return false;
+  if (typed[0] !== word[0]) return false;
+  const budget = word.length <= 8 ? 1 : 2;
+  if (Math.abs(typed.length - word.length) > budget) return false;
+  return typoDistance(typed, word) <= budget;
+}
+
+/**
  * Split a compound speciality label into the alternative phrases a filter
  * should match ANY of. A curated chip like "BIAB / builder gel" or "Colour &
  * balayage" names two ways of saying one filter intent, not a requirement that

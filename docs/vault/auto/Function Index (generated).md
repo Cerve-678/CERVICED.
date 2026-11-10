@@ -5,7 +5,7 @@
 
 #generated
 
-**3670 functions** across **525 files**.
+**3676 functions** across **525 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -465,7 +465,7 @@
 - `askNormaliser.ts` — **normalizeAsk**
 - `engine.ts` — answerFrom · buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · **chooseLayout** · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · **isConfirmToken** · isFresh · isLinkOnlyTurn · isSafeLeadIn · linkOnlyStarterChips · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setLastContext · setPendingAction · suggestionFitsLinkOnly · understandWithFallback · verifyComposition
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
-- `matcher.ts` — containsGappedPhrase · escape · plainAsk · scoreEntities · scorePhrases · **understand**
+- `matcher.ts` — containsGappedPhrase · containsPhraseWithTypos · escape · isKnownWord · phraseWords · plainAsk · scoreEntities · scorePhrases · **understand** · wordsOf
 - `missLog.ts` — **abandonMiss** · offeredOptions · **trackTurn**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
 - `nvidiaInterpreter.ts` — validComposition · validInterpretation
@@ -512,7 +512,7 @@
 - `exploreTabBarScroll.ts` — animateTo · **resetExplorePillTracking** · **settleExplorePillTracking** · trackScrollDirection
 - `FontManager.ts` — **createTextStyles** · getFontFamily · to
 - `fontScaleClamp.ts` — **applyFontScaleClamp** · components · **composeAppearanceStyle** · fontOnlyInjection · Wrapped
-- `fuzzyMatch.ts` — **editDistance** · levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar**
+- `fuzzyMatch.ts` — **editDistance** · **isTypoOf** · levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar** · **typoDistance**
 - `hairTypeMatch.ts` — **matchesHairType**
 - `keepShownOrder.ts` — **keepShownOrder**
 - `latestStart.ts` — **formatLatestStart** · **latestStartMinutes** · **latestStartToEditor** · **startsTooLate**
