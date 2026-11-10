@@ -347,7 +347,7 @@ function MockTab({ ticked, from, to, accent, onAccent, reduceMotion }: MockTabPr
 const tabStyles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
   badge: { position: 'absolute', top: -5, right: -9, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  label: { fontFamily: 'BakbakOne-Regular', fontSize: 9, letterSpacing: 0.3 },
+  label: { fontFamily: 'JosefinSans-Bold', fontSize: 9, letterSpacing: 0.3 },
 });
 
 function createStyles(accent: string, fg: string) {
@@ -359,8 +359,8 @@ function createStyles(accent: string, fg: string) {
       shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 10 }, elevation: 6,
     },
     squareHead: { flexDirection: 'row', justifyContent: 'space-between' },
-    squareKicker: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.5, color: accent, opacity: 0.7 },
-    lead: { fontFamily: 'BakbakOne-Regular', fontSize: 23, lineHeight: 26, color: accent, marginTop: 8, minHeight: 52 },
+    squareKicker: { fontFamily: 'JosefinSans-Bold', fontSize: 10, letterSpacing: 1.5, color: accent, opacity: 0.7 },
+    lead: { fontFamily: 'JosefinSans-Bold', fontSize: 23, lineHeight: 26, color: accent, marginTop: 8, minHeight: 52 },
     track: { height: 5, borderRadius: 3, marginTop: 12, backgroundColor: withAlpha(accent, 0.16), overflow: 'hidden' },
     fill: { height: '100%', borderRadius: 3, backgroundColor: accent },
     steps: { marginTop: 14 },
@@ -373,25 +373,25 @@ function createStyles(accent: string, fg: string) {
       height: 58, borderRadius: 100, backgroundColor: fg, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6,
       shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6,
     },
-    kicker: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.5, color: fg, opacity: 0.7 },
-    title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, lineHeight: 32, color: fg, marginTop: 8 },
+    kicker: { fontFamily: 'JosefinSans-Bold', fontSize: 10, letterSpacing: 1.5, color: fg, opacity: 0.7 },
+    title: { fontFamily: 'JosefinSans-Bold', fontSize: 28, lineHeight: 32, color: fg, marginTop: 8 },
     nowList: { marginTop: 8 },
     nowText: { fontSize: 15 },
     leftRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 22 },
-    leftNumber: { fontFamily: 'BakbakOne-Regular', fontSize: 54, lineHeight: 58, color: fg },
-    leftWord: { fontFamily: 'BakbakOne-Regular', fontSize: 15, lineHeight: 18, color: fg, opacity: 0.9, maxWidth: 150 },
+    leftNumber: { fontFamily: 'JosefinSans-Bold', fontSize: 54, lineHeight: 58, color: fg },
+    leftWord: { fontFamily: 'JosefinSans-Bold', fontSize: 15, lineHeight: 18, color: fg, opacity: 0.9, maxWidth: 150 },
     pill: {
       flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 10,
       borderRadius: 100, paddingVertical: 5, paddingHorizontal: 10, backgroundColor: withAlpha(fg, 0.16),
     },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: fg },
-    pillText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.2, color: fg },
+    pillText: { fontFamily: 'JosefinSans-Bold', fontSize: 10, letterSpacing: 1.2, color: fg },
     note: { fontSize: 14, lineHeight: 20, color: fg, opacity: 0.85, marginTop: 12 },
     alert: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: fg, alignItems: 'center', justifyContent: 'center' },
-    failTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 34, lineHeight: 38, color: fg, marginTop: 18 },
+    failTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 34, lineHeight: 38, color: fg, marginTop: 18 },
     cta: { height: 52, borderRadius: 100, backgroundColor: fg, alignItems: 'center', justifyContent: 'center' },
-    ctaText: { fontFamily: 'BakbakOne-Regular', fontSize: 16, color: accent },
+    ctaText: { fontFamily: 'JosefinSans-Bold', fontSize: 16, color: accent },
     ghost: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-    ghostText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, color: fg, opacity: 0.8 },
+    ghostText: { fontFamily: 'JosefinSans-Bold', fontSize: 14, color: fg, opacity: 0.8 },
   });
 }

@@ -319,10 +319,10 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 24 },
   backBtn: { marginBottom: 24 },
   backArrow: { fontSize: 22, fontWeight: '900' },
-  title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
+  title: { fontFamily: 'JosefinSans-Bold', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 32, lineHeight: 20 },
   fieldGroup: { marginBottom: 20 },
-  label: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1, marginBottom: 8 },
+  label: { fontFamily: 'JosefinSans-Bold', fontSize: 11, letterSpacing: 1, marginBottom: 8 },
   emailHint: { fontSize: 11, marginTop: 6, opacity: 0.6 },
   input: {
     borderRadius: 14,

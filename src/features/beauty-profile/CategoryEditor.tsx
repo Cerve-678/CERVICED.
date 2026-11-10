@@ -299,19 +299,19 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
 
 const styles = StyleSheet.create({
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  sectionLabel:    { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 2 },
-  sectionCount:    { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 0.5, marginLeft: 'auto' },
-  sectionSub:      { fontFamily: 'Jura-VariableFont_wght', fontSize: 12.5, lineHeight: 18, marginBottom: 10 },
+  sectionLabel:    { fontFamily: 'JosefinSans-Bold', fontSize: 13, letterSpacing: 2 },
+  sectionCount:    { fontFamily: 'JosefinSans-Bold', fontSize: 9.5, letterSpacing: 0.5, marginLeft: 'auto' },
+  sectionSub:      { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12.5, lineHeight: 18, marginBottom: 10 },
   warnIcon:        { fontSize: 12, color: '#FFD60A' },
-  optionalBadge:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, letterSpacing: 0.3, fontStyle: 'italic' },
+  optionalBadge:   { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 10, letterSpacing: 0.3, fontStyle: 'italic' },
 
   chips:    { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 24 },
   chip:     { borderRadius: 100, borderWidth: 1.5, paddingVertical: 9, paddingHorizontal: 15 },
-  chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.7 },
+  chipText: { fontFamily: 'JosefinSans-Bold', fontSize: 12, letterSpacing: 0.7 },
 
   medicalInput: {
     borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12,
-    fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 20,
+    fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, lineHeight: 20,
     minHeight: 80, marginBottom: 24,
   },
 
@@ -319,6 +319,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 14,
     borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 24,
   },
-  consentLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 0.4, marginBottom: 3 },
-  consentSub:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, lineHeight: 16 },
+  consentLabel: { fontFamily: 'JosefinSans-Bold', fontSize: 13, letterSpacing: 0.4, marginBottom: 3 },
+  consentSub:   { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 11, lineHeight: 16 },
 });

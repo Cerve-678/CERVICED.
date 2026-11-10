@@ -225,5 +225,5 @@ const styles = StyleSheet.create({
   passwordInner: { paddingBottom: 12 },
   rules: { paddingHorizontal: 16, marginTop: -6 },
   continueBtn: { marginTop: 24 },
-  loginLink: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, textAlign: 'center', marginTop: 16 },
+  loginLink: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, textAlign: 'center', marginTop: 16 },
 });

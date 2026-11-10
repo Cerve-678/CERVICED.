@@ -605,8 +605,8 @@ const styles = StyleSheet.create({
 
   backBtn:   { marginTop: 12, marginBottom: 24 },
   backArrow: { fontSize: 22, fontWeight: '900' },
-  title:     { fontFamily: 'BakbakOne-Regular', fontSize: 26, marginBottom: 6 },
-  subtitle:  { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 13, marginBottom: 28, opacity: 0.8 },
+  title:     { fontFamily: 'JosefinSans-Bold', fontSize: 26, marginBottom: 6 },
+  subtitle:  { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 13, marginBottom: 28, opacity: 0.8 },
 
   previewWrapper: {
     height: 180,
@@ -629,13 +629,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   previewAccentLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 9,
     color: '#fff',
     letterSpacing: 1.2,
   },
   previewName: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 20,
     color: '#fff',
   },
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   previewSub: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 11,
     color: 'rgba(255,255,255,0.75)',
@@ -664,12 +664,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   sectionTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 14,
     marginBottom: 4,
   },
   sectionSub: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 12,
     marginBottom: 16,
@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
   finishSwatchOn: { borderWidth: 2.5 },
   finishLocked: { opacity: 0.55 },
   finishLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
-  finishName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+  finishName: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 11 },
 
   // Card Shape previews: a mini category-pill row over a mini service card.
   shapePreview: {
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center', justifyContent: 'center',
   },
-  imagePlaceholderText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 10, textAlign: 'center' },
+  imagePlaceholderText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 10, textAlign: 'center' },
   imageActions: { flex: 1, gap: 8 },
   imageBtn: {
     paddingVertical: 10, paddingHorizontal: 16,
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   imageBtnText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     color: '#fff',
   },
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   saveBtnText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     color: '#fff',
     letterSpacing: 0.5,

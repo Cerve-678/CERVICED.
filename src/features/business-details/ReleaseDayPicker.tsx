@@ -168,14 +168,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   releasePickerEyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
     marginBottom: 4,
   },
   releasePickerTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 21,
   },
   releasePickerClose: {
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   releasePickerSubtext: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     lineHeight: 18,
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   releasePickerClearText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     textDecorationLine: 'underline',
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   releasePickerDoneText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     color: '#FFFFFF',
   },
@@ -238,7 +238,7 @@ const localStyles = StyleSheet.create({
     width: '100%',
   },
   item: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 19,
   },
 });
