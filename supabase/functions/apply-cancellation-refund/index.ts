@@ -190,6 +190,13 @@ Deno.serve(async (req: Request) => {
           // A retry after a transfer went out but its status write failed:
           // record that transfer, with no second deduction or transfer.
           const previous = await findPayoutTransfer(stripe, payout.stripe_account_id, payout.id, payout.created_at);
+          // A transfer this path didn't make means the release job already
+          // sent the full payout but couldn't record it. Recording it here as
+          // the retained share would leave the provider holding the excess
+          // with nothing taking it back, so stop and leave the row for a person.
+          if (previous && previous.metadata?.['reason'] !== 'cancellation_penalty_retained') {
+            throw new Error(`payout ${payout.id} was already sent in full (transfer ${previous.id}) but is still held; settle this cancellation by hand`);
+          }
           let transfer: Stripe.Transfer | null = previous;
           if (!previous) {
             // Anything the provider still owes from an earlier refund comes out

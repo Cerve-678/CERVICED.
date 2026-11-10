@@ -211,9 +211,10 @@ Deno.serve(async (req: Request) => {
           },
           // The money-safety guarantee: same key -> same transfer, never a
           // second one, if this row is ever retried. Not the old `payout_<id>`
-          // key: Stripe rejects a key reused with different parameters, and
-          // those requests (which named a transfer group) all failed, so no
-          // transfer exists under them.
+          // key: Stripe rejects a key reused with different parameters. A
+          // payout that did go out under the old key (the first one from each
+          // charge) still carries payout_id metadata, so findPayoutTransfer
+          // above finds it and no new request is made.
           { idempotencyKey: `payout_transfer_${row.id}` },
         );
         madeTransfer = true;
