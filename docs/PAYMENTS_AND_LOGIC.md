@@ -675,8 +675,9 @@ rows before they can use the Money screen. Every admin action (retry, approve, d
      Stripe and find the real reason.
    - **"We couldn't tell whether Stripe sent it":** **don't retry yet.** In
      the Stripe Dashboard, look under Connect → the provider → Transfers for
-     a transfer in the group `payout_<payout id>`. If it exists, the provider
-     was paid: escalate to engineering to record it. If not, retry.
+     a transfer whose metadata has `payout_id` = the payout id (older ones are
+     also in the group `payout_<payout id>`). If it exists, the provider was
+     paid: escalate to engineering to record it. If not, retry.
 3. To retry: admin Money screen → the payout → **Try payment again now**. It
    goes out on the next 15-minute run.
 
@@ -811,9 +812,16 @@ Keep the list short and review it monthly.
 - **Money is server-owned.** Every money action is a Supabase Edge Function
   or a `SECURITY DEFINER` database function. The app reaches them only
   through `src/services/databaseService.ts` (CLAUDE.md).
-- **Idempotency everywhere.** Transfers use `payout_<id>` and
-  `fee_payout_<id>` keys and transfer groups. Refunds and reversals are keyed
-  on their source. Debts are unique on `source_key`.
+- **Idempotency everywhere.** Booking payout transfers use the
+  `payout_transfer_<id>` key (`cancelpay_transfer_<id>` when a client
+  cancellation settles it) and carry `payout_id` in their metadata, which is
+  how the job finds a transfer it already sent
+  (`_shared/payoutTransfer.ts`). They name **no transfer group**: one charge
+  often pays several bookings, Stripe stamps the charge with the first
+  transfer's group, and it then refuses any other group from that charge.
+  Fee and tip transfers each have their own charge, so they keep
+  `fee_payout_<id>` / `tip_payout_<id>` keys and transfer groups. Refunds
+  and reversals are keyed on their source. Debts are unique on `source_key`.
 
 ### 5.2 Components
 
@@ -1007,6 +1015,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 3 Nov | Providers can require a non-refundable deposit: kept whenever the client cancels, frozen per booking, still refunded if the provider cancels, declines or doesn't answer. CERVICED refunds its fee when the deposit is the only thing kept | The user's call (2 and 3 Nov), including not waiting for a solicitor. **Not lawyer-reviewed** |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
+| 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |
 
 ---
 

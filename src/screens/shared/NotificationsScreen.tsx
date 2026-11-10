@@ -201,17 +201,19 @@ const INLINE_ACTION_TYPES: ReadonlySet<string> = new Set(['booking_reminder', 'b
 
 /**
  * Whether a notification offers its button. A follow request keeps it after
- * the request is answered: the trigger clears is_actionable then, but Your
- * circle is still where you follow that person back, and without the button
- * the tap only opened the message and went nowhere.
+ * the request is answered. A provider's confirmed booking is also viewable:
+ * the database marks it non-actionable because it needs no response, but the
+ * booking detail is still the destination of its View Booking button.
  */
-const opensSomewhere = (n: { type: string; actionable: boolean }): boolean =>
-  n.actionable || n.type === 'follow_request';
+const opensSomewhere = (n: { type: string; actionable: boolean; bookingId?: string | undefined }, isProvider: boolean): boolean =>
+  n.actionable || n.type === 'follow_request' ||
+  (isProvider && n.type === 'booking_confirmed' && !!n.bookingId);
 // Providers need a direct route to act on an incoming booking and to inspect a
 // cancellation. Clients keep their existing notification treatment, because a
 // provider cancellation is informative rather than a client-side action.
 const PROVIDER_INLINE_BOOKING_ACTION_TYPES: ReadonlySet<string> = new Set([
   'booking_pending',
+  'booking_confirmed',
   'booking_cancelled',
 ]);
 
@@ -1059,7 +1061,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const renderNotification = ({ item }: { item: Notification }) => {
     const heading = dayHeadings.get(item.id);
     const amount = notificationAmount(item.type, item.title, item.message);
-    const showInlineAction = opensSomewhere(item) && (
+    const showInlineAction = opensSomewhere(item, isProvider) && (
       INLINE_ACTION_TYPES.has(item.type)
       || (isProvider && PROVIDER_INLINE_BOOKING_ACTION_TYPES.has(item.type))
     );
@@ -1344,7 +1346,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                       <Text style={[textStyles.body, styles.certificateMessage, { color: quietText }]}>
                         {selectedNotification.message}
                       </Text>
-                      {opensSomewhere(selectedNotification) && (
+                      {opensSomewhere(selectedNotification, isProvider) && (
                         <TouchableOpacity
                           style={[styles.popupActionButton, { backgroundColor: P.accent }]}
                           onPress={() => { hapticMedium(); handleNotificationAction(selectedNotification); }}
@@ -1412,7 +1414,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                               {formatTimestamp(selectedNotification.timestamp)}
                             </Text>
 
-                            {opensSomewhere(selectedNotification) && (
+                            {opensSomewhere(selectedNotification, isProvider) && (
                               <TouchableOpacity
                                 style={[
                                   styles.popupActionButton,
