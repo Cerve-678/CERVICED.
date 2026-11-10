@@ -384,7 +384,10 @@ export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string;
  */
 export const ADDRESS_RELEASE_BY_BUSINESS_TYPE: Record<BusinessType, AddressReleasePolicy[]> = {
   salon:      ['always', 'on_confirmation'],
-  studio:     ['always', 'on_confirmation'],
+  // Studios get the timed options too (2026-11-10): a studio is often a
+  // rented room or a unit the provider would rather not publish until close
+  // to the day. 'manual' stays home_based/mobile only.
+  studio:     ['always', 'on_confirmation', 'day_before', 'two_days_before', 'three_days_before', 'five_days_before', 'week_before'],
   home_based: ['on_confirmation', 'day_before', 'two_days_before', 'three_days_before', 'five_days_before', 'week_before', 'manual'],
   mobile:     ['manual'],
 };
