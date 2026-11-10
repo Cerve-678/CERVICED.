@@ -34,6 +34,7 @@ import { ProviderCard } from '../../features/home/ProviderCard';
 import { LogoCircle } from '../../components/FramedLogo';
 import { ServiceButton } from '../../features/home/ServiceButton';
 import { SkeletonSection } from '../../features/home/SkeletonSection';
+import { useRevealTogether } from '../../features/home/useRevealTogether';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
@@ -118,6 +119,16 @@ interface Provider {
 // the browse catalogue is appended after that initial paint instead of making
 // the first request fetch every provider in one large response.
 const HOME_INITIAL_PROVIDER_LIMIT = 40;
+// What Home waits for before showing its sections, all together. Each read
+// used to paint as it landed, so sections appeared one above another and the
+// page jumped five or six times on the way in, which looked like Home
+// reloading. Near You and the Men's/Kids rails sit further down and keep their
+// own timing.
+const HOME_REVEAL_PARTS = ['providers', 'bookmarks', 'serviceOrder', 'recommended', 'rails', 'availability'] as const;
+type HomeRevealPart = typeof HOME_REVEAL_PARTS[number];
+// Longest Home holds its skeleton for that. On a slow connection it shows
+// what it has by then and the rest arrives as before.
+const HOME_REVEAL_MAX_WAIT_MS = 1500;
 const HOME_REMAINING_PROVIDER_LIMIT = 160;
 
 const ProviderRail = React.memo(function ProviderRail({
@@ -325,6 +336,7 @@ export default function HomeScreen() {
     [liveProviders, ownProviderIds],
   );
   const [providersLoading, setProvidersLoading] = useState(true);
+  const { ready: homeReady, markDone: markHomePart } = useRevealTogether<HomeRevealPart>(HOME_REVEAL_PARTS, HOME_REVEAL_MAX_WAIT_MS);
 
   // Where "Near You" measures from: a place picked on this phone, the
   // account's Your area, the device's position, or a town, in the order
@@ -497,7 +509,7 @@ export default function HomeScreen() {
 
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
-    loadBookmarks();
+    loadBookmarks().catch(() => {}).finally(() => markHomePart('bookmarks'));
 
     // Inject beauty profile so provider scoring uses static preferences from day one
     if (user) {
@@ -520,7 +532,8 @@ export default function HomeScreen() {
       .then(ordered => setServices(ordered))
       .catch(() => {
         // Silent failure — keeps default service order
-      });
+      })
+      .finally(() => markHomePart('serviceOrder'));
 
     const mapDbProvider = (p: PublicProviderSummary): Provider => ({
       id: p.id,
@@ -568,70 +581,66 @@ export default function HomeScreen() {
 
     // These lower-priority rails used to begin in the same tick as the main
     // provider list. On a constrained/slow Supabase API that made Home issue
-    // 7+ independent queries before it had painted a single useful card.
-    // Start only after the main list has arrived and the navigation animation
-    // has settled; a client can browse immediately, while the extra rails
-    // progressively fill in behind it.
+    // 7+ independent queries at once. They still start only after the main
+    // list has arrived, but straight away now: they used to wait a further
+    // 750 ms so the main list could paint first, and then landed as a second
+    // wave that pushed the page down. Home now shows everything together
+    // (HOME_REVEAL_PARTS), so that wait only lengthened the skeleton.
     // Set by this effect's cleanup, so late rail results from a previous run
     // don't land after a newer one.
     let railsCancelled = false;
-    let secondaryRailsTimer: ReturnType<typeof setTimeout> | null = null;
     const loadSecondaryRails = (hasMoreProviders: boolean) => {
-      // getProviders() has just resolved and committed its cards. This delay
-      // gives React Native a frame to render them before lower-priority work
-      // starts, without relying on deprecated InteractionManager scheduling.
-      secondaryRailsTimer = setTimeout(() => {
+      if (railsCancelled) return;
+      void (async () => {
+        // The primary rail is already visible. Extend it in the background
+        // rather than holding the first Home render behind the full 200-row
+        // provider response.
+        if (hasMoreProviders) {
+          getProviders(undefined, HOME_REMAINING_PROVIDER_LIMIT, HOME_INITIAL_PROVIDER_LIMIT)
+            .then(data => {
+              if (railsCancelled) return;
+              setLiveProviders(current => {
+                const seen = new Set(current.map(provider => provider.id));
+                return [...current, ...data.map(mapDbProvider).filter(provider => !seen.has(provider.id))];
+              });
+            })
+            .catch(() => {});
+        }
+
+        if (OFFERS_ENABLED) {
+          getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
+        }
+
+        // Provider-based secondary rails first. They do not compete with
+        // the primary list, and keeping this group separate from service
+        // discovery avoids another burst of joined services queries.
+        await Promise.allSettled([
+          getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
+          getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
+          // Trending is ranked by 7-day bookings, which barely moves between
+          // visits — so the same provider always led the rail. Shuffle the
+          // trending set on each Home load so a client sees a different one
+          // first; every card shown is still genuinely trending.
+          getTrendingProviders(15).then(data => setTrending(shuffle(data.map(mapDbProvider)))),
+        ]);
         if (railsCancelled) return;
-        void (async () => {
-          // The primary rail is already visible. Extend it in the background
-          // rather than holding the first Home render behind the full 200-row
-          // provider response.
-          if (hasMoreProviders) {
-            getProviders(undefined, HOME_REMAINING_PROVIDER_LIMIT, HOME_INITIAL_PROVIDER_LIMIT)
-              .then(data => {
-                if (railsCancelled) return;
-                setLiveProviders(current => {
-                  const seen = new Set(current.map(provider => provider.id));
-                  return [...current, ...data.map(mapDbProvider).filter(provider => !seen.has(provider.id))];
-                });
-              })
-              .catch(() => {});
-          }
+        markHomePart('rails');
 
-          if (OFFERS_ENABLED) {
-            getActivePromotions().then(data => setRawPromotions(data)).catch(() => {});
-          }
-
-          // Provider-based secondary rails first. They do not compete with
-          // the primary list, and keeping this group separate from service
-          // discovery avoids another burst of joined services queries.
-          await Promise.allSettled([
-            getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
-            getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
-            // Trending is ranked by 7-day bookings, which barely moves between
-            // visits — so the same provider always led the rail. Shuffle the
-            // trending set on each Home load so a client sees a different one
-            // first; every card shown is still genuinely trending.
-            getTrendingProviders(15).then(data => setTrending(shuffle(data.map(mapDbProvider)))),
-          ]);
-          if (railsCancelled) return;
-
-          // Service-audience rails are optional enrichment. They come last
-          // because neither is required for the Home screen to be useful.
-          await Promise.allSettled([
-            getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
-            getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
-            ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
-              getDiscoverServices(undefined, 15, 'men').then(data =>
-                setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-              ),
-              getDiscoverServices(undefined, 15, 'kids').then(data =>
-                setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
-              ),
-            ] : []),
-          ]);
-        })();
-      }, 750);
+        // Service-audience rails are optional enrichment. They come last
+        // because neither is required for the Home screen to be useful.
+        await Promise.allSettled([
+          getProviderIdsByServiceAudience('men').then(ids => setMaleServiceProviderIds(new Set(ids))),
+          getProviderIdsByServiceAudience('kids').then(ids => setKidsServiceProviderIds(new Set(ids))),
+          ...(AUDIENCE_SERVICE_PHOTOS_ENABLED ? [
+            getDiscoverServices(undefined, 15, 'men').then(data =>
+              setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+            ),
+            getDiscoverServices(undefined, 15, 'kids').then(data =>
+              setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null))
+            ),
+          ] : []),
+        ]);
+      })();
     };
 
     // Fetch live providers — shows empty state if DB has no data.
@@ -643,23 +652,31 @@ export default function HomeScreen() {
       .then(data => {
         setLiveProviders(data.map(mapDbProvider));
         hasMoreProviders = data.length === HOME_INITIAL_PROVIDER_LIMIT;
+        if (data.length === 0) {
+          // Nothing to rank or check availability for.
+          markHomePart('recommended');
+          markHomePart('availability');
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        markHomePart('recommended');
+        markHomePart('availability');
+      })
       .finally(() => {
         setProvidersLoading(false);
+        markHomePart('providers');
         loadSecondaryRails(hasMoreProviders);
       });
     getOwnProviderIds().then(setOwnProviderIds).catch(() => setOwnProviderIds([]));
 
     return () => {
       railsCancelled = true;
-      if (secondaryRailsTimer) clearTimeout(secondaryRailsTimer);
     };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself
     // re-ran this whole block, GPS prompt and every provider list included,
     // every time anything handed back a new user object.
-  }, [loadBookmarks, user?.id]);
+  }, [loadBookmarks, user?.id, markHomePart]);
 
   // Where Near You measures from (resolveClientLocation): a place picked on
   // this phone, then the account's "Your area", then the device, then a town
@@ -748,7 +765,10 @@ export default function HomeScreen() {
           // later are added after them.
           recommended: keepShownOrder(previous.recommended, ranked),
         }));
-        if (liveProviders.length > 0) setRecommendedReady(true);
+        if (liveProviders.length > 0) {
+          setRecommendedReady(true);
+          markHomePart('recommended');
+        }
 
         // Phase 5.4 — recently viewed from userLearningService interaction log.
         // Raw window is wider than the 15 we display, since repeat views of
@@ -770,7 +790,7 @@ export default function HomeScreen() {
 
     updateProviderData();
     return () => { cancelled = true; };
-  }, [bookmarkedIds, liveProviders, recommendationCandidates, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
+  }, [bookmarkedIds, liveProviders, recommendationCandidates, maleServiceProviderIds, kidsServiceProviderIds, markHomePart]); // React to bookmark changes, live data updates, and audience-tagged services resolving
 
   // One batched, server-side slot calculation for Home. It uses the exact
   // schedule, notice, duration, buffer and live-booking rules used by Search.
@@ -780,9 +800,10 @@ export default function HomeScreen() {
     let cancelled = false;
     getProvidersAvailability(slugs)
       .then(result => { if (!cancelled) setAvailabilityBySlug(result); })
-      .catch(() => { if (!cancelled) setAvailabilityBySlug(new Map()); });
+      .catch(() => { if (!cancelled) setAvailabilityBySlug(new Map()); })
+      .finally(() => markHomePart('availability'));
     return () => { cancelled = true; };
-  }, [liveProviders]);
+  }, [liveProviders, markHomePart]);
 
   const availableThisWeekProviders = useMemo(
     () => liveProviders.filter(provider => availabilityBySlug.get(provider.slug)?.availableThisWeek),
@@ -1344,7 +1365,7 @@ export default function HomeScreen() {
 
         {/* § config-driven — see src/config/homeSections.ts (id: 'your-providers') */}
         {/* Your Providers Section - Only show if there are bookmarked providers */}
-        {!selectedService && providersData.yourProviders.length > 0 && (
+        {!selectedService && homeReady && providersData.yourProviders.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
@@ -1734,6 +1755,10 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+            ) : !homeReady ? (
+              // Held with the rest, so the pills don't reorder once the
+              // client's own order loads.
+              <SkeletonSection cardWidth={86} cardHeight={Platform.OS === 'android' ? 30 : 34} borderRadius={14} count={5} />
             ) : (
               <ScrollView
                 horizontal
@@ -1792,7 +1817,7 @@ export default function HomeScreen() {
                 bookmarked), matching the empty-state guard every sibling
                 section below already has. Without this it rendered a header
                 + empty scroller that looked broken. */}
-            {(recommendedPending || providersData.recommended.length > 0) && (
+            {(!homeReady || recommendedPending || providersData.recommended.length > 0) && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>RECOMMENDED FOR YOU</Text>
@@ -1807,7 +1832,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {recommendedPending ? (
+              {!homeReady || recommendedPending ? (
                 <SkeletonSection cardWidth={176} cardHeight={64} borderRadius={16} />
               ) : viewAllRecommended ? (
                 <View style={styles.expandedGrid}>
@@ -1830,7 +1855,7 @@ export default function HomeScreen() {
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'trending') */}
             {/* TRENDING THIS WEEK */}
-            {trending.length > 0 && (
+            {homeReady && trending.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
@@ -1841,7 +1866,7 @@ export default function HomeScreen() {
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'new-providers') */}
             {/* NEW ON CERVICED */}
-            {newProviders.length > 0 && (
+            {homeReady && newProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
@@ -1852,7 +1877,7 @@ export default function HomeScreen() {
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'top-rated') */}
             {/* TOP RATED */}
-            {topRated.length > 0 && (
+            {homeReady && topRated.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
@@ -1863,7 +1888,7 @@ export default function HomeScreen() {
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'recently-viewed') */}
             {/* RECENTLY VIEWED */}
-            {recentlyViewed.length > 0 && (
+            {homeReady && recentlyViewed.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
@@ -1873,7 +1898,7 @@ export default function HomeScreen() {
             )}
 
             {/* AVAILABLE THIS WEEK — directly under Recently viewed */}
-            {availableThisWeekProviders.length > 0 && (
+            {homeReady && availableThisWeekProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>AVAILABLE THIS WEEK</Text>
@@ -1897,7 +1922,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {providersLoading ? (
+              {!homeReady || providersLoading ? (
                 <SkeletonSection cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
               ) : viewAllProviders ? (
                 <View>
