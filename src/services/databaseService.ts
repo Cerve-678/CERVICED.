@@ -6993,8 +6993,11 @@ export const ACTIVITY_DONE_DAYS = 7;
  *  features/bookings/activityCentre.ts turns this plus the bookings into the
  *  list; this only fetches. */
 export interface ClientActivityRemote {
-  /** Bookings with an intake form still to fill in. */
+  /** Bookings with an intake form still to fill in, once per form. */
   pendingFormBookingIds: string[];
+  /** Booking id → titles of its forms still to fill in, so the Activity
+   *  Centre can name the one that's left when another is already done. */
+  pendingFormTitles: Record<string, string[]>;
   /** Bookings with an info pack the client hasn't opened. */
   unreadPackBookingIds: string[];
   /** Refund requests still waiting on the provider or on Cerviced. */
@@ -7037,14 +7040,14 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     data: { user },
   } = await getSessionUser();
   if (!user) {
-    return { pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [] };
+    return { pendingFormBookingIds: [], pendingFormTitles: {}, unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [] };
   }
 
   const since = new Date(Date.now() - ACTIVITY_DONE_DAYS * 86_400_000).toISOString();
   const [forms, packs, refunds, fees, holds, formsDone, packsDone, feesDone, refundsDone] = await Promise.all([
     supabase
       .from("booking_intake_forms")
-      .select("booking_id")
+      .select("booking_id, title")
       .eq("client_user_id", user.id)
       .eq("status", "pending")
       .limit(ACTIVITY_QUERY_LIMIT),
@@ -7139,9 +7142,17 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
     })),
   ];
 
+  const pendingForms = (forms.data ?? []) as { booking_id: string; title: string | null }[];
+  const pendingFormTitles: Record<string, string[]> = {};
+  for (const r of pendingForms) {
+    const title = r.title?.trim();
+    if (title) (pendingFormTitles[r.booking_id] ??= []).push(title);
+  }
+
   return {
     recentlyDone,
-    pendingFormBookingIds: ((forms.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
+    pendingFormBookingIds: pendingForms.map(r => r.booking_id),
+    pendingFormTitles,
     unreadPackBookingIds: ((packs.data ?? []) as { booking_id: string }[]).map(r => r.booking_id),
     openRefundRequests: ((refunds.data ?? []) as RefundRow[]).map(r => ({
       id: r.id,
