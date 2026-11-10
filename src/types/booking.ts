@@ -388,6 +388,9 @@ export interface ConfirmedBooking {
   lateRescheduleRuleApplies?: boolean | undefined;
   /** Who cancelled — stamped by the DB when the booking became cancelled. */
   cancelledBy?: 'client' | 'provider' | 'system' | undefined;
+  /** Set when this was a request the provider declined, or that expired
+   *  unanswered (bookings.declined_at). Shown as "Declined", not "Cancelled". */
+  declinedAt?: string | undefined;
 
   // Metadata
   notes?: string | undefined;
