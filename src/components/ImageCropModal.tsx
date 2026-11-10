@@ -40,6 +40,10 @@ interface ImageCropModalProps {
   onAccent: string;
   onCancel: () => void;
   onDone: (uri: string) => void;
+  /** Defaults to "Cancel". A queue of photos says "Skip". */
+  cancelLabel?: string;
+  /** e.g. "2 of 3" when cropping several photos in a row. */
+  progressLabel?: string | null;
 }
 
 /** The handle's hit area, centred on its corner or edge of the crop. */
@@ -67,7 +71,7 @@ function handleMark(handle: CropHandle): object {
   }
 }
 
-export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone }: ImageCropModalProps) {
+export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancelLabel = 'Cancel', progressLabel = null }: ImageCropModalProps) {
   const insets = useSafeAreaInsets();
   const [source, setSource] = useState<ImageRef | null>(null);
   const [imageSize, setImageSize] = useState<Size | null>(null);
@@ -163,8 +167,9 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone }: Imag
       <View style={[st.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
         <View style={st.topBar}>
           <TouchableOpacity onPress={onCancel} disabled={saving} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button">
-            <Text style={st.cancel}>Cancel</Text>
+            <Text style={st.cancel}>{cancelLabel}</Text>
           </TouchableOpacity>
+          {progressLabel ? <Text style={st.progress}>{progressLabel}</Text> : null}
           <TouchableOpacity
             testID="crop-use-photo"
             style={[st.use, { backgroundColor: accent, opacity: crop ? 1 : 0.5 }]}
@@ -231,6 +236,7 @@ const st = StyleSheet.create({
   root:    { flex: 1, backgroundColor: '#000000' },
   topBar:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12 },
   cancel:  { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 15, color: '#FFFFFF' },
+  progress: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13, color: 'rgba(255,255,255,0.75)' },
   use:     { minWidth: 104, height: 38, borderRadius: 19, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   useText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
   area:    { flex: 1, marginHorizontal: 24, marginVertical: 12 },

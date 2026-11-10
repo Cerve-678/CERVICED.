@@ -1,5 +1,6 @@
 // Auto-generated Supabase database types for CERVICED
 // Keep in sync with supabase/phase1_schema.sql
+import type { ServiceTypeKey } from '../constants/serviceTypes';
 
 export type Json =
   | string
@@ -549,13 +550,8 @@ export interface DbService {
   audience: "women" | "men" | "kids" | "everyone" | null;
   // Context
   aftercare_notes: string | null;
-  service_type:
-    | "treatment"
-    | "enhancement"
-    | "maintenance"
-    | "restorative"
-    | "consultation"
-    | null;
+  // Limited by services_service_type_check; the list is in constants/serviceTypes.
+  service_type: ServiceTypeKey | null;
   // Only populated by queries that explicitly join service_add_ons (e.g.
   // getMyProviderServices) — most service reads leave it undefined.
   add_ons?: DbServiceAddOn[];

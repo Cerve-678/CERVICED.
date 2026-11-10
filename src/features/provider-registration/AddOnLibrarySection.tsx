@@ -1,9 +1,11 @@
 // "Your add-ons" on InfoReg's services page: the provider's one list of
 // add-ons, each with its price, extra time and which services it goes on.
-// New add-ons start from the "+ Add-on" button beside "+ Add Category" at the
-// top of the page (or the button here while there are none); tapping a row
-// edits it. Both open AddOnEditorModal. "How add-ons work" opens the guide
-// inline, and it starts open while the list is empty.
+// While there are none it sits under the services with its guide open and a
+// "Make your first add-on" button. Once there's one, it moves to the page's
+// Add-ons tab (`inTab`) and replaces the services while that tab is picked.
+// Add-ons made inside a service's editor join this same list. New add-ons
+// also start from "+ Add-on" beside "+ Add Category"; tapping a row edits it.
+// All of them open AddOnEditorModal.
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,9 +23,12 @@ interface Props<S extends AddOnServiceRef> {
   palette: AddOnPalette;
   onEdit: (item: AddOnLibraryItem) => void;
   onNew: () => void;
+  /** Shown as the Services page's Add-ons tab: sits right under the tab row,
+   *  and has an add button of its own beside the guide. */
+  inTab?: boolean;
 }
 
-export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, categories, palette, onEdit, onNew }: Props<S>) {
+export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, categories, palette, onEdit, onNew, inTab = false }: Props<S>) {
   const empty = !library || library.length === 0;
   // null = the provider hasn't touched it, so it follows whether the list is
   // empty: open with no add-ons, closed once they have some.
@@ -43,7 +48,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
 
   const full = library.length >= MAX_ADD_ONS;
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, inTab && styles.wrapInTab]}>
       <View style={styles.headRow}>
         <View style={styles.headLeft}>
           <Text style={[styles.kicker, { color: palette.sub }]}>YOUR ADD-ONS</Text>
@@ -121,6 +126,15 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
         >
           <Text style={[styles.firstText, { color: palette.onAccent }]}>Make your first add-on</Text>
         </TouchableOpacity>
+      ) : inTab ? (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => { tapMedium(); onNew(); }}
+          accessibilityRole="button"
+          style={[styles.moreButton, { borderColor: palette.accent }]}
+        >
+          <Text style={[styles.moreText, { color: palette.accent }]}>+ Add another add-on</Text>
+        </TouchableOpacity>
       ) : null}
     </View>
   );
@@ -128,6 +142,7 @@ export function AddOnLibrarySection<S extends AddOnServiceRef>({ library, catego
 
 const styles = StyleSheet.create({
   wrap: { gap: 10, marginTop: 22 },
+  wrapInTab: { marginTop: 0 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   kicker: { fontFamily: ADD_ON_FONTS.display, fontSize: 12, letterSpacing: 1.5 },
@@ -157,4 +172,6 @@ const styles = StyleSheet.create({
   chevron: { opacity: 0.6 },
   firstButton: { borderRadius: 100, paddingVertical: 13, alignItems: 'center' },
   firstText: { fontFamily: ADD_ON_FONTS.display, fontSize: 13.5, letterSpacing: 0.6 },
+  moreButton: { borderRadius: 100, paddingVertical: 12, alignItems: 'center', borderWidth: 1.5 },
+  moreText: { fontFamily: ADD_ON_FONTS.display, fontSize: 13, letterSpacing: 0.5 },
 });
