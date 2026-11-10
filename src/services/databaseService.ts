@@ -6393,7 +6393,7 @@ export async function getClientBeautyProfileForBooking(
   // details onto the provider's phone. Allergies, medical notes and
   // photography consent always come back. See
   // 20261108190000_beauty_profile_shared_by_booked_service.sql and
-  // 20261110180000_beauty_profile_after_accept.sql.
+  // 20261110131224_beauty_profile_after_accept.sql.
   const { data, error } = await supabase
     .rpc("get_client_beauty_profile_for_booking", { p_booking_id: bookingId })
     .maybeSingle();

@@ -15,8 +15,9 @@
 --
 -- Redefined from the live definition on 2026-11-10; the only change is the
 -- status filter. The md5 guard refuses if live has changed since.
--- Frontier when written: live max 20261110170000, nothing higher on an open
--- branch.
+-- APPLIED 2026-11-10 via the Supabase MCP, which recorded it as 20261110131224
+-- (authored as 20261110180000; live max was 20261110170000, nothing higher on an open
+-- branch). No later migration redefines this function.
 
 BEGIN;
 

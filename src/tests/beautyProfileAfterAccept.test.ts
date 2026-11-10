@@ -10,7 +10,7 @@ import path from 'path';
  */
 const root = path.join(__dirname, '..', '..');
 const read = (...p: string[]) => fs.readFileSync(path.join(root, ...p), 'utf8');
-const sql = read('supabase', 'migrations', '20261110180000_beauty_profile_after_accept.sql');
+const sql = read('supabase', 'migrations', '20261110131224_beauty_profile_after_accept.sql');
 const screen = read('src', 'screens', 'provider', 'ProviderBookingDetailScreen.tsx');
 const service = read('src', 'services', 'databaseService.ts');
 
