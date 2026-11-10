@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   otherInputWrap: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 12 },
   completeBtn: { marginTop: 8 },
   skipBtn: { alignSelf: 'center', marginTop: 16, paddingVertical: 8 },
-  skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  skipText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '600' },
   // Second-hat celebration. Typography follows this screen's fonts rather than
   // the go-live modal's raw fontWeights, so it reads as part of signup.
   celebrateBackdrop: {
@@ -570,14 +570,14 @@ const styles = StyleSheet.create({
     maxWidth: 340,
   },
   celebrateTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 22,
     letterSpacing: 1,
     marginTop: 12,
     textAlign: 'center',
   },
   celebrateBody: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
   // by the time this shows, activeMode has already flipped, so a client-hat
   // celebration in dark mode paints on the PALE blue-grey client accent.
   celebrateBtnText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     letterSpacing: 1,
   },

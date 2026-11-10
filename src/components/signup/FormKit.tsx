@@ -79,7 +79,7 @@ export function FieldRow({
 /** Text style for a TextInput sitting inside a FieldRow. */
 export function useFieldInputStyle(): TextStyle {
   const { palette: t } = useTheme();
-  return { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '600', color: t.text, padding: 0, minHeight: 24 };
+  return { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 16, fontWeight: '600', color: t.text, padding: 0, minHeight: 24 };
 }
 
 export interface DobValue { day: string; month: string; year: string }
@@ -253,26 +253,26 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   titleBlock: { marginBottom: 20 },
-  title: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 36, letterSpacing: 0.5 },
-  subtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, lineHeight: 21, marginTop: 4 },
+  title: { fontFamily: 'JosefinSans-Bold', fontSize: 30, lineHeight: 36, letterSpacing: 0.5 },
+  subtitle: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 15, lineHeight: 21, marginTop: 4 },
   card: { borderRadius: 20, borderWidth: 1, overflow: 'hidden' },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: 16 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  fieldLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  errorText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: ERROR_RED, marginTop: 4 },
+  fieldLabel: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+  errorText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, color: ERROR_RED, marginTop: 4 },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, marginTop: 4 },
-  sectionTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1.2 },
-  sectionHint: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600' },
+  sectionTitle: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1.2 },
+  sectionHint: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, fontWeight: '600' },
   question: { marginBottom: 22 },
   questionBody: { padding: 16 },
-  prompt: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 19, marginBottom: 12 },
-  switchTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700' },
-  switchSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, marginTop: 2 },
+  prompt: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, lineHeight: 19, marginBottom: 12 },
+  switchTitle: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 15, fontWeight: '700' },
+  switchSub: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, lineHeight: 18, marginTop: 2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 18 },
   chip: { minHeight: 38, paddingHorizontal: 14, borderRadius: 100, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  chipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700' },
+  chipText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '700' },
   primary: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center' },
   dobRow: { flexDirection: 'row', alignItems: 'center' },
-  dobSlash: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '600', marginHorizontal: 6 },
-  primaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
+  dobSlash: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 16, fontWeight: '600', marginHorizontal: 6 },
+  primaryText: { fontFamily: 'JosefinSans-Bold', fontSize: 15, letterSpacing: 1.5 },
 });

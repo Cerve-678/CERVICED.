@@ -78,12 +78,12 @@ const createStyles = (P: Palette) =>
     pressed: { opacity: 0.85 },
     topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     logo: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-    initials: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
+    initials: { fontFamily: 'JosefinSans-Bold', fontSize: 16 },
     names: { flex: 1, gap: 2 },
-    provider: { fontFamily: 'Jura-VariableFont_wght', fontSize: 16, fontWeight: '700', color: P.text },
-    service: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, color: P.sub },
+    provider: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 16, fontWeight: '700', color: P.text },
+    service: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, color: P.sub },
     bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-    when: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: P.text, flexShrink: 1 },
+    when: { fontFamily: 'JosefinSans-Bold', fontSize: 15, color: P.text, flexShrink: 1 },
     tag: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -93,5 +93,5 @@ const createStyles = (P: Palette) =>
       borderRadius: 13,
       backgroundColor: P.accentDim,
     },
-    tagText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.text },
+    tagText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, fontWeight: '700', color: P.text },
   });

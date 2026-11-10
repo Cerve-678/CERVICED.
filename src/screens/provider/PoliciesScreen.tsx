@@ -189,7 +189,7 @@ function isCustomAmount(v: string): boolean {
 const pSt = StyleSheet.create({
   row:      { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 4 },
   pill:     { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
-  pillText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  pillText: { fontFamily: 'JosefinSans-Bold', fontSize: 13 },
 });
 
 export default function PoliciesScreen({ navigation }: any) {
@@ -697,13 +697,13 @@ export default function PoliciesScreen({ navigation }: any) {
 }
 
 const capSt = StyleSheet.create({
-  note: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 13, lineHeight: 18, marginTop: 8 },
+  note: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 13, lineHeight: 18, marginTop: 8 },
 });
 
 const termsSt = StyleSheet.create({
   box:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 14 },
   checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  text:     { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600' },
+  text:     { flex: 1, fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '600' },
   link:     { fontWeight: '800', textDecorationLine: 'underline' },
 });
 
@@ -715,8 +715,8 @@ const imgSt = StyleSheet.create({
   removeBtn: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center' },
   removeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   pageNo:    { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 4 },
-  count:     { fontFamily: 'BakbakOne-Regular', fontSize: 11, marginTop: 10 },
+  count:     { fontFamily: 'JosefinSans-Bold', fontSize: 11, marginTop: 10 },
   addTile:   { width: 84, height: 84, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   addPlus:   { fontSize: 22, fontWeight: '300', lineHeight: 24 },
-  addText:   { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 9, marginTop: 2 },
+  addText:   { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 9, marginTop: 2 },
 });

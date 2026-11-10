@@ -255,10 +255,10 @@ function Action({ C, label, onPress, busy, ghost }: { C: BookingFeeColors; label
 
 const st = StyleSheet.create({
   card: { marginHorizontal: 16, marginTop: 12, padding: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, gap: 8 },
-  heading: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 0.6 },
-  title: { fontFamily: 'BakbakOne-Regular', fontSize: 15 },
-  sub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18 },
+  heading: { fontFamily: 'JosefinSans-Bold', fontSize: 11, letterSpacing: 0.6 },
+  title: { fontFamily: 'JosefinSans-Bold', fontSize: 15 },
+  sub: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, lineHeight: 18 },
   input: { minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 10, fontSize: 14, textAlignVertical: 'top', marginBottom: 8 },
   button: { borderRadius: 20, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
-  buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  buttonText: { fontFamily: 'JosefinSans-Bold', fontSize: 14 },
 });

@@ -1,6 +1,6 @@
 /**
- * Edit one service — name, price, duration, description, and whether clients
- * can see it.
+ * Edit one service — name, price, duration, latest start, description, and
+ * whether clients can see it.
  *
  * Deliberately narrow. The fuller service editor in InfoRegScreen still owns
  * safety flags, tags, buffers, add-ons and photos; this is the set a provider
@@ -44,10 +44,13 @@ import {
   emptyTagGroups,
   hasNoTags,
   mergeTagGroups,
+  parseTypedTags,
   suggestServiceDetails,
+  tagLabel,
   type ServiceAudienceValue,
   type ServiceTagGroups,
 } from './serviceTags';
+import { formatLatestStart, latestStartToEditor } from '../../utils/latestStart';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -65,6 +68,8 @@ export interface ServiceEditorValue {
    *  provider thinks in hours, the way services are priced and talked about. */
   hours: string;
   minutes: string;
+  /** Latest start, 'HH:MM' UK time, or '' for any time in working hours. */
+  latestStart: string;
   description: string;
   /** Only offered when editing. A new service always starts on the menu. */
   isActive: boolean;
@@ -79,6 +84,7 @@ export function toEditorValue(service: {
   name: string;
   price: number;
   duration_minutes: number;
+  latest_start_time?: string | null;
   description: string | null;
   is_active: boolean;
   tags?: string[] | null;
@@ -92,6 +98,7 @@ export function toEditorValue(service: {
     name: service.name,
     price: String(service.price ?? ''),
     ...splitDuration(service.duration_minutes),
+    latestStart: latestStartToEditor(service.latest_start_time),
     description: service.description ?? '',
     isActive: service.is_active,
     tags: {
@@ -128,11 +135,21 @@ export const EMPTY_SERVICE_VALUE: ServiceEditorValue = {
   price: '',
   hours: '',
   minutes: '',
+  latestStart: '',
   description: '',
   isActive: true,
   tags: emptyTagGroups(),
   audience: '',
 };
+
+/** Latest-start choices: on the hour, 9am to 8pm. A stored time off this grid
+ *  (set some other way) still gets its own chip, so it's never hidden. */
+const LATEST_START_HOURS = Array.from({ length: 12 }, (_, i) => `${String(9 + i).padStart(2, '0')}:00`);
+
+function latestStartChoices(current: string): string[] {
+  if (!current || LATEST_START_HOURS.includes(current)) return LATEST_START_HOURS;
+  return [...LATEST_START_HOURS, current].sort();
+}
 
 const AUDIENCE_OPTIONS: { value: Exclude<ServiceAudienceValue, ''>; label: string }[] = [
   { value: 'everyone', label: 'Everyone' },
@@ -145,8 +162,6 @@ const AUDIENCE_OPTIONS: { value: Exclude<ServiceAudienceValue, ''>; label: strin
 const STARTER_CHIP_COUNT = 10;
 
 type TagChip = { group: keyof ServiceTagGroups; tag: string };
-
-const tagLabel = (tag: string) => tag.replace(/-/g, ' ');
 
 /** Null when the value is usable; otherwise the reason, phrased for the
  *  provider rather than for the column that would reject it. */
@@ -185,6 +200,7 @@ function toDraft(
     price: Number(value.price),
     // validateServiceValue has already rejected a null here.
     durationMinutes: editorDurationMinutes(value) ?? 0,
+    latestStartTime: value.latestStart || null,
     description: value.description.trim() || null,
     ...(isNew ? {} : { isActive: value.isActive }),
     ...(findability.tags ? { tags: findability.tags } : {}),
@@ -222,6 +238,7 @@ export default function ServiceEditorSheet({
   // typed. After that they're the provider's, and typing changes nothing.
   const [tagsTouched, setTagsTouched] = useState(false);
   const [audienceTouched, setAudienceTouched] = useState(false);
+  const [ownTag, setOwnTag] = useState('');
 
   // Reseed every time the sheet opens. Without this the second service you
   // tapped would open showing the first one's values.
@@ -231,6 +248,7 @@ export default function ServiceEditorSheet({
       setError(null);
       setTagsTouched(false);
       setAudienceTouched(false);
+      setOwnTag('');
     }
   }, [visible, initial]);
 
@@ -282,6 +300,26 @@ export default function ServiceEditorSheet({
       return { ...v, tags: { ...tags, [chip.group]: next } };
     });
   }, [tags]);
+
+  // A word the chips don't have. Typed text that IS a chip ticks that chip;
+  // anything new goes in the style tags — the one group the full editor
+  // always shows, so it can be seen and unticked there too.
+  const addOwnTags = useCallback(() => {
+    const typed = parseTypedTags(ownTag);
+    setOwnTag('');
+    if (!typed.length) return;
+    Haptics.selectionAsync().catch(() => {});
+    setTagsTouched(true);
+    setValue(v => {
+      const next: ServiceTagGroups = { ...tags };
+      for (const tag of typed) {
+        const existing = chips.find(c => c.tag === tag);
+        const group = existing ? existing.group : 'styleTags';
+        if (!next[group].includes(tag)) next[group] = [...next[group], tag];
+      }
+      return { ...v, tags: next };
+    });
+  }, [ownTag, tags, chips]);
 
   const descriptionTopics = useDescriptionTopics(value.name, value.description);
 
@@ -413,6 +451,43 @@ export default function ServiceEditorSheet({
               </View>
             </View>
 
+            <Text style={[styles.label, { color: palette.sub }]}>LATEST START</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.timeChipRow}
+            >
+              {['', ...latestStartChoices(value.latestStart)].map(time => {
+                const on = value.latestStart === time;
+                return (
+                  <TouchableOpacity
+                    key={time || 'any'}
+                    style={[
+                      styles.chip,
+                      { borderColor: on ? palette.accent : palette.border, backgroundColor: on ? palette.accent : palette.card },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setValue(v => ({ ...v, latestStart: time }));
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, { color: on ? (isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740') : palette.text }]}>
+                      {time ? formatLatestStart(time) : 'Any time'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <Text style={[styles.hint, { color: palette.sub }]}>
+              {value.latestStart
+                ? `Clients can't book it to start after ${formatLatestStart(value.latestStart)}.`
+                : 'Clients can book it to start any time in your working hours.'}
+            </Text>
+
             <Text style={[styles.label, { color: palette.sub }]}>DESCRIPTION</Text>
             <TextInput
               value={value.description}
@@ -481,6 +556,30 @@ export default function ServiceEditorSheet({
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+                <View style={styles.ownTagRow}>
+                  <TextInput
+                    value={ownTag}
+                    onChangeText={setOwnTag}
+                    onSubmitEditing={addOwnTags}
+                    placeholder="Add your own, commas for more"
+                    placeholderTextColor={palette.sub}
+                    returnKeyType="done"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Add your own tag"
+                    style={[styles.input, styles.ownTagInput, { color: palette.text, backgroundColor: palette.card, borderColor: palette.border }]}
+                  />
+                  <TouchableOpacity
+                    style={[styles.ownTagButton, { backgroundColor: ownTag.trim() ? palette.accent : withAlpha(palette.text, 0.12) }]}
+                    onPress={addOwnTags}
+                    disabled={!ownTag.trim()}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add tag"
+                  >
+                    <Ionicons name="add" size={20} color={ownTag.trim() ? (isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740') : palette.sub} />
+                  </TouchableOpacity>
                 </View>
               </>
             ) : null}
@@ -570,21 +669,21 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   eyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
     marginBottom: 3,
   },
   title: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 21,
   },
   body: {
     flexGrow: 0,
   },
   label: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1,
@@ -637,11 +736,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   visibilityTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 14,
   },
   visibilityHint: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 16,
@@ -649,13 +748,13 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#FF453A',
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     marginTop: 12,
   },
   hint: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 16,
@@ -678,10 +777,15 @@ const styles = StyleSheet.create({
   },
   suggestText: {
     flex: 1,
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 12,
     lineHeight: 16,
+  },
+  timeChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 4,
   },
   chipGrid: {
     flexDirection: 'row',
@@ -695,12 +799,30 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   chipText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
   },
+  ownTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  ownTagInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  ownTagButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   footnote: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 17,
@@ -713,7 +835,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   saveButtonText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     color: '#FFFFFF',
     fontSize: 15,
   },

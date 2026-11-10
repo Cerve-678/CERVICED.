@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   screenTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.3,
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   countBadgeText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   imagePlaceholderInitial: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 30,
   },
   imageGradient: {
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   ratingChipText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 10,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   offerChipText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 8,
     letterSpacing: 0.4,
     color: '#FFFFFF',
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
     bottom: 10,
   },
   overlayName: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 13,
     color: '#FFFFFF',
     marginBottom: 5,
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
   overlayServiceText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 8.5,
     letterSpacing: 0.3,
     color: '#FFFFFF',
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   locationCaption: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   visitsChipText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 10.5,
     fontWeight: '700',
   },
@@ -631,12 +631,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   emptyTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 18,
     marginBottom: 8,
   },
   emptySubtitle: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 24,
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   exploreButtonText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 13,
     color: '#fff',
     fontWeight: '700',

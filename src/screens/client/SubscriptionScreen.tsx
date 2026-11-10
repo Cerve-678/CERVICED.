@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 24 },
   backBtn: { marginBottom: 24 },
   backArrow: { fontSize: 22, fontWeight: '900' },
-  title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
+  title: { fontFamily: 'JosefinSans-Bold', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 28, lineHeight: 20 },
   planCard: {
     borderRadius: 20,
@@ -98,9 +98,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   planTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  planName: { fontFamily: 'BakbakOne-Regular', fontSize: 18, letterSpacing: 1 },
+  planName: { fontFamily: 'JosefinSans-Bold', fontSize: 18, letterSpacing: 1 },
   planDesc: { fontSize: 13, lineHeight: 19 },
-  sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 2, marginBottom: 4 },
+  sectionLabel: { fontFamily: 'JosefinSans-Bold', fontSize: 13, letterSpacing: 2, marginBottom: 4 },
   comingSoonBadge: { fontSize: 12, letterSpacing: 1, marginBottom: 16 },
   featureList: { gap: 12, marginBottom: 28 },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -110,5 +110,5 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     alignItems: 'center',
   },
-  notifyText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 1, color: '#fff' },
+  notifyText: { fontFamily: 'JosefinSans-Bold', fontSize: 14, letterSpacing: 1, color: '#fff' },
 });

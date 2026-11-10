@@ -24,8 +24,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import type { AppTheme } from '../../constants/theme';
 
-export const FONT_DISPLAY = 'BakbakOne-Regular';
-export const FONT_BODY = 'Jura-VariableFont_wght';
+export const FONT_DISPLAY = 'JosefinSans-Bold';
+export const FONT_BODY = 'JosefinSans-VariableFont_wght';
 
 /**
  * Semantic colours, reused from what the app already ships rather than the

@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   heroDateTime: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 12,
     letterSpacing: 0.3,
   },
@@ -1542,7 +1542,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   heroEyebrow: {
-    fontFamily: "BakbakOne-Regular",
+    fontFamily: "JosefinSans-Bold",
     fontSize: 12,
     letterSpacing: 3,
     marginBottom: 10,
@@ -1560,7 +1560,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   hatBadgeText: {
-    fontFamily: "BakbakOne-Regular",
+    fontFamily: "JosefinSans-Bold",
     fontSize: 10,
     // Tightened from 2 when the badge went from "BEAUTY" to the full
     // "BEAUTY ASSISTANT" — at 2 the longer string stretched the pill most of
@@ -1568,13 +1568,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   heroGreeting: {
-    fontFamily: "BakbakOne-Regular",
+    fontFamily: "JosefinSans-Bold",
     fontSize: 48,
     lineHeight: 48,
     letterSpacing: -0.5,
   },
   heroQuestion: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 18,
     lineHeight: 25,
     marginTop: 14,
@@ -1593,7 +1593,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#4CAF50",
   },
   heroStatusText: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 13,
   },
   heroActionsWrap: {
@@ -1616,13 +1616,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerName: {
-    fontFamily: "BakbakOne-Regular",
+    fontFamily: "JosefinSans-Bold",
     fontSize: 22,
     letterSpacing: 0.4,
     lineHeight: 25,
   },
   headerStatus: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 11,
     letterSpacing: 0.2,
   },
@@ -1659,7 +1659,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   daySepText: {
-    fontFamily: "BakbakOne-Regular",
+    fontFamily: "JosefinSans-Bold",
     fontSize: 9,
     letterSpacing: 1.5,
     paddingHorizontal: 12,
@@ -1714,12 +1714,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   historyTitle: {
-    fontFamily: "BakbakOne-Regular",
+    fontFamily: "JosefinSans-Bold",
     fontSize: 20,
     letterSpacing: 0.5,
   },
   historySubtitle: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 11,
     letterSpacing: 0.2,
   },
@@ -1729,7 +1729,7 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   historyClose: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -1741,7 +1741,7 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   historyEmptyText: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 15,
     textAlign: "center",
     lineHeight: 22,
@@ -1761,18 +1761,18 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   historyItemTitle: {
-    fontFamily: "BakbakOne-Regular",
+    fontFamily: "JosefinSans-Bold",
     fontSize: 15,
     marginBottom: 4,
   },
   historyItemPreview: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 4,
   },
   historyItemDate: {
-    fontFamily: "Jura-VariableFont_wght",
+    fontFamily: "JosefinSans-VariableFont_wght",
     fontSize: 11,
   },
   historyDeleteBtn: {

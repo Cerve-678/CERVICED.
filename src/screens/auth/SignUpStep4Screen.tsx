@@ -415,9 +415,9 @@ const styles = StyleSheet.create({
   question: { marginBottom: 22 },
   chipsInCard: { marginBottom: 0 },
   allergyNote: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
-  allergyNoteText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
+  allergyNoteText: { flex: 1, fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, lineHeight: 17 },
   textArea: { minHeight: 72, fontWeight: '500' },
   continueBtn: { marginTop: 8 },
   skipBtn: { alignSelf: 'center', marginTop: 16, paddingVertical: 8 },
-  skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  skipText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '600' },
 });

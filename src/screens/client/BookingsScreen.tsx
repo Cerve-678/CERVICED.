@@ -45,7 +45,6 @@ import { buildPaymentSheetAppearance } from '../../features/payments/paymentShee
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
-import { bookingTodoCounts } from '../../features/bookings/activityCentre';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
@@ -143,10 +142,10 @@ const WaitlistCard = React.memo(function WaitlistCard({
       }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, color: theme.text, marginBottom: 2 }}>
+            <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 15, color: theme.text, marginBottom: 2 }}>
               {entry.service_name_snapshot}
             </Text>
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
+            <Text style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
               {entry.provider_name_snapshot}
             </Text>
             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
@@ -157,7 +156,7 @@ const WaitlistCard = React.memo(function WaitlistCard({
                 paddingVertical: 3,
               }}>
                 <Text style={{
-                  fontFamily: 'BakbakOne-Regular',
+                  fontFamily: 'JosefinSans-Bold',
                   fontSize: 10,
                   letterSpacing: 0.4,
                   color: notified ? '#34C759' : '#FF9500',
@@ -179,7 +178,7 @@ const WaitlistCard = React.memo(function WaitlistCard({
               onPress={() => onBook(entry)}
               activeOpacity={0.8}
             >
-              <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: P.onAccent }}>Book Now</Text>
+              <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 11, color: P.onAccent }}>Book Now</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -188,7 +187,7 @@ const WaitlistCard = React.memo(function WaitlistCard({
           onPress={() => onLeave(entry)}
           activeOpacity={0.7}
         >
-          <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
+          <Text style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
             Leave waitlist
           </Text>
         </TouchableOpacity>
@@ -366,10 +365,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // Shared with the client Settings card, so both count the same things.
   const {
     activity,
-    remote: activityRemote,
+    todoCounts: bookingActionItems,
     refresh: refreshActivity,
   } = useClientActivity();
-  const bookingActionItems = useMemo(() => bookingTodoCounts(activityRemote), [activityRemote]);
   const activityNeedsYouCount = activity.needsYou.length;
 
   const openActivityCentre = useCallback(() => {
@@ -815,7 +813,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         backgroundColor: isDarkMode ? P.bg : 'transparent',
       },
       headerTitleStyle: {
-        fontFamily: 'BakbakOne-Regular',
+        fontFamily: 'JosefinSans-Bold',
         fontSize: 22,
         color: P.text,
       },
@@ -1477,7 +1475,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 activeTextColor={P.onAccent}
                 inactiveTextColor={P.sub}
                 inactiveBackgroundColor={P.surface}
-                tabFontFamily="BakbakOne-Regular"
+                tabFontFamily="JosefinSans-Bold"
                 centerContent
                 equalWidth
                 gap={16}
@@ -2354,7 +2352,7 @@ const createStyles = (
     right: 1,
   },
   headerTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 28,
     color: theme.text,
     textAlign: 'center',
@@ -2363,7 +2361,7 @@ const createStyles = (
     fontWeight: '800',
   },
   headerSubtitle: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 14,
     color: theme.secondaryText,
     textAlign: 'center',
@@ -2426,13 +2424,13 @@ const createStyles = (
     alignItems: 'center',
   },
   serviceLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 11,
     color: P.text,
     letterSpacing: 1,
   },
   serviceDuration: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 9,
     color: P.sub,
     fontWeight: '600',
@@ -2470,21 +2468,21 @@ const createStyles = (
     borderColor: 'rgba(255, 255, 255, 0.4)',
   },
   upcomingLabelText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     color: P.accentText,
     letterSpacing: 1,
     fontWeight: '800',
   },
   nextLabelText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     color: P.text,
     letterSpacing: 1,
     fontWeight: '800',
   },
   congratsLabelText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 11,
     color: P.text,
     letterSpacing: 0.5,
@@ -2545,7 +2543,7 @@ const createStyles = (
     flex: 1,
   },
   appointmentService: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 16,
     color: P.text,
     marginBottom: 4,
@@ -2553,35 +2551,35 @@ const createStyles = (
     fontWeight: 'bold',
   },
   appointmentProvider: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 13,
     color: P.sub,
     marginBottom: 4,
     fontWeight: '600',
   },
   appointmentAddress: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontWeight: '400',
     fontSize: 12,
     color: P.accentText,
     fontStyle: 'italic',
   },
   nextAppointmentService: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 14,
     color: P.text,
     marginBottom: 4,
     fontWeight: 'bold',
   },
   nextAppointmentProvider: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 12,
     color: P.sub,
     marginBottom: 4,
     fontWeight: '600',
   },
   nextAppointmentAddress: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 11,
     color: P.sub,
     fontStyle: 'italic',
@@ -2663,13 +2661,13 @@ const createStyles = (
     backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0',
   },
   buttonText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 9,
     color: P.text,
     fontWeight: 'bold',
   },
   buttonTextWhite: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 9,
     color: P.text,
     fontWeight: 'bold',
@@ -2683,13 +2681,13 @@ const createStyles = (
     marginBottom: 12,
   },
   backToTrackingText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 14,
     color: '#2196F3',
     fontWeight: '800',
   },
   bookingsTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 18,
     color: P.text,
     textAlign: 'center',
@@ -2714,7 +2712,7 @@ const createStyles = (
     borderRadius: 20,
   },
   serviceCategoryName: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     color: isDarkMode ? '#000' : '#fff',
     letterSpacing: 1,
@@ -2783,14 +2781,14 @@ const createStyles = (
     paddingVertical: 60,
   },
   emptyStateText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 16,
     color: P.sub,
     textAlign: 'center',
     marginBottom: 8,
   },
   emptyStateSubtext: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 14,
     color: P.sub,
     textAlign: 'center',
@@ -3261,7 +3259,7 @@ const createStyles = (
     minHeight: 44,
   },
   modalButtonText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 11,
     color: P.text,
     fontWeight: 'bold',

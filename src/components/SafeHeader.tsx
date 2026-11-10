@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     alignItems: Platform.OS === 'android' ? 'flex-start' : 'center',
   },
   title: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: Platform.OS === 'android' ? 20 : 28,
     color: '#000',
     letterSpacing: Platform.OS === 'android' ? 0.15 : 1,
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     textAlign: Platform.OS === 'android' ? 'left' : 'center',
   },
   subtitle: {
-    fontFamily: 'Jura',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     color: 'rgba(0, 0, 0, 0.7)',
     textAlign: Platform.OS === 'android' ? 'left' : 'center',

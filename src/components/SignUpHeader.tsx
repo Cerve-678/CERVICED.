@@ -43,6 +43,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
   backBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   right: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  action: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700' },
-  count: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
+  action: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '700' },
+  count: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1 },
 });

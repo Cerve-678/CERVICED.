@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   chipText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 10,
   },
   pager: { flex: 1 },

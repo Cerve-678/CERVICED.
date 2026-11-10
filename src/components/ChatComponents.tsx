@@ -1122,7 +1122,7 @@ const styles = StyleSheet.create({
     maxWidth: '96%',
   },
   editorialTakeaway: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 16,
     lineHeight: 21,
     letterSpacing: 0.1,
@@ -1131,7 +1131,7 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
   cardText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 15,
     lineHeight: 21,
     // Jura is a variable font, so weight is a real axis here rather than a
@@ -1142,24 +1142,24 @@ const styles = StyleSheet.create({
   // Emphasis inside a bubble (see renderRichText). Sits clearly above the
   // body's 500 so the highlighted service/provider name actually stands out.
   bubbleBold: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
   },
   bubbleHeading: {
     // A different display face gives the answer's title a clear visual tier
     // above the body copy, so the user can scan a long thread by outcome.
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     lineHeight: 21,
     letterSpacing: 0.15,
   },
   bubbleBullet: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 16,
   },
   bubbleListText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     // Lists are body copy. Individual labels, names and values can still use
     // **bold** markers, but weighting every line made Becca sound shouty.
     fontWeight: '500',
@@ -1170,7 +1170,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   cardTime: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 11,
     marginTop: 6,
     opacity: 0.75,
@@ -1194,7 +1194,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   thinkingLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 12,
     fontStyle: 'italic',
   },
@@ -1211,7 +1211,7 @@ const styles = StyleSheet.create({
     marginLeft: 30,
   },
   sectionLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 10,
     letterSpacing: 1.5,
     marginBottom: 12,
@@ -1238,7 +1238,7 @@ const styles = StyleSheet.create({
     height: 18,
   },
   actionText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     letterSpacing: 0.1,
   },
@@ -1254,7 +1254,7 @@ const styles = StyleSheet.create({
   },
   actionArrow: {
     fontSize: 15,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
   },
 
   // Category-style pill row (short options, e.g. Nails / Hair / Lashes)
@@ -1270,7 +1270,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   pillChipText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     letterSpacing: 0.2,
   },
@@ -1323,19 +1323,19 @@ const styles = StyleSheet.create({
   // Initial shown when a provider has no logo — sized to sit in the same
   // 40px container the real logo uses, so the row never changes height.
   providerLogoFallback: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 21,
     lineHeight: 26,
   },
   providerName: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 10,
     textAlign: 'center',
     letterSpacing: 0.1,
     marginBottom: 2,
   },
   providerService: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 9.5,
     textAlign: 'center',
   },
@@ -1369,12 +1369,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   inspirationProvider: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 10.5,
     paddingHorizontal: 9,
   },
   inspirationCaption: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 9.5,
     lineHeight: 13,
     paddingHorizontal: 9,
@@ -1392,7 +1392,7 @@ const styles = StyleSheet.create({
   },
   inspirationFitText: {
     flex: 1,
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 9,
     lineHeight: 12,
@@ -1434,7 +1434,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 15,
     fontWeight: '400',
     paddingVertical: 8,
@@ -1459,16 +1459,16 @@ const answerStyles = StyleSheet.create({
   trail: { borderRadius: 14, paddingHorizontal: 13, paddingVertical: 11, gap: 8 },
   step: { flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   tick: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  stepText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13, lineHeight: 18 },
+  stepText: { flex: 1, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 13, lineHeight: 18 },
   fold: { gap: 8 },
   foldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9 },
-  foldText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 12 },
+  foldText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 12 },
   headline: { gap: 4 },
-  headlineValue: { fontFamily: 'BakbakOne-Regular', fontSize: 42, lineHeight: 46 },
-  headlineLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 16, lineHeight: 21 },
+  headlineValue: { fontFamily: 'JosefinSans-Bold', fontSize: 42, lineHeight: 46 },
+  headlineLabel: { fontFamily: 'JosefinSans-Bold', fontSize: 16, lineHeight: 21 },
   proofRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 },
   proof: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
-  proofText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+  proofText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 11 },
   card: {
     borderRadius: 18,
     overflow: 'hidden',
@@ -1478,31 +1478,31 @@ const answerStyles = StyleSheet.create({
     elevation: 2,
   },
   band: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
-  bandTitle: { flexShrink: 1, fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1.5 },
-  bandMeta: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11, opacity: 0.85 },
+  bandTitle: { flexShrink: 1, fontFamily: 'JosefinSans-Bold', fontSize: 10.5, letterSpacing: 1.5 },
+  bandMeta: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 11, opacity: 0.85 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
   rowLogo: { width: 34, height: 34, borderRadius: 17, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   rowLogoImage: { width: 34, height: 34 },
-  rowLogoText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  rowLogoText: { fontFamily: 'JosefinSans-Bold', fontSize: 13 },
   rowBody: { flex: 1, minWidth: 0, gap: 2 },
-  rowTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
-  rowDetail: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12 },
+  rowTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 13 },
+  rowDetail: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 12 },
   tag: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4 },
-  tagText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+  tagText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 11 },
   stats: { flexDirection: 'row' },
   stat: { flex: 1, padding: 14, gap: 2 },
-  statValue: { fontFamily: 'BakbakOne-Regular', fontSize: 28, lineHeight: 32 },
-  statLabel: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12 },
+  statValue: { fontFamily: 'JosefinSans-Bold', fontSize: 28, lineHeight: 32 },
+  statLabel: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 12 },
   track: { height: 8, borderRadius: 4, marginTop: 6, overflow: 'hidden' },
   range: { position: 'absolute', top: 0, bottom: 0, borderRadius: 4 },
   axis: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingBottom: 10 },
-  axisText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 10.5, fontVariant: ['tabular-nums'] },
+  axisText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 10.5, fontVariant: ['tabular-nums'] },
   ticket: { flexDirection: 'row' },
   stamp: { width: 70, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, gap: 2 },
-  stampSmall: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 10, letterSpacing: 1.4 },
-  stampBig: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 34 },
+  stampSmall: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 10, letterSpacing: 1.4 },
+  stampBig: { fontFamily: 'JosefinSans-Bold', fontSize: 30, lineHeight: 34 },
   ticketBody: { flex: 1, minWidth: 0, paddingTop: 6 },
-  ticketMeta: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11, paddingHorizontal: 14, paddingTop: 4 },
+  ticketMeta: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 11, paddingHorizontal: 14, paddingTop: 4 },
   footer: { paddingHorizontal: 14, paddingVertical: 9 },
-  footerText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 11.5 },
+  footerText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 11.5 },
 });
