@@ -10,8 +10,12 @@ import { useAppDialog } from './AppDialog';
 import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
 import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getProviderTipEarnings, getPayoutHoldDays, setPayoutHoldDays, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
-import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel, payoutHoldSentence, type PayoutHoldDays } from '../constants/payoutTiming';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
+import {
+  PAYOUT_INTERVALS, PAYOUT_MONTH_DAYS, PAYOUT_RELEASE_HOURS, PAYOUT_WEEKDAYS, payoutIntervalLabel, payoutMonthDayLabel,
+  payoutScheduleSentence, payoutWeekdayLabel, type PayoutInterval, type PayoutMonthDay, type PayoutSchedule,
+  type PayoutScheduleChoice, type PayoutWeekday,
+} from '../constants/payoutSchedule';
 import { groupTipsByBooking } from '../features/payments/tipsByBooking';
 import { providerCancelGroupBooking, providerCancelOwnBooking } from '../services/databaseService';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../constants/featureFlags';
@@ -46,11 +50,12 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [payoutError, setPayoutError] = useState('');
-  const [holdDays, setHoldDays] = useState<PayoutHoldDays | null>(null);
-  const [holdSaving, setHoldSaving] = useState(false);
-  const [holdError, setHoldError] = useState('');
-  // No professional profile yet: there's no payout to time, so no picker.
-  const [holdUnavailable, setHoldUnavailable] = useState(false);
+  // How often Stripe pays their bank, read from Stripe. null with
+  // scheduleLoaded = no Stripe account yet, so there's nothing to choose.
+  const [schedule, setSchedule] = useState<PayoutSchedule | null>(null);
+  const [scheduleLoaded, setScheduleLoaded] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
   const opening = useRef(false);
   const handledReturn = useRef<StripeConnectReturn | undefined>(undefined);
   const loadSequence = useRef(0);
@@ -75,11 +80,11 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       }).catch(() => {
         if (sequence === loadSequence.current) setPayoutError('Booking payments could not load. Refresh to try again.');
       }),
-      getPayoutHoldDays().then(days => {
+      getPayoutSchedule().then(current => {
         if (sequence !== loadSequence.current) return;
-        setHoldDays(days); setHoldUnavailable(days === null); setHoldError('');
+        setSchedule(current); setScheduleLoaded(true); setScheduleError('');
       }).catch(() => {
-        if (sequence === loadSequence.current) setHoldError('Your payout timing could not load. Refresh to try again.');
+        if (sequence === loadSequence.current) setScheduleError('Your payout schedule could not load. Refresh to try again.');
       }),
       // Fees are a secondary list: a failed read leaves it empty rather than
       // replacing the booking payments error above.
@@ -146,21 +151,31 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stripeReturn.result === 'refresh') void openStripe('onboard');
   }, [stripeReturn, load, openStripe]);
-  const chooseHoldDays = async (days: PayoutHoldDays) => {
-    if (days === holdDays || holdSaving) return;
+  const chooseSchedule = async (choice: PayoutScheduleChoice) => {
+    if (scheduleSaving) return;
     void Haptics.selectionAsync().catch(() => {});
-    setHoldSaving(true); setHoldError('');
+    setScheduleSaving(true); setScheduleError('');
     try {
-      setHoldDays(await setPayoutHoldDays(days));
-      // Held rows were re-timed server-side; reread them so "Eligible for release from" matches.
-      void load();
+      setSchedule(await setPayoutSchedule(choice));
     } catch (err) {
-      // The server's own guard wording ("Choose 24 hours, 3, 7, 14 or 30
-      // days.") says what to do; anything else gets the generic retry line.
-      setHoldError(toUserMessageAllowingDbGuard(err, 'Your payout timing was not changed. Please try again.', 'setPayoutHoldDays'));
+      setScheduleError(err instanceof PaymentRequestError
+        ? err.message
+        : toUserMessageAllowingDbGuard(err, 'Your payout schedule was not changed. Please try again.', 'setPayoutSchedule'));
     } finally {
-      setHoldSaving(false);
+      setScheduleSaving(false);
     }
+  };
+  // Switching to weekly or monthly keeps a day Stripe already has, if it's one
+  // the app offers; otherwise Monday, or the 1st.
+  const chooseInterval = (interval: PayoutInterval) => {
+    if (interval === schedule?.interval) return;
+    if (interval === 'daily') return void chooseSchedule({ interval });
+    if (interval === 'weekly') {
+      const day = schedule?.weeklyDays.find((d): d is PayoutWeekday => (PAYOUT_WEEKDAYS as readonly string[]).includes(d)) ?? 'monday';
+      return void chooseSchedule({ interval, weeklyDay: day });
+    }
+    const day = schedule?.monthlyDays.find((d): d is PayoutMonthDay => (PAYOUT_MONTH_DAYS as readonly number[]).includes(d)) ?? 1;
+    void chooseSchedule({ interval, monthlyDay: day });
   };
 
   // Same full-or-partial refund sheet as the booking detail screen; the
@@ -350,9 +365,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       <Text style={[styles.sectionTitle, { color: C.text }]}>From booking to bank</Text>
       <View style={[styles.journey, { backgroundColor: C.surface }]}>
         {[
-          ['1', 'Booking completed', `${holdDays ? payoutHoldSentence(holdDays) : 'Your share is held for the payout timing you choose.'} Change this in Payment settings.`],
+          ['1', 'Booking completed', `Your share is released to Stripe ${PAYOUT_RELEASE_HOURS} hours after the appointment ends.`],
           ['2', 'Released to Stripe', 'Your share moves to Stripe and clears into your available balance.'],
-          ['3', 'Paid to your bank', 'Stripe sends a payout according to your payout schedule.'],
+          ['3', 'Paid to your bank', `${payoutScheduleSentence(schedule)} Change this in Payment settings.`],
         ].map(([step, title, detail]) => <View key={step} style={styles.step}>
           <View style={[styles.stepNumber, { backgroundColor: C.card }]}><Text style={[styles.label, { color: C.accentText }]}>{step}</Text></View>
           <View style={{ flex: 1 }}><Text style={[styles.label, { color: C.text }]}>{title}</Text><Text style={[styles.caption, { color: C.text }]}>{detail}</Text></View>
@@ -373,22 +388,33 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </Card>
     </>}
     {shownSection === 'settings' && <>
-      <Card title="When you get paid" sub="How long after an appointment your share is released to our payment partners. They then pay it into your bank, which usually takes a few more working days.">
-        {!!holdError && <Notice text={holdError} />}
-        {holdUnavailable
-          ? <Notice text="Finish setting up your professional profile to choose when you get paid." />
+      <Card title="When you get paid" sub={`We release your share to Stripe ${PAYOUT_RELEASE_HOURS} hours after each appointment. Stripe then pays it into your bank on the schedule you choose here.`}>
+        {!!scheduleError && <Notice text={scheduleError} />}
+        {scheduleLoaded && !schedule
+          ? <Notice text="Set up your Stripe account to choose when you get paid." />
           : <>
-            <View style={styles.holdOptions}>
-              {PAYOUT_HOLD_DAY_OPTIONS.map(days => {
-                const selected = days === holdDays;
-                return <TouchableOpacity key={days} accessibilityRole="radio" accessibilityState={{ selected, disabled: holdSaving || !holdDays }}
-                  disabled={holdSaving || !holdDays} onPress={() => void chooseHoldDays(days)} activeOpacity={0.75}
-                  style={[styles.holdOption, { backgroundColor: selected ? C.accent : C.surface, borderColor: C.border }]}>
-                  <Text style={[styles.label, { color: selected ? C.bg : C.text }]}>{payoutHoldLabel(days)}</Text>
-                </TouchableOpacity>;
-              })}
+            <View style={styles.scheduleOptions}>
+              {PAYOUT_INTERVALS.map(interval => <ScheduleOption key={interval} label={payoutIntervalLabel(interval)}
+                selected={schedule?.interval === interval} disabled={scheduleSaving || !schedule}
+                onPress={() => chooseInterval(interval)} colors={C} />)}
             </View>
-            <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>A longer time also applies to payments already waiting. A shorter one starts with your next booking.</Text>
+            {schedule?.interval === 'weekly' && <>
+              <Text style={[styles.caption, { color: C.sub, marginTop: 12 }]}>Paid every</Text>
+              <View style={styles.scheduleOptions}>
+                {PAYOUT_WEEKDAYS.map(day => <ScheduleOption key={day} label={payoutWeekdayLabel(day)}
+                  selected={schedule.weeklyDays.includes(day)} disabled={scheduleSaving}
+                  onPress={() => { if (schedule.weeklyDays.length !== 1 || schedule.weeklyDays[0] !== day) void chooseSchedule({ interval: 'weekly', weeklyDay: day }); }} colors={C} />)}
+              </View>
+            </>}
+            {schedule?.interval === 'monthly' && <>
+              <Text style={[styles.caption, { color: C.sub, marginTop: 12 }]}>Paid on</Text>
+              <View style={styles.scheduleOptions}>
+                {PAYOUT_MONTH_DAYS.map(day => <ScheduleOption key={day} label={payoutMonthDayLabel(day)}
+                  selected={schedule.monthlyDays.includes(day)} disabled={scheduleSaving}
+                  onPress={() => { if (schedule.monthlyDays.length !== 1 || schedule.monthlyDays[0] !== day) void chooseSchedule({ interval: 'monthly', monthlyDay: day }); }} colors={C} />)}
+              </View>
+            </>}
+            {!!schedule && <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>{payoutScheduleSentence(schedule)} Stripe can only send money once it has cleared, usually about 3 working days after the client pays.</Text>}
           </>}
       </Card>
       {children}
@@ -403,6 +429,17 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     />}
     <DialogHost />
   </>;
+}
+
+function ScheduleOption({ label, selected, disabled, onPress, colors }: {
+  label: string; selected: boolean; disabled: boolean; onPress: () => void;
+  colors: { accent: string; bg: string; surface: string; border: string; text: string };
+}) {
+  return <TouchableOpacity accessibilityRole="radio" accessibilityState={{ selected, disabled }}
+    disabled={disabled} onPress={onPress} activeOpacity={0.75}
+    style={[styles.scheduleOption, { backgroundColor: selected ? colors.accent : colors.surface, borderColor: colors.border }]}>
+    <Text style={[styles.label, { color: selected ? colors.bg : colors.text }]}>{label}</Text>
+  </TouchableOpacity>;
 }
 
 function feeStatusLabel(fee: ProviderFeeEarning): string {
@@ -551,7 +588,7 @@ const styles = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   notice: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 14, marginBottom: 14 },
   empty: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 10, gap: 12 },
-  holdOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  holdOption: { paddingVertical: 10, paddingHorizontal: 14, minHeight: 44, justifyContent: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  scheduleOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  scheduleOption: { paddingVertical: 10, paddingHorizontal: 14, minHeight: 44, justifyContent: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   action: { padding: 14, minHeight: 48, borderRadius: 14, marginTop: 12 },
 });

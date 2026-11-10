@@ -185,8 +185,8 @@ several receipts whose Paid figures add up to the one bank payment.
 
 ### 1.4 The life of one booking's money (worked example)
 
-Amy books a £60 gel manicure with Jo and pays in full. Jo's payout timing is
-the default, 24 hours.
+Amy books a £60 gel manicure with Jo and pays in full. Jo's bank payout
+schedule is the default, monthly on the 1st.
 
 | When | What happens | Money |
 |---|---|---|
@@ -195,7 +195,7 @@ the default, 24 hours.
 | Booking confirmed | A **held payout** is created for Jo | CERVICED holds £60 |
 | The appointment ends, Tue 3pm | The hold clock starts | — |
 | Wed 3pm (+24h) | The payout job sends Jo's share to her Stripe account | Jo receives **£60** in Stripe |
-| A few working days later | Stripe pays Jo's bank | £60 in Jo's bank |
+| The next 1st of the month (once the money has cleared, about 3 working days after Amy paid) | Stripe pays Jo's bank | £60 in Jo's bank |
 | — | CERVICED keeps the fee | CERVICED earns **£3.40**, and pays Stripe's costs out of it (about £1.40 on a UK card, card fee plus payout) |
 
 If anything changes before Wed 3pm (a cancellation, a refund request, a
@@ -212,7 +212,8 @@ that, putting it right means taking money back from Jo (section 2.8).
 | **Held payout** | The provider's share, waiting at CERVICED until its release time |
 | **Release / transfer** | CERVICED sending a held payout to the provider's Stripe account |
 | **Bank payout** | Stripe sending money from the provider's Stripe account to their bank. Stripe does this, not CERVICED |
-| **Payout timing** | How long after an appointment the provider's share is held: 24 hours, 3, 7, 14 or 30 days. The provider chooses |
+| **Release hold** | How long CERVICED holds the provider's share after an appointment before releasing it to their Stripe balance: always 24 hours |
+| **Bank payout schedule** | How often Stripe pays the provider's Stripe balance into their bank: daily, weekly (a weekday they pick) or monthly (the 1st, 15th or last day). The provider chooses; everyone starts on monthly, the 1st |
 | **Refund** | Money going back to the client |
 | **Reversal / take-back** | Money taken back from a provider who has already been paid |
 | **Shortfall / debt** | Money a provider owes CERVICED because a take-back couldn't be done in full |
@@ -296,15 +297,32 @@ any refunds, minus any money the provider owes (section 2.8).
 **When:**
 
 ```
-appointment ends ─► + the provider's payout timing (24h / 3 / 7 / 14 / 30 days)
-                 ─► the payout job sends it (runs every 15 minutes)
-                 ─► Stripe pays their bank (Stripe's schedule, a few working days)
+appointment ends ─► + 24 hours (the same for every provider)
+                 ─► the payout job sends it to their Stripe balance (runs every 15 minutes)
+                 ─► Stripe pays their bank on their bank payout schedule
+                    (daily / weekly / monthly), once the money has cleared
 ```
 
-- **Payout timing** is set by the provider in *Payments & payouts → Payment
-  settings*. The default is 24 hours, and it's never less. Choosing a
-  **longer** time also delays payouts already waiting. Choosing a **shorter**
-  time only affects new bookings, so a waiting payout is never pulled forward.
+- **The release hold is always 24 hours**, set by the database when the
+  payout is created (`create_held_payout_on_finalize`).
+- **The bank payout schedule** is chosen by the provider in *Payments &
+  payouts → Payment settings*: daily, weekly on a weekday, or monthly on the
+  1st, 15th or last day. Stripe holds it, not CERVICED: `create-connect-account`
+  sets it on their connected account through Stripe's Balance Settings API and
+  reads it back from there, so a change made in Stripe's own dashboard shows
+  too. Everyone starts on **monthly, the 1st** (decided 10 November): a new
+  account gets it when it's created, and an existing one the first time the
+  provider opens Payments (`providers.stripe_payout_schedule_set_at` records
+  that it was done, so a provider's own choice is never overwritten).
+- **Money only goes to the bank once it has cleared** at Stripe, about 3
+  working days after the client paid (a new account's first payout takes
+  about 7 days). A schedule can't make it sooner.
+- **While money waits in the provider's Stripe balance** for the next bank
+  payout, a refund or chargeback can still take it back from there
+  (section 2.3).
+- Until 10 November the provider chose the release hold instead (24 hours,
+  3, 7, 14 or 30 days). Payouts created then keep the release date they were
+  given.
 - **If the booking is moved**, the payout moves with it by the same amount of
   time, earlier or later (live since 29 October).
 
@@ -839,7 +857,7 @@ Keep the list short and review it monthly.
 | `booking-fee` | Provider app | Charges, refunds and cancels late/no-show fees; records a client paying a fee request |
 | `booking-tip` | Client app | Starts and records a tip |
 | `client-saved-cards` | Client app | Lists, adds and removes saved cards (blocks removal inside a fee window) |
-| `create-connect-account` | Provider app | Creates the connected account and onboarding links; refreshes status |
+| `create-connect-account` | Provider app | Creates the connected account and onboarding links; refreshes status; reads and sets the bank payout schedule (Stripe Balance Settings), giving the monthly default once |
 | `stripe-connect-return` | Stripe onboarding redirect | Returns the provider to the app |
 | `money-daily-summary` | Cron (service role only) | The 08:00 UTC email to support@ |
 | `send-support-request` | App | Refund request emails, including the payout-on-hold notice |
@@ -866,7 +884,6 @@ Keep the list short and review it monthly.
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |
 | `create_held_payout_on_finalize` | Trigger on `bookings` | Creates the held payout: `amount_paid − service_charge`, released at appointment end + hold days |
 | `after_booking_move_held_payout` → `move_held_payout_with_booking` | Trigger on `bookings` | Shifts a held, unclaimed payout when the date or time changes |
-| `set_payout_hold_days` | RPC | The provider's timing choice (1/3/7/14/30); lengthens payouts already waiting |
 | `apply_provider_shortfalls` / `apply_fee_payout_shortfalls` | RPC (service role) | Claim the payout and deduct debts, using the shared `take_provider_shortfalls` |
 | `release_provider_shortfalls` / `release_fee_payout_shortfalls` | RPC (service role) | Give deductions back when nothing was sent |
 | `after_shortfall_notify_provider`, `after_payout_sent_notify_debt_recovered`, `after_fee_payout_sent_notify_debt_recovered` | Triggers | The two debt notices |
@@ -966,7 +983,7 @@ Ranked, most important first.
 |---|---|---|---|
 | 1 | **Stripe is in test mode.** No real money has moved | Launch blocker | Switch one project to live keys (PRE-LAUNCH-TODO §24), after the items below |
 | 2 | **Only one admin** (the owner, added 31 October) | If they're away, nobody can retry payouts or answer refund requests | Add a second admin before launch (runbook R10) |
-| 3 | **Legal flag:** holding provider money for up to 30 days isn't covered in the Terms, and Stripe may limit how long a platform can delay transfers | A possible breach of Stripe's terms or consumer law | Ask a solicitor and Stripe before the 14- and 30-day options are used with real money |
+| 3 | **Legal flag:** the provider Terms on cerviced.co still describe a "payout period" the provider chooses (how long CERVICED holds their share). Since 10 November CERVICED always holds 24 hours and the provider chooses their Stripe bank schedule instead; nobody has reworded the Terms | The Terms don't match what happens | The user decides the wording, then a solicitor checks it (LEGAL-COMPLIANCE-NOTES) |
 | 4 | **Legal flag:** the late-cancel charge (the whole deposit, or up to half the price) now also follows a late reschedule, and the 3-day and 5-working-day refund promises are new. None of this has been lawyer-reviewed | The charge could be challenged as unfair under consumer law | Ask a solicitor before live money (LEGAL-COMPLIANCE-NOTES) |
 | 5 | **Chargeback responses are manual**, and a won dispute isn't paid back to the provider automatically | A missed deadline loses money, and providers could be left out of pocket | Runbook R6 for now; automate later |
 | 6 | **A provider can only pay back a debt from future earnings** | Debts from providers who stop working are never recovered | Decided 29 October; revisit if losses appear |
@@ -1016,6 +1033,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |
+| 10 Nov | Providers choose how often Stripe pays their bank (daily, weekly or monthly), not how long CERVICED holds their money. The release hold is fixed at 24 hours, and everyone starts on monthly, the 1st. Not live until migration `20261110190000_payout_bank_schedule` is applied, `create-connect-account` is deployed, and a new app build ships | Day counts were read as "when the bank gets paid", and a long CERVICED hold was an unreviewed legal risk. Money waiting in the provider's Stripe balance can still cover refunds |
 
 ---
 

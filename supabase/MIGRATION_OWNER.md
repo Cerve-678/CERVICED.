@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-10, NOT applied (bank payout schedule)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110190000 | `payout_bank_schedule` | **Not applied; waiting for the user's OK.** Frontier at authoring: live max `20261110170000`; nothing unapplied above it on any open PR; lock `(none)`. Redefines from live with md5 guards `create_held_payout_on_finalize` (`421a396a…`, now a fixed 24-hour hold) and `enforce_provider_stripe_columns_server_only` (`ee880d28…`, adds the new column); guards the trigger's column list by its exact definition and recreates it with the new column; drops `set_payout_hold_days` (`db904f8a…`) and `providers.payout_hold_days` (+ its CHECK); adds `providers.stripe_payout_schedule_set_at`. Forced-rollback dry run 2026-11-10 passed (as a real provider: own-row update allowed, new column refused with check_violation; live unchanged). **Apply before deploying `create-connect-account`** (it selects the new column). Old app builds' payout-timing picker stops working once applied. Written on `feat/payout-bank-schedule`. |
+
 ### Applied 2026-11-10 (Becca miss log)
 
 | Authored version | Name | Status |
