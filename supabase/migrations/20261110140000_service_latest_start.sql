@@ -167,14 +167,20 @@ BEGIN
     -- The service's own latest start (services.latest_start_time). Hard
     -- stop: no emergency opt-in reaches past it, only the provider's own
     -- squeeze-in (the bypass above). Checked on a new booking and on a move
-    -- to a new date or time, never on an UPDATE that leaves both alone, so a
-    -- booking made before the provider set the limit isn't frozen by it.
+    -- to a new date, time or service, never on an UPDATE that leaves all
+    -- three alone, so a booking made before the provider set the limit isn't
+    -- frozen by it. Clients can't insert bookings directly (only the
+    -- provider's own insert policy exists; checkout goes through RPCs that
+    -- always set service_id), so a NULL service_id is a provider's own or
+    -- legacy row and is left alone.
     IF NEW.service_id IS NOT NULL
        AND (TG_OP = 'INSERT'
             OR NEW.booking_date IS DISTINCT FROM OLD.booking_date
-            OR NEW.booking_time IS DISTINCT FROM OLD.booking_time) THEN
+            OR NEW.booking_time IS DISTINCT FROM OLD.booking_time
+            OR NEW.service_id IS DISTINCT FROM OLD.service_id) THEN
       SELECT s.latest_start_time INTO v_latest_start
-        FROM public.services s WHERE s.id = NEW.service_id;
+        FROM public.services s
+       WHERE s.id = NEW.service_id AND s.provider_id = NEW.provider_id;
       IF v_latest_start IS NOT NULL AND NEW.booking_time > v_latest_start THEN
         RAISE EXCEPTION 'This service has to start by %',
           lower(to_char(DATE '2000-01-01' + v_latest_start, 'FMHH12:MIAM'));
