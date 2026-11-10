@@ -10,7 +10,7 @@ Live counts of the codebase. The generated detail notes below refresh on every c
 | Area | Count | Detail | Curated |
 |---|---|---|---|
 | Screens | 85 | [[Screens (generated)]] | [[Screens & Navigation]] |
-| Services | 40 | [[Services (generated)]] | [[Services]] |
+| Services | 41 | [[Services (generated)]] | [[Services]] |
 | Contexts | 8 | [[Contexts (generated)]] | [[Contexts]] |
 | Routes | 98 | [[Routes (generated)]] | [[Screens & Navigation]] |
 | Screen flow | 85 | [[Screen Flow (generated)]] | [[Screens & Navigation]] |

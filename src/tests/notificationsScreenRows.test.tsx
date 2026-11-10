@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
 import { getMyNotifications } from '../services/databaseService';
+import { navigateAfterDismiss, navigateNested } from '../navigation/rootNavigate';
 
 jest.mock('../services/databaseService', () => ({
   getMyNotifications: jest.fn(),
@@ -101,6 +102,22 @@ test('a tip row says View tip and no longer offers Read More', async () => {
   await waitFor(() => expect(ui.getByText('View tip')).toBeTruthy());
   expect(ui.queryByText('Read More')).toBeNull();
   expect(ui.getByText('Today')).toBeTruthy();
+});
+
+test('a confirmed new booking offers View Booking and opens its provider detail', async () => {
+  (getMyNotifications as jest.Mock).mockResolvedValue([
+    row({ id: 'new-booking', type: 'booking_confirmed', title: 'New Booking',
+      booking_id: 'booking-123', is_actionable: false }),
+  ]);
+  const ui = renderScreen();
+  await waitFor(() => expect(ui.getByText('New Booking')).toBeTruthy());
+  fireEvent.press(ui.getByText('View Booking'));
+  await waitFor(() => expect(navigateAfterDismiss).toHaveBeenCalled());
+  const navigate = (navigateAfterDismiss as jest.Mock).mock.calls.at(-1)?.[0];
+  navigate();
+  expect(navigateNested).toHaveBeenCalledWith('ProviderHome', 'BookingDetail', {
+    bookingId: 'booking-123', openReschedule: undefined, fromRescheduleRequest: undefined,
+  });
 });
 
 test('a tip pop-up leads with no big figure and keeps the View Booking button', async () => {
