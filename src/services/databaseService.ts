@@ -16,6 +16,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
+import type { MissRecord as BeccaMissRecord } from './becca/missLog';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
@@ -11266,6 +11267,23 @@ export async function updateBeccaSession(
 /** Insert or update a single message. */
 export async function upsertBeccaMessage(row: DbBeccaMessage): Promise<void> {
   const { error } = await supabase.from("becca_chat_messages").upsert(row);
+  if (error) throw error;
+}
+
+/**
+ * Records a question Becca didn't understand, and what the person meant in
+ * the end (see src/services/becca/missLog.ts). The server drops anything that
+ * mentions health, blanks emails, phone numbers, postcodes and @handles, and
+ * deletes rows after 90 days (record_becca_miss,
+ * 20261110170000_becca_misses.sql). Signed-in callers only.
+ */
+export async function recordBeccaMiss(record: BeccaMissRecord): Promise<void> {
+  const { error } = await supabase.rpc("record_becca_miss", {
+    p_hat: record.hat,
+    p_message: record.message,
+    p_resolved_capability_id: record.resolvedCapabilityId,
+    p_resolved_by: record.resolvedBy,
+  });
   if (error) throw error;
 }
 

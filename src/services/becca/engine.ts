@@ -794,6 +794,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       ...(result.providers ? { providerRecommendations: result.providers } : {}),
       ...(result.inspiration ? { inspiration: result.inspiration } : {}),
       ...answerFrom(result),
+      understood: { capabilityId: capability.id },
     },
     hat,
     undefined,
@@ -1343,6 +1344,7 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
       content:
         `I’m not perfect yet, so I didn’t catch that one. I can help with ${strengths} — could you try asking another way?`,
       suggestions: defaultStarters(hat),
+      understood: { capabilityId: null },
     }, hat, { title: "Let’s find the right thing" });
   }
 
@@ -1352,6 +1354,7 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
       ...options.map((c, i) => askChip(`alt-${i}`, c.describe, c.describe)),
       askChip("help", "Something else", "What can you do?"),
     ],
+    understood: { capabilityId: null },
   }, hat, { title: "Let’s narrow it down" });
 }
 

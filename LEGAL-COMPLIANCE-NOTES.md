@@ -882,3 +882,44 @@ user's decisions:
     as not "collected", but this hasn't been checked by a lawyer).
   - Still open: the App Store privacy label (Contacts), the Play Data safety
     form, and the Privacy text above.
+
+## 24. Becca keeps the questions she didn't understand (2026-11-10)
+
+`becca_misses` (`20261110170000_becca_misses.sql`, branch
+`feat/becca-learns-from-misses`) keeps a question Becca missed for 90 days,
+linked to the account, with what the person ended up choosing. A weekly review
+(`/review-becca-misses`, run with Claude, so Anthropic processes the rows)
+turns them into new phrases. User decisions 2026-11-10: 90 days; never keep a
+question about health. Privacy Policy sections 3 (lawful basis), 5 (Becca),
+6 (Anthropic's purpose) and 8 (retention) were updated in the same change.
+
+What's done:
+- Questions that mention health or another Art. 9 subject (religion,
+  sexuality, gender identity), or a child's details, are dropped server-side
+  before anything is stored. Emails, phone numbers, street addresses,
+  postcodes and @handles are blanked. The policy says the check isn't
+  perfect rather than promising "never", and the review deletes any that slip
+  through (asking the user first).
+- Rows go when the person deletes a Becca chat, that hat's profile or the
+  account (trigger on `becca_chat_sessions`, plus the `auth.users` cascade),
+  and after 90 days regardless.
+
+To raise (not lawyer-reviewed):
+- **No written Legitimate Interests Assessment.** The basis is legitimate
+  interest. A one-page LIA (purpose, necessity, balancing) is expected by the
+  ICO and should cover 16-17 year old users (Children's Code), free text
+  linked to the account, and the imperfect keyword filter.
+- **Objection requests need a step.** Section 9 offers the right to object.
+  Act on one with `DELETE FROM public.becca_misses WHERE user_id = '<id>'`.
+  There's no in-app switch to opt out of this log; consider one.
+- **Necessity of unresolved rows.** Rows that resolved nowhere teach no
+  phrase; they're kept for "what Becca can't do yet" themes. Whether that
+  justifies keeping them linked to the account is a balancing call.
+- **Special category leak route.** A sensitive question the filter misses
+  sits in the table until the next weekly review. See section 2 above.
+- **Becca chat history** (`becca_chat_messages`) already keeps everything
+  typed, unfiltered, while the account is open. That predates this change and
+  is the larger exposure.
+- **Section 5 still says messages go to NVIDIA,** but the AI router is off in
+  production (user's call: switch on only after a scorecard). It overstates,
+  which is the safe direction; recheck when the router changes.

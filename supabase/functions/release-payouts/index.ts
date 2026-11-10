@@ -5,6 +5,7 @@ import { lapseFeePayRequests, retryDueFees } from '../_shared/feePayRequest.ts';
 import {
   classifyTransferFailure, describeTransferFailure, nextPayoutRetryAt, PAYOUT_MAX_ATTEMPTS,
 } from '../_shared/payoutRetry.ts';
+import { findPayoutTransfer } from '../_shared/payoutTransfer.ts';
 import { sendSupportAlert } from '../_shared/supportAlert.ts';
 import { payoutFailedSupportEmail } from '../_shared/emailTemplates.ts';
 
@@ -19,11 +20,13 @@ import { payoutFailedSupportEmail } from '../_shared/emailTemplates.ts';
 // role key as the bearer token — only the server/cron holds it.
 //
 // MONEY SAFETY — the two things that must not go wrong:
-//   1. Never pay twice. Every transfer uses the payout row's id as the Stripe
-//      idempotency key, so if the status write fails after a successful
-//      transfer and the row is picked up again, Stripe returns the SAME
-//      transfer instead of creating a second one. The job is self-healing on
-//      a partial failure rather than double-paying.
+//   1. Never pay twice. Before sending, the job looks for a transfer already
+//      made for this payout (by its payout_id metadata), and every transfer
+//      uses the payout row's id in its Stripe idempotency key, so if the
+//      status write fails after a successful transfer and the row is picked
+//      up again, the earlier transfer is recorded instead of a second one
+//      being made. The job is self-healing on a partial failure rather than
+//      double-paying.
 //   2. Never pay for a booking that isn't owed. A booking can be cancelled or
 //      declined between finalise and release; before transferring we re-check
 //      the live booking status and cancel the payout (no transfer) unless the
@@ -65,7 +68,7 @@ Deno.serve(async (req: Request) => {
   try {
     const { data: due, error: dueError } = await admin
       .from('provider_payouts')
-      .select('id, booking_id, provider_id, stripe_account_id, payout_amount, currency, attempt_count')
+      .select('id, booking_id, provider_id, stripe_account_id, payout_amount, currency, attempt_count, created_at')
       .eq('status', 'held')
       .lte('release_after', new Date().toISOString())
       .order('release_after', { ascending: true })
@@ -170,10 +173,11 @@ Deno.serve(async (req: Request) => {
 
       let madeTransfer = false;
       try {
-        // Stripe may prune idempotency keys after 24 hours. The transfer group
-        // makes recovery durable when a successful transfer's DB write failed:
-        // that transfer is recorded as it is, with no new deduction.
-        const previous = (await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 })).data[0];
+        // Stripe may prune idempotency keys after 24 hours. Looking the
+        // transfer up by its payout_id makes recovery durable when a successful
+        // transfer's DB write failed: that transfer is recorded as it is, with
+        // no new deduction. (Not by transfer group: see _shared/payoutTransfer.ts.)
+        const previous = await findPayoutTransfer(stripe, row.stripe_account_id, row.id, row.created_at);
         let transferPence = 0;
         if (!previous) {
           // Take anything the provider still owes from an earlier refund or
@@ -199,14 +203,19 @@ Deno.serve(async (req: Request) => {
             currency: row.currency ?? 'gbp',
             destination: row.stripe_account_id,
             source_transaction: chargeId,
-            transfer_group: `payout_${row.id}`,
-            // Ties the transfer back to what it paid, for reconciliation and
-            // for the webhook to match it.
+            // No transfer_group: several payouts can share one charge, and
+            // Stripe refuses a second group on it. The payout_id metadata is
+            // how this transfer is found again (findPayoutTransfer), and ties
+            // it back to what it paid for reconciliation and the webhook.
             metadata: { payout_id: row.id, booking_id: row.booking_id, provider_id: row.provider_id },
           },
           // The money-safety guarantee: same key -> same transfer, never a
-          // second one, if this row is ever retried.
-          { idempotencyKey: `payout_${row.id}` },
+          // second one, if this row is ever retried. Not the old `payout_<id>`
+          // key: Stripe rejects a key reused with different parameters. A
+          // payout that did go out under the old key (the first one from each
+          // charge) still carries payout_id metadata, so findPayoutTransfer
+          // above finds it and no new request is made.
+          { idempotencyKey: `payout_transfer_${row.id}` },
         );
         madeTransfer = true;
 
@@ -230,8 +239,10 @@ Deno.serve(async (req: Request) => {
         // forgiven by a payout that never went out. A timeout can hide a
         // transfer Stripe did make, so look before giving back.
         if (!madeTransfer) {
-          const late = await stripe.transfers.list({ transfer_group: `payout_${row.id}`, limit: 1 }).catch(() => null);
-          madeTransfer = !!late?.data[0] || late === null;
+          // Couldn't ask Stripe -> don't know -> treat as sent, so a person checks.
+          const late = await findPayoutTransfer(stripe, row.stripe_account_id, row.id, row.created_at)
+            .then(found => ({ found }), () => null);
+          madeTransfer = late === null || late.found !== null;
         }
         if (!madeTransfer) {
           const { error: releaseErr } = await admin.rpc('release_provider_shortfalls', { p_payout_id: row.id });
