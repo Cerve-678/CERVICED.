@@ -8,6 +8,15 @@ describe('address release policy vs business type', () => {
   it('keeps the current policy when the new type still offers it', () => {
     expect(reconcileAddressReleasePolicy('studio', 'always')).toBe('always');
     expect(reconcileAddressReleasePolicy('home_based', 'week_before')).toBe('week_before');
+    expect(reconcileAddressReleasePolicy('studio', 'week_before')).toBe('week_before');
+  });
+
+  it('gives studios every timed option, but salons only always / on confirmation', () => {
+    for (const timed of ['day_before', 'two_days_before', 'three_days_before', 'five_days_before', 'week_before'] as const) {
+      expect(isAddressReleaseAllowed('studio', timed)).toBe(true);
+      expect(isAddressReleaseAllowed('salon', timed)).toBe(false);
+    }
+    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.salon).toEqual(['always', 'on_confirmation']);
   });
 
   // The bug this exists to prevent: a home_based provider on 'week_before'
