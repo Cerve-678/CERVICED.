@@ -846,7 +846,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
-      hair_type: profileData.hairType || null,
+      hair_type: toPickColumn(profileData.hairType),
       skin_type: toPickColumn(profileData.skinType),
       skin_concerns: profileData.skinConcerns,
       style_vibe: toPickColumn(profileData.styleVibe),

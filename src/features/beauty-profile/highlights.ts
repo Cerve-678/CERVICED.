@@ -36,7 +36,7 @@ const nonEmpty = (values: (string | string[] | null | undefined)[]): string[] =>
 /** Answers for a category in priority order: the first becomes the lead. */
 function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): string[] {
   switch (key) {
-    case 'hair':        return nonEmpty([d.hairType, d.scalpCondition ? L.scalp(d.scalpCondition) : '', d.hairGoals, hairTreatmentHistory(d.treatmentHistory)]);
+    case 'hair':        return nonEmpty([d.hairType, d.scalpCondition.map(c => L.scalp(c)), d.hairGoals, hairTreatmentHistory(d.treatmentHistory)]);
     case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas]);
     case 'nails':       return nonEmpty([d.nailShape, d.nailLength]);
     case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.browCondition]);

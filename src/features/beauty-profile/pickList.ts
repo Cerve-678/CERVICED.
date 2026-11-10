@@ -1,13 +1,15 @@
 // src/features/beauty-profile/pickList.ts
 //
-// Skin type and style vibe are multi-pick (user, 2026-11-08). Their users
-// columns move from text to text[] in
-// supabase/migrations/20261108240000_beauty_profile_skin_type_and_style_vibe_multi_pick.sql,
-// and the app treats both as string[] everywhere. A value can still arrive in
-// the old one-answer shape: a row read before that migration is applied, or
-// sign-up metadata saved by an older build and turned into a row at email
-// verification. Every reader of either field goes through toPickList so the
-// rest of the app only ever sees a list.
+// Multi-pick Beauty Profile answers. Skin type and style vibe became lists on
+// 2026-11-08 (20261108240000_beauty_profile_skin_type_and_style_vibe_multi_pick.sql);
+// hair type, scalp, nail length and shape, lash style, brow style and
+// condition, and the four makeup answers followed on 2026-11-09
+// (20261110120000_beauty_profile_more_multi_pick.sql). Skin tone and lash
+// status stay single. The app treats every one of these as string[]. A value
+// can still arrive in the old one-answer shape: a row read before a migration
+// is applied, or sign-up metadata saved by an older build and turned into a
+// row at email verification. Every reader goes through toPickList so the rest
+// of the app only ever sees a list.
 
 /**
  * One answer list from whatever the database or sign-up metadata holds:

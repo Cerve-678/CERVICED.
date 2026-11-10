@@ -31,13 +31,13 @@ describe('calendar view preference', () => {
 });
 
 describe('describeReleaseQuickView', () => {
-  // 8 Nov 2026, after the 1st's 09:00 UTC release: December is open.
+  // 8 Nov 2026, after the 1st's 9am UK release: December is open.
   const now = new Date(2026, 10, 8, 12, 0);
 
   it('gives the release day, how far clients can book and when the next month opens', () => {
     const view = describeReleaseQuickView({ schedule_release_day: 1, booking_window_days: 60 }, now);
     if (!view) throw new Error('expected a quick view for a provider with a release day');
-    expect(view.title).toBe('Release day: the 1st of every month');
+    expect(view.title).toBe('Release day: the 1st of every month at 9am');
     expect(view.lines).toEqual(['Clients can book up to Thu 31 Dec', 'Next month opens Tue 1 Dec at 09:00am']);
   });
 

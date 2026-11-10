@@ -9,6 +9,7 @@ import {
   Easing,
   useWindowDimensions,
   ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,6 +57,19 @@ import type { PortfolioItemWithProvider, DiscoverServiceWithProvider } from '../
 
 // Stores
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
+import { useCollectionsStore } from '../../stores/useCollectionsStore';
+import type { ExploreCollection } from '../../types/collections';
+import { CollectionsRow } from '../../components/collections/CollectionsRow';
+import { OpenCollectionHeader } from '../../components/collections/OpenCollectionHeader';
+import { CollectionOfferBar } from '../../components/collections/CollectionOfferBar';
+import { AddToCollectionSheet } from '../../components/collections/AddToCollectionSheet';
+import { CollectionEditorSheet } from '../../components/collections/CollectionEditorSheet';
+import type { FolderPaperRect } from '../../components/collections/CollectionFolder';
+import {
+  CollectionFlight,
+  CollectionFlightTarget,
+  CollectionOpenFlight,
+} from '../../components/collections/CollectionOpenFlight';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { logger } from '../../utils/logger';
@@ -297,7 +311,11 @@ const ExploreScreen = memo(() => {
     useCallback(() => {
       resetExplorePillTracking();
       setExploreFocused(true);
-      return () => setExploreFocused(false);
+      return () => {
+        setExploreFocused(false);
+        // Don't leave the "Add to a collection" bar waiting for when you come back.
+        useCollectionsStore.getState().dismissHost('explore');
+      };
     }, [setExploreFocused])
   );
 
@@ -371,6 +389,78 @@ const ExploreScreen = memo(() => {
   // on the first visit to Explore instead of piggy-backing on the other.
   // ---------------------------------------------------------------------
   const { user } = useAuth();
+
+  // Collections: folders of hearted looks at the top of Favourites.
+  const collections = useCollectionsStore(s => s.collections);
+  const loadCollections = useCollectionsStore(s => s.load);
+  const rememberPhotos = useCollectionsStore(s => s.rememberPhotos);
+  const [openCollectionId, setOpenCollectionId] = useState<string | null>(null);
+  const [collectionEditor, setCollectionEditor] = useState<{ collection?: ExploreCollection } | null>(null);
+  useEffect(() => {
+    void loadCollections(user?.id ?? null);
+  }, [loadCollections, user?.id]);
+  useEffect(() => {
+    if (activeTab !== 'favourites') {
+      setOpenCollectionId(null);
+      flownCountRef.current = 0;
+      setFlight(null);
+    }
+  }, [activeTab]);
+  const openCollection = useMemo(
+    () => collections.find(c => c.id === openCollectionId) ?? null,
+    [collections, openCollectionId],
+  );
+  // The editor reads the live collection, so a rename shows straight away.
+  const editingCollection = useMemo(
+    // Falls back to the snapshot so a just-deleted folder doesn't flip the
+    // sheet to "New collection" while it closes.
+    () => (collectionEditor?.collection
+      ? collections.find(c => c.id === collectionEditor.collection?.id) ?? collectionEditor.collection
+      : undefined),
+    [collectionEditor, collections],
+  );
+  // Opening a folder flies its looks into the grid (CollectionOpenFlight).
+  // Skipped when the phone asks for less motion.
+  const reduceMotionRef = useRef(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(enabled => { reduceMotionRef.current = enabled; })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', enabled => {
+      reduceMotionRef.current = enabled;
+    });
+    return () => sub.remove();
+  }, []);
+  // Cards report where they are to the flight object itself, not to this
+  // screen's state, so measuring doesn't re-render Explore mid-flight.
+  const [flight, setFlight] = useState<CollectionFlight | null>(null);
+  // How many looks flew in when the open collection opened. The rest of its
+  // cards wait for them to land, then follow straight on.
+  const flownCountRef = useRef(0);
+  const handleOpenCollection = useCallback((collection: ExploreCollection, papers: FolderPaperRect[]) => {
+    const flying = papers.filter(p => p.uri);
+    const next = !reduceMotionRef.current && flying.length > 0 ? new CollectionFlight(flying) : null;
+    flownCountRef.current = next?.count ?? 0;
+    setFlight(next);
+    setOpenCollectionId(collection.id);
+    favouritesGridRef.current?.scrollToTop();
+  }, []);
+  const handleFlightDone = useCallback(() => setFlight(null), []);
+  const handleCloseCollection = useCallback(() => {
+    flownCountRef.current = 0;
+    setFlight(null);
+    setOpenCollectionId(null);
+  }, []);
+  const handleEditCollection = useCallback(
+    (collection: ExploreCollection) => setCollectionEditor({ collection }),
+    [],
+  );
+  const handleNewCollection = useCallback(() => setCollectionEditor({}), []);
+  const handleCloseEditor = useCallback(() => setCollectionEditor(null), []);
+  const handleCollectionDeleted = useCallback((collectionId: string) => {
+    setOpenCollectionId(current => (current === collectionId ? null : current));
+  }, []);
+
   const [showTour, setShowTour] = useState(false);
   // Explore is a tab screen — it stays mounted after you tap a card through to
   // a provider profile, and CoachMarkTour is a full-screen Modal. Without this
@@ -401,6 +491,12 @@ const ExploreScreen = memo(() => {
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
   const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
   const [favouritesLoading, setFavouritesLoading] = useState(false);
+  // True while saved looks are being fetched, even when some already show.
+  // An open collection waits on this before saying it's empty.
+  const [favouritesHydrating, setFavouritesHydrating] = useState(false);
+  // Read by the fetch below so a re-run keeps what's already loaded.
+  const favouriteItemsRef = useRef<PortfolioItem[]>([]);
+  favouriteItemsRef.current = favouriteItems;
   const [favouritesVisibleCount, setFavouritesVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
 
   // Portfolio items from Supabase
@@ -760,6 +856,7 @@ const ExploreScreen = memo(() => {
     if (activeTab !== 'favourites') return;
     if (savedPortfolioIds.length === 0) {
       setFavouriteItems([]);
+      setFavouritesHydrating(false);
       return;
     }
 
@@ -769,8 +866,14 @@ const ExploreScreen = memo(() => {
     );
     // A card just hearted in Discover is already complete and visible. Put it
     // in Favourites now; the database fetch fills in older saves afterwards.
-    setFavouriteItems(localSavedCards);
-    setFavouritesLoading(localSavedCards.length === 0);
+    // Saves already loaded stay too. This runs again every time the tab opens
+    // and whenever the Discover feed changes, and dropping back to only the
+    // looks that happen to be in Discover made an open collection briefly
+    // claim it was empty.
+    const keptCards = mergeSavedExploreCards(savedPortfolioIds, localSavedCards, favouriteItemsRef.current);
+    setFavouriteItems(keptCards);
+    setFavouritesLoading(keptCards.length === 0);
+    setFavouritesHydrating(true);
 
     const load = async () => {
       try {
@@ -793,9 +896,12 @@ const ExploreScreen = memo(() => {
       } catch {
         // Retain current-session saves when the background hydration fails.
         // An empty state would falsely imply that a heart did not work.
-        if (!cancelled) setFavouriteItems(localSavedCards);
+        if (!cancelled) setFavouriteItems(keptCards);
       } finally {
-        if (!cancelled) setFavouritesLoading(false);
+        if (!cancelled) {
+          setFavouritesLoading(false);
+          setFavouritesHydrating(false);
+        }
       }
     };
     load();
@@ -820,10 +926,35 @@ const ExploreScreen = memo(() => {
   const discoverHasMore =
     discoverVisibleCount < portfolioItems.length ||
     (discoverPageCursors.current.get(selectedFilter)?.hasMore ?? false);
+  // An open collection narrows Favourites to its looks, newest added first.
+  const shownFavouriteItems = useMemo(() => {
+    if (!openCollection) return favouriteItems;
+    const byId = new Map(favouriteItems.map(card => [card.id, card]));
+    return [...openCollection.itemIds]
+      .reverse()
+      .map(id => byId.get(id))
+      .filter((card): card is PortfolioItem => card !== undefined);
+  }, [favouriteItems, openCollection]);
+  // While a collection's looks fly in, only the cards they land on are built.
+  // Building the whole window at once (photos, gradients, fade-ins) in the
+  // same frames made the flight stutter in a folder with lots of looks. The
+  // masonry packs in order, so those first cards don't move when the rest
+  // arrive.
+  const favouritesWindow = flight ? Math.min(flight.count, favouritesVisibleCount) : favouritesVisibleCount;
   const visibleFavouriteItems = useMemo(
-    () => favouriteItems.slice(0, favouritesVisibleCount),
-    [favouriteItems, favouritesVisibleCount],
+    () => shownFavouriteItems.slice(0, favouritesWindow),
+    [shownFavouriteItems, favouritesWindow],
   );
+  // Folders draw the saved photos themselves, so hand the store every photo
+  // this screen has resolved.
+  useEffect(() => {
+    rememberPhotos(
+      [...favouriteItems, ...portfolioItems].map(card => ({
+        id: card.id,
+        uri: (card.image as { uri?: string } | undefined)?.uri,
+      })),
+    );
+  }, [favouriteItems, portfolioItems, rememberPhotos]);
 
   // Only measure visible cards whose ratio is a fallback. Upload-time ratios
   // are already trustworthy, and probing every offscreen URL on mount was
@@ -921,15 +1052,15 @@ const ExploreScreen = memo(() => {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       settleExplorePillTracking(event);
       updateBackToTop(event);
-      if (favouritesVisibleCount >= favouriteItems.length || !isNearGridEnd(event)) return;
+      if (favouritesVisibleCount >= shownFavouriteItems.length || !isNearGridEnd(event)) return;
       const now = Date.now();
       if (now - favouritesLoadMoreAtRef.current < LOAD_MORE_COOLDOWN_MS) return;
       favouritesLoadMoreAtRef.current = now;
       setFavouritesVisibleCount(current =>
-        Math.min(favouriteItems.length, current + EXPLORE_BATCH_SIZE),
+        Math.min(shownFavouriteItems.length, current + EXPLORE_BATCH_SIZE),
       );
     },
-    [favouriteItems.length, favouritesVisibleCount, updateBackToTop],
+    [shownFavouriteItems.length, favouritesVisibleCount, updateBackToTop],
   );
 
   const handleBackToTop = useCallback(() => {
@@ -1049,18 +1180,36 @@ const ExploreScreen = memo(() => {
   // packer's reserved slot and the card's rendered box must be the exact
   // same number (see masonryHeight.ts), and only this screen holds the
   // measured-ratio cache both sides need to agree on.
+  // While a folder's looks are flying in, the cards they land on wait hidden.
+  // Those cards skip their own fade-in: the flying look is their entrance.
+  const flightCount = flight?.count ?? 0;
   const renderPortfolioCard = useCallback(
-    (item: PortfolioItem, index: number) => (
-      <PortfolioCard
-        item={item}
-        columnWidth={columnWidth}
-        imageHeight={getItemHeight(item, columnWidth)}
-        onPress={handleImagePress}
-        index={index}
-        {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
-      />
-    ),
-    [columnWidth, handleImagePress, getItemHeight, tourCardId]
+    (item: PortfolioItem, index: number) => {
+      const imageHeight = getItemHeight(item, columnWidth);
+      const card = (
+        <PortfolioCard
+          item={item}
+          columnWidth={columnWidth}
+          imageHeight={imageHeight}
+          entrance={index >= flightCount}
+          // Cards after the flown-in looks fade in one after another from
+          // the moment those land, not after the usual per-position wait.
+          {...(flownCountRef.current > 0
+            ? { entranceDelayMs: Math.max(0, index - flownCountRef.current) * 60 }
+            : {})}
+          onPress={handleImagePress}
+          index={index}
+          offersCollections
+          {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
+        />
+      );
+      return (
+        <CollectionFlightTarget index={index} flight={flight} landHeight={imageHeight}>
+          {card}
+        </CollectionFlightTarget>
+      );
+    },
+    [columnWidth, handleImagePress, getItemHeight, tourCardId, flight, flightCount]
   );
 
 
@@ -1204,20 +1353,64 @@ const ExploreScreen = memo(() => {
               onScrollEndDrag={handleFavouritesScrollSettled}
               onMomentumScrollEnd={handleFavouritesScrollSettled}
               ListHeaderComponent={
-                <View style={styles.gridHeader}>
-                  <Text style={[styles.gridCount, { color: P.sub }]}>
-                    {favouriteItems.length} saved
-                  </Text>
-                </View>
+                openCollection ? (
+                  <OpenCollectionHeader
+                    collection={openCollection}
+                    onBack={handleCloseCollection}
+                    onEdit={() => handleEditCollection(openCollection)}
+                  />
+                ) : (
+                  <View style={styles.gridHeader}>
+                    {/* Bleeds past the grid's side padding so the row can
+                        scroll edge to edge. */}
+                    <View style={styles.collectionsBleed}>
+                      <CollectionsRow
+                        collections={collections}
+                        onOpen={handleOpenCollection}
+                        onEdit={handleEditCollection}
+                        onNew={handleNewCollection}
+                        inset={spacing.lg}
+                      />
+                    </View>
+                    <Text style={[styles.gridCount, { color: P.sub }]}>
+                      {favouriteItems.length} saved
+                    </Text>
+                  </View>
+                )
               }
               ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <TabIcon name="heart" size={48} color={P.sub} />
-                  <Text style={[styles.emptyText, { color: P.text }]}>No favourites yet</Text>
-                  <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                    Tap the heart on any look, provider or service to save it here
-                  </Text>
-                </View>
+                openCollection && openCollection.itemIds.length > 0 && favouritesHydrating ? (
+                  // Its looks are still on the way; it isn't empty.
+                  <View style={styles.emptyContainer}>
+                    <ActivityIndicator color={P.sub} />
+                  </View>
+                ) : openCollection && openCollection.itemIds.length > 0 ? (
+                  // It has looks, but none could be shown (for example, their
+                  // provider is no longer on CERVICED).
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>Can't show these looks right now</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Check back soon
+                    </Text>
+                  </View>
+                ) : openCollection ? (
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>Nothing in {openCollection.name} yet</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Heart a look, then tap Add to a collection
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>No favourites yet</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Tap the heart on any look, provider or service to save it here
+                    </Text>
+                  </View>
+                )
               }
             />
           )
@@ -1248,7 +1441,21 @@ const ExploreScreen = memo(() => {
         </TouchableOpacity>
       </Animated.View>
 
+      {flight && (
+        <CollectionOpenFlight key={flight.key} flight={flight} onDone={handleFlightDone} />
+      )}
+
+      {/* After a heart: offer to put the look in a collection. */}
+      <CollectionOfferBar host="explore" bottom={FLOATING_TAB_BAR_CLEARANCE} />
+
       {/* Modals */}
+      <AddToCollectionSheet host="explore" />
+      <CollectionEditorSheet
+        visible={collectionEditor !== null}
+        collection={editingCollection}
+        onClose={handleCloseEditor}
+        onDeleted={handleCollectionDeleted}
+      />
       <ImageDetailModal
         visible={isDetailVisible}
         item={selectedImage}
@@ -1345,6 +1552,10 @@ const styles = StyleSheet.create({
   // Grid
   gridHeader: {
     paddingBottom: spacing.sm,
+  },
+  collectionsBleed: {
+    marginHorizontal: -spacing.lg,
+    marginBottom: spacing.xs,
   },
   gridCount: {
     fontSize: fonts.body.small,

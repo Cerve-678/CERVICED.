@@ -29,9 +29,14 @@ export function finishHeightShare(width: number, height: number): number {
 }
 
 /** How far Sheen lifts the second colour toward white for its band of light.
- *  Less on a dark hero, where a strong white band reads as a glare. */
-const SHEEN_LIGHT_ON_PALE = 0.6;
-const SHEEN_LIGHT_ON_DARK = 0.25;
+ *  Less on a dark hero, where a strong white band reads as a glare. Taken
+ *  down a little from 0.6 / 0.25 on 2026-11-09 (owner: "slightly reduced"). */
+const SHEEN_LIGHT_ON_PALE = 0.45;
+const SHEEN_LIGHT_ON_DARK = 0.18;
+
+/** How strong Glow's second colour is at the top corner it spreads from.
+ *  Was full strength until 2026-11-09 (owner: "slightly reduced"). */
+const GLOW_STRENGTH = 0.8;
 
 /** Sheen's colours: the first colour at both corners, the second either side
  *  of a lighter band through the middle. Exported so the test can pin it. */
@@ -73,7 +78,7 @@ export default function ProfileHeroBackdrop({
         <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
           <Defs>
             <RadialGradient id="heroGlow" cx="85%" cy="8%" rx="90%" ry="70%" fx="85%" fy="8%">
-              <Stop offset="0" stopColor={to} stopOpacity={1} />
+              <Stop offset="0" stopColor={to} stopOpacity={GLOW_STRENGTH} />
               <Stop offset="1" stopColor={to} stopOpacity={0} />
             </RadialGradient>
           </Defs>

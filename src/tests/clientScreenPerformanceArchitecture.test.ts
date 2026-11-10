@@ -53,10 +53,13 @@ describe('client screen performance contracts', () => {
 
     expect(source).toContain('const INITIAL_EXPLORE_ITEMS = 20');
     expect(source).toContain('portfolioItems.slice(0, discoverVisibleCount)');
-    expect(source).toContain('favouriteItems.slice(0, favouritesVisibleCount)');
+    // Favourites (or the open collection inside it) is windowed the same way.
+    expect(source).toContain('shownFavouriteItems.slice(0, favouritesWindow)');
+    // ...and while a collection's looks fly in, only the cards they land on.
+    expect(source).toContain('flight ? Math.min(flight.count, favouritesVisibleCount) : favouritesVisibleCount');
     expect(source).toContain('.filter(i => i.aspectRatioIsFallback)');
     expect(source).toContain('data={visiblePortfolioItems}');
-    expect(cardSource).toContain('const shouldAnimate = index < 10');
+    expect(cardSource).toContain('const shouldAnimate = entrance && index < 10');
   });
 
   it('records only a settled Search query, not every keystroke', () => {

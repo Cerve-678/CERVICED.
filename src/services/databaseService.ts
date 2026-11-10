@@ -85,6 +85,11 @@ import type { RefundRequest, RefundRequestStatus } from "../types/booking";
 import type { AdminMoneyOverview } from "../types/adminMoney";
 import type { AdminDashboardOverview, AdminDashboardPeriod } from "../types/adminDashboard";
 import type { ProviderAchievements } from "../types/achievements";
+import {
+  COLLECTION_COLORS,
+  type CollectionColor,
+  type ExploreCollection,
+} from "../types/collections";
 import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
@@ -96,7 +101,7 @@ import {
   type PublicReviewRow,
 } from "../features/providers/reviewPresentation";
 export type { BookingReviewState } from "../features/bookings/reviewState";
-import { toReleaseDay, type BookingHorizonSettings } from "../utils/bookingHorizon";
+import { isReleaseTime, toReleaseDay, toReleaseTime, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -1394,6 +1399,7 @@ type ProviderProfileJoinRow = Omit<
   "services" | "specialties" | "automation_settings"
 > & {
   automation_schedule_release_day: number | null;
+  automation_schedule_release_time: string | null;
   automation_waitlist_enabled: boolean | null;
   services: ProviderProfileServiceJoin[] | null;
   provider_specialties: ProviderWithServices["specialties"] | null;
@@ -1441,6 +1447,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   online_consultations_available,
   cancellation_notice_hours,
   automation_schedule_release_day:automation_settings->scheduleReleaseDay,
+  automation_schedule_release_time:automation_settings->>scheduleReleaseTime,
   automation_waitlist_enabled:automation_settings->waitlistEnabled,
   accessibility_notes,
   languages_spoken,
@@ -1484,6 +1491,7 @@ const providerProfileRequestTokens = new Map<string, symbol>();
 function mapProviderProfileJoinRow(row: ProviderProfileJoinRow): ProviderWithServices {
   const {
     automation_schedule_release_day: scheduleReleaseDay,
+    automation_schedule_release_time: scheduleReleaseTime,
     automation_waitlist_enabled: waitlistEnabled,
     services: joinedServices,
     provider_specialties: providerSpecialties,
@@ -1493,6 +1501,7 @@ function mapProviderProfileJoinRow(row: ProviderProfileJoinRow): ProviderWithSer
     scheduleReleaseDay !== null || waitlistEnabled !== null
       ? {
           ...(scheduleReleaseDay !== null ? { scheduleReleaseDay } : {}),
+          ...(isReleaseTime(scheduleReleaseTime) ? { scheduleReleaseTime } : {}),
           ...(waitlistEnabled !== null ? { waitlistEnabled } : {}),
         }
       : null;
@@ -5195,16 +5204,18 @@ export async function getAvailabilityEmergencyPolicyRow(providerId: string): Pro
   return selectProviderColumns(providerId, EMERGENCY_POLICY_COLUMNS);
 }
 
-/** The two columns that decide how far ahead a provider can be booked —
- *  read together everywhere, since a release day overrides the window. */
+/** The columns that decide how far ahead a provider can be booked — read
+ *  together everywhere, since a release day (at its time) overrides the window. */
 const BOOKING_HORIZON_COLUMNS =
-  "booking_window_days, schedule_release_day:automation_settings->scheduleReleaseDay";
+  "booking_window_days, schedule_release_day:automation_settings->scheduleReleaseDay, schedule_release_time:automation_settings->>scheduleReleaseTime";
 
 export interface AvailabilityProviderSettingsRow {
   booking_window_days: number;
   /** automation_settings.scheduleReleaseDay — set = monthly release, which
    *  replaces booking_window_days. See utils/bookingHorizon. */
   schedule_release_day: number | null;
+  /** automation_settings.scheduleReleaseTime, 'HH:MM' UK time (9am default). */
+  schedule_release_time: string;
   slot_interval_mins: number;
   buffer_mins: number;
   min_booking_notice_hrs: number;
@@ -5281,7 +5292,11 @@ async function fetchAvailabilityProviderCore(providerId: string): Promise<{
     // The release day is a JSON value inside automation_settings — normalise it
     // to the number-or-null the row type promises.
     settings: settingsRow
-      ? { ...(settingsRow as unknown as AvailabilityProviderSettingsRow), schedule_release_day: toReleaseDay(settingsRow['schedule_release_day']) }
+      ? {
+          ...(settingsRow as unknown as AvailabilityProviderSettingsRow),
+          schedule_release_day: toReleaseDay(settingsRow['schedule_release_day']),
+          schedule_release_time: toReleaseTime(settingsRow['schedule_release_time']),
+        }
       : null,
     ...weeklyRows,
   };
@@ -5566,10 +5581,11 @@ export async function getProviderBookingHorizon(providerId: string): Promise<Boo
     .eq("id", providerId)
     .maybeSingle();
   if (error) throw error;
-  const row = data as { booking_window_days: number | null; schedule_release_day: unknown } | null;
+  const row = data as { booking_window_days: number | null; schedule_release_day: unknown; schedule_release_time: unknown } | null;
   return {
     booking_window_days: row?.booking_window_days ?? 60,
     schedule_release_day: toReleaseDay(row?.schedule_release_day),
+    schedule_release_time: toReleaseTime(row?.schedule_release_time),
   };
 }
 
@@ -6297,8 +6313,8 @@ export async function removeProviderBlockedDate(
 
 export interface ClientBeautyProfile {
   // Hair
-  hairType: string | null;
-  scalpCondition: string | null;
+  hairType: string[];
+  scalpCondition: string[];
   hairGoals: string[];
   treatmentHistory: string[];
   // Skin — a list since multi-pick (see features/beauty-profile/pickList.ts)
@@ -6307,18 +6323,18 @@ export interface ClientBeautyProfile {
   skinConcerns: string[];
   sensitiveAreas: string[];
   // Nails
-  nailLength: string | null;
-  nailShape: string | null;
+  nailLength: string[];
+  nailShape: string[];
   // Lashes & Brows
-  lashStyle: string | null;
+  lashStyle: string[];
   lashStatus: string | null;
-  browStyle: string | null;
-  browCondition: string | null;
+  browStyle: string[];
+  browCondition: string[];
   // Makeup
-  makeupCoverage: string | null;
-  makeupFinish: string | null;
-  makeupEyes: string | null;
-  makeupLips: string | null;
+  makeupCoverage: string[];
+  makeupFinish: string[];
+  makeupEyes: string[];
+  makeupLips: string[];
   // General
   styleVibe: string[];
   // Health & Consent
@@ -6331,8 +6347,8 @@ export interface ClientBeautyProfile {
  *  service's category doesn't get comes back null. */
 interface BookingBeautyProfileRow {
   service_category: string | null;
-  hair_type: string | null;
-  scalp_condition: string | null;
+  hair_type: string[] | string | null;
+  scalp_condition: string[] | string | null;
   hair_goals: string[] | null;
   treatment_history: string[] | null;
   /** text[] once 20261108240000 is applied; a single string before it. Read through toPickList. */
@@ -6340,16 +6356,16 @@ interface BookingBeautyProfileRow {
   skin_tone: string | null;
   skin_concerns: string[] | null;
   sensitive_areas: string[] | null;
-  nail_length: string | null;
-  nail_shape: string | null;
-  lash_style: string | null;
+  nail_length: string[] | string | null;
+  nail_shape: string[] | string | null;
+  lash_style: string[] | string | null;
   lash_status: string | null;
-  brow_style: string | null;
-  brow_condition: string | null;
-  makeup_coverage: string | null;
-  makeup_finish: string | null;
-  makeup_eyes: string | null;
-  makeup_lips: string | null;
+  brow_style: string[] | string | null;
+  brow_condition: string[] | string | null;
+  makeup_coverage: string[] | string | null;
+  makeup_finish: string[] | string | null;
+  makeup_eyes: string[] | string | null;
+  makeup_lips: string[] | string | null;
   style_vibe: string[] | string | null;
   allergies: string[] | null;
   medical_notes: string | null;
@@ -6360,24 +6376,24 @@ export async function getClientBeautyProfileForBooking(
   bookingId: string,
 ): Promise<ClientBeautyProfile> {
   const EMPTY_PROFILE: ClientBeautyProfile = {
-    hairType: null,
-    scalpCondition: null,
+    hairType: [],
+    scalpCondition: [],
     hairGoals: [],
     treatmentHistory: [],
     skinType: [],
     skinTone: null,
     skinConcerns: [],
     sensitiveAreas: [],
-    nailLength: null,
-    nailShape: null,
-    lashStyle: null,
+    nailLength: [],
+    nailShape: [],
+    lashStyle: [],
     lashStatus: null,
-    browStyle: null,
-    browCondition: null,
-    makeupCoverage: null,
-    makeupFinish: null,
-    makeupEyes: null,
-    makeupLips: null,
+    browStyle: [],
+    browCondition: [],
+    makeupCoverage: [],
+    makeupFinish: [],
+    makeupEyes: [],
+    makeupLips: [],
     styleVibe: [],
     allergies: [],
     medicalNotes: null,
@@ -6408,24 +6424,24 @@ export async function getClientBeautyProfileForBooking(
 
   const d = data as BookingBeautyProfileRow;
   return {
-    hairType: d.hair_type ?? null,
-    scalpCondition: d.scalp_condition ?? null,
+    hairType: toPickList(d.hair_type),
+    scalpCondition: toPickList(d.scalp_condition),
     hairGoals: d.hair_goals ?? [],
     treatmentHistory: d.treatment_history ?? [],
     skinType: toPickList(d.skin_type),
     skinTone: d.skin_tone ?? null,
     skinConcerns: d.skin_concerns ?? [],
     sensitiveAreas: d.sensitive_areas ?? [],
-    nailLength: d.nail_length ?? null,
-    nailShape: d.nail_shape ?? null,
-    lashStyle: d.lash_style ?? null,
+    nailLength: toPickList(d.nail_length),
+    nailShape: toPickList(d.nail_shape),
+    lashStyle: toPickList(d.lash_style),
     lashStatus: d.lash_status ?? null,
-    browStyle: d.brow_style ?? null,
-    browCondition: d.brow_condition ?? null,
-    makeupCoverage: d.makeup_coverage ?? null,
-    makeupFinish: d.makeup_finish ?? null,
-    makeupEyes: d.makeup_eyes ?? null,
-    makeupLips: d.makeup_lips ?? null,
+    browStyle: toPickList(d.brow_style),
+    browCondition: toPickList(d.brow_condition),
+    makeupCoverage: toPickList(d.makeup_coverage),
+    makeupFinish: toPickList(d.makeup_finish),
+    makeupEyes: toPickList(d.makeup_eyes),
+    makeupLips: toPickList(d.makeup_lips),
     styleVibe: toPickList(d.style_vibe),
     allergies: d.allergies ?? [],
     medicalNotes: d.medical_notes ?? null,
@@ -8331,6 +8347,146 @@ export async function unsavePortfolioItemFromDb(itemId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────
+// EXPLORE COLLECTIONS
+// Folders of hearted Explore photos. RLS keeps every row owner-only, only
+// accepts an item that's in the owner's saved_portfolio, and a trigger takes
+// an un-hearted photo out of every collection — so none of that is
+// re-checked here.
+// ─────────────────────────────────────────────────────────
+
+const COLLECTIONS_QUERY_LIMIT = 50; // the database caps an account at 50
+const COLLECTION_ITEMS_QUERY_LIMIT = 2000;
+
+interface ExploreCollectionRow {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+function toCollectionColor(value: string): CollectionColor {
+  return (COLLECTION_COLORS as readonly string[]).includes(value)
+    ? (value as CollectionColor)
+    : "pink";
+}
+
+function mapCollectionRow(
+  row: ExploreCollectionRow,
+  itemIds: string[],
+): ExploreCollection {
+  return {
+    id: row.id,
+    name: row.name,
+    color: toCollectionColor(row.color),
+    createdAt: row.created_at,
+    itemIds,
+  };
+}
+
+/** The signed-in account's collections, oldest first, with their item ids. */
+export async function getMyCollections(): Promise<ExploreCollection[]> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) return [];
+  const { data: rows, error } = await supabase
+    .from("explore_collections")
+    .select("id, name, color, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(COLLECTIONS_QUERY_LIMIT);
+  if (error) throw error;
+  const collections = (rows ?? []) as ExploreCollectionRow[];
+  if (collections.length === 0) return [];
+
+  const { data: items, error: itemsError } = await supabase
+    .from("explore_collection_items")
+    .select("collection_id, item_id, added_at")
+    .in(
+      "collection_id",
+      collections.map((c) => c.id),
+    )
+    .order("added_at", { ascending: true })
+    .limit(COLLECTION_ITEMS_QUERY_LIMIT);
+  if (itemsError) throw itemsError;
+
+  const byCollection = new Map<string, string[]>();
+  for (const item of (items ?? []) as { collection_id: string; item_id: string }[]) {
+    const list = byCollection.get(item.collection_id) ?? [];
+    list.push(item.item_id);
+    byCollection.set(item.collection_id, list);
+  }
+  return collections.map((row) =>
+    mapCollectionRow(row, byCollection.get(row.id) ?? []),
+  );
+}
+
+export async function createCollection(
+  name: string,
+  color: CollectionColor,
+): Promise<ExploreCollection> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) throw new Error("Sign in to make a collection");
+  const { data, error } = await supabase
+    .from("explore_collections")
+    .insert({ user_id: user.id, name: name.trim(), color })
+    .select("id, name, color, created_at")
+    .single();
+  if (error) throw error;
+  return mapCollectionRow(data as ExploreCollectionRow, []);
+}
+
+export async function updateCollection(
+  collectionId: string,
+  changes: { name?: string; color?: CollectionColor },
+): Promise<void> {
+  const patch: { name?: string; color?: CollectionColor } = {};
+  if (changes.name !== undefined) patch.name = changes.name.trim();
+  if (changes.color !== undefined) patch.color = changes.color;
+  const { error } = await supabase
+    .from("explore_collections")
+    .update(patch)
+    .eq("id", collectionId);
+  if (error) throw error;
+}
+
+/** Deletes the folder only — its photos stay in Favourites. */
+export async function deleteCollection(collectionId: string): Promise<void> {
+  const { error } = await supabase
+    .from("explore_collections")
+    .delete()
+    .eq("id", collectionId);
+  if (error) throw error;
+}
+
+export async function addItemToCollection(
+  collectionId: string,
+  itemId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("explore_collection_items")
+    .upsert(
+      { collection_id: collectionId, item_id: itemId },
+      { onConflict: "collection_id,item_id", ignoreDuplicates: true },
+    );
+  if (error) throw error;
+}
+
+export async function removeItemFromCollection(
+  collectionId: string,
+  itemId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("explore_collection_items")
+    .delete()
+    .eq("collection_id", collectionId)
+    .eq("item_id", itemId);
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────
 // NOTIFICATION PREFERENCES
 // ─────────────────────────────────────────────────────────
 
@@ -8886,6 +9042,8 @@ export async function getProviderSchedulingConstraints(
   bookingWindowDays: number;
   /** Set = monthly release, which replaces bookingWindowDays. */
   scheduleReleaseDay: number | null;
+  /** 'HH:MM' UK time the release day opens next month. */
+  scheduleReleaseTime: string;
   minBookingNoticeHrs: number;
 }> {
   // Prefer the real UUID when the caller has one — exact display_name
@@ -8901,28 +9059,30 @@ export async function getProviderSchedulingConstraints(
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
     scheduleReleaseDay: toReleaseDay((data as any)?.schedule_release_day),
+    scheduleReleaseTime: toReleaseTime((data as any)?.schedule_release_time),
     minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,
   };
 }
 
 /**
- * The signed-in provider's own monthly release day (null = rolling window).
- * Lets a screen that edits it (Edit Profile) pick up a change made on the
- * other one (Scheduling & Availability) when it comes back into view.
- * Own record, so no has_gone_live filter. Same duplicate-row tie-break as
- * the provider lookup by user id above.
+ * The signed-in provider's own monthly release day (null = rolling window)
+ * and the time it opens. Lets a screen that edits them (Edit Profile) pick up
+ * a change made on the other one (Scheduling & Availability) when it comes
+ * back into view. Own record, so no has_gone_live filter. Same duplicate-row
+ * tie-break as the provider lookup by user id above.
  */
-export async function getMyProviderReleaseDay(userId: string): Promise<number | null> {
+export async function getMyProviderRelease(userId: string): Promise<{ day: number | null; time: string }> {
   const { data, error } = await supabase
     .from("providers")
-    .select("schedule_release_day:automation_settings->scheduleReleaseDay")
+    .select("schedule_release_day:automation_settings->scheduleReleaseDay, schedule_release_time:automation_settings->>scheduleReleaseTime")
     .eq("user_id", userId)
     .order("is_active", { ascending: false })
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return toReleaseDay((data as { schedule_release_day?: unknown } | null)?.schedule_release_day);
+  const row = data as { schedule_release_day?: unknown; schedule_release_time?: unknown } | null;
+  return { day: toReleaseDay(row?.schedule_release_day), time: toReleaseTime(row?.schedule_release_time) };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -9374,7 +9534,7 @@ export async function updateMyStagedProviderAnswers(
 export async function updateUserBeautyProfile(
   userId: string,
   data: {
-    hair_type?: string | null;
+    hair_type?: string[] | null;
     skin_type?: string[] | null;
     skin_tone?: string | null;
     allergies?: string[];
@@ -9384,17 +9544,17 @@ export async function updateUserBeautyProfile(
     medical_notes?: string | null;
     photography_consent?: boolean;
     treatment_history?: string[];
-    makeup_coverage?: string | null;
-    makeup_finish?: string | null;
-    makeup_eyes?: string | null;
-    makeup_lips?: string | null;
-    nail_length?: string | null;
-    nail_shape?: string | null;
-    lash_style?: string | null;
+    makeup_coverage?: string[] | null;
+    makeup_finish?: string[] | null;
+    makeup_eyes?: string[] | null;
+    makeup_lips?: string[] | null;
+    nail_length?: string[] | null;
+    nail_shape?: string[] | null;
+    lash_style?: string[] | null;
     lash_status?: string | null;
-    brow_style?: string | null;
-    brow_condition?: string | null;
-    scalp_condition?: string | null;
+    brow_style?: string[] | null;
+    brow_condition?: string[] | null;
+    scalp_condition?: string[] | null;
     hair_goals?: string[];
     service_interests?: string[];
     gender?: string | null;
@@ -9413,8 +9573,8 @@ export async function updateUserBeautyProfile(
 }
 
 export interface UserBeautyProfileRow {
-  hair_type: string | null;
-  scalp_condition: string | null;
+  hair_type: string[] | string | null;
+  scalp_condition: string[] | string | null;
   hair_goals: string[];
   treatment_history: string[];
   /** text[] once 20261108240000 is applied; a single string on rows before it. Read through toPickList. */
@@ -9422,16 +9582,16 @@ export interface UserBeautyProfileRow {
   skin_tone: string | null;
   skin_concerns: string[];
   sensitive_areas: string[];
-  nail_length: string | null;
-  nail_shape: string | null;
-  lash_style: string | null;
+  nail_length: string[] | string | null;
+  nail_shape: string[] | string | null;
+  lash_style: string[] | string | null;
   lash_status: string | null;
-  brow_style: string | null;
-  brow_condition: string | null;
-  makeup_coverage: string | null;
-  makeup_finish: string | null;
-  makeup_eyes: string | null;
-  makeup_lips: string | null;
+  brow_style: string[] | string | null;
+  brow_condition: string[] | string | null;
+  makeup_coverage: string[] | string | null;
+  makeup_finish: string[] | string | null;
+  makeup_eyes: string[] | string | null;
+  makeup_lips: string[] | string | null;
   /** Same transition as skin_type. */
   style_vibe: string[] | string | null;
   service_interests: string[];
@@ -9877,7 +10037,7 @@ export async function upsertUserAfterVerification(data: {
   instagram: string | null;
   tiktok: string | null;
   website: string | null;
-  hair_type: string | null;
+  hair_type: string[] | null;
   skin_type: string[] | null;
   allergies: string[];
   skin_concerns: string[];
@@ -9988,10 +10148,14 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
   background_image_url: string | null;
   profile_theme: string | null;
   brand_font: string | null;
+  logo_url: string | null;
 } | null> {
+  // The provider's own row, read by their own user id — Branding edits it, so
+  // there's no has_gone_live filter. logo_url is read only so Custom can offer
+  // colours from the logo.
   const { data, error } = await supabase
     .from("providers")
-    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font")
+    .select("id, gradient, accent_color, background_image_url, profile_theme, brand_font, logo_url")
     .eq("user_id", userId)
     .order("is_active", { ascending: false })
     .order("created_at", { ascending: true })
@@ -10005,6 +10169,7 @@ export async function getProviderBrandingByUserId(userId: string): Promise<{
     background_image_url: string | null;
     profile_theme: string | null;
     brand_font: string | null;
+    logo_url: string | null;
   };
 }
 
@@ -12368,16 +12533,26 @@ export class AdminCreateAccountRefused extends Error {}
  * supabase/functions/admin-create-account/index.ts.
  */
 export async function adminCreateAccount(input: AdminCreateAccountInput): Promise<AdminCreateAccountResult> {
-  const { data, error } = await supabase.functions.invoke('admin-create-account', { body: input });
+  const data = await invokeAdminAccountAction({ action: 'create', ...input });
+  return toCreateAccountResult(data);
+}
+
+/** One call to admin-create-account; a 4xx reason comes back as AdminCreateAccountRefused. */
+async function invokeAdminAccountAction(body: Record<string, unknown>): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke('admin-create-account', { body });
   if (error) {
     // 4xx bodies are written to be shown; a 5xx body never is.
     const res = (error as { context?: Response }).context;
     if (res && res.status >= 400 && res.status < 500) {
-      const body = await res.json().catch(() => null) as { error?: unknown } | null;
-      if (typeof body?.error === 'string' && body.error) throw new AdminCreateAccountRefused(body.error);
+      const parsed = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof parsed?.error === 'string' && parsed.error) throw new AdminCreateAccountRefused(parsed.error);
     }
     throw error;
   }
+  return data;
+}
+
+function toCreateAccountResult(data: unknown): AdminCreateAccountResult {
   const result = data as Partial<AdminCreateAccountResult> | null;
   if (typeof result?.userId !== 'string' || typeof result.email !== 'string') {
     throw new Error('admin-create-account returned no account.');
@@ -12388,6 +12563,54 @@ export async function adminCreateAccount(input: AdminCreateAccountInput): Promis
     accountType: result.accountType === 'client' ? 'client' : 'provider',
     ...(typeof result.generatedPassword === 'string' ? { generatedPassword: result.generatedPassword } : {}),
   };
+}
+
+/**
+ * Blank provider accounts (Admin → Start a provider now) sign in with a
+ * made-up address here until their details are added. Mirrored by
+ * BLANK_EMAIL_DOMAIN in supabase/functions/admin-create-account/index.ts.
+ */
+export const BLANK_ACCOUNT_EMAIL_DOMAIN = 'pending.cerviced.co';
+
+/** A login the app can sign straight in with. */
+export interface AdminAccountLogin {
+  userId: string;
+  email: string;
+  password: string;
+}
+
+function toAccountLogin(data: unknown): AdminAccountLogin {
+  const result = data as Partial<AdminAccountLogin> | null;
+  if (typeof result?.userId !== 'string' || typeof result.email !== 'string' || typeof result.password !== 'string') {
+    throw new Error('admin-create-account returned no login.');
+  }
+  return { userId: result.userId, email: result.email, password: result.password };
+}
+
+/** Admins only: a provider account with no details yet, to sign into and set up now. */
+export async function adminStartBlankProvider(): Promise<AdminAccountLogin> {
+  return toAccountLogin(await invokeAdminAccountAction({ action: 'start_blank_provider' }));
+}
+
+/** Admins only: back into a blank provider account. Sets it a fresh password each time. */
+export async function adminOpenBlankAccount(userId: string): Promise<AdminAccountLogin> {
+  return toAccountLogin(await invokeAdminAccountAction({ action: 'open_blank', userId }));
+}
+
+export interface AdminAddAccountDetailsInput {
+  userId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  /** YYYY-MM-DD; at least 16. */
+  dob: string;
+  /** Leave blank to have one made up (returned as generatedPassword). */
+  password?: string;
+}
+
+/** Admins only: gives a blank provider account its owner's details, after which it's theirs. */
+export async function adminAddAccountDetails(input: AdminAddAccountDetailsInput): Promise<AdminCreateAccountResult> {
+  return toCreateAccountResult(await invokeAdminAccountAction({ action: 'add_details', ...input }));
 }
 
 export type AdminCreatedProviderStatus = 'live' | 'setting_up' | 'not_started';
@@ -12402,6 +12625,8 @@ export interface AdminCreatedAccount {
   email: string | null;
   /** Providers only. */
   providerStatus: AdminCreatedProviderStatus | null;
+  /** A blank provider whose owner's details haven't been added yet. */
+  detailsPending: boolean;
 }
 
 /** Accounts opened from Admin → Create an account, newest first. Throws for a non-admin. */
@@ -12415,14 +12640,16 @@ export async function listAdminCreatedAccounts(limit = 200): Promise<AdminCreate
   };
   return (data as Row[]).map(row => {
     const status = row.provider_status;
+    const email = typeof row.email === 'string' ? row.email : null;
     return {
       userId: String(row.user_id),
       createdAt: String(row.created_at),
       accountType: row.account_type === 'client' ? 'client' : 'provider',
       createdByName: typeof row.created_by_name === 'string' ? row.created_by_name : null,
       name: typeof row.name === 'string' ? row.name : null,
-      email: typeof row.email === 'string' ? row.email : null,
+      email,
       providerStatus: status === 'live' || status === 'setting_up' || status === 'not_started' ? status : null,
+      detailsPending: email !== null && email.endsWith(`@${BLANK_ACCOUNT_EMAIL_DOMAIN}`),
     };
   });
 }
@@ -12777,17 +13004,6 @@ export async function blockPerson(personId: string): Promise<void> {
 export async function unblockPerson(personId: string): Promise<void> {
   const { error } = await supabase.rpc('unblock_person', { p_target: personId });
   if (error) throw error;
-}
-
-/** Name search. The server ignores queries under 2 characters and caps at 50. */
-export async function searchPeople(query: string, limit = 25): Promise<PersonSummary[]> {
-  if (query.trim().length < 2) return [];
-  const { data, error } = await supabase.rpc('search_people', {
-    p_query: query.trim(),
-    p_limit: limit,
-  });
-  if (error) throw error;
-  return ((data ?? []) as PersonRow[]).map(mapPerson);
 }
 
 /**

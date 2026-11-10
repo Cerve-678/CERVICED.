@@ -8,13 +8,13 @@
 // bookings change, since an intake form filled in or a refund requested
 // elsewhere should be reflected the next time either screen is looked at.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBooking } from '../../contexts/BookingContext';
 import { getMyActivity, type ClientActivityRemote } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
-import { buildClientActivity, type ClientActivity } from './activityCentre';
+import { bookingTodoCounts, buildClientActivity, type ClientActivity } from './activityCentre';
 
 export const EMPTY_ACTIVITY_REMOTE: ClientActivityRemote = {
   pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
@@ -22,8 +22,8 @@ export const EMPTY_ACTIVITY_REMOTE: ClientActivityRemote = {
 
 export interface ClientActivityState {
   activity: ClientActivity;
-  /** The raw reads, for the per-booking "!" (bookingTodoCounts). */
-  remote: ClientActivityRemote;
+  /** Forms + unread packs per booking still ahead: the "!" on each booking row. */
+  todoCounts: Record<string, number>;
   /** False until the first read has finished, either way. */
   loaded: boolean;
   /** The last read failed; `activity` is then what it last had. */
@@ -37,17 +37,25 @@ export function useClientActivity(): ClientActivityState {
   const [remote, setRemote] = useState<ClientActivityRemote>(EMPTY_ACTIVITY_REMOTE);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Focus and a bookings change can both start a read at once. Only the
+  // latest one may land: an earlier read finishing last would put back a form
+  // or pack the client has just finished.
+  const latestRead = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!user?.id) return;
+    const read = ++latestRead.current;
     try {
-      setRemote(await getMyActivity());
+      const next = await getMyActivity();
+      if (read !== latestRead.current) return;
+      setRemote(next);
       setFailed(false);
     } catch (error: unknown) {
+      if (read !== latestRead.current) return;
       logger.warn('[Activity] activity centre failed to load', error);
       setFailed(true);
     } finally {
-      setLoaded(true);
+      if (read === latestRead.current) setLoaded(true);
     }
   }, [user?.id]);
 
@@ -59,15 +67,16 @@ export function useClientActivity(): ClientActivityState {
     void refresh();
   }, [refresh]));
 
-  const activity = useMemo(() => {
+  const allBookings = useMemo(() => {
     const seen = new Set<string>();
-    const all = [...todayBookings, ...upcomingBookings, ...pastBookings].filter(b => {
+    return [...todayBookings, ...upcomingBookings, ...pastBookings].filter(b => {
       if (seen.has(b.id)) return false;
       seen.add(b.id);
       return true;
     });
-    return buildClientActivity(all, remote);
-  }, [todayBookings, upcomingBookings, pastBookings, remote]);
+  }, [todayBookings, upcomingBookings, pastBookings]);
+  const activity = useMemo(() => buildClientActivity(allBookings, remote), [allBookings, remote]);
+  const todoCounts = useMemo(() => bookingTodoCounts(remote, allBookings), [remote, allBookings]);
 
-  return { activity, remote, loaded, failed, refresh };
+  return { activity, todoCounts, loaded, failed, refresh };
 }

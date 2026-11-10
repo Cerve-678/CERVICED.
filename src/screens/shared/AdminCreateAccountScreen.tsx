@@ -19,11 +19,12 @@ import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useAppDialog } from '../../components/AppDialog';
 import { DobField } from '../../components/signup/FormKit';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSignInAsAccount } from '../../features/admin/useSignInAsAccount';
 import {
+  adminAddAccountDetails,
   adminCreateAccount,
   AdminCreateAccountRefused,
-  signInWithEmailPassword,
+  adminStartBlankProvider,
   type AdminCreateAccountInput,
 } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -37,6 +38,12 @@ import { logger } from '../../utils/logger';
 // The server (admin-create-account) refuses anyone who isn't an admin.
 // "Set up their profile now" signs the admin out and into the new account,
 // which they can do only because they hold its password at this moment.
+//
+// Two more ways in:
+// - "Start a provider now" opens a blank provider account (no details at all)
+//   and signs straight into it, for setting a profile up before anything else.
+// - With route param addDetailsForUserId (from Accounts you created), the form
+//   gives that blank account its owner's details instead of creating one.
 // Internal tool, so its copy is English only.
 
 type AccountType = AdminCreateAccountInput['accountType'];
@@ -48,11 +55,14 @@ interface CreatedAccount {
   password: string;
 }
 
-export default function AdminCreateAccountScreen({ navigation }: any) {
+export default function AdminCreateAccountScreen({ navigation, route }: any) {
   const { isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
-  const { logout } = useAuth();
+  const signInAs = useSignInAsAccount();
+  const addDetailsForUserId: string | undefined =
+    typeof route?.params?.addDetailsForUserId === 'string' ? route.params.addDetailsForUserId : undefined;
+  const addingDetails = addDetailsForUserId !== undefined;
 
   const [accountType, setAccountType] = useState<AccountType>('provider');
   const [name, setName] = useState('');
@@ -63,9 +73,10 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [startingBlank, setStartingBlank] = useState(false);
   const [created, setCreated] = useState<CreatedAccount | null>(null);
 
-  const isProvider = accountType === 'provider';
+  const isProvider = addingDetails || accountType === 'provider';
   const rowStyle = [
     styles.inputRow,
     {
@@ -89,7 +100,7 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
 
   const handleCreate = async () => {
     if (!name.trim()) return showAlert('Missing name', 'Add their name.', 'center');
-    if (isProvider && !businessName.trim()) return showAlert('Missing business name', 'Add the business name.', 'center');
+    if (isProvider && !addingDetails && !businessName.trim()) return showAlert('Missing business name', 'Add the business name.', 'center');
     if (!email.trim()) return showAlert('Missing email', 'Add the email address they will sign in with.', 'center');
     const dobError = validateDob(dob.day, dob.month, dob.year);
     if (dobError) return showAlert('Date of birth', dobError === 'You must be at least 16' ? 'They must be at least 16.' : dobError, 'center');
@@ -100,15 +111,20 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      const result = await adminCreateAccount({
-        accountType,
+      const common = {
         name: name.trim(),
         email: email.trim(),
         dob: `${dob.year}-${dob.month.padStart(2, '0')}-${dob.day.padStart(2, '0')}`,
         ...(phone.trim() ? { phone: phone.trim() } : {}),
-        ...(isProvider ? { businessName: businessName.trim() } : {}),
         ...(password ? { password } : {}),
-      });
+      };
+      const result = addDetailsForUserId !== undefined
+        ? await adminAddAccountDetails({ userId: addDetailsForUserId, ...common })
+        : await adminCreateAccount({
+          accountType,
+          ...common,
+          ...(isProvider ? { businessName: businessName.trim() } : {}),
+        });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setCreated({
         accountType: result.accountType,
@@ -119,10 +135,10 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
     } catch (err) {
       if (err instanceof AdminCreateAccountRefused) {
         logger.warn('[AdminCreateAccount] refused:', err.message);
-        showAlert("Couldn't create the account", err.message, 'center');
+        showAlert(addingDetails ? "Couldn't add their details" : "Couldn't create the account", err.message, 'center');
       } else {
         showAlert(
-          "Couldn't create the account",
+          addingDetails ? "Couldn't add their details" : "Couldn't create the account",
           toUserMessage(err, 'Something went wrong. Please try again.', 'AdminCreateAccountScreen.adminCreateAccount'),
           'center',
         );
@@ -152,17 +168,40 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Sign in as them',
+          onPress: () => { void signInAs(account.email, account.password); },
+        },
+      ],
+      'center',
+    );
+  };
+
+  const startBlankProvider = () => {
+    Haptics.selectionAsync().catch(() => {});
+    showConfirm(
+      'Start a provider now?',
+      'This makes a provider account with no details yet and signs you into it, so you can set their profile up straight away. ' +
+        "Add their name, email and password later from Admin → Accounts you created. You'll need to sign back into your own account when you're done.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start',
           onPress: () => {
             void (async () => {
-              // logout() takes this screen away with the rest of the signed-in
-              // app, so nothing below may touch screen state. If the sign-in
-              // fails, the admin is left on the sign-in screen, where they can
-              // type the same details.
-              await logout();
+              setStartingBlank(true);
               try {
-                await signInWithEmailPassword(account.email, account.password);
+                const login = await adminStartBlankProvider();
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                // Takes this screen away; nothing after it may touch state.
+                await signInAs(login.email, login.password);
               } catch (err) {
-                logger.error('[AdminCreateAccount] signing in as the new account failed:', err);
+                setStartingBlank(false);
+                showAlert(
+                  "Couldn't start the account",
+                  err instanceof AdminCreateAccountRefused
+                    ? err.message
+                    : toUserMessage(err, 'Something went wrong. Please try again.', 'AdminCreateAccountScreen.adminStartBlankProvider'),
+                  'center',
+                );
               }
             })();
           },
@@ -189,9 +228,11 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
           <TouchableOpacity style={styles.backBtn} onPress={back} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Back">
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: P.text }]}>CREATE AN ACCOUNT</Text>
+          <Text style={[styles.title, { color: P.text }]}>{addingDetails ? 'ADD THEIR DETAILS' : 'CREATE AN ACCOUNT'}</Text>
           <Text style={[styles.subtitle, { color: P.sub }]}>
-            Ready to sign in to straight away. No verification code, and no emails are sent. You hand them their login.
+            {addingDetails
+              ? "Gives the profile you set up its owner's sign-in. After this the account is theirs. No emails are sent."
+              : 'Ready to sign in to straight away. No verification code, and no emails are sent. You hand them their login.'}
           </Text>
 
           {created ? (
@@ -235,17 +276,40 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.secondaryBtn, { borderColor: P.border }]}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); resetForm(); }}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  if (addingDetails) navigation.goBack(); else resetForm();
+                }}
                 activeOpacity={0.7}
                 accessibilityRole="button"
               >
-                <Text style={[styles.secondaryText, { color: P.accentText }]}>CREATE ANOTHER</Text>
+                <Text style={[styles.secondaryText, { color: P.accentText }]}>{addingDetails ? 'DONE' : 'CREATE ANOTHER'}</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <Text style={[styles.label, { color: P.sub }]}>ACCOUNT TYPE</Text>
-              <View style={styles.segment}>
+              {!addingDetails && (
+                <View style={card}>
+                  <Text style={[styles.label, { color: P.sub }]}>NO DETAILS YET?</Text>
+                  <Text style={[styles.small, { color: P.text }]}>
+                    Open a provider's side straight away and set their profile up. Add their name, email and password later.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.secondaryBtn, { borderColor: P.border, opacity: startingBlank ? 0.7 : 1 }]}
+                    onPress={startBlankProvider}
+                    disabled={startingBlank}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                  >
+                    {startingBlank
+                      ? <ActivityIndicator color={P.accent} />
+                      : <Text style={[styles.secondaryText, { color: P.accentText }]}>START A PROVIDER NOW</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!addingDetails && <Text style={[styles.label, { color: P.sub }]}>ACCOUNT TYPE</Text>}
+              {!addingDetails && <View style={styles.segment}>
                 {(['provider', 'client'] as const).map(type => {
                   const on = accountType === type;
                   return (
@@ -263,14 +327,14 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
                     </TouchableOpacity>
                   );
                 })}
-              </View>
+              </View>}
 
               <Field label="THEIR NAME" labelColor={P.sub} rowStyle={rowStyle}>
                 <TextInput style={inputStyle} value={name} onChangeText={setName} placeholder="First and last name"
                   placeholderTextColor={P.sub} autoCapitalize="words" textContentType="none" autoComplete="off" />
               </Field>
 
-              {isProvider && (
+              {isProvider && !addingDetails && (
                 <Field label="BUSINESS NAME" labelColor={P.sub} rowStyle={rowStyle}>
                   <TextInput style={inputStyle} value={businessName} onChangeText={setBusinessName} placeholder="As clients will see it"
                     placeholderTextColor={P.sub} autoCapitalize="words" textContentType="none" autoComplete="off" />
@@ -316,7 +380,7 @@ export default function AdminCreateAccountScreen({ navigation }: any) {
               >
                 {saving
                   ? <ActivityIndicator color={P.onAccent} />
-                  : <Text style={[styles.primaryText, { color: P.onAccent }]}>CREATE ACCOUNT</Text>}
+                  : <Text style={[styles.primaryText, { color: P.onAccent }]}>{addingDetails ? 'SAVE THEIR DETAILS' : 'CREATE ACCOUNT'}</Text>}
               </TouchableOpacity>
             </>
           )}

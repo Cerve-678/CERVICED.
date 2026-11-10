@@ -88,11 +88,19 @@ export interface RefundOutcome {
 }
 
 export function describeRefundOutcome(
-  booking: Pick<ConfirmedBooking, 'policyRetainedAmount' | 'refundedAmount' | 'providerName' | 'paymentStatus'>,
+  booking: Pick<ConfirmedBooking, 'policyRetainedAmount' | 'refundedAmount' | 'providerName' | 'paymentStatus'>
+    & Partial<Pick<ConfirmedBooking, 'amountPaid' | 'serviceCharge'>>,
   noticeHours: number,
 ): RefundOutcome | null {
   const kept = booking.policyRetainedAmount ?? 0;
   const refunded = booking.refundedAmount ?? 0;
+  // A full refund hands the client back the platform fee too, but that part
+  // never came out of the provider's share. Their badge shows only what came
+  // out of their share: a partial refund is always from the share, so capping
+  // the client's total at the share is exact for both (refundPlan.ts).
+  const fee = Number(booking.serviceCharge ?? 0);
+  const share = Number(booking.amountPaid ?? 0) - fee;
+  const refundedFromShare = fee > 0 && share > 0 ? Math.min(refunded, share) : refunded;
   const money = (n: number) => `£${n.toFixed(2)}`;
   const provider = booking.providerName?.trim() || 'Your provider';
   const policy = noticeHours > 0 ? `${noticeHours}-hour cancellation policy` : 'cancellation policy';
@@ -136,10 +144,57 @@ export function describeRefundOutcome(
       title: 'Refunded',
       message: `${money(refunded)} refunded to you. Banks usually take 5–10 working days to show it.`,
       rows: [{ label: 'Refunded', amount: -refunded }],
-      providerStatus: `Refund issued · ${money(refunded)}`,
+      providerStatus: `Refund issued · ${money(refundedFromShare)}`,
     };
   }
   return null;
+}
+
+/**
+ * What the client's cancel sheet and the "cancelled" message say about getting
+ * their money back. Null when nothing was paid in the app (or it has already
+ * been refunded): money paid off-app is between them and the provider.
+ *
+ * Mirrors apply-cancellation-refund: an early cancel refunds everything paid,
+ * platform fee included; a non-refundable deposit stays with the provider and
+ * the rest comes back; inside the notice window the provider's policy decides,
+ * so the copy promises only what the policy doesn't keep.
+ */
+export interface CancelRefundCopy {
+  /** Added to the confirm sheet, after the existing warning. */
+  confirmLine: string;
+  /** The success message once the cancel has gone through. */
+  doneMessage: string;
+}
+
+export function describeCancelRefund(
+  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'amountPaid' | 'providerName'> & Partial<Pick<ConfirmedBooking, 'refundedAmount'>>,
+  opts: { policyApplies: boolean; depositNonRefundable: boolean },
+): CancelRefundCopy | null {
+  const inApp = booking.paymentStatus === PaymentStatus.DEPOSIT_PAID
+    || booking.paymentStatus === PaymentStatus.PAID_IN_FULL
+    || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
+  const back = Number(booking.amountPaid ?? 0) - Number(booking.refundedAmount ?? 0);
+  if (!inApp || back <= 0) return null;
+  const provider = booking.providerName?.trim() || 'your provider';
+  const bank = 'Banks usually take 5–10 working days to show it.';
+  if (opts.policyApplies) {
+    return {
+      confirmLine: ` Anything ${provider}'s policy doesn't keep will be refunded to you.`,
+      doneMessage: `Your appointment has been cancelled. Anything ${provider}'s policy doesn't keep will be refunded to you. ${bank}`,
+    };
+  }
+  if (opts.depositNonRefundable) {
+    return {
+      confirmLine: '',
+      doneMessage: `Your appointment has been cancelled. Your deposit is non-refundable, so ${provider} keeps it, and the rest will be refunded to you. ${bank}`,
+    };
+  }
+  const amount = `£${back.toFixed(2)}`;
+  return {
+    confirmLine: ` You'll be refunded ${amount} in full, including the platform fee.`,
+    doneMessage: `Your appointment has been cancelled. You'll be refunded ${amount} in full. ${bank}`,
+  };
 }
 
 /**

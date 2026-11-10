@@ -16,6 +16,7 @@ import {
   relativeDayLabel,
   toLocalDate,
 } from "../../../utils/dateUtils";
+import { releaseTimeLabel } from "../../../utils/bookingHorizon";
 import {
   addBookmark,
   getActivePromotions,
@@ -65,6 +66,8 @@ import { buildRebookCartItem, rebookAddOns } from "../../../features/bookings/re
 import { CATEGORY_LABELS, SERVICE_CATALOGUE } from "../serviceCatalogue";
 import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
 import { formatPickList, toPickList } from "../../../features/beauty-profile/pickList";
+import { beautyDataFromRow } from "../../../features/beauty-profile/profileRow";
+import { allSuitedIdeas, type SuitedIdea } from "../../../features/beauty-profile/suitedIdeas";
 import {
   chip,
   navChip,
@@ -2177,7 +2180,7 @@ const providerBookingTiming: Capability = {
     // Same horizon shapes as utils/bookingHorizon: a release day replaces the
     // rolling window, and a 0 window has no limit at all.
     const bookAhead = rules.scheduleReleaseDay != null
-      ? `a month at a time — next month opens on the **${ordinalSuffix(rules.scheduleReleaseDay)}**`
+      ? `a month at a time — next month opens on the **${ordinalSuffix(rules.scheduleReleaseDay)} at ${releaseTimeLabel(rules.scheduleReleaseTime)}**`
       : rules.bookingWindowDays > 0
         ? `up to **${rules.bookingWindowDays} days**`
         : "**no limit**";
@@ -3457,12 +3460,16 @@ const beautyProfile: Capability = {
     // this same object — they are for the provider treating you, and Becca
     // neither recites nor interprets them (see BECCA_CAPABILITIES.md §2.1).
     const fields: { title: string; detail: string }[] = [];
-    if (profile?.hair_type) fields.push({ title: "Hair type", detail: profile.hair_type });
+    const hairTypes = toPickList(profile?.hair_type);
+    if (hairTypes.length) fields.push({ title: "Hair type", detail: formatPickList(hairTypes) });
     const skinTypes = toPickList(profile?.skin_type);
     if (skinTypes.length) fields.push({ title: "Skin type", detail: formatPickList(skinTypes) });
-    if (profile?.nail_shape) fields.push({ title: "Nail shape", detail: profile.nail_shape });
-    if (profile?.lash_style) fields.push({ title: "Lash style", detail: profile.lash_style });
-    if (profile?.brow_style) fields.push({ title: "Brow style", detail: profile.brow_style });
+    const nailShapes = toPickList(profile?.nail_shape);
+    if (nailShapes.length) fields.push({ title: "Nail shape", detail: formatPickList(nailShapes) });
+    const lashStyles = toPickList(profile?.lash_style);
+    if (lashStyles.length) fields.push({ title: "Lash style", detail: formatPickList(lashStyles) });
+    const browStyles = toPickList(profile?.brow_style);
+    if (browStyles.length) fields.push({ title: "Brow style", detail: formatPickList(browStyles) });
     const styleVibes = toPickList(profile?.style_vibe);
     if (styleVibes.length) fields.push({ title: "Style", detail: formatPickList(styleVibes) });
     const bits = fields.map((f) => `- **${f.title}:** ${f.detail}`);
@@ -3720,10 +3727,43 @@ const forMe: Capability = {
     "surprise me", "what do you suggest", "suggest something",
     "based on what i like", "my usual", "the usual", "what do i usually",
   ],
-  async run({ personal }): Promise<CapabilityResult> {
-    // Without real history, say so rather than dressing a generic list up as
-    // a personal recommendation — a fake "just for you" is worse than none.
+  async run({ personal, userId }): Promise<CapabilityResult> {
+    // What the client's Beauty Profile says suits them (hair type, goals,
+    // nails, lashes, brows, makeup; never health answers, see suitedIdeas.ts).
+    // A profile that can't be read just means no profile ideas.
+    let ideas: SuitedIdea[] = [];
+    if (userId) {
+      try {
+        ideas = allSuitedIdeas(beautyDataFromRow(await getUserBeautyProfile(userId)), 2).slice(0, 6);
+      } catch {
+        ideas = [];
+      }
+    }
+    const ideaChips = ideas.slice(0, 3).map((idea, i) =>
+      askChip(`suits-${i}`, idea.label, `Who does ${idea.query}?`),
+    );
+
+    // Without booking history, the profile is the honest basis. Without
+    // either, say so rather than dressing a generic list up as a personal
+    // recommendation — a fake "just for you" is worse than none.
     if (!hasUsefulHistory(personal)) {
+      if (ideas.length > 0) {
+        return {
+          text: oneOf(
+            "Going by your beauty profile, these could suit you.",
+            "From what's on your beauty profile, these could be worth a look.",
+          ),
+          card: {
+            title: "SUITED TO YOU",
+            rows: ideas.map((idea) => ({ title: idea.label, detail: idea.because })),
+          },
+          work: ["Read your beauty profile"],
+          suggestions: [
+            ...ideaChips,
+            navChip("profile", "Edit beauty profile", "Profile", { profileScreen: "BeautyProfile" }),
+          ],
+        };
+      }
       return {
         text:
           `I don't know your taste well enough yet. ` +
@@ -3771,6 +3811,7 @@ const forMe: Capability = {
       providers: rows.slice(0, 12).map(providerFromDb),
       suggestions: [
         askChip("free", `Who's free soon?`, `Which ${label} providers are free this week?`),
+        ...ideaChips,
       ],
     };
   },

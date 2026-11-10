@@ -133,6 +133,7 @@ Status legend: ✅ Done and verified against code · 🚧 Partial / in progress 
 | Search services, typo-tolerant | ✅ (migrations `20261025120000` + `20261025130000` live, #171) | `SearchScreen` → `searchProvidersAndServices()` → RPC `search_services_ranked`: matching services as full-width cards scattered between the provider rows, two after each row (`searchResultsLayout.ts`; photo via `getServiceCoverImages`, description with the searched words in bold, the provider's availability tag, max 3 per provider; the card and its Book button open that service's booking sheet, the provider strip opens the profile), query rewritten into words live services use (typos "frsnch" → french, "blowdry"/"pony tail" joined or split, half-typed words), names/headings/tags/category words/descriptions matched, synonyms in SQL `search_synonym_map()`. Graded by `supabase/tests/service_search_eval.sql` (`scripts/search-eval.sh` tests an unapplied version): 91/92 on 2026-10-25. Becca's `searchProviders` gets the same matching |
 | Service tag suggestions + findability checks | ✅ (#179, no migration) | `src/features/providers/serviceTags.ts` (tag lists, templates, `suggestServiceDetails`, `descriptionProblem`) → both service editors (InfoReg `ServiceModal`, My Services `ServiceEditorSheet`) pre-tick tags read from a typed name; a NEW service needs a real description, 1+ tag and who-it's-for; existing ones aren't blocked. My Services shows a "Help clients find your services" card listing live services missing any of those |
 | Provider profile view | ✅ | `ProviderProfileScreen` |
+| Explore collections (folders of hearted looks) | ✅ (migration `20261110100000` live; not device-run) | Explore → Favourites shows a row of pastel "jelly" folders (`src/components/collections/`, `useCollectionsStore`). After a heart, a bar offers "Add to a collection"; the photo sheet has a folder button. Tables `explore_collections` / `explore_collection_items` are owner-only, only accept looks that are in `users.saved_portfolio`, and a trigger takes un-hearted looks out of every folder. Pink/blue/green only, 50 folders max |
 | Add to cart (multi-provider) | ✅ | `CartContext` — reducer pattern, groups items by provider |
 | Cart pricing | ✅ | `CartContext.ts:554` — service fee = `max(subtotal * 0.05, £2)`. Confirmed still exactly this formula. |
 | Deposit vs full payment | ✅ | `BookingService.calculateDeposit()` — now driven by a provider-configurable `ProviderDepositPolicy` (type + amount), defaulting to 20% if unset, not a hardcoded 20% as `LOGIC.md` described |
@@ -336,14 +337,15 @@ group-booking notification dedup bug happened (fixed 2026-08-08, keyed on
 Three different things that are easy to merge in your head. All three are
 worked out from the clock or live data, so none of them can get stuck.
 
-**Release day** (`automation_settings.scheduleReleaseDay`, set only in Edit
-Profile). A calendar day, not an event: nothing being booked up triggers it and
-the provider does nothing. Before the day at 09:00 UTC clients can book to the
-end of this month; from then, to the end of next month
+**Release day** (`automation_settings.scheduleReleaseDay` + `scheduleReleaseTime`
+'HH:MM', set in Scheduling & Availability or Edit Profile). A calendar day and a
+time, not an event: nothing being booked up triggers it and the provider does
+nothing. Before the day at the release time (UK time, 9am if never chosen)
+clients can book to the end of this UK month; from then, to the end of next month
 (`provider_last_bookable_date`, mirrored in `src/utils/bookingHorizon.ts`). A day
-past the month's end means its last day. At that moment bell followers get
-"December has opened up with X. Get booking now." once a month
-(`process_follow_schedule_release_nudges`). It checks the month is open, not that
+past the month's end means its last day. Within five minutes of that moment
+(cron job 150, every five minutes) bell followers get "December has opened up
+with X. Get booking now." once a month (`process_follow_schedule_release_nudges`). It checks the month is open, not that
 a slot is free, so a provider with every date blocked still triggers it: the
 user chose to keep that (2026-11-01). It stays silent while the schedule is
 closed by hand.

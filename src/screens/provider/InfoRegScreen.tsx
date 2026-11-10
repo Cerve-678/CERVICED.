@@ -62,13 +62,14 @@ import { normalizeExternalBookingUrl } from '../../features/providers/externalBo
 import { ExpandableAboutText, revealIfScrolledPast } from '../../features/providers/ExpandableAboutText';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderReleaseDay } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, replaceMyProviderSpecialties, getProviderSpecialties, removePortfolioStorageObject, getMyProviderTermsText, saveMyProviderTermsText, getServiceDescriptionHistory, saveServiceDescriptionDraft, getMyProviderRelease } from '../../services/databaseService';
 import type { ServiceDescriptionRevision } from '../../services/databaseService';
 import { splitPortfolioByKind, VENUE_PORTFOLIO_CATEGORY } from '../../features/providers/venuePhotos';
 import type { DbPortfolioItem, LogoCardFrame, LogoCardSlot } from '../../types/database';
 import { FramedLogo, LogoCircle } from '../../components/FramedLogo';
 import { LogoCardFramer } from '../../features/provider-registration/LogoCardFramer';
 import { slotsPillText } from '../../utils/slotsRowText';
+import { DEFAULT_RELEASE_TIME, releaseTimeLabel } from '../../utils/bookingHorizon';
 import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
 import { LOGO_CARD_SIZES } from '../../utils/logoFraming';
 
@@ -134,7 +135,9 @@ import {
   hasNoTags,
   inferCategoryKind,
   mergeTagGroups,
+  parseTypedTags,
   suggestServiceDetails,
+  tagLabel,
   type CategoryKind,
   type ServiceTagGroups,
   type ServiceTemplate,
@@ -623,19 +626,20 @@ const SUBCATEGORY_SCOPE: Record<string, SubcategoryScope> = {
   'Lymphatic Drainage':     { templates: ['Facial Lymphatic Drainage Massage', 'Full Body Lymphatic Drainage Massage', 'Skin Consultation'], techniques: ['lymphatic-drainage'], outcomes: ['reduction', 'glow', 'firmness'] },
 };
 
-// ─── Reusable chip-select row, with a trailing "Other" chip ───────────────────
+// ─── Reusable chip-select row, with a trailing "Your own" chip ────────────────
 // Wraps ChipSelect with one more chip at the end. Tapping it reveals a text
-// box (rather than adding "Other" itself as a tag) — typing a value and
-// hitting + / return adds THAT value to the same selected array, exactly like
-// the Trend Names section's always-visible text box already works. Keeps
+// box (rather than adding a tag itself) — typing and hitting + / return adds
+// what was typed to the same selected array, like the Trend Names box. Keeps
 // every preset-tag section (style/occasion/technique/outcome) able to accept
-// a value that isn't in the curated per-category list, without changing what
-// gets stored (still just a plain string in that section's tags array).
+// a value that isn't in the curated per-category list. What's typed is put in
+// the presets' stored form first (parseTypedTags), so "Box Braids" ticks the
+// existing box-braids chip instead of saving a second spelling of it, and
+// "knotless, boho" adds two.
 interface TagSelectWithOtherProps {
   options: string[];
   selected: string[];
   onToggle: (tag: string) => void;
-  onAddOther: (tag: string) => void;
+  onAddOther: (tags: string[]) => void;
   accentColor?: string;
   styles: any;
 }
@@ -645,8 +649,8 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
   const [otherValue, setOtherValue] = useState('');
 
   const submitOther = () => {
-    const trimmed = otherValue.trim();
-    if (trimmed) onAddOther(trimmed);
+    const typed = parseTypedTags(otherValue);
+    if (typed.length) onAddOther(typed);
     setOtherValue('');
   };
 
@@ -667,15 +671,16 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               style={[styles.chip, active && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
               onPress={() => { tapSelect(); onToggle(option); }}
             >
-              <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
+              <Text style={[styles.chipText, active && { color: accentColor }]}>{tagLabel(option)}</Text>
             </TouchableOpacity>
           );
         })}
         <TouchableOpacity
           style={[styles.chip, showOtherInput && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
           onPress={() => { tapSelect(); setShowOtherInput(v => !v); }}
+          accessibilityLabel="Add your own tag"
         >
-          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>Other</Text>
+          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>+ Your own</Text>
         </TouchableOpacity>
       </View>
       {showOtherInput && (
@@ -685,10 +690,12 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               style={styles.textInput}
               value={otherValue}
               onChangeText={setOtherValue}
-              placeholder="Type your own..."
+              placeholder="A word clients search for, commas for more"
               placeholderTextColor={chrome.fg(0.4)}
               onSubmitEditing={submitOther}
               returnKeyType="done"
+              autoCapitalize="none"
+              autoCorrect={false}
               autoFocus
             />
           </View>
@@ -1130,9 +1137,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setTagsTouched(true);
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
   };
-  const addOtherTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) => {
+  const addOtherTag = (arr: string[], setArr: (v: string[]) => void) => (tags: string[]) => {
     setTagsTouched(true);
-    setArr(arr.includes(tag) ? arr : [...arr, tag]);
+    setArr([...arr, ...tags.filter(t => !arr.includes(t))]);
   };
 
   const openedTags = useMemo(() => tagGroupsOf(service), [service]);
@@ -1198,11 +1205,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     });
   };
 
+  // Same stored form as the presets (parseTypedTags), so "Glazed Donut!"
+  // is the glazed-donut chip, and commas add several at once.
   const handleAddTrend = () => {
-    const t = trendInput.trim().toLowerCase().replace(/\s+/g, '-');
-    if (t && !trendNames.includes(t)) {
+    const added = parseTypedTags(trendInput).filter(t => !trendNames.includes(t));
+    if (added.length) {
       setTagsTouched(true);
-      setTrendNames([...trendNames, t]);
+      setTrendNames([...trendNames, ...added]);
     }
     setTrendInput('');
   };
@@ -1623,13 +1632,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
                       <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames(trendNames.filter(x => x !== t)); }}>
-                        <Text style={[styles.chipTextActive, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{t} ×</Text>
+                        <Text style={[styles.chipTextActive, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{tagLabel(t)} ×</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
+                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" autoCapitalize="none" autoCorrect={false} onFocus={() => handleInputFocus('trendInput')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
@@ -1637,7 +1646,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.chipGrid}>
                   {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
                     <TouchableOpacity key={t} style={styles.chip} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames([...trendNames, t]); }}>
-                      <Text style={styles.chipText}>{t}</Text>
+                      <Text style={styles.chipText}>{tagLabel(t)}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -2395,7 +2404,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     never shows text the live screen wouldn't. The day itself
                     is set in Scheduling & Availability. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
-                  {slotsPillText(providerData.scheduleReleaseDay)}
+                  {slotsPillText(providerData.scheduleReleaseDay, providerData.scheduleReleaseTime)}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
                   <BellIcon size={16} color={PP.sub} />
@@ -2871,6 +2880,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     location: '',
     aboutText: '',
     scheduleReleaseDay: null,
+    scheduleReleaseTime: DEFAULT_RELEASE_TIME,
     // The default theme's own colours, which is what this signup saves, so a
     // new provider's profile matches Branding until they choose something.
     // (Was a coral/teal/blue placeholder gradient, saved for real and shown
@@ -2954,6 +2964,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // it's changed here; until then the save leaves it alone and focus
   // re-reads it, so this screen never writes back an older day.
   const releaseDayEditedRef = useRef(false);
+  const releaseTimeEditedRef = useRef(false);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   // True when loadProviderFromSupabase couldn't determine whether this
   // provider already has a published profile (network/DB error, no local
@@ -3018,11 +3029,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     if (!user?.id) return;
     const userId = user.id;
     return navigation.addListener('focus', () => {
-      if (releaseDayEditedRef.current) return;
-      getMyProviderReleaseDay(userId)
-        .then(day => {
-          if (releaseDayEditedRef.current) return;
-          setProviderData(prev => (prev.scheduleReleaseDay === day ? prev : { ...prev, scheduleReleaseDay: day }));
+      if (releaseDayEditedRef.current || releaseTimeEditedRef.current) return;
+      getMyProviderRelease(userId)
+        .then(({ day, time }) => {
+          if (releaseDayEditedRef.current || releaseTimeEditedRef.current) return;
+          setProviderData(prev => (prev.scheduleReleaseDay === day && prev.scheduleReleaseTime === time
+            ? prev
+            : { ...prev, scheduleReleaseDay: day, scheduleReleaseTime: time }));
         })
         .catch(err => logger.warn('InfoReg: release day refresh failed:', err?.message ?? err));
     });
@@ -3780,10 +3793,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             : providerData.externalBookingUrl,
           bookingMode: isLinkOnly ? 'external' : 'cerviced',
           scheduleReleaseDayEdited: releaseDayEditedRef.current,
+          scheduleReleaseTimeEdited: releaseTimeEditedRef.current,
         },
         !isEditMode && termsAccepted,
       );
       releaseDayEditedRef.current = false;
+      releaseTimeEditedRef.current = false;
       // First save only: the providers row now exists, so the specialities
       // answered at sign-up can finally be attached to it. Without this they
       // never reached the profile hero or Search's Speciality filter.
@@ -4866,7 +4881,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 >
                   <Text style={styles.releaseDayBtnText}>
                     {providerData.scheduleReleaseDay != null
-                      ? `Day ${providerData.scheduleReleaseDay} of every month`
+                      ? `Day ${providerData.scheduleReleaseDay} of every month at ${releaseTimeLabel(providerData.scheduleReleaseTime)}`
                       : 'Choose a day'}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
@@ -5979,6 +5994,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
             value={providerData.scheduleReleaseDay ?? new Date().getDate()}
+            time={providerData.scheduleReleaseTime}
+            onSelectTime={(time) => { releaseTimeEditedRef.current = true; setProviderData(prev => ({ ...prev, scheduleReleaseTime: time })); }}
             accentColor={adaptiveAccentColor}
             cardColor={editTheme.card}
             textColor={editTheme.text}

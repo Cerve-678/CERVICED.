@@ -9,12 +9,12 @@ const data = (p: Partial<BeautyData>): BeautyData => ({ ...EMPTY_BEAUTY_DATA, ..
 
 describe('highlightCategory', () => {
   it('leads with the main answer and lists the rest in field order', () => {
-    expect(highlightCategory('hair', data({ hairType: '4C', scalpCondition: 'Dry', hairGoals: ['Volume'] }), L))
+    expect(highlightCategory('hair', data({ hairType: ['4C'], scalpCondition: ['Dry'], hairGoals: ['Volume'] }), L))
       .toEqual({ key: 'hair', lead: '4C', details: ['Dry scalp', 'Volume'] });
   });
 
   it('promotes the next answer when the headline field is blank', () => {
-    expect(highlightCategory('nails', data({ nailLength: 'Short' }), L).lead).toBe('Short');
+    expect(highlightCategory('nails', data({ nailLength: ['Short'] }), L).lead).toBe('Short');
   });
 
   it('never surfaces skin tone', () => {
@@ -34,7 +34,7 @@ describe('highlightCategory', () => {
 
 describe('leadingCategory', () => {
   it('picks the fullest started section, earliest on a tie, never health', () => {
-    const d = data({ allergies: ['Latex'], medicalNotes: 'x', nailShape: 'Oval', nailLength: 'Short', hairType: '4A' });
+    const d = data({ allergies: ['Latex'], medicalNotes: 'x', nailShape: ['Oval'], nailLength: ['Short'], hairType: ['4A'] });
     expect(leadingCategory(computeBeautyProfileStats(d), CATEGORY_ORDER)).toBe('nails');
   });
 

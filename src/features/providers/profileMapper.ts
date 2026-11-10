@@ -1,6 +1,7 @@
 import type { ProviderWithServices } from '../../types/database';
 import { formatServiceDuration } from './profilePresentation';
 import type { ProviderProfileData, ProviderProfileService } from './profileTypes';
+import { toReleaseTime } from '../../utils/bookingHorizon';
 
 /** Converts the database provider model into the client profile view model. */
 export function mapProviderProfileData(provider: ProviderWithServices): ProviderProfileData {
@@ -92,6 +93,7 @@ export function mapProviderProfileData(provider: ProviderWithServices): Provider
     businessType: provider.business_type ?? null,
     rating: Number(provider.rating),
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
+    scheduleReleaseTime: toReleaseTime(provider.automation_settings?.scheduleReleaseTime),
     aboutText: provider.about_text ?? '',
     gradient: (provider.gradient && provider.gradient.length >= 2
       ? provider.gradient

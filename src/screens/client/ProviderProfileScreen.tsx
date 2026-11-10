@@ -106,6 +106,7 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
@@ -421,6 +422,8 @@ interface ReviewsModalProps {
   providerName: string;
   adaptiveAccentColor: string;
   providerGradient: [string, string, ...string[]];
+  /** Branding → Card Shape. */
+  squareCards: boolean;
 }
 
 const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
@@ -431,6 +434,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
     providerName,
     adaptiveAccentColor,
     providerGradient,
+    squareCards,
   }) => {
     const allReviews = reviews;
 
@@ -497,13 +501,13 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
                 <BlurView
                   intensity={20}
                   tint="light"
-                  style={styles.modalReviewCard}
+                  style={[styles.modalReviewCard, squareCards && styles.squareCard]}
                 >
                   <LinearGradient
                     colors={["rgba(255,255,255,0.4)", "transparent"]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 0, y: 1 }}
-                    style={styles.modalCardHighlight}
+                    style={[styles.modalCardHighlight, squareCards && styles.squareCard]}
                   />
                   <View style={styles.modalReviewHeader}>
                     <Text style={styles.modalReviewerName}>{review.name}</Text>
@@ -1471,6 +1475,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
+  // Branding → Card Shape: square corners on the profile's cards (the service
+  // cards and category pills, About/Policies, the sharing card, Reviews,
+  // Contact, Opening hours, Additional info), or the rounded look it has
+  // always had. The availability pill and Instagram button beside it stay
+  // rounded, and so do photos (owner's call, 2026-11-09).
+  const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1705,6 +1715,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     blurTint: cardBlurTint,
     blurIntensity: cardBlurIntensity,
     highlightColors: cardHighlightColors,
+    squareCards,
   }), [
     OP.text,
     OP.sub,
@@ -1716,6 +1727,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     cardBlurTint,
     cardBlurIntensity,
     cardHighlightColors,
+    squareCards,
   ]);
 
   // Venue/workspace shots are stamped with their own category by
@@ -3480,7 +3492,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // up after they're fully booked (process_follow_openings_alerts), their
       // offers and announcements, and — with a release day — each new month.
       return releaseDay != null
-        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)}, when space opens up, and about their announcements and offers`
+        ? `You'll hear when ${fullName} opens a new month on the ${ordinalSuffix(releaseDay)} at ${releaseTimeLabel(provider?.scheduleReleaseTime)}, when space opens up, and about their announcements and offers`
         : `Stay updated — you'll hear when ${fullName} has space open up, and about their announcements and offers`;
     } else {
       return providerIsBookmarked
@@ -3493,6 +3505,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     providerIsBookmarked,
     provider?.providerName,
     provider?.scheduleReleaseDay,
+    provider?.scheduleReleaseTime,
   ]);
 
   if (loading || !provider) {
@@ -3674,6 +3687,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 selectedCategory === category ? "transparent" : OP.border
               }
               textColor={selectedCategory === category ? "#FFFFFF" : OP.text}
+              square={squareCards}
             />
           )}
           keyExtractor={(item) => `cat-${item}`}
@@ -3727,13 +3741,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             style={[
               styles.serviceItemCard,
               { backgroundColor: cardBg, borderColor: OP.border },
+              squareCards && styles.squareCard,
             ]}
           >
             <LinearGradient
               colors={cardHighlightColors}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
-              style={styles.cardHighlight}
+              style={[styles.cardHighlight, squareCards && styles.squareCard]}
             />
             <View style={styles.serviceCardBlur}>
               <View style={styles.serviceItem}>
@@ -4379,6 +4394,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerName={provider?.providerName ?? ""}
           adaptiveAccentColor={adaptiveAccentColor}
           providerGradient={provider?.gradient ?? OP.gradient}
+          squareCards={squareCards}
         />
 
         {/* Offers side panel */}
@@ -5242,7 +5258,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </View>
                     );
                   }
-                  const pillText = slotsPillText(provider.scheduleReleaseDay);
+                  const pillText = slotsPillText(provider.scheduleReleaseDay, provider.scheduleReleaseTime);
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every
@@ -5359,17 +5375,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 tokens={OP}
                 accent={adaptiveAccentColor}
                 cardBg={cardBg}
+                square={squareCards}
                 onError={showAlert}
               />
 
               {/* About / Policy tabbed card */}
-              <View ref={aboutCardRef} style={styles.aboutCardShadowWrap}>
+              <View ref={aboutCardRef} style={[styles.aboutCardShadowWrap, squareCards && styles.squareCard]}>
                 <BlurView
                   intensity={cardBlurIntensity}
                   tint={cardBlurTint}
                   style={[
                     styles.aboutCard,
                     { backgroundColor: cardBg, borderColor: OP.border },
+                    squareCards && styles.squareCard,
                     // Room under the last line for the policy button, so it
                     // never sits on top of the text.
                     policyPages.length > 0 && styles.aboutCardWithPolicyFab,
@@ -5379,7 +5397,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     colors={cardHighlightColors}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 0, y: 1 }}
-                    style={styles.cardHighlight}
+                    style={[styles.cardHighlight, squareCards && styles.squareCard]}
                   />
                   {/* Tab switcher — only show if there are policy rows */}
                   {(() => {
@@ -6421,6 +6439,15 @@ const styles = StyleSheet.create({
     // its shadow via shadow* above.
     elevation: 0,
     marginBottom: 12,
+  },
+  // Every corner, not just borderRadius: the top highlight strips set their
+  // own top-corner radii, which borderRadius: 0 alone doesn't override.
+  squareCard: {
+    borderRadius: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   serviceCardBlur: {
     flex: 1,

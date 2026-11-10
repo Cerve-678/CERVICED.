@@ -46,6 +46,8 @@ export interface ProviderProfileData {
    *  slots_text field, which could say anything regardless of the provider's
    *  actual release cadence. */
   scheduleReleaseDay: number | null;
+  /** 'HH:MM' UK time the release day opens; 9am when never chosen. */
+  scheduleReleaseTime: string;
   aboutText: string;
   /** Flattened across every service type — the "all services" view. Kept as
    *  the shape it has always been so callers that don't care about types

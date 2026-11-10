@@ -146,6 +146,13 @@ function needsYouPulse(item: DraftItem, nowMs: number): ActivityPulse {
   return HARD_DEADLINE.has(item.kind) ? 'soon' : 'still';
 }
 
+/** A form or pack only matters before the appointment: not once the booking
+ *  is finished, cancelled or under way. Shared by the Activity Centre list and
+ *  the per-booking "!" so the two can't disagree. */
+function isStillAhead(b: ActivityBooking | undefined): b is ActivityBooking {
+  return !!b && !isTerminalBookingStatus(b.status) && b.status !== BookingStatus.IN_PROGRESS;
+}
+
 export function buildClientActivity(
   bookings: readonly ActivityBooking[],
   remote: ClientActivityRemote,
@@ -155,10 +162,6 @@ export function buildClientActivity(
   const byId = new Map(bookings.map(b => [b.id, b]));
   const needsYou: DraftItem[] = [];
   const inProgress: DraftItem[] = [];
-
-  // A form or pack only matters before the appointment; one row per booking.
-  const isStillAhead = (b: ActivityBooking | undefined): b is ActivityBooking =>
-    !!b && !isTerminalBookingStatus(b.status) && b.status !== BookingStatus.IN_PROGRESS;
 
   // ── Needs you ─────────────────────────────────────────────
 
@@ -431,10 +434,19 @@ export function activityTimeline(activity: ClientActivity, now: Date = new Date(
   return { days, inProgress: activity.inProgress, done: activity.done };
 }
 
-/** Per-booking count of forms + unread packs — the "!" on each booking row. */
-export function bookingTodoCounts(remote: Pick<ClientActivityRemote, 'pendingFormBookingIds' | 'unreadPackBookingIds'>): Record<string, number> {
+/** Per-booking count of forms + unread packs — the "!" on each booking row.
+ *  Only for bookings still ahead, by the same rule as the Activity Centre: a
+ *  pack never opened on a booking that's since been done or cancelled used to
+ *  keep its "!" on the Past tab forever, while the Activity Centre (rightly)
+ *  showed nothing to do. */
+export function bookingTodoCounts(
+  remote: Pick<ClientActivityRemote, 'pendingFormBookingIds' | 'unreadPackBookingIds'>,
+  bookings: readonly ActivityBooking[],
+): Record<string, number> {
+  const byId = new Map(bookings.map(b => [b.id, b]));
   const counts: Record<string, number> = {};
   for (const id of [...remote.pendingFormBookingIds, ...remote.unreadPackBookingIds]) {
+    if (!isStillAhead(byId.get(id))) continue;
     counts[id] = (counts[id] ?? 0) + 1;
   }
   return counts;
