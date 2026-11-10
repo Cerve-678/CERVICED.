@@ -138,7 +138,7 @@ Curated: [[Booking Flow]] · **363 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
-- `src/utils/scheduleIssues.ts` _(94)_
+- `src/features/bookings/activityCentre.ts` _(95)_
 - … +333 more
 
 ## Notifications

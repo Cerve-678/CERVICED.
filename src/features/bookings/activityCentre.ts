@@ -147,10 +147,15 @@ function needsYouPulse(item: DraftItem, nowMs: number): ActivityPulse {
 }
 
 /** A form or pack only matters before the appointment: not once the booking
- *  is finished, cancelled or under way. Shared by the Activity Centre list and
- *  the per-booking "!" so the two can't disagree. */
-function isStillAhead(b: ActivityBooking | undefined): b is ActivityBooking {
-  return !!b && !isTerminalBookingStatus(b.status) && b.status !== BookingStatus.IN_PROGRESS;
+ *  is finished, cancelled or under way, and not once its start time has gone
+ *  by. That last part is the booking page's own rule (BookingDetailScreen's
+ *  isPast hides its To Do then); without it the Activity Centre kept asking
+ *  for a form the booking page no longer showed, until the provider marked
+ *  the booking done. Shared by the Activity Centre list and the per-booking
+ *  "!" so the three can't disagree. An unreadable date never hides a to-do. */
+function isStillAhead(b: ActivityBooking | undefined, nowMs: number): b is ActivityBooking {
+  if (!b || isTerminalBookingStatus(b.status) || b.status === BookingStatus.IN_PROGRESS) return false;
+  return appointmentMs(b) >= nowMs;
 }
 
 export function buildClientActivity(
@@ -217,7 +222,7 @@ export function buildClientActivity(
   for (const id of remote.pendingFormBookingIds) formCounts.set(id, (formCounts.get(id) ?? 0) + 1);
   for (const [id, count] of formCounts) {
     const b = byId.get(id);
-    if (!isStillAhead(b)) continue;
+    if (!isStillAhead(b, nowMs)) continue;
     const { service, provider } = names(b);
     // Named when there's one left, so it can't be mistaken for one already sent.
     const lastTitle = count === 1 ? remote.pendingFormTitles[id]?.[0] : undefined;
@@ -237,7 +242,7 @@ export function buildClientActivity(
   for (const id of remote.unreadPackBookingIds) packCounts.set(id, (packCounts.get(id) ?? 0) + 1);
   for (const [id, count] of packCounts) {
     const b = byId.get(id);
-    if (!isStillAhead(b)) continue;
+    if (!isStillAhead(b, nowMs)) continue;
     const { service, provider } = names(b);
     needsYou.push({
       key: `pack:${id}`,
@@ -448,11 +453,12 @@ export function activityTimeline(activity: ClientActivity, now: Date = new Date(
 export function bookingTodoCounts(
   remote: Pick<ClientActivityRemote, 'pendingFormBookingIds' | 'unreadPackBookingIds'>,
   bookings: readonly ActivityBooking[],
+  now: Date = new Date(),
 ): Record<string, number> {
   const byId = new Map(bookings.map(b => [b.id, b]));
   const counts: Record<string, number> = {};
   for (const id of [...remote.pendingFormBookingIds, ...remote.unreadPackBookingIds]) {
-    if (!isStillAhead(byId.get(id))) continue;
+    if (!isStillAhead(byId.get(id), now.getTime())) continue;
     counts[id] = (counts[id] ?? 0) + 1;
   }
   return counts;
