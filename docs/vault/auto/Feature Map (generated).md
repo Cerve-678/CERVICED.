@@ -108,7 +108,7 @@ Curated: [[Payments]] · **163 files**
 - … +133 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **366 files**
+Curated: [[Booking Flow]] · **367 files**
 - `src/services/databaseService.ts` _(1113)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **366 files**
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/features/bookings/activityCentre.ts` _(95)_
-- … +336 more
+- … +337 more
 
 ## Notifications
 Curated: [[Notifications]] · **188 files**
@@ -181,7 +181,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **87 files**
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
-- `src/services/providerRegistrationService.ts` _(43)_
+- `src/services/providerRegistrationService.ts` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(36)_
 - `src/contexts/RegistrationContext.tsx` _(28)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
@@ -260,8 +260,8 @@ Curated: [[Booking Flow]] · **210 files**
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `src/utils/policyDisplay.ts` _(67)_
+- `src/screens/provider/InfoRegScreen.tsx` _(65)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
-- `src/screens/provider/InfoRegScreen.tsx` _(62)_
 - `src/services/bookingService.ts` _(60)_
 - `src/screens/client/BookingsScreen.tsx` _(58)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
