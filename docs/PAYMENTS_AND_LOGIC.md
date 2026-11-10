@@ -558,7 +558,7 @@ a penalty (LEGAL-COMPLIANCE-NOTES §17).
 | Amount | £1 to £500 |
 | How | Card only, through the app |
 | The provider | Must have a working Stripe account; otherwise tipping isn't offered |
-| The provider receives | The **whole tip**, held 24 hours (not their chosen payout hold), then sent |
+| The provider receives | The **whole tip**, held 24 hours (the same as a booking payout), then sent to their Stripe balance, which pays their bank on their bank payout schedule |
 | CERVICED | Takes nothing, and **pays Stripe's card fee** on the tip (about 1.5% + 20p on a UK card). The fee is recorded in `booking_tips.stripe_fee_pence` for CERVICED's books |
 | Refunds | **Non-refundable.** The client Terms and the tip sheet say so, and no refund path touches `booking_tips` |
 | Tip notice | The database writes a `tip_received` notification (trigger `on_booking_tip_succeeded`, live). Merged in PR #163; the app shows it from the next build |

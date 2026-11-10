@@ -150,11 +150,20 @@ Deno.serve(async (req: Request) => {
       const choice = parsePayoutScheduleChoice(body.schedule);
       if (!choice) return json({ code: 'payout_schedule_invalid', error: 'Choose daily, weekly or monthly.' }, 400);
       // Stamp first, so no later read applies the default over this choice.
+      // If Stripe refuses it, the stamp goes back to what it was, so a
+      // provider who never got the default still gets it.
       const { error: stampError } = await admin.from('providers')
         .update({ stripe_payout_schedule_set_at: new Date().toISOString() }).eq('id', provider.id);
       if (stampError) throw stampError;
-      const schedule = await setStripePayoutSchedule(Deno.env.get('STRIPE_SECRET_KEY')!, accountId, choice);
-      return json({ schedule });
+      try {
+        const schedule = await setStripePayoutSchedule(Deno.env.get('STRIPE_SECRET_KEY')!, accountId, choice);
+        return json({ schedule });
+      } catch (err) {
+        const { error: restoreError } = await admin.from('providers')
+          .update({ stripe_payout_schedule_set_at: provider.stripe_payout_schedule_set_at ?? null }).eq('id', provider.id);
+        if (restoreError) console.error(`[create-connect-account] could not restore payout schedule stamp for ${provider.id}: ${String(restoreError)}`);
+        throw err;
+      }
     }
     if (body.action === 'dashboard') {
       if (!accountId) throw new Error('No connected account');
