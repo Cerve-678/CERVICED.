@@ -520,6 +520,11 @@ export interface DbService {
   // NULL = no override. before defaults to 0; after inherits providers.buffer_mins.
   buffer_before_mins: number | null;
   buffer_after_mins: number | null;
+  /** Latest time of day this service can start, 'HH:MM:SS' as Postgres
+   *  returns a time. NULL = any time within working hours. Enforced by
+   *  enforce_booking_bookability; AvailabilityService mirrors it. Optional
+   *  because only the owner's own catalogue reads select it. */
+  latest_start_time?: string | null;
   is_active: boolean;
   sort_order: number;
   created_at: string;

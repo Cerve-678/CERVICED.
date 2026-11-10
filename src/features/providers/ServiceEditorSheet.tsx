@@ -1,6 +1,6 @@
 /**
- * Edit one service — name, price, duration, description, and whether clients
- * can see it.
+ * Edit one service — name, price, duration, latest start, description, and
+ * whether clients can see it.
  *
  * Deliberately narrow. The fuller service editor in InfoRegScreen still owns
  * safety flags, tags, buffers, add-ons and photos; this is the set a provider
@@ -50,6 +50,7 @@ import {
   type ServiceAudienceValue,
   type ServiceTagGroups,
 } from './serviceTags';
+import { formatLatestStart, latestStartToEditor } from '../../utils/latestStart';
 
 export interface ServiceEditorPalette {
   bg: string;
@@ -67,6 +68,8 @@ export interface ServiceEditorValue {
    *  provider thinks in hours, the way services are priced and talked about. */
   hours: string;
   minutes: string;
+  /** Latest start, 'HH:MM' UK time, or '' for any time in working hours. */
+  latestStart: string;
   description: string;
   /** Only offered when editing. A new service always starts on the menu. */
   isActive: boolean;
@@ -81,6 +84,7 @@ export function toEditorValue(service: {
   name: string;
   price: number;
   duration_minutes: number;
+  latest_start_time?: string | null;
   description: string | null;
   is_active: boolean;
   tags?: string[] | null;
@@ -94,6 +98,7 @@ export function toEditorValue(service: {
     name: service.name,
     price: String(service.price ?? ''),
     ...splitDuration(service.duration_minutes),
+    latestStart: latestStartToEditor(service.latest_start_time),
     description: service.description ?? '',
     isActive: service.is_active,
     tags: {
@@ -130,11 +135,21 @@ export const EMPTY_SERVICE_VALUE: ServiceEditorValue = {
   price: '',
   hours: '',
   minutes: '',
+  latestStart: '',
   description: '',
   isActive: true,
   tags: emptyTagGroups(),
   audience: '',
 };
+
+/** Latest-start choices: on the hour, 9am to 8pm. A stored time off this grid
+ *  (set some other way) still gets its own chip, so it's never hidden. */
+const LATEST_START_HOURS = Array.from({ length: 12 }, (_, i) => `${String(9 + i).padStart(2, '0')}:00`);
+
+function latestStartChoices(current: string): string[] {
+  if (!current || LATEST_START_HOURS.includes(current)) return LATEST_START_HOURS;
+  return [...LATEST_START_HOURS, current].sort();
+}
 
 const AUDIENCE_OPTIONS: { value: Exclude<ServiceAudienceValue, ''>; label: string }[] = [
   { value: 'everyone', label: 'Everyone' },
@@ -185,6 +200,7 @@ function toDraft(
     price: Number(value.price),
     // validateServiceValue has already rejected a null here.
     durationMinutes: editorDurationMinutes(value) ?? 0,
+    latestStartTime: value.latestStart || null,
     description: value.description.trim() || null,
     ...(isNew ? {} : { isActive: value.isActive }),
     ...(findability.tags ? { tags: findability.tags } : {}),
@@ -434,6 +450,43 @@ export default function ServiceEditorSheet({
                 </View>
               </View>
             </View>
+
+            <Text style={[styles.label, { color: palette.sub }]}>LATEST START</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.timeChipRow}
+            >
+              {['', ...latestStartChoices(value.latestStart)].map(time => {
+                const on = value.latestStart === time;
+                return (
+                  <TouchableOpacity
+                    key={time || 'any'}
+                    style={[
+                      styles.chip,
+                      { borderColor: on ? palette.accent : palette.border, backgroundColor: on ? palette.accent : palette.card },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setValue(v => ({ ...v, latestStart: time }));
+                    }}
+                    activeOpacity={0.75}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, { color: on ? (isDarkColor(palette.accent) ? '#FFFFFF' : '#1B2740') : palette.text }]}>
+                      {time ? formatLatestStart(time) : 'Any time'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <Text style={[styles.hint, { color: palette.sub }]}>
+              {value.latestStart
+                ? `Clients can't book it to start after ${formatLatestStart(value.latestStart)}.`
+                : 'Clients can book it to start any time in your working hours.'}
+            </Text>
 
             <Text style={[styles.label, { color: palette.sub }]}>DESCRIPTION</Text>
             <TextInput
@@ -728,6 +781,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
     lineHeight: 16,
+  },
+  timeChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 4,
   },
   chipGrid: {
     flexDirection: 'row',
