@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-10 (more service types)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110190000 | `more_service_types` | **APPLIED 2026-11-10** on the user's go-ahead ("then apply"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261110170000`; highest unapplied on an open PR `20261110180000_booking_request_declined_at` (#467, unrelated objects); lock `(none)`. Widens `services_service_type_check` from 5 to 19 values (the 5 kept); guard refuses if the live constraint wasn't the 5-value one. Forced-rollback dry run first: all 101 services passed the new check, live unchanged after. Verified live: version present (now live max), constraint has 19 values, 101 services. **`20261110180000_booking_request_declined_at` (#467) now sits below the frontier and must renumber above 20261110190000.** The list is mirrored in `src/constants/serviceTypes.ts`; `src/tests/serviceTypes.test.ts` checks they match. Written on `feat/service-types-per-kind`. |
+
 ### Applied 2026-11-10 (Becca miss log)
 
 | Authored version | Name | Status |
