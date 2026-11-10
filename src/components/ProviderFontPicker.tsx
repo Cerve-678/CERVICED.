@@ -105,8 +105,8 @@ const ProviderFontPicker: React.FC<ProviderFontPickerProps> = ({
 const styles = StyleSheet.create({
   collection: { marginBottom: 14 },
   collectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 6 },
-  collectionName: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1.2 },
-  collectionDesc: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
+  collectionName: { fontFamily: 'JosefinSans-Bold', fontSize: 11, letterSpacing: 1.2 },
+  collectionDesc: { flex: 1, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 11 },
   rail: { flexDirection: 'row', gap: 10 },
   option: {
     width: 150,
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   lockIcon: { position: 'absolute', top: 6, right: 6 },
   preview: { textAlign: 'center' },
   optionName: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 10,
     textAlign: 'center',

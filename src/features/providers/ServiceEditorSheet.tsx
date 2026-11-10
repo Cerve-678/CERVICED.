@@ -616,21 +616,21 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   eyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
     marginBottom: 3,
   },
   title: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 21,
   },
   body: {
     flexGrow: 0,
   },
   label: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1,
@@ -683,11 +683,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   visibilityTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 14,
   },
   visibilityHint: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 16,
@@ -695,13 +695,13 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#FF453A',
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     marginTop: 12,
   },
   hint: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 16,
@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
   },
   suggestText: {
     flex: 1,
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 12,
     lineHeight: 16,
@@ -741,7 +741,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   chipText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
   },
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   footnote: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 17,
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   saveButtonText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     color: '#FFFFFF',
     fontSize: 15,
   },

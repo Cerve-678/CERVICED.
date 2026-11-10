@@ -397,18 +397,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 10,
     letterSpacing: 1.6,
   },
-  skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600' },
+  skipText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, fontWeight: '600' },
   title: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 17,
     letterSpacing: 0.3,
     marginBottom: 5,
   },
-  body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13.5, lineHeight: 19 },
+  body: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13.5, lineHeight: 19 },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   segment: { height: 4, borderRadius: 2 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 1 },
-  backText: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 1 },
+  backText: { fontFamily: 'JosefinSans-Bold', fontSize: 11, letterSpacing: 1 },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -429,5 +429,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 20,
   },
-  nextText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1.2 },
+  nextText: { fontFamily: 'JosefinSans-Bold', fontSize: 12, letterSpacing: 1.2 },
 });

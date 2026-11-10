@@ -194,19 +194,19 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     letterSpacing: 0.5,
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 4,
   },
   emailText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     textAlign: 'center',
     marginBottom: 32,
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     fontSize: 22,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
   },
   primaryBtn: {
     width: '100%',
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   primaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     letterSpacing: 1,
     color: '#FFFFFF',
@@ -248,13 +248,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   secondaryBtnText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     letterSpacing: 0.5,
   },
   backLink: { paddingVertical: 8 },
   backLinkText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 14,
   },
 });

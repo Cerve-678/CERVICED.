@@ -26,5 +26,5 @@ ServiceButton.displayName = 'ServiceButton';
 const styles = StyleSheet.create({
   button: { marginRight: 10 },
   card: { borderRadius: 14, paddingHorizontal: Platform.OS === 'android' ? 18 : 22, height: Platform.OS === 'android' ? 30 : 34, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  text: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
+  text: { fontFamily: 'JosefinSans-Bold', fontSize: 12 },
 });

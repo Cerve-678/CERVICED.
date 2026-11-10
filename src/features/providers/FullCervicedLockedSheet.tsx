@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
   grabber: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 18 },
-  kicker: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.5 },
+  kicker: { fontFamily: 'JosefinSans-Bold', fontSize: 10, letterSpacing: 1.5 },
   title: { fontFamily: 'Prata-Regular', fontSize: 28, lineHeight: 36, marginTop: 4 },
   perks: { gap: 12, marginTop: 20 },
   perk: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   perkTitle: { fontSize: 15, fontWeight: '600' },
   note: { fontSize: 13, lineHeight: 18, marginTop: 18 },
   primary: { height: 52, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 22 },
-  primaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
+  primaryText: { fontFamily: 'JosefinSans-Bold', fontSize: 16 },
   secondary: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  secondaryText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  secondaryText: { fontFamily: 'JosefinSans-Bold', fontSize: 14 },
 });

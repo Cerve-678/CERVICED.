@@ -89,7 +89,7 @@ export default function BeccaNavigator() {
             backgroundColor: theme.background,
           },
           headerTitleStyle: {
-            fontFamily: 'BakbakOne',
+            fontFamily: 'JosefinSans-Bold',
             fontSize: 22,
             color: theme.text,
           },
@@ -107,7 +107,7 @@ export default function BeccaNavigator() {
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
-            fontFamily: 'BakbakOne',
+            fontFamily: 'JosefinSans-Bold',
             fontSize: 22,
             color: theme.text,
           },

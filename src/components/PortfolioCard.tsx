@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
   },
   overlay: {
     position: 'absolute',
@@ -311,14 +311,14 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 9,
     fontWeight: '700',
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     letterSpacing: 0.5,
   },
   providerName: {
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,

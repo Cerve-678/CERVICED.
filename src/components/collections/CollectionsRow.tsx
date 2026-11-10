@@ -96,7 +96,7 @@ const RowFolder = memo(function RowFolder({
 const styles = StyleSheet.create({
   wrap: { paddingTop: 4, paddingBottom: 6 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  title: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
+  title: { fontFamily: 'JosefinSans-Bold', fontSize: 18 },
   newPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
   },
-  newText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 14 },
+  newText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 14 },
   // Top padding leaves room for photos sticking out and lifting on press;
   // bottom padding for the folder's shadow.
   rail: { gap: 14, paddingTop: 12, paddingBottom: 14 },
@@ -120,6 +120,6 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
   },
-  ghostTitle: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 14 },
-  ghostSub: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12, textAlign: 'center' },
+  ghostTitle: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 14 },
+  ghostSub: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 12, textAlign: 'center' },
 });

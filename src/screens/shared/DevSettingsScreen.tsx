@@ -636,7 +636,7 @@ function DevTools({ navigation }: { navigation: any }) {
         <View style={[styles.container, { backgroundColor: 'transparent' }]}>
           {/* Header — pad past the status bar manually (SafeAreaView top inset is unreliable in a modal) */}
           <View style={[styles.header, { borderBottomColor: P.sep, paddingTop: topInset + 12 }]}>
-            <Text style={[styles.title, { color: P.text, fontFamily: 'BakbakOne-Regular' }]}>
+            <Text style={[styles.title, { color: P.text, fontFamily: 'JosefinSans-Bold' }]}>
               Developer Settings
             </Text>
             <TouchableOpacity
@@ -1064,7 +1064,7 @@ function DevTools({ navigation }: { navigation: any }) {
 
             {/* About */}
             <View style={[styles.infoSection, { backgroundColor: P.iconBg, borderColor: P.border }]}>
-              <Text style={[styles.infoTitle, { color: P.text, fontFamily: 'BakbakOne-Regular' }]}>About</Text>
+              <Text style={[styles.infoTitle, { color: P.text, fontFamily: 'JosefinSans-Bold' }]}>About</Text>
               <Text style={[styles.infoText, { color: P.sub }]}>
                 This screen provides developer tools for testing and debugging.
                 {'\n\n'}
@@ -1101,7 +1101,7 @@ function DevTools({ navigation }: { navigation: any }) {
         <WindowControlsInsetProvider>
         <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{ flex: 1, backgroundColor: P.bg }}>
           <View style={[styles.header, { borderBottomColor: P.sep, paddingTop: 12 }]}>
-            <Text style={[styles.title, { color: P.text, fontFamily: 'BakbakOne-Regular' }]}>
+            <Text style={[styles.title, { color: P.text, fontFamily: 'JosefinSans-Bold' }]}>
               Debug Logs ({logEntries.length})
             </Text>
             <TouchableOpacity
@@ -1162,7 +1162,7 @@ function DevTools({ navigation }: { navigation: any }) {
 
 const styles = StyleSheet.create({
   gate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  gateText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, textAlign: 'center' },
+  gateText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 15, textAlign: 'center' },
   gateBack: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
   safeArea: { flex: 1 },
   container: { flex: 1 },
@@ -1198,7 +1198,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1.5,
     marginBottom: 12,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
   },
   statCard: {
     borderRadius: 14,
@@ -1220,7 +1220,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 14,
     fontWeight: '700',
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
   },
   primaryButton: {
     padding: 14,
@@ -1271,7 +1271,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
   },
-  themeButtonText: { fontSize: 12, fontWeight: '600', fontFamily: 'BakbakOne-Regular' },
+  themeButtonText: { fontSize: 12, fontWeight: '600', fontFamily: 'JosefinSans-Bold' },
   tokenBox: {
     borderRadius: 10,
     padding: 12,

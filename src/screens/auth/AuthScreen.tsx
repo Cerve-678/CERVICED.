@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   backIcon: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 18,
   },
 
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   headerTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 32,
     fontWeight: '900',
     letterSpacing: 1,
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tabText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 14,
     letterSpacing: 1,
   },
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   fieldLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 12,
     letterSpacing: 1,
     marginBottom: 8,
@@ -552,13 +552,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   input: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 15,
     letterSpacing: 0.5,
     padding: 0,
   },
   errorText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 11,
     marginTop: 6,
     marginLeft: 4,
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   strengthText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   dobSlash: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 16,
     marginHorizontal: 6,
   },
@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(175,145,151,0.4)',
   },
   submitText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     letterSpacing: 1,
   },
@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
   },
   dividerLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 11,
     letterSpacing: 2,
     marginHorizontal: 16,
@@ -648,14 +648,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   socialLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 13,
     fontWeight: '600',
   },
 
   // Terms
   termsText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 11,
     textAlign: 'center',
     lineHeight: 18,

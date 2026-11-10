@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 16, fontWeight: '700' },
   heroTextBlock: { flex: 1 },
   heroSub: { fontSize: 14, fontWeight: '500', letterSpacing: 0.2, marginBottom: 2 },
-  heroName: { fontSize: 40, fontFamily: 'BakbakOne-Regular', letterSpacing: -0.5 },
+  heroName: { fontSize: 40, fontFamily: 'JosefinSans-Bold', letterSpacing: -0.5 },
 
   // Quick cards
   quickRow: {
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 11,
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     letterSpacing: 1.5,
     marginBottom: 10,
     marginLeft: 2,
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
   providerBtnTitle: { fontSize: 15, fontWeight: '700' },
   providerBtnSub: { fontSize: 12, fontWeight: '400' },
   rowBadge: { borderRadius: 100, paddingHorizontal: 9, paddingVertical: 3, marginRight: 8 },
-  rowBadgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1 },
+  rowBadgeText: { fontFamily: 'JosefinSans-Bold', fontSize: 10.5, letterSpacing: 1 },
   switchBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#FF1744', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, marginLeft: 8 },
   switchBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
 
