@@ -113,6 +113,22 @@ Every turn produces a confidence score. Three bands:
 Becca never invents an answer. Confirmed as the chosen fallback behaviour.
 This band is also **the exact seam the LLM replaces** — see 3.1.
 
+**Learning from misses.** Every reply carries `understood` (the capability
+that answered, or `null` for the fallback). `missLog.ts` holds a typed miss
+until the person's next move, then records it once through
+`record_becca_miss`: resolved by a tapped "did you mean" option (`chip`),
+by asking again in other words (`reworded`), or unresolved. The server never
+stores a question that mentions health or another sensitive subject
+(keyword check; the review deletes any that slip through), blanks emails,
+phone numbers, street addresses,
+postcodes and @handles, and deletes rows after 90 days or when the person
+deletes a Becca chat, that hat's profile or the account
+(`20261110170000_becca_misses.sql`, user decisions 2026-11-10). Nothing
+changes Becca by itself: the weekly `/review-becca-misses` turns resolved
+pairs into new phrases through a normal PR, and reports unresolved themes
+as things Becca can't do yet. The same log is the scorecard for deciding
+whether to switch the AI router on in production.
+
 ---
 
 ## 2. What Becca can do with NO AI
