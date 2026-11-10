@@ -104,7 +104,7 @@ import {
 } from '../../features/business-details/bookingInstructions';
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
-import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import { createServiceDraft, upsertServiceInList } from '../../features/provider-registration/serviceDraft';
 import { fillProfileFromSignup } from '../../features/provider-registration/signupAnswers';
 import {
   applyRuleToServices,
@@ -3638,18 +3638,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       throw new Error('Could not resolve provider for description backup');
     }
     setProviderData(prev => {
-      const categoryServices = prev.categories[currentCategory] || [];
-      const existingIndex = categoryServices.findIndex(s => s.id === service.id);
-
-      let updatedServices;
-      if (existingIndex >= 0) {
-        // Update existing
-        updatedServices = [...categoryServices];
-        updatedServices[existingIndex] = service;
-      } else {
-        // Add new
-        updatedServices = [...categoryServices, service];
-      }
+      // Matches on the saved row's id too, so an editor opened before the
+      // live refresh landed replaces the service instead of adding a copy.
+      const updatedServices = upsertServiceInList(prev.categories[currentCategory] || [], service);
 
       let categories: Record<string, ServiceData[]> = {
         ...prev.categories,
@@ -3677,6 +3668,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // ── Universal add-ons: the provider's own list ─────────────────────────
   const [editingAddOn, setEditingAddOn] = useState<AddOnLibraryItem | null>(null);
+  // The Services page's Add-ons tab. It only exists once there's an add-on;
+  // with none, the empty list and its guide sit under the services instead.
+  const [showingAddOns, setShowingAddOns] = useState(false);
+  const hasAddOns = (providerData.addOnLibrary?.length ?? 0) > 0;
+  const addOnsView = showingAddOns && hasAddOns;
   const [showAddOnEditor, setShowAddOnEditor] = useState(false);
   const openAddOnEditor = useCallback((item: AddOnLibraryItem | null) => {
     setEditingAddOn(item);
@@ -3702,6 +3698,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           : prev.categories,
       };
     });
+    // Land on the list the add-on just joined.
+    setShowingAddOns(true);
     closeAddOnEditor();
   }, [closeAddOnEditor]);
   const handleDeleteAddOn = useCallback((key: string) => {
@@ -5237,7 +5235,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     ) : null}
                     <TouchableOpacity
                       style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
-                      onPress={() => { tapLight(); setShowCategoryModal(true); }}
+                      onPress={() => { tapLight(); setShowingAddOns(false); setShowCategoryModal(true); }}
                     >
                       <Text style={[styles.addCategoryText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>+ Add Category</Text>
                     </TouchableOpacity>
@@ -5249,12 +5247,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ProviderBookingHistoryScreen, and deliberately not a
                       filled pill: the category pills directly below are
                       already filled, and two filled controls stacked read
-                      as one level rather than two. Hidden entirely for a
-                      single-type provider. */}
-                  {serviceTypes.length > 1 ? (
+                      as one level rather than two. A single-type provider
+                      only gets it once they have an add-on: then it reads
+                      Services / Add-ons, and the Add-ons tab shows their
+                      add-on list in place of the services. */}
+                  {serviceTypes.length > 1 || hasAddOns ? (
                     <View style={[styles.serviceTypeSwitch, { borderBottomColor: chrome.fg(0.15) }]}>
                       {serviceTypes.map(serviceType => {
-                        const active = serviceType === selectedServiceType;
+                        const active = !addOnsView && serviceType === selectedServiceType;
                         const count = Object.entries(providerData.categories)
                           .filter(([name]) => typeOfCategory(name) === serviceType)
                           .reduce((total, [, list]) => total + list.length, 0);
@@ -5265,7 +5265,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               styles.serviceTypeTab,
                               active && { borderBottomColor: adaptiveAccentColor },
                             ]}
-                            onPress={() => { tapSelect(); setSelectedServiceType(serviceType); }}
+                            onPress={() => { tapSelect(); setShowingAddOns(false); setSelectedServiceType(serviceType); }}
                             activeOpacity={0.7}
                           >
                             <Text
@@ -5277,16 +5277,49 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 },
                               ]}
                             >
-                              {serviceType}
+                              {serviceTypes.length > 1 ? serviceType : 'Services'}
                               {count > 0 ? `  ${count}` : ''}
                             </Text>
                           </TouchableOpacity>
                         );
                       })}
+                      {hasAddOns ? (
+                        <TouchableOpacity
+                          style={[
+                            styles.serviceTypeTab,
+                            addOnsView && { borderBottomColor: adaptiveAccentColor },
+                          ]}
+                          onPress={() => { tapSelect(); setShowingAddOns(true); }}
+                          activeOpacity={0.7}
+                          accessibilityRole="tab"
+                          accessibilityState={{ selected: addOnsView }}
+                        >
+                          <Text
+                            style={[
+                              styles.serviceTypeTabText,
+                              {
+                                color: addOnsView ? chrome.fg(0.95) : chrome.fg(0.5),
+                                fontWeight: addOnsView ? '700' : '600',
+                              },
+                            ]}
+                          >
+                            {`Add-ons  ${providerData.addOnLibrary?.length ?? 0}`}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   ) : null}
 
-                {categoryNames.length === 0 ? (
+                {addOnsView ? (
+                  <AddOnLibrarySection
+                    library={providerData.addOnLibrary}
+                    categories={providerData.categories}
+                    palette={chromeTheme}
+                    onEdit={openAddOnEditor}
+                    onNew={() => openAddOnEditor(null)}
+                    inTab
+                  />
+                ) : categoryNames.length === 0 ? (
                   <View style={styles.emptyServicesCard}>
                     <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
                     <Text style={styles.emptyServicesText}>
@@ -5560,13 +5593,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
-              <AddOnLibrarySection
-                library={providerData.addOnLibrary}
-                categories={providerData.categories}
-                palette={chromeTheme}
-                onEdit={openAddOnEditor}
-                onNew={() => openAddOnEditor(null)}
-              />
+              {/* No add-ons yet (or the list didn't load): the empty list and
+                  its guide sit here. Once there's one, it moves to the
+                  Add-ons tab above. */}
+              {!hasAddOns && (
+                <AddOnLibrarySection
+                  library={providerData.addOnLibrary}
+                  categories={providerData.categories}
+                  palette={chromeTheme}
+                  onEdit={openAddOnEditor}
+                  onNew={() => openAddOnEditor(null)}
+                />
+              )}
 
               <TouchableOpacity
                 style={styles.docNextButton}

@@ -5,7 +5,7 @@
 
 #generated
 
-**3677 functions** across **525 files**.
+**3680 functions** across **525 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -245,7 +245,7 @@
 - `SectionHeader.tsx` — **SectionHeader**
 - `ServiceAddOnsField.tsx` — all · create · removePending · reuseExisting · ruleNote · **ServiceAddOnsField** · suggestions · toggle
 - `serviceDescriptionVerification.ts` — **serviceDescriptionsMatch**
-- `serviceDraft.ts` — **createServiceDraft** · nextDraftId
+- `serviceDraft.ts` — **collapseDuplicateSavedServices** · **createServiceDraft** · nextDraftId · sameService · **upsertServiceInList**
 - `ServiceImageCarousel.tsx` — beginHold · clearHold · endDrag · handleScroll · makePanResponder · responders · **ServiceImageCarousel** · shiftFor
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
