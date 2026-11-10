@@ -5,7 +5,7 @@
 
 #generated
 
-**3649 functions** across **520 files**.
+**3655 functions** across **521 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -280,8 +280,8 @@
 - `searchResultsLayout.ts` — **highlightSearchTerms** · isWordChar · pushServices · **scatterServicesBetweenProviders**
 - `ServiceBookingCharts.tsx` — MostBookedCard · onLayout · ServiceBookingCharts · ticks · TrendCard · xFor · yFor
 - `serviceBookingSummary.ts` — busiestFirst · **chartTicks** · **summariseServiceBookings**
-- `ServiceEditorSheet.tsx` — descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · push · ServiceEditorSheet · **splitDuration** · suggestion · tagLabel · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
-- `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · optionsFor · readWords · sameWord · **suggestServiceDetails** · words
+- `ServiceEditorSheet.tsx` — addOwnTags · descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · push · ServiceEditorSheet · **splitDuration** · suggestion · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
+- `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · **normalizeTag** · optionsFor · **parseTypedTags** · readWords · sameWord · **suggestServiceDetails** · **tagLabel** · words
 - `todaySchedule.ts` — **buildTodaySchedule** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **shortClientName** · todosFrom
 - `TodayScheduleCards.tsx` — handleScrollEnd · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
 - `useDescriptionTopics.ts` — **useDescriptionTopics**
@@ -370,7 +370,7 @@
 - `CartScreen.tsx` — abandonOutstandingCheckout · addOnsSummary · backFromSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartCheckoutFooter · cartProviderRows · CartProviderSection · CartScreen · checkoutProviderSections · checkoutRenderUnits · checkoutTotalsFrom · clearItemIssue · depositPolicyArg · displayedItemIssues · dynamicStyles · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · flagged · flaggedProviderKeys · flaggedProvidersKey · formatCardNumber · formatExpiry · formatNameList · frozenCheckoutTotals · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleClose · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveFromCart · handleRemoveOne · handleReviewConfirm · handleScrollTargetLaidOut · handleScrollToIndexFailed · hasDeposit · hasUnscheduledItems · identifyCartConflicts · itemPromoDiscounts · itemsByProvider · jumpToRow · localItemIssues · navigateToProvider · onRefresh · openAddressSettings · outside · paymentSheetCartItems · platformFee · pricedCheckoutItems · priceOf · priceOfItem · promoSavingsShown · providerNamesKey · renderAddOns · renderCartProviderRow · renderCheckoutUnit · reportTargetOffset · showCards · SummaryShell · timestamp · toCartIssue · toggleProviderCollapsed · totalPrice
 - `CircleScreen.tsx` — afterFollowChange · checkContacts · CircleScreen · confirmBlock · confirmRemoveFollower · confirmUnblock · confirmUnfollow · Face · follow · loadBlocked · loadLists · loadSettings · moreButton · myStatusById · onPrivateChange · onShowWhereIGoChange · personRow · remove · renderContactsCard · renderItem · renderSharing · respond · runForRow · saveSetting
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
-- `ExploreScreen.tsx` — backToTopOpacity · backToTopTranslateY · columnWidth · dedupeByImageUri · editingCollection · filters · filterTabs · finishTour · getItemHeight · handleBackToTop · handleBookNow · handleCloseCollection · handleCloseDetail · handleCloseEditor · handleCollectionDeleted · handleDiscoverScrollSettled · handleEditCollection · handleFavouritesScrollSettled · handleFlightDone · handleImagePress · handleNewCollection · handleOpenCollection · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · openCollection · prepareDetailItem · renderPortfolioCard · shownFavouriteItems · SkeletonMasonryGrid · tourCardId · updateBackToTop · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
+- `ExploreScreen.tsx` — backToTopOpacity · backToTopTranslateY · columnWidth · dedupeByImageUri · editingCollection · filters · filterTabs · finishTour · getItemHeight · handleBackToTop · handleBookNow · handleCloseCollection · handleCloseDetail · handleCloseEditor · handleCollectionDeleted · handleDiscoverScrollSettled · handleEditCollection · handleFavouritesScrollSettled · handleFlightDone · handleImagePress · handleNewCollection · handleOpenCollection · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · mixExploreCards · openCollection · prepareDetailItem · renderPortfolioCard · shownFavouriteItems · SkeletonMasonryGrid · tourCardId · updateBackToTop · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
 - `ExternalBookingDetailScreen.tsx` — createStyles · ExternalBookingDetailScreen · handleAddToCalendar · handleMessage · handleOpenPage · handleRemove · load · retry
 - `HomeScreen.tsx` — allCategorizedProviders · availableThisWeekProviders · currentOffers · finishTour · handleBackPress · handleRadiusChange · handleSelectPlace · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · kidsSectionRelevant · loadSecondaryRails · loadUnreadCount · maleProvidersDisplay · maleSectionRelevant · navigateToAudienceService · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · openRecommendProvider · previouslyBookedProviders · ProviderRail · recommendationCandidates · recommendedProvidersList · renderKidsSection · renderMaleSection · resetFilters · RoundProviderRail · serviceProviders · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData · visibleTourSteps
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo
@@ -487,7 +487,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (63)
+### `src/utils/` (64)
 - `aboutPage.ts` — **openAboutPage**
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
@@ -536,6 +536,7 @@
 - `rescheduleBlockedReason.ts` — **getRescheduleBlock** · **getStaleRequestBlock** · **hasBookingDatePassed**
 - `rescheduleReplyBy.ts` — **rescheduleReplyBy**
 - `rescheduleWindow.ts` — **parseRescheduleRequestToken** · **rescheduleCandidateDates** · **rescheduleProbeStart** · **rescheduleRequestToken** · **rescheduleWindowLabel** · to24HourTimeOrRaw · tomorrowMidnight
+- `roundRobinMix.ts` — alternateCategories · **roundRobinMix**
 - `savedCarouselImageId.ts` — **savedCarouselImageId**
 - `scheduleIssues.ts` — add · durationToMinutes · emergencyIssue · **findScheduleIssues** · **primaryIssue** · resolveSpan · toMinutes
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · endsWithPlace · fixCompassTypo · nearestPlace · **parseSearchQuery** · takePrice

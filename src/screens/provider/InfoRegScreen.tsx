@@ -135,7 +135,9 @@ import {
   hasNoTags,
   inferCategoryKind,
   mergeTagGroups,
+  parseTypedTags,
   suggestServiceDetails,
+  tagLabel,
   type CategoryKind,
   type ServiceTagGroups,
   type ServiceTemplate,
@@ -624,19 +626,20 @@ const SUBCATEGORY_SCOPE: Record<string, SubcategoryScope> = {
   'Lymphatic Drainage':     { templates: ['Facial Lymphatic Drainage Massage', 'Full Body Lymphatic Drainage Massage', 'Skin Consultation'], techniques: ['lymphatic-drainage'], outcomes: ['reduction', 'glow', 'firmness'] },
 };
 
-// ─── Reusable chip-select row, with a trailing "Other" chip ───────────────────
+// ─── Reusable chip-select row, with a trailing "Your own" chip ────────────────
 // Wraps ChipSelect with one more chip at the end. Tapping it reveals a text
-// box (rather than adding "Other" itself as a tag) — typing a value and
-// hitting + / return adds THAT value to the same selected array, exactly like
-// the Trend Names section's always-visible text box already works. Keeps
+// box (rather than adding a tag itself) — typing and hitting + / return adds
+// what was typed to the same selected array, like the Trend Names box. Keeps
 // every preset-tag section (style/occasion/technique/outcome) able to accept
-// a value that isn't in the curated per-category list, without changing what
-// gets stored (still just a plain string in that section's tags array).
+// a value that isn't in the curated per-category list. What's typed is put in
+// the presets' stored form first (parseTypedTags), so "Box Braids" ticks the
+// existing box-braids chip instead of saving a second spelling of it, and
+// "knotless, boho" adds two.
 interface TagSelectWithOtherProps {
   options: string[];
   selected: string[];
   onToggle: (tag: string) => void;
-  onAddOther: (tag: string) => void;
+  onAddOther: (tags: string[]) => void;
   accentColor?: string;
   styles: any;
 }
@@ -646,8 +649,8 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
   const [otherValue, setOtherValue] = useState('');
 
   const submitOther = () => {
-    const trimmed = otherValue.trim();
-    if (trimmed) onAddOther(trimmed);
+    const typed = parseTypedTags(otherValue);
+    if (typed.length) onAddOther(typed);
     setOtherValue('');
   };
 
@@ -668,15 +671,16 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               style={[styles.chip, active && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
               onPress={() => { tapSelect(); onToggle(option); }}
             >
-              <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
+              <Text style={[styles.chipText, active && { color: accentColor }]}>{tagLabel(option)}</Text>
             </TouchableOpacity>
           );
         })}
         <TouchableOpacity
           style={[styles.chip, showOtherInput && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
           onPress={() => { tapSelect(); setShowOtherInput(v => !v); }}
+          accessibilityLabel="Add your own tag"
         >
-          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>Other</Text>
+          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>+ Your own</Text>
         </TouchableOpacity>
       </View>
       {showOtherInput && (
@@ -686,10 +690,12 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               style={styles.textInput}
               value={otherValue}
               onChangeText={setOtherValue}
-              placeholder="Type your own..."
+              placeholder="A word clients search for, commas for more"
               placeholderTextColor={chrome.fg(0.4)}
               onSubmitEditing={submitOther}
               returnKeyType="done"
+              autoCapitalize="none"
+              autoCorrect={false}
               autoFocus
             />
           </View>
@@ -1131,9 +1137,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setTagsTouched(true);
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
   };
-  const addOtherTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) => {
+  const addOtherTag = (arr: string[], setArr: (v: string[]) => void) => (tags: string[]) => {
     setTagsTouched(true);
-    setArr(arr.includes(tag) ? arr : [...arr, tag]);
+    setArr([...arr, ...tags.filter(t => !arr.includes(t))]);
   };
 
   const openedTags = useMemo(() => tagGroupsOf(service), [service]);
@@ -1199,11 +1205,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     });
   };
 
+  // Same stored form as the presets (parseTypedTags), so "Glazed Donut!"
+  // is the glazed-donut chip, and commas add several at once.
   const handleAddTrend = () => {
-    const t = trendInput.trim().toLowerCase().replace(/\s+/g, '-');
-    if (t && !trendNames.includes(t)) {
+    const added = parseTypedTags(trendInput).filter(t => !trendNames.includes(t));
+    if (added.length) {
       setTagsTouched(true);
-      setTrendNames([...trendNames, t]);
+      setTrendNames([...trendNames, ...added]);
     }
     setTrendInput('');
   };
@@ -1624,13 +1632,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
                       <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames(trendNames.filter(x => x !== t)); }}>
-                        <Text style={[styles.chipTextActive, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{t} ×</Text>
+                        <Text style={[styles.chipTextActive, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{tagLabel(t)} ×</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
+                  <TextInput style={[styles.serviceSheetInput, fieldBox, { flex: 1 }]} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" autoCapitalize="none" autoCorrect={false} onFocus={() => handleInputFocus('trendInput')} />
                   <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
@@ -1638,7 +1646,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.chipGrid}>
                   {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
                     <TouchableOpacity key={t} style={styles.chip} onPress={() => { tapSelect(); setTagsTouched(true); setTrendNames([...trendNames, t]); }}>
-                      <Text style={styles.chipText}>{t}</Text>
+                      <Text style={styles.chipText}>{tagLabel(t)}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
