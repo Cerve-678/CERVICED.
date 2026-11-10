@@ -430,6 +430,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     lateRescheduleFrom: db.late_reschedule_from ?? undefined,
     lateRescheduleRuleApplies: db.late_reschedule_rule_applies ?? undefined,
     cancelledBy: db.cancelled_by ?? undefined,
+    declinedAt: db.declined_at ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
     clientUserId: (db as any).user_id ?? undefined,
     addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({

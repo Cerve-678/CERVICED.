@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  Claude session on fix/declined-request-label (20261110180000), waiting for the user's go-ahead to apply
 ```
+
+### Pending (declined requests)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110180000 | `booking_request_declined_at` | **NOT APPLIED.** Frontier at authoring: live max `20261110170000`; highest unapplied on an open PR `20261110130000_marketing_studio` (#415, below the frontier, unrelated). Adds `bookings.declined_at`, stamps it in `stamp_booking_cancellation` (md5 `09c925da…`) when a pending booking is cancelled by anyone but the client, backfills from `booking_declined` notifications (2 rows), and appends it to `client_bookings` (md5 `fd79d868…`, written out in full). Forced-rollback dry run 2026-11-10 passed: view 56 columns incl. declined_at, function updated, 2 rows backfilled, live unchanged after. **Apply before the app change ships**: the app only reads the column, so nothing breaks without it, but no booking says Declined until it is live. |
 
 ### Applied 2026-11-10 (Becca miss log)
 

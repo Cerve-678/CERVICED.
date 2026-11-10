@@ -5,7 +5,7 @@
 
 #generated
 
-**3676 functions** across **525 files**.
+**3677 functions** across **525 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -143,7 +143,7 @@
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
 - `useFigurePrefs.ts` — save · **useFigurePrefs**
 
-### `src/features/bookings/` (27)
+### `src/features/bookings/` (28)
 - `activityCentre.ts` — **activityTimeline** · appointmentMs · beforeDay · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · isStillAhead · localDayKey · names · needsYouPulse · pounds · shortDay · when
 - `ActivityLive.tsx` — **ActivityTile** · **LiveDot** · remember · **StatusPill** · **TimelineGroup** · **TimelineRail** · useEntrance · **useReduceMotion**
 - `addOnTime.ts` — **addOnExtraMinutes** · **durationWithAddOns** · **formatAddOnExtraTime**
@@ -168,6 +168,7 @@
 - `refundRequestTimeline.ts` — day · **describeRefundRequestTimeline** · **isRefundRequestOpen** · **refundReplyDeadline**
 - `requestWindow.ts` — **clientRequestNote** · day · **formatAnswerBy** · **providerRequestNote** · **requestAnswerDeadline**
 - `reviewState.ts` — **mergeBookingReviewStates**
+- `statusPresentation.ts` — **isDeclinedRequest**
 - `timelineBookings.ts` — **withoutReplacedCancellations**
 - `tipWindow.ts` — enforces · **isTipWindowOpen** · **minutesOfDay** · **tipWindowClosesAt**
 - `useClientActivity.ts` — activity · allBookings · refresh · todoCounts · **useClientActivity**
