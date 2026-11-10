@@ -113,8 +113,8 @@ Curated: [[Booking Flow]] · **366 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
+- `src/services/becca/capabilities/client.ts` _(598)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(597)_
-- `src/services/becca/capabilities/client.ts` _(596)_
 - `src/screens/client/BookingDetailScreen.tsx` _(504)_
 - `src/screens/client/BookingsScreen.tsx` _(407)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_

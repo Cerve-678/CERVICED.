@@ -3,6 +3,8 @@ import {
   getProviderIdByDisplayName,
   getRebookableService,
 } from "../services/databaseService";
+import { normalizeAsk } from "../services/becca/askNormaliser";
+import { understand } from "../services/becca/matcher";
 import { getCapability } from "../services/becca/registry";
 import type { CapabilityContext } from "../services/becca/types";
 import { BookingStatus, type ConfirmedBooking } from "../types/booking";
@@ -93,5 +95,22 @@ describe("Becca's rebook my last appointment", () => {
     expect(result.text).toMatch(/couldn't look up/);
     expect(result.text).not.toMatch(/isn't available/);
     expect(getProviderIdByDisplayName).not.toHaveBeenCalled();
+  });
+});
+
+describe("Becca hears the ways people ask to rebook", () => {
+  it.each([
+    "book my last appointment again",
+    "can i book my last appointment again",
+    "book my last one again",
+    "book my last booking again",
+    "same appointment again",
+    "book my previous appointment",
+    "book it again",
+    "rebook my last appointment",
+    "when was my last appointment",
+  ])("%s", (ask) => {
+    const expected = ask.startsWith("when was") ? "booking.routine" : "booking.rebook";
+    expect(understand(normalizeAsk(ask), {}, "client").capabilityId).toBe(expected);
   });
 });

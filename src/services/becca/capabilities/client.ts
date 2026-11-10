@@ -734,6 +734,11 @@ const rebook: Capability = {
     "book my usual", "repeat my last", "rebook my last",
     "book what i had last", "same thing again", "book that in again",
     "get that booked again", "have that again",
+    // "book my last appointment again" and friends: the words around "last"
+    // vary, so these anchor on the part that doesn't.
+    "last appointment again", "last booking again", "last one again",
+    "previous appointment", "previous booking", "same appointment again",
+    "book it again",
   ],
   async run({ bookings, addToCart }): Promise<CapabilityResult> {
     const past = bookings
