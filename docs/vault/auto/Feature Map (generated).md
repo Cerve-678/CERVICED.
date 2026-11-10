@@ -113,13 +113,13 @@ Curated: [[Booking Flow]] · **366 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(597)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(598)_
 - `src/services/becca/capabilities/client.ts` _(587)_
 - `src/screens/client/BookingDetailScreen.tsx` _(505)_
 - `src/screens/client/BookingsScreen.tsx` _(405)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(252)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(192)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(254)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(193)_
 - `src/screens/client/RescheduleScreen.tsx` _(191)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **67 files**
 - … +37 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **209 files**
+Curated: [[Booking Flow]] · **210 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(338)_
 - `src/services/databaseService.ts` _(272)_
@@ -267,15 +267,15 @@ Curated: [[Booking Flow]] · **209 files**
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
 - `src/components/IssueRefundSheet.tsx` _(54)_
+- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(48)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
-- `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
 - `supabase/fix_provider_no_show_status.sql` _(42)_
 - `src/types/booking.ts` _(41)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `src/types/database.ts` _(38)_
-- … +179 more
+- … +180 more
 
 ## Auth
 Curated: [[Contexts]] · **218 files**

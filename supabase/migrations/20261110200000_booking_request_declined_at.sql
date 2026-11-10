@@ -1,4 +1,5 @@
--- A declined request says "Declined", not "Cancelled".
+-- A declined request says "Declined", not "Cancelled" — and an accepted
+-- request records when it was accepted (confirmed_at, step 2b).
 --
 -- A provider declining a request and the request timing out unanswered both
 -- end as status = 'cancelled', the same as a booking cancelled after it was
@@ -59,6 +60,52 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+-- 2b. Record when a request was accepted ──────────────────────────────────
+-- confirmed_at was only written by the paths that create a booking already
+-- confirmed (checkout, manual booking, waitlist claim). A provider accepting
+-- a request goes through provider_update_booking_status, which set status
+-- alone, so an accepted request had no confirmed_at at all. Stamped here for
+-- every path at once, and never overwritten once set. Nothing branches on the
+-- value today; it is a record, read by the client view.
+CREATE OR REPLACE FUNCTION public.stamp_booking_confirmation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NEW.status = 'confirmed' AND OLD.status IS DISTINCT FROM 'confirmed'
+     AND NEW.confirmed_at IS NULL THEN
+    NEW.confirmed_at := now();
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.stamp_booking_confirmation() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_stamp_booking_confirmation ON public.bookings;
+CREATE TRIGGER trg_stamp_booking_confirmation
+  BEFORE UPDATE OF status ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_booking_confirmation();
+
+-- Past accepts, from the 'booking_confirmed' notice the client was sent at the
+-- time (same group matching as below). Rows with no notice stay NULL rather
+-- than getting a guessed time.
+UPDATE public.bookings b
+   SET confirmed_at = c.confirmed_at
+  FROM (
+    SELECT DISTINCT ON (target.id) target.id, n.created_at AS confirmed_at
+      FROM public.notifications n
+      JOIN public.bookings rep ON rep.id = n.booking_id
+      JOIN public.bookings target
+        ON target.id = rep.id
+        OR (rep.group_booking_id IS NOT NULL AND target.group_booking_id = rep.group_booking_id)
+     WHERE n.type = 'booking_confirmed'
+     ORDER BY target.id, n.created_at ASC
+  ) c
+ WHERE b.id = c.id
+   AND b.confirmed_at IS NULL;
 
 -- 3. Past declines, from the notice the client was already sent ────────────
 -- handle_booking_status_change sends 'booking_declined' on exactly this
@@ -154,5 +201,9 @@ CREATE OR REPLACE VIEW public.client_bookings WITH (security_invoker = true) AS
      LEFT JOIN booking_client_addresses ca ON ((ca.booking_id = b.id)))
      LEFT JOIN LATERAL client_booking_venue(b.id) venue(address, directions, coordinates) ON (true))
   WHERE (b.status <> 'on_hold'::text);
+
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261110200000', 'booking_request_declined_at')
+ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

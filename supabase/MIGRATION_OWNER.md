@@ -53,14 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  Claude session on fix/declined-request-label (20261110180000), waiting for the user's go-ahead to apply
+OWNER:  (none)
 ```
 
-### Pending (declined requests)
+### Applied 2026-11-10 (declined requests + accepted time)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261110180000 | `booking_request_declined_at` | **NOT APPLIED.** Frontier at authoring: live max `20261110170000`; highest unapplied on an open PR `20261110130000_marketing_studio` (#415, below the frontier, unrelated). Adds `bookings.declined_at`, stamps it in `stamp_booking_cancellation` (md5 `09c925da…`) when a pending booking is cancelled by anyone but the client, backfills from `booking_declined` notifications (2 rows), and appends it to `client_bookings` (md5 `fd79d868…`, written out in full). Forced-rollback dry run 2026-11-10 passed: view 56 columns incl. declined_at, function updated, 2 rows backfilled, live unchanged after. **Apply before the app change ships**: the app only reads the column, so nothing breaks without it, but no booking says Declined until it is live. |
+| 20261110200000 | `booking_request_declined_at` | **APPLIED 2026-11-10** on the user's go-ahead ("apply databses"), via `supabase db query --linked -f` (absolute path) from the main folder, version then recorded. Authored as 20261110180000; renumbered because `20261110190000_payout_bank_schedule` was applied first (touches none of these objects). Frontier right before applying: live max `20261110190000`; highest unapplied on an open PR `20261110130000_marketing_studio` (#415, below the frontier, unrelated); lock `(none)` on main. Adds `bookings.declined_at`, stamped in `stamp_booking_cancellation` (md5 guard `09c925da…`) on pending→cancelled unless the client cancelled; new `stamp_booking_confirmation` + `trg_stamp_booking_confirmation` (BEFORE UPDATE OF status) stamps `confirmed_at` on →confirmed when NULL, since `provider_update_booking_status` never set it; backfills both from `booking_declined` / `booking_confirmed` notifications (group-aware); appends `declined_at` to `client_bookings` (md5 guard `fd79d868…`, written out in full). Forced-rollback dry run first: 2 declines backfilled, 0 accepted bookings left without confirmed_at, live unchanged after. Verified live: version present (now live max); column + view column present; view still `security_invoker=true`, grants unchanged; both stamp triggers present; 2 rows declined. Written on `fix/declined-request-label` (#467). |
 
 ### Applied 2026-11-10 (Becca miss log)
 

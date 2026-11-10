@@ -84,7 +84,7 @@ import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes, forma
 import { logger } from '../../utils/logger';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
-import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
+import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS, isDeclinedRequest } from '../../features/bookings/statusPresentation';
 import { describeRefundOutcome } from '../../features/bookings/paymentPresentation';
 import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '../../components/IssueRefundSheet';
 import { formatBookingRef } from '../../features/bookings/presentation';
@@ -1363,7 +1363,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                    {BOOKING_STATUS_LABELS[booking.status]}{dbReschedule?.status === 'provider_responded'
+                    {isDeclinedRequest(booking) ? 'Declined' : BOOKING_STATUS_LABELS[booking.status]}{dbReschedule?.status === 'provider_responded'
                       ? '  ·  Reschedule Offer Pending'
                       : isPending ? '  ·  Reschedule Requested' : ''}
                   </Text>

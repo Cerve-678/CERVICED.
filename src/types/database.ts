@@ -773,7 +773,7 @@ export interface DbBooking {
   late_reschedule_rule_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
   /** A request declined by the provider or expired unanswered — see
-   *  20261110180000_booking_request_declined_at.sql. */
+   *  20261110200000_booking_request_declined_at.sql. */
   declined_at?: string | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;

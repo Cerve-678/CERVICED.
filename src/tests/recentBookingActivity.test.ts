@@ -31,6 +31,11 @@ describe('describeRecentBooking', () => {
     });
   });
 
+  it('calls a request that was turned down Declined, and any other cancellation Cancelled', () => {
+    expect(describeRecentBooking(booking({ status: 'cancelled', declined_at: '2026-11-08T10:00:00.000Z' }), now).status).toBe('Declined');
+    expect(describeRecentBooking(booking({ status: 'cancelled', declined_at: null }), now).status).toBe('Cancelled');
+  });
+
   it('reads the made-at time as a moment, not that day at midnight', () => {
     expect(describeRecentBooking(booking({ created_at: '2026-11-08T11:59:40.000Z' }), now).booked).toBe('Booked just now');
     expect(describeRecentBooking(booking({ created_at: '2026-11-08T11:20:00.000Z' }), now).booked).toBe('Booked 40m ago');
