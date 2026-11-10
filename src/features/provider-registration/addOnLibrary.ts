@@ -17,7 +17,7 @@ import type { ProviderAddOnSaveItem } from '../../services/databaseService';
 export const MAX_ADD_ONS = 50;
 export const MAX_ADD_ON_EXTRA_MINUTES = 240;
 /** The quick picks offered for extra time. Any whole minute 0-240 is valid. */
-export const ADD_ON_EXTRA_TIME_CHOICES = [0, 10, 15, 30, 45, 60] as const;
+export const ADD_ON_EXTRA_TIME_CHOICES = [0, 5, 10, 15, 30, 45, 60] as const;
 
 export interface AddOnLibraryItem {
   /** Stable key for this editing session: the saved id, or `new:<n>`. */
