@@ -105,6 +105,7 @@ import {
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft, upsertServiceInList } from '../../features/provider-registration/serviceDraft';
+import { serviceTypeOptionsFor, type ServiceTypeKey } from '../../constants/serviceTypes';
 import { fillProfileFromSignup } from '../../features/provider-registration/signupAnswers';
 import {
   applyRuleToServices,
@@ -331,7 +332,7 @@ interface ServiceData {
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;
-  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  serviceType: ServiceTypeKey | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
   skinTonesSuitable?: string[];
@@ -1332,13 +1333,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     }, 350);
   };
 
-  const SERVICE_TYPES: { value: ServiceData['serviceType']; label: string }[] = [
-    { value: 'treatment',    label: 'Treatment' },
-    { value: 'enhancement',  label: 'Enhancement' },
-    { value: 'maintenance',  label: 'Maintenance' },
-    { value: 'restorative',  label: 'Restorative' },
-    { value: 'consultation', label: 'Consultation' },
-  ];
+  // Choices that fit this kind of service: a lash service gets Full set /
+  // Infill / Removal, a makeup one gets Event / Trial / Lesson.
+  const serviceTypeOptions = useMemo(() => serviceTypeOptionsFor(catKey, serviceType), [catKey, serviceType]);
 
   const SERVICE_AUDIENCE_OPTS: { value: ServiceData['audience']; label: string }[] = [
     { value: 'everyone', label: 'Everyone' },
@@ -1561,7 +1558,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <Text style={styles.serviceSheetSection}>Service Type</Text>
                 <Text style={styles.serviceSheetHint}>Helps clients understand what kind of service this is</Text>
                 <View style={styles.chipGrid}>
-                  {SERVICE_TYPES.map(({ value, label }) => {
+                  {serviceTypeOptions.map(({ value, label }) => {
                     const active = serviceType === value;
                     return (
                       <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setServiceType(active ? '' : value); }}>

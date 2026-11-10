@@ -108,7 +108,7 @@ Curated: [[Payments]] · **163 files**
 - … +133 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **366 files**
+Curated: [[Booking Flow]] · **367 files**
 - `src/services/databaseService.ts` _(1113)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **366 files**
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/features/bookings/activityCentre.ts` _(95)_
-- … +336 more
+- … +337 more
 
 ## Notifications
 Curated: [[Notifications]] · **188 files**
