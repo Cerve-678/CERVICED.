@@ -23,6 +23,7 @@ import {
   becomeFullMember as becomeFullMemberRpc,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { resetExploreSeen } from '../utils/exploreSeen';
 import { STORAGE_KEYS as LOCATION_STORAGE_KEYS } from '../utils/storage';
 import { logger } from '../utils/logger';
 import { momentsMemoryStorageKey } from '../features/social/momentsMemory';
@@ -952,6 +953,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setActiveMode('client');
     // Clear all user-specific AsyncStorage keys so they don't bleed into the next account
+    resetExploreSeen();
     await AsyncStorage.multiRemove([
       '@app_notifications',
       '@user_learning_data',
@@ -969,6 +971,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // next account that logs in on this device.
       STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
+      // Which Explore photos this phone has shown — browsing history.
+      STORAGE_KEYS.EXPLORE_SEEN,
       // Home's Near You choice on this phone. It outranks the account's Your
       // area, so leaving it would measure the next account from this one's
       // pick (see planClientLocation).

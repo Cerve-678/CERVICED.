@@ -25,6 +25,7 @@ import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
 import { roundRobinMix } from '../../utils/roundRobinMix';
+import { exploreSeenNow, loadExploreSeen, recordExploreSeen } from '../../utils/exploreSeen';
 import { spreadApart, type SpreadRule } from '../../utils/spreadApart';
 import { pickTourCardId } from '../../utils/coachMarkTargets';
 import { mergeSavedExploreCards } from '../../utils/mergeSavedExploreCards';
@@ -159,10 +160,23 @@ const EXPLORE_SPREAD: SpreadRule<PortfolioItem>[] = [
 // How much of the feed already on screen a new page is spread against.
 const EXPLORE_SPREAD_LOOKBACK = 8;
 
+// What a card is "seen" by: the photo itself, so the same upload reached as a
+// portfolio card and as a service card counts once.
+function exploreSeenKey(card: PortfolioItem): string {
+  return (card.image as { uri?: string } | undefined)?.uri ?? card.id;
+}
+
 // One card per provider per round, neighbouring providers in different
-// categories. See roundRobinMix.
+// categories, and each provider leading with a photo this phone hasn't shown
+// yet. See roundRobinMix and utils/exploreSeen.
 function mixExploreCards(cards: PortfolioItem[]): PortfolioItem[] {
-  return roundRobinMix(cards, card => card.providerSlug ?? card.providerId, card => card.category);
+  const seen = exploreSeenNow();
+  return roundRobinMix(
+    cards,
+    card => card.providerSlug ?? card.providerId,
+    card => card.category,
+    seen.size > 0 ? card => seen.get(exploreSeenKey(card)) : undefined,
+  );
 }
 
 function interleaveDiscoverFeed(
@@ -651,6 +665,9 @@ const ExploreScreen = memo(() => {
         // own public work. Do not hide a provider's images from this feed.
         getExplorePortfolioItems(category, DISCOVER_FIRST_PORTFOLIO_POOL),
         getDiscoverServices(category, DISCOVER_FIRST_SERVICE_POOL, undefined, { excludeOwnProvider: false }),
+        // Read alongside the fetch, never after it: what this phone has
+        // already shown, which mixExploreCards reads.
+        loadExploreSeen(),
       ]),
       8_000,
       'Explore feed',
@@ -920,6 +937,12 @@ const ExploreScreen = memo(() => {
     () => portfolioItems.slice(0, discoverVisibleCount),
     [portfolioItems, discoverVisibleCount],
   );
+  // Remember what's been put on screen, so the next load or refresh leads
+  // with photos this phone hasn't shown yet.
+  useEffect(() => {
+    if (portfolioLoading || visiblePortfolioItems.length === 0) return;
+    recordExploreSeen(visiblePortfolioItems.map(exploreSeenKey));
+  }, [visiblePortfolioItems, portfolioLoading]);
   // More looks exist below the last card: either already fetched and not yet
   // mounted, or another page on the server. Read off the cursor ref, which is
   // always written just before the setPortfolioItems that re-renders here.
