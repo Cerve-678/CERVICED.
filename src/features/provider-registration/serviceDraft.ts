@@ -90,3 +90,43 @@ export function createServiceDraft(template?: ServiceTemplateSeed | null): Provi
     audience: '',
   };
 }
+
+type ServiceIdentity = { id: number; dbId: string | null };
+
+/**
+ * Puts an edited service back into its category's list.
+ *
+ * The local `id` is only a number handed out when the profile was read, and
+ * the cached copy and the live refresh hand them out separately. A service
+ * editor opened on the cached copy can therefore come back with an `id` the
+ * refreshed list no longer has. Matching on the saved row's `dbId` as well
+ * replaces the original instead of appending a second copy. Two copies with
+ * the same `dbId` made replace_provider_services write one row twice, so the
+ * publish check found one service fewer than it sent.
+ */
+export function upsertServiceInList<S extends ServiceIdentity>(list: readonly S[], service: S): S[] {
+  const sameService = (s: S) => s.id === service.id || (!!service.dbId && s.dbId === service.dbId);
+  const index = list.findIndex(sameService);
+  if (index < 0) return [...list, service];
+  return list.flatMap((s, i) => (i === index ? [service] : sameService(s) ? [] : [s]));
+}
+
+/**
+ * One entry per saved service, for a list that already holds copies of the
+ * same row. The last copy is the most recent edit. It is also the copy the
+ * database would have kept, since the save RPC applies entries in order.
+ * It takes the place of the first copy, so the menu order stays the same.
+ */
+export function collapseDuplicateSavedServices<S extends ServiceIdentity>(list: readonly S[]): S[] {
+  const lastByDbId = new Map<string, S>();
+  for (const s of list) if (s?.dbId) lastByDbId.set(s.dbId, s);
+  const placed = new Set<string>();
+  const out: S[] = [];
+  for (const s of list) {
+    if (!s?.dbId) { out.push(s); continue; }
+    if (placed.has(s.dbId)) continue;
+    placed.add(s.dbId);
+    out.push(lastByDbId.get(s.dbId) as S);
+  }
+  return out;
+}

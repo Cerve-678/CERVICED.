@@ -103,7 +103,7 @@ import {
 } from '../../features/business-details/bookingInstructions';
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
-import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import { createServiceDraft, upsertServiceInList } from '../../features/provider-registration/serviceDraft';
 import { fillProfileFromSignup } from '../../features/provider-registration/signupAnswers';
 import {
   applyRuleToServices,
@@ -3620,18 +3620,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       throw new Error('Could not resolve provider for description backup');
     }
     setProviderData(prev => {
-      const categoryServices = prev.categories[currentCategory] || [];
-      const existingIndex = categoryServices.findIndex(s => s.id === service.id);
-
-      let updatedServices;
-      if (existingIndex >= 0) {
-        // Update existing
-        updatedServices = [...categoryServices];
-        updatedServices[existingIndex] = service;
-      } else {
-        // Add new
-        updatedServices = [...categoryServices, service];
-      }
+      // Matches on the saved row's id too, so an editor opened before the
+      // live refresh landed replaces the service instead of adding a copy.
+      const updatedServices = upsertServiceInList(prev.categories[currentCategory] || [], service);
 
       let categories: Record<string, ServiceData[]> = {
         ...prev.categories,
