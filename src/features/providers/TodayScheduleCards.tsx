@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   eyebrow: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.4,
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   headerLinkText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     letterSpacing: 0.8,
   },
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bigCount: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 54,
     lineHeight: 60,
   },
@@ -446,12 +446,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   countWord: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
     lineHeight: 22,
   },
   countSub: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     marginTop: 1,
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   },
   stripText: {
     flex: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     lineHeight: 16,
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   },
   rowTime: {
     width: 54,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
   },
   rowText: {
@@ -499,23 +499,23 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     lineHeight: 18,
   },
   rowService: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
   },
   rowTag: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 0.8,
   },
   more: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     letterSpacing: 0.3,
@@ -533,12 +533,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardsTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 26,
     lineHeight: 30,
   },
   cardsDate: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     marginTop: 1,
@@ -575,19 +575,19 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   cardTag: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
   },
   cardTime: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 28,
     lineHeight: 34,
     marginTop: 6,
   },
   cardLength: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
   },
@@ -595,12 +595,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
     lineHeight: 20,
   },
   cardService: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 14,
@@ -615,7 +615,7 @@ const styles = StyleSheet.create({
     backgroundColor: FLAG_BG,
   },
   flagText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 9,
     letterSpacing: 0.8,
@@ -651,19 +651,19 @@ const styles = StyleSheet.create({
     backgroundColor: FLAG_BG,
   },
   todoBadgeText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     color: FLAG_TEXT,
   },
   todoEyebrow: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
     color: FLAG_TEXT,
   },
   todoText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     marginTop: 1,

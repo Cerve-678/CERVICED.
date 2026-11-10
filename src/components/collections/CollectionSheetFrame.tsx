@@ -41,9 +41,9 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
   },
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 14 },
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 22 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 22 },
   subtitle: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
     marginTop: 2,

@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   backBtn: { marginBottom: 24, marginTop: 12 },
   backArrow: { fontSize: 22, fontWeight: '900' },
 
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 32, lineHeight: 20 },
 
   section: {

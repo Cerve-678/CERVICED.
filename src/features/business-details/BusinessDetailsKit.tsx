@@ -50,8 +50,8 @@ const CP = CP_DARK; // static fallback for StyleSheet.create
 // screen this kit replaced set neither, so its text silently fell back to the
 // OS font — visible as a font-face jump when navigating in from
 // BusinessProfileScreen, which does set BakbakOne on its title.
-const FONT_HEAD = 'JosefinSans-Bold';
-const FONT_BODY = 'JosefinSans-VariableFont_wght';
+const FONT_HEAD = 'BakbakOne-Regular';
+const FONT_BODY = 'Jura-VariableFont_wght';
 
 export type Palette = typeof CP_DARK;
 

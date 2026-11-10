@@ -1376,14 +1376,14 @@ const styles = StyleSheet.create({
   },
   backButton: { width: 28, alignItems: 'flex-start', justifyContent: 'center', marginRight: 4 },
   backButtonText: { fontSize: 28, fontWeight: '300', lineHeight: 28 },
-  headerTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 18 },
+  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   headerSubtitle: { fontSize: 13, marginTop: 4 },
   closeButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   closeButtonText: { fontSize: 15, fontWeight: '700' },
   body: { flex: 1 },
   bodyContent: { padding: 20, paddingBottom: 40 },
   section: { marginBottom: 26 },
-  sectionTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 15, marginBottom: 12 },
+  sectionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, marginBottom: 12 },
   summaryHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   changeLink: { fontSize: 13, fontWeight: '700' },
   addOnSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
@@ -1423,7 +1423,7 @@ const styles = StyleSheet.create({
   // The one question each step is asking. Sets the step's purpose before any
   // controls appear, so the client reads an intent rather than a form.
   stepQuestion: {
-    fontFamily: 'JosefinSans-Bold', fontSize: 20,
+    fontFamily: 'BakbakOne-Regular', fontSize: 20,
     letterSpacing: -0.3, marginBottom: 22,
   },
 
@@ -1453,8 +1453,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  totalLabel: { fontFamily: 'JosefinSans-Bold', fontSize: 16 },
-  totalPrice: { fontFamily: 'JosefinSans-Bold', fontSize: 20, fontWeight: 'bold' },
+  totalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
+  totalPrice: { fontFamily: 'BakbakOne-Regular', fontSize: 20, fontWeight: 'bold' },
   summaryAddOnRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2, paddingLeft: 12 },
   summaryAddOnName: { fontSize: 12, flex: 1, marginRight: 8 },
   summaryAddOnPrice: { fontSize: 12 },
@@ -1475,7 +1475,7 @@ const styles = StyleSheet.create({
   doneButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
   submitButtonDisabled: { opacity: 0.5 },
   submitButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     fontWeight: 'bold',
     lineHeight: 20,

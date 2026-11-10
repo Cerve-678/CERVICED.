@@ -60,7 +60,7 @@ export default function ActivityCentreScreen({ navigation }: Props) {
     // background; the stacks' shared header colour is the provider palette's.
     navigation.setOptions({
       headerStyle: { backgroundColor: P.bg },
-      headerTitleStyle: { fontFamily: 'JosefinSans-Bold', fontSize: 22, color: P.text },
+      headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 22, color: P.text },
       headerTintColor: P.text,
     });
   }, [navigation, P.bg, P.text]);
@@ -221,9 +221,9 @@ const st = StyleSheet.create({
   loading: { marginVertical: 48 },
   section: { marginBottom: 6 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, marginBottom: 8, marginHorizontal: 4 },
-  sectionLabel: { fontFamily: 'JosefinSans-Bold', fontSize: 10.5, letterSpacing: 1.5 },
+  sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1.5 },
   empty: { alignItems: 'center', paddingTop: 56, paddingHorizontal: 24, gap: 10 },
   doneAfterEmpty: { marginTop: 32 },
-  emptyTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 20, marginTop: 8 },
+  emptyTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, marginTop: 8 },
   emptyBody: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });

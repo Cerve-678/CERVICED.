@@ -2261,15 +2261,15 @@ const styles = StyleSheet.create({
   hairTypeBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   sectionTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
     letterSpacing: 1,
   },
   viewAll: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     letterSpacing: 0.5,
     fontWeight: '700',
@@ -2338,7 +2338,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   categoryLabel: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
     marginBottom: 10,
     marginTop: 10,
@@ -2409,7 +2409,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
   },
   filterDropdownTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
     letterSpacing: 1,
   },
@@ -2421,7 +2421,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   filterSectionTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     letterSpacing: 0.8,
     marginBottom: 10,
@@ -2518,13 +2518,13 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
   },
   offerTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     marginBottom: 4,
     lineHeight: 16,
   },
   offerDescription: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '300',
     fontSize: 10,
     opacity: 0.6,
@@ -2541,7 +2541,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
   },
   offerValidText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 8,
     opacity: 0.5,
     fontWeight: '300',
@@ -2569,7 +2569,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   quadrantServiceName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     textAlign: 'center',
   },
@@ -2602,7 +2602,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(218, 112, 214, 0.2)',
   },
   serviceTypeChipText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -2630,7 +2630,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(218, 112, 214, 0.2)',
   },
   offerTabText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -2680,14 +2680,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalProviderName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 4,
     textAlign: 'center',
   },
   modalProviderService: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '500',
     opacity: 0.7,

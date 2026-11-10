@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   tabText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     textAlign: 'center',
     fontWeight: '600',

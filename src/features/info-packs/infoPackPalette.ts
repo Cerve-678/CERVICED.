@@ -40,4 +40,4 @@ export const INFO_PACK_DARK: InfoPackPalette = {
 
 export type InfoPackPalette = typeof INFO_PACK_LIGHT;
 
-export const BAKBAK = 'JosefinSans-Bold';
+export const BAKBAK = 'BakbakOne-Regular';

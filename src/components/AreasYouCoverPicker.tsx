@@ -171,18 +171,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%',
     borderWidth: 1, borderRadius: 100, paddingLeft: 11, paddingRight: 8, paddingVertical: 7,
   },
-  chipText: { flexShrink: 1, fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '700' },
+  chipText: { flexShrink: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700' },
   empty: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
   },
-  emptyText: { flex: 1, fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  emptyText: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600', lineHeight: 18 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   dashedPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     borderWidth: 1, borderStyle: 'dashed', borderRadius: 100, paddingHorizontal: 13, paddingVertical: 8,
   },
-  dashedPillText: { fontFamily: 'JosefinSans-Bold', fontSize: 12, letterSpacing: 0.3 },
+  dashedPillText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.3 },
   disabled: { opacity: 0.45 },
-  hint: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, fontWeight: '700', marginTop: 8, lineHeight: 17 },
+  hint: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700', marginTop: 8, lineHeight: 17 },
 });

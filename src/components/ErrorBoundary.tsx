@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     borderColor: P.border,
   },
   heading: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 22,
     color: P.text,
     marginBottom: 8,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   retryText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     letterSpacing: 0.5,
   },
 });
