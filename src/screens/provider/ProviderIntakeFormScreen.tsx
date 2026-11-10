@@ -1307,7 +1307,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
   fieldHint:  { fontSize: 12, lineHeight: 18, marginBottom: 10, marginTop: -4 },
   serviceLinkHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  serviceLinkAction: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 0.6 },
+  serviceLinkAction: { fontFamily: 'JosefinSans-Bold', fontSize: 11, letterSpacing: 0.6 },
   titleInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, fontWeight: '600', marginBottom: 20 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
 

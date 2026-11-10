@@ -291,13 +291,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   headline: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 15,
     letterSpacing: -0.2,
     flexShrink: 1,
   },
   detail: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontSize: 13,
     marginTop: 4,
     marginLeft: 22,
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dayLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 11,
   },
   dayLabelToday: {
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   editChipText: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 10,
     letterSpacing: 0.5,
   },

@@ -336,10 +336,10 @@ export default function SchedulingScreen({ navigation }: any) {
               <Ionicons name="calendar-outline" size={18} color={C.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 0.3, color: C.text }}>
+              <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 15, letterSpacing: 0.3, color: C.text }}>
                 Working Hours & Blocked Dates
               </Text>
-              <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 2, lineHeight: 16, color: C.sub }}>
+              <Text style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, marginTop: 2, lineHeight: 16, color: C.sub }}>
                 Your day-by-day hours, breaks, blocked dates and one-off changes
               </Text>
             </View>
@@ -474,7 +474,7 @@ export default function SchedulingScreen({ navigation }: any) {
                 <SectionLabel text="How late they can ask" />
                 <RadioGroup options={REQUEST_WINDOW_OPTS} value={requestAfter} onChange={setRequestAfter} />
 
-                <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16, marginTop: 8, color: C.sub }}>
+                <Text style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, lineHeight: 16, marginTop: 8, color: C.sub }}>
                   Measured from your opening and closing time on the day being booked.
                   On a day you don't work at all, the whole day is requestable.
                 </Text>
@@ -513,7 +513,7 @@ const st = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  releaseDayText: { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 13 },
-  releaseDayHint: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17 },
-  windowExplainer: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17, marginBottom: 8 },
+  releaseDayText: { flex: 1, fontFamily: 'JosefinSans-Bold', fontSize: 13 },
+  releaseDayHint: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17 },
+  windowExplainer: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17, marginBottom: 8 },
 });

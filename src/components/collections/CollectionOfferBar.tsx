@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-  text: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 15, marginRight: 6 },
+  text: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 15, marginRight: 6 },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -101,5 +101,5 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
   },
-  actionText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 14 },
+  actionText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 14 },
 });

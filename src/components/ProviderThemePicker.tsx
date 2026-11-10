@@ -314,13 +314,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   collectionName: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 11,
     letterSpacing: 1.2,
   },
   collectionDesc: {
     flex: 1,
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 11,
   },
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   optionName: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 10,
     textAlign: 'center',
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   rowLabel: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: 'JosefinSans-Bold',
     fontSize: 10,
     letterSpacing: 1,
     marginBottom: 8,
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   partLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 12,
   },
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   choosePhotoText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'JosefinSans-VariableFont_wght',
     fontWeight: '700',
     fontSize: 12,
   },

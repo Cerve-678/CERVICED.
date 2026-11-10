@@ -78,10 +78,10 @@ const styles = StyleSheet.create({
     paddingRight: 12,
     borderRadius: 16,
   },
-  pillText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 14 },
+  pillText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 14 },
   editText: { paddingLeft: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 14, paddingTop: 4 },
   titleText: { flex: 1, minWidth: 0, paddingBottom: 6 },
-  title: { fontFamily: 'BakbakOne-Regular', fontSize: 26, lineHeight: 30 },
-  count: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 14 },
+  title: { fontFamily: 'JosefinSans-Bold', fontSize: 26, lineHeight: 30 },
+  count: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 14 },
 });

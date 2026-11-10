@@ -54,9 +54,9 @@ export function PasswordRequirements({ password, goodColor, pendingColor, layout
 const styles = StyleSheet.create({
   container: { width: '100%', marginTop: 8, marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  mark: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, width: 18 },
-  label: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght' },
+  mark: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, width: 18 },
+  label: { fontSize: 13, fontFamily: 'JosefinSans-VariableFont_wght' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 100, borderWidth: 1 },
-  chipLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600' },
+  chipLabel: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, fontWeight: '600' },
 });

@@ -67,7 +67,7 @@ export default function CartNavigator() {
           headerBlurEffect: undefined,
           headerShadowVisible: false,
           headerTitleStyle: {
-            fontFamily: 'BakbakOne',
+            fontFamily: 'JosefinSans-Bold',
             fontSize: 22,
             color: theme.text,
           },
@@ -85,7 +85,7 @@ export default function CartNavigator() {
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
-            fontFamily: 'BakbakOne',
+            fontFamily: 'JosefinSans-Bold',
             fontSize: 22,
             color: theme.text,
           },

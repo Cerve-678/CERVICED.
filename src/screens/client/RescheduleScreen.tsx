@@ -72,6 +72,9 @@ async function fetchRealRescheduleDates(
   currentDate: string,
   isActive: () => boolean = () => true,
   onDates: (dates: DateOption[]) => void = () => {},
+  /** The booking's service, so a time past its latest start isn't offered
+   *  only to be refused by the check on submit. */
+  serviceId?: string,
 ): Promise<DateOption[]> {
   const candidateDates = rescheduleCandidateDates(currentDate);
 
@@ -86,7 +89,7 @@ async function fetchRealRescheduleDates(
     const results = await Promise.all(
       batch.map(async date => ({
         date,
-        times: await AvailabilityService.getAvailableSlotTimes(providerId, date).catch(() => [] as string[]),
+        times: await AvailabilityService.getAvailableSlotTimes(providerId, date, undefined, serviceId).catch(() => [] as string[]),
       })),
     );
     if (!isActive()) return openDates;
@@ -132,7 +135,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       headerTransparent: false,
       headerTitle: 'Reschedule',
       headerTitleAlign: 'center',
-      headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 16, color: C.text },
+      headerTitleStyle: { fontFamily: 'JosefinSans-Bold', fontSize: 16, color: C.text },
       headerStyle: { backgroundColor: C.bg },
       headerShadowVisible: false,
       headerTintColor: C.accentText,
@@ -243,7 +246,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             if (!active) return;
             setDateOptions(dates);
             setLoadingDates(false);
-          }),
+          }, booking.serviceId || undefined),
           AvailabilityService.getAvailabilitySummary(providerRef).catch(() => null),
         ])
           .then(([options, summary]) => {

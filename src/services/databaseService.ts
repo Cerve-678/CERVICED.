@@ -2608,7 +2608,7 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, latest_start_time, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type",
     )
     .eq("provider_id", providerId)
     .order("category_name", { ascending: true })
@@ -2637,6 +2637,9 @@ export interface MyServiceDraft {
   tags?: ServiceTagGroups;
   /** Absent = leave services.audience as it is. */
   audience?: Exclude<ServiceAudienceValue, ''>;
+  /** Latest start, 'HH:MM' (UK time). null = any time in working hours;
+   *  absent = leave services.latest_start_time as it is. */
+  latestStartTime?: string | null;
 }
 
 export interface ServiceDescriptionRevision {
@@ -2685,8 +2688,8 @@ export async function getServiceDescriptionHistory(
   return (data ?? []) as ServiceDescriptionRevision[];
 }
 
-/** The tag/audience columns a draft carries, and nothing for what it doesn't. */
-function myServiceFindabilityColumns(draft: MyServiceDraft): Record<string, unknown> {
+/** The tag, audience and latest-start columns a draft carries, and nothing for what it doesn't. */
+function myServiceOptionalColumns(draft: MyServiceDraft): Record<string, unknown> {
   return {
     ...(draft.tags
       ? {
@@ -2698,6 +2701,7 @@ function myServiceFindabilityColumns(draft: MyServiceDraft): Record<string, unkn
         }
       : {}),
     ...(draft.audience ? { audience: draft.audience } : {}),
+    ...(draft.latestStartTime === undefined ? {} : { latest_start_time: draft.latestStartTime }),
   };
 }
 
@@ -2730,9 +2734,9 @@ export async function createMyService(
       duration_minutes: draft.durationMinutes,
       sort_order: ((last?.sort_order as number | undefined) ?? -1) + 1,
       is_active: true,
-      ...myServiceFindabilityColumns(draft),
+      ...myServiceOptionalColumns(draft),
     })
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, latest_start_time, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -2750,10 +2754,10 @@ export async function updateMyService(
       price: draft.price,
       duration_minutes: draft.durationMinutes,
       ...(draft.isActive === undefined ? {} : { is_active: draft.isActive }),
-      ...myServiceFindabilityColumns(draft),
+      ...myServiceOptionalColumns(draft),
     })
     .eq("id", serviceId)
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, latest_start_time, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, skin_tones_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -5105,6 +5109,9 @@ type ServiceBufferRow = {
   id: string;
   buffer_before_mins: number | null;
   buffer_after_mins: number | null;
+  /** The service's latest start ('HH:MM:SS'), or null for none. Read with
+   *  the buffers because every slot generator that needs one needs both. */
+  latest_start_time: string | null;
 };
 
 // Every one of the week's seven day lookups asks for the SAME service's buffer
@@ -5131,7 +5138,7 @@ export async function getAvailabilityServiceBufferRows(
   const request = (async () => {
     const { data, error } = await supabase
       .from("services")
-      .select("id, buffer_before_mins, buffer_after_mins")
+      .select("id, buffer_before_mins, buffer_after_mins, latest_start_time")
       .in("id", serviceIds);
     if (error) throw error;
     return (data ?? []) as ServiceBufferRow[];
@@ -5462,11 +5469,7 @@ export async function getAvailabilityDateBundle(
     start_time: string | null;
     end_time: string | null;
   }[];
-  serviceBuffer: {
-    id: string;
-    buffer_before_mins: number | null;
-    buffer_after_mins: number | null;
-  } | null;
+  serviceBuffer: ServiceBufferRow | null;
 }> {
   const [core, exceptions, serviceBuffers] = await Promise.all([
     getAvailabilityProviderCore(providerId),
