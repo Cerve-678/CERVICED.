@@ -396,6 +396,7 @@ const ExploreScreen = memo(() => {
   useEffect(() => {
     if (activeTab !== 'favourites') {
       setOpenCollectionId(null);
+      flownCountRef.current = 0;
       setFlight(null);
     }
   }, [activeTab]);
@@ -427,14 +428,20 @@ const ExploreScreen = memo(() => {
   // Cards report where they are to the flight object itself, not to this
   // screen's state, so measuring doesn't re-render Explore mid-flight.
   const [flight, setFlight] = useState<CollectionFlight | null>(null);
+  // How many looks flew in when the open collection opened. The rest of its
+  // cards wait for them to land, then follow straight on.
+  const flownCountRef = useRef(0);
   const handleOpenCollection = useCallback((collection: ExploreCollection, papers: FolderPaperRect[]) => {
     const flying = papers.filter(p => p.uri);
-    setFlight(!reduceMotionRef.current && flying.length > 0 ? new CollectionFlight(flying) : null);
+    const next = !reduceMotionRef.current && flying.length > 0 ? new CollectionFlight(flying) : null;
+    flownCountRef.current = next?.count ?? 0;
+    setFlight(next);
     setOpenCollectionId(collection.id);
     favouritesGridRef.current?.scrollToTop();
   }, []);
   const handleFlightDone = useCallback(() => setFlight(null), []);
   const handleCloseCollection = useCallback(() => {
+    flownCountRef.current = 0;
     setFlight(null);
     setOpenCollectionId(null);
   }, []);
@@ -478,6 +485,12 @@ const ExploreScreen = memo(() => {
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
   const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
   const [favouritesLoading, setFavouritesLoading] = useState(false);
+  // True while saved looks are being fetched, even when some already show.
+  // An open collection waits on this before saying it's empty.
+  const [favouritesHydrating, setFavouritesHydrating] = useState(false);
+  // Read by the fetch below so a re-run keeps what's already loaded.
+  const favouriteItemsRef = useRef<PortfolioItem[]>([]);
+  favouriteItemsRef.current = favouriteItems;
   const [favouritesVisibleCount, setFavouritesVisibleCount] = useState(INITIAL_EXPLORE_ITEMS);
 
   // Portfolio items from Supabase
@@ -836,6 +849,7 @@ const ExploreScreen = memo(() => {
     if (activeTab !== 'favourites') return;
     if (savedPortfolioIds.length === 0) {
       setFavouriteItems([]);
+      setFavouritesHydrating(false);
       return;
     }
 
@@ -845,8 +859,14 @@ const ExploreScreen = memo(() => {
     );
     // A card just hearted in Discover is already complete and visible. Put it
     // in Favourites now; the database fetch fills in older saves afterwards.
-    setFavouriteItems(localSavedCards);
-    setFavouritesLoading(localSavedCards.length === 0);
+    // Saves already loaded stay too. This runs again every time the tab opens
+    // and whenever the Discover feed changes, and dropping back to only the
+    // looks that happen to be in Discover made an open collection briefly
+    // claim it was empty.
+    const keptCards = mergeSavedExploreCards(savedPortfolioIds, localSavedCards, favouriteItemsRef.current);
+    setFavouriteItems(keptCards);
+    setFavouritesLoading(keptCards.length === 0);
+    setFavouritesHydrating(true);
 
     const load = async () => {
       try {
@@ -869,9 +889,12 @@ const ExploreScreen = memo(() => {
       } catch {
         // Retain current-session saves when the background hydration fails.
         // An empty state would falsely imply that a heart did not work.
-        if (!cancelled) setFavouriteItems(localSavedCards);
+        if (!cancelled) setFavouriteItems(keptCards);
       } finally {
-        if (!cancelled) setFavouritesLoading(false);
+        if (!cancelled) {
+          setFavouritesLoading(false);
+          setFavouritesHydrating(false);
+        }
       }
     };
     load();
@@ -905,9 +928,15 @@ const ExploreScreen = memo(() => {
       .map(id => byId.get(id))
       .filter((card): card is PortfolioItem => card !== undefined);
   }, [favouriteItems, openCollection]);
+  // While a collection's looks fly in, only the cards they land on are built.
+  // Building the whole window at once (photos, gradients, fade-ins) in the
+  // same frames made the flight stutter in a folder with lots of looks. The
+  // masonry packs in order, so those first cards don't move when the rest
+  // arrive.
+  const favouritesWindow = flight ? Math.min(flight.count, favouritesVisibleCount) : favouritesVisibleCount;
   const visibleFavouriteItems = useMemo(
-    () => shownFavouriteItems.slice(0, favouritesVisibleCount),
-    [shownFavouriteItems, favouritesVisibleCount],
+    () => shownFavouriteItems.slice(0, favouritesWindow),
+    [shownFavouriteItems, favouritesWindow],
   );
   // Folders draw the saved photos themselves, so hand the store every photo
   // this screen has resolved.
@@ -1156,6 +1185,11 @@ const ExploreScreen = memo(() => {
           columnWidth={columnWidth}
           imageHeight={imageHeight}
           entrance={index >= flightCount}
+          // Cards after the flown-in looks fade in one after another from
+          // the moment those land, not after the usual per-position wait.
+          {...(flownCountRef.current > 0
+            ? { entranceDelayMs: Math.max(0, index - flownCountRef.current) * 60 }
+            : {})}
           onPress={handleImagePress}
           index={index}
           offersCollections
@@ -1338,7 +1372,22 @@ const ExploreScreen = memo(() => {
                 )
               }
               ListEmptyComponent={
-                openCollection ? (
+                openCollection && openCollection.itemIds.length > 0 && favouritesHydrating ? (
+                  // Its looks are still on the way; it isn't empty.
+                  <View style={styles.emptyContainer}>
+                    <ActivityIndicator color={P.sub} />
+                  </View>
+                ) : openCollection && openCollection.itemIds.length > 0 ? (
+                  // It has looks, but none could be shown (for example, their
+                  // provider is no longer on CERVICED).
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="heart" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>Can't show these looks right now</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Check back soon
+                    </Text>
+                  </View>
+                ) : openCollection ? (
                   <View style={styles.emptyContainer}>
                     <TabIcon name="heart" size={48} color={P.sub} />
                     <Text style={[styles.emptyText, { color: P.text }]}>Nothing in {openCollection.name} yet</Text>
