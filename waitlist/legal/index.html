@@ -14,7 +14,7 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Josefin+Sans:wght@400;500;600;700&display=swap">
 <style>
 body{ margin:0 }
 /* Layout: brand masthead band, then a sticky policy index beside one reading column; the index stacks above the text on phones. */
@@ -29,9 +29,9 @@ body{ margin:0 }
   --line:rgba(126,102,103,0.22);
   --ph-bg:#EFD9B4;
   --ph-ink:#4A3226;
-  --display:"Bakbak One","Arial Black",system-ui,sans-serif;
-  --body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --label:"Jura",ui-sans-serif,system-ui,sans-serif;
+  --display:"Josefin Sans","Avenir Next",system-ui,sans-serif;
+  --body:"Josefin Sans","Avenir Next",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --label:"Josefin Sans","Avenir Next",ui-sans-serif,system-ui,sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -55,9 +55,9 @@ strong{ font-weight:650 }
 .band{ background:var(--band); border-bottom:1px solid var(--line) }
 .masthead{ padding-block:40px 36px }
 .brandline{ display:flex; align-items:center; gap:12px; font-family:var(--label); font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:600 }
-.wordmark{ font-family:var(--display); font-size:21px; letter-spacing:.08em; color:var(--accent); font-weight:400 }
+.wordmark{ font-family:"Bakbak One","Arial Black",sans-serif; font-size:21px; letter-spacing:.08em; color:var(--accent); font-weight:400 }
 .brandline .sep{ width:1px; height:18px; background:var(--line) }
-h1{ font-family:var(--display); font-weight:400; font-size:clamp(34px, 6vw, 54px); line-height:1.05; margin:20px 0 12px; text-wrap:balance; letter-spacing:.01em }
+h1{ font-family:var(--display); font-weight:700; font-size:clamp(34px, 6vw, 54px); line-height:1.05; margin:20px 0 12px; text-wrap:balance; letter-spacing:.01em }
 .lede{ max-width:60ch; font-size:17px; color:var(--muted); margin:0 }
 .facts{ display:flex; flex-wrap:wrap; gap:12px 36px; margin:26px 0 0 }
 .facts div{ display:flex; flex-direction:column; gap:2px; min-width:0 }
@@ -78,13 +78,13 @@ h1{ font-family:var(--display); font-weight:400; font-size:clamp(34px, 6vw, 54px
 .policy-head{ display:flex; flex-direction:column; gap:10px; padding-bottom:20px; border-bottom:2px solid var(--accent) }
 .eyebrow{ font-family:var(--label); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0; display:flex; gap:6px 14px; flex-wrap:wrap; align-items:center; font-weight:600 }
 .tag{ color:var(--accent); font-weight:700 }
-.policy h2{ font-family:var(--display); font-weight:400; font-size:clamp(28px, 4.4vw, 38px); line-height:1.1; margin:0; text-wrap:balance }
+.policy h2{ font-family:var(--display); font-weight:700; font-size:clamp(28px, 4.4vw, 38px); line-height:1.1; margin:0; text-wrap:balance }
 .policy-intro{ margin:0; color:var(--muted) }
 .short{ margin-top:24px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 22px }
 .short h3{ font-family:var(--label); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin:0 0 8px; font-weight:700 }
 .short ul{ margin:0; padding-left:1.1em; display:flex; flex-direction:column; gap:6px }
 .clause{ margin-top:34px; scroll-margin-top:24px }
-.clause h3{ font-family:var(--display); font-weight:400; font-size:19px; line-height:1.3; margin:0 0 10px; display:flex; gap:12px; align-items:baseline; text-wrap:balance }
+.clause h3{ font-family:var(--display); font-weight:700; font-size:19px; line-height:1.3; margin:0 0 10px; display:flex; gap:12px; align-items:baseline; text-wrap:balance }
 .clause h3 .n{ font-family:var(--label); font-weight:700; font-size:14px; color:var(--accent); min-width:1.7em; flex:none; font-variant-numeric:tabular-nums }
 .clause p{ margin:0 0 12px }
 .clause h4{ font-family:var(--label); font-size:12.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:22px 0 8px; font-weight:700 }
