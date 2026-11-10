@@ -5,7 +5,7 @@
 
 #generated
 
-**3661 functions** across **523 files**.
+**3664 functions** across **524 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -189,8 +189,9 @@
 ### `src/features/explore/` (1)
 - `moreLikeThis.ts` — **buildMoreLikeThis**
 
-### `src/features/home/` (1)
+### `src/features/home/` (2)
 - `SkeletonSection.tsx` — **SkeletonSection**
+- `useRevealTogether.ts` — **allPartsDone** · markDone · **useRevealTogether**
 
 ### `src/features/info-packs/` (4)
 - `infoPackLogic.ts` — **clientPreviewNames** · **countClients** · **formsNotYetSent** · **hasPlaceholder** · **hasSection** · **insertSection** · **isHeadingLine** · **isUpcomingOpenBooking** · **packCoversService** · **packServiceLabel** · **packsNotYetSent** · **splitUpcomingForPack** · **summarizeDeliveries**
