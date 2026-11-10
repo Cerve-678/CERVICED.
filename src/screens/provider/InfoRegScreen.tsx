@@ -23,6 +23,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
+import { ImageCropModal } from '../../components/ImageCropModal';
 import { TapToEditTextInput } from '../../components/TapToEditTextInput';
 import type { ViewInstance } from 'react-native';
 import type { ScrollViewInstance } from 'react-native';
@@ -104,6 +105,7 @@ import {
 import AreaPicker from '../../components/AreaPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft, upsertServiceInList } from '../../features/provider-registration/serviceDraft';
+import { serviceTypeOptionsFor, type ServiceTypeKey } from '../../constants/serviceTypes';
 import { fillProfileFromSignup } from '../../features/provider-registration/signupAnswers';
 import {
   applyRuleToServices,
@@ -330,7 +332,7 @@ interface ServiceData {
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;
-  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  serviceType: ServiceTypeKey | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
   skinTonesSuitable?: string[];
@@ -1168,21 +1170,29 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     return problem ? DESCRIPTION_PROBLEM_COPY[problem] : null;
   }, [description, name]);
 
-  // Pick one photo, crop and adjust it in the iOS crop, done. One at a time
-  // because iOS offers no crop during a multi-select. The crop IS the framing,
+  // Pick several photos at once, then crop each one in ImageCropModal, in the
+  // order picked. iOS's own crop (allowsEditing) only does squares and isn't
+  // offered during a multi-select, so the free-shape crop runs after the
+  // picker. Each crop starts as the whole photo: Use Photo without dragging
+  // keeps it as it is, and Skip leaves that one out. The crop IS the framing,
   // so the photo fills its frame wherever it's shown.
+  const [cropQueue, setCropQueue] = useState<{ uris: string[]; total: number }>({ uris: [], total: 0 });
+  const cropping = cropQueue.uris[0] ?? null;
+  const nextCrop = () => setCropQueue(prev => ({ uris: prev.uris.slice(1), total: prev.uris.length > 1 ? prev.total : 0 }));
   const handleAddImage = async () => {
     try {
       // No permission request first: picking from the library needs none on
       // iOS or Android, and asking added a round trip before every picker.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        orderedSelection: true,
         quality: 0.8,
       });
-      const asset = result.assets?.[0];
-      if (result.canceled || !asset) return;
-      setImages(prev => [...prev, { uri: asset.uri, fit: 'cover' }]);
+      const uris = result.canceled ? [] : (result.assets ?? []).map(asset => asset.uri).filter(Boolean);
+      if (!uris.length) return;
+      setCropQueue({ uris, total: uris.length });
     } catch (e) {
       Alert.alert('Could not open your photos', toUserMessage(e, 'Please try again.', 'InfoRegScreen.addServiceImage'));
     }
@@ -1323,13 +1333,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     }, 350);
   };
 
-  const SERVICE_TYPES: { value: ServiceData['serviceType']; label: string }[] = [
-    { value: 'treatment',    label: 'Treatment' },
-    { value: 'enhancement',  label: 'Enhancement' },
-    { value: 'maintenance',  label: 'Maintenance' },
-    { value: 'restorative',  label: 'Restorative' },
-    { value: 'consultation', label: 'Consultation' },
-  ];
+  // Choices that fit this kind of service: a lash service gets Full set /
+  // Infill / Removal, a makeup one gets Event / Trial / Lesson.
+  const serviceTypeOptions = useMemo(() => serviceTypeOptionsFor(catKey, serviceType), [catKey, serviceType]);
 
   const SERVICE_AUDIENCE_OPTS: { value: ServiceData['audience']; label: string }[] = [
     { value: 'everyone', label: 'Everyone' },
@@ -1552,7 +1558,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <Text style={styles.serviceSheetSection}>Service Type</Text>
                 <Text style={styles.serviceSheetHint}>Helps clients understand what kind of service this is</Text>
                 <View style={styles.chipGrid}>
-                  {SERVICE_TYPES.map(({ value, label }) => {
+                  {serviceTypeOptions.map(({ value, label }) => {
                     const active = serviceType === value;
                     return (
                       <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setServiceType(active ? '' : value); }}>
@@ -1794,6 +1800,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
           </SafeAreaView>
         </LinearGradient>
       </KeyboardDismissView>
+      <ImageCropModal
+        uri={cropping}
+        accent={accentColor}
+        onAccent={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'}
+        cancelLabel={cropQueue.total > 1 ? 'Skip' : 'Cancel'}
+        progressLabel={cropQueue.total > 1 ? `${cropQueue.total - cropQueue.uris.length + 1} of ${cropQueue.total}` : null}
+        onCancel={nextCrop}
+        onDone={uri => { setImages(prev => [...prev, { uri, fit: 'cover' }]); nextCrop(); }}
+      />
     </Modal>
   );
 };

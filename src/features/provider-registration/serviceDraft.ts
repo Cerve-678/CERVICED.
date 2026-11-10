@@ -1,6 +1,7 @@
 import type { ServiceImageDraft } from '../../services/providerRegistrationService';
+import type { ServiceTypeKey } from '../../constants/serviceTypes';
 
-export type ProviderServiceType = 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+export type ProviderServiceType = ServiceTypeKey | '';
 
 // '' = not stated, read as "everyone" by the app — mirrors the live
 // services_audience_check constraint (NULL or one of these three values).

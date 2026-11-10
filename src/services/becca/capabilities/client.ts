@@ -58,8 +58,11 @@ import {
   getProviders,
   getProviderReviews,
   getRebookableService,
+  getMyLatestCompletedBooking,
   getUserWaitlistEntries,
 } from "../../databaseService";
+import { mapDbBookingToConfirmed } from "../../bookingService";
+import { logger } from "../../../utils/logger";
 import { AvailabilityService } from "../../AvailabilityService";
 import { hasUsefulHistory, type Capability, type CapabilityResult, type PendingActionDone, type ThinkingTurn } from "../types";
 import { buildRebookCartItem, rebookAddOns } from "../../../features/bookings/rebook";
@@ -731,18 +734,17 @@ const rebook: Capability = {
     "book my usual", "repeat my last", "rebook my last",
     "book what i had last", "same thing again", "book that in again",
     "get that booked again", "have that again",
+    // "book my last appointment again" and friends: the words around "last"
+    // vary, so these anchor on the part that doesn't.
+    "last appointment again", "last booking again", "last one again",
+    "previous appointment", "previous booking", "same appointment again",
+    "book it again",
   ],
   async run({ bookings, addToCart }): Promise<CapabilityResult> {
     const past = bookings
       .filter((b) => b.status === BookingStatus.COMPLETED)
       .sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
-    const last = past[0];
-    if (!last) {
-      return {
-        text: "You haven't had an appointment through the app yet, so there's nothing to rebook.",
-        suggestions: [askChip("find", "Find someone", "Find me a provider")],
-      };
-    }
+    let last: ConfirmedBooking | undefined = past[0];
     // Resolve the actual service before offering it. getRebookableService
     // re-checks is_active + has_gone_live, so a provider who has since taken
     // their profile down is never offered as rebookable — and it returns
@@ -750,12 +752,33 @@ const rebook: Capability = {
     let rebookable = null;
     let providerId: string | null = null;
     try {
+      // The cached bookings only reach back 90 days (getMyBookings), so a
+      // client whose last visit was longer ago than that still has one.
+      if (!last) {
+        const row = await getMyLatestCompletedBooking();
+        if (row) last = mapDbBookingToConfirmed(row);
+      }
+      if (!last) {
+        return {
+          text: "You haven't had an appointment through the app yet, so there's nothing to rebook.",
+          suggestions: [askChip("find", "Find someone", "Find me a provider")],
+        };
+      }
       providerId = last.providerId ?? await getProviderIdByDisplayName(last.providerName);
       if (providerId) {
-        rebookable = await getRebookableService(providerId, last.serviceName);
+        rebookable = await getRebookableService(providerId, last.serviceName, last.serviceId);
       }
-    } catch {
-      // Fall through to the no-longer-available message below.
+    } catch (error) {
+      // A failed lookup is not the same as a service that has gone — saying
+      // "that isn't available" here sent people looking for someone else.
+      logger.error("Becca rebook lookup failed:", error);
+      return {
+        text: "I couldn't look up your last appointment just now. Try again in a moment, or open Bookings and tap Book Again there.",
+        suggestions: [
+          askChip("retry", "Try again", "Rebook my last appointment"),
+          navChip("bookings", "Open Bookings", "Bookings"),
+        ],
+      };
     }
 
     if (!rebookable || !providerId) {

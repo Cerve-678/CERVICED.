@@ -567,7 +567,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
-    const live = await getRebookableService(providerDbId, booking.serviceName).catch(() => null);
+    let live: Awaited<ReturnType<typeof getRebookableService>>;
+    try {
+      live = await getRebookableService(providerDbId, booking.serviceName, booking.serviceId);
+    } catch (error) {
+      // A failed lookup isn't a missing service — don't tell the client it's gone.
+      logger.error('[Bookings] rebook lookup failed', error);
+      setSuccessMessage("We couldn't check that service just now. Please try again in a moment.");
+      setSuccessIcon('⚠️');
+      setShowSuccessModal(true);
+      return;
+    }
     if (!live) {
       setSuccessMessage(`${booking.providerName} no longer offers ${booking.serviceName}. Check their profile for their current services.`);
       setSuccessIcon('⚠️');

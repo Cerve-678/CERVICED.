@@ -98,7 +98,9 @@ const STATUS_CFG: Record<string, { bg: string; dbg: string; color: string; label
   upcoming:    { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', label: 'Confirmed'   },
 };
 
-function statusCfg(s: string) {
+function statusCfg(s: string, declinedAt?: string | null) {
+  // A request you (or the 24-hour expiry) turned down is stored as cancelled.
+  if (s === 'cancelled' && declinedAt) return { ...STATUS_CFG['cancelled']!, label: 'Declined' };
   return STATUS_CFG[s] ?? STATUS_CFG['completed']!;
 }
 
@@ -225,7 +227,7 @@ interface BookingCardProps {
 }
 
 function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress, onViewMessages, dark, P }: BookingCardProps) {
-  const cfg   = statusCfg(booking.status);
+  const cfg   = statusCfg(booking.status, booking.declinedAt);
   const past  = isPastBooking(booking.bookingDate, booking.bookingTime);
   const eta   = countdownLabel(booking.bookingDate, booking.bookingTime);
   const addOns = booking.addOns?.reduce((s, a) => s + a.price, 0) ?? 0;
@@ -649,7 +651,7 @@ function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, o
 
           {/* Booking blocks */}
           {positioned.map(({ booking, top, height, col, cols, colorIdx }) => {
-            const cfg   = statusCfg(booking.status);
+            const cfg   = statusCfg(booking.status, booking.declinedAt);
             const color = booking.status === BookingStatus.CANCELLED ? CANCELLED_BLOCK : BLOCK_COLORS[colorIdx]!;
             const blockW = bookingAreaW / cols - 4;
             const left   = col * (bookingAreaW / cols) + 2;
