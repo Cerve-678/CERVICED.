@@ -642,12 +642,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!initSlotDate || !booking?.providerId) { setInitSuggestedTimes([]); setInitSelectedTimes([]); return; }
     let cancelled = false;
     setInitLoadingTimes(true);
-    AvailabilityService.getAvailableSlotTimes(booking.providerId, initSlotDate)
+    // The booking's service, so its latest start is respected. The client's
+    // accept is refused by the server for a time past it anyway.
+    AvailabilityService.getAvailableSlotTimes(booking.providerId, initSlotDate, undefined, booking.serviceId || undefined)
       .then(slots => { if (!cancelled) { setInitSuggestedTimes(slots); setInitSelectedTimes([]); } })
       .catch((err) => { logger.error('[ProviderBookingDetail] available slots load failed:', err); if (!cancelled) setInitSuggestedTimes([]); })
       .finally(() => { if (!cancelled) setInitLoadingTimes(false); });
     return () => { cancelled = true; };
-  }, [initSlotDate, booking?.providerId]);
+  }, [initSlotDate, booking?.providerId, booking?.serviceId]);
 
   const toggleInitTime = useCallback((time: string) => {
     setInitSelectedTimes(prev => prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]);
