@@ -1158,7 +1158,7 @@ const styles = StyleSheet.create({
   providerName: {
     fontSize: fonts.providerName,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   ratingRow: {
     flexDirection: 'row',
@@ -1169,11 +1169,11 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
   },
   reviewCount: {
     fontSize: 11,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
   },
   categoryChip: {
     paddingHorizontal: 10,
@@ -1183,7 +1183,7 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 10,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     letterSpacing: 0.5,
   },
   providerChevron: {
@@ -1200,18 +1200,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fonts.title.small,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   caption: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     lineHeight: 22,
     marginBottom: spacing.sm,
   },
   price: {
     fontSize: fonts.title.small,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   tagsRow: {
     flexDirection: 'row',
@@ -1226,7 +1226,7 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: 10,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   divider: {
@@ -1253,12 +1253,12 @@ const styles = StyleSheet.create({
     fontSize: fonts.buttonText.medium,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   sectionTitle: {
     fontSize: fonts.body.medium,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     marginBottom: spacing.sm,
   },
   moreLikeThisRow: {
@@ -1277,11 +1277,11 @@ const styles = StyleSheet.create({
   moreLikeThisProvider: {
     fontSize: 11,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
   },
   moreLikeThisService: {
     fontSize: 10,
     fontWeight: '600',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
   },
 });

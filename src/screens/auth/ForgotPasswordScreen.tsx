@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
   iconTile: { width: 60, height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
   primaryBtn: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
-  primaryBtnText: { fontFamily: 'JosefinSans-Bold', fontSize: 15, letterSpacing: 1.5 },
+  primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
   backLink: { alignSelf: 'center', paddingVertical: 14 },
-  backLinkText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  backLinkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
 });

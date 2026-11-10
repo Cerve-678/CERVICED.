@@ -27,8 +27,8 @@ export const tapMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle
 export const tapWarn = () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {}); };
 
 export const ADD_ON_FONTS = {
-  display: 'JosefinSans-Bold',
-  body: 'JosefinSans-VariableFont_wght',
+  display: 'BakbakOne-Regular',
+  body: 'Jura-VariableFont_wght',
 } as const;
 
 /** "£10" or "£12.50", the way prices read across the provider screens. */

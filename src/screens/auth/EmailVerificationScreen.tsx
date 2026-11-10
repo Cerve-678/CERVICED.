@@ -380,16 +380,16 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
 
 const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: 20 },
-  step: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: 28 },
+  step: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: 28 },
   iconTile: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 30, lineHeight: 36, letterSpacing: 0.5, marginBottom: 8 },
-  subtitle: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 15, lineHeight: 22, marginBottom: 28 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 30, lineHeight: 36, letterSpacing: 0.5, marginBottom: 8 },
+  subtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, lineHeight: 22, marginBottom: 28 },
   otpRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
-  otpBox: { flex: 1, height: 58, borderRadius: 14, fontSize: 24, fontFamily: 'JosefinSans-Bold' },
+  otpBox: { flex: 1, height: 58, borderRadius: 14, fontSize: 24, fontFamily: 'BakbakOne-Regular' },
   secondaryBtn: { alignSelf: 'flex-start', minHeight: 44, borderRadius: 100, borderWidth: 1, paddingHorizontal: 16, justifyContent: 'center' },
-  secondaryBtnText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '700' },
+  secondaryBtnText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700' },
   primaryBtn: { minHeight: 56, borderRadius: 100, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
-  primaryBtnText: { fontFamily: 'JosefinSans-Bold', fontSize: 15, letterSpacing: 1.5 },
+  primaryBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1.5 },
   backLink: { alignSelf: 'center', paddingVertical: 14 },
-  backLinkText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  backLinkText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
 });

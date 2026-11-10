@@ -153,14 +153,14 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   backBtn: {},
   backArrow: { fontSize: 22, fontWeight: '900' },
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 28, lineHeight: 20 },
   // BakbakOne so these caps labels stay branded (and immune to the app-wide
   // body-font choice, which only fills text with no explicit family).
-  section: { fontFamily: 'JosefinSans-Bold', fontSize: 12, letterSpacing: 2, marginBottom: 12, marginTop: 8 },
+  section: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2, marginBottom: 12, marginTop: 8 },
 
   previewCard: { borderRadius: 14, borderWidth: 0.5, padding: 18, marginBottom: 20 },
-  previewHeading: { fontFamily: 'JosefinSans-Bold', marginBottom: 8 },
+  previewHeading: { fontFamily: 'BakbakOne-Regular', marginBottom: 8 },
   previewBody: {},
 
   sizeCard: { borderRadius: 14, borderWidth: 0.5, padding: 18, marginBottom: 20 },

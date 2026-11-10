@@ -258,7 +258,7 @@ export default function AboutYouScreen({ navigation }: any) {
                 activeOpacity={0.7}
                 style={{ alignSelf: 'flex-start', marginTop: -4, marginBottom: 10 }}
               >
-                <Text style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 11, fontWeight: '700', color: C.accent }}>
+                <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', color: C.accent }}>
                   {skinTones.length === SKIN_TONES.length ? 'Clear all' : 'I work with all skin tones'}
                 </Text>
               </TouchableOpacity>
@@ -283,7 +283,7 @@ export default function AboutYouScreen({ navigation }: any) {
               <ToggleRow label="Online consultations available" sub="Clients can book a virtual consultation before their appointment" value={onlineConsult} onChange={setOnlineConsult} />
 
               <SectionLabel text="Patch test policy" />
-              <Text style={{ fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 11, color: C.sub, marginBottom: 8, marginTop: -6 }}>
+              <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: C.sub, marginBottom: 8, marginTop: -6 }}>
                 Shown to clients before they book, so they know if a patch test is needed in advance.
               </Text>
               <RadioGroup options={PATCH_OPTS} value={patchTest} onChange={setPatchTest} />

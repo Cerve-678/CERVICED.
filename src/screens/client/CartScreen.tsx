@@ -3860,42 +3860,42 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
   // Create dynamic styles based on theme
   const dynamicStyles = useMemo(() => StyleSheet.create({
-    headerTitle: { fontSize: 26, fontWeight: '600', fontFamily: 'JosefinSans-Bold', color: theme.text },
-    title: { fontSize: 15, fontFamily: 'JosefinSans-Bold', color: theme.text },
-    providerName: { fontSize: 12, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 2 },
-    providerStats: { fontSize: 9, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginTop: 3 },
-    serviceName: { fontSize: 11, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 3 },
-    serviceDuration: { fontSize: 10, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 6 },
-    addOnsTitle: { fontSize: 9, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 5 },
-    baseServicePrice: { fontSize: 8, fontFamily: 'JosefinSans-VariableFont_wght', color: theme.secondaryText, marginBottom: 3, fontWeight: '500' },
-    addOnItem: { fontSize: 8, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 2, paddingLeft: 3 },
-    fallbackTitle: { fontSize: 11, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 10, textAlign: 'center' },
-    fallbackLabel: { fontSize: 10, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.text, marginBottom: 3, marginTop: 6 },
-    notesTitle: { fontSize: 14, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 3 },
-    notesSubtitle: { fontSize: 10, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.secondaryText },
+    headerTitle: { fontSize: 26, fontWeight: '600', fontFamily: 'BakbakOne-Regular', color: theme.text },
+    title: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text },
+    providerName: { fontSize: 12, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 2 },
+    providerStats: { fontSize: 9, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginTop: 3 },
+    serviceName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 3 },
+    serviceDuration: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 6 },
+    addOnsTitle: { fontSize: 9, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 5 },
+    baseServicePrice: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 3, fontWeight: '500' },
+    addOnItem: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 2, paddingLeft: 3 },
+    fallbackTitle: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 10, textAlign: 'center' },
+    fallbackLabel: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text, marginBottom: 3, marginTop: 6 },
+    notesTitle: { fontSize: 14, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 3 },
+    notesSubtitle: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText },
     characterCount: { fontSize: 8, color: theme.secondaryText, textAlign: 'right', marginBottom: 12 },
-    cancelText: { fontSize: 11, fontFamily: 'JosefinSans-Bold', color: theme.text },
-    summaryLabel: { fontSize: 13, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.text },
-    summaryValue: { fontSize: 13, fontFamily: 'JosefinSans-VariableFont_wght', color: theme.text, fontWeight: '700' },
-    serviceFeeNote: { fontSize: 13, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, textAlign: 'right', marginTop: 2 },
-    totalLabel: { fontSize: 17, fontFamily: 'JosefinSans-Bold', color: theme.text },
-    totalValue: { fontSize: 18, fontFamily: 'JosefinSans-Bold', color: theme.text },
-    emptyTitle: { fontSize: 15, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 8 },
-    emptyText: { fontSize: 11, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 16, textAlign: 'center' },
-    paymentTitle: { fontSize: 15, fontFamily: 'JosefinSans-Bold', color: theme.text },
+    cancelText: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text },
+    summaryLabel: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text },
+    summaryValue: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.text, fontWeight: '700' },
+    serviceFeeNote: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, textAlign: 'right', marginTop: 2 },
+    totalLabel: { fontSize: 17, fontFamily: 'BakbakOne-Regular', color: theme.text },
+    totalValue: { fontSize: 18, fontFamily: 'BakbakOne-Regular', color: theme.text },
+    emptyTitle: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 8 },
+    emptyText: { fontSize: 11, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 16, textAlign: 'center' },
+    paymentTitle: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text },
     paymentCloseText: { fontSize: 14, color: theme.text, fontWeight: 'bold' },
-    orderSummaryTitle: { fontSize: 13, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 8 },
-    orderItemName: { fontSize: 10, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', color: theme.text, flex: 1 },
-    orderItemPrice: { fontSize: 10, fontFamily: 'JosefinSans-Bold', color: theme.text },
-    orderTotalLabel: { fontSize: 13, fontFamily: 'JosefinSans-Bold', color: theme.text },
-    orderTotalAmount: { fontSize: 15, fontFamily: 'JosefinSans-Bold', color: theme.text, fontWeight: 'bold' },
-    paymentMethodsTitle: { fontSize: 13, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 12 },
-    paymentMethodName: { fontSize: 11, fontFamily: 'JosefinSans-Bold', color: theme.text, flex: 1 },
-    cardDetailsTitle: { fontSize: 13, fontFamily: 'JosefinSans-Bold', color: theme.text, marginBottom: 12 },
-    cardInput: { borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', borderWidth: 1 },
+    orderSummaryTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 8 },
+    orderItemName: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text, flex: 1 },
+    orderItemPrice: { fontSize: 10, fontFamily: 'BakbakOne-Regular', color: theme.text },
+    orderTotalLabel: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text },
+    orderTotalAmount: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text, fontWeight: 'bold' },
+    paymentMethodsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
+    paymentMethodName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, flex: 1 },
+    cardDetailsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
+    cardInput: { borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', borderWidth: 1 },
     liquidGlassSuccessCheckmark: { fontSize: 28, color: theme.text, fontWeight: 'bold' },
-    liquidGlassSuccessTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 18, color: theme.text, marginBottom: 6, textAlign: 'center' },
-    liquidGlassSuccessButtonText: { fontFamily: 'JosefinSans-Bold', fontSize: 13, color: theme.text, fontWeight: '600' },
+    liquidGlassSuccessTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18, color: theme.text, marginBottom: 6, textAlign: 'center' },
+    liquidGlassSuccessButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: theme.text, fontWeight: '600' },
   }), [theme]);
 
   // Most items now arrive pre-scheduled from the provider profile — only
@@ -5093,15 +5093,15 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: fonts.title.large,
     fontWeight: '600',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   title: {
     fontSize: fonts.title.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   clearText: {
     fontSize: 11,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#F44336',
   },
 
@@ -5117,7 +5117,7 @@ const styles = StyleSheet.create({
   },
   bookingsText: {
     fontSize: 11,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   clearButton: {
     paddingHorizontal: spacing.md,
@@ -5196,7 +5196,7 @@ const styles = StyleSheet.create({
   },
   collapseHandleText: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   providerLogo: {
     width: dimensions.providerLogo.size,
@@ -5218,7 +5218,7 @@ const styles = StyleSheet.create({
   },
   serviceTypeText: {
     fontSize: fonts.serviceTag,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontWeight: 'bold',
   },
   providerInfo: {
@@ -5226,13 +5226,13 @@ const styles = StyleSheet.create({
   },
   providerName: {
     fontSize: fonts.providerName,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000',
     marginBottom: spacing.xs,
   },
   providerStats: {
     fontSize: fonts.ratingText,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     marginTop: spacing.sm,
@@ -5328,7 +5328,7 @@ const styles = StyleSheet.create({
   nodeWhenText: {
     flexShrink: 1,
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '500',
   },
   nodeRemove: {
@@ -5351,11 +5351,11 @@ const styles = StyleSheet.create({
   nodeServiceName: {
     flex: 1,
     fontSize: fonts.serviceText + 1,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   nodePrice: {
     fontSize: fonts.serviceText + 1,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   nodeMetaRow: {
     flexDirection: 'row',
@@ -5365,7 +5365,7 @@ const styles = StyleSheet.create({
   },
   nodeMeta: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   nodeTag: {
@@ -5376,7 +5376,7 @@ const styles = StyleSheet.create({
   nodeTagText: {
     fontSize: 11,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
   },
   nodeBanner: {
     flexDirection: 'row',
@@ -5405,7 +5405,7 @@ const styles = StyleSheet.create({
   },
   nodeNote: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     marginTop: 6,
   },
 
@@ -5424,7 +5424,7 @@ const styles = StyleSheet.create({
   },
   pickerTitle: {
     fontSize: fonts.title.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     marginBottom: spacing.md,
   },
   pickerRow: {
@@ -5439,21 +5439,21 @@ const styles = StyleSheet.create({
   },
   pickerSubtitle: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
   pickerSectionLabel: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     letterSpacing: 0.3,
     marginTop: spacing.lg,
     marginBottom: 2,
   },
   pickerRowHint: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     marginTop: 1,
   },
@@ -5497,11 +5497,11 @@ const styles = StyleSheet.create({
   },
   groupSheetSpanText: {
     fontSize: fonts.title.small,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   groupSheetSpanTotal: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   groupSheetPreviewRow: {
@@ -5514,12 +5514,12 @@ const styles = StyleSheet.create({
   groupSheetPreviewName: {
     flex: 1,
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   groupSheetPreviewTime: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   groupSheetConfirm: {
     marginTop: spacing.lg,
@@ -5530,7 +5530,7 @@ const styles = StyleSheet.create({
   groupSheetConfirmText: {
     color: '#FFFFFF',
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
 
   // Grouped card — services scheduled back-to-back, shown as one appointment,
@@ -5549,23 +5549,23 @@ const styles = StyleSheet.create({
   },
   groupTag: {
     fontSize: 9,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   groupTagSpan: {
     fontSize: 9,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   groupHeaderDate: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   groupHeaderSpan: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     marginTop: 1,
   },
@@ -5585,12 +5585,12 @@ const styles = StyleSheet.create({
   },
   gchipName: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     marginBottom: 1,
   },
   gchipMeta: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   // Same red as the card banner, so a flagged chip reads as part of the
@@ -5598,25 +5598,25 @@ const styles = StyleSheet.create({
   groupRowIssue: {
     color: '#F44336',
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     marginTop: 2,
   },
   groupRowAddOns: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     marginTop: 1,
   },
   groupRowDeposit: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     marginTop: 1,
   },
   gchipPrice: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   groupRowRemove: {
     paddingLeft: 2,
@@ -5630,22 +5630,22 @@ const styles = StyleSheet.create({
   },
   gfootLabel: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   gfootSubnote: {
     fontSize: 9,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     marginTop: 1,
   },
   gfootAmt: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   providerIssueCount: {
     color: '#F44336',
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     marginTop: 4,
   },
@@ -5654,12 +5654,12 @@ const styles = StyleSheet.create({
   },
   pickerRowName: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     marginBottom: 2,
   },
   pickerRowMeta: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   pickerCancel: {
@@ -5669,7 +5669,7 @@ const styles = StyleSheet.create({
   },
   pickerCancelText: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   notesPreview: {
     fontSize: fonts.body.xsmall,
@@ -5697,20 +5697,20 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     color: '#000',
   },
   summaryValue: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     color: '#000',
     fontWeight: '700',
   },
   serviceFeeNote: {
     // ADD THIS
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     textAlign: 'right',
@@ -5725,12 +5725,12 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: fonts.body.large,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000',
   },
   totalValue: {
     fontSize: fonts.title.small,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000',
   },
 
@@ -5743,7 +5743,7 @@ const styles = StyleSheet.create({
   },
   checkoutText: {
     fontSize: fonts.body.large,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#fff',
     textAlign: 'center',
   },
@@ -5755,7 +5755,7 @@ const styles = StyleSheet.create({
   },
   multiBookingGuideTitle: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontWeight: '900',
     letterSpacing: 0.2,
     marginBottom: 10,
@@ -5776,7 +5776,7 @@ const styles = StyleSheet.create({
   multiBookingGuideBody: {
     flex: 1,
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     lineHeight: 16,
   },
@@ -5790,13 +5790,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: fonts.title.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000',
     marginBottom: spacing.md,
   },
   emptyText: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     marginBottom: spacing.xxl,
@@ -5809,7 +5809,7 @@ const styles = StyleSheet.create({
   },
   browseText: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#fff',
   },
 
@@ -5835,7 +5835,7 @@ const styles = StyleSheet.create({
   retryText: {
     color: '#fff',
     fontSize: fonts.body.xsmall,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
 
   // Payment Modal Styles - UPDATED TEXT COLORS FOR CLARITY
@@ -5869,7 +5869,7 @@ const styles = StyleSheet.create({
   },
   paymentTitle: {
     fontSize: fonts.title.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000',
   },
   paymentCloseButton: {
@@ -5896,7 +5896,7 @@ const styles = StyleSheet.create({
   },
   orderSummaryTitle: {
     fontSize: fonts.body.large,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000',
     marginBottom: spacing.md,
   },
@@ -5907,14 +5907,14 @@ const styles = StyleSheet.create({
   },
   orderItemName: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     color: '#000', // CLEAR BLACK
     flex: 1,
   },
   orderItemPrice: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000', // CLEAR BLACK
   },
   orderTotal: {
@@ -5927,12 +5927,12 @@ const styles = StyleSheet.create({
   },
   orderTotalLabel: {
     fontSize: fonts.body.large,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000', // CLEAR BLACK
   },
   orderTotalAmount: {
     fontSize: fonts.title.small,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000', // CLEAR BLACK
     fontWeight: 'bold',
   },
@@ -5976,7 +5976,7 @@ const styles = StyleSheet.create({
   },
   payDividerText: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
@@ -6003,7 +6003,7 @@ const styles = StyleSheet.create({
   },
   savedCardTitle: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
   },
   payErrorText: {
@@ -6019,12 +6019,12 @@ const styles = StyleSheet.create({
   },
   paySecureText: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   paymentMethodsTitle: {
     fontSize: fonts.body.large,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000', // CLEAR BLACK
     marginBottom: spacing.lg,
   },
@@ -6043,7 +6043,7 @@ const styles = StyleSheet.create({
   },
   paymentMethodName: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000', // CLEAR BLACK
     flex: 1,
   },
@@ -6066,7 +6066,7 @@ const styles = StyleSheet.create({
   },
   cardDetailsTitle: {
     fontSize: fonts.body.large,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#000', // CLEAR BLACK
     marginBottom: spacing.lg,
   },
@@ -6075,7 +6075,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     borderWidth: StyleSheet.hairlineWidth,
   },
@@ -6095,7 +6095,7 @@ const styles = StyleSheet.create({
   },
   payButtonText: {
     fontSize: fonts.body.large,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#fff',
     fontWeight: 'bold',
   },
@@ -6156,14 +6156,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   liquidGlassSuccessTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: fonts.title.medium,
     color: '#000',
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   liquidGlassSuccessMessage: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: fonts.title.small,
     fontWeight: '900',
     color: 'rgba(0, 0, 0, 0.83)',
@@ -6193,7 +6193,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   liquidGlassSuccessButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: fonts.body.large,
     color: '#000',
     fontWeight: '600',
@@ -6216,7 +6216,7 @@ const styles = StyleSheet.create({
   },
   reviewAddressBtnText: {
     flex: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
   },
   reviewKeyboardWrap: {
@@ -6234,14 +6234,14 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   reviewModalTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   reviewModalSubtitle: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     marginBottom: 20,
@@ -6250,13 +6250,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   reviewFieldLabel: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     letterSpacing: 1,
     marginBottom: 6,
   },
   reviewInput: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 15,
     borderWidth: 1.5,
@@ -6265,7 +6265,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   reviewPhoneWarning: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 11,
     color: '#FF3B30',
@@ -6303,7 +6303,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   reviewCheckboxLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
   },
@@ -6323,7 +6323,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reviewCancelText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     letterSpacing: 0.5,
   },
@@ -6334,7 +6334,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reviewConfirmText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     letterSpacing: 0.5,
     color: '#fff',
@@ -6356,12 +6356,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   reviewEditText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     letterSpacing: 0.5,
   },
   reviewFieldValue: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 15,
     paddingVertical: 10,
@@ -6450,7 +6450,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   summaryProviderTotal: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
   },
   summaryProviderBody: {
@@ -6458,12 +6458,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   summaryProviderName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     letterSpacing: 0.3,
   },
   summaryProviderMeta: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     marginTop: 1,
   },
@@ -6474,18 +6474,18 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   summarySectionTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     letterSpacing: 1.2,
     marginBottom: 8,
   },
   summaryCustomerName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     marginBottom: 3,
   },
   summaryCustomerDetail: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     marginBottom: 2,
@@ -6500,23 +6500,23 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   summaryItemService: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     flex: 1,
     marginRight: 8,
   },
   summaryItemPrice: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
   },
   summaryItemAddOns: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 2,
   },
   summaryItemDateTime: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 11,
   },
@@ -6540,7 +6540,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   summaryGroupBadgeText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 9,
     letterSpacing: 0.8,
     color: '#FFFFFF',
@@ -6560,12 +6560,12 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   summaryGroupFooterLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '700',
   },
   summaryGroupFooterValue: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
   },
   summaryDivider: {
@@ -6578,12 +6578,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryTotalLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
   },
   summaryTotalValue: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -6593,11 +6593,11 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   summaryGrandLabel: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
   },
   summaryGrandValue: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 17,
   },
 });

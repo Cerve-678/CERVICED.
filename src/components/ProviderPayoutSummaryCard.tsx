@@ -183,12 +183,12 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   title: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: -0.2,
   },
   headline: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     marginBottom: 4,
   },
@@ -206,23 +206,23 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
   },
   statLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.2,
     marginBottom: 4,
   },
   statValue: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
   },
   note: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     letterSpacing: -0.1,
   },
   testMode: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     marginTop: 6,
   },
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     letterSpacing: 0.5,
   },

@@ -75,10 +75,10 @@ export function TypedConfirmDialog({ request, onCancel }: { request: TypedConfir
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 },
   box: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 20, gap: 12 },
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 20, letterSpacing: 0.5 },
-  body: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, lineHeight: 20 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 20, letterSpacing: 0.5 },
+  body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20 },
   input: { minHeight: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, fontSize: 16, letterSpacing: 2 },
   buttons: { flexDirection: 'row', gap: 10, marginTop: 4 },
   btn: { flex: 1, minHeight: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  btnText: { fontFamily: 'JosefinSans-Bold', fontSize: 13, letterSpacing: 1 },
+  btnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 1 },
 });

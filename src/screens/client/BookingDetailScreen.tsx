@@ -2248,7 +2248,7 @@ const st = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mapActionBtnText: { fontFamily: 'JosefinSans-Bold', fontSize: 13, fontWeight: 'bold' },
+  mapActionBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, fontWeight: 'bold' },
   mapActionBtnDisabled: { opacity: 0.5 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },

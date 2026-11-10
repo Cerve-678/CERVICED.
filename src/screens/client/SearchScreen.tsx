@@ -1542,7 +1542,7 @@ export default function SearchScreen({ navigation, route }: Props) {
       headerBackVisible: true,
       headerTitle: 'SEARCH',
       headerTitleAlign: 'center',
-      headerTitleStyle: { fontFamily: 'JosefinSans-Bold', fontSize: 19, color: P.text },
+      headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
       headerStyle: { backgroundColor: P.bg },
       headerShadowVisible: false,
       headerTintColor: P.accentText,
@@ -1613,7 +1613,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         <ReAnimated.View style={[styles.searchBar, { backgroundColor: P.card, transformOrigin: 'center' }, barAnimatedStyle]}>
           <TabIcon name="magnifying-glass" size={16} color={P.sub} />
           <TextInput
-            style={[styles.searchInput, { color: P.text, fontFamily: 'JosefinSans-VariableFont_wght' }]}
+            style={[styles.searchInput, { color: P.text, fontFamily: 'Jura-VariableFont_wght' }]}
             placeholder="Try 'nail art in Manchester'"
             accessibilityLabel="Search providers, services or places"
             placeholderTextColor={P.sub}
@@ -2084,7 +2084,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   loadMoreFooter: { paddingVertical: 16, alignItems: 'center' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { fontSize: 14, fontFamily: 'JosefinSans-VariableFont_wght' },
+  loadingText: { fontSize: 14, fontFamily: 'Jura-VariableFont_wght' },
 
   // Header is the real native header now (see the useLayoutEffect that
   // Category pills — always visible below the search bar
@@ -2115,7 +2115,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   activeChipText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2129,7 +2129,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   activeChipClearAllText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
     textDecorationLine: 'underline',
@@ -2159,7 +2159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   filterCountBadgeText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 9,
     fontWeight: '800',
   },
@@ -2193,12 +2193,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   filterModalTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 0.5,
   },
   filterModalReset: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -2207,7 +2207,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   filterSectionTitle: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -2237,13 +2237,13 @@ const styles = StyleSheet.create({
     opacity: 0.42,
   },
   filterAvailabilityHint: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     lineHeight: 17,
     marginTop: 8,
   },
   filterPillText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -2256,7 +2256,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterModalDoneText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     letterSpacing: 0.5,
     color: '#FFFFFF',
@@ -2319,12 +2319,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   countText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
   },
   correctedText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     paddingTop: 10,
   },
@@ -2346,7 +2346,7 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   serviceEyebrow: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 9,
     letterSpacing: 1.2,
   },
@@ -2373,15 +2373,15 @@ const styles = StyleSheet.create({
   },
   serviceCardName: {
     flex: 1,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
   },
   serviceCardPrice: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
   },
   serviceCardDesc: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 16,
@@ -2398,7 +2398,7 @@ const styles = StyleSheet.create({
   },
   serviceCardMeta: {
     flexShrink: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -2424,7 +2424,7 @@ const styles = StyleSheet.create({
   },
   serviceCardProviderName: {
     flexShrink: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2490,7 +2490,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   cardName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     letterSpacing: 0.1,
   },
@@ -2505,13 +2505,13 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   servicePillText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   specialtiesText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
     fontWeight: '600',
     lineHeight: 14,
@@ -2528,18 +2528,18 @@ const styles = StyleSheet.create({
     color: '#F5A623',
   },
   ratingNum: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '700',
     marginLeft: 3,
   },
   reviewCount: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
     fontWeight: '600',
   },
   priceText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
     fontWeight: '600',
     // Shrinks so a long price/location string ellipsizes within the card.
@@ -2565,7 +2565,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   availBadgeText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 8,
     letterSpacing: 0.2,
     flexShrink: 1,
@@ -2578,26 +2578,26 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   bookBtnText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     letterSpacing: 0.3,
   },
 
   // Empty state
   emptyClearBtn: { marginTop: 14, paddingVertical: 8, paddingHorizontal: 18 },
-  emptyClearText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  emptyClearText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: 64,
     gap: 10,
   },
   emptyTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 17,
     marginTop: 8,
   },
   emptySub: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '600',
   },

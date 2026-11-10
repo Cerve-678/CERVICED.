@@ -896,13 +896,13 @@ const offersStyles = StyleSheet.create({
     paddingVertical: 18,
   },
   headerTitle: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 2,
   },
   headerSub: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 12,
     opacity: 0.7,
@@ -930,7 +930,7 @@ const offersStyles = StyleSheet.create({
     alignItems: "center",
   },
   emptyText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 14,
     opacity: 0.6,
@@ -952,20 +952,20 @@ const offersStyles = StyleSheet.create({
     marginBottom: 10,
   },
   discountText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     color: "#fff",
     fontWeight: "800",
     letterSpacing: 0.5,
   },
   offerTitle: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 6,
   },
   offerDescription: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 13,
     lineHeight: 18,
@@ -980,13 +980,13 @@ const offersStyles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 9,
     letterSpacing: 0.3,
     opacity: 0.7,
   },
   validity: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 11,
     marginBottom: 12,
@@ -1003,7 +1003,7 @@ const offersStyles = StyleSheet.create({
     gap: 10,
   },
   promoLabel: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1,
@@ -1011,13 +1011,13 @@ const offersStyles = StyleSheet.create({
   },
   promoCode: {
     flex: 1,
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 15,
     fontWeight: "700",
     letterSpacing: 2,
   },
   promoCopy: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.5,
@@ -1034,7 +1034,7 @@ const offersStyles = StyleSheet.create({
     elevation: 4,
   },
   bookBtnText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     color: "#fff",
     letterSpacing: 0.5,
@@ -1139,7 +1139,7 @@ const unclaimedStyles = StyleSheet.create({
   content: { flexGrow: 1, alignItems: "center", paddingHorizontal: 32, paddingTop: 24, paddingBottom: 24 },
   logo: { width: 88, height: 88, borderRadius: 44 },
   name: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 20,
     marginTop: 16,
     textAlign: "center",
@@ -1151,12 +1151,12 @@ const unclaimedStyles = StyleSheet.create({
     borderRadius: 12,
   },
   chipText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     fontWeight: "700",
   },
   about: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
@@ -1171,7 +1171,7 @@ const unclaimedStyles = StyleSheet.create({
   },
   noticeText: {
     flex: 1,
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     lineHeight: 17,
   },
@@ -1182,7 +1182,7 @@ const unclaimedStyles = StyleSheet.create({
     alignItems: "center",
   },
   claimButtonText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     color: "#FFFFFF",
   },
@@ -3538,7 +3538,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (!loading && !provider) {
       return (
         <View style={[styles.loading, { backgroundColor: OP.bg }]}>
-          <Text style={{ color: OP.sub, fontFamily: "JosefinSans-VariableFont_wght" }}>
+          <Text style={{ color: OP.sub, fontFamily: "Jura-VariableFont_wght" }}>
             {loadFailed
               ? "Could not load provider. Please try again."
               : "Provider not found"}
@@ -5893,7 +5893,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   providerHandle: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 13,
     marginBottom: 14,
@@ -5910,7 +5910,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   providerMeta: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "800",
     fontSize: 12,
     letterSpacing: 1.2,
@@ -5930,13 +5930,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ratingInline: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "800",
     fontSize: 13,
     marginLeft: 4,
   },
   yearsExp: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "800",
     fontSize: 12,
     textAlign: "center",
@@ -5958,7 +5958,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   infoTabText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -5977,7 +5977,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   infoTagText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     letterSpacing: 0.3,
   },
@@ -6031,7 +6031,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   linkOnlyBookText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 15,
     letterSpacing: 1,
   },
@@ -6043,7 +6043,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   linkOnlyCaption: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -6074,7 +6074,7 @@ const styles = StyleSheet.create({
   joinNudgeBarText: {
     flex: 1,
     color: "#FFFFFF",
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -6088,7 +6088,7 @@ const styles = StyleSheet.create({
   },
   joinNudgeBarButtonText: {
     color: "#26201E",
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -6111,7 +6111,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   providerNameLarge: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 28,
     color: "#000",
     marginBottom: 15,
@@ -6131,7 +6131,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   ratingText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 16,
     color: "#000",
     fontWeight: "bold",
@@ -6213,7 +6213,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   notificationText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     flexShrink: 1,
     minWidth: 0,
@@ -6224,14 +6224,14 @@ const styles = StyleSheet.create({
   },
 
   serviceText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     color: "#000",
     fontWeight: "bold",
     letterSpacing: 0.5,
   },
   locationText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 16,
     color: "#000",
     marginBottom: 15,
@@ -6243,7 +6243,7 @@ const styles = StyleSheet.create({
   },
 
   slotsText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     textAlign: "center",
     zIndex: 2, // Above overlays
@@ -6316,12 +6316,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   sectionTitle: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 18,
     marginBottom: 15,
   },
   aboutText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 14,
     lineHeight: 20,
@@ -6331,7 +6331,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   moreButtonText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     fontWeight: "bold",
     // Color will be set dynamically using adaptiveAccentColor
@@ -6342,7 +6342,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitleNoCard: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 18,
     marginBottom: 15,
     paddingHorizontal: 20,
@@ -6379,7 +6379,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   serviceTypeTabText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 15,
     letterSpacing: -0.1,
   },
@@ -6394,7 +6394,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8, // Add vertical padding to prevent cutoff
   },
   categoryDescriptionText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     lineHeight: 18,
     paddingHorizontal: 20,
@@ -6407,7 +6407,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyServiceTypeText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     lineHeight: 18,
     paddingHorizontal: 20,
@@ -6421,7 +6421,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   showAllServicesText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     letterSpacing: 0.5,
   },
@@ -6475,7 +6475,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   serviceImagePlaceholderText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 22,
   },
   serviceImageOverlay: {
@@ -6491,18 +6491,18 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   serviceName: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     marginBottom: 5,
   },
   serviceVirtualBadge: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 10,
     marginBottom: 5,
   },
   serviceDescription: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 12,
     marginBottom: 4,
@@ -6515,7 +6515,7 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   seeMoreText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
     fontWeight: "800",
     textDecorationLine: "underline",
@@ -6526,7 +6526,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   serviceSafetyTitle: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
@@ -6534,7 +6534,7 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   serviceSafetyLine: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
     lineHeight: 15,
   },
@@ -6566,12 +6566,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   serviceDuration: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 11,
   },
   servicePrice: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     fontWeight: "bold",
     // Color will be set dynamically using adaptiveAccentColor
@@ -6612,7 +6612,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bookButtonText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     fontWeight: "bold",
     letterSpacing: 0.4,
@@ -6645,7 +6645,7 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   quickBookButtonText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 10,
     color: "#000",
     fontWeight: "600",
@@ -6674,18 +6674,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   contactSheetTitle: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 18,
     marginBottom: 4,
   },
   contactSheetSub: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 16,
   },
   contactSheetEmpty: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 8,
@@ -6714,12 +6714,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contactSheetOptionLabel: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 14,
   },
   contactSheetOptionDetail: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     marginTop: 1,
   },
@@ -6731,7 +6731,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   contactSheetCloseText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     letterSpacing: 0.5,
   },
@@ -6754,7 +6754,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   policyHandledNote: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     marginTop: 10,
   },
@@ -6764,7 +6764,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   policyLabel: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 10,
     letterSpacing: 1,
     textTransform: "uppercase",
@@ -6777,19 +6777,19 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   policyTagText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 9,
     letterSpacing: 0.5,
     color: "#fff",
   },
   policyValue: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     fontWeight: "700",
   },
   // The section's own note (and the no-show grace period) under its value.
   policyNote: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     lineHeight: 18,
     marginTop: 3,
@@ -6839,12 +6839,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   contactRowLabel: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     fontWeight: "800",
   },
   contactRowText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     fontWeight: "700",
     flex: 1,
@@ -6852,12 +6852,12 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
   },
   contactRowAction: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     fontWeight: "800",
   },
   contactText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 12,
     marginBottom: 8,
@@ -6874,7 +6874,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   contactButtonText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     letterSpacing: 0.6,
     color: "#fff",
@@ -6912,13 +6912,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalTitle: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 22,
     color: "#000",
     marginBottom: 4,
   },
   modalSubtitle: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 14,
     color: "rgba(0,0,0,0.85)",
@@ -6982,7 +6982,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalReviewerName: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     color: "#000",
   },
@@ -6994,14 +6994,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   modalReviewDate: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 12,
     color: "rgba(0, 0, 0, 0.75)",
     marginLeft: "auto",
   },
   modalReviewComment: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 14,
     color: "#000",
@@ -7073,7 +7073,7 @@ const styles = StyleSheet.create({
   },
   successDetails: { width: "100%", marginBottom: 22 },
   successService: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 16,
     textAlign: "center",
@@ -7105,13 +7105,13 @@ const styles = StyleSheet.create({
   },
   // Colour for these comes from the theme at render time (see SuccessMessage).
   successTitle: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 19,
     marginBottom: 16,
     textAlign: "center",
   },
   successMessage: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 16,
     textAlign: "center",
@@ -7132,7 +7132,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   successCloseText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     fontWeight: "bold",
   },
@@ -7149,7 +7149,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   successViewCartText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     color: "#fff",
     fontWeight: "bold",
@@ -7179,14 +7179,14 @@ const styles = StyleSheet.create({
     minWidth: 54,
   },
   offersFloatCount: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 20,
     fontWeight: "800",
     color: "#fff",
     lineHeight: 22,
   },
   offersFloatLabel: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 8,
     color: "rgba(255,255,255,0.85)",
     letterSpacing: 1.2,
@@ -7269,7 +7269,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   waitlistJoinText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     fontWeight: "bold",
   },
@@ -7289,12 +7289,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   waitlistChipText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     letterSpacing: 0.3,
   },
   waitlistChipX: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     opacity: 0.7,
   },
@@ -7311,12 +7311,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   waitlistBadgeText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 10,
     letterSpacing: 0.3,
   },
   waitlistLeaveText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 10,
     opacity: 0.6,
@@ -7354,22 +7354,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  waitlistPopupTitle: { fontFamily: "JosefinSans-Bold", fontSize: 17 },
+  waitlistPopupTitle: { fontFamily: "BakbakOne-Regular", fontSize: 17 },
   waitlistPopupService: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 12,
     marginTop: 1,
   },
   waitlistPopupSub: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 13,
     marginBottom: 16,
     opacity: 0.7,
   },
   waitlistPopupLabel: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 10,
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -7389,7 +7389,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   waitlistSegmentText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     letterSpacing: 0.3,
   },
@@ -7408,14 +7408,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   waitlistDateLabel: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     width: 32,
     letterSpacing: 0.3,
   },
   waitlistDateValue: {
     flex: 1,
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 13,
   },
@@ -7426,7 +7426,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   waitlistPickerDoneText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     letterSpacing: 0.3,
   },
@@ -7435,7 +7435,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 14,
     minHeight: 72,
@@ -7443,7 +7443,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   waitlistErrorText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 12,
     marginBottom: 10,
@@ -7458,7 +7458,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   waitlistPopupCancelText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     letterSpacing: 0.3,
   },
@@ -7469,7 +7469,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   waitlistJoinConfirmText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     color: "#fff",
     letterSpacing: 0.4,
@@ -7497,21 +7497,21 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   leavePopupTitle: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 20,
     letterSpacing: 0.2,
     marginBottom: 6,
     textAlign: "center",
   },
   leavePopupService: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     letterSpacing: 0.3,
     marginBottom: 10,
     textAlign: "center",
   },
   leavePopupBody: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 13,
     lineHeight: 19,
@@ -7528,7 +7528,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF3B30",
   },
   leavePopupLeaveText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 13,
     color: "#fff",
     letterSpacing: 0.4,

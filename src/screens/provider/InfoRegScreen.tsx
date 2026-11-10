@@ -4247,7 +4247,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     return (
       <View style={styles.loading}>
         <Ionicons name="cloud-offline-outline" size={32} color={chromeTheme.sub} style={{ marginBottom: 12 }} />
-        <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 16, color: chromeTheme.text, textAlign: 'center', marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 16, color: chromeTheme.text, textAlign: 'center', marginBottom: 8 }}>
           Couldn't load your profile
         </Text>
         <Text style={{ fontSize: 13, color: chromeTheme.sub, textAlign: 'center', marginBottom: 20, maxWidth: 260 }}>
@@ -4258,7 +4258,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           style={{ backgroundColor: chromeTheme.accent, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 22 }}
           activeOpacity={0.8}
         >
-          <Text style={{ fontFamily: 'JosefinSans-Bold', fontSize: 14, color: chromeTheme.onAccent }}>Retry</Text>
+          <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 14, color: chromeTheme.onAccent }}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -6195,7 +6195,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   backButtonText: {
     fontSize: 24,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: P.text,
   },
   headerActions: {
@@ -6213,7 +6213,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderColor: accentBorder,
   },
   headerTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
     color: P.text,
   },
@@ -6232,7 +6232,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   claimErrorText: {
     flex: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
@@ -6295,7 +6295,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     elevation: 4,
   },
   logoCaption: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     color: fg(0.6),
     marginTop: 10,
@@ -6363,7 +6363,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // structure they're meant to carry; 0.32 keeps them clearly secondary to the
   // heading while actually being legible.
   docNum: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 46,
     lineHeight: 50,
     opacity: 0.42,
@@ -6381,14 +6381,14 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     opacity: 0.6,
   },
   docHeading: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 24,
     letterSpacing: 0.2,
     color: P.text,
     marginBottom: 4,
   },
   docSub: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 13,
     lineHeight: 18,
@@ -6417,7 +6417,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderColor: accentBorder,
   },
   docNextButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     letterSpacing: 0.3,
   },
@@ -6431,7 +6431,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderTopColor: fg(0.12),
   },
   docEndMark: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     letterSpacing: 1,
     color: fg(0.6),
@@ -6453,7 +6453,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // faintest thing on the row. 11.5 with tighter tracking stays compact but is
   // actually readable; the amber was already full-strength.
   docFieldFlag: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 12,
     letterSpacing: 1,
@@ -6470,7 +6470,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   publishWarningText: {
     flex: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 11,
     lineHeight: 15,
@@ -6491,7 +6491,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: 'rgba(255,149,0,0.1)',
   },
   missingFieldChipText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 11,
     color: REVIEW_WARN_COLOR,
@@ -6530,7 +6530,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     opacity: 0.6,
   },
   pinnedBarButtonText: {
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 15,
     fontWeight: "bold",
   },
@@ -6549,7 +6549,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // Only for a required field that's actually empty — an optional blank
   // stays neutral, so the warn colour always means "this blocks publishing".
   reviewFootnote: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '600',
     lineHeight: 16,
@@ -6586,7 +6586,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   termsRowText: {
     flex: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '600',
     color: P.text,
@@ -6676,7 +6676,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     lineHeight: 24,
   },
   portfolioAddText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 9,
     color: fg(0.72),
@@ -6685,7 +6685,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
 
   // ── Elevated section header: numbered accent chip + stronger title ──
   sectionSubtitle: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 19,
@@ -6693,7 +6693,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 18,
   },
   sectionTitleNoCard: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
     color: P.text,
   },
@@ -6706,7 +6706,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // have sitting at 0.55 — uppercase at 11px is already low-contrast before
   // any alpha is applied. Lifted to 0.78 and up a half-point in size.
   inputLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     letterSpacing: 1.5,
@@ -6715,7 +6715,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 7,
   },
   inputHint: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '700',
     color: fg(0.86),
@@ -6776,7 +6776,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     elevation: 0,
   },
   textInput: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 15,
     color: P.text,
@@ -6802,13 +6802,13 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingVertical: 13,
   },
   locationSelectText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 15,
     color: P.text,
   },
   locationStepLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 11,
     letterSpacing: 0.5,
@@ -6837,7 +6837,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderColor: edge(0.3),
   },
   serviceCategoryText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     color: fg(0.7),
   },
@@ -6856,7 +6856,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 10,
   },
   gradientSelectorText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     color: fg(0.6),
@@ -6892,7 +6892,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderWidth: 1.5,
   },
   addCategoryText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     color: '#fff',
   },
@@ -6907,7 +6907,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 10,
   },
   emptyServicesText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
     color: fg(0.6),
@@ -6944,14 +6944,14 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     letterSpacing: -0.1,
   },
   categoryHint: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
     color: fg(0.6),
     marginBottom: 10,
   },
   selectedCategoryDescription: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
@@ -6998,7 +6998,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontWeight: 'bold',
   },
   categoryTabText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     fontWeight: '600',
     color: fg(0.7),
@@ -7070,7 +7070,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingVertical: 2,
   },
   imageCountText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     color: '#fff',
   },
@@ -7079,13 +7079,13 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginRight: 10,
   },
   serviceName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     color: P.text,
     marginBottom: 4,
   },
   serviceDescription: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     color: fg(0.6),
     marginBottom: 6,
@@ -7096,12 +7096,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     alignItems: 'center',
   },
   serviceDuration: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     color: fg(0.68),
   },
   servicePrice: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -7145,7 +7145,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: surf(0.1),
   },
   addServiceText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
   },
   // Service Cards
@@ -7159,7 +7159,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     // Scaled with inputLabel (14 → 11): at the old 13 it outweighed the label
     // it was marking. Softened too — it's a marker, not a warning.
     color: 'rgba(229,57,53,0.85)',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 11,
   },
@@ -7174,7 +7174,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: surf(0.45),
   },
   durationChipText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     color: fg(0.7),
   },
@@ -7205,14 +7205,14 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 2,
   },
   templateSheetSub: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     color: fg(0.66),
     marginTop: 3,
   },
   templateGroupLabel: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     color: fg(0.6),
     marginTop: 22,
@@ -7232,12 +7232,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 22,
   },
   templateScratchTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     color: P.text,
   },
   templateScratchSub: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     color: fg(0.5),
@@ -7259,19 +7259,19 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     elevation: 2,
   },
   templateName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     color: P.text,
   },
   templateDuration: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     color: fg(0.5),
     marginTop: 3,
   },
   templateAdd: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
   },
   templateCarouselLabel: {
@@ -7303,7 +7303,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: surf(0.75),
   },
   templateVariantBadgeText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     color: fg(0.7),
   },
@@ -7352,12 +7352,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     opacity: 0.45,
   },
   categoryTypeLabel: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     color: P.text,
   },
   categoryTypeBlurb: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 10,
     color: fg(0.5),
@@ -7386,7 +7386,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderBottomColor: fg(0.1),
   },
   modalTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
     color: P.text,
   },
@@ -7442,7 +7442,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 8,
   },
   gradientName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     color: P.text,
     textAlign: 'center',
@@ -7477,7 +7477,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingBottom: 14,
   },
   serviceSheetEyebrow: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 10,
     letterSpacing: 1.1,
@@ -7485,7 +7485,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 3,
   },
   serviceSheetTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 21,
     color: P.text,
   },
@@ -7496,7 +7496,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // inputLabel/inputBlur pair is deliberately left alone — every other step of
   // registration still uses it.
   serviceSheetLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     letterSpacing: 1,
@@ -7513,7 +7513,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     // BakbakOne, per DESIGN_SYSTEM's one rule: uppercase/display type is
     // BakbakOne, sentences are Jura. It's a single-weight face, so there's no
     // fontWeight to set — the letterSpacing carries the caps instead.
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -7530,7 +7530,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginBottom: 18,
   },
   serviceSheetHint: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 11,
     lineHeight: 17,
@@ -7552,7 +7552,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     flex: 1,
   },
   serviceSheetInput: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 15,
     color: P.text,
@@ -7576,7 +7576,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   serviceSheetSelectText: {
     flex: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 15,
     lineHeight: 18,
@@ -7593,7 +7593,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // the reason a save didn't go through stays next to the button that refused.
   serviceSheetError: {
     color: '#FF453A',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     marginBottom: 10,
@@ -7609,7 +7609,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     alignItems: 'center',
   },
   serviceSheetSaveText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#FFFFFF',
     fontSize: 15,
   },
@@ -7634,7 +7634,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     elevation: 0,
   },
   smallModalTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
     color: P.text,
     marginBottom: 20,
@@ -7663,14 +7663,14 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     bottom: 0,
   },
   transferTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 22,
     color: P.text,
     textAlign: 'center',
     marginBottom: 10,
   },
   transferSubtitle: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
     color: fg(0.7),
@@ -7689,7 +7689,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     alignItems: 'center',
   },
   transferButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     color: '#1A1815',
   },
@@ -7702,7 +7702,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: surf(0.3),
   },
   skipButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     color: P.text,
   },
@@ -7737,7 +7737,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: surf(0.2),
   },
   cancelButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     color: P.text,
   },
@@ -7749,7 +7749,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     alignItems: 'center',
   },
   saveButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     color: '#1A1815',
   },
@@ -7800,7 +7800,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     color: fg(0.5),
   },
   addImageText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 10,
     color: fg(0.5),
@@ -7854,7 +7854,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     overflow: 'hidden',
   },
   accentPickerSubtitle: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
     color: fg(0.6),
@@ -7892,7 +7892,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     elevation: 3,
   },
   accentColorName: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 10,
     color: P.text,
@@ -7937,7 +7937,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   },
   previewBackText: {
     fontSize: 24,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     color: '#fff',
   },
   previewBadge: {
@@ -7947,7 +7947,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderRadius: 15,
   },
   previewBadgeText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     color: '#fff',
     letterSpacing: 1,
@@ -8041,7 +8041,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     textAlign: 'center',
   },
   previewMetaText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     letterSpacing: 1.2,
@@ -8065,13 +8065,13 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     color: '#FFD700',
   },
   previewRatingText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 13,
     marginLeft: 4,
   },
   previewYearsText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 12,
     textAlign: 'center',
@@ -8103,7 +8103,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     gap: 8,
   },
   previewLinkOnlyBookText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 1,
   },
@@ -8115,7 +8115,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     justifyContent: 'center',
   },
   previewLinkOnlyCaption: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -8139,7 +8139,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderRadius: 20,
   },
   previewSlotsText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     zIndex: 2,
   },
@@ -8176,17 +8176,17 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderTopRightRadius: 26,
   },
   previewSectionTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
     marginBottom: 15,
   },
   previewSectionTitleNoCard: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
     marginBottom: 15,
   },
   previewAboutText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
     lineHeight: 20,
@@ -8196,7 +8196,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     alignSelf: 'flex-start',
   },
   previewMoreButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -8214,7 +8214,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingVertical: 8,
   },
   previewSelectedCategoryDescription: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
@@ -8259,7 +8259,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginRight: 12,
   },
   previewServiceImagePlaceholderText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 22,
   },
   previewServiceItemInfo: {
@@ -8267,12 +8267,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginRight: 10,
   },
   previewServiceItemName: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     marginBottom: 4,
   },
   previewServiceItemDesc: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
     marginBottom: 6,
@@ -8283,12 +8283,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     alignItems: 'center',
   },
   previewServiceItemDuration: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 11,
   },
   previewServiceItemPrice: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -8299,7 +8299,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingVertical: 8,
   },
   previewBookButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: 'bold',
     color: '#fff',
@@ -8311,7 +8311,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingTop: 8,
   },
   previewAddOnsLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 10,
     marginBottom: 4,
@@ -8323,12 +8323,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingVertical: 3,
   },
   previewAddOnName: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 11,
   },
   previewAddOnPrice: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
   },
   // Contact rows — matches ProviderProfileScreen's contactRow layout
@@ -8341,12 +8341,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginTop: 4,
   },
   previewContactLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '800',
   },
   previewContactValue: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '700',
     flex: 1,
@@ -8354,7 +8354,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     paddingLeft: 16,
   },
   previewContactAction: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '800',
   },
@@ -8370,7 +8370,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     elevation: 5,
   },
   previewContactButtonText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     letterSpacing: 0.6,
     color: '#fff',
@@ -8428,7 +8428,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     backgroundColor: 'rgba(0,0,0,0.32)',
   },
   previewPortfolioCaption: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 11,
     color: '#fff',
@@ -8444,7 +8444,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
 
   // Category Edit Hint
   categoryEditHint: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
     fontWeight: '600',
     color: fg(0.55),
@@ -8498,12 +8498,12 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     borderColor: '#FF6868',
   },
   chipText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     color: P.text,
   },
   chipTextActive: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     color: '#fff',
   },
@@ -8521,7 +8521,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // serviceSheetSection and sits in the same sheet, so it takes the same face —
   // only the colour differs, since the safety card is deliberately its own.
   safetySectionTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -8539,13 +8539,13 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     marginRight: 12,
   },
   toggleLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '800',
     color: fg(0.85),
   },
   toggleHint: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
     color: fg(0.6),
@@ -8577,7 +8577,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // the screen with no fontFamily at all, so they rendered in the OS default
   // while everything around them used the app's two fonts.
   policySectionTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 17,
     color: fg(0.82),
     marginBottom: 12,
@@ -8586,7 +8586,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
   // screen — these are section labels, not fine print. Bigger, less spaced out,
   // and much closer to full strength.
   policyLabel: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.5,

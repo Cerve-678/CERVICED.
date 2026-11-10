@@ -1480,7 +1480,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   headerTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: fonts.title.large,
     fontWeight: 'bold',
     letterSpacing: 1,
@@ -1499,7 +1499,7 @@ const styles = StyleSheet.create({
   unreadBadgeText: {
     fontSize: fonts.body.small,
     fontWeight: 'bold',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   markAllButton: {
     marginLeft: spacing.md,
@@ -1510,7 +1510,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   markAllText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     fontWeight: 'bold',
     letterSpacing: 0.3,
@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   dayHeadingText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10.5,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -1609,13 +1609,13 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   inlineActionText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
     fontWeight: 'bold',
     letterSpacing: 0.3,
   },
-  rowAmount: { fontFamily: 'JosefinSans-Bold', fontSize: 16, letterSpacing: 0.3 },
-  viewTip: { fontFamily: 'JosefinSans-Bold', fontSize: 11, letterSpacing: 0.4 },
+  rowAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 16, letterSpacing: 0.3 },
+  viewTip: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 0.4 },
 
   // Popup Modal
   modalOverlay: { 
@@ -1659,7 +1659,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   popupKicker: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10.5,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -1674,7 +1674,7 @@ const styles = StyleSheet.create({
   },
   closeButtonText: { fontSize: 24, fontWeight: 'bold' },
   popupAmount: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 38,
     lineHeight: 42,
     letterSpacing: 0.5,
@@ -1684,7 +1684,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 6,
     textAlign: 'left',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     // A touch smaller than the shared h3 (24) — local to this popup.
     fontSize: 18,
     lineHeight: 24,
@@ -1711,7 +1711,7 @@ const styles = StyleSheet.create({
   },
   popupActionText: { 
     letterSpacing: 0.5,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
   },
   certificatePopup: {
@@ -1751,7 +1751,7 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     marginTop: 20,
     marginBottom: 10,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   emptyStateText: {
     textAlign: 'center',
@@ -1778,7 +1778,7 @@ const styles = StyleSheet.create({
   // Bold notification title
   notificationTitleBold: {
     fontWeight: 'bold',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
 
   // Error banner

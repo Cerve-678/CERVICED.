@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 24 },
   backBtn: { marginBottom: 24 },
   backArrow: { fontSize: 22, fontWeight: '900' },
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 32, lineHeight: 20 },
   fieldGroup: { marginBottom: 20 },
   label: { fontSize: 11, letterSpacing: 1, marginBottom: 8 },
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   },
   inputWithEye: { flex: 1, paddingVertical: 14, fontSize: 15 },
   eyeBtn: { paddingLeft: 8 },
-  eyeText: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, fontWeight: '600' },
+  eyeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600' },
   saveBtn: {
     borderRadius: 100,
     paddingVertical: 15,

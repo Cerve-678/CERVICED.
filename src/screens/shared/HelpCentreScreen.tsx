@@ -200,9 +200,9 @@ const styles = StyleSheet.create({
   backBtn: {},
   backArrow: { fontSize: 22, fontWeight: '900' },
   moreBtn: { padding: 4 },
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 28, lineHeight: 20 },
-  section: { fontFamily: 'JosefinSans-Bold', fontSize: 12, letterSpacing: 2, marginBottom: 12 },
+  section: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2, marginBottom: 12 },
   faqItem: {
     borderRadius: 14,
     borderWidth: 0.5,

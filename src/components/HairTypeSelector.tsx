@@ -90,6 +90,6 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 12,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
   },
 });

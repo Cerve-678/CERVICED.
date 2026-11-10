@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   },
   backArrow: { fontSize: 18, fontWeight: '400' },
   headerTitle: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
     letterSpacing: 1,
   },

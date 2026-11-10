@@ -230,8 +230,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   rowText: { flex: 1, minWidth: 0 },
-  rowName: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 16 },
-  rowCount: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '600', fontSize: 13 },
+  rowName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 16 },
+  rowCount: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13 },
   check: {
     width: 26,
     height: 26,
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   createWrap: { paddingTop: 2 },
   error: {
     color: '#C0392B',
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
     marginTop: 12,
@@ -253,5 +253,5 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', gap: 10, marginTop: 18 },
   button: { flex: 1, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
   primary: { flex: 2 },
-  buttonText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 16 },
+  buttonText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 16 },
 });

@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 16 },
   rowIcon: { marginTop: 14 },
   rowBody: { flex: 1 },
-  hint: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 12, lineHeight: 17, paddingHorizontal: 16, paddingBottom: 12, marginTop: -6 },
-  saveError: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 13, color: ERROR_RED, marginTop: 12 },
+  hint: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17, paddingHorizontal: 16, paddingBottom: 12, marginTop: -6 },
+  saveError: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, color: ERROR_RED, marginTop: 12 },
   button: { marginTop: 18 },
 });

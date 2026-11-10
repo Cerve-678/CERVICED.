@@ -220,8 +220,8 @@ const styles = StyleSheet.create({
   sectionGap: { marginTop: 22 },
   prefixRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   bookingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, marginTop: 12 },
-  bookingLabel: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  bookingUrl: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 15, fontWeight: '700', marginTop: 2 },
-  bookingChange: { fontFamily: 'JosefinSans-VariableFont_wght', fontSize: 14, fontWeight: '700' },
+  bookingLabel: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  bookingUrl: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '700', marginTop: 2 },
+  bookingChange: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700' },
   continueBtn: { marginTop: 24 },
 });

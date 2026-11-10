@@ -147,13 +147,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     letterSpacing: 0.5,
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
@@ -171,14 +171,14 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 15,
     padding: 0,
     paddingRight: 8,
   },
   eyeBtn: { paddingLeft: 8 },
   eyeText: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryBtnText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 1,
     color: '#FFFFFF',
