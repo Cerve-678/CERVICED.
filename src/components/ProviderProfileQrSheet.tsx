@@ -137,9 +137,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
   },
-  title: { fontFamily: "JosefinSans-Bold", fontSize: 23 },
+  title: { fontFamily: "BakbakOne-Regular", fontSize: 23 },
   copy: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 20,
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   hint: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 12,
     fontWeight: "600",
     textAlign: "center",
@@ -177,13 +177,13 @@ const styles = StyleSheet.create({
   },
   shareText: {
     color: "#FFFFFF",
-    fontFamily: "JosefinSans-Bold",
+    fontFamily: "BakbakOne-Regular",
     fontSize: 14,
     letterSpacing: 0.5,
   },
   closeButton: { paddingVertical: 16, paddingHorizontal: 24, marginTop: 2 },
   closeText: {
-    fontFamily: "JosefinSans-VariableFont_wght",
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 14,
     fontWeight: "800",
   },

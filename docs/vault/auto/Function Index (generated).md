@@ -5,7 +5,7 @@
 
 #generated
 
-**3660 functions** across **521 files**.
+**3664 functions** across **524 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -143,7 +143,7 @@
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
 - `useFigurePrefs.ts` — save · **useFigurePrefs**
 
-### `src/features/bookings/` (26)
+### `src/features/bookings/` (27)
 - `activityCentre.ts` — **activityTimeline** · appointmentMs · beforeDay · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · isStillAhead · localDayKey · names · needsYouPulse · pounds · shortDay · when
 - `ActivityLive.tsx` — **ActivityTile** · **LiveDot** · remember · **StatusPill** · **TimelineGroup** · **TimelineRail** · useEntrance · **useReduceMotion**
 - `addOnTime.ts` — **addOnExtraMinutes** · **durationWithAddOns** · **formatAddOnExtraTime**
@@ -153,6 +153,7 @@
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · kindLabel · load · payFee · pounds · run
 - `bookingFeeRules.ts` — **feeChargeWindow** · **feeDisputeOpen** · **liveFee**
+- `bookingForms.ts` — **formsToDoFirst**
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · **isSupportRequestReady** · money · **passRefundRequestOn** · ticket
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
@@ -188,8 +189,9 @@
 ### `src/features/explore/` (1)
 - `moreLikeThis.ts` — **buildMoreLikeThis**
 
-### `src/features/home/` (1)
+### `src/features/home/` (2)
 - `SkeletonSection.tsx` — **SkeletonSection**
+- `useRevealTogether.ts` — **allPartsDone** · markDone · **useRevealTogether**
 
 ### `src/features/info-packs/` (4)
 - `infoPackLogic.ts` — **clientPreviewNames** · **countClients** · **formsNotYetSent** · **hasPlaceholder** · **hasSection** · **insertSection** · **isHeadingLine** · **isUpcomingOpenBooking** · **packCoversService** · **packServiceLabel** · **packsNotYetSent** · **splitUpcomingForPack** · **summarizeDeliveries**

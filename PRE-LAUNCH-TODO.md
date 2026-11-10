@@ -1420,6 +1420,18 @@ radius is the one that may matter: a mobile provider can be booked to an
 address outside their radius. Decide whether that should be checked against
 the client's address at checkout.
 
+### 31g. Search's "available today" dots ignore minimum notice for "Any time" booking windows (found 2026-11-10)
+
+In live `get_providers_availability` the slot filter reads
+`booking_window_days <= 0 OR day <= today + window AND start >= now + notice`.
+AND binds tighter than OR, so for a provider whose booking window is "Any
+time" (0) the notice check never runs. A provider with 24h notice and no
+window limit can show "Available today" in Search for a slot nobody can
+actually book (the booking trigger and the picker both refuse it correctly).
+Display-only, no wrong bookings. Fix: bracket the OR so notice applies to
+everyone. Migration `20261110140000` kept the existing meaning on purpose
+(it bracketed the whole clause unchanged), so this is still open.
+
 ## 32. Review later — which bookings still unlock a client's beauty profile (2026-11-08)
 
 Since `get_client_beauty_profile_for_booking` (migration 20261108190000, PR

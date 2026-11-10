@@ -329,5 +329,5 @@ const st = StyleSheet.create({
   group: { position: 'relative', marginBottom: 8 },
   node: { position: 'absolute', left: -24, top: 2 },
   nodeHollow: { width: 9, height: 9, borderRadius: 4.5, borderWidth: 2 },
-  groupLabel: { fontFamily: 'JosefinSans-Bold', fontSize: 10.5, letterSpacing: 1.5, lineHeight: 13, marginBottom: 8 },
+  groupLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 1.5, lineHeight: 13, marginBottom: 8 },
 });

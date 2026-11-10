@@ -159,14 +159,14 @@ const styles = StyleSheet.create({
   formTop: { marginTop: 14 },
   error: {
     color: DESTRUCTIVE,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 14,
     marginTop: 12,
   },
   footer: { flexDirection: 'row', gap: 10, marginTop: 18 },
   button: { flex: 1, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 16 },
+  buttonText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 16 },
   deleteLink: { alignSelf: 'center', paddingVertical: 14 },
-  deleteText: { color: DESTRUCTIVE, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700', fontSize: 15 },
+  deleteText: { color: DESTRUCTIVE, fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 15 },
 });

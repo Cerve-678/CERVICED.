@@ -1509,7 +1509,7 @@ const styles = StyleSheet.create({
   discoverLabel: {
     fontSize: 17,
     fontWeight: '700',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
   },
   subTabUnderline: {
     marginTop: 4,
@@ -1537,7 +1537,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
   },
 
   // Filter Section
@@ -1559,7 +1559,7 @@ const styles = StyleSheet.create({
   },
   gridCount: {
     fontSize: fonts.body.small,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
 
@@ -1593,12 +1593,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: fonts.title.small,
     fontWeight: '600',
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     marginTop: spacing.lg,
   },
   emptySubtext: {
     fontSize: fonts.body.medium,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     marginTop: spacing.sm,
   },
   retryButton: {

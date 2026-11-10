@@ -103,7 +103,7 @@ export default function HomeNavigator() {
           headerTransparent: false,
           headerShadowVisible: false,
           headerTitleStyle: {
-            fontFamily: 'JosefinSans-Bold',
+            fontFamily: 'BakbakOne',
             fontSize: 22,
             color: theme.text,
           },
@@ -121,7 +121,7 @@ export default function HomeNavigator() {
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
-            fontFamily: 'JosefinSans-Bold',
+            fontFamily: 'BakbakOne',
             fontSize: 22,
             color: theme.text,
           },

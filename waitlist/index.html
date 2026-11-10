@@ -958,16 +958,15 @@ section[id]{scroll-margin-top:24px;}
 <script>
 /* ──────────────────────────────────────────────────────────────────────
    WHERE SIGNUPS GO
-   Fill this in to make the form live. It posts straight to a Supabase
-   table via the REST API — the anon key is publishable by design, but the
-   table needs an INSERT-only RLS policy for `anon` and NO select policy,
-   or anyone could read every signup back out.
-   See waitlist/waitlist_signups.sql in this repo for the table + policy.
-   Leave blank and the form runs in preview mode (validates, no network).
+   The form posts straight to public.waitlist_signups in the app's live
+   Supabase project (migration 20261110150000_waitlist_signups.sql). The
+   anon key is the app's publishable key, already shipped in every app
+   build; the table lets anon INSERT only, so nobody can read the list back
+   through it. Read sign-ups in the Supabase dashboard.
    ────────────────────────────────────────────────────────────────────── */
 var WAITLIST = {
-  supabaseUrl: '',                 // e.g. 'https://abcdefgh.supabase.co'
-  anonKey:     '',                 // publishable anon key
+  supabaseUrl: 'https://ztrfpfvvejzaysrelmfm.supabase.co',
+  anonKey:     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0cmZwZnZ2ZWp6YXlzcmVsbWZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNDkwNzYsImV4cCI6MjA4OTkyNTA3Nn0.ZTBga3-C1dZ-WQIw2rniyqv29So7L9y6rxk2omn4SjI',
   table:       'waitlist_signups'
 };
 
@@ -1032,12 +1031,6 @@ var WAITLIST = {
       consented_at:  new Date().toISOString()
     };
 
-    if (!WAITLIST.supabaseUrl || !WAITLIST.anonKey) {
-      say('Preview mode — nothing was sent. Add your Supabase details in the page script to go live.');
-      console.log('[waitlist] would submit:', payload);
-      return;
-    }
-
     var button = form.querySelector('.submit');
     button.disabled = true;
     say('Sending…');
@@ -1065,7 +1058,7 @@ var WAITLIST = {
       throw new Error('HTTP ' + response.status);
     }).catch(function (error) {
       console.error('[waitlist] submit failed', error);
-      say('That didn’t go through. Try again in a moment, or email hello@cerviced.com.');
+      say('That didn’t go through. Try again in a moment, or email support@cerviced.co.');
       button.disabled = false;
     });
   });

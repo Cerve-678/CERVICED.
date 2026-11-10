@@ -69,7 +69,7 @@ export default function ProfileNavigator() {
           // the screen read as one surface (theme.background differs).
           headerStyle: { backgroundColor: palette.bg },
           headerTintColor: palette.text,
-          headerTitleStyle: { fontFamily: 'JosefinSans-Bold', fontSize: 20, color: palette.text },
+          headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, color: palette.text },
         }}
       />
       <ProfileStack.Screen
@@ -184,7 +184,7 @@ export default function ProfileNavigator() {
           headerTransparent: false,
           headerShadowVisible: false,
           headerTitleStyle: {
-            fontFamily: 'JosefinSans-Bold',
+            fontFamily: 'BakbakOne',
             fontSize: 22,
             color: theme.text,
           },
@@ -202,7 +202,7 @@ export default function ProfileNavigator() {
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
           headerTitleStyle: {
-            fontFamily: 'JosefinSans-Bold',
+            fontFamily: 'BakbakOne',
             fontSize: 22,
             color: theme.text,
           },

@@ -3,8 +3,8 @@ import { TextStyle } from 'react-native';
 
 // Font family definitions
 export const FontFamilies = {
-  primary: 'JosefinSans-Bold',
-  secondary: 'JosefinSans-VariableFont_wght',
+  primary: 'BakbakOne-Regular',
+  secondary: 'Jura-VariableFont_wght',
   system: 'System', // Fallback for iOS, 'Roboto' for Android
 } as const;
 

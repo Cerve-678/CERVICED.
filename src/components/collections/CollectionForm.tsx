@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     fontSize: 16,
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
   },
   colours: { flexDirection: 'row', gap: 10 },
@@ -78,5 +78,5 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
   },
-  colourLabel: { fontSize: 13, fontFamily: 'JosefinSans-VariableFont_wght', fontWeight: '700' },
+  colourLabel: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', fontWeight: '700' },
 });

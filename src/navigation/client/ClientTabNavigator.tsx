@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   cartBadgeText: {
-    fontFamily: 'JosefinSans-Bold',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     color: '#fff',
     fontWeight: 'bold',

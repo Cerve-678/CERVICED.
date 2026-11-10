@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontFamily: 'JosefinSans-Bold', fontSize: 18 },
+  headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   headerSubtitle: { fontSize: 13, marginTop: 4 },
   closeButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   closeButtonText: { fontSize: 15, fontWeight: '700' },

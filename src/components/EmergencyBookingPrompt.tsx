@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   },
   card: { width: '100%', maxWidth: 380, maxHeight: '80%', borderRadius: 22, overflow: 'hidden' },
   cardBody: { padding: 22, paddingBottom: 8 },
-  title: { fontFamily: 'JosefinSans-Bold', fontSize: 19, marginBottom: 10 },
+  title: { fontFamily: 'BakbakOne-Regular', fontSize: 19, marginBottom: 10 },
   lead: { fontSize: 15, lineHeight: 21, fontWeight: '600', marginBottom: 14 },
   question: { fontSize: 15, lineHeight: 21, marginBottom: 8 },
   detail: { fontSize: 13, lineHeight: 19, marginBottom: 16 },

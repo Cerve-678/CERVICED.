@@ -101,8 +101,8 @@ export const colors = {
 
 export const typography = {
   fontFamily: {
-    heading: 'JosefinSans-Bold',
-    body: 'JosefinSans-VariableFont_wght',
+    heading: 'BakbakOne-Regular',
+    body: 'Jura-VariableFont_wght',
     mono: 'monospace',
   },
 

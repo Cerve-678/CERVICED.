@@ -31,7 +31,6 @@ import { PinyonScript_400Regular } from '@expo-google-fonts/pinyon-script/400Reg
 import { Sacramento_400Regular } from '@expo-google-fonts/sacramento/400Regular';
 import { Syne_700Bold } from '@expo-google-fonts/syne/700Bold';
 import { JosefinSans_600SemiBold } from '@expo-google-fonts/josefin-sans/600SemiBold';
-import { JosefinSans_700Bold } from '@expo-google-fonts/josefin-sans/700Bold';
 import { TenorSans_400Regular } from '@expo-google-fonts/tenor-sans/400Regular';
 import { PoiretOne_400Regular } from '@expo-google-fonts/poiret-one/400Regular';
 import { Limelight_400Regular } from '@expo-google-fonts/limelight/400Regular';
@@ -181,13 +180,6 @@ function StatusBarBlur() {
 
 export default Sentry.wrap(function App() {
   const [fontsLoaded, fontError] = useFonts({
-    // The app's own type: Josefin Sans Bold for headings, labels, prices and
-    // buttons; the variable Josefin Sans for everything else, so fontWeight
-    // works across its 100-700 range on iOS.
-    'JosefinSans-Bold': JosefinSans_700Bold,
-    'JosefinSans-VariableFont_wght': require('./assets/fonts/JosefinSans-VariableFont_wght.ttf'),
-    // Still loaded for the CERVICED name (it stays Bakbak One), the "Bakbak"
-    // business-name font, and the Jura / Bakbak One choices in Display settings.
     'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
     'Prata-Regular': require('./assets/fonts/Prata-Regular.ttf'),

@@ -40,7 +40,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   submitReview, getProviderIdByDisplayName, hasReviewedBooking,
-  getIntakeFormByBooking, IntakeForm, getBookedClientContact,
+  getIntakeFormsByBooking, IntakeForm, getBookedClientContact,
   ProviderContactInfo,
   getProviderBookingDetailMetadata,
   type ProviderBookingDetailMetadata,
@@ -77,6 +77,7 @@ import { logger } from '../../utils/logger';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
+import { formsToDoFirst } from '../../features/bookings/bookingForms';
 import { RecommendBookingButton } from '../../features/social/RecommendBookingButton';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
 
@@ -156,7 +157,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
 
   // Async data loaded on mount
-  const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
+  const [bookingIntakeForms, setBookingIntakeForms] = useState<IntakeForm[]>([]);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [todoLoaded, setTodoLoaded] = useState(false);
   const [todoLoadError, setTodoLoadError] = useState(false);
@@ -247,7 +248,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     const bookingChanged = todoBookingIdRef.current !== bookingId;
     todoBookingIdRef.current = bookingId;
     if (bookingChanged) {
-      setBookingIntakeForm(null);
+      setBookingIntakeForms([]);
       setBookingInfoPacks([]);
       setTodoLoaded(false);
     }
@@ -255,13 +256,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
     let active = true;
     Promise.allSettled([
-      getIntakeFormByBooking(bookingId),
+      getIntakeFormsByBooking(bookingId),
       getInfoPacksByBooking(bookingId),
     ]).then(([intakeResult, packsResult]) => {
       if (!active) return;
-      const form = intakeResult.status === 'fulfilled' ? intakeResult.value : null;
+      const forms = intakeResult.status === 'fulfilled' ? intakeResult.value : [];
       const packs = packsResult.status === 'fulfilled' ? packsResult.value : [];
-      if (intakeResult.status === 'fulfilled') setBookingIntakeForm(form);
+      if (intakeResult.status === 'fulfilled') setBookingIntakeForms(forms);
       if (packsResult.status === 'fulfilled') setBookingInfoPacks(packs);
       const hadError = intakeResult.status === 'rejected' || packsResult.status === 'rejected';
       setTodoLoadError(hadError);
@@ -271,7 +272,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       // next unrelated commit (the policy/countdown metadata resolving a beat
       // later) — which is the "glitch" where the whole screen twitched. A
       // fade, not the position-animating preset, so siblings don't slide.
-      if (form || packs.length > 0 || hadError) {
+      if (forms.length > 0 || packs.length > 0 || hadError) {
         LayoutAnimation.configureNext({
           duration: 220,
           create: { type: 'easeInEaseOut', property: 'opacity' },
@@ -1008,24 +1009,31 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           )}
-          {!isPast && todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (
+          {!isPast && todoLoaded && (bookingIntakeForms.length > 0 || bookingInfoPacks.length > 0) && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
-              {bookingIntakeForm && (
-                <TouchableOpacity style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: bookingIntakeForm.status === 'completed' ? 0.72 : 1 }]} activeOpacity={0.8}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClientIntakeForm', { formId: bookingIntakeForm.id, bookingId: bookingIntakeForm.bookingId, serviceName: booking.serviceName }); }}>
-                  <Text style={{ fontSize: 20 }}>📋</Text>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{bookingIntakeForm.title}</Text>
-                    <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>
-                      {bookingIntakeForm.status === 'completed' ? 'Submitted — tap to review your answers' : 'Your provider needs this before your appointment'}
-                    </Text>
-                  </View>
-                  <View style={[st.todoBadge, { backgroundColor: bookingIntakeForm.status === 'completed' ? '#34C759' : C.accent }]}>
-                    <Text style={[st.todoBadgeText, { color: bookingIntakeForm.status === 'completed' ? '#FFF' : C.onAccent }]}>{bookingIntakeForm.status === 'completed' ? 'Completed' : 'Required'}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
+              {/* Every form, not just the newest. A provider can send two (Terms
+                  & Conditions plus a consultation form); showing only the latest
+                  left the other one asked for in the Activity Centre with no way
+                  to reach it. Still-to-do forms come first. */}
+              {formsToDoFirst(bookingIntakeForms).map(form => {
+                const completed = form.status === 'completed';
+                return (
+                  <TouchableOpacity key={form.id} style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: completed ? 0.72 : 1 }]} activeOpacity={0.8}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClientIntakeForm', { formId: form.id, bookingId: form.bookingId, serviceName: booking.serviceName }); }}>
+                    <Text style={{ fontSize: 20 }}>📋</Text>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{form.title}</Text>
+                      <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>
+                        {completed ? 'Submitted — tap to review your answers' : 'Your provider needs this before your appointment'}
+                      </Text>
+                    </View>
+                    <View style={[st.todoBadge, { backgroundColor: completed ? '#34C759' : C.accent }]}>
+                      <Text style={[st.todoBadgeText, { color: completed ? '#FFF' : C.onAccent }]}>{completed ? 'Completed' : 'Required'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
               {bookingInfoPacks.map(pack => (
                 <TouchableOpacity key={pack.id} style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: pack.viewedAt ? 0.72 : 1 }]} activeOpacity={0.8}
                   onPress={() => {
@@ -2240,7 +2248,7 @@ const st = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mapActionBtnText: { fontFamily: 'JosefinSans-Bold', fontSize: 13, fontWeight: 'bold' },
+  mapActionBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, fontWeight: 'bold' },
   mapActionBtnDisabled: { opacity: 0.5 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },

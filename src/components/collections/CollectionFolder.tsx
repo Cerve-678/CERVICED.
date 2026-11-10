@@ -379,11 +379,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   name: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
   },
   count: {
-    fontFamily: 'JosefinSans-VariableFont_wght',
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     opacity: 0.8,
   },

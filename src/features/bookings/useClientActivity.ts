@@ -17,7 +17,7 @@ import { logger } from '../../utils/logger';
 import { bookingTodoCounts, buildClientActivity, type ClientActivity } from './activityCentre';
 
 export const EMPTY_ACTIVITY_REMOTE: ClientActivityRemote = {
-  pendingFormBookingIds: [], unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
+  pendingFormBookingIds: [], pendingFormTitles: {}, unreadPackBookingIds: [], openRefundRequests: [], feesToPay: [], waitlistHolds: [], recentlyDone: [],
 };
 
 export interface ClientActivityState {
