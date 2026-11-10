@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **198 files**
 - … +168 more
 
 ## Payments
-Curated: [[Payments]] · **162 files**
+Curated: [[Payments]] · **163 files**
 - `src/screens/client/CartScreen.tsx` _(530)_
 - `src/services/databaseService.ts` _(228)_
 - `src/screens/provider/PaymentsScreen.tsx` _(173)_
@@ -105,10 +105,10 @@ Curated: [[Payments]] · **162 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
-- … +132 more
+- … +133 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **365 files**
+Curated: [[Booking Flow]] · **366 files**
 - `src/services/databaseService.ts` _(1113)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **365 files**
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/features/bookings/activityCentre.ts` _(95)_
-- … +335 more
+- … +336 more
 
 ## Notifications
 Curated: [[Notifications]] · **188 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **67 files**
 - … +37 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **208 files**
+Curated: [[Booking Flow]] · **209 files**
 - `src/contexts/BookingContext.tsx` _(348)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(337)_
 - `src/services/databaseService.ts` _(271)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **208 files**
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `src/types/database.ts` _(38)_
-- … +178 more
+- … +179 more
 
 ## Auth
 Curated: [[Contexts]] · **218 files**
@@ -335,6 +335,7 @@ Curated: [[Services]] · **55 files**
 - `src/services/becca/registry.ts` _(10)_
 - `src/i18n/catalogs/en.ts` _(9)_
 - `src/services/becca/aiRuntime.ts` _(9)_
+- `src/services/becca/matcher.ts` _(9)_
 - `src/utils/env.ts` _(9)_
 - `src/navigation/provider/ProviderTabNavigator.tsx` _(8)_
 - `src/navigation/client/ClientTabNavigator.tsx` _(6)_
@@ -342,7 +343,6 @@ Curated: [[Services]] · **55 files**
 - `src/services/becca/capabilities/shared.ts` _(6)_
 - `src/i18n/catalogs/fr.ts` _(5)_
 - `src/i18n/catalogs/es.ts` _(4)_
-- `src/navigation/provider/tabs/ProviderServicesNavigator.tsx` _(4)_
 - … +25 more
 
 ## Cart & checkout
