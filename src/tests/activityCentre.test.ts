@@ -248,6 +248,27 @@ describe('activityTimeline', () => {
 
 describe('bookingTodoCounts', () => {
   it('counts forms and unread packs per booking', () => {
-    expect(bookingTodoCounts({ pendingFormBookingIds: ['a', 'b'], unreadPackBookingIds: ['a'] })).toEqual({ a: 2, b: 1 });
+    expect(bookingTodoCounts({ pendingFormBookingIds: ['a', 'b'], unreadPackBookingIds: ['a'] }, [booking('a'), booking('b')])).toEqual({ a: 2, b: 1 });
+  });
+
+  it('gives no "!" to a booking that is finished, cancelled or under way', () => {
+    // Live on 2026-11-09: 17 never-opened packs sat on done or cancelled bookings.
+    const counts = bookingTodoCounts(
+      { pendingFormBookingIds: ['now'], unreadPackBookingIds: ['done', 'cancelled', 'ahead'] },
+      [
+        booking('done', { status: BookingStatus.COMPLETED }),
+        booking('cancelled', { status: BookingStatus.CANCELLED }),
+        booking('now', { status: BookingStatus.IN_PROGRESS }),
+        booking('ahead'),
+      ],
+    );
+    expect(counts).toEqual({ ahead: 1 });
+  });
+
+  it('agrees with the Activity Centre list', () => {
+    const bookings = [booking('done', { status: BookingStatus.COMPLETED }), booking('ahead')];
+    const remote = { ...none, pendingFormBookingIds: ['done', 'ahead'], unreadPackBookingIds: ['done'] };
+    const listed = new Set(buildClientActivity(bookings, remote, NOW).needsYou.map(i => i.target.bookingId));
+    expect(Object.keys(bookingTodoCounts(remote, bookings))).toEqual([...listed]);
   });
 });
