@@ -103,8 +103,9 @@ describe('beauty maintenance migration contracts', () => {
     expect(body).toContain("DELETE FROM public.maintenance_items WHERE kind = 'event' AND event_on < CURRENT_DATE");
   });
 
-  it('keeps every push body generic and in one place', () => {
-    expect(fn('maintenance_notification_copy')).toContain("'You have something due. Open CERVICED to see it.'");
+  it('keeps every push body in one place', () => {
+    // The wording itself was superseded by 20261111090000 (names the item);
+    // maintenanceReminderCopy.test.ts pins that version.
     // Inserts take their title/message from the copy function, never a literal.
     for (const name of ['process_maintenance_reminders', 'handle_booking_completed_maintenance']) {
       expect(fn(name)).toMatch(/v_copy\.title, v_copy\.message/);
