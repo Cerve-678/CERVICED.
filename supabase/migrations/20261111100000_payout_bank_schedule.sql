@@ -144,7 +144,7 @@ CREATE TRIGGER enforce_provider_stripe_columns_server_only
   ON public.providers FOR EACH ROW EXECUTE FUNCTION public.enforce_provider_stripe_columns_server_only();
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261110190000', 'payout_bank_schedule')
+VALUES ('20261111100000', 'payout_bank_schedule')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

@@ -81,7 +81,9 @@ const STATUS: Record<string, { bg: string; darkBg: string; color: string; label:
   in_progress: { bg: '#F3EAFF', darkBg: '#2E1A40', color: '#7B2FBE', label: 'In Progress' },
 };
 
-function statusFor(s: string) {
+function statusFor(s: string, declinedAt?: string | null) {
+  // A request you (or the 24-hour expiry) turned down is stored as cancelled.
+  if (s === 'cancelled' && declinedAt) return { ...STATUS['cancelled']!, label: 'Declined' };
   return STATUS[s] ?? { bg: '#EDEDF0', darkBg: '#2E2E32', color: '#6C6C72', label: s };
 }
 
@@ -186,7 +188,7 @@ function filterBookings(bookings: BookingWithAddOns[], tab: TabKey, historyFilte
 function BookingCard({ booking, siblingCount, total, dark, P, onPress }: {
   booking: BookingWithAddOns; siblingCount: number; total: number; dark: boolean; P: Palette; onPress: () => void;
 }) {
-  const st    = statusFor(booking.status);
+  const st    = statusFor(booking.status, booking.declined_at);
   const mappedStatus = mapDbBookingStatus(booking.status);
   const done  = mappedStatus === BookingStatus.CANCELLED || mappedStatus === BookingStatus.NO_SHOW;
   const name  = booking.customer_name ?? 'Client';

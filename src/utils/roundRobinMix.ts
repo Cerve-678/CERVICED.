@@ -15,11 +15,18 @@ import { shuffle } from './shuffle';
  * shows. Dealing in rounds gives each group an equal share of the top.
  * Later rounds only hold the bigger groups, so the tail of a long feed is
  * less varied; that's what's actually there to show.
+ *
+ * `seenAt` (when given) says when the viewer last saw an item. Inside each
+ * group, unseen items come first in random order and seen ones after,
+ * longest-ago first, so every group leads with something new until
+ * everything has had a turn. Groups with something unseen also go ahead of
+ * groups the viewer has seen all of.
  */
 export function roundRobinMix<T>(
   items: readonly T[],
   groupOf: (item: T) => string | null | undefined,
   categoryOf?: (item: T) => string | null | undefined,
+  seenAt?: (item: T) => number | undefined,
 ): T[] {
   if (items.length < 2) return [...items];
 
@@ -36,11 +43,20 @@ export function roundRobinMix<T>(
     else groups.set(key, [item]);
   }
   // Items with no group each get a round slot of their own.
-  const queues: T[][] = [...groups.values(), ...ungrouped.map(item => [item])].map(shuffle);
+  const queues: T[][] = [...groups.values(), ...ungrouped.map(item => [item])].map(queue =>
+    seenAt ? freshFirst(queue, seenAt) : shuffle(queue),
+  );
 
-  const order = categoryOf
-    ? alternateCategories(queues, queue => categoryOf(queue[0]!) ?? '')
-    : shuffle(queues);
+  const arrange = (list: T[][]) =>
+    categoryOf ? alternateCategories(list, queue => categoryOf(queue[0]!) ?? '') : shuffle(list);
+  // A group whose lead is already seen means everything in it is; those go
+  // after the groups with something new, each part arranged as usual.
+  const order = seenAt
+    ? [
+        ...arrange(queues.filter(queue => seenAt(queue[0]!) === undefined)),
+        ...arrange(queues.filter(queue => seenAt(queue[0]!) !== undefined)),
+      ]
+    : arrange(queues);
 
   const out: T[] = [];
   let dealt = true;
@@ -55,6 +71,19 @@ export function roundRobinMix<T>(
     }
   }
   return out;
+}
+
+// Unseen items shuffled, then seen ones from the longest ago.
+function freshFirst<T>(items: readonly T[], seenAt: (item: T) => number | undefined): T[] {
+  const unseen: T[] = [];
+  const seen: { item: T; at: number }[] = [];
+  for (const item of items) {
+    const at = seenAt(item);
+    if (at === undefined) unseen.push(item);
+    else seen.push({ item, at });
+  }
+  seen.sort((a, b) => a.at - b.at);
+  return [...shuffle(unseen), ...seen.map(entry => entry.item)];
 }
 
 // Random order with no two neighbours sharing a category, whenever that's

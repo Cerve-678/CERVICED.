@@ -599,6 +599,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   providerBusinessType: fromDb.providerBusinessType ?? b.providerBusinessType,
                   remainingBalance: fromDb.remainingBalance,
                   paymentStatus: fromDb.paymentStatus,
+                  // A cancelled request reads "Declined" from this — the
+                  // cached copy was saved before the provider answered.
+                  cancelledBy: fromDb.cancelledBy,
+                  declinedAt: fromDb.declinedAt,
                 };
               });
               const localIds = new Set(migratedBookings.map((b: ConfirmedBooking) => b.id));

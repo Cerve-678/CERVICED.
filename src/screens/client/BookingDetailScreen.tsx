@@ -28,6 +28,7 @@ import { canDisputeNoShow, hasDirectionsDestination, isAddressPending, isMobileB
 import { directionsUrlFor } from '../../utils/mapsLink';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { isDeclinedRequest } from '../../features/bookings/statusPresentation';
 import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import {
   describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
@@ -710,9 +711,19 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       const providerDbId =
         b.providerId ?? (await getProviderIdByDisplayName(b.providerName).catch(() => null)) ?? undefined;
 
-      const live = providerDbId
-        ? await getRebookableService(providerDbId, b.serviceName).catch(() => null)
-        : null;
+      let live: Awaited<ReturnType<typeof getRebookableService>> = null;
+      if (providerDbId) {
+        try {
+          live = await getRebookableService(providerDbId, b.serviceName, b.serviceId);
+        } catch (error) {
+          // A failed lookup isn't a missing service — don't tell the client it's gone.
+          logger.error('[BookingDetail] rebook lookup failed', error);
+          setSuccessMessage("We couldn't check that service just now. Please try again in a moment.");
+          setSuccessIcon('⚠️');
+          setShowSuccessModal(true);
+          return;
+        }
+      }
 
       if (!live || !providerDbId) {
         setSuccessMessage(
@@ -955,7 +966,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={st.statusText}>
                     {booking.isPendingReschedule
                       ? (booking.rescheduleRequest?.providerAvailableDates ? 'RESCHEDULE OFFERED' : 'RESCHEDULE PENDING')
-                      : booking.status.replace('_', ' ').toUpperCase()}
+                      : isDeclinedRequest(booking)
+                        ? 'DECLINED'
+                        : booking.status.replace('_', ' ').toUpperCase()}
                   </Text>
                 </View>
               </View>

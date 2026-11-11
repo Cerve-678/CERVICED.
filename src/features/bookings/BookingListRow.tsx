@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { BookingStatus } from '../../contexts/BookingContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatBookingDate } from './presentation';
+import { isDeclinedRequest } from './statusPresentation';
 import type { BookingCardProps } from './presentationTypes';
 
 /**
@@ -50,6 +51,7 @@ export const BookingListRow = React.memo<BookingCardProps>(
         return (booking as any).rescheduleRequest?.providerAvailableDates ? 'AVAILABLE' : 'PENDING';
       }
       if (booking.status === BookingStatus.PENDING) return 'AWAITING CONFIRMATION';
+      if (isDeclinedRequest(booking)) return 'DECLINED';
       if (booking.status === BookingStatus.CANCELLED) return 'CANCELLED';
       if (booking.status === BookingStatus.NO_SHOW) return 'NO SHOW';
       return '';

@@ -1,5 +1,6 @@
 // Auto-generated Supabase database types for CERVICED
 // Keep in sync with supabase/phase1_schema.sql
+import type { ServiceTypeKey } from '../constants/serviceTypes';
 
 export type Json =
   | string
@@ -549,13 +550,8 @@ export interface DbService {
   audience: "women" | "men" | "kids" | "everyone" | null;
   // Context
   aftercare_notes: string | null;
-  service_type:
-    | "treatment"
-    | "enhancement"
-    | "maintenance"
-    | "restorative"
-    | "consultation"
-    | null;
+  // Limited by services_service_type_check; the list is in constants/serviceTypes.
+  service_type: ServiceTypeKey | null;
   // Only populated by queries that explicitly join service_add_ons (e.g.
   // getMyProviderServices) — most service reads leave it undefined.
   add_ons?: DbServiceAddOn[];
@@ -772,6 +768,9 @@ export interface DbBooking {
   /** client_bookings only: booked after that rule went live, so it applies. */
   late_reschedule_rule_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
+  /** A request declined by the provider or expired unanswered — see
+   *  20261110200000_booking_request_declined_at.sql. */
+  declined_at?: string | null;
   no_show_dispute_reason?: string | null;
   no_show_counted_at?: string | null;
   // Client intent — feeds search personalisation and Becca context

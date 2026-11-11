@@ -2,7 +2,7 @@
 //
 // "Rings" (chosen 2026-11-08): small overlapping faces, or initials, of
 // people you follow who recommend or have been to this provider. A
-// recommender's face carries a tiny heart; a visitor's face is bare. Up to 3
+// recommender's face carries a tiny heart; a visitor's face is bare. Up to 4
 // faces, then "+N" (2 on narrow cards). Tapping opens a sheet saying who
 // recommends and who has been, never which service.
 //

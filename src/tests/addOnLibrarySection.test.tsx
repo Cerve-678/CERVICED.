@@ -62,3 +62,20 @@ describe('AddOnLibrarySection', () => {
     expect(onEdit).toHaveBeenCalledWith(lashRemoval);
   });
 });
+
+describe('AddOnLibrarySection in the Add-ons tab', () => {
+  it('offers another add-on below the list', () => {
+    const onNew = jest.fn();
+    render(
+      <AddOnLibrarySection library={[lashRemoval]} categories={categories} palette={palette} onEdit={() => {}} onNew={onNew} inTab />,
+    );
+    expect(screen.getByText('Lash removal')).toBeTruthy();
+    fireEvent.press(screen.getByText('+ Add another add-on'));
+    expect(onNew).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the plain list without the extra button outside the tab', () => {
+    render(<AddOnLibrarySection library={[lashRemoval]} categories={categories} palette={palette} onEdit={() => {}} onNew={() => {}} />);
+    expect(screen.queryByText('+ Add another add-on')).toBeNull();
+  });
+});
