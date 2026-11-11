@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-11 (maintenance reminder names the item)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261111090000 | `maintenance_reminder_names_item` | **APPLIED 2026-11-11** on the user's go-ahead ("apply merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Forced-rollback dry run first (no error, version row 0 after, live md5s unchanged). Verified live: version present (now live max); copy function returns the three new lines; `process_maintenance_reminders` uses them, still SECURITY DEFINER; grants postgres + service_role only. Frontier at authoring and at apply: live max `20261110200000`; highest unapplied on an open PR `20261110190000_payout_bank_schedule` (#469, below the frontier, unrelated). Redefines from live with md5 guards: `maintenance_notification_copy` (`00e798d2…`) and `process_maintenance_reminders` (`3516a222…`); grants unchanged (postgres + service_role only). Written on `fix/maintenance-reminder-names-item`. |
+
 ### Applied 2026-11-10 (declined requests + accepted time)
 
 | Authored version | Name | Status |
