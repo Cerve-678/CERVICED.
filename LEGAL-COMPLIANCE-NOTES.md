@@ -640,11 +640,12 @@ pros instead of treating a save as consent; Terms say 30-day deletion grace.
   inbox (§7).
 - Things to put to a solicitor: 16 as the contracting age (§5); provider-set
   cancellation terms under the CRA 2015 (§6); the foreseeable-loss liability
-  clause; holds up to 30 days and chargeback recovery from future payouts in
-  shared Terms rather than a signed provider agreement; the provider indemnity;
+  clause; chargeback recovery from future payouts in shared Terms rather
+  than a signed provider agreement; the provider indemnity;
   who is data controller for client health information passed to providers
   (§2); PECR separation of marketing and booking notifications (§8).
 - No re-consent: existing users aren't asked to accept the new Terms (§10).
+- **Payouts changed 2026-11-10 and the Terms haven't:** provider Terms (cerviced.co/legal, "Payout period" and "Payouts") say CERVICED holds a provider's share for "the payout period you choose", then Stripe pays it "on its own schedule". Now CERVICED always holds 24 hours, and the provider chooses their Stripe bank schedule (daily, weekly, monthly; monthly by default). The 30-day hold question is gone with it. Wording is the user's call, not drafted here. Existing providers are moved to monthly the first time they open Payments, with **no advance notice**: the user decided on 2026-11-10 that this isn't a change needing the Provider Terms' 15-day notice. The legal review flagged it as arguable (Provider Terms §12 and §34, "significant change"); raise it with the solicitor along with the Terms wording. Nothing records that a provider was told.
 - The Privacy Policy (AboutScreen) still names privacy@cerviced.app (§13).
 
 ## 20. PayPal at checkout (2026-10-19)

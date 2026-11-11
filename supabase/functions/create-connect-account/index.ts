@@ -1,5 +1,9 @@
 import { readProviderFinance } from '../_shared/providerFinance.ts';
 import { createConnectedAccount } from '../_shared/createConnectedAccount.ts';
+import {
+  DEFAULT_PAYOUT_SCHEDULE, getStripePayoutSchedule, parsePayoutScheduleChoice, setStripePayoutSchedule,
+  type PayoutScheduleView,
+} from '../_shared/payoutSchedule.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 
@@ -25,8 +29,36 @@ interface RequestBody {
   // Deep links the app registers so Stripe can bounce the provider back into
   // it. `refreshUrl` is hit if the link expired before completion; `returnUrl`
   // when they finish (or bail) — the app then re-reads the account status.
-  action?: 'onboard' | 'status' | 'dashboard' | 'finance';
+  action?: 'onboard' | 'status' | 'dashboard' | 'finance' | 'payout_schedule' | 'set_payout_schedule';
   cursor?: string;
+  /** set_payout_schedule: { interval, weeklyDay?, monthlyDay? } (parsePayoutScheduleChoice). */
+  schedule?: unknown;
+}
+
+type AdminClient = ReturnType<typeof createClient>;
+
+/**
+ * Gives an account the default bank payout schedule (monthly, on the 1st) the
+ * first time the app sees it, and never again, so a provider's own choice is
+ * never overwritten. Claims the row first, so only one call applies it; gives
+ * the claim back if Stripe refuses, so a later call tries again. Returns null
+ * if the schedule has already been set.
+ */
+async function applyDefaultPayoutSchedule(admin: AdminClient, providerId: string, accountId: string): Promise<PayoutScheduleView | null> {
+  const { data: claimed, error: claimError } = await admin.from('providers')
+    .update({ stripe_payout_schedule_set_at: new Date().toISOString() })
+    .eq('id', providerId).is('stripe_payout_schedule_set_at', null)
+    .select('id');
+  if (claimError) throw claimError;
+  if (!claimed?.length) return null;
+  try {
+    return await setStripePayoutSchedule(Deno.env.get('STRIPE_SECRET_KEY')!, accountId, DEFAULT_PAYOUT_SCHEDULE);
+  } catch (err) {
+    const { error: releaseError } = await admin.from('providers')
+      .update({ stripe_payout_schedule_set_at: null }).eq('id', providerId);
+    if (releaseError) console.error(`[create-connect-account] could not release payout schedule claim for ${providerId}: ${String(releaseError)}`);
+    throw err;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -61,7 +93,7 @@ Deno.serve(async (req: Request) => {
     // explicitly too so the account can only ever be attached to their row.
     const { data: provider, error: providerError } = await supabase
       .from('providers')
-      .select('id, stripe_account_id, display_name')
+      .select('id, stripe_account_id, display_name, stripe_payout_schedule_set_at')
       .eq('user_id', user.id)
       .single();
     if (providerError || !provider) {
@@ -98,6 +130,41 @@ Deno.serve(async (req: Request) => {
       }
       return json(await readProviderFinance(stripe, accountId, body.cursor));
     }
+    // How often Stripe pays this provider's balance into their bank. Read
+    // from Stripe, the only copy; the first read gives the default.
+    if (body.action === 'payout_schedule') {
+      if (!accountId) return json({ schedule: null });
+      const secret = Deno.env.get('STRIPE_SECRET_KEY')!;
+      // If Stripe refuses the default (an account still being set up, say),
+      // show what Stripe has; the next read tries the default again.
+      const applied = provider.stripe_payout_schedule_set_at
+        ? null
+        : await applyDefaultPayoutSchedule(admin, provider.id, accountId).catch(err => {
+          console.error(`[create-connect-account] default payout schedule not applied for ${provider.id}: ${String(err)}`);
+          return null;
+        });
+      return json({ schedule: applied ?? await getStripePayoutSchedule(secret, accountId) });
+    }
+    if (body.action === 'set_payout_schedule') {
+      if (!accountId) return json({ code: 'payout_schedule_needs_stripe', error: 'Set up Stripe first.' }, 409);
+      const choice = parsePayoutScheduleChoice(body.schedule);
+      if (!choice) return json({ code: 'payout_schedule_invalid', error: 'Choose daily, weekly or monthly.' }, 400);
+      // Stamp first, so no later read applies the default over this choice.
+      // If Stripe refuses it, the stamp goes back to what it was, so a
+      // provider who never got the default still gets it.
+      const { error: stampError } = await admin.from('providers')
+        .update({ stripe_payout_schedule_set_at: new Date().toISOString() }).eq('id', provider.id);
+      if (stampError) throw stampError;
+      try {
+        const schedule = await setStripePayoutSchedule(Deno.env.get('STRIPE_SECRET_KEY')!, accountId, choice);
+        return json({ schedule });
+      } catch (err) {
+        const { error: restoreError } = await admin.from('providers')
+          .update({ stripe_payout_schedule_set_at: provider.stripe_payout_schedule_set_at ?? null }).eq('id', provider.id);
+        if (restoreError) console.error(`[create-connect-account] could not restore payout schedule stamp for ${provider.id}: ${String(restoreError)}`);
+        throw err;
+      }
+    }
     if (body.action === 'dashboard') {
       if (!accountId) throw new Error('No connected account');
       const link = await stripe.accounts.createLoginLink(accountId);
@@ -123,6 +190,11 @@ Deno.serve(async (req: Request) => {
         .select('stripe_account_id').eq('id', provider.id).single();
       if (readError || !fresh?.stripe_account_id) throw readError ?? new Error('Account could not be linked');
       accountId = fresh.stripe_account_id;
+
+      // Start the new account on the default bank schedule. Not fatal: if
+      // Stripe refuses, the next Payments read applies it instead.
+      await applyDefaultPayoutSchedule(admin, provider.id, accountId)
+        .catch(err => console.error(`[create-connect-account] default payout schedule not applied for ${provider.id}: ${String(err)}`));
 
     }
 

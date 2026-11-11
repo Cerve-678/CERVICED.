@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderStripePayments from '../components/ProviderStripePayments';
-import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderRefundState, getProviderFeeEarnings, getProviderTipEarnings, getPayoutHoldDays, setPayoutHoldDays } from '../services/providerPaymentService';
+import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderRefundState, getProviderFeeEarnings, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule } from '../services/providerPaymentService';
 
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'dismiss' }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
@@ -10,7 +10,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../services/providerPaymentService', () => ({
   getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(), getProviderTipEarnings: jest.fn(),
   getConnectLink: jest.fn(), refundProviderBooking: jest.fn(), getProviderRefundState: jest.fn(),
-  getPayoutHoldDays: jest.fn(), setPayoutHoldDays: jest.fn(),
+  getPayoutSchedule: jest.fn(), setPayoutSchedule: jest.fn(),
 }));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
@@ -34,7 +34,7 @@ beforeEach(() => {
   (getProviderFeeEarnings as jest.Mock).mockResolvedValue([]);
   (getProviderTipEarnings as jest.Mock).mockResolvedValue([]);
   (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: true, detailsSubmitted: true });
-  (getPayoutHoldDays as jest.Mock).mockResolvedValue(1);
+  (getPayoutSchedule as jest.Mock).mockResolvedValue({ interval: 'monthly', weeklyDays: [], monthlyDays: [1] });
   (getProviderPayouts as jest.Mock).mockResolvedValue([{
     id: 'payment', booking_id: 'booking', gross_amount: 10000, platform_fee: 1000, payout_amount: 9000,
     currency: 'gbp', status: 'held', created_at: '2026-10-01T10:00:00Z', release_after: '2026-10-03T10:00:00Z',
@@ -116,35 +116,48 @@ test('names the bank payouts land in, and points to Manage to change it', async 
   await waitFor(() => expect(ui.getByText('Paid to BARCLAYS BANK PLC ••6789. Tap Manage to change it.')).toBeTruthy());
 });
 
-test('a provider can choose how long after the appointment their share is released', async () => {
-  // Like the server: once saved, the refresh after the change reads the new value back.
-  (setPayoutHoldDays as jest.Mock).mockImplementation(async (days: number) => {
-    (getPayoutHoldDays as jest.Mock).mockResolvedValue(days);
-    return days;
-  });
+test('a provider chooses how often Stripe pays their bank; the release to Stripe stays at 24 hours', async () => {
+  (setPayoutSchedule as jest.Mock).mockImplementation(async (choice: { interval: string; weeklyDay?: string; monthlyDay?: number }) => ({
+    interval: choice.interval, weeklyDays: choice.weeklyDay ? [choice.weeklyDay] : [], monthlyDays: choice.monthlyDay ? [choice.monthlyDay] : [],
+  }));
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
-  // The choice lives in Payment settings; Payouts says what's set and where to change it.
   fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
-  expect(ui.getByText(/released to Stripe 24 hours after the appointment ends\. Change this in Payment settings\./)).toBeTruthy();
-  expect(ui.queryByText('7 days')).toBeNull();
+  expect(ui.getByText('Your share is released to Stripe 24 hours after the appointment ends.')).toBeTruthy();
+  expect(ui.getByText('Stripe pays your bank on the 1st of each month. Change this in Payment settings.')).toBeTruthy();
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
-  fireEvent.press(ui.getByText('7 days'));
-  await waitFor(() => expect(setPayoutHoldDays).toHaveBeenCalledWith(7));
-  await waitFor(() => expect(ui.getByRole('radio', { name: '7 days', selected: true })).toBeTruthy());
+  expect(ui.getByRole('radio', { name: 'Monthly', selected: true })).toBeTruthy();
+  expect(ui.getByRole('radio', { name: '1st', selected: true })).toBeTruthy();
+  // Weekly starts on Monday, then any weekday can be picked.
+  fireEvent.press(ui.getByText('Weekly'));
+  await waitFor(() => expect(setPayoutSchedule).toHaveBeenCalledWith({ interval: 'weekly', weeklyDay: 'monday' }));
+  fireEvent.press(await ui.findByText('Fri'));
+  await waitFor(() => expect(setPayoutSchedule).toHaveBeenLastCalledWith({ interval: 'weekly', weeklyDay: 'friday' }));
+  await waitFor(() => expect(ui.getByRole('radio', { name: 'Fri', selected: true })).toBeTruthy());
+  fireEvent.press(ui.getByText('Daily'));
+  await waitFor(() => expect(setPayoutSchedule).toHaveBeenLastCalledWith({ interval: 'daily' }));
   fireEvent.press(ui.getByRole('tab', { name: 'Payouts' }));
-  expect(ui.getByText(/released to Stripe 7 days after the appointment ends/)).toBeTruthy();
+  expect(ui.getByText('Stripe pays your bank every working day. Change this in Payment settings.')).toBeTruthy();
 });
 
-test('a failed timing change keeps the old choice and says why it failed', async () => {
-  (setPayoutHoldDays as jest.Mock).mockRejectedValue(new Error('offline'));
+test('a failed schedule change keeps the old choice and says why it failed', async () => {
+  (setPayoutSchedule as jest.Mock).mockRejectedValue(new Error('offline'));
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
-  fireEvent.press(ui.getByText('30 days'));
+  fireEvent.press(ui.getByText('Daily'));
   // An offline failure says so; any other unexplained one gets the retry line.
   await waitFor(() => expect(ui.getByText('No internet connection. Please check your network and try again.')).toBeTruthy());
-  expect(ui.getByRole('radio', { name: '24 hours', selected: true })).toBeTruthy();
+  expect(ui.getByRole('radio', { name: 'Monthly', selected: true })).toBeTruthy();
+});
+
+test('a schedule set in Stripe that the app does not offer is shown as it is, with nothing selected', async () => {
+  (getPayoutSchedule as jest.Mock).mockResolvedValue({ interval: 'manual', weeklyDays: [], monthlyDays: [] });
+  const ui = render(<ProviderStripePayments />);
+  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
+  expect(ui.getByText(/set to manual in Stripe, so nothing is sent until you choose a schedule/)).toBeTruthy();
+  expect(ui.queryByRole('radio', { selected: true })).toBeNull();
 });
 
 test('lists late and no-show fees with the provider\'s share and where the money is', async () => {
@@ -189,23 +202,14 @@ test('a tip whose booking payment is outside the list keeps its own section', as
   expect(ui.getByText('£10.00')).toBeTruthy();
 });
 
-test('an account with no professional profile is told to finish setting one up, not offered a choice that cannot save', async () => {
-  (getPayoutHoldDays as jest.Mock).mockResolvedValue(null);
+test('before Stripe is set up there is no schedule to choose, so it says to set up Stripe first', async () => {
+  (getPayoutSchedule as jest.Mock).mockResolvedValue(null);
   const ui = render(<ProviderStripePayments />);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
-  expect(ui.getByText('Finish setting up your professional profile to choose when you get paid.')).toBeTruthy();
-  expect(ui.queryByText('7 days')).toBeNull();
-  expect(setPayoutHoldDays).not.toHaveBeenCalled();
-});
-
-test("shows the server's own reason when it refuses a timing change", async () => {
-  (setPayoutHoldDays as jest.Mock).mockRejectedValue({ code: 'P0001', message: 'Only a professional account can change payout timing.' });
-  const ui = render(<ProviderStripePayments />);
-  await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
-  fireEvent.press(ui.getByRole('tab', { name: 'Payment settings' }));
-  fireEvent.press(ui.getByText('7 days'));
-  await waitFor(() => expect(ui.getByText('Only a professional account can change payout timing.')).toBeTruthy());
+  expect(ui.getByText('Set up your Stripe account to choose when you get paid.')).toBeTruthy();
+  expect(ui.queryByText('Weekly')).toBeNull();
+  expect(setPayoutSchedule).not.toHaveBeenCalled();
 });
 
 test('before Stripe is set up, the dashboard is just the connect card — Payment settings still works', async () => {

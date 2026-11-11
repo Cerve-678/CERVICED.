@@ -91,7 +91,7 @@ import {
   type CollectionColor,
   type ExploreCollection,
 } from "../types/collections";
-import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
+import { PAYOUT_INTERVALS, type PayoutSchedule, type PayoutScheduleChoice } from "../constants/payoutSchedule";
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
 import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
@@ -12380,30 +12380,38 @@ export async function getHeldPayoutPence(bookingId: string): Promise<number | nu
   return data?.status === 'held' ? Number(data.payout_amount) : null;
 }
 
-/**
- * The provider's own payout timing (provider reading their own record). null
- * when the account has no professional profile yet, so there's nothing to set.
- */
-export async function getPayoutHoldDays(): Promise<PayoutHoldDays | null> {
-  const { data: { user }, error: authError } = await getSessionUser();
-  if (authError || !user) throw new Error('Please sign in again.');
-  const { data, error } = await supabase.from('providers')
-    .select('payout_hold_days').eq('user_id', user.id).maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  return isPayoutHoldDays(data.payout_hold_days) ? data.payout_hold_days : DEFAULT_PAYOUT_HOLD_DAYS;
+function readPayoutSchedule(value: unknown): PayoutSchedule | null {
+  if (value === null) return null;
+  const raw = value as Partial<PayoutSchedule> | undefined;
+  const interval = raw?.interval;
+  if (!interval || !([...PAYOUT_INTERVALS, 'manual', 'unknown'] as string[]).includes(interval)) {
+    throw new Error('Your payout schedule could not be read.');
+  }
+  return {
+    interval,
+    weeklyDays: Array.isArray(raw.weeklyDays) ? raw.weeklyDays.filter((d): d is string => typeof d === 'string') : [],
+    monthlyDays: Array.isArray(raw.monthlyDays) ? raw.monthlyDays.filter((d): d is number => typeof d === 'number') : [],
+  };
 }
 
 /**
- * Changes how long after an appointment the provider's share is held. A longer
- * choice also pushes back payouts still held; a shorter one applies to new
- * bookings only.
+ * How often Stripe pays the provider's balance into their bank, read from
+ * Stripe (the only copy). null when they haven't set up Stripe yet, so there
+ * is no schedule to choose.
  */
-export async function setPayoutHoldDays(days: PayoutHoldDays): Promise<PayoutHoldDays> {
-  const { data, error } = await supabase.rpc('set_payout_hold_days', { p_days: days });
-  if (error) throw error;
-  if (!isPayoutHoldDays(data)) throw new Error('Payout timing could not be confirmed. Refresh to check it.');
-  return data;
+export async function getPayoutSchedule(): Promise<PayoutSchedule | null> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'payout_schedule' } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your payout schedule could not load. Refresh to try again.');
+  return readPayoutSchedule(data?.schedule);
+}
+
+/** Sets how often Stripe pays the provider's bank, and returns what Stripe now has. */
+export async function setPayoutSchedule(choice: PayoutScheduleChoice): Promise<PayoutSchedule> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'set_payout_schedule', schedule: choice } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your payout schedule was not changed. Please try again.');
+  const schedule = readPayoutSchedule(data?.schedule);
+  if (!schedule) throw new Error('Your payout schedule could not be confirmed. Refresh to check it.');
+  return schedule;
 }
 
 /** A late/no-show fee this provider charged, with their share after Stripe's card fee. */
