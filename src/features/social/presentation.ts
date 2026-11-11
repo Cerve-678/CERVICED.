@@ -17,7 +17,7 @@ export interface CircleRow {
 }
 
 /** Most faces a card shows before "+N". Narrow cards show fewer. */
-export const STACK_MAX_FACES = 3;
+export const STACK_MAX_FACES = 4;
 export const STACK_MAX_FACES_NARROW = 2;
 /** Cards narrower than this (px) use the narrow count. */
 export const STACK_NARROW_CARD_WIDTH = 140;
