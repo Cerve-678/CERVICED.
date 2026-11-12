@@ -81,6 +81,17 @@ export interface MoneyAttention {
     paid_pence: number;
     refunded_pence: number;
   }>;
+  /** Cancelled bookings still owed a refund an hour on (20261112120000).
+   *  Optional so an older database without it still summarises. */
+  unsent_refunds?: Array<{
+    booking_id: string;
+    cause: 'client_cancelled' | 'offer_declined' | 'provider_cancelled' | 'request_expired' | 'other_automatic';
+    client_name: string | null;
+    provider_name: string | null;
+    service_name: string | null;
+    amount_pence: number;
+    attempts: number;
+  }>;
 }
 
 const pounds = (pence: number) => `£${(Number(pence) / 100).toFixed(2)}`;
@@ -97,6 +108,7 @@ export function summarizeMoneyAttention(data: MoneyAttention): {
   failed: MoneySummaryLine[];
   owed: MoneySummaryLine[];
   refunds: MoneySummaryLine[];
+  unsentRefunds: MoneySummaryLine[];
 } {
   return {
     failed: (data.failed ?? []).map((f) => {
@@ -115,5 +127,18 @@ export function summarizeMoneyAttention(data: MoneyAttention): {
       title: `${r.status === 'under_review' ? 'Needs you' : 'With the provider'}: ${r.client_name || 'Client'}, ${r.service_name || 'booking'} with ${r.provider_name || 'their provider'}`,
       amount: pounds(Math.max(0, r.paid_pence - r.refunded_pence)),
     })),
+    unsentRefunds: (data.unsent_refunds ?? []).map((u) => {
+      const by = u.cause === 'client_cancelled' ? 'they cancelled'
+        : u.cause === 'offer_declined' ? 'they declined the new time'
+        : u.cause === 'provider_cancelled' ? 'the provider cancelled'
+        : u.cause === 'request_expired' ? 'the request expired' : 'cancelled automatically';
+      const tries = u.cause === 'other_automatic' ? 'not sent again automatically, needs you'
+        : u.attempts >= 5 ? `sent again ${u.attempts} times, needs you`
+        : `sent again ${u.attempts} ${u.attempts === 1 ? 'time' : 'times'} so far`;
+      return {
+        title: `${u.client_name || 'Client'}, ${u.service_name || 'booking'} with ${u.provider_name || 'their provider'}: ${by}, refund never went out (${tries})`,
+        amount: pounds(u.amount_pence),
+      };
+    }),
   };
 }

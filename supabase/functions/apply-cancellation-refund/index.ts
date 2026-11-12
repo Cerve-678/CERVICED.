@@ -1,4 +1,5 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
+import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 import { takeBackFromProvider } from '../_shared/takeBack.ts';
 import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { findPayoutTransfer } from '../_shared/payoutTransfer.ts';
@@ -81,14 +82,21 @@ Deno.serve(async (req: Request) => {
     const body: RequestBody = await req.json();
     if (!body.bookingId) return json({ error: 'Invalid request' }, 400);
 
-    // Authorise: must be the booking's own client.
-    const userClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return json({ error: 'Invalid session' }, 401);
+    // Authorise: the booking's own client, or the server sending a refund
+    // that never went out (process_unsent_refunds). Everything below still
+    // only settles a client's own cancellation, once.
+    const isServiceCaller = await isServiceRoleRequest(authHeader);
+    let callerId: string | null = null;
+    if (!isServiceCaller) {
+      const userClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: { user }, error: authError } = await userClient.auth.getUser();
+      if (authError || !user) return json({ error: 'Invalid session' }, 401);
+      callerId = user.id;
+    }
 
     // Load the booking with the service role (private payment fields). We need
     // the frozen policy snapshot and the stored money figures.
@@ -99,7 +107,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (bookingError) throw bookingError;
     if (!booking) return json({ error: 'Booking not found' }, 404);
-    if (booking.user_id !== user.id) return json({ error: 'You can only settle your own booking.' }, 403);
+    if (!isServiceCaller && booking.user_id !== callerId) return json({ error: 'You can only settle your own booking.' }, 403);
 
     // Only ever runs after the booking is actually cancelled — never a way to
     // refund a live booking.
