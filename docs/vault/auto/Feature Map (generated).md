@@ -10,7 +10,7 @@ Curated: [[Address Release]] · **103 files**
 - `src/services/databaseService.ts` _(200)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
-- `src/screens/provider/InfoRegScreen.tsx` _(92)_
+- `src/screens/provider/InfoRegScreen.tsx` _(93)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/services/providerRegistrationService.ts` _(71)_
 - `src/screens/client/CartScreen.tsx` _(65)_
