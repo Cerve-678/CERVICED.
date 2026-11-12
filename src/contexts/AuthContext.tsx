@@ -34,6 +34,7 @@ import { toPickColumn } from '../features/beauty-profile/pickList';
 import { clearAuthProfileSnapshot, readAuthProfileSnapshot, saveAuthProfileSnapshot } from '../services/authProfileSnapshot';
 import { getAccountHatState, ownsHat, resolveActiveHat, type AccountHatState } from '../utils/accountHats';
 import type { ProviderBookingMode } from '../types/database';
+import { accountDeletionError } from '../utils/accountDeletionError';
 
 export type AccountType = 'user' | 'provider';
 
@@ -159,18 +160,6 @@ interface AuthContextType {
   isReactivating: boolean;
   reactivateAccount: () => Promise<void>;
   declineReactivation: () => Promise<void>;
-}
-
-/** Turns a failed delete_client_profile/delete_provider_profile RPC result
- *  into a message worth showing the user (as opposed to a raw error code). */
-function accountDeletionError(data: any): Error {
-  if (data?.error === 'upcoming_bookings') {
-    const count = data?.count ?? 0;
-    return new Error(
-      `You have ${count} upcoming appointment${count === 1 ? '' : 's'}. Please cancel or complete ${count === 1 ? 'it' : 'them'} first.`
-    );
-  }
-  return new Error(data?.error || 'Could not delete your account.');
 }
 
 /** Best-effort cleanup of a user's own <uid>/ folder in a storage bucket —
