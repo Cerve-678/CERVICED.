@@ -108,6 +108,52 @@ CREATE POLICY provider_waitlist_client_leave ON public.provider_waitlist
   FOR DELETE TO authenticated
   USING (auth.uid() = user_id AND status <> 'notified');
 
+-- The names on a waitlist row reach other people (the provider's list and
+-- notifications, the client's notices), so the server writes them, not the
+-- client. A row can only be for a live provider, and for one of their own
+-- active services. An "any service" row (service_id NULL, how Becca joins)
+-- keeps the client's own description of what they want.
+CREATE OR REPLACE FUNCTION public.set_waitlist_entry_snapshots()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_provider_name text;
+  v_service_name text;
+BEGIN
+  SELECT p.display_name INTO v_provider_name
+    FROM public.providers p
+   WHERE p.id = NEW.provider_id AND p.has_gone_live = true AND p.is_active = true;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'This provider isn''t taking bookings right now';
+  END IF;
+  NEW.provider_name_snapshot := COALESCE(v_provider_name, NEW.provider_name_snapshot);
+
+  IF NEW.service_id IS NOT NULL THEN
+    SELECT s.name INTO v_service_name
+      FROM public.services s
+     WHERE s.id = NEW.service_id AND s.provider_id = NEW.provider_id AND s.is_active = true;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'That service is no longer available';
+    END IF;
+    NEW.service_name_snapshot := v_service_name;
+  END IF;
+
+  SELECT NULLIF(btrim(u.name), '') INTO NEW.user_name_snapshot
+    FROM public.users u WHERE u.id = NEW.user_id;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.set_waitlist_entry_snapshots() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_waitlist_entry_snapshots ON public.provider_waitlist;
+CREATE TRIGGER trg_waitlist_entry_snapshots
+  BEFORE INSERT ON public.provider_waitlist
+  FOR EACH ROW EXECUTE FUNCTION public.set_waitlist_entry_snapshots();
+
 -- ── 3. Slots that came back to a provider with Auto-fill off ───────────────
 CREATE TABLE IF NOT EXISTS public.waitlist_released_slots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -624,8 +670,11 @@ BEGIN
     IF NOT FOUND THEN
       RAISE EXCEPTION 'That client is no longer waiting';
     END IF;
+    -- The slot's end time belongs to its own service; another service's
+    -- length is worked out from that service instead.
     PERFORM public.offer_waitlist_slot(
-      p_entry_id, COALESCE(v_entry_service, s.service_id), s.booking_date, s.booking_time, s.end_time);
+      p_entry_id, COALESCE(v_entry_service, s.service_id), s.booking_date, s.booking_time,
+      CASE WHEN v_entry_service IS NULL OR v_entry_service = s.service_id THEN s.end_time END);
   END IF;
 
   UPDATE public.waitlist_released_slots SET resolved_at = now() WHERE id = s.id;
@@ -812,6 +861,18 @@ BEGIN
        AND b.hold_expires_at > now()
      FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'This waitlist slot is no longer held for you'; END IF;
+    -- A payment already started on this hold must finish (or be cancelled)
+    -- first. Re-pointing the row at a new checkout would leave the first
+    -- payment finalising with no booking, and the client charged twice.
+    IF v_wl_hold.hold_batch_id IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.checkout_batches cb
+       WHERE cb.id = v_wl_hold.hold_batch_id
+         AND cb.status = 'prepared'
+         AND cb.payment_intent_id IS NOT NULL
+         AND cb.expires_at > now()
+    ) THEN
+      RAISE EXCEPTION 'Your payment for this slot is still going through. Check your bookings in a moment.';
+    END IF;
     v_expiry := LEAST(v_expiry, v_wl_hold.hold_expires_at);
   END IF;
 

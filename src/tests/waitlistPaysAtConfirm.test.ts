@@ -140,6 +140,21 @@ describe('the migration keeps waitlist slots paid for', () => {
     expect(prepare).toContain('b.user_id = auth.uid()');
   });
 
+  it('refuses a second checkout while a payment on the hold is going through', () => {
+    // Re-pointing the hold at a new checkout would leave the first payment
+    // finalising with no booking.
+    const prepare = fn('prepare_checkout');
+    expect(prepare).toContain('cb.id = v_wl_hold.hold_batch_id');
+    expect(prepare).toContain('cb.payment_intent_id IS NOT NULL');
+  });
+
+  it('writes the names on a waitlist row on the server', () => {
+    const snapshots = fn('set_waitlist_entry_snapshots');
+    expect(snapshots).toContain('p.has_gone_live = true');
+    expect(snapshots).toContain('NEW.user_name_snapshot');
+    expect(sql).toContain('BEFORE INSERT ON public.provider_waitlist');
+  });
+
   it("leaves a waitlist hold to the waitlist's own expiry", () => {
     expect(fn('expire_cart_holds').match(/AND b\.waitlist_entry_id IS NULL/g)).toHaveLength(2);
     expect(fn('cancel_checkout')).toContain('SET hold_batch_id = NULL');
