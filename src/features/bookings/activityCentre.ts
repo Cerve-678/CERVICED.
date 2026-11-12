@@ -6,7 +6,7 @@
 // BookingContext plus getMyActivity()'s reads, and gets the list back.
 //
 // Every item points at the place the thing is actually done (the booking's
-// detail screen, the reschedule picker, the waitlist hold popup). Nothing here
+// detail screen, the reschedule picker, the held slot at the top of Bookings). Nothing here
 // acts on its own, and the refund wording follows refundRequestTimeline.ts:
 // it never promises money.
 
@@ -193,8 +193,8 @@ export function buildClientActivity(
       key: `hold:${hold.bookingId}`,
       kind: 'waitlist_hold',
       title: 'A slot opened up for you',
-      detail: `${service} with ${provider}${slot ? ` · ${slot}` : ''}.${until ? ` Confirm it before ${until}.` : ''}`,
-      summary: `Confirm your ${service} slot${until ? ` before ${until}` : ''}`,
+      detail: `${service} with ${provider}${slot ? ` · ${slot}` : ''}.${until ? ` Confirm and pay for it before ${until}.` : ''}`,
+      summary: `Confirm and pay for your ${service} slot${until ? ` before ${until}` : ''}`,
       caption: until ? `Ends at ${until}` : undefined,
       target: { type: 'waitlist_hold', bookingId: hold.bookingId },
       sortAt: isoMs(hold.holdExpiresAt) ?? nowMs,

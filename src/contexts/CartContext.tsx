@@ -102,6 +102,17 @@ export interface CartItem {
    *  re-derived whenever the date/time changes — a request reason belongs to
    *  the time it was accepted for, never to the item. */
   emergencyRequest?: EmergencyRequest;
+  /** Set when this item pays for a waitlist slot held for the client. Its
+   *  date and time can't change, the hold's own 15 minutes keep running, and
+   *  checkout sends the hold's booking id so the server reuses that row (see
+   *  features/bookings/waitlist.ts). */
+  waitlistHold?: WaitlistHoldRef;
+}
+
+/** A waitlist hold an item pays for: the on_hold booking and when it ends. */
+export interface WaitlistHoldRef {
+  bookingId: string;
+  expiresAt: string;
 }
 
 export interface CartState {
@@ -174,6 +185,8 @@ export interface AddToCartParams {
   policySnapshot?: Record<string, unknown> | undefined;
   /** See CartItem.emergencyRequest. */
   emergencyRequest?: EmergencyRequest | undefined;
+  /** See CartItem.waitlistHold. */
+  waitlistHold?: WaitlistHoldRef | undefined;
 }
 
 /** Fields a BookingSheet edit can change on an existing cart item. */
@@ -314,7 +327,8 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           isDepositOnly,
           bookingBatchId,
           policySnapshot,
-          emergencyRequest
+          emergencyRequest,
+          waitlistHold
         } = action.payload;
 
         const instanceId = forceNewInstance || safeGet(service, 'instanceId') ? 
@@ -363,9 +377,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             ...(isDepositOnly ? { isDepositOnly } : {}),
             ...(bookingBatchId ? { bookingBatchId } : {}),
             ...(policySnapshot ? { policySnapshot } : {}),
-            ...(emergencyRequest ? { emergencyRequest } : {})
+            ...(emergencyRequest ? { emergencyRequest } : {}),
+            ...(waitlistHold ? { waitlistHold } : {})
           };
-          newItems = [...state.items, newItem];
+          // One cart line per held slot: a second tap on "Confirm & pay"
+          // replaces the line rather than adding the same hold twice.
+          newItems = waitlistHold
+            ? [...state.items.filter(existing => existing.waitlistHold?.bookingId !== waitlistHold.bookingId), newItem]
+            : [...state.items, newItem];
         }
 
         const totals = calculateTotals(newItems);
@@ -447,9 +466,16 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         // Spread, not a merge that skips undefined: callers clear a field by
         // passing it explicitly as undefined (splitting an item out of a
         // group sends bookingBatchId: undefined), and that must overwrite.
-        const newItems: CartItem[] = state.items.map(item =>
-          safeGet(item, 'id') === itemId ? ({ ...item, ...updates } as CartItem) : item
-        );
+        const newItems: CartItem[] = state.items.map(item => {
+          if (safeGet(item, 'id') !== itemId) return item;
+          // A held waitlist slot is one fixed time: nothing in the cart may
+          // move it, group it or turn it into a request.
+          if (item.waitlistHold) {
+            const { selectedDate: _d, selectedTime: _t, emergencyRequest: _e, bookingBatchId: _b, ...allowed } = updates;
+            return { ...item, ...allowed } as CartItem;
+          }
+          return { ...item, ...updates } as CartItem;
+        });
         const totals = calculateTotals(newItems);
         return { ...state, items: newItems, ...totals };
       }

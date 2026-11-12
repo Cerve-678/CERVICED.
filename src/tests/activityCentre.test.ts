@@ -125,7 +125,7 @@ describe('buildClientActivity', () => {
     expect(inProgress[0]!.detail).toBe("Braids by Amara hasn't confirmed Knotless braids on Thu 12 Nov at 2:30pm yet.");
   });
 
-  it('sends a waitlist hold to the hold popup', () => {
+  it('sends a waitlist hold to the held slot in Bookings', () => {
     const remote: ClientActivityRemote = {
       ...none,
       waitlistHolds: [{
@@ -135,7 +135,7 @@ describe('buildClientActivity', () => {
     };
     const { needsYou } = buildClientActivity([], remote, NOW);
     expect(needsYou[0]).toMatchObject({ kind: 'waitlist_hold', target: { type: 'waitlist_hold', bookingId: 'h1' } });
-    expect(needsYou[0]!.detail).toMatch(/^Silk press with Hair by Jo · Tue 10 Nov at 09:00am\. Confirm it before /);
+    expect(needsYou[0]!.detail).toMatch(/^Silk press with Hair by Jo · Tue 10 Nov at 09:00am\. Confirm and pay for it before /);
   });
 });
 

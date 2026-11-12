@@ -1333,6 +1333,11 @@ export const AvailabilityService = {
       serviceId?: string | undefined;
       /** See isSlotAvailable — set from CartItem.emergencyRequest. */
       isEmergencyRequest?: boolean | undefined;
+      /** A waitlist slot already held for this client (CartItem.waitlistHold).
+       *  Its own hold makes the slot read as taken, so the "is it free" check
+       *  is skipped; prepare_checkout confirms the hold is theirs. The clash
+       *  checks against the client's diary and the rest of the cart still run. */
+      heldForClient?: boolean | undefined;
     }[]
   ): Promise<BookingConflictResult> {
     const conflicts: BookingConflictResult['conflicts'] = [];
@@ -1398,7 +1403,7 @@ export const AvailabilityService = {
     // time, turns an N-item cart's checkout check from N sequential round
     // trips into one wave of N — the difference is most visible on a
     // multi-service, same-provider booking.
-    const nonStaleBookings = bookings.filter(b => !staleItemIds.has(b.cartItemId));
+    const nonStaleBookings = bookings.filter(b => !staleItemIds.has(b.cartItemId) && !b.heldForClient);
     const slotChecks = await Promise.all(
       nonStaleBookings.map(booking =>
         this.isSlotAvailable(
@@ -1421,9 +1426,9 @@ export const AvailabilityService = {
       if (staleItemIds.has(booking.cartItemId)) continue;
 
       // Check against existing bookings in storage
-      const existingConflict = slotConflictByCartItemId.get(booking.cartItemId)!;
+      const existingConflict = slotConflictByCartItemId.get(booking.cartItemId);
 
-      if (existingConflict.hasConflict) {
+      if (existingConflict?.hasConflict) {
         conflicts.push({
           cartItemId: booking.cartItemId,
           message: existingConflict.message || 'Time slot is no longer available',
