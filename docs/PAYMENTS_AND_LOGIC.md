@@ -275,7 +275,11 @@ Three things can finish a checkout once the card is approved, all through
 `settleCheckout`: the app, the signed Stripe webhook, and the
 `reconcile-checkouts` job every 5 minutes, which picks up any checkout started
 3 or more minutes ago with a payment on it and still open. A checkout that was
-never paid is marked `abandoned` once its hold is over, and nothing is sent. The
+never paid is marked `abandoned` once its hold is over, and nothing is sent. A
+checkout whose payment Stripe has no record of (for example one made on the
+Stripe account the app used before 29 September) is also marked `abandoned`,
+and support is emailed the checkout and payment ids, instead of being asked
+about every 5 minutes for good. The
 notices come from the database, so they reach the client whichever of the three
 finished it.
 
@@ -349,6 +353,7 @@ ever be sent once, even if the job runs twice.
 | Provider | Told once, on the first failure, **only if** their Stripe account is the problem ("We couldn't send your £X… finish setting it up") |
 | After the 4th failure | Marked **failed**. A person must retry it from the admin Money screen |
 | If CERVICED can't tell whether Stripe sent it (for example, a timeout) | Marked **failed** at once, with no retry. A person must check Stripe first |
+| If Stripe errors while the job is checking the payment, before sending | A failed try like any other: retried about 1, 2 and 4 days later, support emailed each time, never the provider. The rest of the payouts in that run still go out |
 
 Each failure is classified as one of three causes:
 
@@ -1034,6 +1039,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |
 | 10 Nov | Providers choose how often Stripe pays their bank (daily, weekly or monthly), not how long CERVICED holds their money. The release hold is fixed at 24 hours, and everyone starts on monthly, the 1st. Not live until migration `20261111100000_payout_bank_schedule` is applied, `create-connect-account` is deployed, and a new app build ships | Day counts were read as "when the bank gets paid", and a long CERVICED hold was an unreviewed legal risk. Money waiting in the provider's Stripe balance can still cover refunds |
+| 12 Nov | One payout's Stripe check failing no longer stops the payout job; it becomes a failed try on the usual schedule. A checkout whose payment Stripe doesn't have is closed as abandoned and support is told | One bad payout could otherwise hold up every provider's payout indefinitely, and the September test checkout had errored every 5 minutes since |
 
 ---
 

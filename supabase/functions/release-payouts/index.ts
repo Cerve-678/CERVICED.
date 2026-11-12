@@ -129,13 +129,28 @@ Deno.serve(async (req: Request) => {
         skipped++;
         continue;
       }
-      const payment = await stripe.paymentIntents.retrieve(booking.payment_intent_id);
-      if (payment.status !== 'succeeded' || !payment.latest_charge) {
+      // Stripe's answer for this one payout. If Stripe errors (an outage, or
+      // a payment it can't find), this payout counts as a failed try and
+      // waits for its next retry, so it can't stop the payouts behind it.
+      // Nothing has been sent or deducted yet, so there's nothing to undo.
+      let charge: Stripe.Charge | null = null;
+      try {
+        const payment = await stripe.paymentIntents.retrieve(booking.payment_intent_id);
+        if (payment.status === 'succeeded' && payment.latest_charge) {
+          charge = await stripe.charges.retrieve(
+            typeof payment.latest_charge === 'string' ? payment.latest_charge : payment.latest_charge.id,
+          );
+        }
+      } catch (err) {
+        await recordCheckFailure(row, err);
+        failed++;
+        continue;
+      }
+      if (!charge) {
         skipped++;
         continue;
       }
-      const chargeId = typeof payment.latest_charge === 'string' ? payment.latest_charge : payment.latest_charge.id;
-      const charge = await stripe.charges.retrieve(chargeId);
+      const chargeId = charge.id;
       if (charge.disputed) { skipped++; continue; }
       // A refund on the charge is fine only if every penny of it is one the
       // booking_refunds ledger recorded AND already took off its payout. (A
@@ -344,6 +359,33 @@ async function reportPayoutFailure(
   } catch (e) {
     console.error(`[release-payouts] could not report failed payout ${row.id}: ${String(e)}`);
   }
+}
+
+// A payout whose Stripe checks failed before anything was sent: a failed try
+// on the usual retry schedule (about 1, 2 and 4 days), with support told each
+// time, then 'failed' for a person after the last one. Always counted as
+// 'other': the provider's Stripe account isn't what failed, so the provider is
+// never told to fix it.
+interface DuePayout { id: string; booking_id: string; provider_id: string; payout_amount: number; attempt_count: number | null }
+
+async function recordCheckFailure(row: DuePayout, cause: unknown) {
+  const err = new Error(`Stripe check before sending failed: ${String(cause)}`);
+  const attempts = Number(row.attempt_count ?? 0) + 1;
+  const retryAt = nextPayoutRetryAt(attempts, new Date());
+  const { error: writeErr } = await admin
+    .from('provider_payouts')
+    .update({
+      ...(retryAt ? { release_after: retryAt.toISOString() } : { status: 'failed' }),
+      failure_reason: err.message.slice(0, 500),
+      failure_cause: 'other',
+      attempt_count: attempts,
+      last_failed_at: new Date().toISOString(),
+    })
+    .eq('id', row.id)
+    .eq('status', 'held');
+  if (writeErr) console.error(`[release-payouts] fail-status write errored for ${row.id}: ${String(writeErr)}`);
+  console.error(`[release-payouts] ${err.message} (payout ${row.id}, try ${attempts})`);
+  await reportPayoutFailure(row, err, attempts, retryAt, false);
 }
 
 // Late/no-show fee payouts (booking_fee_charges, not provider_payouts — see the
