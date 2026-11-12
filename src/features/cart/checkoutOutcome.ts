@@ -14,7 +14,9 @@ export type CheckoutWaitResult = SettledCheckout | 'unknown';
 
 /** finalize-payment-intent's capture answer, as what the client is told. */
 export function settledFromCaptureStatus(status: string | null | undefined): SettledCheckout | null {
-  if (status === 'succeeded') return 'succeeded';
+  // 'held': every booking was a request, so the card is authorised and only
+  // charged when a provider accepts. The bookings exist, same as 'succeeded'.
+  if (status === 'succeeded' || status === 'held') return 'succeeded';
   if (status === 'refunded') return 'refunded';
   if (status === 'canceled') return 'not_charged';
   return null;

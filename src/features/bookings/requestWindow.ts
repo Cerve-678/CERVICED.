@@ -40,20 +40,29 @@ export function formatAnswerBy(answerBy: Date, now: Date = new Date()): string {
   return `${formatTime12(answerBy)} ${when}`;
 }
 
-/** The client's note on a booking waiting for an answer. */
-export function clientRequestNote(providerName: string, deadline: RequestDeadline, now?: Date): string {
+/** The client's note on a booking waiting for an answer. `held` when the
+ *  payment is only held on their card (a checkout of requests only), so it is
+ *  taken only if the provider accepts. */
+export function clientRequestNote(providerName: string, deadline: RequestDeadline, now?: Date, held = false): string {
   const by = formatAnswerBy(deadline.answerBy, now);
   const lead = deadline.urgent
     ? `Your appointment is soon, so ${providerName} has until ${by} to accept this request.`
     : `${providerName} has ${REQUEST_RESPONSE_HOURS} hours to accept this request, until ${by}.`;
+  if (held) {
+    return `${lead} Your card is only charged if they accept. If they decline or don't answer by then, the hold on your card is released and you pay nothing.`;
+  }
   return `${lead} If they don't answer by then, it's declined automatically and anything you paid is refunded in full.`;
 }
 
-/** The provider's note on a request they haven't answered. */
-export function providerRequestNote(deadline: RequestDeadline, now?: Date): string {
+/** The provider's note on a request they haven't answered. `held` when the
+ *  client's payment is only held on their card until the provider accepts. */
+export function providerRequestNote(deadline: RequestDeadline, now?: Date, held = false): string {
   const by = formatAnswerBy(deadline.answerBy, now);
   const lead = deadline.urgent
     ? `Needs your answer soon: accept or decline by ${by}, before the appointment.`
     : `You have ${REQUEST_RESPONSE_HOURS} hours to answer, until ${by}.`;
+  if (held) {
+    return `${lead} The client's payment is held on their card and taken when you accept. If you don't answer, it's declined automatically and the hold is released.`;
+  }
   return `${lead} After that it's declined automatically and the client is refunded.`;
 }

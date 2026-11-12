@@ -67,3 +67,21 @@ describe('the notes both sides read', () => {
       .toContain('You have 24 hours to answer, until 12:00pm tomorrow');
   });
 });
+
+describe('a request whose payment is held on the card', () => {
+  const now = new Date(2026, 10, 12, 9, 0);
+  const deadline = requestAnswerDeadline(now, new Date(2026, 10, 20, 14, 0));
+
+  it('tells the client they are only charged if the provider accepts', () => {
+    const note = clientRequestNote('Amy', deadline, now, true);
+    expect(note).toContain('only charged if they accept');
+    expect(note).toContain('you pay nothing');
+    expect(note).not.toContain('refunded');
+  });
+
+  it('tells the provider the money is taken when they accept', () => {
+    const note = providerRequestNote(deadline, now, true);
+    expect(note).toContain('taken when you accept');
+    expect(note).not.toContain('refunded');
+  });
+});

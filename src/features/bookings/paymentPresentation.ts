@@ -32,7 +32,10 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const paymentStatus = booking.paymentStatus ?? PaymentStatus.PENDING;
   const isDeposit = paymentType === 'deposit';
   const isPaidInFull = paymentStatus === PaymentStatus.PAID_IN_FULL;
-  const isUnpaid = !isPaidInFull && paymentStatus !== PaymentStatus.DEPOSIT_PAID;
+  // A request's payment held on the card: the amount is set aside, not taken,
+  // and is only charged if the provider accepts.
+  const isHeld = paymentStatus === PaymentStatus.AUTHORISED;
+  const isUnpaid = !isPaidInFull && !isHeld && paymentStatus !== PaymentStatus.DEPOSIT_PAID;
 
   // Two figures, always (owner's call, 2026-11-01): Paid is what actually left
   // the client's card, platform fee included, and Due at Appointment is what's
@@ -40,13 +43,13 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   //
   // `isUnpaid` is checked first: a booking can carry payment_type 'deposit'
   // while payment_status is still 'pending', and nothing has been paid.
-  const paidLabel = 'Paid';
+  const paidLabel = isHeld ? 'Held on your card' : 'Paid';
   const paidAmount = isUnpaid ? 0 : amountPaidAtCheckout;
   const remainingBalance = Math.max(0, total - paidAmount);
   // The deposit itself, shown as its own line in the breakdown (owner's call,
   // 2026-11-08), only once it has actually been paid. It's part of the
   // service price, not added on top, and Paid above already includes it.
-  const depositPaid = isDeposit && !isUnpaid ? depositAmount : 0;
+  const depositPaid = isDeposit && !isUnpaid && !isHeld ? depositAmount : 0;
 
   return {
     servicePrice,
@@ -62,6 +65,7 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     isDeposit,
     isPaidInFull,
     isUnpaid,
+    isHeld,
     paidLabel,
     paidAmount,
     depositPaid,
@@ -106,6 +110,14 @@ export function describeRefundOutcome(
   const policy = noticeHours > 0 ? `${noticeHours}-hour cancellation policy` : 'cancellation policy';
   const keptLine = `${provider} kept ${money(kept)} under their ${policy}.`;
 
+  if (booking.paymentStatus === PaymentStatus.NOT_CHARGED) {
+    return {
+      title: 'Not charged',
+      message: "Your card wasn't charged. The hold on it has been released, though some banks take a few days to stop showing it.",
+      rows: [],
+      providerStatus: 'Not charged',
+    };
+  }
   if (booking.paymentStatus === PaymentStatus.REFUND_PENDING) {
     return {
       title: 'Refund pending',
@@ -171,6 +183,14 @@ export function describeCancelRefund(
   booking: Pick<ConfirmedBooking, 'paymentStatus' | 'amountPaid' | 'providerName'> & Partial<Pick<ConfirmedBooking, 'refundedAmount'>>,
   opts: { policyApplies: boolean; depositNonRefundable: boolean },
 ): CancelRefundCopy | null {
+  // A request whose payment is only held: withdrawing it is never charged,
+  // whatever the provider's policy (apply-cancellation-refund agrees).
+  if (booking.paymentStatus === PaymentStatus.AUTHORISED) {
+    return {
+      confirmLine: " Your card hasn't been charged, so the hold on it will be released.",
+      doneMessage: "Your request has been cancelled. Your card wasn't charged, and the hold on it is being released.",
+    };
+  }
   const inApp = booking.paymentStatus === PaymentStatus.DEPOSIT_PAID
     || booking.paymentStatus === PaymentStatus.PAID_IN_FULL
     || booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
