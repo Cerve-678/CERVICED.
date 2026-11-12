@@ -194,7 +194,7 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
   // fee whenever the deposit is beside it, so the two don't look contradictory.
   const paymentRows: PaymentRow[] = [
     ...(payment.depositPaid > 0 ? [{ label: 'Deposit paid', amount: payment.depositPaid }] : []),
-    { label: payment.depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', amount: payment.paidAmount, strong: remainingBalance <= 0 },
+    { label: payment.isHeld ? payment.paidLabel : payment.depositPaid > 0 ? 'Paid (incl. fee)' : 'Paid', amount: payment.paidAmount, strong: remainingBalance <= 0 },
     { label: 'Due at Appointment', amount: remainingBalance, strong: remainingBalance > 0 },
   ];
 
@@ -240,12 +240,15 @@ export function buildProviderInvoiceHTML(booking: ConfirmedBooking): string {
   // client's card and, on a card charge, includes CERVICED's platform fee.
   // Keyed off payment_status (via isUnpaid), so a hand-added booking with
   // nothing paid is never invoiced as a "Full payment".
-  const received = payment.isUnpaid ? 0 : payment.isDeposit ? payment.depositAmount : providerTotal;
+  // A request's payment held on the card hasn't been received yet.
+  const received = payment.isUnpaid || payment.isHeld ? 0 : payment.isDeposit ? payment.depositAmount : providerTotal;
   const balance = Math.max(0, providerTotal - received);
   const providerName = booking.providerName?.trim();
   const clientName = booking.customerName?.trim();
 
-  const state = payment.isUnpaid
+  const state = payment.isHeld
+    ? 'Held on card, taken when accepted'
+    : payment.isUnpaid
     ? 'Not paid in app'
     : payment.isDeposit ? 'Deposit paid' : 'Full payment';
   const paymentRows: PaymentRow[] = [

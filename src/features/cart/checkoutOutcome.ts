@@ -7,23 +7,30 @@
 // confirming. The server tells the client either way by notification
 // (payment_success / payment_not_completed), so "we'll let you know" is true.
 
-/** A checkout the client can be told the result of. */
-export type SettledCheckout = 'succeeded' | 'refunded' | 'not_charged';
+/** A checkout the client can be told the result of. 'held': booked, with the
+ *  card only held because every booking is a request — charged only for what
+ *  a provider accepts. */
+export type SettledCheckout = 'succeeded' | 'held' | 'refunded' | 'not_charged';
 /** 'unknown' = still unsettled after waiting; the server finishes it later. */
 export type CheckoutWaitResult = SettledCheckout | 'unknown';
 
 /** finalize-payment-intent's capture answer, as what the client is told. */
 export function settledFromCaptureStatus(status: string | null | undefined): SettledCheckout | null {
   if (status === 'succeeded') return 'succeeded';
+  if (status === 'held') return 'held';
   if (status === 'refunded') return 'refunded';
   if (status === 'canceled') return 'not_charged';
   return null;
 }
 
 /** The checkout row's own record of how it ended (checkout_batches.status / outcome). */
-export function settledFromBatch(row: { status: string; outcome: string | null } | null): SettledCheckout | null {
+export function settledFromBatch(
+  row: { status: string; outcome: string | null; captureState?: string | null } | null,
+): SettledCheckout | null {
   if (!row) return null;
-  if (row.status === 'finalised') return 'succeeded';
+  if (row.status === 'finalised') {
+    return row.captureState === 'held' || row.captureState === 'settling' ? 'held' : 'succeeded';
+  }
   if (row.outcome === 'refunded') return 'refunded';
   if (row.outcome === 'not_charged') return 'not_charged';
   return null;
@@ -32,7 +39,7 @@ export function settledFromBatch(row: { status: string; outcome: string | null }
 export interface WaitForCheckoutDeps {
   /** Asks the server to settle again (idempotent), returning its status. */
   capture: () => Promise<string>;
-  readBatch: () => Promise<{ status: string; outcome: string | null } | null>;
+  readBatch: () => Promise<{ status: string; outcome: string | null; captureState?: string | null } | null>;
   sleep: (ms: number) => Promise<void>;
   onError?: (err: unknown) => void;
   attempts?: number;

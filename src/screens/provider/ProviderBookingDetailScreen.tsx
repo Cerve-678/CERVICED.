@@ -2137,13 +2137,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     provider is never owed that fee, so this row shows the
                     provider's own cut: the full service price when paid in
                     full, or just the deposit (fee-free at source) otherwise. */}
-                {(booking.amountPaid ?? 0) > 0 && (
+                {(booking.amountPaid ?? 0) > 0 && booking.paymentStatus !== PaymentStatus.NOT_CHARGED && (
                   <Row
-                    label={booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
+                    label={booking.paymentStatus === PaymentStatus.AUTHORISED
+                      // A request's payment is held on the client's card and
+                      // only taken when you accept it.
+                      ? (booking.paymentType === 'deposit' ? 'Deposit held, taken only if you accept' : 'Payment held, taken only if you accept')
+                      : booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
                     value={`£${(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)}`}
                     textColor={P.text}
                     divColor={rowDiv}
-                    valueColor="#34C759"
+                    valueColor={booking.paymentStatus === PaymentStatus.AUTHORISED ? P.sub : '#34C759'}
                     bold
                   />
                 )}
@@ -2311,7 +2315,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       marginBottom: 10,
                     }}
                   >
-                    {providerRequestNote(requestDeadline)}
+                    {providerRequestNote(requestDeadline, undefined, booking.paymentStatus === PaymentStatus.AUTHORISED)}
                   </Text>
                 )}
                 <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />

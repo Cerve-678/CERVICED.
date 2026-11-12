@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  Claude session on feat/request-card-hold (20261112100000), waiting on reviews and the user's go-ahead to apply + deploy
 ```
+
+### Pending (request card hold)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261112100000 | `request_card_hold` | **NOT APPLIED.** Frontier at authoring: live max `20261111100000`. Adds payment_status `authorised`/`not_charged`, `checkout_batches.capture_state` (+ `held_action`, `held_capture_pence`, `held_settled_at`), `checkout_batch_all_requests`, `finalize_checkout_held`, `begin_held_settlement`, `complete_held_settlement`, `settle_held_payment_async`, trigger `on_held_request_answered`, payout trigger `on_booking_held_payment_captured_create_payout`, cron `settle-held-payments` (*/5). md5-guarded patches: `create_held_payout_on_finalize` (`3e45e6d1…`), `handle_booking_status_change` (`a1aad410…`), `notify_client_payment_received` (`c5b19126…`). Forced-rollback dry runs 2026-11-12 passed (wait / capture £89.65 with retry-same + payout created / release + not_charged + no payout + "won't be charged" notice / "Card held, not charged" checkout notice; anon+authenticated can't execute; live unchanged after). **Deploy with it:** `settle-held-payment` (new), `finalize-payment-intent`, `stripe-webhook`, `reconcile-checkouts` (all import settleCheckout), `refund-payment`, `apply-cancellation-refund`. Apply the migration first, then deploy, in the same sitting. |
 
 ### Applied 2026-11-11 (bank payout schedule)
 

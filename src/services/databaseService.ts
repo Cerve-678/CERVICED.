@@ -11916,14 +11916,16 @@ export async function finalizeCheckoutPaymentIntent(
  *  payment to settle. outcome is set only when it ended without bookings. */
 export async function getCheckoutOutcome(
   checkoutBatchId: string,
-): Promise<{ status: string; outcome: string | null } | null> {
+): Promise<{ status: string; outcome: string | null; captureState: string | null } | null> {
   const { data, error } = await supabase
     .from('checkout_batches')
-    .select('status, outcome')
+    .select('status, outcome, capture_state')
     .eq('id', checkoutBatchId)
     .maybeSingle();
   if (error) throw error;
-  return data ? { status: String(data.status), outcome: data.outcome ?? null } : null;
+  return data
+    ? { status: String(data.status), outcome: data.outcome ?? null, captureState: data.capture_state ?? null }
+    : null;
 }
 
 export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unknown> {
@@ -12967,9 +12969,10 @@ export async function getRefundRequestsForBooking(bookingId: string): Promise<Re
  *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
 export async function applyCancellationRefund(
   bookingId: string,
-): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible'> {
+): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible' | 'not_charged'> {
   const { data, error } = await supabase.functions.invoke('apply-cancellation-refund', { body: { bookingId } });
-  if (error || data?.error || !['settled', 'already_settled', 'no_payment', 'not_eligible'].includes(data?.status)) {
+  // 'not_charged': a request whose card was only held — nothing to refund.
+  if (error || data?.error || !['settled', 'already_settled', 'no_payment', 'not_eligible', 'not_charged'].includes(data?.status)) {
     throw new Error('The cancellation refund could not be confirmed.');
   }
   return data.status;

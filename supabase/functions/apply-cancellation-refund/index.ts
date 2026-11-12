@@ -117,6 +117,12 @@ Deno.serve(async (req: Request) => {
     if (booking.stripe_refund_id || booking.payment_status === 'refunded' || booking.payment_status === 'partially_refunded') {
       return json({ status: 'already_settled' }, 200);
     }
+    // A request withdrawn while its card was only held: nothing was taken and
+    // nothing is kept, whatever the provider's late-cancel rule (user decision
+    // 2026-11-12). settle-held-payment releases or trims the hold.
+    if (booking.payment_status === 'authorised' || booking.payment_status === 'not_charged') {
+      return json({ status: 'not_charged' }, 200);
+    }
     // Nothing captured (Stripe off, or a free booking) — clean cancel, no money.
     if (!booking.payment_intent_id || Number(booking.amount_paid) <= 0) {
       return json({ status: 'no_payment' }, 200);

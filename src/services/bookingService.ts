@@ -323,6 +323,8 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
       case 'partially_refunded': return PaymentStatus.PARTIALLY_REFUNDED;
       case 'refund_pending': return PaymentStatus.REFUND_PENDING;
       case 'failed':        return PaymentStatus.FAILED;
+      case 'authorised':    return PaymentStatus.AUTHORISED;
+      case 'not_charged':   return PaymentStatus.NOT_CHARGED;
       default:              return PaymentStatus.PENDING;
     }
   };

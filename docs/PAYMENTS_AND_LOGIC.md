@@ -208,7 +208,7 @@ that, putting it right means taking money back from Jo (section 2.8).
 |---|---|
 | **Checkout batch** | One checkout. It can contain several bookings with several providers |
 | **Hold (slot)** | A time slot reserved for 5 minutes while the client pays |
-| **Authorise / capture** | Authorise = the bank reserves the money on the card. Capture = the money is actually taken. CERVICED captures straight after authorising |
+| **Authorise / capture** | Authorise = the bank reserves the money on the card. Capture = the money is actually taken. CERVICED captures straight after authorising, except for a checkout of requests only, which stays authorised until a provider accepts (section 2.1.1) |
 | **Held payout** | The provider's share, waiting at CERVICED until its release time |
 | **Release / transfer** | CERVICED sending a held payout to the provider's Stripe account |
 | **Bank payout** | Stripe sending money from the provider's Stripe account to their bank. Stripe does this, not CERVICED |
@@ -288,6 +288,56 @@ received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
 and CERVICED never records, collects or confirms it** (section 2.9).
+
+### 2.1.1 Requests: the card is held, not charged
+
+*Built on `feat/request-card-hold`, not live until migration `20261112100000` is applied and `settle-held-payment`, `finalize-payment-intent`, `stripe-webhook`, `reconcile-checkouts`, `refund-payment` and `apply-cancellation-refund` are deployed.*
+
+When **every** booking in a checkout is a request (the provider doesn't
+auto-accept, or it's an emergency out-of-hours request), the card is
+authorised but **not captured**. The client's bank shows a pending hold, not a
+payment.
+
+| What happens next | Money |
+|---|---|
+| Every request in the checkout has an answer, and at least one was accepted | Only the accepted bookings are captured, in one go; the rest of the hold is released. The client gets "Payment received". Nothing is taken while any request in the checkout is still waiting (24 hours at most), so an accepted booking can sit unpaid for up to a day |
+| Every request is declined, expires or is withdrawn | The hold is released: nothing is taken and the bookings read **Not charged**. The same if only £0 bookings (a free patch test) were accepted |
+| The client withdraws the request | **Never charged**, whatever the provider's late-cancellation rule (owner's decision, 12 November) |
+
+**Why only all-request checkouts:** Stripe can capture a payment once. A
+checkout that mixes requests with instant bookings has to take the instant
+bookings' money at checkout, so it is charged in full at checkout as before,
+and a request in it that is declined is refunded as before.
+
+**Mechanics.** `settleCheckout` finalises an all-request checkout with
+`finalize_checkout_held`: bookings get `payment_status = 'authorised'` and the
+checkout `capture_state = 'held'`. **No provider payout row exists while
+held.** When a held request is answered, `on_held_request_answered` posts to
+`settle-held-payment`. That calls `begin_held_settlement`, which decides
+capture, release or wait under a row lock and records the decision
+(`capture_state = 'settling'`, `held_action`, `held_capture_pence`), so a retry
+repeats the same Stripe call (idempotency keys `held_capture_<checkout>` /
+`held_release_<checkout>`). `complete_held_settlement` then marks the bookings
+`fully_paid`/`deposit_paid` (which creates their payouts) or `not_charged`.
+
+**Known edge (owner informed):** in a checkout with several requests, a client
+who cancels an *accepted* one while another is still waiting is never
+charged for it, because nothing has been taken yet, so the provider's
+late-cancel policy can't apply to it.
+The `settle-held-payments` cron (every 5 min) catches anything a trigger call
+missed.
+
+Two safety nets send money back through the normal refund path
+(`refund_booking_async`, so it is recorded, taken back from the payout and
+the client is told): a booking cancelled in the seconds while its capture is
+being sent to Stripe (the decision fixes `held_capture_booking_ids`), and a
+checkout captured in full by a stale concurrent settle (the app's call and
+Stripe's webhook both settle checkouts). `settleCheckout` re-reads the
+checkout right before any capture to make that second case rare. Only the
+server can set or clear `authorised`/`not_charged`
+(`guard_held_payment_status`). Requests are answered within 24 hours, well inside a card
+authorisation's 7 days. If a hold has somehow gone when a provider accepts,
+support is emailed and the checkout stays `settling` for a person to resolve.
 
 ### 2.2 Paying the provider (payouts)
 
@@ -377,7 +427,7 @@ Pay or PayPal.
 | Situation | Who starts it | What the client gets back | What the provider keeps | CERVICED's fee |
 |---|---|---|---|---|
 | Provider declines or cancels a paid booking | Provider | Everything, automatically | Nothing | Refunded |
-| Provider doesn't accept within 24 hours, or by an hour before the start time if that's sooner (until the start time, for a request made less than an hour ahead). Live since 2026-11-05 (`20261105090833`). | Automatic (every 5 min) | Everything, automatically | Nothing | Refunded |
+| Provider doesn't accept within 24 hours, or by an hour before the start time if that's sooner (until the start time, for a request made less than an hour ahead). Live since 2026-11-05 (`20261105090833`). | Automatic (every 5 min) | Everything, automatically | Nothing | Refunded, or if the card was only held (section 2.1.1), the hold released and nothing taken |
 | Client cancels **before** the provider's cancellation window | Client | Everything | Nothing | Refunded |
 | Client cancels and the booking's frozen policy has a **non-refundable deposit**, with no bigger late penalty | Client | Everything except the deposit | The deposit (at most half the service price if they paid in full) | Refunded |
 | Same, but cancelled late under a penalty worth more than the deposit | Client | As the penalty rows below | The penalty, never less than the deposit | Kept |
@@ -848,7 +898,8 @@ Keep the list short and review it monthly.
 | Function | Called by | What it does |
 |---|---|---|
 | `create-payment-intent` | App (checkout) | Re-prices the batch, checks providers are payout-ready, enforces fee consent, creates the PaymentIntent |
-| `finalize-payment-intent` | App | Captures; moves bookings `on_hold` → `pending`/`confirmed`; records the payment method |
+| `finalize-payment-intent` | App | Captures; moves bookings `on_hold` → `pending`/`confirmed`; records the payment method. A checkout of requests only is finalised without capturing (section 2.1.1) |
+| `settle-held-payment` | DB trigger and cron (service role only) | Captures or releases a held request checkout once it's answered (section 2.1.1) |
 | `stripe-webhook` | Stripe (signature-checked, no JWT) | Payment success, refunds, account status, transfers and reversals, disputes, bank payout failures |
 | `reconcile-checkouts` | Cron, via `process_stale_checkouts()` (service role only) | Finishes checkouts a payment was started for but nobody settled; cancels payments never completed once the hold is over |
 | `release-payouts` | Cron, via `process_due_payouts()` (service role only) | Releases booking, fee and tip payouts; retries; fee pay-request retries and lapses; support alerts |
@@ -869,7 +920,8 @@ Keep the list short and review it monthly.
 | `release-due-payouts` | Every 15 min | `process_due_payouts()` → `release-payouts`, only when something is due |
 | `expire-cart-holds` | Every minute | Frees unpaid 5-minute slot holds |
 | `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
-| `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them |
+| `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them, or leaves a held one to `settle-held-payments` |
+| `settle-held-payments` | Every 5 min | `process_held_payments()`: calls `settle-held-payment` only when a held checkout has an answer to act on |
 | `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
 | `money-daily-summary` | 08:00 daily | Triggers the summary email when anything needs attention |
 | `refund-request-deadlines` | Hourly at :25 | `process_refund_request_deadlines()`: reminds the provider at 2 days, passes the request to CERVICED at 3 |
@@ -912,7 +964,7 @@ so Stripe retries.
 | Table | Holds | Statuses |
 |---|---|---|
 | `checkout_batches` | One checkout: amount due, platform fee, `outcome` (`not_charged`, `refunded` or `abandoned` when it ended without bookings) | `prepared` → `finalised` / `expired` / `cancelled` |
-| `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id`, `late_reschedule_from` (moved inside the cancellation window; cleared by a later provider-proposed move) | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed` |
+| `bookings` (money columns) | `base_price`, `add_ons_total`, `deposit_amount`, `service_charge` (its share of the fee), `amount_paid`, `remaining_balance`, `payment_type` (`full`/`deposit`), `payment_intent_id`, `payment_method`, `refunded_amount`, `stripe_refund_id`, `late_reschedule_from` (moved inside the cancellation window; cleared by a later provider-proposed move) | `payment_status`: `pending`, `deposit_paid`, `fully_paid`, `refund_pending`, `partially_refunded`, `refunded`, `failed`, `authorised` (a request's payment held on the card), `not_charged` (the hold released) |
 | `provider_payouts` | One per paid booking: `gross_amount`, `platform_fee`, `payout_amount`, `deducted_pence`, `release_after`, `release_claimed_at`, `attempt_count`, `failure_cause` | `held` → `transferred` / `cancelled` / `reversed` / `failed` |
 | `booking_refunds` | A ledger of every refund (pence, and whether it has been applied to the payout) | — |
 | `refund_requests` | Client requests; `passed_automatically` (no reply in 3 days), `provider_reminded_at` | `with_provider` → `under_review` → `refunded` / `declined` (a decline needs a note) |
@@ -1004,6 +1056,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 |---|---|---|
 | 29 Sep | Stripe Connect with separate charges and transfers, and Express accounts | CERVICED holds the funds and controls payout timing |
 | 29 Sep | Full refunds return CERVICED's fee; partial refunds keep it | Keeping the fee on a full refund was judged likely unlawful in the UK |
+| 12 Nov | A checkout of requests only holds the card and is charged only for what providers accept, once every request in it is answered; a withdrawn held request is never charged; mixed checkouts are charged at checkout as before | A declined request no longer waits 5–10 working days for a refund of money that should never have left. Stripe captures once, so a mixed basket can't be held |
 | 3 Oct | Client cancellations follow the provider's frozen policy: no charge, keep the deposit, or keep the full price (changed 1 November) | Predictable for both sides; a client is never charged more than they paid |
 | 12–13 Oct | Late/no-show fees: in-app, 50% cap, 24-hour window, no CERVICED cut | Protects providers without CERVICED profiting from penalties |
 | 13 Oct | Fee disputes go to the provider, not CERVICED | CERVICED doesn't judge fees |
