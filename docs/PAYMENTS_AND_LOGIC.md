@@ -284,6 +284,21 @@ received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 "refunded" notices don't send and the 5-minute job has nothing to call. The
 "Confirming your payment…" screen needs a new app build.*
 
+**Waitlist slots** are paid for through this same checkout. When a slot
+opens, the next client in line gets it held for 15 minutes (an `on_hold`
+booking). "Confirm & pay" puts that slot in the cart at its fixed time;
+`prepare_checkout` reuses the held row (`waitlist_hold_id`), prices it from the
+database like any item, and the checkout can't outlast the hold: the 15
+minutes keep running while the client pays. Nothing is booked until
+`finalize_checkout` captures the payment. If the time runs out or the client
+passes, the hold row is deleted (never a cancelled booking), they come off that
+waitlist, and the slot goes to the next person (provider's "offer automatically"
+setting on) or opens to everyone and back to the provider to offer (off). A
+provider offering a time by hand also creates a 15-minute hold, never an unpaid
+booking. *Not live until migration `20261112100000` is applied and a new app
+build ships. Until then the old path booked waitlist slots with £0 paid, though
+none ever was.*
+
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
 and CERVICED never records, collects or confirms it** (section 2.9).
@@ -635,6 +650,7 @@ one broken, it's a top-severity bug: stop and escalate.
 | 11 | Card data never touches CERVICED | Stripe's own card fields; only brand, last 4 and expiry are read from Stripe |
 | 12 | Only the server can move money. App users can't call any payout, debt or refund function directly | Function permissions (service role only) |
 | 13 | Off-app payments are never tracked | Product rule (section 2.9) |
+| 14 | A waitlist slot is never booked without the client paying for it | `claim_waitlist_hold` was dropped; a hold only becomes a booking in `finalize_checkout` (20261112100000) |
 
 ---
 
@@ -852,7 +868,8 @@ Keep the list short and review it monthly.
 
 | Name | Kind | What it does |
 |---|---|---|
-| `prepare_checkout` | RPC | Validates the basket and places 5-minute holds |
+| `prepare_checkout` | RPC | Validates the basket and places 5-minute holds. A waitlist item (`waitlist_hold_id`) reuses its held row and caps the checkout at the hold's own end |
+| `offer_waitlist_slot`, `invite_next_waitlist_entry`, `end_waitlist_hold`, `expire_waitlist_holds` | Functions / cron (every minute) | Offer a 15-minute waitlist hold; end one that wasn't paid for and offer it on or hand it back to the provider |
 | `record_checkout_outcome` | RPC (service role) | Records how a checkout ended without bookings, once (a real outcome can replace `abandoned`), and tells the client unless nothing was taken |
 | `notify_client_payment_received` | Trigger on `checkout_batches` | "Payment received" when a checkout is finalised |
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |
@@ -967,7 +984,8 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
-| 12 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
+| 12 | **Waitlist checkout has never run end to end.** No waitlist offer has ever been sent in production, and the new pay-at-confirm path hasn't been tried in Stripe test mode | A broken step would only show as nobody being offered a slot | Rehearse it in test mode after the migration (hold, pay, decline, time running out, Auto-fill on and off) |
+| 13 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
 
 ---
 
@@ -1005,6 +1023,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 6 Nov | The £25.99 monthly price comes off every full-membership screen; only "2 months free" stays | Pricing isn't final, so the app shouldn't name a number yet |
 | 2 Nov | A provider has 24 hours, not 48, to answer a booking request. Still fully refunded if they don't | The user's call, 2 November 2026 |
 | 3 Nov | Providers can require a non-refundable deposit: kept whenever the client cancels, frozen per booking, still refunded if the provider cancels, declines or doesn't answer. CERVICED refunds its fee when the deposit is the only thing kept | The user's call (2 and 3 Nov), including not waiting for a solicitor. **Not lawyer-reviewed** |
+| 10 Nov | A waitlist slot is paid for at checkout like any booking: 15-minute hold, the clock keeps running while paying, missing it or passing takes the client off that waitlist. "Offer automatically" rolls a lapsed slot to the next person; off, it opens to everyone and the provider can offer it. A provider's own offer is a hold too | Confirming used to book with £0 paid: no deposit, fee, saved card or policy agreement. The user's call, 10 November 2026 |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 

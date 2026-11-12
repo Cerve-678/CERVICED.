@@ -81,6 +81,8 @@ import { calculatePlatformFee, PAYPAL_MAX_CHECKOUT_TOTAL } from '../../features/
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 import { openLegalPage } from '../../utils/legalPage';
 import { durationWithAddOns } from '../../features/bookings/addOnTime';
+import { WaitlistHoldCountdown } from '../../components/WaitlistHoldCountdown';
+import { holdSecondsLeft } from '../../features/bookings/waitlist';
 
 // Keep real payments opt-in until Stripe is explicitly switched on. Expo Go
 // includes the SDK-compatible Stripe module, so it can show the card form;
@@ -1316,9 +1318,13 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     onEdit(item);
                   }}
+                  // A held waitlist slot is one fixed time: there's nothing to change.
+                  disabled={!!item.waitlistHold}
                   activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={isScheduled
+                  accessibilityRole={item.waitlistHold ? 'text' : 'button'}
+                  accessibilityLabel={item.waitlistHold && isScheduled
+                    ? `Held for you, ${formatShortDayDate(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
+                    : isScheduled
                     ? `Change time, currently ${formatShortDayDate(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
                     : 'Pick a date and time'}
                 >
@@ -1328,7 +1334,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                       ? `${formatShortDayDate(bookingInfo.selectedDate)} · ${formatTime12(bookingInfo.selectedTime)}`
                       : 'No time picked'}
                   </Text>
-                  <Ionicons name="chevron-forward" size={12} color={whenColor} />
+                  {!item.waitlistHold && <Ionicons name="chevron-forward" size={12} color={whenColor} />}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.nodeRemove, { borderColor: P.border }]}
@@ -1359,16 +1365,28 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 )}
               </View>
 
+              {/* A held waitlist slot: the client's 15 minutes keep running
+                  while they pay, so the time left stays on the card. */}
+              {item.waitlistHold && !issue && (
+                <View style={[styles.nodeBanner, { backgroundColor: P.accentDim }]}>
+                  <Ionicons name="time-outline" size={12} color={P.accentText} />
+                  <Text style={[styles.nodeBannerText, { color: P.accentText }]}>Held for you from your waitlist</Text>
+                  <WaitlistHoldCountdown expiresAt={item.waitlistHold.expiresAt} color={P.accentText} />
+                </View>
+              )}
               {issue && (
                 <View style={styles.nodeBanner}>
                   <Ionicons name="alert-circle" size={12} color="#F44336" />
                   <Text style={styles.nodeBannerText}>{issue}</Text>
-                  <TouchableOpacity onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    onEdit(item);
-                  }}>
-                    <Text style={styles.nodeBannerFix}>Fix</Text>
-                  </TouchableOpacity>
+                  {/* A held slot's time can't be changed; removing it is the fix. */}
+                  {!item.waitlistHold && (
+                    <TouchableOpacity onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      onEdit(item);
+                    }}>
+                      <Text style={styles.nodeBannerFix}>Fix</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
               {/* An out-of-hours time looks exactly like an ordinary one
@@ -2384,6 +2402,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           // See BookingContext's copy of this list: an accepted out-of-hours
           // request must not be re-flagged as a conflict by the cart.
           isEmergencyRequest: !!item.emergencyRequest,
+          // The slot is already held for this client, so it reads as taken;
+          // prepare_checkout confirms the hold is theirs.
+          heldForClient: !!item.waitlistHold,
         };
       })
     );
@@ -2866,8 +2887,20 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Only the checks that genuinely need Supabase (has someone ELSE taken this
   // slot, is the provider still working that day, is the promo still live) wait
   // for the checkout attempt.
-  const localItemIssues = useMemo(
-    () => findCartItemIssues(items.map(item => {
+  // A held waitlist slot ends at a known moment. Re-check the cart then (not
+  // every second: each card's own countdown does the ticking).
+  const [holdClock, setHoldClock] = useState(() => Date.now());
+  useEffect(() => {
+    const upcoming = items
+      .map(item => (item.waitlistHold ? new Date(item.waitlistHold.expiresAt).getTime() : NaN))
+      .filter(end => Number.isFinite(end) && end > holdClock);
+    if (upcoming.length === 0) return;
+    const timer = setTimeout(() => setHoldClock(Date.now()), Math.min(...upcoming) - Date.now() + 250);
+    return () => clearTimeout(timer);
+  }, [items, holdClock]);
+
+  const localItemIssues = useMemo(() => {
+    const issues = findCartItemIssues(items.map(item => {
       const booking = getServiceBooking(item.id);
       return {
         itemId: item.id,
@@ -2876,9 +2909,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         time: booking.selectedTime,
         duration: durationWithAddOns(item.duration, item.addOns),
       };
-    })),
-    [items, getServiceBooking],
-  );
+    }));
+    items.forEach(item => {
+      if (item.waitlistHold && holdSecondsLeft(item.waitlistHold.expiresAt, holdClock) === 0) {
+        issues.set(item.id, CART_ISSUE.waitlistHoldEnded);
+      }
+    });
+    return issues;
+  }, [items, getServiceBooking, holdClock]);
 
   // A stored date/time the app can't parse back shouldn't be possible — the
   // sheet only ever writes formats it understands. The client is shown the
@@ -4396,12 +4434,23 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               ...(booking.emergencyRequest
                                 ? { emergency: true, emergency_ack: true }
                                 : {}),
+                              // A held waitlist slot: the server reuses that row
+                              // and keeps its own 15 minutes running.
+                              ...(item.waitlistHold
+                                ? { waitlist_hold_id: item.waitlistHold.bookingId }
+                                : {}),
                             };
                           });
                           const prepared = await prepareCheckout(intent);
                           setServerCheckoutBatchId(prepared.checkoutBatchId);
                           setPaymentTotal(prepared.amountDue);
                         } else {
+                          // The older card-entry path books with
+                          // hold_cart_booking_slots, which knows nothing about a
+                          // held waitlist row and would clash with it.
+                          if (checkoutSnapshot.items.some(item => item.waitlistHold)) {
+                            throw new BookingError('A waitlist slot can only be paid for by card in this version of the app.');
+                          }
                           console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
                           const batchId = await holdCartCheckoutSlots(
                             checkoutSnapshot.items,

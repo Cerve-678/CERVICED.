@@ -98,6 +98,9 @@ export const CART_ISSUE = {
   depositNoLongerOffered: 'This provider now requires payment in full — deposit is no longer available',
   depositNowRequired: 'This provider now requires a deposit — pay in full is no longer available',
   takenWhilePaying: 'This time was taken while you were paying — pick a new time',
+  // A waitlist slot's 15 minutes ran out. Its time can't be changed, and the
+  // client has come off that waitlist, so removing it is the only fix.
+  waitlistHoldEnded: 'This slot was held for 15 minutes and that time is up. Remove it to continue',
   bookingFailed: "This service couldn't be booked — try again",
 } as const;
 

@@ -36,7 +36,7 @@ import { hasDirectionsDestination, hasMapDestination, isMobileBooking, type Book
 import { directionsUrlFor } from '../../utils/mapsLink';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
+import { forgetCachedReads, submitReview, getProviderIdByDisplayName, hasReviewedBooking, getBookingReviewStates, getActiveRescheduleRequest, getBookedClientContact, ProviderContactInfo, getRebookableService, RebookableService, startBookingTipPayment, confirmBookingTipPayment, getMyWaitlist, leaveWaitlist, joinWaitlist, updateMyWaitlistDates, type MyWaitlistPlace, getBookingById, declineWaitlistHold, getMyExternalBookings, type ClientExternalBookingWithProvider } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { useTheme, Theme } from '../../contexts/ThemeContext';
@@ -44,12 +44,15 @@ import type { AppTheme } from '../../constants/theme';
 import { buildPaymentSheetAppearance } from '../../features/payments/paymentSheetAppearance';
 import { isTipWindowOpen } from '../../features/bookings/tipWindow';
 import { buildRebookCartItem } from '../../features/bookings/rebook';
+import { WaitlistPlaceCard } from '../../features/bookings/WaitlistPlaceCard';
+import { WaitlistDatesSheet } from '../../features/bookings/WaitlistDatesSheet';
+import { buildWaitlistHoldCartItem, holdEndLabel, offeredSlotLabel, sortWaitlistPlaces, waitlistCardState } from '../../features/bookings/waitlist';
 import { RecommendAfterRatingBar, useRecommendAfterRating } from '../../features/social/RecommendAfterRating';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
 import { TodoMark } from '../../components/TodoMark';
 import { HomeScreenProps } from '../../navigation/types';
 import { logger } from '../../utils/logger';
-import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
+import { dateToYMD, formatLongDate, formatTime12 } from '../../utils/dateUtils';
 import type { GroupedListItem } from '../../features/bookings/presentationTypes';
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { BookingListRow } from '../../features/bookings/BookingListRow';
@@ -74,7 +77,7 @@ type BookingsListRow =
   | GroupedListItem
   | { kind: 'past-booking'; booking: ConfirmedBooking }
   | { kind: 'waitlist-header' }
-  | { kind: 'waitlist'; entry: WaitlistEntry }
+  | { kind: 'waitlist'; place: MyWaitlistPlace }
   | { kind: 'external-header' }
   | { kind: 'external'; entry: ClientExternalBookingWithProvider };
 
@@ -118,88 +121,10 @@ const CATEGORY_TABS = [
 const PAST_BOOKINGS_VISIBLE_DAYS = 30;
 /** Long enough for the Activity Centre's fade-out before another Modal opens. */
 
-const WaitlistCard = React.memo(function WaitlistCard({
-  entry,
-  onBook,
-  onLeave,
-}: {
-  entry: WaitlistEntry;
-  onBook: (entry: WaitlistEntry) => void;
-  onLeave: (entry: WaitlistEntry) => void;
-}) {
-  const { theme, palette: P } = useTheme();
-  const notified = entry.status === 'notified';
-
-  return (
-    <View style={{ paddingHorizontal: 16 }}>
-      <View style={{
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: P.border,
-        backgroundColor: P.surface,
-        padding: 16,
-        marginBottom: 10,
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, color: theme.text, marginBottom: 2 }}>
-              {entry.service_name_snapshot}
-            </Text>
-            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
-              {entry.provider_name_snapshot}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-              <View style={{
-                backgroundColor: notified ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                paddingVertical: 3,
-              }}>
-                <Text style={{
-                  fontFamily: 'BakbakOne-Regular',
-                  fontSize: 10,
-                  letterSpacing: 0.4,
-                  color: notified ? '#34C759' : '#FF9500',
-                }}>
-                  {notified ? 'SLOT OPENED' : `#${entry.position} IN QUEUE`}
-                </Text>
-              </View>
-            </View>
-          </View>
-          {notified ? (
-            <TouchableOpacity
-              style={{
-                backgroundColor: P.accent,
-                borderRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                marginLeft: 12,
-              }}
-              onPress={() => onBook(entry)}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: P.onAccent }}>Book Now</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          style={{ marginTop: 10, alignSelf: 'flex-start' }}
-          onPress={() => onLeave(entry)}
-          activeOpacity={0.7}
-        >
-          <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
-            Leave waitlist
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-});
-
 // ==================== MAIN COMPONENT ====================
 
 const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { showAlert, DialogHost } = useAppDialog();
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   useFont();
   const { theme, isDarkMode, palette: P } = useTheme();
   const modalBottomGap = useSystemBottomInset() + 16;
@@ -213,7 +138,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const { user } = useAuth();
   // After a 4–5 star rating, offer Recommend in a slim bar.
   const recommendAfterRating = useRecommendAfterRating(user?.id ?? null);
-  const { addToCart } = useCart();
+  const { addToCart, items: cartItems, removeFromCart } = useCart();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const {
@@ -299,15 +224,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   const [activeFilters, setActiveFilters] = useState<Set<'all' | 'past'>>(new Set());
-  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
-
-  // A time-boxed waitlist hold (waitlist_holds.sql) — deliberately excluded
-  // from todayBookings/upcomingBookings/pastBookings (see client_bookings
-  // view) so it never shows as a phantom confirmed appointment. Fetched
-  // directly by id only when a waitlist_slot_available notification points
-  // at one; see the route-params effect below.
-  const [waitlistHold, setWaitlistHold] = useState<RawBooking | null>(null);
-  const [waitlistHoldBusy, setWaitlistHoldBusy] = useState(false);
+  // The client's waitlist places (get_my_waitlist): held slots, waiting places
+  // with their real place in line, and ones that ended in the last 30 days.
+  // A held slot is an on_hold booking, which client_bookings never returns,
+  // so it's only ever shown from here, never as a phantom appointment.
+  const [waitlistPlaces, setWaitlistPlaces] = useState<MyWaitlistPlace[]>([]);
+  // When the list was last laid out: a card whose hold ran out on screen
+  // moves to "gone" without waiting for the server.
+  const [waitlistNow, setWaitlistNow] = useState(() => Date.now());
+  const [waitlistBusyId, setWaitlistBusyId] = useState<string | null>(null);
+  const [datesSheetPlace, setDatesSheetPlace] = useState<MyWaitlistPlace | null>(null);
+  const [datesError, setDatesError] = useState<string | null>(null);
+  // Opened from a "slot opened" notification after the hold had ended.
+  const [goneNotice, setGoneNotice] = useState<MyWaitlistPlace | null>(null);
 
   // "Booked elsewhere" entries — the client's own notes of bookings made on a
   // link-only provider's page. Reloaded on focus, since they're added from a
@@ -329,38 +258,216 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     return { upcoming, past: past.filter(entry => externalBookingStart(entry).getTime() >= cutoff) };
   }, [externalBookings]);
 
-  // Load waitlist entries for this user
-  useEffect(() => {
-    if (!user?.id) return;
-    getUserWaitlistEntries(user.id)
-      .then(setWaitlistEntries)
-      .catch(() => {});
-  }, [user?.id]);
-
-  const handleConfirmWaitlistHold = useCallback(async () => {
-    if (!waitlistHold) return;
-    setWaitlistHoldBusy(true);
+  const loadWaitlist = useCallback(async (): Promise<MyWaitlistPlace[]> => {
+    if (!user?.id) return [];
     try {
-      await claimWaitlistHold(waitlistHold.id);
-      setWaitlistHold(null);
-      await reloadBookings();
-    } catch (err: any) {
-      Alert.alert('Could not confirm', toUserMessageAllowingDbGuard(err, 'This hold may have expired. Please check with the provider for other openings.', 'BookingsScreen.confirmWaitlistHold'));
-      setWaitlistHold(null);
-    } finally {
-      setWaitlistHoldBusy(false);
+      const places = await getMyWaitlist();
+      setWaitlistPlaces(places);
+      setWaitlistNow(Date.now());
+      return places;
+    } catch (error) {
+      logger.warn('[Bookings] waitlist failed to load', error);
+      return [];
     }
-  }, [waitlistHold, reloadBookings]);
+  }, [user?.id]);
+  useFocusEffect(useCallback(() => { void loadWaitlist(); }, [loadWaitlist]));
 
-  const handleDeclineWaitlistHold = useCallback(async () => {
-    if (!waitlistHold) return;
-    setWaitlistHoldBusy(true);
+  // A held card ran out on screen: show it as gone now, and read the list
+  // again once the every-minute sweep has ended the hold on the server.
+  const waitlistRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (waitlistRefreshTimer.current) clearTimeout(waitlistRefreshTimer.current);
+  }, []);
+  const handleWaitlistHoldEnded = useCallback(() => {
+    setWaitlistNow(Date.now());
+    if (waitlistRefreshTimer.current) clearTimeout(waitlistRefreshTimer.current);
+    waitlistRefreshTimer.current = setTimeout(() => { void loadWaitlist(); }, 65_000);
+  }, [loadWaitlist]);
+
+  // The cart line paying for a hold, if the client already started checkout.
+  const removeHoldFromCart = useCallback((holdBookingId: string | null) => {
+    if (!holdBookingId) return;
+    cartItems
+      .filter(item => item.waitlistHold?.bookingId === holdBookingId)
+      .forEach(item => removeFromCart(item.id));
+  }, [cartItems, removeFromCart]);
+
+  // Confirm & pay: the held slot goes into the cart at its fixed time and the
+  // client pays for it like any booking. The 15 minutes keep running.
+  const handleConfirmAndPay = useCallback(async (place: MyWaitlistPlace) => {
+    if (!place.holdBookingId) return;
+    setWaitlistBusyId(place.id);
     try {
-      await declineWaitlistHold(waitlistHold.id);
-    } catch {}
-    setWaitlistHold(null);
-    setWaitlistHoldBusy(false);
-  }, [waitlistHold]);
+      const hold = await getBookingById(place.holdBookingId);
+      if (!hold || hold.status !== 'on_hold' || !hold.hold_expires_at) {
+        showAlert('This slot has gone', "Its time ran out before you could pay, so you've come off this waitlist. You can rejoin.");
+        await loadWaitlist();
+        return;
+      }
+      const live = await getRebookableService(hold.provider_id, hold.service_name_snapshot);
+      if (!live || live.id !== hold.service_id) {
+        showAlert("Can't book this right now", `${place.providerName} isn't taking bookings for ${place.serviceName} at the moment.`);
+        return;
+      }
+      addToCart(buildWaitlistHoldCartItem({
+        holdBookingId: hold.id,
+        holdExpiresAt: hold.hold_expires_at,
+        bookingDate: hold.booking_date,
+        bookingTime: hold.booking_time,
+        providerId: hold.provider_id,
+        providerImage: hold.provider_logo_snapshot,
+        live,
+      }));
+      navigation.getParent()?.navigate('Cart' as never);
+    } catch (error) {
+      showAlert("Couldn't open checkout", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.confirmAndPayWaitlist'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [addToCart, loadWaitlist, navigation, showAlert]);
+
+  const handlePassWaitlist = useCallback((place: MyWaitlistPlace) => {
+    const holdId = place.holdBookingId;
+    if (!holdId) return;
+    const slot = offeredSlotLabel(place.offeredDate, place.offeredTime) ?? 'this slot';
+    showConfirm(
+      `Pass on ${slot}?`,
+      "It'll be offered to someone else, and you'll come off this waitlist. You can rejoin afterwards.",
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Pass it on',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setWaitlistBusyId(place.id);
+              try {
+                await declineWaitlistHold(holdId);
+                removeHoldFromCart(holdId);
+                await loadWaitlist();
+              } catch (error) {
+                showAlert("Couldn't pass it on", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.passWaitlist'));
+              } finally {
+                setWaitlistBusyId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [loadWaitlist, removeHoldFromCart, showAlert, showConfirm]);
+
+  // A hold whose time ran out before the sweep reached it still counts as
+  // held on the server. Rejoin and Dismiss end it first (decline_waitlist_hold
+  // records it as missed).
+  const endLeftoverHold = useCallback(async (place: MyWaitlistPlace) => {
+    if (place.status === 'notified' && place.offeredBookingId) {
+      await declineWaitlistHold(place.offeredBookingId);
+      removeHoldFromCart(place.offeredBookingId);
+    }
+  }, [removeHoldFromCart]);
+
+  const handleRejoinWaitlist = useCallback(async (place: MyWaitlistPlace) => {
+    if (!user?.id) return;
+    setWaitlistBusyId(place.id);
+    try {
+      await endLeftoverHold(place);
+      // Keep their dates unless the range is already over.
+      const today = dateToYMD(new Date());
+      const [start, end] = place.preferredDates ?? [];
+      const dates = start && (!end || end >= today)
+        ? [start < today ? today : start, ...(end ? [end] : [])]
+        : null;
+      await joinWaitlist({
+        providerId: place.providerId,
+        userId: user.id,
+        serviceId: place.serviceId,
+        serviceNameSnapshot: place.serviceName,
+        providerNameSnapshot: place.providerName,
+        ...(user.name ? { userNameSnapshot: user.name } : {}),
+        ...(dates ? { preferredDates: dates } : {}),
+        ...(place.notes ? { notes: place.notes } : {}),
+      });
+      setGoneNotice(null);
+      await loadWaitlist();
+    } catch (error) {
+      showAlert("Couldn't rejoin", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.rejoinWaitlist'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [endLeftoverHold, loadWaitlist, showAlert, user?.id, user?.name]);
+
+  const handleDismissWaitlist = useCallback(async (place: MyWaitlistPlace) => {
+    setWaitlistBusyId(place.id);
+    try {
+      await endLeftoverHold(place);
+      await leaveWaitlist(place.id);
+      setWaitlistPlaces(prev => prev.filter(candidate => candidate.id !== place.id));
+    } catch (error) {
+      showAlert("Couldn't remove it", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.dismissWaitlist'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [endLeftoverHold, showAlert]);
+
+  const handleOpenWaitlistDates = useCallback((place: MyWaitlistPlace) => {
+    setDatesError(null);
+    setDatesSheetPlace(place);
+  }, []);
+
+  const handleSaveWaitlistDates = useCallback(async (place: MyWaitlistPlace, dates: string[] | null) => {
+    setWaitlistBusyId(place.id);
+    setDatesError(null);
+    try {
+      await updateMyWaitlistDates(place.id, dates);
+      setDatesSheetPlace(null);
+      await loadWaitlist();
+    } catch (error) {
+      setDatesError(toUserMessageAllowingDbGuard(error, "Couldn't save your dates. Try again.", 'BookingsScreen.saveWaitlistDates'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [loadWaitlist]);
+
+  // The sheet closes first: the dialog host sits outside its Modal, so a
+  // confirm raised while the sheet is up would never be seen.
+  const handleLeaveFromDatesSheet = useCallback((place: MyWaitlistPlace) => {
+    setDatesSheetPlace(null);
+    showConfirm(
+      'Leave this waitlist?',
+      `You'll lose your place in line for ${place.serviceName} with ${place.providerName}.`,
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                await leaveWaitlist(place.id);
+                setWaitlistPlaces(prev => prev.filter(candidate => candidate.id !== place.id));
+              } catch (error) {
+                showAlert("Couldn't leave the waitlist", toUserMessageAllowingDbGuard(error, 'Check your connection and try again.', 'BookingsScreen.leaveWaitlist'));
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [showAlert, showConfirm]);
+
+  const sortedWaitlistPlaces = useMemo(
+    () => sortWaitlistPlaces(waitlistPlaces, waitlistNow),
+    [waitlistPlaces, waitlistNow],
+  );
+  const heldWaitlistPlaces = useMemo(
+    () => sortedWaitlistPlaces.filter(place => waitlistCardState(place, waitlistNow) === 'held'),
+    [sortedWaitlistPlaces, waitlistNow],
+  );
+  const otherWaitlistPlaces = useMemo(
+    () => sortedWaitlistPlaces.filter(place => waitlistCardState(place, waitlistNow) !== 'held'),
+    [sortedWaitlistPlaces, waitlistNow],
+  );
 
   // Shared with the client Settings card, so both count the same things.
   const {
@@ -1117,19 +1224,34 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         // Not in the normal lists — could be a waitlist hold (deliberately
         // excluded from them, see client_bookings view) rather than actually
         // missing. Check directly before falling back to the retry/give-up
-        // path below.
+        // path below. A held slot shows at the top of Bookings; one whose
+        // hold has already ended was deleted, and is recognised by the
+        // waitlist entry that was offered it.
+        const handledFromWaitlist = () => {
+          navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+          if (notifBookingGiveUpRef.current) {
+            clearTimeout(notifBookingGiveUpRef.current.timer);
+            notifBookingGiveUpRef.current = null;
+          }
+        };
         getBookingById(bookingId!)
-          .then(direct => {
-            if (direct?.status === 'on_hold') {
-              setWaitlistHold(direct);
-              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, openReview: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
-              if (notifBookingGiveUpRef.current) {
-                clearTimeout(notifBookingGiveUpRef.current.timer);
-                notifBookingGiveUpRef.current = null;
+          .then(async direct => {
+            if (direct?.status === 'on_hold' && direct.waitlist_entry_id) {
+              handledFromWaitlist();
+              await loadWaitlist();
+              mainScrollRef.current?.scrollToOffset({ offset: 0, animated: true });
+              return;
+            }
+            if (!direct) {
+              const places = await loadWaitlist();
+              const gone = places.find(place => place.offeredBookingId === bookingId && waitlistCardState(place, Date.now()) !== 'held');
+              if (gone) {
+                handledFromWaitlist();
+                setGoneNotice(gone);
               }
             }
           })
-          .catch(() => {});
+          .catch((error: unknown) => logger.warn('[Bookings] could not check a waitlist hold from a notification', error));
 
         logger.warn('⚠️ Booking not found:', bookingId);
         // Bookings may still be loading — allow a few seconds of retries as
@@ -1153,7 +1275,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setActiveFilters(new Set([route.params.initialTab]));
       navigation.setParams({ initialTab: undefined } as any);
     }
-  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule, showAlert]);
+  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.openReview, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule, showAlert, loadWaitlist]);
 
   // ✅ Update selectedBooking ONLY when modal is visible and booking state changes
   // Use ref to track last update to prevent infinite loops
@@ -1263,12 +1385,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       rows.push({ kind: 'external-header' });
       rows.push(...externalRows.map(entry => ({ kind: 'external' as const, entry })));
     }
-    if (waitlistEntries.length > 0) {
+    // Held slots sit at the top of the screen (they're on a clock); the
+    // places still waiting, and the ones that ended, are listed here.
+    if (otherWaitlistPlaces.length > 0) {
       rows.push({ kind: 'waitlist-header' });
-      rows.push(...waitlistEntries.map(entry => ({ kind: 'waitlist' as const, entry })));
+      rows.push(...otherWaitlistPlaces.map(place => ({ kind: 'waitlist' as const, place })));
     }
     return rows;
-  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, waitlistEntries, externalSplit, pastCategoryFilter]);
+  }, [activeFilters, isFilterView, listItems, pastBookingsFiltered, otherWaitlistPlaces, externalSplit, pastCategoryFilter]);
 
   // The notification-driven scroll above fires on a timer, after the filter
   // switch has re-rendered this list, so it needs the rows as they are at that
@@ -1345,17 +1469,20 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     </View>
   ), [handleBookingPress, highlightedBookingId, recentlyAddedBookings, styles.pastBookingRowWrap]);
 
-  const handleBookWaitlistEntry = useCallback((entry: WaitlistEntry) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate('ProviderProfile', { providerId: entry.provider_id });
-  }, [navigation]);
-
-  const handleLeaveWaitlistEntry = useCallback((entry: WaitlistEntry) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    leaveWaitlist(entry.id).then(() => {
-      setWaitlistEntries(prev => prev.filter(candidate => candidate.id !== entry.id));
-    }).catch(() => {});
-  }, []);
+  const renderWaitlistPlace = useCallback((place: MyWaitlistPlace) => (
+    <WaitlistPlaceCard
+      key={place.id}
+      place={place}
+      nowMs={waitlistNow}
+      busy={waitlistBusyId === place.id}
+      onConfirmAndPay={handleConfirmAndPay}
+      onPass={handlePassWaitlist}
+      onChangeDates={handleOpenWaitlistDates}
+      onRejoin={handleRejoinWaitlist}
+      onDismiss={handleDismissWaitlist}
+      onHoldEnded={handleWaitlistHoldEnded}
+    />
+  ), [waitlistNow, waitlistBusyId, handleConfirmAndPay, handlePassWaitlist, handleOpenWaitlistDates, handleRejoinWaitlist, handleDismissWaitlist, handleWaitlistHoldEnded]);
 
   const handleExternalBookingPress = useCallback((entry: ClientExternalBookingWithProvider) => {
     navigation.navigate('ExternalBookingDetail', { externalBookingId: entry.id });
@@ -1377,18 +1504,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     if (item.kind === 'waitlist-header') {
       return (
         <View style={{ paddingHorizontal: 16 }}>
-          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>ON WAITLIST</Text>
+          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>WAITING FOR</Text>
         </View>
       );
     }
-    return (
-      <WaitlistCard
-        entry={item.entry}
-        onBook={handleBookWaitlistEntry}
-        onLeave={handleLeaveWaitlistEntry}
-      />
-    );
-  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, handleExternalBookingPress, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
+    return renderWaitlistPlace(item.place);
+  }, [renderWaitlistPlace, handleExternalBookingPress, renderServiceCategoryRow, renderPastBookingRow, styles.bookingsTitle]);
 
   const bookingListKeyExtractor = useCallback((item: BookingsListRow) => {
     if (item.kind === 'category') return `category-${item.serviceType}`;
@@ -1396,7 +1517,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     if (item.kind === 'waitlist-header') return 'waitlist-header';
     if (item.kind === 'external-header') return 'external-header';
     if (item.kind === 'external') return `external-${item.entry.id}`;
-    return `waitlist-${item.entry.id}`;
+    return `waitlist-${item.place.id}`;
   }, []);
 
   // ==================== RENDER ====================
@@ -1483,6 +1604,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 springSpeed={14}
               />
             </Animated.View>
+            {/* A held waitlist slot is on a 15-minute clock, so it sits above
+                everything else until it's paid for, passed on, or gone. */}
+            {heldWaitlistPlaces.length > 0 && (
+              <View style={styles.heldSection}>
+                <Text style={[styles.bookingsTitle, styles.heldTitle]}>HELD FOR YOU</Text>
+                {heldWaitlistPlaces.map(renderWaitlistPlace)}
+              </View>
+            )}
             {/* Tracking View */}
             {!isFilterView && (
               <>
@@ -2159,49 +2288,63 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         </Modal>
 
-        {/* ─── Waitlist Hold Modal — a time-boxed slot reserved via
-            invite_next_waitlist_entry() (waitlist_holds.sql). Fetched
-            directly by id (see the route-params effect above) since it's
-            deliberately excluded from the normal bookings lists. ─── */}
-        <Modal visible={!!waitlistHold} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setWaitlistHold(null)}>
+        {/* ─── A "slot opened" notification tapped after the hold ended. The
+            held row was deleted when its 15 minutes ran out, so this is
+            recognised by the waitlist entry it was offered to. ─── */}
+        <Modal visible={!!goneNotice} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => setGoneNotice(null)}>
           <View style={popSt.overlay}>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
-              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⏳</Text>
-              <Text style={[popSt.sheetTitle, { color: P.text }]}>A Slot Opened Up!</Text>
-              {waitlistHold && (
+              <View style={[styles.goneIcon, { backgroundColor: P.accentDim }]}>
+                <Ionicons name="time-outline" size={26} color={P.accentText} />
+              </View>
+              <Text style={[popSt.sheetTitle, { color: P.text }]}>This slot has gone</Text>
+              {goneNotice && (
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  {waitlistHold.service_name_snapshot} with {waitlistHold.provider_name_snapshot}{'\n'}
-                  {formatLongDate(waitlistHold.booking_date)}
-                  {' at '}
-                  {formatTime12(waitlistHold.booking_time)}
-                  {'\n\n'}This is held just for you — it'll be released to the next person if you don't respond in time.
+                  {offeredSlotLabel(goneNotice.offeredDate, goneNotice.offeredTime) ?? 'The slot'} with {goneNotice.providerName}
+                  {holdEndLabel(goneNotice.offerExpiresAt) ? ` was held for you until ${holdEndLabel(goneNotice.offerExpiresAt)}.` : ' was held for you, and its time ran out.'}
+                  {"\n\n"}You've come off this waitlist, but you can rejoin to be offered the next slot that opens.
                 </Text>
               )}
-              <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
+              <View style={{ gap: 10, marginTop: 16 }}>
                 <TouchableOpacity
-                  style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
-                  onPress={handleDeclineWaitlistHold}
-                  disabled={waitlistHoldBusy}
-                  activeOpacity={0.7}
+                  style={[popSt.sheetBtn, { backgroundColor: P.accent, flex: 0 }]}
+                  onPress={() => { if (goneNotice) void handleRejoinWaitlist(goneNotice); }}
+                  disabled={!!goneNotice && waitlistBusyId === goneNotice.id}
+                  activeOpacity={0.8}
                 >
-                  <Text style={{ color: P.text, fontWeight: '600', textAlign: 'center' }}>Not This Time</Text>
+                  {goneNotice && waitlistBusyId === goneNotice.id
+                    ? <ActivityIndicator color={P.onAccent} size="small" />
+                    : <Text style={{ color: P.onAccent, fontWeight: '700', textAlign: 'center' }}>Rejoin the waitlist</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[popSt.sheetBtn, { backgroundColor: P.accent }]}
-                  onPress={handleConfirmWaitlistHold}
-                  disabled={waitlistHoldBusy}
+                  style={[popSt.sheetBtn, { backgroundColor: P.accentDim, flex: 0 }]}
+                  onPress={() => {
+                    const providerId = goneNotice?.providerId;
+                    setGoneNotice(null);
+                    if (providerId) navigation.navigate('ProviderProfile', { providerId });
+                  }}
                   activeOpacity={0.7}
                 >
-                  {waitlistHoldBusy ? (
-                    <ActivityIndicator color={P.onAccent} size="small" />
-                  ) : (
-                    <Text style={{ color: P.onAccent, fontWeight: '600', textAlign: 'center' }}>Confirm This Slot</Text>
-                  )}
+                  <Text style={{ color: P.accentText, fontWeight: '700', textAlign: 'center' }}>
+                    See {goneNotice?.providerName ?? 'their'}'s other times
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setGoneNotice(null)} activeOpacity={0.6} style={{ paddingVertical: 6 }}>
+                  <Text style={{ color: P.sub, fontWeight: '600', textAlign: 'center' }}>Close</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
+
+        <WaitlistDatesSheet
+          place={datesSheetPlace}
+          busy={!!datesSheetPlace && waitlistBusyId === datesSheetPlace.id}
+          error={datesError}
+          onClose={() => setDatesSheetPlace(null)}
+          onSave={(place, dates) => { void handleSaveWaitlistDates(place, dates); }}
+          onLeave={handleLeaveFromDatesSheet}
+        />
 
         {/* ─── Rating Modal — the "Rate" button on the Today map view set
             showRatingModal/rating/reviewText but nothing rendered a modal, so
@@ -2685,6 +2828,21 @@ const createStyles = (
     fontSize: 14,
     color: '#2196F3',
     fontWeight: '800',
+  },
+  heldSection: {
+    marginTop: 16,
+  },
+  heldTitle: {
+    marginBottom: 12,
+  },
+  goneIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 12,
   },
   bookingsTitle: {
     fontFamily: 'BakbakOne-Regular',

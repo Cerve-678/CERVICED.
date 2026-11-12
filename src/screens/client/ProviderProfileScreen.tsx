@@ -48,7 +48,7 @@ import { FullImageViewer } from "../../components/FullImageViewer";
 import { LogoZoomViewer } from "../../components/LogoZoomViewer";
 import { policyImageUrls } from "../../features/providers/policyImages";
 import { StackScreenProps } from "@react-navigation/stack";
-import { usePreventRemove } from "@react-navigation/native";
+import { useFocusEffect, usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
 
 // Correct icon imports - using your IconLibrary.tsx
@@ -75,10 +75,10 @@ import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
 import CategoryTabItem from "../../components/CategoryTabPill";
 import {
   getProviderDepositPoliciesByDisplayNames,
-  getUserWaitlistEntries,
+  getMyWaitlist,
   joinWaitlist,
   leaveWaitlist,
-  type WaitlistEntry,
+  type MyWaitlistPlace,
   setProviderFollowNotify,
   recordProviderStat,
   addMyExternalBooking,
@@ -105,7 +105,8 @@ import {
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
-import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { dateToYMD, formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { placeInLineLabel } from "../../features/bookings/waitlist";
 import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
@@ -1580,7 +1581,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // non-cacheable viewer request. viewerChecked remains a separate gate so
   // deep-linked booking UI never auto-opens before that check settles.
   const [userWaitlistMap, setUserWaitlistMap] = useState<
-    Record<string, WaitlistEntry>
+    Record<string, MyWaitlistPlace>
   >({});
   // service.dbId -> "has a bookable slot in the next 14 days". The Waitlist
   // button only makes sense once we've confirmed there's genuinely nothing
@@ -1603,7 +1604,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistJoining, setWaitlistJoining] = useState(false);
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [leaveConfirmEntry, setLeaveConfirmEntry] =
-    useState<WaitlistEntry | null>(null);
+    useState<MyWaitlistPlace | null>(null);
   const [waitlistDateMode, setWaitlistDateMode] = useState<"anytime" | "range">(
     "anytime",
   );
@@ -1887,20 +1888,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
   }, [promotions.length, offersTabSlide]);
 
-  useEffect(() => {
+  // The client's live places on this provider's waitlists, with their real
+  // place in line. A place whose hold ended (status 'expired') isn't one:
+  // the service offers Waitlist again so they can rejoin.
+  const loadWaitlistMap = useCallback(async () => {
     if (!currentUserId || !providerDbId) return;
-    getUserWaitlistEntries(currentUserId)
-      .then((entries) => {
-        const map: Record<string, WaitlistEntry> = {};
-        entries
-          .filter((e) => e.provider_id === providerDbId)
-          .forEach((e) => {
-            map[e.service_id ?? "__any__"] = e;
-          });
-        setUserWaitlistMap(map);
-      })
-      .catch(() => {});
+    try {
+      const places = await getMyWaitlist();
+      const map: Record<string, MyWaitlistPlace> = {};
+      places
+        .filter((place) => place.providerId === providerDbId && (place.status === "waiting" || place.status === "notified"))
+        .forEach((place) => {
+          map[place.serviceId ?? "__any__"] = place;
+        });
+      setUserWaitlistMap(map);
+    } catch (error) {
+      logger.warn("[ProviderProfile] waitlist places failed to load", error);
+    }
   }, [currentUserId, providerDbId]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadWaitlistMap();
+    }, [loadWaitlistMap]),
+  );
 
   // Check near-term availability per service so the Waitlist button (or,
   // when waitlists are off, the plain "no openings" note) only shows once a
@@ -2339,12 +2349,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     try {
       let preferredDates: string[] | undefined;
       if (waitlistDateMode === "range" && waitlistDateFrom) {
-        const fromStr = waitlistDateFrom.toISOString().split("T")[0]!;
+        // Local calendar dates: toISOString() went through UTC and could
+        // slip a day back during British Summer Time.
+        const fromStr = dateToYMD(waitlistDateFrom);
         preferredDates = waitlistDateTo
-          ? [fromStr, waitlistDateTo.toISOString().split("T")[0]!]
+          ? [fromStr, dateToYMD(waitlistDateTo)]
           : [fromStr];
       }
-      const entry = await joinWaitlist({
+      await joinWaitlist({
         providerId: providerDbId,
         userId: currentUserId,
         serviceId: waitlistModal.service.dbId,
@@ -2354,11 +2366,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         ...(preferredDates ? { preferredDates } : {}),
         ...(waitlistNotes.trim() ? { notes: waitlistNotes.trim() } : {}),
       });
-      setUserWaitlistMap((prev) => ({
-        ...prev,
-        [entry.service_id ?? "__any__"]: entry,
-      }));
       closeWaitlistModal();
+      await loadWaitlistMap();
     } catch {
       setWaitlistError("Couldn't save — check your connection and try again.");
     }
@@ -2374,14 +2383,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     waitlistDateFrom,
     waitlistDateTo,
     closeWaitlistModal,
+    loadWaitlistMap,
   ]);
 
-  const handleLeaveWaitlist = useCallback(async (entry: WaitlistEntry) => {
+  const handleLeaveWaitlist = useCallback(async (entry: MyWaitlistPlace) => {
     try {
       await leaveWaitlist(entry.id);
       setUserWaitlistMap((prev) => {
         const next = { ...prev };
-        delete next[entry.service_id ?? "__any__"];
+        delete next[entry.serviceId ?? "__any__"];
         return next;
       });
     } catch {
@@ -4009,63 +4019,46 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                   {(() => {
                     const wEntry = userWaitlistMap[service.dbId];
+                    // Held: the slot is theirs for 15 minutes; it's paid for
+                    // from Bookings, so the chip goes there. No ✕ while held:
+                    // they pass on it from Bookings instead.
+                    if (wEntry?.status === "notified") {
+                      return (
+                        <TouchableOpacity
+                          style={[styles.waitlistChip, { borderColor: adaptiveAccentColor, backgroundColor: adaptiveAccentColor }]}
+                          onPress={() => {
+                            runAction(() => navigation.navigate("Bookings" as never));
+                          }}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="A slot is held for you. Open Bookings to confirm and pay."
+                        >
+                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
+                          <Ionicons name="chevron-forward" size={11} color="#fff" />
+                        </TouchableOpacity>
+                      );
+                    }
                     if (wEntry) {
                       return (
                         <View
                           style={[
                             styles.waitlistChip,
-                            {
-                              borderColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "70"
-                                  : "#FF9500" + "70",
-                              backgroundColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "0D"
-                                  : "#FF950010",
-                            },
+                            { borderColor: adaptiveAccentColor + "70", backgroundColor: adaptiveAccentColor + "0D" },
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.waitlistChipText,
-                              {
-                                color:
-                                  wEntry.status === "notified"
-                                    ? adaptiveAccentColor
-                                    : "#FF9500",
-                              },
-                            ]}
-                          >
-                            {wEntry.status === "notified"
-                              ? "Slot Held — Confirm!"
-                              : `Waiting · #${wEntry.position}`}
+                          <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
+                            {placeInLineLabel(wEntry.placeInLine)}
                           </Text>
                           <TouchableOpacity
                             onPress={() => {
                               runAction(() => setLeaveConfirmEntry(wEntry));
                             }}
                             activeOpacity={0.6}
-                            hitSlop={{
-                              top: 6,
-                              bottom: 6,
-                              left: 6,
-                              right: 6,
-                            }}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Leave the ${service.name} waitlist`}
                           >
-                            <Text
-                              style={[
-                                styles.waitlistChipX,
-                                {
-                                  color:
-                                    wEntry.status === "notified"
-                                      ? adaptiveAccentColor
-                                      : "#FF9500",
-                                },
-                              ]}
-                            >
-                              ✕
-                            </Text>
+                            <Text style={[styles.waitlistChipX, { color: adaptiveAccentColor }]}>✕</Text>
                           </TouchableOpacity>
                         </View>
                       );
@@ -4572,7 +4565,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
 
               <Text style={[styles.waitlistPopupSub, { color: OP.sub }]}>
-                We'll notify you when a slot opens up.
+                If a slot that suits you opens, it's held for you for 15 minutes to confirm and pay, deposit and fee included. If you don't pay in time, you come off the waitlist and can rejoin.
               </Text>
 
               {/* Availability toggle */}
@@ -4894,7 +4887,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   ]}
                   numberOfLines={1}
                 >
-                  {leaveConfirmEntry.service_name_snapshot}
+                  {leaveConfirmEntry.serviceName}
                 </Text>
               )}
               <Text style={[styles.leavePopupBody, { color: OP.sub }]}>

@@ -882,3 +882,33 @@ user's decisions:
     as not "collected", but this hasn't been checked by a lawyer).
   - Still open: the App Store privacy label (Contacts), the Play Data safety
     form, and the Privacy text above.
+
+## 24. A waitlist slot is paid for within 15 minutes (2026-11-12)
+
+Before this, confirming a held waitlist slot booked it with £0 paid: no
+deposit, no fee, no saved card for late or no-show fees, and no recorded
+agreement to the provider's policies. Now it goes through the normal checkout
+(consent recorded server-side at the hold, §11). Decided by the user on
+2026-11-10: the client has 15 minutes from the offer, the clock keeps running
+while they pay, and missing it or passing takes them off that waitlist.
+
+What the copy now says (Terms §17 Waitlists, the join pop-up, the held card in
+Bookings, the "slot has gone" notice):
+- the 15-minute deadline, that deposit and fee apply, and that missing it
+  loses their place;
+- the booking is made when payment goes through;
+- a payment caught by the clock is cancelled or refunded in full (done by
+  `reconcile-checkouts`, which sends its own `payment_not_completed` notice).
+
+Still for a lawyer:
+- Whether a 15-minute window, running during payment (including 3D Secure),
+  is a fair term under the Consumer Rights Act 2015.
+- Cooling-off (Consumer Contracts Regulations 2013) for a waitlist booking,
+  often near-term and made under time pressure. Same open question as §6,
+  more likely to come up here.
+- Providers weren't asked to re-agree to the changed waitlist behaviour
+  (their own offer is now a hold, not an unpaid booking). Same as §10.
+- The Terms page goes live when merged to main, ahead of the app build that
+  follows it. Older builds can't confirm a held slot at all once the
+  migration drops `claim_waitlist_hold` (they show an error), so they never
+  book against the old rule; nobody has ever been offered a waitlist slot.

@@ -76,10 +76,9 @@ const BOOKING_TYPES = new Set([
   'intake_form_received',
   'info_pack_received',
   'address_released',
-  // Carries a real booking_id when it's a time-boxed hold (waitlist_holds.sql)
-  // — same booking-detail deep link as everything else here. Falls through to
-  // openNotifications() below via the !booking_id guard for the older
-  // booking_id-less notifications this same type can also cover.
+  // Carries the hold's booking_id when a slot is held for the client. Bookings
+  // shows a held slot at the top, or "this slot has gone" if the hold has
+  // ended since (20261112100000). Notices with no booking are routed above.
   'waitlist_slot_available',
 ]);
 
@@ -138,6 +137,17 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
 
   if (!type) {
     openNotifications();
+    return;
+  }
+
+  // ── Waitlist notices with no booking ─────────────────────────────────────────
+  // "Your held slot has gone" and "Taken off a waitlist" (client), "X didn't
+  // take…" and "Waitlist exhausted" (provider): the hold row is deleted when it
+  // ends, so there's no booking to open. Each side's waitlist is where the
+  // next step is: Rejoin in Bookings, or offer the slot from the to-do list.
+  if (type === 'waitlist_slot_available' && !booking_id) {
+    if (isProvider) navigateNested('ProviderHome', 'BookingHistory', { initialTab: 'todo' });
+    else navigateNested('Home', 'Bookings', {});
     return;
   }
 

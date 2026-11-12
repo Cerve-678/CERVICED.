@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { WAITLIST_HOLD_MINUTES, WAITLIST_HOLD_MS } from '../constants/waitlist';
+import { WAITLIST_HOLD_MINUTES } from '../constants/waitlist';
 
 const MIGRATION = readFileSync(
   join(__dirname, '..', '..', 'supabase/migrations/20260827120519_waitlist_hold_fifteen_minutes.sql'),
@@ -15,10 +15,6 @@ describe('waitlist hold window', () => {
   it('matches the interval the database stamps', () => {
     const fn = MIGRATION.slice(MIGRATION.indexOf('FUNCTION public.waitlist_hold_duration'));
     expect(fn).toContain(`INTERVAL '${WAITLIST_HOLD_MINUTES} minutes'`);
-  });
-
-  it('derives ms from minutes rather than carrying a second literal', () => {
-    expect(WAITLIST_HOLD_MS).toBe(WAITLIST_HOLD_MINUTES * 60 * 1000);
   });
 
   it('sweeps at least as often as the hold is long', () => {

@@ -22,11 +22,13 @@ import SlidingTabs from '../../components/SlidingTabs';
 import {
   getProviderBookings,
   getMyProviderProfile,
-  getServiceBookingDefaults,
-  insertDirectBooking,
   getProviderWaitlist,
-  inviteFromWaitlist,
-  leaveWaitlist,
+  getProviderReleasedWaitlistSlots,
+  providerOfferWaitlistSlot,
+  providerOfferReleasedWaitlistSlot,
+  dismissReleasedWaitlistSlot,
+  providerRemoveWaitlistEntry,
+  type ReleasedWaitlistSlot,
   getProviderUnreadConversationCount,
   updateBookingStatus,
   updateGroupBookingStatus,
@@ -40,7 +42,8 @@ import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../../types/
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
-import { WAITLIST_HOLD_MS } from '../../constants/waitlist';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { placeInLineLabel, holdEndLabel } from '../../features/bookings/waitlist';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -343,6 +346,9 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   const [activeTab, setActiveTab]       = useState<TabKey>(route?.params?.initialTab ?? 'todo');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilterKey>('all');
   const [waitlist, setWaitlist]         = useState<WaitlistEntry[]>([]);
+  // Slots that came back with Auto-fill off: open to everyone, and offerable.
+  const [releasedSlots, setReleasedSlots] = useState<ReleasedWaitlistSlot[]>([]);
+  const [waitlistBusyId, setWaitlistBusyId] = useState<string | null>(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
   // Client-requested reschedules still awaiting the provider's response
   // (status 'pending' — distinct from 'provider_responded', which is
@@ -390,8 +396,102 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
 
   const fetchWaitlist = useCallback(async () => {
     if (!providerDbId) return;
-    try { setWaitlist(await getProviderWaitlist(providerDbId)); } catch {}
+    const [entries, released] = await Promise.allSettled([
+      getProviderWaitlist(providerDbId),
+      getProviderReleasedWaitlistSlots(providerDbId),
+    ]);
+    if (entries.status === 'fulfilled') setWaitlist(entries.value);
+    else logger.warn('[ProviderBookings] waitlist failed to load', entries.reason);
+    if (released.status === 'fulfilled') setReleasedSlots(released.value);
+    else logger.warn('[ProviderBookings] released waitlist slots failed to load', released.reason);
   }, [providerDbId]);
+
+  // Each waiting client's place for their service, counted the way the
+  // database picks who's next (position, then when they joined).
+  const waitlistPlaces = useMemo(() => {
+    const places: Record<string, number> = {};
+    const byService = new Map<string, WaitlistEntry[]>();
+    waitlist.filter(e => e.status === 'waiting').forEach(e => {
+      const key = e.service_id ?? '__any__';
+      byService.set(key, [...(byService.get(key) ?? []), e]);
+    });
+    byService.forEach(entries => {
+      [...entries]
+        .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+        .forEach((e, i) => { places[e.id] = i + 1; });
+    });
+    return places;
+  }, [waitlist]);
+
+  const handleRemoveWaitlistEntry = useCallback((entry: WaitlistEntry) => {
+    Alert.alert(
+      `Remove ${entry.user_name_snapshot ?? 'this client'}?`,
+      `They'll come off your ${entry.service_name_snapshot} waitlist and be told.`,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setWaitlistBusyId(entry.id);
+              try {
+                await providerRemoveWaitlistEntry(entry.id);
+                setWaitlist(prev => prev.filter(e => e.id !== entry.id));
+              } catch (err: unknown) {
+                Alert.alert("Couldn't remove them", toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.removeWaitlistEntry'));
+              } finally {
+                setWaitlistBusyId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, []);
+
+  const handleOfferReleasedSlot = useCallback(async (slot: ReleasedWaitlistSlot, entryId?: string) => {
+    setWaitlistBusyId(slot.id);
+    try {
+      await providerOfferReleasedWaitlistSlot(slot.id, entryId);
+      await fetchWaitlist();
+    } catch (err: unknown) {
+      Alert.alert("Couldn't offer it", toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerReleasedSlot'));
+      await fetchWaitlist();
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, [fetchWaitlist]);
+
+  // "Pick someone": the waiting clients for that service (or any service).
+  const handlePickForReleasedSlot = useCallback((slot: ReleasedWaitlistSlot) => {
+    const candidates = waitlist
+      .filter(e => e.status === 'waiting' && (e.service_id === slot.serviceId || e.service_id === null))
+      .slice(0, 6);
+    if (candidates.length === 0) {
+      Alert.alert('Nobody waiting', `Nobody is waiting for ${slot.serviceName} right now.`);
+      return;
+    }
+    Alert.alert('Who should get it?', "They'll have 15 minutes to confirm and pay.", [
+      ...candidates.map(e => ({
+        text: e.user_name_snapshot ?? 'Client',
+        onPress: () => { void handleOfferReleasedSlot(slot, e.id); },
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  }, [waitlist, handleOfferReleasedSlot]);
+
+  const handleDismissReleasedSlot = useCallback(async (slot: ReleasedWaitlistSlot) => {
+    setWaitlistBusyId(slot.id);
+    try {
+      await dismissReleasedWaitlistSlot(slot.id);
+      setReleasedSlots(prev => prev.filter(r => r.id !== slot.id));
+    } catch (err: unknown) {
+      Alert.alert("Couldn't clear it", toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.dismissReleasedSlot'));
+    } finally {
+      setWaitlistBusyId(null);
+    }
+  }, []);
 
   const fetchUnreadMessages = useCallback(async () => {
     try {
@@ -432,7 +532,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   // ── Derived data ─────────────────────────────────────────────────────────
 
   const pendingCount  = useMemo(() => bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING).length, [bookings]);
-  const waitlistCount = useMemo(() => waitlist.filter(e => e.status === 'waiting').length, [waitlist]);
+  const waitlistCount = useMemo(() => waitlist.filter(e => e.status === 'waiting').length + releasedSlots.length, [waitlist, releasedSlots]);
   const rescheduleRequestCount = useMemo(() => Object.keys(pendingRescheduleRequests).length, [pendingRescheduleRequests]);
   // Booking rows the reschedule-request rows below link to, keyed by id —
   // a request whose booking fell out of the loaded ledger (shouldn't happen,
@@ -555,68 +655,30 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
     }
   }, [inviteDate, inviteTime]);
 
+  // The provider picks a time for a waiting client. It's offered as a
+  // 15-minute hold the client confirms and pays for (decided 2026-11-10),
+  // never booked in with nothing paid.
   const handleConfirmInvite = useCallback(async () => {
-    if (!inviteModal.entry || !providerDbId || !inviteDate || !inviteTime) return;
+    if (!inviteModal.entry || !inviteDate || !inviteTime) return;
     setInviting(true);
     try {
       const entry = inviteModal.entry;
-      let basePrice = 0;
-      // Length matters as much as price here: without it the booking is
-      // written with no end_time, which leaves the DB overlap constraint
-      // nothing to measure and shows up on the provider's day as a block of
-      // unknown length. An hour is the same fallback the database itself
-      // uses (get_provider_busy_spans COALESCEs to booking_time + 1 hour),
-      // so a service with no duration set still produces a real span.
-      let durationMinutes = 60;
-      if (entry.service_id) {
-        const defaults = await getServiceBookingDefaults(entry.service_id);
-        basePrice = defaults.price;
-        if (defaults.durationMinutes > 0) durationMinutes = defaults.durationMinutes;
-      }
-      const bookingDate = inviteDate.toISOString().split('T')[0]!;
-      const bookingTime = inviteTime.toTimeString().split(' ')[0]!;
-      const endAt = new Date(inviteTime.getTime() + durationMinutes * 60_000);
-      const endTime = endAt.toTimeString().split(' ')[0]!;
-      await insertDirectBooking({
-        user_id: entry.user_id,
-        provider_id: providerDbId,
-        service_id: entry.service_id,
-        status: 'pending',
-        booking_date: bookingDate,
-        booking_time: bookingTime,
-        end_time: endTime,
-        payment_type: 'full',
-        base_price: basePrice,
-        add_ons_total: 0,
-        service_charge: 0,
-        deposit_amount: 0,
-        amount_paid: 0,
-        remaining_balance: basePrice,
-        payment_status: 'pending',
-        is_group_booking: false,
-        group_booking_count: 1,
-        provider_name_snapshot: entry.provider_name_snapshot,
-        service_name_snapshot: entry.service_name_snapshot,
-      });
-      await inviteFromWaitlist(entry);
-      setWaitlist(prev => prev.map(e => e.id === entry.id ? { ...e, status: 'booked' as const } : e));
+      const bookingTime = `${String(inviteTime.getHours()).padStart(2, '0')}:${String(inviteTime.getMinutes()).padStart(2, '0')}`;
+      await providerOfferWaitlistSlot(entry.id, dateToYMD(inviteDate), bookingTime);
       setInviteModal({ visible: false, entry: null });
       setInviteDate(null);
       setInviteTime(null);
-    } catch (err: any) {
-      logger.error('Invite failed:', err);
-      // The invite RPC throws a real, specific reason (blocked date,
-      // overlapping slot, provider closed that day) — surface it instead of
-      // always showing the generic connection copy, which previously hid
-      // exactly that kind of actionable message.
-      const message =
-        typeof err?.message === 'string' && err.message.length > 0 && !err.message.includes('Network')
-          ? err.message
-          : 'The booking could not be created. Please check your connection and try again.';
-      Alert.alert('Invite failed', message);
+      await fetchWaitlist();
+    } catch (err: unknown) {
+      // The database says why (taken, outside your hours, inside your
+      // notice); anything technical becomes the fallback.
+      Alert.alert(
+        "Couldn't hold that time",
+        toUserMessageAllowingDbGuard(err, 'Check your connection and try again.', 'ProviderBookingHistory.offerWaitlistSlot'),
+      );
     }
     setInviting(false);
-  }, [inviteModal.entry, providerDbId, inviteDate, inviteTime]);
+  }, [inviteModal.entry, inviteDate, inviteTime, fetchWaitlist]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -674,10 +736,10 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               s.listContent,
-              unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && items.length === 0 && s.listCentered,
+              unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && releasedSlots.length === 0 && items.length === 0 && s.listCentered,
             ]}
           >
-            {unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && items.length === 0 ? (
+            {unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && releasedSlots.length === 0 && items.length === 0 ? (
               <View style={s.emptyWrap}>
                 <Ionicons name="checkmark-done-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
                 <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
@@ -745,10 +807,42 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   </>
                 )}
 
-                {waitlist.length > 0 && (
+                {(waitlist.length > 0 || releasedSlots.length > 0) && (
                   <>
                     <Text style={[wl.popupLabel, { color: P.sub, marginTop: (unreadMessages > 0 || rescheduleRequestRows.length > 0) ? 8 : 0 }]}>WAITLIST</Text>
-                    {waitlist.map(entry => (
+                    {/* Auto-fill off: a client's hold ended unpaid, the time is
+                        open to everyone, and the provider can still offer it. */}
+                    {releasedSlots.map(slot => {
+                      const busy = waitlistBusyId === slot.id;
+                      return (
+                        <View key={slot.id} style={[wl.card, { backgroundColor: P.card, marginBottom: 10, borderWidth: 1.5, borderColor: P.accent }, !dark && bc.shadow]}>
+                          <Text style={[wl.clientName, { color: P.text }]}>
+                            {slot.releasedByName ?? 'Your waitlist client'} didn't take {formatShortDate(slot.bookingDate)}, {formatTime12(slot.bookingTime)}
+                          </Text>
+                          <Text style={[wl.serviceName, { color: P.sub }]}>
+                            {slot.serviceName} · {slot.reason === 'missed' ? 'Their 15 minutes ran out.' : 'They passed on it.'} It's open to everyone now.
+                          </Text>
+                          <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent, marginTop: 10, alignSelf: 'stretch', alignItems: 'center' }]} activeOpacity={0.8}
+                            disabled={busy} onPress={() => { void handleOfferReleasedSlot(slot); }}>
+                            {busy ? <ActivityIndicator color={P.onAccent} size="small" /> : <Text style={[wl.inviteBtnText, { color: P.onAccent }]}>Offer it to the next in line</Text>}
+                          </TouchableOpacity>
+                          <View style={wl.actions}>
+                            <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8} disabled={busy}
+                              onPress={() => handlePickForReleasedSlot(slot)}>
+                              <Text style={[wl.removeBtnText, { color: P.text }]}>Pick someone</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8} disabled={busy}
+                              onPress={() => { void handleDismissReleasedSlot(slot); }}>
+                              <Text style={[wl.removeBtnText, { color: P.sub }]}>Leave it open</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })}
+                    {waitlist.map(entry => {
+                      const held = entry.status === 'notified';
+                      const busy = waitlistBusyId === entry.id;
+                      return (
                       <View key={entry.id} style={[wl.card, { backgroundColor: P.card, marginBottom: 10 }, !dark && bc.shadow]}>
                         <View style={wl.cardTop}>
                           <View style={[wl.avatar, { backgroundColor: P.tile }]}>
@@ -764,21 +858,18 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                               {entry.service_name_snapshot}
                             </Text>
                           </View>
-                          <View style={[wl.posBadge, { backgroundColor: entry.status === 'notified' ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)' }]}>
-                            <Text style={[wl.posBadgeText, { color: entry.status === 'notified' ? '#34C759' : '#FF9500' }]}>
-                              {entry.status === 'notified' ? 'Holding Slot' : `Waiting · #${entry.position}`}
+                          <View style={[wl.posBadge, { backgroundColor: held ? P.accent : P.accentSoft }]}>
+                            <Text style={[wl.posBadgeText, { color: held ? P.onAccent : P.accent }]}>
+                              {held ? 'Held for them' : placeInLineLabel(waitlistPlaces[entry.id] ?? null)}
                             </Text>
                           </View>
                         </View>
-                        {/* A hold reserves the slot for WAITLIST_HOLD_MINUTES from
-                            notified_at — an estimate, not fetched from the linked
-                            bookings row, since this list is optimised for provider
-                            skimming rather than authoritative countdown precision.
-                            The window is the DB's (waitlist_hold_duration()); the
-                            constant only mirrors it for display. */}
-                        {entry.status === 'notified' && entry.notified_at ? (
-                          <Text style={[wl.preferredDates, { color: '#34C759' }]}>
-                            Expires around {formatTime12(new Date(new Date(entry.notified_at).getTime() + WAITLIST_HOLD_MS))} if not confirmed
+                        {/* The hold's real end (offer_expires_at is written with
+                            the hold itself), not an estimate. */}
+                        {held && entry.offered_date && entry.offered_time ? (
+                          <Text style={[wl.preferredDates, { color: P.accent }]}>
+                            {formatShortDate(entry.offered_date)}, {formatTime12(entry.offered_time)}
+                            {holdEndLabel(entry.offer_expires_at) ? ` · theirs to pay for until ${holdEndLabel(entry.offer_expires_at)}` : ''}
                           </Text>
                         ) : null}
                         {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
@@ -789,24 +880,21 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                               : `${formatShortDate(entry.preferred_dates[0]!)} onward`}
                           </Text>
                         ) : null}
-                        <View style={wl.actions}>
-                          {entry.status === 'waiting' && (
-                            <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent }]} activeOpacity={0.8}
+                        {!held && (
+                          <View style={wl.actions}>
+                            <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent }]} activeOpacity={0.8} disabled={busy}
                               onPress={() => setInviteModal({ visible: true, entry })}>
-                              <Text style={[wl.inviteBtnText, { color: P.onAccent }]}>Schedule & Invite</Text>
+                              <Text style={[wl.inviteBtnText, { color: P.onAccent }]}>Offer a time</Text>
                             </TouchableOpacity>
-                          )}
-                          <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8}
-                            onPress={() => {
-                              leaveWaitlist(entry.id)
-                                .then(() => setWaitlist(prev => prev.filter(e => e.id !== entry.id)))
-                                .catch(() => {});
-                            }}>
-                            <Text style={[wl.removeBtnText, { color: P.sub }]}>Remove</Text>
-                          </TouchableOpacity>
-                        </View>
+                            <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8} disabled={busy}
+                              onPress={() => handleRemoveWaitlistEntry(entry)}>
+                              {busy ? <ActivityIndicator color={P.sub} size="small" /> : <Text style={[wl.removeBtnText, { color: P.sub }]}>Remove</Text>}
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
-                    ))}
+                      );
+                    })}
                   </>
                 )}
 
@@ -894,7 +982,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   <Ionicons name="calendar-outline" size={20} color={P.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[wl.popupTitle, { color: P.text }]}>Schedule Appointment</Text>
+                  <Text style={[wl.popupTitle, { color: P.text }]}>Offer a time</Text>
                   <Text style={[wl.popupSub, { color: P.sub }]} numberOfLines={1}>
                     {inviteModal.entry?.user_name_snapshot ?? 'Client'} · {inviteModal.entry?.service_name_snapshot}
                   </Text>
@@ -946,6 +1034,9 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   <DateTimePicker value={inviteTime ?? new Date()} mode="time" display="spinner" onChange={(_, d) => { if (d) setInviteTime(d); }} />
                 </View>
               )}
+              <Text style={[wl.notes, { color: P.sub, marginTop: 12 }]}>
+                {inviteModal.entry?.user_name_snapshot ?? 'They'} will have 15 minutes to confirm and pay. If they don't, it opens up again.
+              </Text>
               <View style={wl.popupActions}>
                 <TouchableOpacity style={[wl.cancelBtn, { borderColor: P.sub + '40' }]} onPress={() => setInviteModal({ visible: false, entry: null })} activeOpacity={0.7}>
                   <Text style={[wl.cancelText, { color: P.sub }]}>Cancel</Text>
@@ -956,7 +1047,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   disabled={!inviteDate || !inviteTime || inviting}
                   activeOpacity={0.8}
                 >
-                  <Text style={[wl.confirmText, { color: P.onAccent }]}>{inviting ? 'Sending…' : 'Confirm & Invite'}</Text>
+                  <Text style={[wl.confirmText, { color: P.onAccent }]}>{inviting ? 'Holding…' : 'Hold it for them'}</Text>
                 </TouchableOpacity>
               </View>
             </View>

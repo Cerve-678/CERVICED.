@@ -728,6 +728,11 @@ export interface DbBooking {
   service_name_snapshot: string;
   service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
+  /** Set on an on_hold row: a cart checkout's 5 minutes, or a waitlist
+   *  hold's 15. Optional because client_bookings never returns on_hold rows. */
+  hold_expires_at?: string | null;
+  /** The waitlist entry a hold (and the booking it becomes) came from. */
+  waitlist_entry_id?: string | null;
   // The provider's private venue is NOT on the bookings table (migration
   // 20261108180000): it lives in booking_venue_details, which clients can't
   // read. These three are client_bookings VIEW columns, null until the

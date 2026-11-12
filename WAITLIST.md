@@ -1,186 +1,104 @@
 # CERVICED — Waitlist System
 
-Reference doc for the waitlist feature as redesigned in
-[waitlist_holds.sql](supabase/waitlist_holds.sql). See [BOOKINGS.md](BOOKINGS.md)
-for the general booking lifecycle this plugs into.
+How the in-app waitlist works: a client joins a fully booked service, a freed
+slot is held for them, and they pay for it at checkout. Rewritten for
+`supabase/migrations/20261112100000_waitlist_pays_at_confirm.sql` (10 Nov 2026),
+which replaced the earlier free "claim". The money side is also in
+`docs/PAYMENTS_AND_LOGIC.md` §2.1. See `BOOKINGS.md` for the booking lifecycle.
 
 ---
 
-## 1. What problem this solves
+## 1. The rules (decided 2026-11-10)
 
-The original design (`waitlist_automation_settings.sql`) sent the top waiter
-a bare "tap to book" notification with no date/time and no reservation —
-whoever's `INSERT` landed first won, waitlisted client or not. It also
-collected a preferred-date range but never checked it, never enforced its own
-`expires_at`, and only ever tried one candidate per cancellation. The
-redesign fixes all four:
+1. A freed slot is **held** for the next matching client for **15 minutes**
+   (`waitlist_hold_duration()`), as an `on_hold` booking.
+2. They **confirm and pay** through the normal checkout. The 15 minutes keep
+   running while they pay; a failed payment can be retried until time is up.
+   Nothing is booked until `finalize_checkout()` captures the payment.
+3. **Missing the 15 minutes, or passing, takes them off that waitlist.** They
+   can rejoin (back of the line).
+4. What happens next is the provider's **"Offer it to the next person
+   automatically"** setting (`automation_settings.autoAcceptWaitlist`):
+   - **On:** the slot is held for the next person in line.
+   - **Off:** the slot opens to everyone straight away and comes back to the
+     provider (`waitlist_released_slots`), who can offer it to the next in
+     line or pick someone.
+5. A provider's own offer ("Offer a time", or offering a released slot) is a
+   15-minute hold too, never an unpaid booking.
+6. **Queue order** decides who's first. "Any day" and a date range are equal;
+   the dates only decide whether someone matches.
+7. A place lasts until the client leaves, books, or the provider removes them.
 
-1. A freed slot is now genuinely **held** for the best-matching candidate —
-   not just first-come-first-served.
-2. The client's stated date preference is actually respected.
-3. An unclaimed/declined hold **auto-cascades** to the next candidate instead
-   of the slot going stale forever.
-4. Queue position is visible.
+## 2. Data
 
-## 2. Data model
-
-Two tables involved:
-
-**`public.provider_waitlist`** ([waitlist_schema.sql](supabase/waitlist_schema.sql)) —
-one row per client-waiting-for-a-provider(+optionally a specific service):
-
-| Column | Notes |
-|---|---|
-| `service_id` | `NULL` = "any service from this provider" |
-| `preferred_dates` | `DATE[]`. **`[0]`** = range start, **`[1]`** (optional) = range end. `NULL` = any date at all. This is a real date-range picker the join modal already had (`waitlistDateFrom`/`waitlistDateTo`, [ProviderProfileScreen.tsx:2111](src/screens/ProviderProfileScreen.tsx#L2111)) — the redesign made the *backend* finally read it, no new UI needed. |
-| `position` | Auto-assigned per provider+service by an insert trigger (`assign_waitlist_position()`) — FCFS tiebreaker within a service |
-| `status` | `waiting → notified → booked` (happy path) or `→ expired` (missed/declined a hold) or `→ cancelled` (left voluntarily) |
-| `expires_at` | 30 days from joining — the row itself goes stale, distinct from a hold's `hold_expires_at` on the linked booking |
-
-**`public.bookings`** gained two columns for this:
+**`provider_waitlist`**, one row per client per provider + service
+(`service_id` NULL = any service, which Becca uses):
 
 | Column | Notes |
 |---|---|
-| `waitlist_entry_id` | Nullable FK — links a hold (and its eventual real booking) back to the waitlist entry that earned it |
-| `hold_expires_at` | Only set while `status = 'on_hold'` — cleared on claim |
+| `preferred_dates` | `date[]`: `[1]` start, `[2]` optional end. NULL = any date |
+| `position` | Set on insert by `assign_waitlist_position()`; not renumbered when someone leaves, so the real place is counted (`get_my_waitlist()`) |
+| `status` | `waiting` → `notified` (held) → `booked` (paid), or `expired` (missed or passed) |
+| `offered_booking_id`, `offered_date`, `offered_time`, `offer_expires_at`, `offer_ended_at` | The last offer. A lapsed hold row is deleted, so this is how "this slot has gone" is shown |
 
-And a new status value, **`on_hold`** — a real `bookings` row, not a separate
-holds table. This is the key design choice: reusing `bookings` means the
-hold is automatically respected by *every* existing overlap mechanism (the
-`bookings_no_overlap` exclusion constraint, `enforce_booking_bookability()`'s
-own check, every app-side availability query) with no parallel
-conflict-checking system to keep in sync.
+Who can change it (RLS): a client inserts their own row as `waiting`, reads
+and deletes their own (not while held). A provider reads their own. Every
+other change goes through a function. Before 20261112100000 the one policy was
+`FOR ALL`, so a client could set their own `position`.
 
-## 3. Join flow
+**`bookings`**: a hold is a real row with `status = 'on_hold'`,
+`waitlist_entry_id` and `hold_expires_at`, so every overlap check already
+treats it as taken. `client_bookings` never returns `on_hold` rows.
 
-`ProviderProfileScreen.tsx`'s waitlist modal → `joinWaitlist()`
-([databaseService.ts](src/services/databaseService.ts), moved here from a
-standalone `WaitlistService.ts` that used to call Supabase directly — a
-boundary violation fixed as part of this redesign) → deletes any stale row
-for the same provider+service, then inserts fresh. The waitlist button only
-appears when `hasNearTermAvailabilityForServices` confirms nothing's
-bookable in the next 14 days (see [BOOKINGS.md §4b](BOOKINGS.md#4b-fully-booked)),
-and only if the provider's `automation_settings.waitlistEnabled !== false`.
+**`waitlist_released_slots`**: slots handed back to a provider (Auto-fill
+off), with who didn't take them and why (`missed` / `passed`).
 
-## 4. The hold mechanism
+## 3. Functions
 
-`invite_next_waitlist_entry()` ([waitlist_holds.sql](supabase/waitlist_holds.sql)) —
-called from `handle_booking_status_change()` on every transition into
-`cancelled` (i.e., whenever a slot actually frees up), passing the freed
-slot's provider/service/date/time/price through.
+| Function | What it does |
+|---|---|
+| `offer_waitlist_slot(entry, service, date, time, end)` | Inserts the hold, marks the entry `notified`, sends "A slot opened up!". Raises on failure |
+| `invite_next_waitlist_entry(...)` | Called by `handle_booking_status_change()` on a cancellation. Tries candidates in order; logs (doesn't swallow) each failure |
+| `prepare_checkout(items)` | An item with `waitlist_hold_id` reuses the caller's own unexpired hold and caps the checkout's expiry at the hold's |
+| `cancel_checkout(batch)` | Detaches a waitlist hold instead of deleting it, so the client can try again |
+| `expire_cart_holds()` | Skips waitlist holds |
+| `expire_waitlist_holds()` | Every minute (cron `expire-waitlist-holds`): ends lapsed holds |
+| `end_waitlist_hold(id, missed, tell_client)` | Deletes the hold, marks the entry `expired`, tells the client if their time ran out, then rolls it on or hands it back |
+| `decline_waitlist_hold(id)` | "Pass it on". Refused while a payment is going through |
+| `mark_waitlist_entry_booked()` | Trigger: hold paid → entry `booked` |
+| `get_my_waitlist()` | The client's places with their real place in line |
+| `update_my_waitlist_dates(entry, dates)` | Change dates without losing their place |
+| `provider_offer_waitlist_slot`, `provider_offer_released_waitlist_slot`, `dismiss_released_waitlist_slot`, `get_provider_released_waitlist_slots`, `provider_remove_waitlist_entry` | The provider's side |
 
-```
-1. Bail if automation_settings.waitlistEnabled is off (default: on)
-2. Select candidates:
-     provider_id matches, status = 'waiting',
-     (service_id matches OR service_id IS NULL),
-     freed date falls within [preferred_dates[0], preferred_dates[1] ?? infinity]
-       (NULL preferred_dates = always matches)
-   ORDER BY exact-service-match DESC, position ASC
-3. For each candidate in order, TRY:
-     autoAcceptWaitlist ON  → INSERT a real 'pending' booking outright
-                              (unchanged from the original design — the
-                              provider explicitly wants zero-friction booking)
-     autoAcceptWaitlist OFF → INSERT status='on_hold', hold_expires_at = now()+3h,
-                              waitlist_entry_id = this candidate's row,
-                              send a notification carrying this booking's id
-                              and the actual date/time (not just "tap to book")
-   On success: mark the waitlist entry 'notified' (or 'booked' for
-   auto-accept) and STOP.
-   On failure (bookability rules no longer clear — notice window, working
-   hours, a concurrent write): try the NEXT candidate instead of giving up.
-4. If every candidate fails: nothing to do, slot is just open to the public,
-   same as any other cancellation.
-```
+`claim_waitlist_hold()` (booked a hold with £0 paid) was dropped.
 
-`autoAcceptWaitlist` keeps its original meaning (provider wants instant
-booking, no confirmation step) — the hold is specifically what happens when
-that's *off* (the default), which used to just be a bare notification with
-no reservation at all.
+## 4. Screens
 
-**Why a hold blocks everyone else, for free**: `on_hold` is not in the
-exclusion constraint's `WHERE status NOT IN ('cancelled', 'no_show')`
-excluded set, so it's already "active" as far as `bookings_no_overlap` is
-concerned. It's also added explicitly to the handful of app-side
-`.in('status', [...])` availability queries
-([AvailabilityService.ts](src/services/AvailabilityService.ts),
-[databaseService.ts:1132](src/services/databaseService.ts#L1132)) and to
-`enforce_booking_bookability()`'s own overlap check
-([waitlist_holds.sql](supabase/waitlist_holds.sql), step 3 of the migration).
+**Client**
+- Provider profile: a **Waitlist** button when nothing is bookable in the next
+  14 days and the provider has the waitlist on. Once joined, the chip shows
+  "2nd in line" (✕ to leave), or **Held for you**, which opens Bookings.
+- Bookings: **Held for you** at the top (countdown, Confirm & pay, Pass it on),
+  then **Waiting for** (place in line and dates, tap to change dates or leave,
+  `WaitlistDatesSheet`), and cards for places whose hold ended (Rejoin,
+  Dismiss). `WaitlistPlaceCard`.
+- Confirm & pay adds the slot to the Cart at its fixed time
+  (`CartItem.waitlistHold`, `buildWaitlistHoldCartItem`). The Cart shows the
+  countdown, won't let the time change, and flags the item once the hold ends.
+- A notification tapped after the hold ended shows "This slot has gone" with
+  Rejoin.
 
-## 5. Expiry & cascade
+**Provider** (Bookings to-do list, `ProviderBookingHistoryScreen`)
+- Waiting clients with their place, **Offer a time** (a held offer) and
+  **Remove** (asks first; the client is told).
+- "Held for them" with the hold's real end time.
+- A released slot: "Ama didn't take Thu 20 Nov, 2:00pm", with Offer it to the
+  next in line, Pick someone, Leave it open.
 
-`expire_waitlist_holds()`, run every 15 minutes via `pg_cron`
-(`expire-waitlist-holds` job):
+## 5. Not yet
 
-```
-For every booking WHERE status='on_hold' AND hold_expires_at < NOW():
-  → flip it to 'cancelled'
-  → flip its waitlist entry to 'expired' (the status value the schema always
-    had but nothing ever set until now)
-  → PERFORM invite_next_waitlist_entry() again for that same freed slot
-    (provider/service/date/time carried on the booking row) — cascades to
-    whoever's next in line automatically.
-```
-
-`decline_waitlist_hold(booking_id)` does the same cancel+cascade
-immediately, client-invoked — so an active "no thanks" doesn't make the next
-person wait out the full 3 hours.
-
-## 6. Claiming a hold
-
-`claim_waitlist_hold(booking_id)` — SECURITY DEFINER RPC, verifies the caller
-owns the hold and it hasn't expired, then:
-
-- Provider has `auto_accept_bookings` on → straight to `confirmed`, sends the
-  normal "Booking Confirmed" wording itself.
-- Otherwise → `pending`, sends the normal "Booking Request Sent" +
-  "New Booking Request" pair itself.
-
-Neither transition (`on_hold → confirmed` / `on_hold → pending`) matches any
-branch in `handle_booking_status_change()` (its branches all key off
-specific named `OLD.status` values, none of which is `on_hold`) — so
-`claim_waitlist_hold` sending its own explicit notification is deliberate,
-not a workaround: nothing else will fire for this transition, so there's
-nothing to double up with. Separately, `handle_new_booking()` (fires on
-every `INSERT`) got an early-return guard for `NEW.status = 'on_hold'` — the
-hold's own INSERT would otherwise have prematurely told the client "your
-request is awaiting confirmation" and the provider "new booking request" for
-something the client hasn't even seen yet.
-
-## 7. UI surfaces
-
-**Client**:
-- Waitlist chip on the provider profile — `Waiting · #{position}` or
-  `Slot Held — Confirm!` when a hold is active
-  ([ProviderProfileScreen.tsx:2971](src/screens/ProviderProfileScreen.tsx#L2971)).
-- Tapping the `waitlist_slot_available` notification (cold-start push or
-  in-app) deep-links straight to a **Confirm/Decline modal**
-  ([BookingsScreen.tsx](src/screens/BookingsScreen.tsx)) showing the actual
-  service, provider, date, and time — fetched directly by booking id via
-  `getBookingById()`, since a not-yet-claimed hold is deliberately excluded
-  from the normal bookings list (`client_bookings` view) so it never shows
-  as a phantom confirmed appointment. Confirm → `claimWaitlistHold`; Decline
-  → `declineWaitlistHold` (cascades immediately).
-
-**Provider** (`ProviderBookingHistoryScreen.tsx`'s Waitlist tab):
-- Each entry shows `Waiting · #N` or `Holding Slot` with an estimated expiry
-  time (`notified_at + 3h`, computed client-side for display — not an
-  authoritative countdown).
-- Preferred-date range now renders as an actual range ("12 Aug – 30 Aug" or
-  "12 Aug onward") instead of a comma-joined date list.
-- Manual **"Schedule & Invite"** — a provider hand-picking someone books them
-  outright (`insertDirectBooking`, unchanged) rather than placing a hold —
-  there's no public race to protect against when the provider is the one
-  deliberately choosing right now.
-
-## 8. Known limitations
-
-- Hold window (3 hours) is a fixed constant, not per-provider configurable —
-  reasonable default for v1, not exposed as a setting yet.
-- The provider's hold-expiry estimate in the Waitlist tab is computed
-  client-side from `notified_at`, not fetched from the actual
-  `hold_expires_at` on the linked booking — cosmetic drift only if the
-  constant ever changes without updating both places.
-- `preferred_dates` matching is a plain date-range containment check — no
-  day-of-week or partial-day preference (e.g. "weekday afternoons only").
+- The whole path has never run with a real client. Rehearse it in Stripe test
+  mode after applying the migration: hold, pay, fail and retry, pass, time
+  running out, Auto-fill on and off, provider offer.
+- Dates only: no "weekdays" or "evenings" preference.
+- The hold length is fixed at 15 minutes for every provider.
