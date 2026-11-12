@@ -5,7 +5,7 @@
 
 #generated
 
-**3700 functions** across **527 files**.
+**3701 functions** across **528 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -106,7 +106,7 @@
 - `waitlist.ts` — changes
 
 ### `src/contexts/` (8)
-- `AuthContext.tsx` — accountDeletionError · addClientProfile · applyMode · **AuthProvider** · becomeFullMember · beginSignupVerification · cancelSignupVerification · clearStorageFolder · completeVerifiedSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · enterFullMemberMode · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
+- `AuthContext.tsx` — addClientProfile · applyMode · **AuthProvider** · becomeFullMember · beginSignupVerification · cancelSignupVerification · clearStorageFolder · completeVerifiedSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · enterFullMemberMode · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
 - `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getItemQuantity · getProviderTotal · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `DisplaySettingsContext.tsx` — apply · **DisplaySettingsProvider** · loadAccountDisplaySettings · persist · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
@@ -492,8 +492,9 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (66)
+### `src/utils/` (67)
 - `aboutPage.ts` — **openAboutPage**
+- `accountDeletionError.ts` — **accountDeletionError** · list
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart

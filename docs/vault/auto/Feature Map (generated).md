@@ -74,7 +74,7 @@ Curated: [[Availability & Slots]] · **198 files**
 - … +168 more
 
 ## Payments
-Curated: [[Payments]] · **163 files**
+Curated: [[Payments]] · **164 files**
 - `src/screens/client/CartScreen.tsx` _(530)_
 - `src/services/databaseService.ts` _(236)_
 - `src/screens/provider/PaymentsScreen.tsx` _(173)_
@@ -105,7 +105,7 @@ Curated: [[Payments]] · **163 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(27)_
-- … +133 more
+- … +134 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **367 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **67 files**
 - … +37 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **210 files**
+Curated: [[Booking Flow]] · **211 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(338)_
 - `src/services/databaseService.ts` _(272)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **210 files**
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `src/types/database.ts` _(38)_
-- … +180 more
+- … +181 more
 
 ## Auth
 Curated: [[Contexts]] · **219 files**
