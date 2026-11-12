@@ -9,10 +9,11 @@
  * under the name), so a tag missing here is a search a client can't make.
  */
 
+import type { ServiceTypeKey } from '../../constants/serviceTypes';
 import { editDistance, normalizeTerm, tokenize } from '../../utils/fuzzyMatch';
 
-/** Mirrors ServiceData['serviceType'] in InfoRegScreen and services.service_type. */
-export type ServiceTypeValue = 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+/** services.service_type, or '' for not stated. The list lives in constants/serviceTypes. */
+export type ServiceTypeValue = ServiceTypeKey | '';
 
 // ─── Category kinds ──────────────────────────────────────────────────────────
 // Every category a provider adds is tied to one of these "kinds". The kind is

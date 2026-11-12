@@ -640,11 +640,12 @@ pros instead of treating a save as consent; Terms say 30-day deletion grace.
   inbox (§7).
 - Things to put to a solicitor: 16 as the contracting age (§5); provider-set
   cancellation terms under the CRA 2015 (§6); the foreseeable-loss liability
-  clause; holds up to 30 days and chargeback recovery from future payouts in
-  shared Terms rather than a signed provider agreement; the provider indemnity;
+  clause; chargeback recovery from future payouts in shared Terms rather
+  than a signed provider agreement; the provider indemnity;
   who is data controller for client health information passed to providers
   (§2); PECR separation of marketing and booking notifications (§8).
 - No re-consent: existing users aren't asked to accept the new Terms (§10).
+- **Payouts changed 2026-11-10 and the Terms haven't:** provider Terms (cerviced.co/legal, "Payout period" and "Payouts") say CERVICED holds a provider's share for "the payout period you choose", then Stripe pays it "on its own schedule". Now CERVICED always holds 24 hours, and the provider chooses their Stripe bank schedule (daily, weekly, monthly; monthly by default). The 30-day hold question is gone with it. Wording is the user's call, not drafted here. Existing providers are moved to monthly the first time they open Payments, with **no advance notice**: the user decided on 2026-11-10 that this isn't a change needing the Provider Terms' 15-day notice. The legal review flagged it as arguable (Provider Terms §12 and §34, "significant change"); raise it with the solicitor along with the Terms wording. Nothing records that a provider was told.
 - The Privacy Policy (AboutScreen) still names privacy@cerviced.app (§13).
 
 ## 20. PayPal at checkout (2026-10-19)
@@ -883,7 +884,48 @@ user's decisions:
   - Still open: the App Store privacy label (Contacts), the Play Data safety
     form, and the Privacy text above.
 
-## 24. A waitlist slot is paid for within 15 minutes (2026-11-12)
+## 24. Becca keeps the questions she didn't understand (2026-11-10)
+
+`becca_misses` (`20261110170000_becca_misses.sql`, branch
+`feat/becca-learns-from-misses`) keeps a question Becca missed for 90 days,
+linked to the account, with what the person ended up choosing. A weekly review
+(`/review-becca-misses`, run with Claude, so Anthropic processes the rows)
+turns them into new phrases. User decisions 2026-11-10: 90 days; never keep a
+question about health. Privacy Policy sections 3 (lawful basis), 5 (Becca),
+6 (Anthropic's purpose) and 8 (retention) were updated in the same change.
+
+What's done:
+- Questions that mention health or another Art. 9 subject (religion,
+  sexuality, gender identity), or a child's details, are dropped server-side
+  before anything is stored. Emails, phone numbers, street addresses,
+  postcodes and @handles are blanked. The policy says the check isn't
+  perfect rather than promising "never", and the review deletes any that slip
+  through (asking the user first).
+- Rows go when the person deletes a Becca chat, that hat's profile or the
+  account (trigger on `becca_chat_sessions`, plus the `auth.users` cascade),
+  and after 90 days regardless.
+
+To raise (not lawyer-reviewed):
+- **No written Legitimate Interests Assessment.** The basis is legitimate
+  interest. A one-page LIA (purpose, necessity, balancing) is expected by the
+  ICO and should cover 16-17 year old users (Children's Code), free text
+  linked to the account, and the imperfect keyword filter.
+- **Objection requests need a step.** Section 9 offers the right to object.
+  Act on one with `DELETE FROM public.becca_misses WHERE user_id = '<id>'`.
+  There's no in-app switch to opt out of this log; consider one.
+- **Necessity of unresolved rows.** Rows that resolved nowhere teach no
+  phrase; they're kept for "what Becca can't do yet" themes. Whether that
+  justifies keeping them linked to the account is a balancing call.
+- **Special category leak route.** A sensitive question the filter misses
+  sits in the table until the next weekly review. See section 2 above.
+- **Becca chat history** (`becca_chat_messages`) already keeps everything
+  typed, unfiltered, while the account is open. That predates this change and
+  is the larger exposure.
+- **Section 5 still says messages go to NVIDIA,** but the AI router is off in
+  production (user's call: switch on only after a scorecard). It overstates,
+  which is the safe direction; recheck when the router changes.
+
+## 25. A waitlist slot is paid for within 15 minutes (2026-11-12)
 
 Before this, confirming a held waitlist slot booked it with £0 paid: no
 deposit, no fee, no saved card for late or no-show fees, and no recorded

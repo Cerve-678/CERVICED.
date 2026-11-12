@@ -33,6 +33,9 @@ export const STORAGE_KEYS = {
   /** Prefix: the view a provider's Home calendar opens in, stored at
    *  `<this>:<userId>` (features/provider-bookings/calendarViewPreference.ts). */
   PROVIDER_CALENDAR_VIEW: '@cerviced_provider_calendar_view',
+  /** Explore photos this phone has already shown, so the next visit leads
+   *  with new ones (utils/exploreSeen.ts). Device-only. */
+  EXPLORE_SEEN:        '@cerviced_explore_seen',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];

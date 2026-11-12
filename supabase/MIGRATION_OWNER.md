@@ -56,6 +56,36 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-11 (bank payout schedule)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261111100000 | `payout_bank_schedule` | **APPLIED 2026-11-11** on the user's go-ahead ("apply and merge"), via `supabase db query --linked -f` (absolute path), after a second forced-rollback dry run against live passed and the full suite passed (314/314). Frontier right before applying: live max `20261111090000`, nothing unapplied above it on an open PR. Verified live: version recorded (now live max); `payout_hold_days` and `set_payout_hold_days` gone; `stripe_payout_schedule_set_at` present, 0 rows set; `create_held_payout_on_finalize` holds 24 hours and is still SECURITY DEFINER; `on_booking_finalized_create_payout` present; the guard trigger lists the new column. `create-connect-account` deployed straight after. Authored as 20261110190000; renumbered 2026-11-11 because `20261110190000_more_service_types`, `20261110200000_booking_request_declined_at` and `20261111090000_maintenance_reminder_names_item` were applied first (none touch these objects; the md5 guards check). Frontier at renumbering: live max `20261111090000`; nothing unapplied above it on any open PR; lock `(none)`. Redefines from live with md5 guards `create_held_payout_on_finalize` (`421a396a…`, now a fixed 24-hour hold) and `enforce_provider_stripe_columns_server_only` (`ee880d28…`, adds the new column); guards the trigger's column list by its exact definition and recreates it with the new column; drops `set_payout_hold_days` (`db904f8a…`) and `providers.payout_hold_days` (+ its CHECK); adds `providers.stripe_payout_schedule_set_at`. Forced-rollback dry run 2026-11-10 passed (as a real provider: own-row update allowed, new column refused with check_violation; live unchanged). **Apply before deploying `create-connect-account`** (it selects the new column). Old app builds' payout-timing picker stops working once applied. Written on `feat/payout-bank-schedule`. |
+
+### Applied 2026-11-11 (maintenance reminder names the item)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261111090000 | `maintenance_reminder_names_item` | **APPLIED 2026-11-11** on the user's go-ahead ("apply merge"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Forced-rollback dry run first (no error, version row 0 after, live md5s unchanged). Verified live: version present (now live max); copy function returns the three new lines; `process_maintenance_reminders` uses them, still SECURITY DEFINER; grants postgres + service_role only. Frontier at authoring and at apply: live max `20261110200000`; highest unapplied on an open PR `20261110190000_payout_bank_schedule` (#469, below the frontier, unrelated). Redefines from live with md5 guards: `maintenance_notification_copy` (`00e798d2…`) and `process_maintenance_reminders` (`3516a222…`); grants unchanged (postgres + service_role only). Written on `fix/maintenance-reminder-names-item`. |
+
+### Applied 2026-11-10 (declined requests + accepted time)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110200000 | `booking_request_declined_at` | **APPLIED 2026-11-10** on the user's go-ahead ("apply databses"), via `supabase db query --linked -f` (absolute path) from the main folder, version then recorded. Authored as 20261110180000; renumbered because `20261110190000_more_service_types` was applied first (touches none of these objects). **`feat/payout-bank-schedule` also authored 20261110190000 and must renumber above 20261110200000.** Frontier right before applying: live max `20261110190000`; highest unapplied on an open PR `20261110130000_marketing_studio` (#415, below the frontier, unrelated); lock `(none)` on main. Adds `bookings.declined_at`, stamped in `stamp_booking_cancellation` (md5 guard `09c925da…`) on pending→cancelled unless the client cancelled; new `stamp_booking_confirmation` + `trg_stamp_booking_confirmation` (BEFORE UPDATE OF status) stamps `confirmed_at` on →confirmed when NULL, since `provider_update_booking_status` never set it; backfills both from `booking_declined` / `booking_confirmed` notifications (group-aware); appends `declined_at` to `client_bookings` (md5 guard `fd79d868…`, written out in full). Forced-rollback dry run first: 2 declines backfilled, 0 accepted bookings left without confirmed_at, live unchanged after. Verified live: version present (now live max); column + view column present; view still `security_invoker=true`, grants unchanged; both stamp triggers present; 2 rows declined. Written on `fix/declined-request-label` (#467). |
+
+### Applied 2026-11-10 (more service types)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110190000 | `more_service_types` | **APPLIED 2026-11-10** on the user's go-ahead ("then apply"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Frontier right before applying: live max `20261110170000`; highest unapplied on an open PR `20261110180000_booking_request_declined_at` (#467, unrelated objects); lock `(none)`. Widens `services_service_type_check` from 5 to 19 values (the 5 kept); guard refuses if the live constraint wasn't the 5-value one. Forced-rollback dry run first: all 101 services passed the new check, live unchanged after. Verified live: version present (now live max), constraint has 19 values, 101 services. **`20261110180000_booking_request_declined_at` (#467) now sits below the frontier and must renumber above 20261110190000.** The list is mirrored in `src/constants/serviceTypes.ts`; `src/tests/serviceTypes.test.ts` checks they match. Written on `feat/service-types-per-kind`. |
+
+### Applied 2026-11-10 (Becca miss log)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261110170000 | `becca_misses` | **APPLIED 2026-11-10** by the user ("apply migration"), running the file with `supabase db query --linked -f` themselves, after Claude's own apply was refused by the tool permission check and the Supabase MCP was disconnected; version recorded by the file. Frontier right before applying: live max `20261110150000`; only unapplied file above it on an open PR was this one. Lock `(none)` on main; stale claims on open PR branches (`feat/import-from-photo-pdf-link`, `feat/marketing-studio`, `fix/ship-account-hat-restore-fix`) whose migrations touch none of these objects. New objects only: table `becca_misses` (RLS on, all grants revoked), `becca_mentions_sensitive`, `record_becca_miss` (SECURITY DEFINER, `search_path ''`), `forget_becca_misses_with_chat` + trigger on `becca_chat_sessions`, cron job `purge-becca-misses` (jobid 174, `41 4 * * *`, 90 days). Two forced-rollback dry runs first (as a real account): sensitive strings from the security and legal reviews dropped, redaction worked, deleting a client chat cleared only client misses, live unchanged after. Verified live: version present (now live max); RLS on; authenticated can execute `record_becca_miss` only, anon nothing; trigger present; cron job present; 0 rows. Written on `feat/becca-learns-from-misses` (#459). |
+
 ### Applied 2026-11-10 (waitlist sign-ups)
 
 | Authored version | Name | Status |

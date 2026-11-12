@@ -16,6 +16,7 @@ import type {
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
 import type { SavedCard } from '../features/payments/savedCards';
+import type { MissRecord as BeccaMissRecord } from './becca/missLog';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
@@ -90,7 +91,7 @@ import {
   type CollectionColor,
   type ExploreCollection,
 } from "../types/collections";
-import { DEFAULT_PAYOUT_HOLD_DAYS, isPayoutHoldDays, type PayoutHoldDays } from "../constants/payoutTiming";
+import { PAYOUT_INTERVALS, type PayoutSchedule, type PayoutScheduleChoice } from "../constants/payoutSchedule";
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
 import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
@@ -3661,6 +3662,31 @@ export async function getOlderBookings(
 }
 
 /**
+ * The signed-in client's most recent completed appointment, however long ago.
+ * Becca's "rebook my last appointment" reads BookingContext's cache first, but
+ * that only holds getMyBookings()'s recent window — without this, a client
+ * whose last visit was more than 90 days ago is told they've never booked.
+ */
+export async function getMyLatestCompletedBooking(): Promise<BookingWithAddOns | null> {
+  const {
+    data: { user },
+  } = await getSessionUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("client_bookings") // gated view, client-side only — see getMyBookings
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("status", "completed")
+    .order("booking_date", { ascending: false })
+    .order("booking_time", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return ((data ?? [])[0] as BookingWithAddOns | undefined) ?? null;
+}
+
+/**
  * Look up a provider's UUID by display_name (used at checkout to get provider_id).
  *
  * Deliberately NOT filtered on `has_gone_live` — the documented exception to
@@ -6514,41 +6540,24 @@ interface BookingBeautyProfileRow {
   photography_consent: boolean | null;
 }
 
+/**
+ * The client's Beauty Profile for one booking, or null when it isn't shared
+ * with this provider: the booking is still a request, or was declined,
+ * cancelled or missed, or the caller isn't its provider. Null means "not
+ * shared", never "nothing on file", so a caller must not render it as an
+ * empty profile (that would read as "no allergies").
+ */
 export async function getClientBeautyProfileForBooking(
   bookingId: string,
-): Promise<ClientBeautyProfile> {
-  const EMPTY_PROFILE: ClientBeautyProfile = {
-    hairType: [],
-    scalpCondition: [],
-    hairGoals: [],
-    treatmentHistory: [],
-    skinType: [],
-    skinTone: null,
-    skinConcerns: [],
-    sensitiveAreas: [],
-    nailLength: [],
-    nailShape: [],
-    lashStyle: [],
-    lashStatus: null,
-    browStyle: [],
-    browCondition: [],
-    makeupCoverage: [],
-    makeupFinish: [],
-    makeupEyes: [],
-    makeupLips: [],
-    styleVibe: [],
-    allergies: [],
-    medicalNotes: null,
-    // No answer is not a yes: unknown consent reads as "no photos".
-    photographyConsent: false,
-  };
-
+): Promise<ClientBeautyProfile | null> {
   // Goes through a SECURITY DEFINER RPC (not a direct table select). It
-  // only answers the provider on this booking, and returns null for every
-  // field the booked service's category doesn't get, so a nail booking never
-  // brings the client's hair, skin or makeup details onto the provider's
-  // phone. Allergies, medical notes and photography consent always come back.
-  // See 20261108190000_beauty_profile_shared_by_booked_service.sql.
+  // only answers the provider on this booking, once they have accepted it,
+  // and returns null for every field the booked service's category doesn't
+  // get, so a nail booking never brings the client's hair, skin or makeup
+  // details onto the provider's phone. Allergies, medical notes and
+  // photography consent always come back. See
+  // 20261108190000_beauty_profile_shared_by_booked_service.sql and
+  // 20261110131224_beauty_profile_after_accept.sql.
   const { data, error } = await supabase
     .rpc("get_client_beauty_profile_for_booking", { p_booking_id: bookingId })
     .maybeSingle();
@@ -6558,11 +6567,7 @@ export async function getClientBeautyProfileForBooking(
   // as an error, not silently read as a confirmed-clear profile. The caller
   // decides how to degrade (see CLAUDE.md).
   if (error) throw error;
-  // No row = legitimately no booking relationship with this client (the RPC
-  // is booking-gated) — EMPTY_PROFILE is the correct, non-error result here.
-  if (!data) {
-    return EMPTY_PROFILE;
-  }
+  if (!data) return null;
 
   const d = data as BookingBeautyProfileRow;
   return {
@@ -10733,17 +10738,6 @@ export interface RebookableService {
   addOns: { id: string; name: string; price: number; extraMinutes: number }[];
 }
 
-/**
- * Re-resolve a past booking's service against live data, for "Book Again".
- *
- * Rebooking used to copy the booking's snapshot straight into the cart with a
- * synthetic id (`rebook_<timestamp>`) and the ORIGINAL price — so a client could
- * re-book a deleted service, or at a price the provider had since changed, with
- * no real service_id attached. This returns the current row so the caller can
- * rebook at today's price or explain why it isn't possible.
- *
- * Returns null when the provider is no longer live/active or the service is gone.
- */
 /** Resolve real `services.id` UUIDs for a provider's services by name.
  *
  *  Cart items store whatever id the screen that added them happened to have —
@@ -10772,30 +10766,77 @@ export async function getServiceIdsByNames(
   return out;
 }
 
+/**
+ * Re-resolve a past booking's service against live data, for "Book Again".
+ *
+ * Rebooking used to copy the booking's snapshot straight into the cart with a
+ * synthetic id (`rebook_<timestamp>`) and the ORIGINAL price — so a client could
+ * re-book a deleted service, or at a price the provider had since changed, with
+ * no real service_id attached. This returns the current row so the caller can
+ * rebook at today's price or explain why it isn't possible.
+ *
+ * Found by the booking's own `service_id` first, so a service the provider has
+ * since renamed is still found. The name is the fallback, for old bookings with
+ * no service link; when two active services share that name, the newest wins
+ * (`.maybeSingle()` would error on two rows and read as "not available").
+ *
+ * Returns null when the provider is no longer live/active or the service is gone.
+ * Throws on a query error, so a caller never mistakes a failed lookup for a
+ * service that has gone.
+ */
 export async function getRebookableService(
   providerId: string,
   serviceName: string,
+  serviceId?: string | null,
 ): Promise<RebookableService | null> {
   // has_gone_live + is_active: never let a client re-book into a provider who
   // has taken their profile down (see the client-facing query rule at the top).
-  const { data: provider } = await supabase
+  const { data: provider, error: providerError } = await supabase
     .from("providers")
     .select("id, slug, display_name")
     .eq("id", providerId)
     .eq("is_active", true)
     .eq("has_gone_live", true)
     .maybeSingle();
+  if (providerError) throw providerError;
   if (!provider) return null;
 
-  const { data } = await supabase
-    .from("services")
-    .select(
-      "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active, extra_minutes )",
-    )
-    .eq("provider_id", providerId)
-    .eq("name", serviceName)
-    .eq("is_active", true)
-    .maybeSingle();
+  const columns =
+    "id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active, extra_minutes )";
+  type RebookServiceRow = {
+    id: string;
+    name: string;
+    price: number | string;
+    duration_minutes: number | string;
+    category_name: string;
+    service_add_ons: { id: string; name: string; price: number | string; is_active: boolean; extra_minutes: number | null }[] | null;
+  };
+  let data: RebookServiceRow | null = null;
+  if (serviceId && UUID_RE.test(serviceId)) {
+    const byId = await supabase
+      .from("services")
+      .select(columns)
+      .eq("id", serviceId)
+      .eq("provider_id", providerId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (byId.error) throw byId.error;
+    data = byId.data as RebookServiceRow | null;
+  }
+  if (!data && serviceName) {
+    const byName = await supabase
+      .from("services")
+      .select(columns)
+      .eq("provider_id", providerId)
+      // Case-insensitive exact match: % and _ are escaped so a name is never
+      // read as a pattern.
+      .ilike("name", serviceName.trim().replace(/[\\%_]/g, "\\$&"))
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (byName.error) throw byName.error;
+    data = (byName.data?.[0] as RebookServiceRow | undefined) ?? null;
+  }
   if (!data) return null;
 
   return {
@@ -10806,9 +10847,9 @@ export async function getRebookableService(
     categoryName: data.category_name,
     providerSlug: provider.slug,
     providerDisplayName: provider.display_name,
-    addOns: ((data as any).service_add_ons ?? [])
-      .filter((a: any) => a.is_active)
-      .map((a: any) => ({
+    addOns: (data.service_add_ons ?? [])
+      .filter((a) => a.is_active)
+      .map((a) => ({
         id: a.id,
         name: a.name,
         price: Number(a.price),
@@ -11350,6 +11391,23 @@ export async function updateBeccaSession(
 /** Insert or update a single message. */
 export async function upsertBeccaMessage(row: DbBeccaMessage): Promise<void> {
   const { error } = await supabase.from("becca_chat_messages").upsert(row);
+  if (error) throw error;
+}
+
+/**
+ * Records a question Becca didn't understand, and what the person meant in
+ * the end (see src/services/becca/missLog.ts). The server drops anything that
+ * mentions health, blanks emails, phone numbers, postcodes and @handles, and
+ * deletes rows after 90 days (record_becca_miss,
+ * 20261110170000_becca_misses.sql). Signed-in callers only.
+ */
+export async function recordBeccaMiss(record: BeccaMissRecord): Promise<void> {
+  const { error } = await supabase.rpc("record_becca_miss", {
+    p_hat: record.hat,
+    p_message: record.message,
+    p_resolved_capability_id: record.resolvedCapabilityId,
+    p_resolved_by: record.resolvedBy,
+  });
   if (error) throw error;
 }
 
@@ -12406,30 +12464,38 @@ export async function getHeldPayoutPence(bookingId: string): Promise<number | nu
   return data?.status === 'held' ? Number(data.payout_amount) : null;
 }
 
-/**
- * The provider's own payout timing (provider reading their own record). null
- * when the account has no professional profile yet, so there's nothing to set.
- */
-export async function getPayoutHoldDays(): Promise<PayoutHoldDays | null> {
-  const { data: { user }, error: authError } = await getSessionUser();
-  if (authError || !user) throw new Error('Please sign in again.');
-  const { data, error } = await supabase.from('providers')
-    .select('payout_hold_days').eq('user_id', user.id).maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  return isPayoutHoldDays(data.payout_hold_days) ? data.payout_hold_days : DEFAULT_PAYOUT_HOLD_DAYS;
+function readPayoutSchedule(value: unknown): PayoutSchedule | null {
+  if (value === null) return null;
+  const raw = value as Partial<PayoutSchedule> | undefined;
+  const interval = raw?.interval;
+  if (!interval || !([...PAYOUT_INTERVALS, 'manual', 'unknown'] as string[]).includes(interval)) {
+    throw new Error('Your payout schedule could not be read.');
+  }
+  return {
+    interval,
+    weeklyDays: Array.isArray(raw.weeklyDays) ? raw.weeklyDays.filter((d): d is string => typeof d === 'string') : [],
+    monthlyDays: Array.isArray(raw.monthlyDays) ? raw.monthlyDays.filter((d): d is number => typeof d === 'number') : [],
+  };
 }
 
 /**
- * Changes how long after an appointment the provider's share is held. A longer
- * choice also pushes back payouts still held; a shorter one applies to new
- * bookings only.
+ * How often Stripe pays the provider's balance into their bank, read from
+ * Stripe (the only copy). null when they haven't set up Stripe yet, so there
+ * is no schedule to choose.
  */
-export async function setPayoutHoldDays(days: PayoutHoldDays): Promise<PayoutHoldDays> {
-  const { data, error } = await supabase.rpc('set_payout_hold_days', { p_days: days });
-  if (error) throw error;
-  if (!isPayoutHoldDays(data)) throw new Error('Payout timing could not be confirmed. Refresh to check it.');
-  return data;
+export async function getPayoutSchedule(): Promise<PayoutSchedule | null> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'payout_schedule' } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your payout schedule could not load. Refresh to try again.');
+  return readPayoutSchedule(data?.schedule);
+}
+
+/** Sets how often Stripe pays the provider's bank, and returns what Stripe now has. */
+export async function setPayoutSchedule(choice: PayoutScheduleChoice): Promise<PayoutSchedule> {
+  const { data, error } = await supabase.functions.invoke('create-connect-account', { body: { action: 'set_payout_schedule', schedule: choice } });
+  if (error || data?.error) throw await getPaymentRequestError(error, data, 'Your payout schedule was not changed. Please try again.');
+  const schedule = readPayoutSchedule(data?.schedule);
+  if (!schedule) throw new Error('Your payout schedule could not be confirmed. Refresh to check it.');
+  return schedule;
 }
 
 /** A late/no-show fee this provider charged, with their share after Stripe's card fee. */

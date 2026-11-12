@@ -29,14 +29,14 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMemberSheet';
 import { FULL_MEMBER_FREE_LINE } from '../../constants/fullMembership';
-import { PAYOUT_HOLD_DAY_OPTIONS, payoutHoldLabel } from '../../constants/payoutTiming';
+import { PAYOUT_INTERVALS, payoutIntervalLabel } from '../../constants/payoutSchedule';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Feature = { icon: IconName; title: string; body: string };
 
-// Every payout hold a full provider can pick in Payments.
-const PAYOUT_CHOICES = PAYOUT_HOLD_DAY_OPTIONS.map(payoutHoldLabel);
+// Every bank payout schedule a full provider can pick in Payments.
+const PAYOUT_CHOICES = PAYOUT_INTERVALS.map(payoutIntervalLabel);
 
 // In-app chat and Becca are NOT listed: link-only pros already have both.
 const SECTIONS: { title: string; features: Feature[] }[] = [
@@ -125,7 +125,7 @@ export default function FullCervicedFeaturesScreen() {
 
         <View style={styles.payout}>
           <Text style={styles.payoutTitle}>You choose when you're paid</Text>
-          <Text style={styles.payoutSub}>How long after each appointment your money is released. Change it any time in Payments.</Text>
+          <Text style={styles.payoutSub}>How often your money is paid into your bank. Change it any time in Payments.</Text>
           <View style={styles.chips}>
             {PAYOUT_CHOICES.map(label => (
               <View key={label} style={styles.chip}>

@@ -12,6 +12,7 @@ import { geocodeUkPlace, isInUk } from './ukGeocode';
 import { themeBrandingColours } from '../constants/providerThemes';
 import { toReleaseTime } from '../utils/bookingHorizon';
 import type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
+import type { ServiceTypeKey } from '../constants/serviceTypes';
 import { normalizeServiceImages } from '../utils/serviceImageDraft';
 export type { ServiceImageDraft, ServiceImageFit } from '../utils/serviceImageDraft';
 import {
@@ -36,6 +37,7 @@ import {
   updateProviderRegistrationRow,
   uploadPublicStorageObject,
 } from './databaseService';
+import { collapseDuplicateSavedServices } from '../features/provider-registration/serviceDraft';
 import { serviceDescriptionsMatch, type ExpectedServiceDescription } from '../features/provider-registration/serviceDescriptionVerification';
 import type { DbProvider, BusinessType, LogoFraming, ProviderBookingMode } from '../types/database';
 import {
@@ -82,7 +84,7 @@ export interface ServiceData {
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;
-  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  serviceType: ServiceTypeKey | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
   skinTonesSuitable?: string[];
@@ -551,6 +553,15 @@ export async function saveProviderToSupabase(
   // overwritten or cleared.
   acceptedTerms?: boolean
 ): Promise<void> {
+  // An editor that already holds two copies of one saved service (see
+  // upsertServiceInList) would send both. The RPC writes that row twice and
+  // the description check after it then fails. Keep the latest copy.
+  data = {
+    ...data,
+    categories: Object.fromEntries(
+      Object.entries(data.categories).map(([name, list]) => [name, collapseDuplicateSavedServices(list)]),
+    ),
+  };
   // 0. Validate the real business address before anything else happens —
   // required for every business_type now, including 'mobile' (a private base
   // address, never shown to clients). Fails fast, before any upload or DB

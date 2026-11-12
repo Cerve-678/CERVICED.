@@ -52,10 +52,16 @@ describe('stackLayout', () => {
     ['a', 'b', 'c', 'd', 'e'].map((id) => row({ person_id: id, name: id })),
   ), 'p1');
 
-  it('shows three faces and +N on a normal card', () => {
+  it('shows four faces and +N on a normal card', () => {
     const out = stackLayout(people, 180);
-    expect(out.shown).toHaveLength(3);
-    expect(out.more).toBe(2);
+    expect(out.shown).toHaveLength(4);
+    expect(out.more).toBe(1);
+  });
+
+  it('shows exactly four faces with no +N', () => {
+    const out = stackLayout(people.slice(0, 4), 180);
+    expect(out.shown).toHaveLength(4);
+    expect(out.more).toBe(0);
   });
 
   it('shows two faces on a narrow card', () => {

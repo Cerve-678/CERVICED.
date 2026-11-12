@@ -5,7 +5,7 @@
 // See all opens booking history's History → All.
 
 import type { BookingWithAddOns } from '../../types/database';
-import { mapDbBookingStatus } from '../../types/booking';
+import { BookingStatus, mapDbBookingStatus } from '../../types/booking';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS } from '../bookings/statusPresentation';
 import { formatShortDayDate, formatTime12Safe } from '../../utils/dateUtils';
 
@@ -48,7 +48,9 @@ export function describeRecentBooking(booking: BookingWithAddOns, now: Date = ne
     detail: `${booking.customer_name?.trim() || 'Client'} · for ${when}`,
     booked: bookedAgo(new Date(booking.created_at), now),
     price: `£${total.toFixed(2)}`,
-    status: BOOKING_STATUS_LABELS[status] ?? 'Booking',
+    status: booking.declined_at && status === BookingStatus.CANCELLED
+      ? 'Declined'
+      : BOOKING_STATUS_LABELS[status] ?? 'Booking',
     statusColor: BOOKING_STATUS_COLORS[status] ?? '#8E8E93',
   };
 }
