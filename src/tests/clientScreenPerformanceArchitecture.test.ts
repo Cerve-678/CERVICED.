@@ -84,7 +84,10 @@ describe('client screen performance contracts', () => {
     expect(source).toContain('Location.watchPositionAsync(');
     expect(source).not.toContain('setInterval(getUserLocation');
     expect(source).toContain("type BookingsListRow =");
-    expect(source).toContain('const WaitlistCard = React.memo');
+    // Waitlist rows are a memoized card rendered by the virtualized list.
+    expect(source).toContain("import { WaitlistPlaceCard } from '../../features/bookings/WaitlistPlaceCard'");
+    expect(fs.readFileSync(path.join(__dirname, '..', 'features', 'bookings', 'WaitlistPlaceCard.tsx'), 'utf8'))
+      .toContain('export const WaitlistPlaceCard = React.memo');
     expect(source).toContain('data={virtualizedListRows}');
     expect(source).toContain('renderItem={renderBookingsListRow}');
     expect(source).toContain('ListHeaderComponent={(');
