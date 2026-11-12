@@ -20,6 +20,7 @@ tags: [screen, provider]
 - [[BusinessInfoScreen\|BusinessInfo]]
 - [[ProviderInfoPackScreen\|InfoPacks]]
 - [[ProviderClienteleScreen\|Clientele]]
+- [[AdminCreateAccountScreen\|AccountHolderDetails]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

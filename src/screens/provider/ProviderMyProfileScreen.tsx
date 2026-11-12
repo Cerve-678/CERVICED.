@@ -164,7 +164,7 @@ const RING_CIRC = 2 * Math.PI * RING_RADIUS;
  *  three destinations are registered on this navigator, so each tap pushes
  *  with this screen underneath rather than bouncing to another tab's root and
  *  leaving its back button with nothing to return to. */
-const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackParamList> = {
+const GO_LIVE_STEP_SCREENS: Record<Exclude<GoLiveStepKey, 'ownerDetails'>, keyof ProviderServicesStackParamList> = {
   profile: 'EditProfile',
   schedule: 'ProviderSchedule',
   services: 'EditProfile',
@@ -1419,6 +1419,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const handleGoLiveStep = useCallback(
     (key: GoLiveStepKey) => {
       Haptics.selectionAsync().catch(() => {});
+      if (key === 'ownerDetails') {
+        navigation.navigate('AccountHolderDetails', { addDetailsForCurrentUser: true });
+        return;
+      }
       if (key === 'portfolio') { void handleAddPhotos(); return; }
       navigation.navigate(GO_LIVE_STEP_SCREENS[key]);
     },
