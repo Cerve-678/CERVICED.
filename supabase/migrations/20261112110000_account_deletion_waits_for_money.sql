@@ -12,9 +12,13 @@
 --
 -- Now:
 -- * account_deletion_blockers(user) lists what is still moving: unfinished
---   bookings of any date, payouts held or failed, unsettled debts, fee charges
---   or fee payouts in flight, tips not yet paid out, refunds processing, and
---   open refund requests, on the side(s) being deleted. Empty = safe.
+--   bookings of any date, payouts held or failed (the provider's, on the
+--   client's own bookings too), unsettled debts, fee charges or fee payouts
+--   in flight, tips not yet paid out or being paid, refunds processing or still
+--   owed after a cancel, and open refund requests, on the side(s) being
+--   deleted. Empty = safe. An unknown side is refused, not read as safe.
+--   The account's rows are locked before the check, so nothing new can start
+--   between the check and the delete.
 -- * delete_provider_profile / delete_client_profile refuse with
 --   'upcoming_bookings' (as before, for unfinished bookings) or the new
 --   'money_in_progress' with the list.
@@ -44,11 +48,19 @@ $guard$;
 
 CREATE FUNCTION public.account_deletion_blockers(p_user_id uuid, p_side text)
  RETURNS jsonb
- LANGUAGE sql
+ LANGUAGE plpgsql
  STABLE
  SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
+DECLARE
+  v_result jsonb;
+BEGIN
+  -- An unknown side would read as "nothing blocking", so it is refused.
+  IF p_side IS NULL OR p_side NOT IN ('client', 'provider', 'both') THEN
+    RAISE EXCEPTION 'account_deletion_blockers: unknown side %', p_side;
+  END IF;
+
   -- p_side: 'client' (deleting only the client profile), 'provider' (only the
   -- provider profile) or 'both' (the whole account). A side not being deleted
   -- has a NULL id here, so its money never blocks.
@@ -64,27 +76,47 @@ AS $function$
       (SELECT count(*) FROM public.bookings b, me
         WHERE (b.user_id = me.uid OR b.provider_id = me.pid)
           AND b.status IN ('pending', 'confirmed', 'in_progress', 'on_hold')) AS unfinished_bookings,
-      (SELECT count(*) FROM public.provider_payouts pp, me
-        WHERE pp.provider_id = me.pid AND pp.status IN ('held', 'failed')) AS payouts_waiting,
+      -- Payouts on either side: a client's own bookings carry the provider's
+      -- payout too, and deleting those bookings would erase it.
+      (SELECT count(*) FROM public.provider_payouts pp JOIN public.bookings b ON b.id = pp.booking_id, me
+        WHERE (pp.provider_id = me.pid OR b.user_id = me.uid)
+          AND pp.status IN ('held', 'failed')) AS payouts_waiting,
       (SELECT count(*) FROM public.provider_shortfalls s, me
         WHERE s.provider_id = me.pid AND s.settled_at IS NULL) AS debts_owed,
       (SELECT count(*) FROM public.booking_fee_charges f JOIN public.bookings b ON b.id = f.booking_id, me
         WHERE (b.user_id = me.uid OR f.provider_id = me.pid)
           AND (f.status IN ('processing', 'awaiting_client')
                OR (f.status = 'succeeded' AND f.payout_status IN ('pending', 'held', 'failed')))) AS fees_in_progress,
+      -- A tip paid but not yet paid out, or one being paid right now (an
+      -- unpaid tip older than a day was abandoned and doesn't count).
       (SELECT count(*) FROM public.booking_tips t, me
         WHERE (t.client_user_id = me.uid OR t.provider_id = me.pid)
-          AND t.status = 'succeeded' AND t.payout_status IN ('pending', 'held', 'failed')) AS tips_waiting,
+          AND ((t.status = 'succeeded' AND t.payout_status IN ('pending', 'held', 'failed'))
+               OR (t.status = 'pending' AND t.created_at > now() - interval '1 day'))) AS tips_waiting,
       (SELECT count(*) FROM public.bookings b, me
         WHERE (b.user_id = me.uid OR b.provider_id = me.pid)
           AND b.payment_status = 'refund_pending') AS refunds_processing,
+      -- Cancelled but the client's money is still taken, with no refund on
+      -- record and no policy settlement (a kept deposit records
+      -- policy_retained_amount): the refund never went out, or Stripe rejected
+      -- it. Deleting the booking would lose it for good.
+      (SELECT count(*) FROM public.bookings b, me
+        WHERE (b.user_id = me.uid OR b.provider_id = me.pid)
+          AND b.status = 'cancelled'
+          AND b.payment_intent_id IS NOT NULL
+          AND COALESCE(b.amount_paid, 0) > 0
+          AND b.payment_status IN ('fully_paid', 'deposit_paid')
+          AND b.policy_retained_amount IS NULL
+          AND NOT EXISTS (SELECT 1 FROM public.booking_refunds br WHERE br.booking_id = b.id)) AS refunds_owed,
       (SELECT count(*) FROM public.refund_requests rr, me
         WHERE (rr.client_id = me.uid OR rr.provider_id = me.pid)
           AND rr.status IN ('with_provider', 'under_review')) AS refund_requests_open
   )
-  SELECT COALESCE(jsonb_object_agg(k, v) FILTER (WHERE v > 0), '{}'::jsonb)
+  SELECT COALESCE(jsonb_object_agg(k, v) FILTER (WHERE v > 0), '{}'::jsonb) INTO v_result
     FROM counts, LATERAL jsonb_each_text(to_jsonb(counts)) AS e(k, v_text),
          LATERAL (SELECT v_text::int AS v) AS n;
+  RETURN v_result;
+END;
 $function$;
 
 COMMENT ON FUNCTION public.account_deletion_blockers(uuid, text) IS
@@ -119,14 +151,17 @@ BEGIN
 
   -- Nothing may be deleted while money on this account is still moving:
   -- see account_deletion_blockers. Unfinished bookings keep their own
-  -- message, which older app builds already show.
+  -- message, which older app builds already show. The rows are locked first,
+  -- so a booking or payout can't be added between the check and the delete.
+  PERFORM 1 FROM public.users WHERE id = v_uid FOR UPDATE;
+  PERFORM 1 FROM public.providers WHERE user_id = v_uid FOR UPDATE;
   v_blockers := public.account_deletion_blockers(v_uid, CASE WHEN v_has_client THEN 'provider' ELSE 'both' END);
   v_upcoming := COALESCE((v_blockers->>'unfinished_bookings')::int, 0);
   IF v_upcoming > 0 THEN
     RETURN jsonb_build_object('ok', false, 'error', 'upcoming_bookings', 'count', v_upcoming);
   END IF;
   IF v_blockers <> '{}'::jsonb THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'money_in_progress', 'blockers', v_blockers);
+    RETURN jsonb_build_object('ok', false, 'error', 'money_in_progress', 'blockers', v_blockers, 'audience', 'provider');
   END IF;
 
   INSERT INTO public.account_deletion_log
@@ -190,14 +225,17 @@ BEGIN
 
   -- Nothing may be deleted while money on this account is still moving:
   -- see account_deletion_blockers. Unfinished bookings keep their own
-  -- message, which older app builds already show.
+  -- message, which older app builds already show. The rows are locked first,
+  -- so a booking or payout can't be added between the check and the delete.
+  PERFORM 1 FROM public.users WHERE id = v_uid FOR UPDATE;
+  PERFORM 1 FROM public.providers WHERE user_id = v_uid FOR UPDATE;
   v_blockers := public.account_deletion_blockers(v_uid, CASE WHEN v_provider_id IS NULL THEN 'both' ELSE 'client' END);
   v_upcoming := COALESCE((v_blockers->>'unfinished_bookings')::int, 0);
   IF v_upcoming > 0 THEN
     RETURN jsonb_build_object('ok', false, 'error', 'upcoming_bookings', 'count', v_upcoming);
   END IF;
   IF v_blockers <> '{}'::jsonb THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'money_in_progress', 'blockers', v_blockers);
+    RETURN jsonb_build_object('ok', false, 'error', 'money_in_progress', 'blockers', v_blockers, 'audience', 'client');
   END IF;
 
   INSERT INTO public.account_deletion_log
@@ -268,18 +306,21 @@ BEGIN
      WHERE deletion_requested_at IS NOT NULL
        AND deletion_requested_at <= NOW() - INTERVAL '30 days'
   LOOP
-    -- Money that started moving during the 30 days (a refund request, a
-    -- payout still held) waits: the account is tried again tomorrow.
-    v_blockers := public.account_deletion_blockers(r.id, 'both');
-    IF v_blockers <> '{}'::jsonb THEN
-      RAISE WARNING 'process_scheduled_account_deletions: % waits, money still moving: %', r.id, v_blockers;
-      v_waiting := v_waiting + 1;
-      CONTINUE;
-    END IF;
-
     -- Each account on its own: one that fails rolls back alone instead of
     -- undoing every deletion in the run.
     BEGIN
+      -- Locked, then checked: money that started moving during the 30 days
+      -- (a refund request, a payout still held) waits, and the account is
+      -- tried again tomorrow.
+      PERFORM 1 FROM public.users WHERE id = r.id FOR UPDATE;
+      PERFORM 1 FROM public.providers WHERE user_id = r.id FOR UPDATE;
+      v_blockers := public.account_deletion_blockers(r.id, 'both');
+      IF v_blockers <> '{}'::jsonb THEN
+        RAISE WARNING 'process_scheduled_account_deletions: % waits, money still moving: %', r.id, v_blockers;
+        v_waiting := v_waiting + 1;
+        CONTINUE;
+      END IF;
+
       DELETE FROM public.reviews  WHERE provider_id IN (SELECT id FROM public.providers WHERE user_id = r.id);
       DELETE FROM public.booking_tips
        WHERE client_user_id = r.id

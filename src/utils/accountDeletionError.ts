@@ -10,14 +10,26 @@ export interface AccountDeletionRefusal {
   error?: string;
   count?: number;
   blockers?: Record<string, number>;
+  /** Which profile is being deleted, so the reasons read right to that person. */
+  audience?: 'client' | 'provider';
 }
 
-const BLOCKER_PHRASES: Record<string, string> = {
+const PROVIDER_PHRASES: Record<string, string> = {
   payouts_waiting: 'a payout still on its way to you',
   debts_owed: 'money you still owe from a refund or chargeback',
   fees_in_progress: 'a late or no-show fee still being paid',
-  tips_waiting: 'a tip still being paid out',
-  refunds_processing: 'a refund still going through',
+  tips_waiting: 'a tip still on its way to you',
+  refunds_processing: 'a refund to a client still going through',
+  refunds_owed: 'a refund still owed to a client',
+  refund_requests_open: "a client's refund request that is still open",
+};
+
+const CLIENT_PHRASES: Record<string, string> = {
+  payouts_waiting: "a payment to your provider that hasn't gone out yet",
+  fees_in_progress: 'a late or no-show fee still being paid',
+  tips_waiting: 'a tip still on its way to your provider',
+  refunds_processing: 'a refund to you still going through',
+  refunds_owed: 'a refund still owed to you',
   refund_requests_open: 'a refund request that is still open',
 };
 
@@ -33,8 +45,9 @@ export function accountDeletionError(data: AccountDeletionRefusal | null | undef
     );
   }
   if (data?.error === 'money_in_progress') {
+    const phrases = data.audience === 'client' ? CLIENT_PHRASES : PROVIDER_PHRASES;
     const reasons = Object.keys(data.blockers ?? {})
-      .map(key => BLOCKER_PHRASES[key])
+      .map(key => phrases[key])
       .filter((phrase): phrase is string => !!phrase);
     return new Error(reasons.length
       ? `You can't delete your account yet because there's ${list(reasons)}. You can delete it once that's finished.`

@@ -634,15 +634,20 @@ money on it is still moving. `account_deletion_blockers` lists what's left,
 on the side being deleted:
 
 - bookings that haven't ended, of any date
-- payouts held or failed
+- payouts held or failed, including the provider's payout on a client's own
+  booking (deleting the booking would erase it)
 - debts not yet settled
 - late/no-show fees, or their payouts, still in flight
-- tips not yet paid out
-- refunds still processing
+- tips not yet paid out, or being paid
+- refunds still processing, or still owed after a cancellation
 - open refund requests
 
-The app names what's left in plain words ("there's a payout still on its way
-to you"). A whole account waiting out its 30 days is checked again when the
+The app names what's left in plain words, worded for whoever is deleting
+("there's a payout still on its way to you", or for a client "a refund still
+owed to you"). The account's rows are locked during the check, so nothing new
+can start between the check and the delete. **Known limit:** a provider who
+owes a debt has no future payouts to clear it, so their deletion waits until
+someone settles it by hand, and nothing alerts support yet (Part 6). A whole account waiting out its 30 days is checked again when the
 30 days are up: if anything started moving meanwhile, it waits, and the job
 tries again the next day. Each account is deleted on its own, so one that
 fails can't undo the others.

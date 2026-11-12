@@ -634,7 +634,7 @@ pros instead of treating a save as consent; Terms say 30-day deletion grace.
 **Open before launch:**
 - `[company number]` and `[registered address]` placeholders in clause 1.
 - The app's deletion grace is still 1 day for testing. The Terms say 30.
-- **Deletion can now take longer than 30 days (2026-11-12).** An account isn't deleted while money on it is still moving (a held payout, an open refund request, a debt, a refund processing); the job waits and retries daily. The Terms and Privacy wording promise deletion after 30 days, so they may need to say "or once any payments are settled". Raise it with the solicitor; not reworded here.
+- **Deletion can now take longer than 30 days (2026-11-12).** An account isn't deleted while money on it is still moving (a held payout, an open refund request, a debt, a refund processing); the job waits and retries daily. The Terms and Privacy wording promise deletion after 30 days, so they may need to say "or once any payments are settled". A provider with an unsettled debt has no future payouts to clear it, so their deletion can wait indefinitely until someone settles it by hand. Raise both with the solicitor (UK GDPR erasure vs. keeping what's needed to settle money); not reworded here.
 - **Settled money records are still erased with the account** (payouts, refunds, fee charges, tips). UK accounting and tax rules usually expect transaction records to be kept for years, which is a lawful reason to keep them after a deletion request. Keeping them, anonymised, is a product and legal decision for the user, not built.
 - Clause 4 describes Search order as featured-then-rating (main today). Update
   it when ranked search ships, and say so if featuring is ever paid.
