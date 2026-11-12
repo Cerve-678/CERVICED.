@@ -113,7 +113,7 @@ export function describeRefundOutcome(
   if (booking.paymentStatus === PaymentStatus.NOT_CHARGED) {
     return {
       title: 'Not charged',
-      message: "Your card wasn't charged. The hold on it has been released, though some banks take a few days to stop showing it.",
+      message: "Your card wasn't charged. We've asked your bank to release the hold; some banks take a few days to stop showing it.",
       rows: [],
       providerStatus: 'Not charged',
     };
@@ -188,7 +188,7 @@ export function describeCancelRefund(
   if (booking.paymentStatus === PaymentStatus.AUTHORISED) {
     return {
       confirmLine: " Your card hasn't been charged, so the hold on it will be released.",
-      doneMessage: "Your request has been cancelled. Your card wasn't charged, and the hold on it is being released.",
+      doneMessage: "Your request has been cancelled. Your card wasn't charged, and we've asked your bank to release the hold. Some banks take a few days to stop showing it.",
     };
   }
   const inApp = booking.paymentStatus === PaymentStatus.DEPOSIT_PAID

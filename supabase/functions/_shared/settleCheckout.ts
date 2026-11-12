@@ -111,6 +111,12 @@ export async function settleCheckout(admin: SupabaseClient, stripe: Stripe, inte
     }
   }
   if (intent.status === 'requires_capture') {
+    // Re-read right before taking money: a concurrent settle (the app's call
+    // and Stripe's webhook both land here) may have just held this checkout,
+    // which also made checkout_batch_all_requests read false above. If one
+    // still slips through, settleHeldPayment refunds what shouldn't be kept.
+    batch = await readBatch();
+    if (batch.capture_state) return 'held';
     if (!available()) {
       // Older deployments finalised before capture: finish those too.
       if (batch.status !== 'finalised') {

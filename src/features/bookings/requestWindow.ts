@@ -49,7 +49,7 @@ export function clientRequestNote(providerName: string, deadline: RequestDeadlin
     ? `Your appointment is soon, so ${providerName} has until ${by} to accept this request.`
     : `${providerName} has ${REQUEST_RESPONSE_HOURS} hours to accept this request, until ${by}.`;
   if (held) {
-    return `${lead} Your card is only charged if they accept. If they decline or don't answer by then, the hold on your card is released and you pay nothing.`;
+    return `${lead} Your card is only charged if they accept. If they decline or don't answer by then, the hold on your card is released and you pay nothing. Your bank shows the hold as pending until then.`;
   }
   return `${lead} If they don't answer by then, it's declined automatically and anything you paid is refunded in full.`;
 }

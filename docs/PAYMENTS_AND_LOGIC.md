@@ -320,7 +320,17 @@ repeats the same Stripe call (idempotency keys `held_capture_<checkout>` /
 `held_release_<checkout>`). `complete_held_settlement` then marks the bookings
 `fully_paid`/`deposit_paid` (which creates their payouts) or `not_charged`.
 The `settle-held-payments` cron (every 5 min) catches anything a trigger call
-missed. Requests are answered within 24 hours, well inside a card
+missed.
+
+Two safety nets send money back through the normal refund path
+(`refund_booking_async`, so it is recorded, taken back from the payout and
+the client is told): a booking cancelled in the seconds while its capture is
+being sent to Stripe (the decision fixes `held_capture_booking_ids`), and a
+checkout captured in full by a stale concurrent settle (the app's call and
+Stripe's webhook both settle checkouts). `settleCheckout` re-reads the
+checkout right before any capture to make that second case rare. Only the
+server can set or clear `authorised`/`not_charged`
+(`guard_held_payment_status`). Requests are answered within 24 hours, well inside a card
 authorisation's 7 days. If a hold has somehow gone when a provider accepts,
 support is emailed and the checkout stays `settling` for a person to resolve.
 

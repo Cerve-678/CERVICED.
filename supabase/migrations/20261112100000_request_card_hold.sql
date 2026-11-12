@@ -53,7 +53,10 @@ ALTER TABLE public.checkout_batches
     CHECK (held_action IN ('capture', 'release')),
   ADD COLUMN IF NOT EXISTS held_capture_pence integer
     CHECK (held_capture_pence IS NULL OR held_capture_pence > 0),
-  ADD COLUMN IF NOT EXISTS held_settled_at timestamptz;
+  ADD COLUMN IF NOT EXISTS held_settled_at timestamptz,
+  -- The bookings a capture decision charged for, fixed with the amount, so a
+  -- booking cancelled while Stripe is being called is refunded, not lost.
+  ADD COLUMN IF NOT EXISTS held_capture_booking_ids uuid[];
 
 COMMENT ON COLUMN public.checkout_batches.capture_state IS
   'NULL: captured at checkout (the normal case). held: every booking is a request and the card is only authorised. settling: a capture/release is decided and being sent to Stripe (held_action, held_capture_pence). captured / released: done.';
@@ -132,6 +135,7 @@ DECLARE
   v_accepted boolean;
   v_pending  boolean;
   v_amount   integer;
+  v_ids      uuid[];
 BEGIN
   SELECT * INTO v_batch
     FROM public.checkout_batches
@@ -160,17 +164,20 @@ BEGIN
     -- Everything still standing: the accepted bookings and any request in the
     -- same checkout still waiting (charged now; refunded as usual if it is
     -- declined later). Cancelled ones were never charged.
-    SELECT SUM(ROUND(b.amount_paid * 100))::integer INTO v_amount
+    SELECT SUM(ROUND(b.amount_paid * 100))::integer, array_agg(b.id)
+      INTO v_amount, v_ids
       FROM public.bookings b
      WHERE b.payment_intent_id = p_payment_intent_id
        AND b.status <> 'cancelled';
     UPDATE public.checkout_batches
-       SET capture_state = 'settling', held_action = 'capture', held_capture_pence = v_amount
+       SET capture_state = 'settling', held_action = 'capture', held_capture_pence = v_amount,
+           held_capture_booking_ids = v_ids
      WHERE id = v_batch.id;
     action := 'capture'; amount_pence := v_amount;
   ELSIF NOT COALESCE(v_pending, false) THEN
     UPDATE public.checkout_batches
-       SET capture_state = 'settling', held_action = 'release', held_capture_pence = NULL
+       SET capture_state = 'settling', held_action = 'release', held_capture_pence = NULL,
+           held_capture_booking_ids = NULL
      WHERE id = v_batch.id;
     action := 'release'; amount_pence := NULL;
   ELSE
@@ -180,16 +187,28 @@ BEGIN
 END;
 $function$;
 
--- Called once Stripe has done it. Moving a booking from 'authorised' to paid
--- is what creates its provider payout (step 6).
-CREATE FUNCTION public.complete_held_settlement(p_payment_intent_id text)
+-- Called once Stripe has done it, with what Stripe actually captured
+-- (p_captured_pence, NULL when nothing was). Moving a booking from 'authorised'
+-- to paid is what creates its provider payout (step 6).
+--
+-- Usually the captured set is the one begin_held_settlement fixed. Two cases
+-- put money on bookings that shouldn't keep it, and both go back through the
+-- normal refund path (refund_booking_async), which records it, takes it back
+-- from the payout and tells the client:
+--   * a booking in the captured set was cancelled while Stripe was called;
+--   * the whole checkout was captured at once by a stale concurrent settle
+--     (p_captured_pence = the full amount), so every booking was charged.
+CREATE FUNCTION public.complete_held_settlement(p_payment_intent_id text, p_captured_pence integer)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $function$
 DECLARE
-  v_batch public.checkout_batches%ROWTYPE;
+  v_batch   public.checkout_batches%ROWTYPE;
+  v_full    integer;
+  v_charged uuid[];
+  v_id      uuid;
 BEGIN
   SELECT * INTO v_batch
     FROM public.checkout_batches
@@ -198,26 +217,43 @@ BEGIN
    FOR UPDATE;
   IF NOT FOUND THEN RETURN; END IF;
 
-  IF v_batch.held_action = 'capture' THEN
+  IF COALESCE(p_captured_pence, 0) > 0 THEN
+    v_full := ROUND(v_batch.amount_due * 100)::integer;
+    IF p_captured_pence >= v_full THEN
+      SELECT array_agg(b.id) INTO v_charged
+        FROM public.bookings b WHERE b.payment_intent_id = p_payment_intent_id;
+    ELSE
+      v_charged := COALESCE(v_batch.held_capture_booking_ids, ARRAY[]::uuid[]);
+    END IF;
+
     UPDATE public.bookings
        SET payment_status = CASE WHEN payment_type = 'deposit' THEN 'deposit_paid' ELSE 'fully_paid' END
      WHERE payment_intent_id = p_payment_intent_id
        AND payment_status = 'authorised'
-       AND status <> 'cancelled';
+       AND id = ANY (v_charged);
 
     -- The checkout's notice said the card was held; this is the payment.
     INSERT INTO public.notifications
       (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role, metadata)
     SELECT v_batch.user_id, 'payment_success', 'Payment received',
            'Your request was accepted, so we took the £' ||
-             TO_CHAR(v_batch.held_capture_pence / 100.0, 'FM999990.00') || ' held on your card.',
+             TO_CHAR(p_captured_pence / 100.0, 'FM999990.00') || ' held on your card.',
            'medium', FALSE, b.id, b.provider_id, 'client',
-           jsonb_build_object('checkout_batch_id', v_batch.id, 'amount_pence', v_batch.held_capture_pence)
+           jsonb_build_object('checkout_batch_id', v_batch.id, 'amount_pence', p_captured_pence)
       FROM public.bookings b
      WHERE b.payment_intent_id = p_payment_intent_id
        AND b.status NOT IN ('pending', 'cancelled')
      ORDER BY b.booking_date, b.booking_time, b.id
      LIMIT 1;
+
+    FOR v_id IN
+      SELECT b.id FROM public.bookings b
+       WHERE b.payment_intent_id = p_payment_intent_id
+         AND b.id = ANY (v_charged)
+         AND b.status = 'cancelled'
+    LOOP
+      PERFORM public.refund_booking_async(v_id, 'request_not_accepted');
+    END LOOP;
   END IF;
 
   UPDATE public.bookings
@@ -226,7 +262,7 @@ BEGIN
      AND payment_status = 'authorised';
 
   UPDATE public.checkout_batches
-     SET capture_state = CASE WHEN v_batch.held_action = 'capture' THEN 'captured' ELSE 'released' END,
+     SET capture_state = CASE WHEN COALESCE(p_captured_pence, 0) > 0 THEN 'captured' ELSE 'released' END,
          held_settled_at = now()
    WHERE id = v_batch.id;
 END;
@@ -290,6 +326,34 @@ CREATE TRIGGER on_booking_held_payment_captured_create_payout
   WHEN (OLD.payment_status = 'authorised' AND NEW.payment_status IN ('fully_paid', 'deposit_paid'))
   EXECUTE FUNCTION public.create_held_payout_on_finalize();
 
+-- 6b. Only the server moves a booking into or out of a hold state ──────────
+-- claim_cart_booking_slots (the non-Stripe cart path) writes payment_status
+-- from what the app sends. Nothing a signed-in user calls may set 'authorised'
+-- or 'not_charged', or move a booking out of 'authorised': those belong to
+-- finalize_checkout_held and complete_held_settlement (service role).
+CREATE FUNCTION public.guard_held_payment_status()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $function$
+BEGIN
+  IF auth.uid() IS NOT NULL
+     AND (TG_OP = 'INSERT' OR NEW.payment_status IS DISTINCT FROM OLD.payment_status)
+     AND (NEW.payment_status IN ('authorised', 'not_charged')
+          OR (TG_OP = 'UPDATE' AND OLD.payment_status = 'authorised')) THEN
+    RAISE EXCEPTION 'A held payment can only be settled by the server';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.guard_held_payment_status() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS before_booking_guard_held_payment_status ON public.bookings;
+CREATE TRIGGER before_booking_guard_held_payment_status
+  BEFORE INSERT OR UPDATE OF payment_status ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.guard_held_payment_status();
+
 -- 7a. The checkout notice says "held", not "received", for a held checkout ──
 DO $$
 BEGIN
@@ -331,7 +395,7 @@ DO $$
 DECLARE
   v_def text := pg_get_functiondef('public.handle_booking_status_change'::regproc);
   v_line text := $l$ || CASE WHEN NEW.payment_status = 'authorised'
-                 THEN ' You won''t be charged: the hold on your card is released.' ELSE '' END,$l$;
+                 THEN ' You won''t be charged. We''ve asked your bank to release the hold on your card; some banks take a few days to stop showing it.' ELSE '' END,$l$;
 BEGIN
   v_def := pg_temp.patch(v_def,
     $old$              ' requested service(s), starting with ' || NEW.service_name_snapshot ||
@@ -370,13 +434,19 @@ BEGIN
     RETURN;
   END IF;
 
-  PERFORM net.http_post(
-    url     := 'https://ztrfpfvvejzaysrelmfm.supabase.co/functions/v1/settle-held-payment',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_key),
-    body    := CASE WHEN p_payment_intent_id IS NULL THEN '{"sweep":true}'::jsonb
-                    ELSE jsonb_build_object('paymentIntentId', p_payment_intent_id) END,
-    timeout_milliseconds := 30000
-  );
+  -- Never let a failed post undo the provider's accept or decline that fired
+  -- it: the sweep settles anything this misses.
+  BEGIN
+    PERFORM net.http_post(
+      url     := 'https://ztrfpfvvejzaysrelmfm.supabase.co/functions/v1/settle-held-payment',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_key),
+      body    := CASE WHEN p_payment_intent_id IS NULL THEN '{"sweep":true}'::jsonb
+                      ELSE jsonb_build_object('paymentIntentId', p_payment_intent_id) END,
+      timeout_milliseconds := 30000
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'settle_held_payment_async: post failed (%); the sweep will settle %', SQLERRM, p_payment_intent_id;
+  END;
 END;
 $function$;
 
@@ -434,14 +504,14 @@ SELECT cron.schedule('settle-held-payments', '*/5 * * * *', $$ SELECT public.pro
 REVOKE ALL ON FUNCTION public.checkout_batch_all_requests(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.finalize_checkout_held(uuid, text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.begin_held_settlement(text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.complete_held_settlement(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.complete_held_settlement(text, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.settle_held_payment_async(text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.on_held_request_answered() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.process_held_payments() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.checkout_batch_all_requests(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.finalize_checkout_held(uuid, text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.begin_held_settlement(text) TO service_role;
-GRANT EXECUTE ON FUNCTION public.complete_held_settlement(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.complete_held_settlement(text, integer) TO service_role;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
 VALUES ('20261112100000', 'request_card_hold')

@@ -33,7 +33,12 @@ export async function settleHeldPayment(
   if (decision.action === 'wait') return 'wait';
 
   const batchId = decision.checkout_batch_id!;
-  const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  let intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  // What Stripe actually holds, passed to complete_held_settlement. Normally
+  // the decided amount, or nothing on a release. If a stale concurrent settle
+  // already captured the whole checkout, it's the full amount, and the
+  // database refunds every booking that shouldn't keep its share.
+  let capturedPence: number | null = null;
 
   if (decision.action === 'capture') {
     const amount = decision.amount_pence ?? 0;
@@ -41,15 +46,16 @@ export async function settleHeldPayment(
       throw new Error(`Held capture amount ${amount} is outside 1..${intent.amount} for ${paymentIntentId}`);
     }
     if (intent.status === 'requires_capture') {
-      await stripe.paymentIntents.capture(
+      intent = await stripe.paymentIntents.capture(
         paymentIntentId,
         { amount_to_capture: amount },
         { idempotencyKey: `held_capture_${batchId}` },
       );
     } else if (intent.status !== 'succeeded') {
-      // The hold is gone (Stripe cancels an authorisation left too long) but
-      // a provider has accepted: a booking now stands unpaid. Never guess —
-      // tell support and leave the checkout 'settling' for a person to resolve.
+      // The hold is gone but a provider has accepted: a booking now stands
+      // unpaid. Never guess — tell support and leave the checkout 'settling'.
+      // (Requests are answered within 24 hours, inside a card hold's 7 days,
+      // so this should not happen.)
       await sendSupportAlert({
         subject: 'A held request payment could not be taken',
         html: `<p>A provider accepted a request, but its card hold could no longer be captured.</p>` +
@@ -58,15 +64,23 @@ export async function settleHeldPayment(
       }, 'settle-held-payment');
       throw new Error(`Held payment ${paymentIntentId} can't be captured: ${intent.status}`);
     }
+    capturedPence = intent.amount_received;
   } else {
     if (intent.status === 'requires_capture') {
       await stripe.paymentIntents.cancel(paymentIntentId, {}, { idempotencyKey: `held_release_${batchId}` });
+    } else if (intent.status === 'succeeded') {
+      // Captured by a stale concurrent settle even though nothing was
+      // accepted: complete_held_settlement refunds every booking.
+      capturedPence = intent.amount_received;
     } else if (intent.status !== 'canceled') {
       throw new Error(`Held payment ${paymentIntentId} can't be released: ${intent.status}`);
     }
   }
 
-  const { error: doneError } = await admin.rpc('complete_held_settlement', { p_payment_intent_id: paymentIntentId });
+  const { error: doneError } = await admin.rpc('complete_held_settlement', {
+    p_payment_intent_id: paymentIntentId,
+    p_captured_pence: capturedPence,
+  });
   if (doneError) throw doneError;
-  return decision.action === 'capture' ? 'captured' : 'released';
+  return capturedPence ? 'captured' : 'released';
 }
