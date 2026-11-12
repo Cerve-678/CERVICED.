@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-12 (account deletion waits for money)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261112110000 | `account_deletion_waits_for_money` | **APPLIED 2026-11-12** on the user's go-ahead ("Apply, merge, deploy"), via `supabase db query --linked -f` (absolute path); frontier right before: live max `20261111100000`. Verified live: version recorded; `account_deletion_blockers` present, not executable by authenticated; all three deletion functions carry the guard; delete_* still callable by users as before. **`feat/request-card-hold` and `feat/waitlist-pay-at-confirm` (both `20261112100000`) are now below the frontier and must renumber above `20261112120000`.**  Frontier at authoring: live max `20261111100000`; unapplied on open PRs `20261112100000_request_card_hold` (feat/request-card-hold) and `20261112100000_waitlist_pays_at_confirm` (feat/waitlist-pay-at-confirm), neither touching these objects; lock `(none)`. New `account_deletion_blockers(uuid, text)` (SECURITY DEFINER, revoked from PUBLIC/anon/authenticated). Redefines from live with md5 guards `delete_provider_profile` (`ff8a7231…`), `delete_client_profile` (`99855999…`), `process_scheduled_account_deletions` (`6faed2a1…`). Two forced-rollback dry runs 2026-11-12 passed: a provider with held payouts refused, their client side not; the tipped client's client-profile delete removed the tip and bookings without the RESTRICT error; a plain client fully deleted by the 30-day job; live unchanged after. Revised after security review (the provider's payout on a client's own booking blocks; cancelled bookings still owed a refund block; tips being paid block; users/providers rows locked FOR UPDATE before the check, in the 30-day job inside each account's subtransaction; unknown side raises; refusal carries 'audience'); re-dry-run passed. Written on `fix/account-deletion-money-guard`. |
+
 ### Applied 2026-11-11 (bank payout schedule)
 
 | Authored version | Name | Status |

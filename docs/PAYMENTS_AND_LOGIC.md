@@ -627,6 +627,35 @@ to pay off debts.
 automatically. It shows on the admin Money screen and in the daily email
 until someone deals with it (runbook R5).
 
+### 2.8.1 Deleting an account while money is moving
+
+An account (or just its provider or client profile) can't be deleted while
+money on it is still moving. `account_deletion_blockers` lists what's left,
+on the side being deleted:
+
+- bookings that haven't ended, of any date
+- payouts held or failed, including the provider's payout on a client's own
+  booking (deleting the booking would erase it)
+- debts not yet settled
+- late/no-show fees, or their payouts, still in flight
+- tips not yet paid out, or being paid
+- refunds still processing, or still owed after a cancellation
+- open refund requests
+
+The app names what's left in plain words, worded for whoever is deleting
+("there's a payout still on its way to you", or for a client "a refund still
+owed to you"). The account's rows are locked during the check, so nothing new
+can start between the check and the delete. **Known limit:** a provider who
+owes a debt has no future payouts to clear it, so their deletion waits until
+someone settles it by hand, and nothing alerts support yet (Part 6). A whole account waiting out its 30 days is checked again when the
+30 days are up: if anything started moving meanwhile, it waits, and the job
+tries again the next day. Each account is deleted on its own, so one that
+fails can't undo the others.
+
+Once nothing is moving, the account's settled money records (payouts,
+refunds, fees, tips) are deleted with its bookings, as before. Keeping them,
+anonymised, is a separate decision (Part 6).
+
 ### 2.9 Money CERVICED deliberately doesn't track
 
 CERVICED never collects, stores, verifies or confirms money paid between a
@@ -1040,6 +1069,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |
 | 10 Nov | Providers choose how often Stripe pays their bank (daily, weekly or monthly), not how long CERVICED holds their money. The release hold is fixed at 24 hours, and everyone starts on monthly, the 1st. Not live until migration `20261111100000_payout_bank_schedule` is applied, `create-connect-account` is deployed, and a new app build ships | Day counts were read as "when the bank gets paid", and a long CERVICED hold was an unreviewed legal risk. Money waiting in the provider's Stripe balance can still cover refunds |
 | 12 Nov | One payout's Stripe check failing no longer stops the payout job; it becomes a failed try on the usual schedule. A checkout whose payment Stripe doesn't have is closed as abandoned and support is told | One bad payout could otherwise hold up every provider's payout indefinitely, and the September test checkout had errored every 5 minutes since |
+| 12 Nov | Deleting an account or profile waits until no money on it is still moving (`account_deletion_blockers`); the 30-day job re-checks and deletes each account on its own. Not live until migration `20261112110000_account_deletion_waits_for_money` is applied | Deleting used to erase held payouts, open refund requests and debts with nothing paid, refunded or recovered, and one tipped client made every deletion in a run fail |
 
 ---
 
