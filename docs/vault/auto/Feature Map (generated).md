@@ -177,9 +177,9 @@ Curated: [[Notifications]] · **188 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **87 files**
-- `src/services/databaseService.ts` _(93)_
+- `src/services/databaseService.ts` _(95)_
+- `src/features/providers/goLiveStatus.ts` _(60)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
-- `src/features/providers/goLiveStatus.ts` _(58)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(36)_
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **211 files**
 
 ## Auth
 Curated: [[Contexts]] · **219 files**
-- `src/services/databaseService.ts` _(332)_
+- `src/services/databaseService.ts` _(340)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/screens/auth/LoginScreen.tsx` _(140)_

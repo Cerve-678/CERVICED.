@@ -71,6 +71,7 @@ Curated overview: [[Screens & Navigation]].
 - `DevSettings`
 - `InfoReg`
 - `ProviderHomeMain`
+- `AccountHolderDetails`
 - `LinkOnlyHomeMain`
 - `LinkOnlyAnalytics`
 - `FullCervicedFeatures`

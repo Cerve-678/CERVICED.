@@ -49,6 +49,7 @@ import {
   subscribeToProviderBookingChanges,
   getUnreadNotificationCount,
   countProviderServices,
+  getCurrentAccountDetailsPending,
   getOrCreateConversation,
   forgetCachedReads,
 } from '../../services/databaseService';
@@ -386,7 +387,7 @@ function SummaryRow({ label, value, italic, P }: { label: string; value: string;
 /** Where each shared go-live step is fixed, from the Home stack. All four are
  *  registered on this navigator so the tap pushes rather than bouncing to
  *  another tab's root. */
-const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
+const GO_LIVE_STEP_SCREENS: Record<Exclude<GoLiveStepKey, 'ownerDetails'>, string> = {
   profile: 'EditProfile',
   schedule: 'ProviderSchedule',
   services: 'EditProfile',
@@ -1508,7 +1509,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       return Promise.all([
         countProviderServices(profile.id),
         hasMyProviderGoLiveAddress(profile.id).catch(() => false),
-      ]).then(([serviceCount, goLiveAddress]) => {
+        getCurrentAccountDetailsPending(),
+      ]).then(([serviceCount, goLiveAddress, detailsPending]) => {
         if (cancelled) return;
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
@@ -1531,6 +1533,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           // present without an extra read.
           stripeSet: deriveStripeGoLiveField(profile),
           isLive: !!profile.has_gone_live,
+          detailsPending,
         });
 
         // Go-live celebration: only on a genuine false->true transition,
@@ -1949,7 +1952,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             {buildGoLiveSteps(setupStatus).filter(step => step.blocking).map(step => (
               <TouchableOpacity
                 key={step.key}
-                onPress={() => { tap(); navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never); }}
+                onPress={() => {
+                  tap();
+                  if (step.key === 'ownerDetails') {
+                    navigation.navigate('AccountHolderDetails', { addDetailsForCurrentUser: true });
+                  } else {
+                    navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never);
+                  }
+                }}
                 disabled={step.done}
                 activeOpacity={0.7}
                 style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}

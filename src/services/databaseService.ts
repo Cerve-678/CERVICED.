@@ -149,6 +149,14 @@ export async function getCurrentAuthUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
+/** The server keeps an admin-made blank provider offline until its owner has
+ * been assigned. Read the same auth metadata flag for the go-live checklist. */
+export async function getCurrentAccountDetailsPending(): Promise<boolean> {
+  const { data, error } = await getSessionUser();
+  if (error) throw error;
+  return data.user?.app_metadata?.['details_pending'] === true;
+}
+
 export function setAuthAutoRefresh(active: boolean): void {
   if (active) supabase.auth.startAutoRefresh();
   else supabase.auth.stopAutoRefresh();
@@ -12691,6 +12699,23 @@ export interface AdminAddAccountDetailsInput {
 /** Admins only: gives a blank provider account its owner's details, after which it's theirs. */
 export async function adminAddAccountDetails(input: AdminAddAccountDetailsInput): Promise<AdminCreateAccountResult> {
   return toCreateAccountResult(await invokeAdminAccountAction({ action: 'add_details', ...input }));
+}
+
+/** Complete the handover while signed into the admin-made blank provider.
+ * The Edge Function derives the target user id from the caller's verified
+ * session and refuses every account that is not still awaiting owner details. */
+export async function completeMyBlankProviderDetails(
+  input: Omit<AdminAddAccountDetailsInput, 'userId'>,
+): Promise<AdminCreateAccountResult> {
+  const result = toCreateAccountResult(await invokeAdminAccountAction({
+    action: 'complete_my_blank_details',
+    ...input,
+  }));
+  // The auth metadata changed from details_pending to false. Refresh the
+  // current session so the go-live checklist and account UI see that change.
+  const { error } = await supabase.auth.refreshSession();
+  if (error) logger.warn('[AccountHandover] session refresh failed:', error);
+  return result;
 }
 
 export type AdminCreatedProviderStatus = 'live' | 'setting_up' | 'not_started';
