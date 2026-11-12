@@ -128,6 +128,7 @@ Deno.serve(async (req: Request) => {
       : null;
     let alreadyRefundedPence = 0;
     let pendingRefund = false;
+    const succeededRefunds: Stripe.Refund[] = [];
     for await (const r of stripe.refunds.list({ payment_intent: booking.payment_intent_id, limit: 100 })) {
       if (r.metadata?.booking_id !== booking.id) continue;
       // Same request retried (double tap, network retry): hand back the
@@ -141,6 +142,7 @@ Deno.serve(async (req: Request) => {
       if (r.status === 'succeeded' || r.status === 'pending' || r.status === 'requires_action') {
         alreadyRefundedPence += r.amount;
         if (r.status !== 'succeeded') pendingRefund = true;
+        else succeededRefunds.push(r);
       }
     }
     // Known limit: two DIFFERENT requests landing at the same instant could
@@ -166,7 +168,13 @@ Deno.serve(async (req: Request) => {
     const request = body.amountPence === undefined || body.amountPence === null ? 'full' : Number(body.amountPence);
     const plan = planRefund({ amountPaidPence: paidPence, alreadyRefundedPence, providerHeldPence, request });
     if (!plan.ok) {
-      if (request === 'full' && alreadyRefundedPence >= paidPence) return json({ status: 'already_refunded' }, 200);
+      if (request === 'full' && alreadyRefundedPence >= paidPence) {
+        // Stripe already refunded it all, but our records may not say so (the
+        // refund went out and its write failed). Record what Stripe has, so the
+        // booking stops looking owed (process_unsent_refunds, the daily email).
+        for (const r of succeededRefunds) await reconcileRefund(admin, stripe, r);
+        return json({ status: 'already_refunded' }, 200);
+      }
       return json({ error: plan.error }, 409);
     }
 

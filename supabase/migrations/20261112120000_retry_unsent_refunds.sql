@@ -11,12 +11,16 @@
 -- Now:
 -- * bookings_owed_a_refund(): cancelled bookings still paid, with no refund
 --   and (for a client's own cancellation) no policy settlement, 10+ minutes on,
---   with why: 'provider_cancelled', 'request_expired', 'offer_declined' (the
---   client declined the provider's new time: refunded in full, though the
---   cancel is stamped as the client's) or 'client_cancelled' (the only one
---   settled by the frozen policy).
+--   with why: 'provider_cancelled', 'request_expired' (an unanswered request:
+--   cancelled_by 'system' with declined_at set), 'offer_declined' (the client
+--   declined the provider's new time: refunded in full, though the cancel is
+--   stamped as the client's), 'client_cancelled' (the only one settled by the
+--   frozen policy) or 'other_automatic' (some other server cancel: listed for
+--   a person, never refunded automatically). "Still owed" means still paid
+--   with no recorded refund, so a refund Stripe rejected counts too.
 -- * process_unsent_refunds() (cron, every 10 minutes): sends each again, at
---   most every 30 minutes and 5 times, within 30 days of the cancel. A
+--   most every 30 minutes for 5 tries, then once a day, within 30 days of the
+--   cancel; a missing vault key uses up no tries. A
 --   client's own cancel goes through apply-cancellation-refund (which now
 --   accepts the server); everything else back through refund_booking_async.
 --   Both are idempotent: they count what Stripe already refunded.
@@ -59,7 +63,8 @@ AS $function$
   SELECT b.id,
          CASE
            WHEN b.cancelled_by = 'provider' THEN 'provider_cancelled'
-           WHEN b.cancelled_by = 'system' THEN 'request_expired'
+           WHEN b.cancelled_by = 'system' AND b.declined_at IS NOT NULL THEN 'request_expired'
+           WHEN b.cancelled_by = 'system' THEN 'other_automatic'
            WHEN d.declined_offer THEN 'offer_declined'
            ELSE 'client_cancelled'
          END,
@@ -75,7 +80,9 @@ AS $function$
      AND b.payment_intent_id IS NOT NULL
      AND COALESCE(b.amount_paid, 0) > 0
      AND b.payment_status IN ('fully_paid', 'deposit_paid')
-     AND b.stripe_refund_id IS NULL
+     -- No refund on record. Not stripe_refund_id: a refund Stripe rejected
+     -- leaves its id behind while the money stays taken.
+     AND NOT EXISTS (SELECT 1 FROM public.booking_refunds br WHERE br.booking_id = b.id)
      AND b.cancelled_at IS NOT NULL
      AND b.cancelled_at < now() - interval '10 minutes'
      AND (b.cancelled_by IN ('provider', 'system')
@@ -96,13 +103,23 @@ DECLARE
   v_key text;
   v_sent integer := 0;
 BEGIN
+  -- Without the key nothing can be sent, so no try is used up.
+  SELECT decrypted_secret INTO v_key FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1;
+  IF v_key IS NULL OR v_key = '' OR v_key LIKE '<%' THEN
+    RAISE WARNING 'process_unsent_refunds: service_role_key unavailable; nothing sent';
+    RETURN 0;
+  END IF;
+
   FOR r IN
     SELECT o.booking_id, o.cause
       FROM public.bookings_owed_a_refund() o
       LEFT JOIN public.unsent_refund_retries x ON x.booking_id = o.booking_id
      WHERE o.cancelled_at > now() - interval '30 days'
-       AND COALESCE(x.attempts, 0) < 5
-       AND (x.last_attempt_at IS NULL OR x.last_attempt_at < now() - interval '30 minutes')
+       AND o.cause <> 'other_automatic'
+       -- Five tries 30 minutes apart, then once a day while it's still owed.
+       AND (x.last_attempt_at IS NULL
+            OR (x.attempts < 5 AND x.last_attempt_at < now() - interval '30 minutes')
+            OR x.last_attempt_at < now() - interval '1 day')
      ORDER BY o.cancelled_at
      LIMIT 20
   LOOP
@@ -112,13 +129,6 @@ BEGIN
       SET attempts = unsent_refund_retries.attempts + 1, last_attempt_at = now();
 
     IF r.cause = 'client_cancelled' THEN
-      IF v_key IS NULL THEN
-        SELECT decrypted_secret INTO v_key FROM vault.decrypted_secrets WHERE name = 'service_role_key' LIMIT 1;
-      END IF;
-      IF v_key IS NULL OR v_key = '' OR v_key LIKE '<%' THEN
-        RAISE WARNING 'process_unsent_refunds: service_role_key unavailable; % not sent', r.booking_id;
-        CONTINUE;
-      END IF;
       PERFORM net.http_post(
         url     := 'https://ztrfpfvvejzaysrelmfm.supabase.co/functions/v1/apply-cancellation-refund',
         headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_key),
@@ -242,6 +252,8 @@ BEGIN
 END;
 $function$;
 
+-- Safe to re-run: an existing job of this name is replaced.
+SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'retry-unsent-refunds';
 SELECT cron.schedule('retry-unsent-refunds', '3,13,23,33,43,53 * * * *', 'SELECT public.process_unsent_refunds();');
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)

@@ -65,5 +65,9 @@ describe('summarizeMoneyAttention', () => {
       failed: [], owed: [], refunds: [],
       unsent_refunds: [{ booking_id: 'b4', cause: 'offer_declined', client_name: 'Sam', provider_name: 'Nail Studio', service_name: 'Gel', amount_pence: 3200, attempts: 1 }],
     }).unsentRefunds[0]!.title).toBe('Sam, Gel with Nail Studio: they declined the new time, refund never went out (sent again 1 time so far)');
+    expect(summarizeMoneyAttention({
+      failed: [], owed: [], refunds: [],
+      unsent_refunds: [{ booking_id: 'b5', cause: 'other_automatic', client_name: 'Kim', provider_name: 'Spa', service_name: 'Facial', amount_pence: 5000, attempts: 0 }],
+    }).unsentRefunds[0]!.title).toBe('Kim, Facial with Spa: cancelled automatically, refund never went out (not sent again automatically, needs you)');
   });
 });
