@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-12, NOT applied (retry unsent refunds)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261112120000 | `retry_unsent_refunds` | **Not applied; waiting for the user's OK.** Frontier at authoring: live max `20261111100000`; unapplied on open PRs `20261112100000` (request_card_hold, waitlist_pays_at_confirm) and `20261112110000_account_deletion_waits_for_money` (#476); none touch these objects; lock `(none)`. New table `unsent_refund_retries` (RLS on, all grants revoked), `bookings_owed_a_refund()` and `process_unsent_refunds()` (SECURITY DEFINER, revoked from PUBLIC/anon/authenticated), cron `retry-unsent-refunds` (`3,13,23,33,43,53 * * * *`). Redefines from live with md5 guards `money_needing_attention` (`30e055f6…`) and `process_money_daily_summary` (`26415379…`). Forced-rollback dry run 2026-11-12 passed: 0 owed live; two simulated rows picked up (provider_cancelled, offer_declined), sent once each, not re-sent within 30 minutes, both in the summary; not callable by authenticated; live unchanged, nothing queued. **Deploy `apply-cancellation-refund` (server caller) and `money-daily-summary` right after applying.** Written on `fix/retry-unsent-refunds`. |
+
 ### Applied 2026-11-11 (bank payout schedule)
 
 | Authored version | Name | Status |

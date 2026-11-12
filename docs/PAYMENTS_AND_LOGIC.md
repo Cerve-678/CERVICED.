@@ -465,6 +465,16 @@ money, or a no-show. Stripe and PayPal keep their processing fee on every
 refund, so a refunded booking costs CERVICED that processing fee (about £0.99
 by card or £2.04 by PayPal on a £50 booking).
 
+**A refund that never went out is sent again.** A provider cancel or
+decline, an expired request, a declined new time or a client's own cancel
+each sends its refund straight away. If that call fails, the booking is
+cancelled with the money still taken. `process_unsent_refunds` (every 10
+minutes) finds those 10 minutes on and sends each again, at most every 30
+minutes and 5 times, within 30 days. A client's own cancel goes back through
+the frozen policy; everything else is a full refund. Both count what Stripe
+already refunded, so nothing is refunded twice. Anything still owed an hour
+on is in support's daily email ("Refunds that never went out").
+
 **Where the provider's money comes from in a refund:**
 
 - If the payout is still held, it's simply lowered or cancelled.
@@ -1040,6 +1050,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |
 | 10 Nov | Providers choose how often Stripe pays their bank (daily, weekly or monthly), not how long CERVICED holds their money. The release hold is fixed at 24 hours, and everyone starts on monthly, the 1st. Not live until migration `20261111100000_payout_bank_schedule` is applied, `create-connect-account` is deployed, and a new app build ships | Day counts were read as "when the bank gets paid", and a long CERVICED hold was an unreviewed legal risk. Money waiting in the provider's Stripe balance can still cover refunds |
 | 12 Nov | One payout's Stripe check failing no longer stops the payout job; it becomes a failed try on the usual schedule. A checkout whose payment Stripe doesn't have is closed as abandoned and support is told | One bad payout could otherwise hold up every provider's payout indefinitely, and the September test checkout had errored every 5 minutes since |
+| 12 Nov | A cancelled booking whose refund never went out is sent again (`process_unsent_refunds`, every 10 minutes, up to 5 tries) and listed in support's daily email after an hour. Not live until migration `20261112120000_retry_unsent_refunds` is applied and `apply-cancellation-refund` and `money-daily-summary` are deployed | Every refund after a cancel was a single unchecked call: if it failed, the client's money stayed taken and nothing noticed |
 
 ---
 

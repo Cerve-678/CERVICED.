@@ -119,6 +119,7 @@ const every = () => [
       failed: [{ title: HOSTILE, amount: HOSTILE }],
       owed: [{ title: HOSTILE, amount: HOSTILE }],
       refunds: [{ title: HOSTILE, amount: HOSTILE }],
+      unsentRefunds: [{ title: HOSTILE, amount: HOSTILE }],
     }),
   ],
 ] as Array<[string, { subject: string; html: string }]>;
