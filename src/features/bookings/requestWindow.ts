@@ -62,7 +62,7 @@ export function providerRequestNote(deadline: RequestDeadline, now?: Date, held 
     ? `Needs your answer soon: accept or decline by ${by}, before the appointment.`
     : `You have ${REQUEST_RESPONSE_HOURS} hours to answer, until ${by}.`;
   if (held) {
-    return `${lead} The client's payment is held on their card and taken when you accept. If you don't answer, it's declined automatically and the hold is released.`;
+    return `${lead} The client's payment is held on their card and is only taken if you accept. If you don't answer, it's declined automatically and the hold is released.`;
   }
   return `${lead} After that it's declined automatically and the client is refunded.`;
 }

@@ -300,8 +300,8 @@ payment.
 
 | What happens next | Money |
 |---|---|
-| A provider accepts one of the requests | Everything still standing in that checkout is captured at once: the accepted bookings and any request in it still waiting. Requests already declined, expired or withdrawn are left out of the amount. The client gets "Payment received". A request still waiting that is declined later is refunded the normal way |
-| The provider declines, or it expires unanswered | Left out of the capture. If it was the last one, the hold is released: nothing is taken and the booking reads **Not charged** |
+| Every request in the checkout has an answer, and at least one was accepted | Only the accepted bookings are captured, in one go; the rest of the hold is released. The client gets "Payment received". Nothing is taken while any request in the checkout is still waiting (24 hours at most), so an accepted booking can sit unpaid for up to a day |
+| Every request is declined, expires or is withdrawn | The hold is released: nothing is taken and the bookings read **Not charged**. The same if only £0 bookings (a free patch test) were accepted |
 | The client withdraws the request | **Never charged**, whatever the provider's late-cancellation rule (owner's decision, 12 November) |
 
 **Why only all-request checkouts:** Stripe can capture a payment once. A
@@ -319,6 +319,11 @@ capture, release or wait under a row lock and records the decision
 repeats the same Stripe call (idempotency keys `held_capture_<checkout>` /
 `held_release_<checkout>`). `complete_held_settlement` then marks the bookings
 `fully_paid`/`deposit_paid` (which creates their payouts) or `not_charged`.
+
+**Known edge (owner informed):** in a checkout with several requests, a client
+who cancels an *accepted* one while another is still waiting is never
+charged for it, because nothing has been taken yet, so the provider's
+late-cancel policy can't apply to it.
 The `settle-held-payments` cron (every 5 min) catches anything a trigger call
 missed.
 
@@ -1051,7 +1056,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 |---|---|---|
 | 29 Sep | Stripe Connect with separate charges and transfers, and Express accounts | CERVICED holds the funds and controls payout timing |
 | 29 Sep | Full refunds return CERVICED's fee; partial refunds keep it | Keeping the fee on a full refund was judged likely unlawful in the UK |
-| 12 Nov | A checkout of requests only holds the card and is charged only when a provider accepts; a withdrawn held request is never charged; mixed checkouts are charged at checkout as before | A declined request no longer waits 5–10 working days for a refund of money that should never have left. Stripe captures once, so a mixed basket can't be held |
+| 12 Nov | A checkout of requests only holds the card and is charged only for what providers accept, once every request in it is answered; a withdrawn held request is never charged; mixed checkouts are charged at checkout as before | A declined request no longer waits 5–10 working days for a refund of money that should never have left. Stripe captures once, so a mixed basket can't be held |
 | 3 Oct | Client cancellations follow the provider's frozen policy: no charge, keep the deposit, or keep the full price (changed 1 November) | Predictable for both sides; a client is never charged more than they paid |
 | 12–13 Oct | Late/no-show fees: in-app, 50% cap, 24-hour window, no CERVICED cut | Protects providers without CERVICED profiting from penalties |
 | 13 Oct | Fee disputes go to the provider, not CERVICED | CERVICED doesn't judge fees |

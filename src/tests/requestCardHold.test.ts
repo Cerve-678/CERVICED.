@@ -1,4 +1,5 @@
-import { settledFromCaptureStatus } from '../features/cart/checkoutOutcome';
+import { settledFromBatch, settledFromCaptureStatus } from '../features/cart/checkoutOutcome';
+import { getRefundRequestScope } from '../features/bookings/bookingSupportRequest';
 import {
   calculateBookingPaymentBreakdown,
   describeCancelRefund,
@@ -29,8 +30,16 @@ describe('a request paid by a hold on the card', () => {
     expect(row('not_charged').paymentStatus).toBe(PaymentStatus.NOT_CHARGED);
   });
 
-  it('counts a held checkout as booked', () => {
-    expect(settledFromCaptureStatus('held')).toBe('succeeded');
+  it('tells a held checkout apart from a paid one, from either answer', () => {
+    expect(settledFromCaptureStatus('held')).toBe('held');
+    expect(settledFromCaptureStatus('succeeded')).toBe('succeeded');
+    expect(settledFromBatch({ status: 'finalised', outcome: null, captureState: 'held' })).toBe('held');
+    expect(settledFromBatch({ status: 'finalised', outcome: null, captureState: null })).toBe('succeeded');
+  });
+
+  it('treats a held or released payment as nothing to ask a refund for', () => {
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.NOT_CHARGED })).toBe('settled');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.AUTHORISED })).toBe('settled');
   });
 
   it('shows the amount as held, not paid, and no deposit as paid', () => {

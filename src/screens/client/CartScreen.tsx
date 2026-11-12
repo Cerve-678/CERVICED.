@@ -321,7 +321,9 @@ interface PaymentModalProps {
   onPaymentComplete: () => void;
   /** The card was approved but the checkout didn't simply book: refunded or
    *  not charged (the time had gone), or still unsettled after waiting. */
-  onPaymentPending?: (outcome: Exclude<CheckoutWaitResult, 'succeeded'>) => void;
+  onPaymentPending?: (outcome: Exclude<CheckoutWaitResult, 'succeeded' | 'held'>) => void;
+  /** Every booking was a request, so the card is only held (see checkoutOutcome). */
+  onPaymentHeld?: () => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -644,6 +646,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentSuccess,
     onPaymentComplete,
     onPaymentPending,
+    onPaymentHeld,
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
@@ -874,10 +877,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
             onError: err => logger.error('[checkout] still confirming the payment', err),
           });
         }
-        if (outcome !== 'succeeded') {
+        if (outcome !== 'succeeded' && outcome !== 'held') {
           onPaymentPending?.(outcome);
           return;
         }
+        if (outcome === 'held') onPaymentHeld?.();
         await onPaymentSuccess(method === 'paypal' ? 'paypal' : 'card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -901,7 +905,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setConfirming(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onPaymentHeld, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
 
     // Closing after a declined attempt leaves an unconfirmed intent open —
     // cancel it so CartScreen's hold release (wired into onClose) isn't
@@ -1996,6 +2000,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
+  // Every booking in the checkout was a request, so the card is only held.
+  const [paymentHeld, setPaymentHeld] = useState(false);
 
   // Mirrors of the two outstanding-checkout ids, for the abandon path below:
   // it runs from a navigation listener and on unmount, neither of which can
@@ -3497,6 +3503,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // frozenCheckoutTotals.total computes next render, rather than two
     // independent formulas that could drift apart under a future edit.
     setPaymentTotal(checkoutTotalsFrom(pricedCheckoutItems(snapshot.items, snapshot.bookings)).total);
+    setPaymentHeld(false);
 
     // Show review modal pre-filled with user data
     setReviewName(user?.name || '');
@@ -4401,6 +4408,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           const prepared = await prepareCheckout(intent);
                           setServerCheckoutBatchId(prepared.checkoutBatchId);
                           setPaymentTotal(prepared.amountDue);
+                          setPaymentHeld(false);
                         } else {
                           console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
                           const batchId = await holdCartCheckoutSlots(
@@ -4644,6 +4652,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 totalAmount={paymentTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
+                onPaymentHeld={() => setPaymentHeld(true)}
                 onPaymentPending={outcome => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);
@@ -4700,9 +4709,9 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>Success!</Text>
 
                     <Text style={[styles.liquidGlassSuccessMessage, { color: P.sub }]}>
-                      Payment of £{paymentTotal.toFixed(2)} has been processed successfully.
-                      Appointments have been booked and will show up in Bookings when confirmed by
-                      providers.
+                      {paymentHeld
+                        ? `£${paymentTotal.toFixed(2)} is held on your card, not taken. You're only charged for what a provider accepts, and the rest of the hold is released. Your requests are in Bookings.`
+                        : `Payment of £${paymentTotal.toFixed(2)} has been processed successfully. Appointments have been booked and will show up in Bookings when confirmed by providers.`}
                     </Text>
 
                     <View style={styles.successButtonsContainer}>

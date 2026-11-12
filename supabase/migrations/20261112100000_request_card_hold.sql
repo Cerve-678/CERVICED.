@@ -56,7 +56,10 @@ ALTER TABLE public.checkout_batches
   ADD COLUMN IF NOT EXISTS held_settled_at timestamptz,
   -- The bookings a capture decision charged for, fixed with the amount, so a
   -- booking cancelled while Stripe is being called is refunded, not lost.
-  ADD COLUMN IF NOT EXISTS held_capture_booking_ids uuid[];
+  ADD COLUMN IF NOT EXISTS held_capture_booking_ids uuid[],
+  -- Set the first time support is told a hold couldn't be taken, so the sweep
+  -- doesn't email again every five minutes.
+  ADD COLUMN IF NOT EXISTS held_alerted_at timestamptz;
 
 COMMENT ON COLUMN public.checkout_batches.capture_state IS
   'NULL: captured at checkout (the normal case). held: every booking is a request and the card is only authorised. settling: a capture/release is decided and being sent to Stripe (held_action, held_capture_pence). captured / released: done.';
@@ -64,6 +67,12 @@ COMMENT ON COLUMN public.checkout_batches.capture_state IS
 CREATE INDEX IF NOT EXISTS checkout_batches_capture_state_open_idx
   ON public.checkout_batches (capture_state)
   WHERE capture_state IN ('held', 'settling');
+
+-- Every settle step, the sweep and refunds look bookings up by their payment.
+-- (200 rows today, so a plain build inside the transaction is instant.)
+CREATE INDEX IF NOT EXISTS bookings_payment_intent_id_idx
+  ON public.bookings (payment_intent_id)
+  WHERE payment_intent_id IS NOT NULL;
 
 -- 3. Is every booking in this checkout a request? ───────────────────────────
 -- The same rule finalize_checkout uses: a provider without auto-accept, or an
@@ -75,15 +84,19 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $function$
+  -- Read through checkout_batch_items, which finalising doesn't change, so a
+  -- second settle running just after the first finalised gets the same answer
+  -- (and then finds the checkout already held) instead of reading "not all
+  -- requests" and capturing it.
   SELECT EXISTS (
-           SELECT 1 FROM public.bookings b
-            WHERE b.hold_batch_id = p_checkout_batch_id AND b.status = 'on_hold')
+           SELECT 1 FROM public.checkout_batch_items i
+            WHERE i.checkout_batch_id = p_checkout_batch_id)
      AND NOT EXISTS (
            SELECT 1
-             FROM public.bookings b
+             FROM public.checkout_batch_items i
+             JOIN public.bookings b ON b.id = i.booking_id
              JOIN public.providers p ON p.id = b.provider_id
-            WHERE b.hold_batch_id = p_checkout_batch_id
-              AND b.status = 'on_hold'
+            WHERE i.checkout_batch_id = p_checkout_batch_id
               AND COALESCE(p.auto_accept_bookings, false)
               AND NOT COALESCE(b.is_emergency_request, false));
 $function$;
@@ -160,28 +173,38 @@ BEGIN
     FROM public.bookings b
    WHERE b.payment_intent_id = p_payment_intent_id;
 
+  -- Nothing is taken while any request in the checkout is still waiting, so
+  -- every request keeps its promise: charged only if accepted. Each is
+  -- answered within 24 hours (booking_request_deadline), far inside a card
+  -- hold's 7 days, so the wait is short.
+  IF COALESCE(v_pending, false) THEN
+    action := 'wait'; amount_pence := NULL;
+    RETURN NEXT; RETURN;
+  END IF;
+
   IF COALESCE(v_accepted, false) THEN
-    -- Everything still standing: the accepted bookings and any request in the
-    -- same checkout still waiting (charged now; refunded as usual if it is
-    -- declined later). Cancelled ones were never charged.
+    -- Only the accepted bookings; declined, expired and withdrawn ones are
+    -- never charged.
     SELECT SUM(ROUND(b.amount_paid * 100))::integer, array_agg(b.id)
       INTO v_amount, v_ids
       FROM public.bookings b
      WHERE b.payment_intent_id = p_payment_intent_id
        AND b.status <> 'cancelled';
+  END IF;
+
+  IF COALESCE(v_amount, 0) > 0 THEN
     UPDATE public.checkout_batches
        SET capture_state = 'settling', held_action = 'capture', held_capture_pence = v_amount,
            held_capture_booking_ids = v_ids
      WHERE id = v_batch.id;
     action := 'capture'; amount_pence := v_amount;
-  ELSIF NOT COALESCE(v_pending, false) THEN
+  ELSE
+    -- Nothing accepted, or only £0 bookings (a free patch test): nothing to take.
     UPDATE public.checkout_batches
        SET capture_state = 'settling', held_action = 'release', held_capture_pence = NULL,
            held_capture_booking_ids = NULL
      WHERE id = v_batch.id;
     action := 'release'; amount_pence := NULL;
-  ELSE
-    action := 'wait'; amount_pence := NULL;
   END IF;
   RETURN NEXT;
 END;
@@ -197,7 +220,8 @@ $function$;
 -- from the payout and tells the client:
 --   * a booking in the captured set was cancelled while Stripe was called;
 --   * the whole checkout was captured at once by a stale concurrent settle
---     (p_captured_pence = the full amount), so every booking was charged.
+--     (Stripe holds more than was decided, or anything on a release), so
+--     every booking was charged.
 CREATE FUNCTION public.complete_held_settlement(p_payment_intent_id text, p_captured_pence integer)
 RETURNS void
 LANGUAGE plpgsql
@@ -206,7 +230,6 @@ SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_batch   public.checkout_batches%ROWTYPE;
-  v_full    integer;
   v_charged uuid[];
   v_id      uuid;
 BEGIN
@@ -218,12 +241,14 @@ BEGIN
   IF NOT FOUND THEN RETURN; END IF;
 
   IF COALESCE(p_captured_pence, 0) > 0 THEN
-    v_full := ROUND(v_batch.amount_due * 100)::integer;
-    IF p_captured_pence >= v_full THEN
+    -- Stripe took exactly what was decided: those bookings. Anything else
+    -- (more than decided, or money taken on a release) is a stale whole-
+    -- checkout capture: every booking in it was charged.
+    IF v_batch.held_action = 'capture' AND p_captured_pence <= COALESCE(v_batch.held_capture_pence, 0) THEN
+      v_charged := COALESCE(v_batch.held_capture_booking_ids, ARRAY[]::uuid[]);
+    ELSE
       SELECT array_agg(b.id) INTO v_charged
         FROM public.bookings b WHERE b.payment_intent_id = p_payment_intent_id;
-    ELSE
-      v_charged := COALESCE(v_batch.held_capture_booking_ids, ARRAY[]::uuid[]);
     END IF;
 
     UPDATE public.bookings
@@ -481,15 +506,11 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
       FROM public.checkout_batches cb
-     WHERE cb.capture_state = 'settling'
+     WHERE (cb.capture_state = 'settling' AND cb.held_alerted_at IS NULL)
         OR (cb.capture_state = 'held'
             AND NOT EXISTS (SELECT 1 FROM public.bookings b
                              WHERE b.payment_intent_id = cb.payment_intent_id
                                AND b.status = 'pending'))
-        OR (cb.capture_state = 'held'
-            AND EXISTS (SELECT 1 FROM public.bookings b
-                         WHERE b.payment_intent_id = cb.payment_intent_id
-                           AND b.status NOT IN ('pending', 'cancelled')))
   ) THEN
     RETURN false;
   END IF;

@@ -56,7 +56,13 @@ export async function settleHeldPayment(
       // unpaid. Never guess — tell support and leave the checkout 'settling'.
       // (Requests are answered within 24 hours, inside a card hold's 7 days,
       // so this should not happen.)
-      await sendSupportAlert({
+      // Once per checkout: the sweep retries every five minutes.
+      const { data: firstAlert, error: alertMarkError } = await admin.from('checkout_batches')
+        .update({ held_alerted_at: new Date().toISOString() })
+        .eq('id', batchId).is('held_alerted_at', null)
+        .select('id');
+      if (alertMarkError) throw alertMarkError;
+      if ((firstAlert ?? []).length > 0) await sendSupportAlert({
         subject: 'A held request payment could not be taken',
         html: `<p>A provider accepted a request, but its card hold could no longer be captured.</p>` +
           `<p>Payment: ${escapeHtml(paymentIntentId)}<br>Checkout: ${escapeHtml(batchId)}<br>Stripe status: ${escapeHtml(intent.status)}</p>` +

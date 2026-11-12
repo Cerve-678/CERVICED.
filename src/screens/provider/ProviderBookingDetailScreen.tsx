@@ -2142,7 +2142,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     label={booking.paymentStatus === PaymentStatus.AUTHORISED
                       // A request's payment is held on the client's card and
                       // only taken when you accept it.
-                      ? (booking.paymentType === 'deposit' ? 'Deposit held, taken when you accept' : 'Payment held, taken when you accept')
+                      ? (booking.paymentType === 'deposit' ? 'Deposit held, taken only if you accept' : 'Payment held, taken only if you accept')
                       : booking.paymentType === 'deposit' ? 'Deposit paid' : 'Full payment'}
                     value={`£${(booking.paymentType === 'deposit' ? (booking.depositAmount ?? 0) : totalPrice).toFixed(2)}`}
                     textColor={P.text}

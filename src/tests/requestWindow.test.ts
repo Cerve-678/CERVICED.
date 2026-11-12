@@ -81,7 +81,7 @@ describe('a request whose payment is held on the card', () => {
 
   it('tells the provider the money is taken when they accept', () => {
     const note = providerRequestNote(deadline, now, true);
-    expect(note).toContain('taken when you accept');
+    expect(note).toContain('only taken if you accept');
     expect(note).not.toContain('refunded');
   });
 });
