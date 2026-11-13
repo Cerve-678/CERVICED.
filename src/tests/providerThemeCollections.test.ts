@@ -134,6 +134,21 @@ describe('Sheen', () => {
     expect(lum(light)).toBeGreaterThan(lum('#F2E7D2'));
   });
 
+  it('runs a soft band across a custom colour instead of a stripe of the pale content area', () => {
+    // A custom set is saved as backdrop → content area (Branding's save).
+    const custom = sheenColors('#7A2E4D', SHEET_BG);
+    expect(custom[0]).toBe('#7A2E4D');
+    expect(custom[4]).toBe('#7A2E4D');
+    expect(custom).not.toContain(SHEET_BG);
+    // The band stays close to their colour, nowhere near the near-white sheet.
+    expect(contrast(custom[2], '#7A2E4D')).toBeLessThan(2);
+    expect(contrast(custom[2], SHEET_BG)).toBeGreaterThan(2.5);
+  });
+
+  it('leaves real two-colour sets as they were', () => {
+    expect(sheenColors('#1A1A1A', '#C9A227').slice(0, 2)).toEqual(['#1A1A1A', '#C9A227']);
+  });
+
   it('keeps the band softer on a dark hero', () => {
     const pale = sheenColors('#F2E6CC', '#2A2418')[2];
     const dark = sheenColors('#0D0C0A', '#2A2418')[2];
