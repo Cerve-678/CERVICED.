@@ -28,6 +28,8 @@ export const feeKindLabel = (kind: BookingFeeKind): string =>
  *  they paid only a deposit on, under the half-price policy frozen on it. */
 export function isChargeableLateCancel(terms: BookingFeeTerms): boolean {
   if (terms.status !== 'cancelled' || terms.cancelledBy !== 'client' || !terms.cancelledAt) return false;
+  // Never on a request the provider hadn't accepted.
+  if (!terms.confirmedAt) return false;
   if (terms.paymentStatus !== 'deposit_paid') return false;
   if (terms.cancelPenalty !== 'half' && terms.cancelPenalty !== 'full') return false;
   if (!(terms.cancelNoticeHours > 0)) return false;

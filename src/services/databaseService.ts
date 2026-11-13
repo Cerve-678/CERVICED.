@@ -11890,6 +11890,8 @@ export interface BookingFeeTerms {
   paymentStatus: string | null;
   cancelledBy: string | null;
   cancelledAt: string | null;
+  /** When the provider accepted it; null for a request that was never accepted. */
+  confirmedAt: string | null;
   /** The notice period frozen on the booking, in hours. */
   cancelNoticeHours: number;
   lateRescheduleFrom: string | null;
@@ -11909,6 +11911,7 @@ interface BookingFeeTermsRow {
   payment_status: string | null;
   cancelled_by: string | null;
   cancelled_at: string | null;
+  confirmed_at: string | null;
   cancel_notice_hours: number | null;
   late_reschedule_from: string | null;
   policy_snapshot: Record<string, unknown> | null;
@@ -11916,7 +11919,7 @@ interface BookingFeeTermsRow {
 
 export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
   const { data, error } = await supabase.from('bookings')
-    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, deposit_amount, payment_status, cancelled_by, cancelled_at, cancel_notice_hours, late_reschedule_from, policy_snapshot')
+    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, deposit_amount, payment_status, cancelled_by, cancelled_at, confirmed_at, cancel_notice_hours, late_reschedule_from, policy_snapshot')
     .eq('id', bookingId)
     .single();
   if (error) throw error;
@@ -11933,6 +11936,7 @@ export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeT
     paymentStatus: row.payment_status,
     cancelledBy: row.cancelled_by,
     cancelledAt: row.cancelled_at,
+    confirmedAt: row.confirmed_at,
     cancelNoticeHours: Number(row.cancel_notice_hours ?? 0),
     lateRescheduleFrom: row.late_reschedule_from,
     cancelPenalty: typeof row.policy_snapshot?.['cancelPenalty'] === 'string' ? row.policy_snapshot['cancelPenalty'] as string : null,

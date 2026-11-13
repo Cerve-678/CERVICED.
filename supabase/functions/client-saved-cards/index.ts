@@ -202,7 +202,7 @@ async function feeCardNeededUntil(
 
   const since = new Date(Date.now() - FEE_CARD_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
   const { data: bookings, error } = await admin.from('bookings')
-    .select('id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, cancelled_by, cancelled_at, cancel_notice_hours, late_reschedule_from, payment_status, payment_intent_id')
+    .select('id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, cancelled_by, cancelled_at, confirmed_at, cancel_notice_hours, late_reschedule_from, payment_status, payment_intent_id')
     .eq('user_id', userId)
     .gte('booking_date', since)
     // 'cancelled' for a late cancellation fee that can still be charged.
@@ -221,7 +221,7 @@ async function feeCardNeededUntil(
   const nowMs = Date.now();
   const open = bookings.flatMap(b => {
     const noticeHours = Number(b.cancel_notice_hours ?? 0);
-    const lateClientCancel = b.status === 'cancelled' && b.cancelled_by === 'client' && !!b.cancelled_at
+    const lateClientCancel = b.status === 'cancelled' && b.cancelled_by === 'client' && !!b.cancelled_at && !!b.confirmed_at
       && b.payment_status === 'deposit_paid'
       && isLateClientCancel({
         noticeHours,

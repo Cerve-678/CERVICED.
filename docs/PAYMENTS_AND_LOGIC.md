@@ -582,9 +582,10 @@ and the provider may also charge the rest up to half the price.
 | Agreement | Its own tick box at checkout, separate from the late and no-show fees (wording `2026-11-13-late-cancel`). The record keeps the amount per provider. Older app builds can't agree to it, so they can't check out with such a booking |
 | Who charges | The provider, from the cancelled booking's page ("Charge late-cancel fee"). Nothing is charged automatically; if they don't press it, nothing more is taken |
 | When | Any time after the late cancel until **24 hours after the appointment would have ended** |
-| Only if | The client cancelled it themselves, inside the notice period (or after moving it once the window had started), paid only a deposit, and the booking's frozen policy is Half |
+| Only if | The provider had accepted the booking, the client then cancelled it themselves inside the notice period (or after moving it once the window had started), paid only a deposit, and the booking's frozen policy is Half. A withdrawn request is never charged |
 | Notices | The client's cancel sheet says "Late cancellation: you'll lose your £X deposit and may be charged up to £Y more." After the cancel, both sides are told the charge is available |
 | Everything else | As the late and no-show fees above: same card, declines, payment requests, retries, disputes, payout minus Stripe's card fee, nothing to CERVICED, card can't be removed until the window closes |
+| Which booking | Every fee (late, no-show or late cancellation) is charged only on a booking that its checkout actually made (`checkout_batch_items`). A booking row a provider added themselves can't borrow a client's payment and agreement |
 
 ### 2.6 Tips
 

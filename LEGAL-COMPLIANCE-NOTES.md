@@ -957,3 +957,29 @@ lawyer-reviewed**:
   in the booking's calendar month. Raise whether restricting a move this way,
   combined with a late-cancel charge, leaves a client who can't make any date
   that month with only a charged cancellation.
+- **Raised by the legal-flagger review (2026-11-13), for the solicitor:**
+  - SCA / merchant-initiated transaction rules for a variable "up to £Y"
+    off-session charge after a cancellation: is an exemption claimed, does the
+    mandate need the ceiling and timing stated, and who carries a chargeback on
+    it (provider, Cerviced as collecting agent, or both).
+  - The right test: CRA 2015 s.62 fairness and Schedule 2 paras 5-6, plus CMA
+    guidance on cancellation charges (for consumers), rather than "genuine
+    pre-estimate"; Cavendish v Makdessi for the penalty rule.
+  - The saved card can't be removed until the charge window closes, which now
+    runs to 24 hours after a cancelled appointment, possibly weeks after the
+    cancel. Is that consistent with UK GDPR withdrawal and erasure, and should
+    the Privacy text say so?
+  - No notice or re-acceptance is asked of existing users for this material
+    change (CRA Sch 2 para 11, variation of terms). Bookings already made carry
+    no late cancellation amount, so none can be charged; future bookings are
+    agreed at checkout. Providers whose saved Custom policy was turned into
+    Half (0 at authoring) weren't asked.
+  - Agreement to the late cancellation fee is a condition of booking (the
+    tick box blocks checkout); confirm "performing our contract" is the right
+    lawful basis framing.
+  - How the Consumer Contracts Regulations 14-day cancellation right interacts
+    with a pre-paid deposit for an appointment inside 14 days (the leisure
+    services exemption may or may not cover a salon appointment).
+  - Providers contracting with consumers carry their own unfair-terms risk for
+    the Half policy they choose; the Provider Terms don't tell them so.
+

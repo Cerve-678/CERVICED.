@@ -355,7 +355,7 @@ async function notifySettlement(
   const providerTopUp = topUp
     ? ` Under your Half policy you can charge ${more} more to their saved card from the booking, until ${topUp.untilLabel}.` : '';
   const clientTopUp = topUp
-    ? ` ${providerName} can also charge up to ${more} more to your saved card, as you agreed when booking.` : '';
+    ? ` ${providerName} can also charge up to ${more} more to your saved card, as you agreed when booking, until ${topUp.untilLabel}. You'll be told if they do.` : '';
 
   const rows = [
     ...(provider?.user_id ? [{

@@ -93,8 +93,8 @@ Curated: [[Payments]] · **166 files**
 - `src/screens/client/BookingsScreen.tsx` _(47)_
 - `src/services/becca/capabilities/client.ts` _(46)_
 - `src/screens/provider/PoliciesScreen.tsx` _(45)_
+- `src/utils/policyDisplay.ts` _(41)_
 - `src/features/bookings/bookingSupportRequest.ts` _(40)_
-- `src/utils/policyDisplay.ts` _(40)_
 - `src/screens/client/PaymentMethodsScreen.tsx` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(38)_
@@ -109,7 +109,7 @@ Curated: [[Payments]] · **166 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **372 files**
-- `src/services/databaseService.ts` _(1132)_
+- `src/services/databaseService.ts` _(1137)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
@@ -258,7 +258,7 @@ Curated: [[Booking Flow]] · **214 files**
 - `src/screens/provider/PoliciesScreen.tsx` _(79)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
-- `src/utils/policyDisplay.ts` _(69)_
+- `src/utils/policyDisplay.ts` _(70)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `src/screens/provider/InfoRegScreen.tsx` _(65)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
@@ -368,11 +368,11 @@ Curated: [[Payments]] · **86 files**
 - `src/navigation/types.ts` _(7)_
 - `src/types/booking.ts` _(7)_
 - `src/features/bookings/rebook.ts` _(6)_
+- `src/screens/provider/PoliciesScreen.tsx` _(6)_
 - `src/types/database.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/constants/feeTerms.ts` _(5)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(5)_
-- `src/screens/provider/PoliciesScreen.tsx` _(5)_
 - `src/screens/shared/AdminDashboardScreen.tsx` _(5)_
 - `src/services/bookingService.ts` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_

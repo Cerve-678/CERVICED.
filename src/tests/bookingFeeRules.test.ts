@@ -3,7 +3,7 @@ import type { BookingFeeCharge, BookingFeeTerms } from '../services/databaseServ
 
 const terms: BookingFeeTerms = {
   status: 'completed', bookingDate: '2026-07-01', bookingTime: '14:00:00', endTime: '15:00:00', lateFeePence: 1000, noShowFeePence: 2000,
-  lateCancelFeePence: null, depositPence: 0, paymentStatus: 'fully_paid', cancelledBy: null, cancelledAt: null,
+  lateCancelFeePence: null, depositPence: 0, paymentStatus: 'fully_paid', cancelledBy: null, cancelledAt: null, confirmedAt: '2026-06-20T10:00:00Z',
   cancelNoticeHours: 24, lateRescheduleFrom: null, cancelPenalty: 'half',
 };
 // Cancelled by the client 6 hours before a 14:00 start, deposit only, half policy.
@@ -48,6 +48,7 @@ test('no late cancellation fee for an early cancel, a provider cancel, a full pa
   expect(isChargeableLateCancel(lateCancelled)).toBe(true);
   expect(isChargeableLateCancel({ ...lateCancelled, cancelledAt: new Date('2026-06-30T08:00:00').toISOString() })).toBe(false);
   expect(isChargeableLateCancel({ ...lateCancelled, cancelledBy: 'provider' })).toBe(false);
+  expect(isChargeableLateCancel({ ...lateCancelled, confirmedAt: null })).toBe(false);
   expect(isChargeableLateCancel({ ...lateCancelled, paymentStatus: 'fully_paid' })).toBe(false);
   expect(isChargeableLateCancel({ ...lateCancelled, cancelPenalty: 'deposit' })).toBe(false);
   expect(isChargeableLateCancel({ ...lateCancelled, cancelNoticeHours: 0 })).toBe(false);

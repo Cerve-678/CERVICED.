@@ -467,7 +467,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 {policies.cancelPenalty === 'half' && (
                   <>
                     <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Paid in full: you keep half and they get the rest back.</Text>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid a deposit: you keep the deposit and can charge their saved card the rest, up to half the price, from the booking within 24 hours of the appointment.</Text>
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid a deposit: you keep the deposit. If it's less than half the price and they agreed at checkout, you can also charge their saved card the difference, from the booking, until 24 hours after the appointment would have ended. Bookings made before 13 November keep the policy they were booked with.</Text>
                     <Text style={[capSt.note, { color: C.text }]}>The app works out the amount for each booking. You don't type anything.</Text>
                   </>
                 )}

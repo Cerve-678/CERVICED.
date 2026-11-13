@@ -161,9 +161,9 @@ INSERT INTO public.fee_terms_versions (version, heading, body, consent_line, lat
 VALUES (
   '2026-11-13-late-cancel',
   'Late Arrival, No-Show & Late Cancellation Fees',
-  'Some providers set a late arrival fee, a no-show fee, or both. Any fee is shown to you before you pay, and you must agree to it at checkout to book. If you agree, your card is saved securely by Stripe, and the provider may charge the agreed fee to it within 24 hours of your appointment: the late arrival fee if you arrive after the provider''s stated grace period, or the no-show fee if you do not attend. If a provider''s cancellation policy is half the price and you pay only a deposit, you must also agree at checkout to their late cancellation charge. If you then cancel within their notice period, the provider keeps your deposit and may charge your saved card the difference between that deposit and half the price of the booking, no later than 24 hours after the appointment ends. The amount is shown before you book and again before you cancel. If the charge is declined, we will ask you to pay the fee in the app or by email within 7 days, and we may try your saved card again up to three more times in those 7 days. If your bank asks you to approve the charge, we won''t try the card again; you can pay it yourself within the 7 days. Each fee is fixed at the amount shown when you book, can be collected only once per booking, and can never be more than half the price of the booking. You will be notified whenever a fee is charged or retried. If you believe a fee is wrong, you can dispute it with the provider in the app within 7 days of the charge, and the provider decides whether to refund it. Fees are paid to the provider, not to Cerviced, and Cerviced does not decide fee disputes. This does not affect your statutory rights, including your right to contact your bank.',
+  'Some providers set a late arrival fee, a no-show fee, or both. Any fee is shown to you before you pay, and you must agree to it at checkout to book. If you agree, your card is saved securely by Stripe, and the provider may charge the agreed fee to it within 24 hours of your appointment: the late arrival fee if you arrive after the provider''s stated grace period, or the no-show fee if you do not attend. If a provider''s cancellation policy is half the price and you pay only a deposit, you must also agree at checkout to their late cancellation charge. If you then cancel within their notice period, or cancel after moving the booking once that period had begun, the provider keeps your deposit and may charge your saved card the difference between that deposit and half the price of the booking (the service and any add-ons, not including the Cerviced service fee), no later than 24 hours after the time the appointment would have ended. The amount is shown before you book and again before you cancel, and the provider decides whether to charge it. If the charge is declined, we will ask you to pay the fee in the app or by email within 7 days, and we may try your saved card again up to three more times in those 7 days. If your bank asks you to approve the charge, we won''t try the card again; you can pay it yourself within the 7 days. Each fee is fixed at the amount shown when you book, can be collected only once per booking, and can never be more than half the price of the booking. You will be notified whenever a fee is charged or retried. If you believe a fee is wrong, you can dispute it with the provider in the app within 7 days of the charge, and the provider decides whether to refund it. Fees are paid to the provider, not to Cerviced, and Cerviced does not decide fee disputes. This does not affect your statutory rights, including your right to contact your bank.',
   'I agree that CERVICED may save this card with Stripe and, if the provider records that I arrived more than the stated grace period late or did not attend, may charge this card the applicable fee shown above. Each fee is for this booking only, is first charged no later than 24 hours after the appointment ends, and will not exceed the amount shown. If that charge is declined, it may be tried again up to three times within the following 7 days, and I may pay it myself in that time. I can dispute a charged fee in the app within 7 days; the provider will review the dispute and may refund or keep the fee. This does not affect my statutory rights.',
-  'I understand that if I cancel within the provider''s notice period, I lose my deposit, and CERVICED may save this card with Stripe so the provider can charge it up to the amount shown above, no later than 24 hours after the appointment ends.',
+  'I understand that if I cancel within the provider''s notice period, or after moving the booking once that period had begun, I lose my deposit, and CERVICED may save this card with Stripe so the provider can charge it up to the amount shown above, no later than 24 hours after the time the appointment would have ended. The provider decides whether to charge it, I will be notified if they do, and I can dispute it in the app within 7 days. This does not affect my statutory rights.',
   ''  -- replaced by before_fee_terms_sha256
 )
 ON CONFLICT (version) DO NOTHING;
@@ -171,7 +171,7 @@ ON CONFLICT (version) DO NOTHING;
 DO $sha$
 BEGIN
   IF (SELECT sha256 FROM public.fee_terms_versions WHERE version = '2026-11-13-late-cancel')
-     IS DISTINCT FROM 'dd2e86b1049823962da974d8c8c2b27203f998be3b14e3874ced6917121765cd' THEN
+     IS DISTINCT FROM '1d365e984f93acf326586243a9814c878bc7659031d3f0f111a3275e436ea42e' THEN
     RAISE EXCEPTION 'The 2026-11-13-late-cancel wording does not hash to what the app sends';
   END IF;
 END
@@ -310,7 +310,7 @@ CREATE OR REPLACE FUNCTION public.request_reschedule_own_booking(p_booking_id uu
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_booking RECORD;

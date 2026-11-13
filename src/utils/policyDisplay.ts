@@ -183,7 +183,9 @@ export function buildPolicyDisplayRows(
   const cancelPenaltyText = policy.cancelPenalty === 'custom'
     ? (customCancelFee ? ` · ${customCancelFee} kept, at most half the price` : '')
     : policy.cancelPenalty && policy.cancelPenalty !== 'none'
-      ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'half the price kept'}`
+      // 'half the price charged', not 'kept': a client who paid only a deposit
+      // can be charged the rest up to half (late-cancel-half-top-up).
+      ? ` · ${policy.cancelPenalty === 'deposit' ? 'deposit kept' : 'half the price charged'}`
       : '';
   let cancelRule: string | null = null;
   if (enforcedCancellationNoticeHours && enforcedCancellationNoticeHours > 0) {

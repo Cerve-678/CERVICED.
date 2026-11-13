@@ -98,7 +98,7 @@ interface ProviderRow { id: string; stripe_account_id: string | null; stripe_pay
 
 async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): Promise<Response> {
   const { data: booking, error: bookingError } = await admin.from('bookings')
-    .select('id, provider_id, user_id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, cancelled_by, cancelled_at, cancel_notice_hours, late_reschedule_from, payment_status, policy_snapshot, payment_intent_id, provider_name_snapshot, service_name_snapshot')
+    .select('id, provider_id, user_id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, cancelled_by, cancelled_at, cancel_notice_hours, late_reschedule_from, confirmed_at, payment_status, policy_snapshot, payment_intent_id, provider_name_snapshot, service_name_snapshot')
     .eq('id', bookingId).maybeSingle();
   if (bookingError) throw bookingError;
   if (!booking || booking.provider_id !== provider.id) return json({ error: 'Booking not found' }, 404);
@@ -115,10 +115,22 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
   if (batchError) throw batchError;
   if (existingError) throw existingError;
 
+  // The booking must be one that checkout actually made. A provider can insert
+  // booking rows for their own business, so a row copying a real client's
+  // payment id would otherwise find that client's agreement and be chargeable
+  // once per copy. checkout_batch_items is written only by prepare_checkout.
+  let bookingInBatch = false;
+  if (batch) {
+    const { data: item, error: itemError } = await admin.from('checkout_batch_items')
+      .select('booking_id').eq('checkout_batch_id', batch.id).eq('booking_id', booking.id).maybeSingle();
+    if (itemError) throw itemError;
+    bookingInBatch = !!item;
+  }
+
   // The client's recorded agreement for this checkout, and that it covers
   // this provider. The amount charged is the booking's frozen fee, which
   // accept_checkout_fees copied into the record from the same held rows.
-  const { data: consent, error: consentError } = batch
+  const { data: consent, error: consentError } = batch && bookingInBatch
     ? await admin.from('fee_consent_records').select('id, user_id, fees, terms_version').eq('checkout_batch_id', batch.id).maybeSingle()
     : { data: null, error: null };
   if (consentError) throw consentError;
@@ -155,6 +167,9 @@ async function charge(provider: ProviderRow, bookingId: string, kind: FeeKind): 
   const snapshot = (booking.policy_snapshot ?? null) as Record<string, unknown> | null;
   const lateClientCancel = kind === 'late_cancel'
     && booking.cancelled_by === 'client' && !!booking.cancelled_at
+    // Only a booking the provider had accepted: a withdrawn request is never
+    // charged (the client's cancel sheet warns only on accepted bookings).
+    && !!booking.confirmed_at
     && booking.payment_status === 'deposit_paid'
     && readCancelPenalty(snapshot?.['cancelPenalty']) === 'half'
     && isLateClientCancel({

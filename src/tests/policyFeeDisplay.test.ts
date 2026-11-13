@@ -31,5 +31,5 @@ test('a custom cancellation charge shows its amount and its cap', () => {
   expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'custom', cancelCustomFee: '20' }))
     .toBe('24h notice · £20 kept, at most half the price');
   expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'custom', cancelCustomFee: '' })).toBe('24h notice');
-  expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'half' })).toBe('24h notice · half the price kept');
+  expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'half' })).toBe('24h notice · half the price charged');
 });
