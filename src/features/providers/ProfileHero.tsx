@@ -300,7 +300,8 @@ const layout = StyleSheet.create({
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
   coverTop: { paddingTop: 120 },
   kicker: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 10, letterSpacing: 2.4, marginBottom: 8 },
-  // Arch and Spa open on a line of text, not the logo, so they start lower:
+  // Arch, Spa and Framed open on a line of text (Framed's beside its logo),
+  // not on the logo alone, so they start lower:
   // at the logo's height the first line sat under the header buttons.
   mastHead: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 18 },
   located: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12, letterSpacing: 0.6, marginTop: 4 },
@@ -310,7 +311,7 @@ const layout = StyleSheet.create({
   mastAbout: { flex: 1, paddingBottom: 20 },
   meet: { fontFamily: "PinyonScript_400Regular", fontSize: 34, lineHeight: 40 },
   meetName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 26, lineHeight: 30, marginBottom: 6 },
-  sideRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginBottom: 6 },
+  sideRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 6 },
   sideText: { flex: 1, alignItems: "center" },
   welcome: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, letterSpacing: 2 },
   locatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
