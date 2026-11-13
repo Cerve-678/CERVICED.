@@ -9,7 +9,7 @@
 // "+N" for the rest, with free and closed days included so a gap is visible at
 // a glance. Design B: https://claude.ai/artifact/MJfLyQ2BLudDpneHpqbVMx
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,7 +28,7 @@ import { DAY_NAMES_ABBREV, DAY_NAMES_FULL, MONTH_NAMES_ABBREV, formatDurationMin
 import type { DbProviderAvailability } from '../../types/database';
 import { DASHBOARD_WEEK_DAYS, buildDashboardWeek, diaryEventMinutes, type DashboardWeekDay } from './diaryDays';
 import { compactTime } from './linkOnlyDashboard';
-import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { CalendarChooserSheet } from './CalendarChooserSheet';
 import { logger } from '../../utils/logger';
 
 export interface DiaryPalette {
@@ -71,7 +71,6 @@ function daySummary(day: DashboardWeekDay): string {
  *  than "Free all day". */
 export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbProviderAvailability[] }) {
   const styles = useMemo(() => createStyles(P), [P]);
-  const bottomInset = useSystemBottomInset();
   const [phase, setPhase] = useState<Phase>('loading');
   const [events, setEvents] = useState<DiaryEvent[]>([]);
   const [chooserOpen, setChooserOpen] = useState(false);
@@ -116,6 +115,14 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     void load();
   }, [chosen, load]);
+
+  const toggleCalendar = useCallback((calendarId: string, on: boolean) => {
+    setChosen(prev => {
+      const next = new Set(prev);
+      if (on) next.add(calendarId); else next.delete(calendarId);
+      return next;
+    });
+  }, []);
 
   const disconnect = useCallback(async () => {
     await clearDiaryCalendars();
@@ -239,45 +246,19 @@ export function DiaryCard({ P, hours }: { P: DiaryPalette; hours: readonly DbPro
         </View>
       )}
 
-      <Modal visible={chooserOpen} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setChooserOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setChooserOpen(false)}>
-          <Pressable style={[styles.sheet, { paddingBottom: bottomInset + 20 }]} onPress={e => e.stopPropagation()}>
-            <View style={styles.grabber} />
-            <Text style={styles.sheetTitle}>Which calendars?</Text>
-            <Text style={styles.body}>Choose the ones your bookings land in. This stays on this phone.</Text>
-            <ScrollView style={styles.sheetList}>
-              {calendars.length === 0 ? (
-                <Text style={styles.body}>No calendars found on this phone.</Text>
-              ) : calendars.map(calendar => (
-                <View key={calendar.id} style={styles.calendarRow}>
-                  <View style={[styles.dot, { backgroundColor: calendar.color }]} />
-                  <View style={styles.eventText}>
-                    <Text style={styles.eventTitle} numberOfLines={1}>{calendar.title}</Text>
-                    {!!calendar.sourceName && <Text style={styles.eventWhen} numberOfLines={1}>{calendar.sourceName}</Text>}
-                  </View>
-                  <Switch
-                    value={chosen.has(calendar.id)}
-                    onValueChange={on => setChosen(prev => {
-                      const next = new Set(prev);
-                      if (on) next.add(calendar.id); else next.delete(calendar.id);
-                      return next;
-                    })}
-                    trackColor={{ true: P.accent, false: P.border }}
-                  />
-                </View>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={[styles.button, chosen.size === 0 && styles.disabled]} disabled={chosen.size === 0} onPress={saveChoice} activeOpacity={0.85}>
-              <Text style={styles.buttonText}>Show these</Text>
-            </TouchableOpacity>
-            {phase === 'connected' && (
-              <TouchableOpacity style={styles.textButton} onPress={disconnect} activeOpacity={0.7}>
-                <Text style={styles.disconnect}>Disconnect on this phone</Text>
-              </TouchableOpacity>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <CalendarChooserSheet
+        P={P}
+        visible={chooserOpen}
+        calendars={calendars}
+        chosen={chosen}
+        onToggle={toggleCalendar}
+        onSave={saveChoice}
+        onClose={() => setChooserOpen(false)}
+        onDisconnect={phase === 'connected' ? disconnect : undefined}
+        body="Choose the ones your bookings land in. This stays on this phone."
+        saveLabel="Show these"
+        disconnectLabel="Disconnect on this phone"
+      />
     </View>
   );
 }
@@ -311,17 +292,5 @@ const createStyles = (P: DiaryPalette) =>
     spacer: { marginVertical: 8 },
     button: { height: 44, borderRadius: 22, backgroundColor: P.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.6, color: P.onAccent },
-    disabled: { opacity: 0.45 },
-    dot: { width: 10, height: 10, borderRadius: 5 },
     eventText: { flex: 1 },
-    eventTitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '700', color: P.text },
-    eventWhen: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: P.sub, marginTop: 1 },
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: P.bg, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingTop: 10, gap: 10, maxHeight: '80%' },
-    grabber: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, backgroundColor: P.border, marginBottom: 6 },
-    sheetTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, color: P.text },
-    sheetList: { flexGrow: 0 },
-    calendarRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52 },
-    textButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-    disconnect: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '700', color: P.sub, textDecorationLine: 'underline' },
   });

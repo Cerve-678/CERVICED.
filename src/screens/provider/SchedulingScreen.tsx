@@ -64,6 +64,8 @@ import {
 } from '../../features/business-details/options';
 import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { ReleaseDayPicker, RELEASE_DAY_EXPLAINER } from '../../features/business-details/ReleaseDayPicker';
+import { CalendarSyncCard } from '../../features/providers/CalendarSyncCard';
+import { useAuth } from '../../contexts/AuthContext';
 
 // The two ways a provider can limit how far ahead clients book.
 type HorizonMode = 'rolling' | 'monthly';
@@ -76,6 +78,10 @@ export default function SchedulingScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const C = useBusinessPalette();
+  // Calendar sync blocks booking times here, so it's for providers who take
+  // bookings in CERVICED. A link-only provider can reach this screen from
+  // Profile, but their calendar stays on the phone (DiaryCard on their Home).
+  const { myBookingMode } = useAuth();
 
   const [providerId, setProviderId] = useState<string | null>(null);
 
@@ -345,6 +351,8 @@ export default function SchedulingScreen({ navigation }: any) {
             </View>
             <Ionicons name="chevron-forward" size={18} color={C.sub} style={{ opacity: 0.5 }} />
           </TouchableOpacity>
+
+          {myBookingMode !== 'external' && <CalendarSyncCard C={C} />}
 
           <Card
             title="Availability"
