@@ -938,16 +938,20 @@ chargebacks are not limited. Terms: Client Terms §15, Fees policy §9,
 Provider Terms §10, Complaints §1. Not lawyer-reviewed. Same untested area as
 section 6.
 
+Owner's answers (2026-11-13): applies only to bookings made after the
+migration is applied (`refund_request_window_starts_at()`), so earlier
+bookings keep the open-ended rule, as Client Terms §34 promises; no Terms
+notice is sent; the five days apply to every reason, including a wrong
+charge.
+
 To raise (not lawyer-reviewed):
-- **Bookings made before the change.** Client Terms §34 says changes do not
-  affect bookings already made, and promises notice before a significant
-  change. Applying the window to every booking at once cuts off a route that
-  was open the day before.
-- **Notice.** Provider Terms §12 promises providers 15 days' notice of a
-  change; §10 changed. Clients have no notice yet either.
-- **Billing errors.** "I was charged the wrong amount" is one of the request
-  reasons. A wrong or duplicate charge is a payment-services question as well
-  as a consumer one; "statutory rights" alone may not cover it.
+- **Notice (owner chose none).** Client Terms §34 promises notice before a
+  significant change, and Provider Terms §12 promises providers 15 days'
+  notice; §10 changed. Only the page's "Last updated" date moves.
+- **Billing errors (owner chose five days for all).** "I was charged the
+  wrong amount" is one of the request reasons. A wrong or duplicate charge is
+  a payment-services question as well as a consumer one; "statutory rights"
+  alone may not cover it.
 - **Consumer Rights Act.** The Act's remedies against the provider have no
   five-day limit. The in-app channel is not the remedy itself, and each place
   that closes it says statutory rights are unaffected; whether the overall

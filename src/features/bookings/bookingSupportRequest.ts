@@ -59,9 +59,10 @@ export function isSupportRequestReady(reason: string | null, message: string): b
 
 /**
  * How long a client has to ask: until the end of the fifth UK day after the
- * day of the appointment (an appointment on Monday 10th can be asked about
- * until 23:59 on Saturday 15th). request_booking_refund() refuses after that
- * with the same date, so change both together.
+ * day of the appointment (an appointment on the 10th can be asked about until
+ * 23:59 on the 15th). request_booking_refund() refuses after that with the
+ * same date, so change both together. Only bookings made after the rule went
+ * live (refundRequestWindowApplies); older ones keep no limit.
  */
 export const REFUND_REQUEST_DAYS = 5;
 
@@ -70,11 +71,26 @@ export function refundRequestLastDay(bookingDate: string): string {
   return addDaysYmd(bookingDate.slice(0, 10), REFUND_REQUEST_DAYS);
 }
 
-/** True until the end of the last day. A date that can't be read leaves it
- *  open: the server decides, and says why if it refuses. */
-export function isRefundRequestWindowOpen(bookingDate: string | null | undefined, now: Date = new Date()): boolean {
-  if (!bookingDate || !/^\d{4}-\d{2}-\d{2}/.test(bookingDate)) return true;
-  return ukTodayYmd(now) <= refundRequestLastDay(bookingDate);
+function hasReadableDate(bookingDate: string | null | undefined): bookingDate is string {
+  return !!bookingDate && /^\d{4}-\d{2}-\d{2}/.test(bookingDate);
+}
+
+/** True when the five days apply to this booking: it was made after the rule
+ *  went live and its date can be read. Otherwise the server decides. */
+export function hasRefundRequestDeadline(
+  booking: Pick<ConfirmedBooking, 'bookingDate' | 'refundRequestWindowApplies'>,
+): boolean {
+  return booking.refundRequestWindowApplies === true && hasReadableDate(booking.bookingDate);
+}
+
+/** True until the end of the last day, and always for a booking the five
+ *  days don't apply to. */
+export function isRefundRequestWindowOpen(
+  booking: Pick<ConfirmedBooking, 'bookingDate' | 'refundRequestWindowApplies'>,
+  now: Date = new Date(),
+): boolean {
+  if (!hasRefundRequestDeadline(booking)) return true;
+  return ukTodayYmd(now) <= refundRequestLastDay(booking.bookingDate);
 }
 
 /**
@@ -94,14 +110,14 @@ export function isRefundRequestWindowOpen(bookingDate: string | null | undefined
 export type RefundRequestScope = 'in_app' | 'off_app' | 'closed' | 'settled';
 
 export function getRefundRequestScope(
-  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'bookingDate'>,
+  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'bookingDate' | 'refundRequestWindowApplies'>,
   now: Date = new Date(),
 ): RefundRequestScope {
   switch (booking.paymentStatus) {
     case PaymentStatus.DEPOSIT_PAID:
     case PaymentStatus.PAID_IN_FULL:
     case PaymentStatus.PARTIALLY_REFUNDED:
-      return isRefundRequestWindowOpen(booking.bookingDate, now) ? 'in_app' : 'closed';
+      return isRefundRequestWindowOpen(booking, now) ? 'in_app' : 'closed';
     case PaymentStatus.REFUNDED:
     case PaymentStatus.REFUND_PENDING:
       return 'settled';
@@ -120,7 +136,7 @@ export function getRefundRequestScope(
  *   when the client says they didn't.
  */
 export function describeRefundScope(
-  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'paymentType' | 'amountPaid' | 'remainingBalance' | 'providerName' | 'bookingDate'>,
+  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'paymentType' | 'amountPaid' | 'remainingBalance' | 'providerName' | 'bookingDate' | 'refundRequestWindowApplies'>,
   now: Date = new Date(),
 ): { title: string; lines: string[] } {
   const provider = booking.providerName?.trim() || 'your provider';
@@ -138,8 +154,8 @@ export function describeRefundScope(
     };
   }
 
-  // 'closed' only happens with a readable date, so lastDay is set there.
-  const lastDay = /^\d{4}-\d{2}-\d{2}/.test(booking.bookingDate ?? '')
+  // Only a booking the five days apply to has a last day ('closed' included).
+  const lastDay = hasRefundRequestDeadline(booking)
     ? formatLongDateNoYear(refundRequestLastDay(booking.bookingDate))
     : null;
   if (scope === 'closed' && lastDay) {

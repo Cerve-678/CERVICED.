@@ -767,6 +767,9 @@ export interface DbBooking {
   late_reschedule_from?: string | null;
   /** client_bookings only: booked after that rule went live, so it applies. */
   late_reschedule_rule_applies?: boolean | null;
+  /** client_bookings only: booked after the five-day refund-request limit
+   *  went live (migration 20261113190000), so it applies. */
+  refund_request_window_applies?: boolean | null;
   cancelled_by?: 'client' | 'provider' | 'system' | null;
   /** A request declined by the provider or expired unanswered — see
    *  20261110200000_booking_request_declined_at.sql. */

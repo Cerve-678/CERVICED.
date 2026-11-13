@@ -42,7 +42,7 @@ const booking = {
 
 describe('getRefundRequestScope', () => {
   it('treats only money paid through the app as something Cerviced can review', () => {
-    const scope = (paymentStatus: PaymentStatus) => getRefundRequestScope({ paymentStatus, bookingDate: RECENT }, NOW);
+    const scope = (paymentStatus: PaymentStatus) => getRefundRequestScope({ paymentStatus, bookingDate: RECENT, refundRequestWindowApplies: true }, NOW);
     expect(scope(PaymentStatus.DEPOSIT_PAID)).toBe('in_app');
     expect(scope(PaymentStatus.PAID_IN_FULL)).toBe('in_app');
     expect(scope(PaymentStatus.PARTIALLY_REFUNDED)).toBe('in_app');
@@ -53,9 +53,15 @@ describe('getRefundRequestScope', () => {
   });
 
   it('closes an in-app request once the five days are up, but still explains off-app ones', () => {
-    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.PAID_IN_FULL, bookingDate: '2026-11-07' }, NOW)).toBe('closed');
-    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.PENDING, bookingDate: '2026-11-07' }, NOW)).toBe('off_app');
-    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.REFUNDED, bookingDate: '2026-11-07' }, NOW)).toBe('settled');
+    const old = { bookingDate: '2026-11-07', refundRequestWindowApplies: true };
+    expect(getRefundRequestScope({ ...old, paymentStatus: PaymentStatus.PAID_IN_FULL }, NOW)).toBe('closed');
+    expect(getRefundRequestScope({ ...old, paymentStatus: PaymentStatus.PENDING }, NOW)).toBe('off_app');
+    expect(getRefundRequestScope({ ...old, paymentStatus: PaymentStatus.REFUNDED }, NOW)).toBe('settled');
+  });
+
+  it('never closes a booking made before the limit went live', () => {
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.PAID_IN_FULL, bookingDate: '2026-01-07', refundRequestWindowApplies: false }, NOW)).toBe('in_app');
+    expect(getRefundRequestScope({ paymentStatus: PaymentStatus.PAID_IN_FULL, bookingDate: '2026-01-07' }, NOW)).toBe('in_app');
   });
 });
 
@@ -65,33 +71,37 @@ describe('the five-day refund window', () => {
     expect(refundRequestLastDay('2026-11-28')).toBe('2026-12-03');
   });
 
+  const covered = (bookingDate: string) => ({ bookingDate, refundRequestWindowApplies: true });
+
   it('is open all of the last day, UK time, and closed from midnight', () => {
-    expect(isRefundRequestWindowOpen('2026-11-10', new Date(Date.UTC(2026, 10, 15, 23, 59)))).toBe(true);
-    expect(isRefundRequestWindowOpen('2026-11-10', new Date(Date.UTC(2026, 10, 16, 0, 0)))).toBe(false);
+    expect(isRefundRequestWindowOpen(covered('2026-11-10'), new Date(Date.UTC(2026, 10, 15, 23, 59)))).toBe(true);
+    expect(isRefundRequestWindowOpen(covered('2026-11-10'), new Date(Date.UTC(2026, 10, 16, 0, 0)))).toBe(false);
     // In summer the UK is an hour ahead: 23:30 UTC on the 20th is already the 21st there.
-    expect(isRefundRequestWindowOpen('2026-07-15', new Date(Date.UTC(2026, 6, 20, 22, 30)))).toBe(true);
-    expect(isRefundRequestWindowOpen('2026-07-15', new Date(Date.UTC(2026, 6, 20, 23, 30)))).toBe(false);
+    expect(isRefundRequestWindowOpen(covered('2026-07-15'), new Date(Date.UTC(2026, 6, 20, 22, 30)))).toBe(true);
+    expect(isRefundRequestWindowOpen(covered('2026-07-15'), new Date(Date.UTC(2026, 6, 20, 23, 30)))).toBe(false);
   });
 
   it('is open for an appointment still to come', () => {
-    expect(isRefundRequestWindowOpen('2026-12-01', NOW)).toBe(true);
+    expect(isRefundRequestWindowOpen(covered('2026-12-01'), NOW)).toBe(true);
   });
 
   it("leaves it to the server when the date can't be read", () => {
-    expect(isRefundRequestWindowOpen('', NOW)).toBe(true);
-    expect(isRefundRequestWindowOpen(null, NOW)).toBe(true);
+    expect(isRefundRequestWindowOpen(covered(''), NOW)).toBe(true);
   });
 
   it('matches the database refusal', () => {
     const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/20261113190000_refund_request_five_days.sql'), 'utf8');
     expect(REFUND_REQUEST_DAYS).toBe(5);
     expect(sql).toContain(`(now() AT TIME ZONE 'Europe/London')::date > v_booking_date + ${REFUND_REQUEST_DAYS} THEN`);
+    // Only bookings made once the rule started, the same flag the app reads.
+    expect(sql).toContain('IF v_created_at >= public.refund_request_window_starts_at()');
+    expect(sql).toMatch(/\(b\.created_at >= refund_request_window_starts_at\(\)\) AS refund_request_window_applies/);
     expect(sql).toContain(`TO_CHAR(v_booking_date + ${REFUND_REQUEST_DAYS},`);
   });
 });
 
 describe('describeRefundScope', () => {
-  const base = { providerName: 'Braids by Amara', amountPaid: 20, remainingBalance: 60, bookingDate: RECENT };
+  const base = { providerName: 'Braids by Amara', amountPaid: 20, remainingBalance: 60, bookingDate: RECENT, refundRequestWindowApplies: true };
 
   it('tells an off-app client it is between them and the provider', () => {
     const { title, lines } = describeRefundScope({ ...base, paymentStatus: PaymentStatus.PENDING, paymentType: 'full', amountPaid: 0 }, NOW);
@@ -116,6 +126,12 @@ describe('describeRefundScope', () => {
   it('says the last day to ask while it is open', () => {
     const { lines } = describeRefundScope({ ...base, paymentStatus: PaymentStatus.PAID_IN_FULL, paymentType: 'full' }, NOW);
     expect(lines[lines.length - 1]).toBe('You can ask until the end of Sunday 15th November, 5 days after the day of your appointment.');
+  });
+
+  it('gives no last day for a booking made before the limit', () => {
+    const { lines } = describeRefundScope({ ...base, refundRequestWindowApplies: false, paymentStatus: PaymentStatus.PAID_IN_FULL, paymentType: 'full', remainingBalance: 0 }, NOW);
+    expect(lines).toHaveLength(1);
+    expect(lines.join(' ')).not.toMatch(/You can ask until/);
   });
 
   it('says when it closed, and that a complaint is still open', () => {

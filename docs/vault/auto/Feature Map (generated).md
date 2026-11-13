@@ -22,7 +22,7 @@ Curated: [[Address Release]] · **103 files**
 - `src/screens/client/BookingsScreen.tsx` _(38)_
 - `src/types/booking.ts` _(35)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
-- `src/types/database.ts` _(33)_
+- `src/types/database.ts` _(34)_
 - `supabase/address_release_notification.sql` _(33)_
 - `supabase/require_provider_address.sql` _(32)_
 - `src/services/bookingService.ts` _(31)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **372 files**
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
-- `src/types/booking.ts` _(108)_
+- `src/types/booking.ts` _(109)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/database.ts` _(102)_
 - `src/components/BookingSheet.tsx` _(100)_
