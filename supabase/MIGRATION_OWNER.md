@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-13 (booking times in UK time)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113140000 | `booking_times_in_uk_time` | **APPLIED 2026-11-13** after dry run + cerviced-security-review (nothing blocking), via `supabase db query --linked -f` (absolute path); frontier right before: live max `20261113130000`. Verified live: version recorded (now live max); all four functions read Europe/London, still SECURITY DEFINER, grants unchanged. Review note: `booking_date + end_time` has no day rollover; 0 live bookings end after midnight and the bookability trigger keeps end times within one day's hours. **#473 and #474 must renumber above `20261113140000`.** Frontier at authoring: live max `20261113130000` (this session's); unapplied on open PRs `20261112100000` (#473, #474). Redefines from live (after 120000/130000) with md5 guards `cancel_own_booking` (`e73c89a5…`), `provider_update_booking_status` (`11f09243…`), `provider_update_group_booking_status` (`70ace8e7…`), `process_auto_complete_bookings` (`849e58de…`): booking times read `AT TIME ZONE 'Europe/London'`, the no-show day is the UK date. Forced-rollback dry run 2026-11-13: old and new auto-complete predicates select the same rows today (GMT), the run completed 0; July 12:00 → 11:00 UTC; grants unchanged; live unchanged after. No effect until BST (29 Mar 2027). About 20 other functions read booking times or CURRENT_DATE as UTC (bookability trigger, reminders, busy spans, reschedule expiry…); listed for a follow-up. Written on `fix/booking-times-uk-time`. |
+
 ### Applied 2026-11-12 (retry unsent refunds)
 
 | Authored version | Name | Status |

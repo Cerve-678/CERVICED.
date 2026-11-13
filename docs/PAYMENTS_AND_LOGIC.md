@@ -916,7 +916,7 @@ Keep the list short and review it monthly.
 | `expire-cart-holds` | Every minute | Frees unpaid 5-minute slot holds |
 | `reconcile-checkouts` | Every 5 min | `process_stale_checkouts()`: marks unpaid checkouts abandoned, and calls `reconcile-checkouts` only when a checkout with a payment on it is still open 3 minutes after it started |
 | `expire-stale-pending-bookings` | Every 30 min | Cancels unaccepted bookings (after 24h, or once past the start time) and fully refunds them |
-| `auto-complete-bookings` | Every 30 min | Marks finished bookings completed, which makes tipping available |
+| `auto-complete-bookings` | Every 30 min | Marks finished bookings completed (by the booking's UK end time since 13 Nov, `20261113140000`; it was an hour late in summer before), which makes tipping available and starts the payout |
 | `money-daily-summary` | 08:00 daily | Triggers the summary email when anything needs attention |
 | `refund-request-deadlines` | Hourly at :25 | `process_refund_request_deadlines()`: reminds the provider at 2 days, passes the request to CERVICED at 3 |
 
