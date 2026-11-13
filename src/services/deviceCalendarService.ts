@@ -3,9 +3,11 @@
  * the phone) — read for a link-only provider's diary on Home, and written to
  * when a client taps "Add to my calendar".
  *
- * Everything here stays on the device. No calendar event is ever sent to
- * CERVICED's servers, which is why the chosen calendars live in AsyncStorage
- * rather than on the provider's row.
+ * The chosen calendars live in AsyncStorage, not on the provider's row: the
+ * choice is per phone. A link-only provider's events never leave the phone.
+ * A full provider's busy TIMES (start and end only, via getBusyEvents and
+ * features/providers/calendarBusySync) go to CERVICED so clients can't book
+ * them; titles, locations and notes never do.
  *
  * Uses expo-calendar's legacy API on purpose: the newer object API is a stub
  * in Expo Go, and the legacy one works in both Expo Go and a dev build.
@@ -126,6 +128,33 @@ export async function getDiaryEvents(calendarIds: readonly string[], days: numbe
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime())
     .slice(0, MAX_DIARY_EVENTS);
+}
+
+/** An event reduced to what calendar sync needs: when, and whether it
+ *  counts as busy. Nothing that says what or who it is. */
+export interface BusyCalendarEvent {
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  free: boolean;
+}
+
+const MAX_BUSY_EVENTS = 5000;
+
+/** Every event in the chosen calendars between `start` and `end`, for
+ *  calendar sync. Repeating events come back as one entry per occurrence. */
+export async function getBusyEvents(calendarIds: readonly string[], start: Date, end: Date): Promise<BusyCalendarEvent[]> {
+  if (calendarIds.length === 0) return [];
+  const known = new Set((await getDeviceCalendars()).map(calendar => calendar.id));
+  const ids = calendarIds.filter(id => known.has(id));
+  if (ids.length === 0) return [];
+  const events = await Calendar.getEventsAsync(ids, start, end);
+  return events.slice(0, MAX_BUSY_EVENTS).map(event => ({
+    start: new Date(event.startDate),
+    end: new Date(event.endDate),
+    allDay: event.allDay,
+    free: event.availability === Calendar.Availability.FREE,
+  }));
 }
 
 export interface AppointmentForCalendar {

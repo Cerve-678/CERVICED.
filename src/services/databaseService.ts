@@ -5697,6 +5697,61 @@ export async function getProviderBusySpans(
 }
 
 // ─────────────────────────────────────────────────────────
+// CALENDAR SYNC (busy times from the provider's phone calendar)
+// ─────────────────────────────────────────────────────────
+
+/** One busy stretch on one UK day: 'YYYY-MM-DD' and 'HH:MM:SS'. */
+export interface CalendarBusyBlockInput {
+  date: string;
+  start: string;
+  end: string;
+}
+
+export interface CalendarSyncStatus {
+  syncedAt: string;
+  /** 'YYYY-MM-DD': the last day the sync covered. */
+  syncedThrough: string;
+  blockCount: number;
+}
+
+/** Replace the signed-in provider's busy times with `blocks`
+ *  (sync_my_calendar_busy_blocks). get_provider_busy_spans returns them to
+ *  every slot picker and enforce_booking_bookability refuses a booking into
+ *  one. Start and end only: nothing about what the event is. */
+export async function syncMyCalendarBusyBlocks(
+  fromDate: string,
+  toDate: string,
+  blocks: readonly CalendarBusyBlockInput[],
+): Promise<{ providerId: string; blockCount: number }> {
+  const { data, error } = await supabase.rpc("sync_my_calendar_busy_blocks", {
+    p_from: fromDate,
+    p_to: toDate,
+    p_blocks: blocks,
+  });
+  if (error) throw error;
+  const row = data as { provider_id: string; block_count: number };
+  invalidateProviderAvailabilityRanges(row.provider_id);
+  return { providerId: row.provider_id, blockCount: row.block_count };
+}
+
+/** Disconnect: every busy time the provider synced is removed. */
+export async function clearMyCalendarBusyBlocks(): Promise<void> {
+  const { data, error } = await supabase.rpc("clear_my_calendar_busy_blocks");
+  if (error) throw error;
+  if (typeof data === "string") invalidateProviderAvailabilityRanges(data);
+}
+
+/** When the provider last synced, or null if they never have (or disconnected). */
+export async function getMyCalendarSyncStatus(): Promise<CalendarSyncStatus | null> {
+  const { data, error } = await supabase.rpc("get_my_calendar_sync_status");
+  if (error) throw error;
+  const row = (data as Array<{ synced_at: string; synced_through: string; block_count: number }> | null)?.[0];
+  return row
+    ? { syncedAt: row.synced_at, syncedThrough: row.synced_through, blockCount: row.block_count }
+    : null;
+}
+
+// ─────────────────────────────────────────────────────────
 // RESCHEDULE REQUESTS
 // ─────────────────────────────────────────────────────────
 
