@@ -113,3 +113,9 @@ describe('two-part headings say what the section is', () => {
     expect(headingPair('portfolio')).toEqual(['My', 'Portfolio']);
   });
 });
+
+describe('the services heading', () => {
+  it('says "The Services", not "The Menu"', () => {
+    expect(headingPair('services')).toEqual(['The', 'Services']);
+  });
+});

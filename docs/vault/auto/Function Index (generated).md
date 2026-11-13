@@ -5,7 +5,7 @@
 
 #generated
 
-**3796 functions** across **538 files**.
+**3797 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -525,7 +525,7 @@
 - `exploreSeen.ts` — **exploreSeenNow** · **loadExploreSeen** · **markSeen** · **pruneSeen** · **recordExploreSeen** · **resetExploreSeen**
 - `exploreTabBarScroll.ts` — animateTo · **resetExplorePillTracking** · **settleExplorePillTracking** · trackScrollDirection
 - `FontManager.ts` — **createTextStyles** · getFontFamily · to
-- `fontScaleClamp.ts` — **applyFontScaleClamp** · components · **composeAppearanceStyle** · fontOnlyInjection · Wrapped
+- `fontScaleClamp.ts` — **applyFontScaleClamp** · components · **composeAppearanceStyle** · fontOnlyInjection · **osMultiplierFor** · Wrapped
 - `fuzzyMatch.ts` — **editDistance** · **isTypoOf** · levenshtein · **matchesAnySpeciality** · matchesPhrase · **matchesSpeciality** · **normalizeTerm** · splitAlternatives · **tokenize** · **tokensSimilar** · **typoDistance**
 - `hairTypeMatch.ts` — **matchesHairType**
 - `keepShownOrder.ts` — **keepShownOrder**

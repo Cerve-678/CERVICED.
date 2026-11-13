@@ -226,7 +226,7 @@ export function ProfileHeroLayout({
                 <View style={layout.locatedRow}>
                   <Ionicons name="location-outline" size={13} color={heroSub} />
                   <Text style={[layout.locatedScript, { color: heroSub }, shadow]}>located in</Text>
-                  <Text style={[layout.locatedPlace, { color: heroText }, shadow]} numberOfLines={1}>{location}</Text>
+                  <Text style={[layout.locatedPlace, { color: heroText }, shadow]} numberOfLines={2}>{location}</Text>
                 </View>
               ) : null}
             </View>
@@ -251,7 +251,7 @@ export function ProfileHeroLayout({
     case "spa":
       // Spa: a quiet line of what they do, the name spaced out, a ringed logo.
       return (
-        <View style={layout.infoCenter}>
+        <View style={[layout.infoCenter, layout.textFirst]}>
           {kicker ? <Text style={[layout.spaKicker, { color: heroSub }, shadow]}>{kicker}</Text> : null}
           {renderName({ scale: 1.15, letterSpacing: 4 })}
           <View style={layout.spaLogo}>{renderLogo(116)}</View>
@@ -291,13 +291,19 @@ function CurvedCaption({ text, color, width }: { text: string; color: string; wi
   );
 }
 
+/** How much lower a hero that opens on text starts than one that opens on the logo. */
+const TEXT_FIRST_DROP = 48;
+
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
   coverTop: { paddingTop: 120 },
   kicker: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 10, letterSpacing: 2.4, marginBottom: 8 },
-  mastHead: { alignItems: "center", paddingHorizontal: 20, marginBottom: 18 },
+  // Arch, Spa and Framed open on a line of text (Framed's beside its logo),
+  // not on the logo alone, so they start lower:
+  // at the logo's height the first line sat under the header buttons.
+  mastHead: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 18 },
   located: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12, letterSpacing: 0.6, marginTop: 4 },
   mastRow: { flexDirection: "row", alignItems: "flex-end", gap: 14, paddingHorizontal: 20, marginBottom: 10 },
   mastLogo: { alignItems: "center" },
@@ -305,12 +311,13 @@ const layout = StyleSheet.create({
   mastAbout: { flex: 1, paddingBottom: 20 },
   meet: { fontFamily: "PinyonScript_400Regular", fontSize: 34, lineHeight: 40 },
   meetName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 26, lineHeight: 30, marginBottom: 6 },
-  sideRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginBottom: 6 },
+  sideRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 6 },
   sideText: { flex: 1, alignItems: "center" },
   welcome: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, letterSpacing: 2 },
   locatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   locatedScript: { fontFamily: "Sacramento_400Regular", fontSize: 18 },
   locatedPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12, flexShrink: 1 },
+  textFirst: { marginTop: TEXT_FIRST_DROP },
   spaKicker: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 4, marginBottom: 10, textAlign: "center" },
   spaLogo: { marginTop: 16 },
 });
@@ -363,6 +370,7 @@ const styles = StyleSheet.create({
   glossRing: { position: "absolute", top: -8, left: -8, width: 164, height: 164, borderRadius: 82 },
   doubleRing: { position: "absolute", top: -11, left: -11, width: 170, height: 170, borderRadius: 85, borderWidth: 1.5 },
   pillRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, paddingHorizontal: 24, marginBottom: 12 },
-  pill: { height: 28, paddingHorizontal: 12, borderRadius: 100, backgroundColor: "#FFFFFF", justifyContent: "center", maxWidth: 220 },
+  // minHeight, not height: the label grows with the chosen text size.
+  pill: { minHeight: 28, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 100, backgroundColor: "#FFFFFF", justifyContent: "center", maxWidth: 220 },
   pillText: { fontFamily: "BakbakOne-Regular", fontSize: 10, letterSpacing: 1, color: "#1F1A18" },
 });

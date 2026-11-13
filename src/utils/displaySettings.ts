@@ -14,11 +14,15 @@ export interface TextScaleStep {
   readonly label: string;
 }
 
+// Kept deliberately close together: each step is roughly one point on body
+// text. The layouts are drawn for the default size, and the old 1.15/1.3 steps
+// made Large and Larger break them (2026-11-13). Saved values snap to the
+// nearest step on load, so anyone on the old sizes lands on Larger.
 export const TEXT_SCALE_STEPS: readonly TextScaleStep[] = [
-  { value: 0.85, label: 'Small' },
+  { value: 0.92, label: 'Small' },
   { value: 1.0, label: 'Default' },
-  { value: 1.15, label: 'Large' },
-  { value: 1.3, label: 'Larger' },
+  { value: 1.06, label: 'Large' },
+  { value: 1.12, label: 'Larger' },
 ] as const;
 
 export const DEFAULT_TEXT_SCALE = 1.0;

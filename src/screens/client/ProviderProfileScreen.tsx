@@ -5228,7 +5228,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               { color: heroSub },
                               heroIsDark && styles.heroTextShadow,
                             ]}
-                            numberOfLines={1}
+                            numberOfLines={2}
                           >
                             {/* Every type they actually have services under, so a
                                 lashes-and-brows business doesn't read as only one.
@@ -5526,6 +5526,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <Text
                         style={[styles.jumpBarText, { color: onAccentInk(adaptiveAccentColor).text }]}
                         numberOfLines={1}
+                        // Several titles share one pill-shaped row, so at a
+                        // larger text size they shrink to fit rather than
+                        // ending in "…".
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
                       >
                         {PAGE_SECTION_TITLES[key].toUpperCase()}
                       </Text>
@@ -6129,6 +6134,9 @@ const styles = StyleSheet.create({
     fontSize: NAME_SIZE,
     lineHeight: NAME_LINE_HEIGHT,
     textAlign: "center",
+    // It shares a row with the verified tick, and a row doesn't wrap a child
+    // that can't shrink: a long name at a larger text size ran off both edges.
+    flexShrink: 1,
   },
   providerHandle: {
     fontFamily: "Jura-VariableFont_wght",
@@ -6485,6 +6493,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "center",
     zIndex: 2, // Above overlays
+    // The pill clips its contents; without this a long line at a larger text
+    // size pushed the bell out of the pill and cut the words off.
+    flexShrink: 1,
   },
   slotsoutcard: {
     backgroundColor: "rgba(255, 255, 255, 0.3)",
@@ -6846,11 +6857,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    // At a larger text size the length and price can be wider than the card's
+    // middle column; the price drops under the length instead of being cut off.
+    flexWrap: "wrap",
+    columnGap: 8,
   },
   serviceDuration: {
     fontFamily: "Jura-VariableFont_wght",
     fontWeight: "700",
     fontSize: 11,
+    flexShrink: 1,
   },
   servicePrice: {
     fontFamily: "BakbakOne-Regular",
