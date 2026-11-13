@@ -248,9 +248,8 @@ that, putting it right means taking money back from Jo (section 2.8).
    so nothing is compared; the live policy is still what gets frozen. The
    cancel window is frozen from `providers.cancellation_notice_hours` when
    set, which the app's copy doesn't carry, so a change to that column alone
-   isn't caught (Part 6). *Not live until migration
-   `20261113090000_card_checkout_saves_policy_and_consent` is applied. Until
-   then no card-paid booking had either (0 of 94 on 13 November), so their
+   isn't caught (Part 6). *Live since 13 November (`20261113090000`); the app part needs a new
+   build. Until then no card-paid booking had either (0 of 94 on 13 November), so their
    refunds use the provider's current policy; they are not backfilled.*
 2. **Add the fee** from section 1.3.
 3. **Check the provider can be paid.** If any provider in the basket hasn't
