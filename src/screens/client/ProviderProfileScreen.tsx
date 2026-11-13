@@ -4357,6 +4357,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerKey={provider?.providerName ?? ""}
           providerServiceCategory={provider?.providerService}
           bookingPolicies={provider?.bookingPolicies ?? null}
+          showPolicyPagesCard={pageStyle.key !== "classic"}
         />
 
         {/* Multi-service booking modal — for services picked via "Select" mode */}
@@ -5574,14 +5575,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </View>
               ) : null}
 
-              {/* Their policy pictures as story circles: a tap opens them
-                  full screen, one page at a time. */}
-              <PolicyStoryRings
-                urls={policyPages}
-                accent={adaptiveAccentColor}
-                sheet={OP.bg}
-                onOpen={setPolicyStoryIndex}
-              />
+              {/* Templates only: their policy pictures as story circles; a
+                  tap opens them full screen, one page at a time. Classic keeps
+                  the round button on the About card. */}
+              {pageStyle.key !== "classic" ? (
+                <PolicyStoryRings
+                  urls={policyPages}
+                  accent={adaptiveAccentColor}
+                  sheet={OP.bg}
+                  onOpen={setPolicyStoryIndex}
+                />
+              ) : null}
 
               {!pageStyle.separateAboutAndPolicies ? (
                 <>
@@ -5594,6 +5598,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       styles.aboutCard,
                       { backgroundColor: cardBg, borderColor: OP.border },
                       squareCards && styles.squareCard,
+                      // Room under the last line for the policy button, so it
+                      // never sits on top of the text.
+                      policyPages.length > 0 && styles.aboutCardWithPolicyFab,
                     ]}
                   >
                     <LinearGradient
@@ -5754,6 +5761,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       })()
                     )}
 
+                    {/* Floating policy-photo button — bottom-right of the card,
+                        on top of whichever tab (or lack of tabs) is showing. This
+                        is the only way in for a provider who uploaded this photo
+                        but filled in none of the structured fields above (which
+                        is why the tab switcher itself doesn't gate on it). */}
+                    {policyPages.length > 0 ? (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => setShowPolicyImage(true)}
+                        style={[
+                          styles.policyImageFab,
+                          { backgroundColor: adaptiveAccentColor },
+                        ]}
+                        accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons
+                          name="document-text-outline"
+                          size={20}
+                          color="#FFFFFF"
+                        />
+                      </TouchableOpacity>
+                    ) : null}
                   </BlurView>
                 </View>
                 </>
@@ -5854,9 +5884,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
               )}
 
-              {/* Their policy pictures in the page itself, after the price
-                  list: Branding → Policy Pictures picks Melt in or Bleed. */}
-              {policyPages.length > 0 ? (
+              {/* Templates only: their policy pictures in the page itself,
+                  after the price list (Branding → Policy Pictures picks Melt
+                  in or Bleed). Classic keeps them behind the round button. */}
+              {pageStyle.key !== "classic" && policyPages.length > 0 ? (
                 <View ref={policyPagesRef} collapsable={false}>
                   <PolicyPagesInline
                     urls={policyPages}
@@ -6618,6 +6649,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
+  // The policy button's height plus its bottom offset (policyImageFab), so the
+  // card's last line ends above the button instead of under it.
+  aboutCardWithPolicyFab: {
+    paddingBottom: 10 + 44,
+  },
   cardHighlight: {
     position: "absolute",
     top: 0,
@@ -6658,6 +6694,26 @@ const styles = StyleSheet.create({
   },
 
   // Services Section
+  // Floating circular button, bottom-right of the About/Policy card — opens
+  // the provider's uploaded policy photo. Absolutely positioned so it stays
+  // put regardless of which tab (About/Policy) is active, or whether the
+  // tab switcher is even showing (a provider can have this image with no
+  // structured policy fields at all, in which case it's the only way in).
+  policyImageFab: {
+    position: "absolute",
+    bottom: 10,
+    right: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   servicesSection: {
     marginBottom: 20,
   },

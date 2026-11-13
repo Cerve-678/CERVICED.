@@ -181,6 +181,9 @@ interface BookingSheetProps {
    *  edits their policy later. Caller already has this loaded (e.g.
    *  ProviderProfileScreen's own Policy tab reads the same data). */
   bookingPolicies?: Record<string, unknown> | null;
+  /** Show the provider's policy pictures as a card on the last step. Only
+   *  for providers using a page template; the default layout is unchanged. */
+  showPolicyPagesCard?: boolean;
   adaptiveAccentColor: string;
   /** Sheet's background colour — always the caller's own content-backdrop
    *  colour (e.g. the provider's card colour, or the cart's card colour),
@@ -219,6 +222,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   providerKey,
   providerServiceCategory,
   bookingPolicies,
+  showPolicyPagesCard = false,
   adaptiveAccentColor,
   backgroundColor,
   initial,
@@ -1112,7 +1116,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </View>
               )}
 
-              {policyPages.length > 0 && (
+              {showPolicyPagesCard && policyPages.length > 0 && (
                 <TouchableOpacity
                   style={[styles.policyPeek, { backgroundColor: withAlpha(tokens.text, 0.05), borderColor: tokens.border }]}
                   onPress={() => {

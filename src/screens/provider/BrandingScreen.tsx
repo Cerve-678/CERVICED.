@@ -505,7 +505,9 @@ export default function BrandingScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Policy pictures — how their uploaded policy pages sit in the profile */}
+          {/* Policy pictures — how their uploaded policy pages sit in the
+              profile. Templates only: Classic keeps them behind the button. */}
+          {pageStyle !== DEFAULT_PAGE_STYLE && (
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
@@ -552,6 +554,7 @@ export default function BrandingScreen({ navigation }: any) {
               })}
             </View>
           </View>
+          )}
 
           {/* Card shape — corners of the service cards and category pills */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
