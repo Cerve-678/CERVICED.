@@ -490,7 +490,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     if (!booking.bookingDate || !booking.bookingTime) return false;
     const apptMs = createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime();
     const hoursUntil = (apptMs - Date.now()) / 3_600_000;
-    return hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs;
+    // After the start counts too: the refund treats it as late
+    // (isLateClientCancel in supabase/functions/_shared/cancellationSettlement.ts).
+    return hoursUntil < cancellationNoticeHrs;
   }, [booking, cancellationNoticeHrs]);
   // Moved while already inside the window: the policy applies to any cancel,
   // however far off the new date is (apply-cancellation-refund).

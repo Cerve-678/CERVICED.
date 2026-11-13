@@ -5,6 +5,7 @@ import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { findPayoutTransfer } from '../_shared/payoutTransfer.ts';
 import {
   computeCancellationSettlement,
+  isLateClientCancel,
   readCancelCustomFeePence,
   readCancelPenalty,
 } from '../_shared/cancellationSettlement.ts';
@@ -157,11 +158,16 @@ Deno.serve(async (req: Request) => {
     // turn a late cancel into a full refund.
     const cancelledMs = Date.parse(booking.cancelled_at);
     const hoursUntil = Number.isFinite(apptMs) && Number.isFinite(cancelledMs) ? (apptMs - cancelledMs) / 3_600_000 : 0;
-    // A client who asked to move this booking while already inside the window
-    // stays inside it (decided 2026-10-25): stamped by
-    // confirm_reschedule_own_booking; only a later provider-proposed move clears it.
-    const movedLate = hours > 0 && !!booking.late_reschedule_from;
-    const isLateCancel = movedLate || (hours > 0 && hoursUntil >= 0 && hoursUntil < hours);
+    // Late inside the window AND after the start (cancelling a booking that
+    // has begun used to count as early); a booking moved while already inside
+    // the window stays late (decided 2026-10-25, stamped by
+    // confirm_reschedule_own_booking).
+    // Rule and reasons: isLateClientCancel in _shared/cancellationSettlement.ts.
+    const isLateCancel = isLateClientCancel({
+      noticeHours: hours,
+      hoursUntilStart: hoursUntil,
+      movedLate: !!booking.late_reschedule_from,
+    });
 
     // The provider's payout row for this booking (its stored share, in pence).
     const { data: payout, error: payoutErr } = await admin
