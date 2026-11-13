@@ -162,7 +162,7 @@ export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
 const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
   about: ['Meet', 'the Artist'],
   policies: ['Booking', 'Policies'],
-  services: ['The', 'Menu'],
+  services: ['The', 'Services'],
   reviews: ['Client', 'Reviews'],
   hours: ['Opening', 'Hours'],
   contact: ['Get in', 'Touch'],

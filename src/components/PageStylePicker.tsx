@@ -83,9 +83,9 @@ export default function PageStylePicker({
 const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   classic: { text: 'Services' },
   cover: { text: 'services' },
-  arch: { lead: 'The', text: 'Menu' },
+  arch: { lead: 'The', text: 'Services' },
   framed: { text: 'Services' },
-  scrapbook: { lead: 'THE', text: 'menu' },
+  scrapbook: { lead: 'THE', text: 'services' },
   spa: { text: 'SERVICES' },
   glossy: { text: 'services' },
 };
