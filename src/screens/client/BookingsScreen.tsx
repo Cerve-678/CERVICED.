@@ -267,8 +267,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     const source = pastCategoryFilter
       ? filteredPastBookings.filter(b => resolveServiceCategory(b.serviceName, b.providerService) === pastCategoryFilter)
       : filteredPastBookings;
-    // filteredPastBookings is sorted oldest-first; history reads most-recent-first.
-    return [...source].reverse();
+    // BookingContext already sorts past bookings most-recent-first.
+    return source;
   }, [filteredPastBookings, pastCategoryFilter]);
 
   const mapRef = useRef<MapView>(null);

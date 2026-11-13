@@ -42,6 +42,9 @@ import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerT
 import { EMERGENCY_BOOKINGS_ENABLED } from '../constants/featureFlags';
 import type { DbPromotion } from '../types/database';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
+import { policyImageUrls } from '../features/providers/policyImages';
+import { FullImageViewer } from './FullImageViewer';
+import { Image } from 'expo-image';
 import { logger } from '../utils/logger';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { durationWithAddOns, formatAddOnExtraTime, type ChosenAddOn } from '../features/bookings/addOnTime';
@@ -178,6 +181,9 @@ interface BookingSheetProps {
    *  edits their policy later. Caller already has this loaded (e.g.
    *  ProviderProfileScreen's own Policy tab reads the same data). */
   bookingPolicies?: Record<string, unknown> | null;
+  /** Show the provider's policy pictures as a card on the last step. Only
+   *  for providers using a page template; the default layout is unchanged. */
+  showPolicyPagesCard?: boolean;
   adaptiveAccentColor: string;
   /** Sheet's background colour — always the caller's own content-backdrop
    *  colour (e.g. the provider's card colour, or the cart's card colour),
@@ -216,6 +222,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   providerKey,
   providerServiceCategory,
   bookingPolicies,
+  showPolicyPagesCard = false,
   adaptiveAccentColor,
   backgroundColor,
   initial,
@@ -312,6 +319,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const [fetchedBookingPolicies, setFetchedBookingPolicies] =
     useState<Record<string, unknown> | null>(null);
   const effectiveBookingPolicies = bookingPolicies ?? fetchedBookingPolicies;
+  // Their uploaded policy pages, shown again on the last step so the client
+  // has them in front of them before adding the booking. Reading only — the
+  // tick that records agreement is the Terms one below and the cart's own.
+  const policyPages = useMemo(() => policyImageUrls(effectiveBookingPolicies), [effectiveBookingPolicies]);
+  const [showPolicyPages, setShowPolicyPages] = useState(false);
   const emergencyPolicyText =
     typeof effectiveBookingPolicies?.['emergencyBookingPolicy'] === 'string'
       ? (effectiveBookingPolicies['emergencyBookingPolicy'] as string).trim()
@@ -1104,6 +1116,38 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </View>
               )}
 
+              {showPolicyPagesCard && policyPages.length > 0 && (
+                <TouchableOpacity
+                  style={[styles.policyPeek, { backgroundColor: withAlpha(tokens.text, 0.05), borderColor: tokens.border }]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setShowPolicyPages(true);
+                  }}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Read ${providerDisplayName}'s policy, ${policyPages.length} ${policyPages.length === 1 ? 'page' : 'pages'}`}
+                >
+                  <View style={styles.policyPeekStack}>
+                    {policyPages.length > 1 ? (
+                      <Image source={{ uri: policyPages[1]! }} style={[styles.policyPeekThumb, styles.policyPeekThumbBack]} contentFit="cover" contentPosition="top" transition={0} />
+                    ) : null}
+                    <Image source={{ uri: policyPages[0]! }} style={styles.policyPeekThumb} contentFit="cover" contentPosition="top" transition={0} />
+                  </View>
+                  <View style={styles.policyPeekText}>
+                    <Text style={[styles.policyPeekTitle, { color: tokens.text }]} numberOfLines={1}>
+                      {providerDisplayName}'s policy
+                    </Text>
+                    <Text style={[styles.policyPeekSub, { color: tokens.sub }]}>
+                      Worth a read before you book
+                    </Text>
+                    <Text style={[styles.policyPeekLink, { color: adaptiveAccentColor }]}>
+                      Read their {policyPages.length === 1 ? 'page' : `${policyPages.length} pages`}
+                    </Text>
+                  </View>
+                  <Text style={[styles.policyPeekChevron, { color: tokens.sub }]}>›</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Shown whether or not there's a structured booking policy — a
                   provider can have written terms without having filled one in.
                   The tick is what gates Add to Cart; it records agreement for
@@ -1319,6 +1363,15 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         </View>
       </Modal>
 
+      {/* Their policy pages, from the card on the last step. A sibling of the
+          sheet's Modal, like the Emergency Booking Policy below. */}
+      <FullImageViewer
+        uris={policyPages}
+        visible={showPolicyPages}
+        onClose={() => setShowPolicyPages(false)}
+        label="Policy document"
+      />
+
       {/* The provider's Emergency Booking Policy — a separate document from
           their Terms & Conditions above. Opened from the "scheduling conflict"
           prompt, so it lands on top of both the sheet and that prompt. */}
@@ -1474,6 +1527,31 @@ const styles = StyleSheet.create({
   },
   doneButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
   submitButtonDisabled: { opacity: 0.5 },
+  policyPeek: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: 16,
+  },
+  policyPeekStack: { width: 58, height: 76 },
+  policyPeekThumb: {
+    position: 'absolute',
+    left: 0,
+    top: 4,
+    width: 50,
+    height: 70,
+    borderRadius: 6,
+    backgroundColor: 'rgba(127,127,127,0.15)',
+  },
+  policyPeekThumbBack: { left: 8, top: 0, transform: [{ rotate: '6deg' }], opacity: 0.85 },
+  policyPeekText: { flex: 1, gap: 2 },
+  policyPeekTitle: { fontSize: 14, fontWeight: '700' },
+  policyPeekSub: { fontSize: 12 },
+  policyPeekLink: { fontSize: 12, fontWeight: '700', marginTop: 4 },
+  policyPeekChevron: { fontSize: 22 },
   submitButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,

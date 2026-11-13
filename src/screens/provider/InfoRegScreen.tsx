@@ -2977,6 +2977,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // The cached profile can be edited while its live refresh is still in
   // flight. Preserve service changes if that refresh completes afterwards.
   const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
+  // A live profile read can finish after a local rename. Keep the old keys
+  // out of that read so it cannot bring the renamed category back.
+  const renamedCategoryKeysRef = useRef<Set<string>>(new Set());
   // The release day is also edited in Scheduling & Availability. True once
   // it's changed here; until then the save leaves it alone and focus
   // re-reads it, so this screen never writes back an older day.
@@ -3105,9 +3108,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           .then(data => {
             if (cancelled) return;
             if (data) {
-              setProviderData({
-                ...data,
-                categories: { ...data.categories, ...editedServiceCategoriesRef.current },
+              setProviderData(prev => {
+                const categories = { ...data.categories };
+                const categoryDescriptions = { ...data.categoryDescriptions };
+                const categoryServiceTypes = { ...data.categoryServiceTypes };
+                for (const oldName of renamedCategoryKeysRef.current) {
+                  delete categories[oldName];
+                  delete categoryDescriptions[oldName];
+                  delete categoryServiceTypes[oldName];
+                }
+                for (const newName of Object.keys(editedServiceCategoriesRef.current)) {
+                  categoryDescriptions[newName] = prev.categoryDescriptions[newName] ?? '';
+                  categoryServiceTypes[newName] = prev.categoryServiceTypes[newName] ?? data.providerService;
+                }
+                return {
+                  ...data,
+                  categories: { ...categories, ...editedServiceCategoriesRef.current },
+                  categoryDescriptions,
+                  categoryServiceTypes,
+                  addOnLibrary: renamedCategoryKeysRef.current.size
+                    ? prev.addOnLibrary ?? data.addOnLibrary ?? []
+                    : data.addOnLibrary ?? [],
+                };
               });
               setIsEditMode(true);
               // Being in edit mode means this profile was published, which
@@ -3115,8 +3137,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // tick in the render — a box that draws checked but holds false
               // does nothing on the first tap and looks broken.
               setTermsAccepted(true);
-              const firstCat = Object.keys(data.categories)[0];
-              if (firstCat) setSelectedCategory(firstCat);
+              setSelectedCategory(current => {
+                if (current && !renamedCategoryKeysRef.current.has(current)) return current;
+                return Object.keys(editedServiceCategoriesRef.current)[0]
+                  ?? Object.keys(data.categories).find(name => !renamedCategoryKeysRef.current.has(name))
+                  ?? '';
+              });
               // A contact field that exists elsewhere should already be in the
               // box, not blank with a note telling you where to go and type it.
               // The signup prefill below only runs on the very first save, so
@@ -3545,6 +3571,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Add service category
   const handleAddCategory = useCallback((name: string, description: string) => {
+    renamedCategoryKeysRef.current.delete(name);
     setProviderData(prev => ({
       ...prev,
       categories: { ...prev.categories, [name]: [] },
@@ -3571,15 +3598,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            delete editedServiceCategoriesRef.current[name];
+            renamedCategoryKeysRef.current.add(name);
             setProviderData(prev => {
               const newCategories = { ...prev.categories };
               delete newCategories[name];
               const newDescriptions = { ...prev.categoryDescriptions };
               delete newDescriptions[name];
+              const newServiceTypes = { ...prev.categoryServiceTypes };
+              delete newServiceTypes[name];
               return {
                 ...prev,
                 categories: newCategories,
                 categoryDescriptions: newDescriptions,
+                categoryServiceTypes: newServiceTypes,
                 ...(prev.addOnLibrary ? { addOnLibrary: removeCategoryFromLibrary(prev.addOnLibrary, name) } : {}),
               };
             });
@@ -3597,19 +3629,35 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const handleRenameCategory = useCallback((oldName: string, newName: string, description: string) => {
     if (!newName.trim()) return;
     const trimmedNew = newName.trim();
+    if (Object.keys(providerData.categories).some(name =>
+      name !== oldName && name.toLocaleLowerCase() === trimmedNew.toLocaleLowerCase())) {
+      Alert.alert('Category already exists', 'Choose a different category name.');
+      return;
+    }
+
+    if (oldName !== trimmedNew) {
+      const services = editedServiceCategoriesRef.current[oldName] ?? providerData.categories[oldName] ?? [];
+      delete editedServiceCategoriesRef.current[oldName];
+      editedServiceCategoriesRef.current[trimmedNew] = services;
+      renamedCategoryKeysRef.current.add(oldName);
+      renamedCategoryKeysRef.current.delete(trimmedNew);
+    }
 
     setProviderData(prev => {
       const newCategories: Record<string, ServiceData[]> = {};
       const newDescriptions: Record<string, string> = {};
+      const newServiceTypes: Record<string, string> = {};
       Object.keys(prev.categories).forEach(key => {
         const targetKey = key === oldName ? trimmedNew : key;
         newCategories[targetKey] = prev.categories[key] || [];
         newDescriptions[targetKey] = key === oldName ? description : (prev.categoryDescriptions?.[key] ?? '');
+        newServiceTypes[targetKey] = prev.categoryServiceTypes?.[key] ?? prev.providerService;
       });
       return {
         ...prev,
         categories: newCategories,
         categoryDescriptions: newDescriptions,
+        categoryServiceTypes: newServiceTypes,
         // An add-on set to "All <category>" follows the category's new name.
         ...(prev.addOnLibrary && oldName !== trimmedNew
           ? { addOnLibrary: renameCategoryInLibrary(prev.addOnLibrary, oldName, trimmedNew) }
@@ -3622,7 +3670,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }
     setShowEditCategoryModal(false);
     setEditingCategory('');
-  }, [selectedCategory]);
+  }, [providerData.categories, selectedCategory]);
 
   // Add/Edit service
   const handleSaveService = useCallback(async (service: ServiceData, newAddOns: AddOnLibraryItem[]) => {
