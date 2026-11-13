@@ -8,6 +8,7 @@ import {
 } from '../_shared/stripeCustomer.ts';
 import { FEE_POSSIBLE_STATUSES, feeCardNeededUntilMs } from '../_shared/bookingFeePlan.ts';
 import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
+import { isLateClientCancel } from '../_shared/cancellationSettlement.ts';
 
 // A client's saved cards, for the Payment Methods screen.
 //
@@ -201,12 +202,13 @@ async function feeCardNeededUntil(
 
   const since = new Date(Date.now() - FEE_CARD_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
   const { data: bookings, error } = await admin.from('bookings')
-    .select('id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, payment_intent_id')
+    .select('id, status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, cancelled_by, cancelled_at, cancel_notice_hours, late_reschedule_from, payment_status, payment_intent_id')
     .eq('user_id', userId)
     .gte('booking_date', since)
-    .in('status', FEE_POSSIBLE_STATUSES)
+    // 'cancelled' for a late cancellation fee that can still be charged.
+    .in('status', [...FEE_POSSIBLE_STATUSES, 'cancelled'])
     .not('payment_intent_id', 'is', null)
-    .or('late_fee_pence.not.is.null,no_show_fee_pence.not.is.null')
+    .or('late_fee_pence.not.is.null,no_show_fee_pence.not.is.null,late_cancel_fee_pence.not.is.null')
     .limit(FEE_CARD_BOOKING_LIMIT);
   if (error) throw error;
   if (!bookings?.length) return retryUntil > Date.now() ? retryUntil : null;
@@ -218,11 +220,22 @@ async function feeCardNeededUntil(
 
   const nowMs = Date.now();
   const open = bookings.flatMap(b => {
+    const noticeHours = Number(b.cancel_notice_hours ?? 0);
+    const lateClientCancel = b.status === 'cancelled' && b.cancelled_by === 'client' && !!b.cancelled_at
+      && b.payment_status === 'deposit_paid'
+      && isLateClientCancel({
+        noticeHours,
+        appointmentMs: londonWallTimeToUtcMs(b.booking_date, b.booking_time),
+        cancelledMs: Date.parse(b.cancelled_at),
+        movedLate: noticeHours > 0 && !!b.late_reschedule_from,
+      });
     const until = feeCardNeededUntilMs({
       status: b.status,
       endMs: londonWallTimeToUtcMs(b.booking_date, b.end_time ?? b.booking_time),
       lateFeePence: b.late_fee_pence,
       noShowFeePence: b.no_show_fee_pence,
+      lateCancelFeePence: b.late_cancel_fee_pence,
+      lateClientCancel,
       alreadyCharged: chargedIds.has(b.id),
       nowMs,
     });

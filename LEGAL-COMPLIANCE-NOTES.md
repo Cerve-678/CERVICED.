@@ -926,3 +926,34 @@ To raise (not lawyer-reviewed):
 - **Section 5 still says messages go to NVIDIA,** but the AI router is off in
   production (user's call: switch on only after a scorecard). It overstates,
   which is the safe direction; recheck when the router changes.
+
+## 25. Late cancellation charge on deposit bookings, and same-month reschedules (2026-11-13)
+
+Branch `feat/late-cancel-half-top-up`. At the user's direction, **not
+lawyer-reviewed**:
+
+- **What changed:** the late-cancel Custom £ amount is replaced by one "Half the
+  price" option. A client who paid only a deposit and cancels inside the notice
+  period loses the deposit, and the provider may now also charge the client's
+  saved card the rest up to half the price (half of service + add-ons, minus the
+  deposit), within 24 hours of the appointment's end. Until now the app only
+  ever kept part of what had been paid; this is the first charge **after a
+  cancellation**, not just after an appointment.
+- **Wording (user chose a separate tick box, option C):** fee terms version
+  `2026-11-13-late-cancel` in `src/constants/feeTerms.ts`: new heading, a
+  late-cancellation paragraph in the body, and `LATE_CANCEL_CONSENT_LINE`. The
+  cancel sheet says "Late cancellation: you'll lose your £X deposit and may be
+  charged up to £Y more." (the user's chosen wording 2). cerviced.co/legal Client
+  Terms §12, §13 and §16, Provider Terms §8 and the Privacy payments line were
+  updated to match.
+- **Raise:** whether deposit + charge up to half the price is a genuine
+  pre-estimate of loss rather than a penalty under the Consumer Rights Act 2015
+  (Schedule 2 grey list para 5 / 6: disproportionate sums on cancellation),
+  especially for long-notice bookings where the slot can be re-sold; whether
+  the checkout tick box is a sufficient mandate for this merchant-initiated
+  charge; and whether a 24h-after-appointment window is reasonable when the
+  cancel may be days earlier.
+- **Same-month reschedules:** providers can require a client's new date to stay
+  in the booking's calendar month. Raise whether restricting a move this way,
+  combined with a late-cancel charge, leaves a client who can't make any date
+  that month with only a charged cancellation.

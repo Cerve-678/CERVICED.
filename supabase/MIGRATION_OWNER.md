@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/late-cancel-half-top-up (Claude, worktree ~/cerviced-worktrees/late-cancel-top-up; 20261113160000_late_cancel_half_top_up, awaiting the user's go-ahead to apply, 2026-11-13)
 ```
+
+### Pending (late cancellation Half + top-up, same-month reschedules)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113160000 | `late_cancel_half_top_up` | **NOT APPLIED.** Frontier at authoring and re-checked 2026-11-13: live max `20261113150000`; nothing unapplied above it on an open PR; no open PR touches these objects. Adds `bookings.late_cancel_fee_pence` (frozen by `snapshot_booking_fees`), `booking_late_cancel_fee_pence()`, `fee_terms_versions.late_cancel_line` + wording `2026-11-13-late-cancel`, kind `late_cancel` on `booking_fee_charges`; drops and recreates `get_checkout_fees(uuid)` (new return columns, grants re-applied); redefines from live with md5 guards `snapshot_booking_fees` (`7e5715c2…`), `get_checkout_fees` (`9c633ed3…`), `accept_checkout_fees` (`7d2aa850…`), `request_reschedule_own_booking` (`34a5f04d…`), `set_fee_terms_sha256` (`08e3cd5d…`) and guards the kind CHECK's exact definition; turns saved `custom` late-cancel policies into `half` (0 at authoring). Forced-rollback dry run 2026-11-13 passed: £100/£20 → 3000, £60/£20 → 1000, deposit already half / paid in full / no notice → NULL; new wording hashes to the app's `FEE_TERMS_SHA256`; old version's hash unchanged; grants authenticated + service_role; live unchanged after. **Apply BEFORE deploying `booking-fee`, `apply-cancellation-refund`, `create-payment-intent`, `client-saved-cards`** (they select the new column), and before an app build ships. Written on `feat/late-cancel-half-top-up`. |
 
 ### Applied 2026-11-13 (calendar sync busy times)
 

@@ -20,18 +20,40 @@ export interface FeeChargeWindow {
   closesAtLabel: string;
 }
 
+export const feeKindLabel = (kind: BookingFeeKind): string =>
+  kind === 'late' ? 'late arrival fee' : kind === 'no_show' ? 'no-show fee' : 'late cancellation fee';
+
+/** Mirror of the server's isLateClientCancel plus the conditions booking-fee
+ *  adds for a late cancellation fee: the client's own late cancel of a booking
+ *  they paid only a deposit on, under the half-price policy frozen on it. */
+export function isChargeableLateCancel(terms: BookingFeeTerms): boolean {
+  if (terms.status !== 'cancelled' || terms.cancelledBy !== 'client' || !terms.cancelledAt) return false;
+  if (terms.paymentStatus !== 'deposit_paid') return false;
+  if (terms.cancelPenalty !== 'half' && terms.cancelPenalty !== 'full') return false;
+  if (!(terms.cancelNoticeHours > 0)) return false;
+  if (terms.lateRescheduleFrom) return true;
+  const start = new Date(`${terms.bookingDate}T${terms.bookingTime}`).getTime();
+  const cancelled = Date.parse(terms.cancelledAt);
+  const hoursUntil = Number.isFinite(start) && Number.isFinite(cancelled) ? (start - cancelled) / 3_600_000 : 0;
+  return hoursUntil >= 0 && hoursUntil < terms.cancelNoticeHours;
+}
+
 export function feeChargeWindow(terms: BookingFeeTerms, nowMs: number): FeeChargeWindow {
   const start = new Date(`${terms.bookingDate}T${terms.bookingTime}`).getTime();
   const end = new Date(`${terms.bookingDate}T${terms.endTime ?? terms.bookingTime}`).getTime();
   const closes = end + FEE_WINDOW_MS;
-  const open = Number.isFinite(start) && Number.isFinite(end) && nowMs >= start && nowMs <= closes;
+  const valid = Number.isFinite(start) && Number.isFinite(end) && nowMs <= closes;
+  // Visit fees wait for the appointment to start; a late cancel comes before it.
+  const visitOpen = valid && nowMs >= start;
+  const lateCancel = valid && !!terms.lateCancelFeePence && isChargeableLateCancel(terms);
   return {
-    open,
+    open: visitOpen || lateCancel,
     canCharge: {
-      late: open && !!terms.lateFeePence && WENT_AHEAD.includes(terms.status),
-      no_show: open && !!terms.noShowFeePence && terms.status === 'no_show',
+      late: visitOpen && !!terms.lateFeePence && WENT_AHEAD.includes(terms.status),
+      no_show: visitOpen && !!terms.noShowFeePence && terms.status === 'no_show',
+      late_cancel: lateCancel,
     },
-    closesAtLabel: new Date(closes).toLocaleString('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit' }),
+    closesAtLabel: new Date(closes).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
   };
 }
 

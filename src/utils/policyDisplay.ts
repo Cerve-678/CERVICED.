@@ -10,11 +10,14 @@ import { resolveDepositMode } from './depositPolicy';
 export interface PolicyDisplayData {
   cancelNotice?: string;
   cancelPenalty?: string;
-  /** The £ amount kept under a 'custom' penalty, at most half the price. */
+  /** The £ amount kept under a 'custom' penalty, at most half the price. No
+   *  longer offered (2026-11-13), but bookings frozen with it still show it. */
   cancelCustomFee?: string;
   cancelNote?: string;
   rescheduleNotice?: string;
   maxReschedules?: string;
+  /** 'same_month': the new date must be in the booking's calendar month. */
+  rescheduleWithin?: string;
   rescheduleNote?: string;
   depositMode?: string;
   depositRequired?: boolean;
@@ -121,6 +124,7 @@ function rescheduleSummary(policy: PolicyDisplayData): string | null {
   else if (policy.rescheduleNotice) parts.push(`${policy.rescheduleNotice} notice`);
   if (policy.maxReschedules === 'unlimited') parts.push('no limit');
   else if (policy.maxReschedules) parts.push(`max ${policy.maxReschedules}`);
+  if (policy.rescheduleWithin === 'same_month') parts.push('same month only');
   if (parts.length === 0) return null;
   const text = parts.join(' · ');
   return text.charAt(0).toUpperCase() + text.slice(1);
