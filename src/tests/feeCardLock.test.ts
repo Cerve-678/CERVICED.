@@ -31,3 +31,14 @@ describe('removing a card a fee still needs', () => {
     expect(error.message).toBe('This card is needed for a late or no-show fee you agreed to. You can remove it after 3:00pm on Thu 2 Jul.');
   });
 });
+
+describe('card needed for a late cancellation fee', () => {
+  const cancelFee = { ...base, lateFeePence: null, noShowFeePence: null, lateCancelFeePence: 3000 };
+  it('stays locked while the booking can still be cancelled late', () => {
+    expect(feeCardNeededUntilMs(cancelFee)).toBe(Date.UTC(2026, 6, 2, 14, 0));
+  });
+  it('stays locked after a late client cancel, and frees after an early one', () => {
+    expect(feeCardNeededUntilMs({ ...cancelFee, status: 'cancelled', lateClientCancel: true })).toBe(Date.UTC(2026, 6, 2, 14, 0));
+    expect(feeCardNeededUntilMs({ ...cancelFee, status: 'cancelled', lateClientCancel: false })).toBeNull();
+  });
+});

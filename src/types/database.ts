@@ -324,6 +324,7 @@ export interface DbProvider {
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     rescheduleNote?: string;
     /** 'full_only' | 'client_choice' | 'deposit_required' — the provider's
      *  three-way deposit choice, edited on PaymentsScreen. Read it through

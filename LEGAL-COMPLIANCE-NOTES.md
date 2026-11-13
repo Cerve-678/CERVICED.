@@ -927,7 +927,63 @@ To raise (not lawyer-reviewed):
   production (user's call: switch on only after a scorecard). It overstates,
   which is the safe direction; recheck when the router changes.
 
-## 25. Refund requests close five days after the appointment (2026-11-13)
+## 25. Late cancellation charge on deposit bookings, and same-month reschedules (2026-11-13)
+
+Branch `feat/late-cancel-half-top-up`. At the user's direction, **not
+lawyer-reviewed**:
+
+- **What changed:** the late-cancel Custom £ amount is replaced by one "Half the
+  price" option. A client who paid only a deposit and cancels inside the notice
+  period loses the deposit, and the provider may now also charge the client's
+  saved card the rest up to half the price (half of service + add-ons, minus the
+  deposit), within 24 hours of the appointment's end. Until now the app only
+  ever kept part of what had been paid; this is the first charge **after a
+  cancellation**, not just after an appointment.
+- **Wording (user chose a separate tick box, option C):** fee terms version
+  `2026-11-13-late-cancel` in `src/constants/feeTerms.ts`: new heading, a
+  late-cancellation paragraph in the body, and `LATE_CANCEL_CONSENT_LINE`. The
+  cancel sheet says "Late cancellation: you'll lose your £X deposit and may be
+  charged up to £Y more." (the user's chosen wording 2). cerviced.co/legal Client
+  Terms §12, §13 and §16, Provider Terms §8 and the Privacy payments line were
+  updated to match.
+- **Raise:** whether deposit + charge up to half the price is a genuine
+  pre-estimate of loss rather than a penalty under the Consumer Rights Act 2015
+  (Schedule 2 grey list para 5 / 6: disproportionate sums on cancellation),
+  especially for long-notice bookings where the slot can be re-sold; whether
+  the checkout tick box is a sufficient mandate for this merchant-initiated
+  charge; and whether a 24h-after-appointment window is reasonable when the
+  cancel may be days earlier.
+- **Same-month reschedules:** providers can require a client's new date to stay
+  in the booking's calendar month. Raise whether restricting a move this way,
+  combined with a late-cancel charge, leaves a client who can't make any date
+  that month with only a charged cancellation.
+- **Raised by the legal-flagger review (2026-11-13), for the solicitor:**
+  - SCA / merchant-initiated transaction rules for a variable "up to £Y"
+    off-session charge after a cancellation: is an exemption claimed, does the
+    mandate need the ceiling and timing stated, and who carries a chargeback on
+    it (provider, Cerviced as collecting agent, or both).
+  - The right test: CRA 2015 s.62 fairness and Schedule 2 paras 5-6, plus CMA
+    guidance on cancellation charges (for consumers), rather than "genuine
+    pre-estimate"; Cavendish v Makdessi for the penalty rule.
+  - The saved card can't be removed until the charge window closes, which now
+    runs to 24 hours after a cancelled appointment, possibly weeks after the
+    cancel. Is that consistent with UK GDPR withdrawal and erasure, and should
+    the Privacy text say so?
+  - No notice or re-acceptance is asked of existing users for this material
+    change (CRA Sch 2 para 11, variation of terms). Bookings already made carry
+    no late cancellation amount, so none can be charged; future bookings are
+    agreed at checkout. Providers whose saved Custom policy was turned into
+    Half (0 at authoring) weren't asked.
+  - Agreement to the late cancellation fee is a condition of booking (the
+    tick box blocks checkout); confirm "performing our contract" is the right
+    lawful basis framing.
+  - How the Consumer Contracts Regulations 14-day cancellation right interacts
+    with a pre-paid deposit for an appointment inside 14 days (the leisure
+    services exemption may or may not cover a salon appointment).
+  - Providers contracting with consumers carry their own unfair-terms risk for
+    the Half policy they choose; the Provider Terms don't tell them so.
+
+## 26. Refund requests close five days after the appointment (2026-11-13)
 
 The owner's rule: "client has five days after the day of the appointment to
 request for a refund". In-app refund requests close at the end of the fifth
