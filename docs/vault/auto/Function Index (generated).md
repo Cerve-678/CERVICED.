@@ -5,7 +5,7 @@
 
 #generated
 
-**3799 functions** across **538 files**.
+**3800 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -110,7 +110,7 @@
 ### `src/contexts/` (8)
 - `AuthContext.tsx` — addClientProfile · applyMode · **AuthProvider** · becomeFullMember · beginSignupVerification · cancelSignupVerification · clearStorageFolder · completeVerifiedSignup · declineReactivation · deleteClientProfile · deleteProviderProfile · enterFullMemberMode · hatState · isCurrent · keepsShownProfile · loadUserProfile · login · logout · reactivateAccount · resolveRestoredMode · returns · schedule · switchMode · tryAgain · updateUser · upgradeToProvider · **useAuth**
 - `BookingContext.tsx` — above · applyProviderResponse · applyRejection · are · **BookingProvider** · cancelBooking · canReschedule · confirmGroupReschedule · confirmReschedule · createBookingsFromCart · declineGroupReschedule · declineReschedule · getBookingById · getBookingsByDate · getBookingsByGroupId · getBookingsByProvider · holdCartCheckoutSlots · is · isDbBookingId · loadBookings · loadOlderBookings · markProviderNoShow · pastBookings · providerRespondToReschedule · refreshBookingStatuses · releaseCartCheckoutSlots · reloadBookings · reloadBookingsIfStale · requestReschedule · saveBookings · serves · todayBookings · upcomingBookings · updateBookingStatus · validateBookingsBeforeCheckout
-- `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getItemQuantity · getProviderTotal · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · memoizedTotals · **offlineProviderItems** · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
+- `CartContext.tsx` — addServiceInstance · addToCart · calculateTotals · **CartProvider** · clearCart · clearCartError · clearProviderItems · contextValue · getBookingSummary · getItemQuantity · getProviderTotal · getServiceInstanceCount · getServiceInstances · getTotalServiceInstances · has · isItemInCart · itemsByProvider · lookupKey · memoizedTotals · **offlineProviderItems** · removeFromCart · resolveCartItemProviderId · updateCartItem · updateQuantity · with
 - `DisplaySettingsContext.tsx` — apply · **DisplaySettingsProvider** · loadAccountDisplaySettings · persist · setFontChoice · setLanguage · setRegion · setTextScale · **useDisplaySettings**
 - `FontContext.tsx` — **FontProvider** · textStyles · **useFont** · value
 - `RegistrationContext.tsx` — **RegistrationProvider** · resetData · updateData · **useRegistration** · value

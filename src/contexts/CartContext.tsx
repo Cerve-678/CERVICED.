@@ -528,14 +528,28 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // Repair or drop any stored item that lost its provider link while the
           // cart sat in storage (provider renamed, or the item predates
-          // providerId).
+          // providerId). Each distinct provider is looked up once, all in
+          // parallel — several items from one provider share the lookup.
           const providerIdByItem = new Map<string, string>();
+          const lookupKey = (it: CartItem) => `${it.providerSlug ?? ''}|${it.providerName}`;
+          const unlinked = stored.filter(it => !it.providerId);
+          const lookups = new Map<string, CartItem>();
+          unlinked.forEach(it => {
+            if (!lookups.has(lookupKey(it))) lookups.set(lookupKey(it), it);
+          });
+          const resolvedByKey = new Map(
+            await Promise.all(
+              [...lookups].map(async ([key, it]) =>
+                [key, await resolveCartItemProviderId(it).catch(() => null)] as const,
+              ),
+            ),
+          );
           for (const it of stored) {
             if (it.providerId) {
               providerIdByItem.set(it.id, it.providerId);
               continue;
             }
-            const resolvedId = await resolveCartItemProviderId(it).catch(() => null);
+            const resolvedId = resolvedByKey.get(lookupKey(it)) ?? null;
             if (resolvedId) {
               providerIdByItem.set(it.id, resolvedId);
               dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });

@@ -102,6 +102,34 @@ describe("restoring a saved cart", () => {
   });
 });
 
+describe("re-linking unlinked items", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    (getProviderIdByDisplayName as jest.Mock).mockResolvedValue(null);
+  });
+
+  it("looks each provider up once, not once per item", async () => {
+    (storage.getItem as jest.Mock).mockResolvedValue([
+      item("a", "Lola"),
+      item("b", "Lola"),
+      item("c", "Mia"),
+    ]);
+    (getProviderBySlug as jest.Mock).mockImplementation(async (slug: string) => ({ id: `p-${slug}` }));
+    (getLiveProviderIds as jest.Mock).mockResolvedValue(new Set(["p-lola", "p-mia"]));
+
+    const { result } = renderHook(() => useCart(), { wrapper });
+
+    await waitFor(() => expect(getLiveProviderIds).toHaveBeenCalled(), SLOW);
+    expect(getProviderBySlug).toHaveBeenCalledTimes(2);
+    expect(getLiveProviderIds).toHaveBeenCalledWith(["p-lola", "p-mia"]);
+    await waitFor(
+      () => expect(result.current.items.map((i) => i.providerId)).toEqual(["p-lola", "p-lola", "p-mia"]),
+      SLOW,
+    );
+  });
+});
+
 describe("offlineProviderItems", () => {
   it("ignores items with no resolved provider", () => {
     const items = [item("a", "Lola"), item("b", "Gone")];
