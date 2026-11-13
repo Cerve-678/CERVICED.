@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **191 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **88 files**
-- `src/services/databaseService.ts` _(95)_
+- `src/services/databaseService.ts` _(96)_
 - `src/features/providers/goLiveStatus.ts` _(60)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
@@ -348,11 +348,11 @@ Curated: [[Services]] · **55 files**
 ## Cart & checkout
 Curated: [[Payments]] · **86 files**
 - `src/screens/client/CartScreen.tsx` _(441)_
-- `src/services/databaseService.ts` _(108)_
+- `src/services/databaseService.ts` _(110)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/components/BookingSheet.tsx` _(35)_
-- `src/contexts/CartContext.tsx` _(31)_
+- `src/contexts/CartContext.tsx` _(35)_
 - `src/services/AvailabilityService.ts` _(31)_
 - `src/services/becca/capabilities/client.ts` _(26)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_

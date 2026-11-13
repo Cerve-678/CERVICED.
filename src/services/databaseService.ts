@@ -7686,6 +7686,27 @@ export async function getMobileProviderDisplayNames(
   );
 }
 
+/**
+ * Of the given provider ids, which ones are live and active — i.e. a client
+ * can still open their profile and book them. Used to drop a saved cart's
+ * items from providers who went offline while the cart sat in storage.
+ * Throws on error so the caller can tell "not live" apart from "couldn't check".
+ */
+export async function getLiveProviderIds(
+  providerIds: string[],
+): Promise<Set<string>> {
+  if (providerIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id")
+    .in("id", providerIds)
+    .eq("is_active", true)
+    .eq("has_gone_live", true)
+    .limit(providerIds.length);
+  if (error) throw error;
+  return new Set(((data ?? []) as { id: string }[]).map((p) => p.id));
+}
+
 /** Of the given provider ids, which ones require a consultation before a new client's first booking. */
 export async function getConsultationRequiredProviderIds(
   providerIds: string[],

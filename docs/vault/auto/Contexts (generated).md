@@ -9,7 +9,7 @@
 
 - `src/contexts/AuthContext.tsx` — `AuthProvider`, `SIGNUP_VERIFICATION_HOLD_MS`, `useAuth`
 - `src/contexts/BookingContext.tsx` — `BookingProvider`, `createBookingDateTime`, `useBooking`
-- `src/contexts/CartContext.tsx` — `CartProvider`, `useCart`
+- `src/contexts/CartContext.tsx` — `CartProvider`, `offlineProviderItems`, `useCart`
 - `src/contexts/DisplaySettingsContext.tsx` — `DisplaySettingsProvider`, `useDisplaySettings`
 - `src/contexts/FontContext.tsx` — `FontProvider`, `useFont`
 - `src/contexts/RegistrationContext.tsx` — `RegistrationProvider`, `useRegistration`
