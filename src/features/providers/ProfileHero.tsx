@@ -292,7 +292,7 @@ function CurvedCaption({ text, color, width }: { text: string; color: string; wi
 }
 
 /** How much lower a hero that opens on text starts than one that opens on the logo. */
-const TEXT_FIRST_DROP = 28;
+const TEXT_FIRST_DROP = 48;
 
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
