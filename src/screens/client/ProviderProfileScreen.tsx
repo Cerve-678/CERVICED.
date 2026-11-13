@@ -1937,12 +1937,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
     return [...new Set(types.map((type) => (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase()))].join(" · ");
   }, [provider]);
-  // Scrapbook's card under the name: their specialities, else what they do.
-  const heroChips = useMemo(() => {
-    if (!provider) return [];
-    const picks = provider.specialties.length ? provider.specialties : heroKicker.split(" · ").filter(Boolean);
-    return picks.slice(0, 3);
-  }, [provider, heroKicker]);
 
   // Cover's pills under the name: every service type they offer, their area
   // and how they work — the same facts as the small-caps line other styles show.
@@ -5163,8 +5157,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroText={heroText}
                 heroSub={heroSub}
                 heroIsDark={heroIsDark}
-                chips={heroChips}
-                chipCard={{ background: cardBg, text: OP.text }}
                 renderLogo={(size) => (
                   <HeroLogo
                     size={size}

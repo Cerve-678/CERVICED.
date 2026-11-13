@@ -153,8 +153,6 @@ export function ProfileStylePreview({
             heroText={heroText}
             heroSub={heroSub}
             heroIsDark={heroIsDark}
-            chips={kicker.split(" · ").filter(Boolean).slice(0, 3)}
-            chipCard={{ background: cardBg, text: OP.text }}
             renderLogo={size => (
               <HeroLogo
                 size={size}
