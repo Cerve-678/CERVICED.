@@ -11,7 +11,7 @@ jest.mock('expo-blur', () => {
   return { BlurView: View };
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('react-native-svg', () => ({ __esModule: true, default: () => null, Path: () => null }));
+jest.mock('react-native-svg', () => ({ __esModule: true, default: () => null, Path: () => null, Defs: () => null, Text: () => null, TextPath: () => null }));
 jest.mock('../components/ProfileHeroBackdrop', () => () => null);
 jest.mock('../components/FramedLogo', () => ({ LogoCircle: () => null }));
 
@@ -28,6 +28,8 @@ function renderPreview(styleKey: (typeof PAGE_STYLES)[number]['key']) {
       logoFraming={null}
       metaLabels={['LASHES', 'PECKHAM']}
       pillLabels={['LASHES', 'PECKHAM', 'HOME STUDIO']}
+      kicker="LASHES"
+      location="Peckham"
     />,
   );
 }
@@ -58,5 +60,34 @@ describe('Branding preview', () => {
     renderPreview('classic');
     expect(screen.getByText('About')).toBeTruthy();
     expect(screen.getByText('Policy')).toBeTruthy();
+  });
+});
+
+describe('hero layouts', () => {
+  it('puts the name at the top of Arch, with the welcome, the area and "Meet"', () => {
+    renderPreview('arch');
+    expect(screen.getByText('WELCOME TO MY BOOKING PAGE')).toBeTruthy();
+    expect(screen.getByText('Located in Peckham')).toBeTruthy();
+    expect(screen.getByText('Meet')).toBeTruthy();
+    expect(screen.getByText('Amara')).toBeTruthy();
+  });
+
+  it('sets Framed\'s welcome beside the logo', () => {
+    renderPreview('framed');
+    expect(screen.getByText('WELCOME TO')).toBeTruthy();
+    expect(screen.getByText('located in')).toBeTruthy();
+  });
+
+  it('leaves the logo off Cover, and keeps it on Classic', () => {
+    renderPreview('cover');
+    expect(screen.queryByText('AL')).toBeNull();
+    screen.unmount();
+    renderPreview('classic');
+    expect(screen.getByText('AL')).toBeTruthy();
+  });
+
+  it('prints what they do above the name on Spa', () => {
+    renderPreview('spa');
+    expect(screen.getByText('LASHES')).toBeTruthy();
   });
 });

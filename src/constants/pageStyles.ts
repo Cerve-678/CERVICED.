@@ -44,6 +44,20 @@ export type PagePolicies =
   | 'hairline'  // quiet rows between hairlines
   | 'bubbles';  // two-up rounded tiles
 
+/**
+ * How the hero (the top of the profile, over the photo or colours) is laid
+ * out. Every layout keeps the stars, the slots pill with its bell, Instagram
+ * and a link-only provider's Book block; they differ in where the logo, the
+ * name and the words around them sit.
+ */
+export type PageHero =
+  | 'stacked'    // logo, then the name under it, centred (Classic, Glossy)
+  | 'cover'      // no logo: a huge name low over the photo, pills under it
+  | 'masthead'   // the name at the top as a heading, then the arched logo beside "Meet" and their About
+  | 'sideBySide' // the logo on the left; "Welcome to", the name, their About and area on the right
+  | 'poster'     // a polaroid logo, a big name, and a card of what they do overlapping the hero's foot
+  | 'spa';       // what they do as a tiny spaced line, the name, a ringed logo and their opening line
+
 /** The frame round the logo in the hero. */
 export type PageLogoFrame = 'circle' | 'arch' | 'polaroid' | 'doubleRing' | 'glossRing';
 
@@ -55,8 +69,9 @@ export interface PageStyle {
   cards: PageCards;
   policies: PagePolicies;
   logo: PageLogoFrame;
-  /** The business name's size against the standard one. */
-  nameScale: number;
+  hero: PageHero;
+  /** Their About sits in the hero (Arch, Framed), so the page doesn't repeat it as a section. */
+  aboutInHero: boolean;
   /** Service types, area and venue as white pills under the name. */
   heroPills: boolean;
   /** A bar of section links (About, Services, Policies, Reviews) at the top of the page. */
@@ -72,37 +87,44 @@ export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
 export const PAGE_STYLES: readonly PageStyle[] = [
   {
     key: 'classic', name: 'Classic', description: 'Frosted cards, the profile as it has always looked',
-    heading: 'plain', cards: 'frosted', policies: 'rows', logo: 'circle', nameScale: 1,
+    heading: 'plain', cards: 'frosted', policies: 'rows', logo: 'circle',
+    hero: 'stacked', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: false, numberedServices: false,
   },
   {
-    key: 'cover', name: 'Cover', description: 'Your name across your photo, big lowercase headings',
-    heading: 'bigLower', cards: 'none', policies: 'boxes', logo: 'circle', nameScale: 1.6,
+    key: 'cover', name: 'Cover', description: 'Your name huge across your photo, big lowercase headings',
+    heading: 'bigLower', cards: 'none', policies: 'boxes', logo: 'circle',
+    hero: 'cover', aboutInHero: false,
     heroPills: true, jumpBar: true, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'arch', name: 'Arch', description: 'An arched logo, script-and-serif headings, flat tiles',
-    heading: 'scriptPair', cards: 'flat', policies: 'discTiles', logo: 'arch', nameScale: 1,
+    key: 'arch', name: 'Arch', description: 'Your name at the top, an arched logo beside your About',
+    heading: 'scriptPair', cards: 'flat', policies: 'discTiles', logo: 'arch',
+    hero: 'masthead', aboutInHero: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'framed', name: 'Framed', description: 'Outlined boxes with the title set into the line',
-    heading: 'legend', cards: 'outline', policies: 'circles', logo: 'arch', nameScale: 1,
+    key: 'framed', name: 'Framed', description: 'Your logo beside your name, outlined boxes',
+    heading: 'legend', cards: 'outline', policies: 'circles', logo: 'arch',
+    hero: 'sideBySide', aboutInHero: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'scrapbook', name: 'Scrapbook', description: 'A polaroid logo and your policies on a wavy band',
-    heading: 'capsScript', cards: 'paper', policies: 'band', logo: 'polaroid', nameScale: 1,
+    key: 'scrapbook', name: 'Scrapbook', description: 'A polaroid logo, your name big, policies on a wavy band',
+    heading: 'capsScript', cards: 'paper', policies: 'band', logo: 'polaroid',
+    hero: 'poster', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
     key: 'spa', name: 'Spa', description: 'Calm and minimal: fine lines, numbered treatments',
-    heading: 'spacedCaps', cards: 'none', policies: 'hairline', logo: 'doubleRing', nameScale: 1,
+    heading: 'spacedCaps', cards: 'none', policies: 'hairline', logo: 'doubleRing',
+    hero: 'spa', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
     key: 'glossy', name: 'Glossy', description: 'Shiny, rounded cards and bubbly headings',
-    heading: 'bubbly', cards: 'gloss', policies: 'bubbles', logo: 'glossRing', nameScale: 1,
+    heading: 'bubbly', cards: 'gloss', policies: 'bubbles', logo: 'glossRing',
+    hero: 'stacked', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
@@ -141,11 +163,11 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
   about: ['Meet', 'the Artist'],
   policies: ['Booking', 'Policies'],
   services: ['The', 'Menu'],
-  reviews: ['Kind', 'Words'],
+  reviews: ['Client', 'Reviews'],
   hours: ['Opening', 'Hours'],
   contact: ['Get in', 'Touch'],
   info: ['Good to', 'Know'],
-  portfolio: ['Recent', 'Work'],
+  portfolio: ['My', 'Portfolio'],
   specialities: ['My', 'Specialities'],
   policyPages: ['Before', 'You Book'],
 };

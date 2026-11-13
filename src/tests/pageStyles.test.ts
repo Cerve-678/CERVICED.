@@ -54,7 +54,7 @@ describe('page styles', () => {
   it('keeps Classic exactly as the profile always was', () => {
     const classic = getPageStyle('classic');
     expect(classic).toMatchObject({
-      heading: 'plain', cards: 'frosted', policies: 'rows', logo: 'circle', nameScale: 1,
+      heading: 'plain', cards: 'frosted', policies: 'rows', logo: 'circle', hero: 'stacked', aboutInHero: false,
       heroPills: false, jumpBar: false, separateAboutAndPolicies: false, numberedServices: false,
     });
     expect(serviceCardSurface(classic, { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG })).toBeNull();
@@ -104,5 +104,12 @@ describe('policy picture look in the stored theme key', () => {
     const key = encodeThemeKey('app', undefined, undefined, undefined, undefined, 'bleed');
     expect(key).toBe(`app|${SHEET_BG}|blend|rounded|classic|bleed`);
     expect(parseThemeKey(key)).toMatchObject({ pageStyle: 'classic', policyLook: 'bleed' });
+  });
+});
+
+describe('two-part headings say what the section is', () => {
+  it('calls the reviews and portfolio sections by name', () => {
+    expect(headingPair('reviews')).toEqual(['Client', 'Reviews']);
+    expect(headingPair('portfolio')).toEqual(['My', 'Portfolio']);
   });
 });
