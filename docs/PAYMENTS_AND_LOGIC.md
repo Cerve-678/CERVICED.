@@ -448,6 +448,16 @@ Pay or PayPal.
   (`late_reschedule_rule_starts_at()`, fixed when the migration ran). Client
   Terms §13 says so. *Live since 1 November (migration `20261101130000`,
   `apply-cancellation-refund` v8). The warnings need the next app build.*
+- **A provider's reschedule offer stops at the start.** A provider can offer
+  new times "cancel if declined": if the client declines, the booking is
+  cancelled and fully refunded. Once the appointment has started (UK time) a
+  provider can't send or answer with new times, and a client can't decline a
+  cancel-if-declined offer sent just before the start, because that would
+  cancel and fully refund a booking already under way, which a provider cancel
+  isn't allowed to do either. Both sides are told to message the other to sort
+  it out. *On branch `fix/no-reschedule-offer-after-start` (migration
+  `20261113170000_no_reschedule_offer_after_start`); the app wording needs the
+  next build, the server refusal works on any build.*
 - When a late cancellation keeps money, both sides are told: the provider
   ("You kept the £20 deposit…") and the client ("£40 refunded…").
 - **PayPal:** the same rules apply. Stripe allows PayPal refunds up to 180
@@ -1083,6 +1093,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 12 Nov | One payout's Stripe check failing no longer stops the payout job; it becomes a failed try on the usual schedule. A checkout whose payment Stripe doesn't have is closed as abandoned and support is told | One bad payout could otherwise hold up every provider's payout indefinitely, and the September test checkout had errored every 5 minutes since |
 | 12 Nov | Deleting an account or profile waits until no money on it is still moving (`account_deletion_blockers`); the 30-day job re-checks and deletes each account on its own. Live since 12 November (migration `20261112110000_account_deletion_waits_for_money`) | Deleting used to erase held payouts, open refund requests and debts with nothing paid, refunded or recovered, and one tipped client made every deletion in a run fail |
 | 12 Nov | A cancelled booking whose refund never went out is sent again (`process_unsent_refunds`, every 10 minutes: 5 tries, then daily) and listed in support's daily email after an hour. Live since 12 November (migration `20261112120000_retry_unsent_refunds`; `apply-cancellation-refund`, `refund-payment` and `money-daily-summary` deployed) | Every refund after a cancel was a single unchecked call: if it failed, the client's money stayed taken and nothing noticed |
+| 13 Nov | A provider can't offer new times once an appointment has started, and a client can't decline a cancel-if-declined offer after the start. Each side is told to message the other. On branch `fix/no-reschedule-offer-after-start` | A "cancel if declined" offer was a side door to the full refund that a provider cancel after the start is refused |
 
 ---
 

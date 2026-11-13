@@ -1,5 +1,7 @@
 import { BookingStatus } from '../types/booking';
-import { getRescheduleBlock, getStaleRequestBlock, hasBookingDatePassed } from '../utils/rescheduleBlockedReason';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { getRescheduleBlock, getStaleRequestBlock, hasBookingDatePassed, PROVIDER_STARTED_BLOCK } from '../utils/rescheduleBlockedReason';
 
 // Fixed "now": Fri 25 Sep 2026, 12:00 local.
 const NOW = new Date(2026, 8, 25, 12, 0, 0);
@@ -28,12 +30,24 @@ describe('getRescheduleBlock', () => {
     expect(getRescheduleBlock(BookingStatus.UPCOMING, ...FUTURE, NOW)).toBeNull();
   });
 
-  it('allows one that is in progress, even though its start has passed', () => {
-    expect(getRescheduleBlock(BookingStatus.IN_PROGRESS, ...PAST, NOW)).toBeNull();
+  it('stops a provider once the appointment is in progress, and says to message the client', () => {
+    const block = getRescheduleBlock(BookingStatus.IN_PROGRESS, ...PAST, NOW);
+    expect(block).toBe(PROVIDER_STARTED_BLOCK);
+    expect(block?.message).toMatch(/message the client to sort it out/);
   });
 
-  it('says the date has passed for an upcoming booking that is behind us', () => {
-    expect(getRescheduleBlock(BookingStatus.UPCOMING, ...PAST, NOW)?.message).toMatch(/date for this appointment has passed/);
+  it('stops a provider for an upcoming booking whose start is behind us', () => {
+    expect(getRescheduleBlock(BookingStatus.UPCOMING, ...PAST, NOW)).toBe(PROVIDER_STARTED_BLOCK);
+  });
+
+  it('uses the same words as the database refusal', () => {
+    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/20261113170000_no_reschedule_offer_after_start.sql'), 'utf8');
+    const refusal = PROVIDER_STARTED_BLOCK.message.replace("You can't offer new times once an appointment has started.", '');
+    expect(sql).toContain(refusal.trim().replace(/'/g, "''"));
+    // Every provider entry point refuses after the start, and so does a client's
+    // cancel-if-declined decline.
+    expect(sql.match(/AT TIME ZONE 'Europe\/London'\) <= now\(\)/g)).toHaveLength(3);
+    expect(sql).toMatch(/IF v_cancel AND v_starts_at <= now\(\) THEN/);
   });
 
   it('says cancelled, not date-passed, when both are true — the event wins', () => {
@@ -60,6 +74,11 @@ describe('getRescheduleBlock', () => {
 });
 
 describe('getRescheduleBlock for a client', () => {
+  it('still lets a client ask while it is in progress, and says the date passed after', () => {
+    expect(getRescheduleBlock(BookingStatus.IN_PROGRESS, ...PAST, NOW, 'client')).toBeNull();
+    expect(getRescheduleBlock(BookingStatus.UPCOMING, ...PAST, NOW, 'client')?.message).toMatch(/date for this appointment has passed/);
+  });
+
   it('words a pending booking around the provider confirming, not "you"', () => {
     const block = getRescheduleBlock(BookingStatus.PENDING, ...FUTURE, NOW, 'client');
     expect(block?.message).toMatch(/waiting for the provider/);

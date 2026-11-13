@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-13, NOT applied (no reschedule offer after start)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113170000 | `no_reschedule_offer_after_start` | **NOT APPLIED.** Redefines from live with md5 guards `provider_initiate_reschedule` (`9cc45a5d…`), `provider_initiate_reschedule_with_note` (`b79cd81b…`), `respond_to_reschedule_request` (`a3894abb…`), `decline_reschedule_offer` (`04be8430…`): refuse after the UK start time (decline: only a cancel-if-declined one). Forced-rollback dry run 2026-11-13 passed (both provider entry points refused a real started booking as its provider; live unchanged). Security review: no blocking findings. Apply was blocked by the session's permission check. Frontier at authoring: live max `20261113150000`; unapplied `20261113160000_late_cancel_half_top_up` (peer worktree, no shared objects). Written on `fix/no-reschedule-offer-after-start`. |
+
 ### Applied 2026-11-13 (calendar sync busy times)
 
 | Authored version | Name | Status |

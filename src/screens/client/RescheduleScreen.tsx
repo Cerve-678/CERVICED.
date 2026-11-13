@@ -28,6 +28,7 @@ import {
   RESCHEDULE_MAX_DATES,
 } from '../../utils/rescheduleWindow';
 import { logger, reportError } from '../../utils/logger';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -489,8 +490,11 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 await declineReschedule(booking.id);
               }
               navigation.goBack();
-            } catch (err: any) {
-              showAlert('Could Not Decline', err?.message || 'Something went wrong. Please try again.');
+            } catch (err: unknown) {
+              // Our own guard (P0001) is written for the client, e.g. a
+              // cancel-if-declined offer that closed when the appointment
+              // started; anything technical gets the plain fallback.
+              showAlert('Could Not Decline', toUserMessageAllowingDbGuard(err, 'Something went wrong. Please try again.', 'RescheduleScreen.decline'));
             } finally {
               setIsDeclining(false);
             }
