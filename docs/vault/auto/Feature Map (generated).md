@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **371 files**
 - `src/screens/client/RescheduleScreen.tsx` _(191)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(149)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(151)_
 - `src/screens/shared/NotificationsScreen.tsx` _(141)_
 - `src/services/AvailabilityService.ts` _(139)_
 - `supabase/waitlist_holds.sql` _(134)_
@@ -135,9 +135,9 @@ Curated: [[Booking Flow]] · **371 files**
 - `src/types/booking.ts` _(108)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/database.ts` _(102)_
+- `src/components/BookingSheet.tsx` _(100)_
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
-- `src/components/BookingSheet.tsx` _(98)_
 - `src/features/bookings/activityCentre.ts` _(95)_
 - … +341 more
 
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **190 files**
 - … +160 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **87 files**
+Curated: [[Provider Onboarding & Go-Live]] · **88 files**
 - `src/services/databaseService.ts` _(95)_
 - `src/features/providers/goLiveStatus.ts` _(60)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **87 files**
 - `src/screens/client/CartScreen.tsx` _(4)_
 - `src/screens/auth/ClaimProviderScreen.tsx` _(3)_
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
-- … +57 more
+- … +58 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **67 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **211 files**
 - … +181 more
 
 ## Auth
-Curated: [[Contexts]] · **219 files**
+Curated: [[Contexts]] · **220 files**
 - `src/services/databaseService.ts` _(340)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **219 files**
 - `src/features/admin/useSignInAsAccount.ts` _(14)_
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
-- … +189 more
+- … +190 more
 
 ## Becca / AI
 Curated: [[Services]] · **55 files**
@@ -351,7 +351,7 @@ Curated: [[Payments]] · **86 files**
 - `src/services/databaseService.ts` _(108)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
-- `src/components/BookingSheet.tsx` _(34)_
+- `src/components/BookingSheet.tsx` _(35)_
 - `src/contexts/CartContext.tsx` _(31)_
 - `src/services/AvailabilityService.ts` _(31)_
 - `src/services/becca/capabilities/client.ts` _(26)_

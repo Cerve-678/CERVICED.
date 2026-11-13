@@ -47,7 +47,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageCropModal } from '../../components/ImageCropModal';
-import { MAX_POLICY_IMAGES, policyImageFields, policyImageUrls } from '../../features/providers/policyImages';
+import {
+  MAX_POLICY_IMAGES,
+  policyImageEdges,
+  policyImageFields,
+  policyImageUrls,
+  prunePolicyImageEdges,
+  type PolicyImageEdge,
+} from '../../features/providers/policyImages';
+import { edgeColoursFromPhoto } from '../../features/provider-registration/photoColours';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -208,6 +216,9 @@ export default function PoliciesScreen({ navigation }: any) {
   const [carriedPolicies, setCarriedPolicies] = useState<Record<string, unknown>>({});
   // Uploads still in flight; a few photos picked at once upload one by one.
   const [policyImageUploads, setPolicyImageUploads] = useState(0);
+  // Each page's top and bottom edge colour, keyed by URL, so the profile can
+  // run the page into the page around it (Branding → Policy Pictures).
+  const [imageEdges, setImageEdges] = useState<Record<string, PolicyImageEdge>>({});
   const policyImageUploading = policyImageUploads > 0;
   // Photos picked together, waiting to be cropped in turn. The first is open.
   const [policyImageCropQueue, setPolicyImageCropQueue] = useState<string[]>([]);
@@ -247,6 +258,7 @@ export default function PoliciesScreen({ navigation }: any) {
         const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
         // Reads the old single image too, so a provider's existing page stays.
         merged.policyImageUrls = policyImageUrls(saved);
+        setImageEdges(policyImageEdges(saved));
         // Saved before 'Full charge' became 'Half the price' (2026-11-01).
         if ((merged.cancelPenalty as string) === 'full') merged.cancelPenalty = 'half';
         if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
@@ -319,6 +331,11 @@ export default function PoliciesScreen({ navigation }: any) {
       // sharp in the scrolling viewer instead of shrinking by its height.
       const publicUrl = await uploadToStorage('portfolio', path, uri, 'document');
       setPolicies(prev => ({ ...prev, policyImageUrls: [...prev.policyImageUrls, publicUrl].slice(0, MAX_POLICY_IMAGES) }));
+      // Read while the photo is still on this phone. Best effort: without it
+      // the profile works the colours out itself.
+      edgeColoursFromPhoto(uri)
+        .then(edge => setImageEdges(prev => ({ ...prev, [publicUrl]: edge })))
+        .catch(() => {});
     } catch (e: any) {
       Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
     } finally {
@@ -357,6 +374,7 @@ export default function PoliciesScreen({ navigation }: any) {
         ...carriedPolicies,
         ...policies,
         ...policyImageFields(policies.policyImageUrls),
+        policyImageEdges: prunePolicyImageEdges(imageEdges, policies.policyImageUrls),
         cancelCustomFee: policies.cancelPenalty === 'custom' ? policies.cancelCustomFee : '',
         noShowFee: policies.noShowAction === 'custom' ? policies.noShowFee : '',
         ...(isLinkOnly ? LINK_ONLY_CLEARED : {}),
@@ -375,7 +393,7 @@ export default function PoliciesScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [userId, providerId, policies, loadedNotice, carriedPolicies, loadFailed, navigation, isLinkOnly]);
+  }, [userId, providerId, policies, imageEdges, loadedNotice, carriedPolicies, loadFailed, navigation, isLinkOnly]);
 
   if (loading) {
     return (

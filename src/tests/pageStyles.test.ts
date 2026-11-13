@@ -26,7 +26,7 @@ describe('page style in the stored theme key', () => {
     const key = encodeThemeKey('blush', '#F8ECF0', 'glow', 'square', 'arch');
     expect(key).toBe('blush|#F8ECF0|glow|square|arch');
     expect(parseThemeKey(key)).toEqual({
-      base: 'blush', sheet: '#F8ECF0', finish: 'glow', shape: 'square', pageStyle: 'arch',
+      base: 'blush', sheet: '#F8ECF0', finish: 'glow', shape: 'square', pageStyle: 'arch', policyLook: 'melt',
     });
   });
 
@@ -91,5 +91,18 @@ describe('page styles', () => {
     expect(policiesBringOwnSurface(getPageStyle('scrapbook'))).toBe(true);
     expect(policiesBringOwnSurface(getPageStyle('framed'))).toBe(false);
     expect(policiesBringOwnSurface(getPageStyle('spa'))).toBe(false);
+  });
+});
+
+describe('policy picture look in the stored theme key', () => {
+  it('defaults to Melt in, including for keys saved before it existed', () => {
+    expect(parseThemeKey('blush|#F8ECF0|glow|square|arch').policyLook).toBe('melt');
+    expect(parseThemeKey(null).policyLook).toBe('melt');
+  });
+
+  it('round-trips Bleed as the sixth part, writing every earlier part out', () => {
+    const key = encodeThemeKey('app', undefined, undefined, undefined, undefined, 'bleed');
+    expect(key).toBe(`app|${SHEET_BG}|blend|rounded|classic|bleed`);
+    expect(parseThemeKey(key)).toMatchObject({ pageStyle: 'classic', policyLook: 'bleed' });
   });
 });

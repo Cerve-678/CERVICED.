@@ -119,7 +119,7 @@ export function getPageStyle(key: string | null | undefined): PageStyle {
 /** Which section a heading belongs to, so a two-part heading can say something better than the bare title. */
 export type PageSectionKey =
   | 'about' | 'policies' | 'services' | 'reviews' | 'hours' | 'contact'
-  | 'info' | 'portfolio' | 'specialities';
+  | 'info' | 'portfolio' | 'specialities' | 'policyPages';
 
 /** The plain title of each section — what Classic shows, and what screen readers hear in every style. */
 export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
@@ -132,6 +132,7 @@ export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
   info: 'Additional Information',
   portfolio: 'Portfolio',
   specialities: 'Specialities',
+  policyPages: 'Full Policy',
 };
 
 /** The two halves of a script-and-serif or caps-and-script heading: a short
@@ -146,6 +147,7 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
   info: ['Good to', 'Know'],
   portfolio: ['Recent', 'Work'],
   specialities: ['My', 'Specialities'],
+  policyPages: ['Before', 'You Book'],
 };
 
 export function headingPair(section: PageSectionKey): [string, string] {
@@ -155,4 +157,23 @@ export function headingPair(section: PageSectionKey): [string, string] {
 /** Two-digit menu numbers for the Spa style: 1 → "01". */
 export function menuNumber(index: number): string {
   return String(index + 1).padStart(2, '0');
+}
+
+// ── Policy pictures ──────────────────────────────────────────────────────────
+// Branding → Policy Pictures: how a provider's uploaded policy pages sit in
+// their profile (owner's picks A and B on the 2026-11-13 canvas). Both run the
+// page edge to edge in the page's own edge colours; they differ in how it
+// meets the page around it. Stored as the sixth `|` part of profile_theme.
+
+export type PolicyPictureLook = 'melt' | 'bleed';
+
+export const DEFAULT_POLICY_PICTURE_LOOK: PolicyPictureLook = 'melt';
+
+export const POLICY_PICTURE_LOOKS: readonly { key: PolicyPictureLook; name: string; description: string }[] = [
+  { key: 'melt', name: 'Melt in', description: 'Your pages fade into the page around them' },
+  { key: 'bleed', name: 'Bleed', description: 'Your pages run edge to edge on a wavy band of their own colour' },
+];
+
+export function isPolicyPictureLook(value: string | null | undefined): value is PolicyPictureLook {
+  return POLICY_PICTURE_LOOKS.some(look => look.key === value);
 }
