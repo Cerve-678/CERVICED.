@@ -545,11 +545,14 @@ const headingStyles = StyleSheet.create({
   serif: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 24, lineHeight: 32 },
   capsRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginBottom: 12 },
   centerRow: { justifyContent: "center" },
-  caps: { fontFamily: "Syne_700Bold", fontSize: 24, lineHeight: 30 },
+  // Each style has a heading face of its own: Syne (Cover), Pinyon + Playfair
+  // (Arch), Limelight (Framed), Bebas Neue + Sacramento (Scrapbook), Tenor Sans
+  // (Spa), Shrikhand (Glossy).
+  caps: { fontFamily: "BebasNeue_400Regular", fontSize: 32, lineHeight: 36, letterSpacing: 0.5 },
   capsScript: { fontFamily: "Sacramento_400Regular", fontSize: 34, lineHeight: 40 },
   spaced: { fontFamily: "TenorSans_400Regular", fontSize: 11, letterSpacing: 4, textAlign: "center", marginBottom: 16 },
   bubbly: { fontFamily: "Shrikhand_400Regular", fontSize: 26, lineHeight: 34, textAlign: "center", marginBottom: 12 },
-  legend: { fontFamily: "Shrikhand_400Regular", fontSize: 21, lineHeight: 28, paddingHorizontal: 12 },
+  legend: { fontFamily: "Limelight_400Regular", fontSize: 20, lineHeight: 28, paddingHorizontal: 12 },
 });
 
 const surfaceStyles = StyleSheet.create({

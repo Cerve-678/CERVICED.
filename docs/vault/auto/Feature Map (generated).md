@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **103 files**
 - … +73 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **203 files**
+Curated: [[Availability & Slots]] · **205 files**
 - `src/services/databaseService.ts` _(332)_
 - `src/services/AvailabilityService.ts` _(310)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **203 files**
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(24)_
 - `src/features/cart/presentation.ts` _(22)_
 - `src/screens/client/BookingsScreen.tsx` _(21)_
-- … +173 more
+- … +175 more
 
 ## Payments
 Curated: [[Payments]] · **165 files**
@@ -108,7 +108,7 @@ Curated: [[Payments]] · **165 files**
 - … +135 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **371 files**
+Curated: [[Booking Flow]] · **372 files**
 - `src/services/databaseService.ts` _(1120)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **371 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/features/bookings/activityCentre.ts` _(95)_
-- … +341 more
+- … +342 more
 
 ## Notifications
 Curated: [[Notifications]] · **191 files**

@@ -21,7 +21,7 @@ import { resolveProviderFontFamily, resolveProviderFontScale } from "../../const
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
-import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills } from "./ProfileHero";
+import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "./ProfileHero";
 import {
   GlossShine,
   onAccentInk,
@@ -58,6 +58,9 @@ export interface ProfileStylePreviewProps {
   metaLabels: readonly string[];
   /** The same plus how they work, for Cover's pills. */
   pillLabels: readonly string[];
+  /** What they do ("LASHES · BROWS"), for the layouts that print it on its own. */
+  kicker: string;
+  location: string;
 }
 
 export function ProfileStylePreview({
@@ -71,6 +74,8 @@ export function ProfileStylePreview({
   logoFraming,
   metaLabels,
   pillLabels,
+  kicker,
+  location,
 }: ProfileStylePreviewProps) {
   const { finish, shape, pageStyle: styleKey } = parseThemeKey(themeKey);
   const pageStyle = getPageStyle(styleKey);
@@ -140,47 +145,69 @@ export function ProfileStylePreview({
         </View>
 
         <View style={styles.heroInfo}>
-          <HeroLogo
-            uri={logoUri}
-            framing={logoFraming}
-            name={name}
-            fallbackColor={accent}
-            accent={accent}
-            heroText={heroText}
+          <ProfileHeroLayout
             pageStyle={pageStyle}
-          />
-          <View style={styles.infoCenter}>
-            <Text
-              style={[
-                styles.name,
-                {
-                  color: heroText,
-                  fontFamily: resolveProviderFontFamily(brandFont),
-                  fontSize: HERO_NAME_SIZE * fontScale * pageStyle.nameScale,
-                  lineHeight: HERO_NAME_LINE_HEIGHT * fontScale * pageStyle.nameScale,
-                },
-                heroIsDark && styles.textShadow,
-              ]}
-            >
-              {name}
-            </Text>
-            {pageStyle.heroPills ? (
-              <HeroPills labels={pillLabels} />
-            ) : (
-              <Text style={[styles.meta, { color: heroSub }, heroIsDark && styles.textShadow]} numberOfLines={1}>
-                {metaLabels.join(" · ")}
+            name={name}
+            kicker={kicker}
+            location={location}
+            heroText={heroText}
+            heroSub={heroSub}
+            heroIsDark={heroIsDark}
+            chips={kicker.split(" · ").filter(Boolean).slice(0, 3)}
+            chipCard={{ background: cardBg, text: OP.text }}
+            renderLogo={size => (
+              <HeroLogo
+                size={size}
+                uri={logoUri}
+                framing={logoFraming}
+                name={name}
+                fallbackColor={accent}
+                accent={accent}
+                heroText={heroText}
+                pageStyle={pageStyle}
+              />
+            )}
+            renderName={({ scale, letterSpacing }) => (
+              <Text
+                style={[
+                  styles.name,
+                  {
+                    color: heroText,
+                    fontFamily: resolveProviderFontFamily(brandFont),
+                    fontSize: HERO_NAME_SIZE * fontScale * scale,
+                    lineHeight: HERO_NAME_LINE_HEIGHT * fontScale * scale,
+                    ...(letterSpacing ? { letterSpacing } : null),
+                  },
+                  heroIsDark && styles.textShadow,
+                ]}
+              >
+                {name}
               </Text>
             )}
-            <View style={styles.ratingRow}>
-              {[1, 2, 3, 4, 5].map(star => (
-                <Ionicons key={star} name="star" size={12} color="#FFD700" />
-              ))}
-            </View>
-            <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
-              <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
-              <Ionicons name="notifications-outline" size={16} color={OP.sub} />
-            </BlurView>
-          </View>
+            meta={
+              pageStyle.heroPills ? (
+                <HeroPills labels={pillLabels} />
+              ) : (
+                <Text style={[styles.meta, { color: heroSub }, heroIsDark && styles.textShadow]} numberOfLines={1}>
+                  {metaLabels.join(" · ")}
+                </Text>
+              )
+            }
+            details={
+              <>
+                <View style={styles.ratingRow}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Ionicons key={star} name="star" size={12} color="#FFD700" />
+                  ))}
+                </View>
+                <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
+                  <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
+                  <Ionicons name="notifications-outline" size={16} color={OP.sub} />
+                </BlurView>
+              </>
+            }
+            about={pageStyle.aboutInHero ? lines(withAlpha(heroText, 0.45), [100, 94, 70]) : null}
+          />
         </View>
 
         <View style={[styles.sheet, { backgroundColor: OP.bg }]}>
@@ -216,9 +243,11 @@ export function ProfileStylePreview({
             </BlurView>
           ) : (
             <>
-              <PageSection section="about" palette={palette}>
-                {lines(cardInk.separator)}
-              </PageSection>
+              {!pageStyle.aboutInHero ? (
+                <PageSection section="about" palette={palette}>
+                  {lines(cardInk.separator)}
+                </PageSection>
+              ) : null}
               {pageStyle.policies === "band" ? (
                 <PolicyBandSection palette={palette}>
                   <StyledPolicyList rows={PREVIEW_POLICY_ROWS} palette={palette} ink={onAccentInk(accent)} />

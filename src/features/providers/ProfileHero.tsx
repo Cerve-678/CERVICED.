@@ -4,9 +4,11 @@
 // both draw, so the preview can't drift from what clients actually see: the
 // logo in its page-style frame, Cover's pills, and the business name's size.
 
-import React from "react";
+import React, { useId } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import Svg, { Defs, Path, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
 import type { PageStyle } from "../../constants/pageStyles";
@@ -44,6 +46,7 @@ export function HeroLogo({
   pageStyle,
   onPress,
   accessibilityLabel,
+  size = 148,
 }: {
   uri: string | null | undefined;
   framing?: LogoFraming | null;
@@ -56,10 +59,17 @@ export function HeroLogo({
   /** Tap to see the logo in full. Left out in the preview. */
   onPress?: () => void;
   accessibilityLabel?: string;
+  /** The logo's width and height; the hero layouts draw it smaller beside text. */
+  size?: number;
 }) {
+  // Everything below is drawn for 148pt; other sizes scale it.
+  const box = { width: size, height: size, borderRadius: size / 2 };
+  const ringOut = (extra: number) => ({
+    top: -extra, left: -extra, width: size + extra * 2, height: size + extra * 2, borderRadius: size / 2 + extra,
+  });
   const frame =
     pageStyle.logo === "arch"
-      ? styles.arch
+      ? [styles.arch, { borderTopLeftRadius: size / 2, borderTopRightRadius: size / 2 }]
       : pageStyle.logo === "polaroid"
         ? styles.polaroidPhoto
         : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
@@ -67,28 +77,28 @@ export function HeroLogo({
           : null;
 
   const logo = uri ? (
-    <LogoCircle uri={uri} framing={framing} style={[styles.logo, frame]} />
+    <LogoCircle uri={uri} framing={framing} style={[styles.logo, box, frame]} />
   ) : (
-    <View style={[styles.logo, frame, styles.initialsWrap, { backgroundColor: fallbackColor }]}>
-      <Text style={styles.initials}>{logoInitials(name)}</Text>
+    <View style={[styles.logo, box, frame, styles.initialsWrap, { backgroundColor: fallbackColor }]}>
+      <Text style={[styles.initials, { fontSize: 28 * (size / 148) }]}>{logoInitials(name)}</Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
       <View style={pageStyle.logo === "polaroid" ? styles.polaroid : undefined}>
-        <View style={styles.wrapper}>
+        <View style={[styles.wrapper, { width: size, height: size }]}>
           {pageStyle.logo === "glossRing" ? (
             <LinearGradient
               colors={["#FFFFFF", blend(accent, "#FFFFFF", 0.45), "#FFFFFF"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.glossRing}
+              style={[styles.glossRing, ringOut(8 * (size / 148))]}
               pointerEvents="none"
             />
           ) : null}
           {pageStyle.logo === "doubleRing" ? (
-            <View style={[styles.doubleRing, { borderColor: withAlpha(heroText, 0.7) }]} pointerEvents="none" />
+            <View style={[styles.doubleRing, ringOut(11 * (size / 148)), { borderColor: withAlpha(heroText, 0.7) }]} pointerEvents="none" />
           ) : null}
           {uri && onPress ? (
             <TouchableOpacity
@@ -105,7 +115,7 @@ export function HeroLogo({
           {/* Sits on top of the logo, so it must let taps through. */}
           <LinearGradient
             colors={["rgba(255,255,255,0.3)", "transparent"]}
-            style={[styles.gloss, frame]}
+            style={[styles.gloss, box, frame]}
             pointerEvents="none"
           />
         </View>
@@ -113,6 +123,226 @@ export function HeroLogo({
     </View>
   );
 }
+
+// ── Hero layouts ─────────────────────────────────────────────────────────────
+
+export interface ProfileHeroLayoutProps {
+  pageStyle: PageStyle;
+  name: string;
+  /** What they do ("LASHES · BROWS"): Arch's curved caption, Spa's top line, Scrapbook's card. */
+  kicker: string;
+  location: string;
+  heroText: string;
+  heroSub: string;
+  heroIsDark: boolean;
+  /** Scrapbook's card under the name: specialities, else service types. */
+  chips: readonly string[];
+  chipCard: { background: string; text: string };
+  /** The logo at a given size. */
+  renderLogo: (size: number) => React.ReactNode;
+  /** The name row (name + verified tick) at a multiple of the standard size. */
+  renderName: (options: { scale: number; letterSpacing?: number }) => React.ReactNode;
+  /** The small-caps line under the name, or Cover's pills. */
+  meta: React.ReactNode;
+  /** Stars, years of experience and the slots pill with its bell (or a
+   *  link-only provider's Book block). Every layout shows these. */
+  details: React.ReactNode;
+  /** Their About, for the layouts that carry it in the hero (Arch, Framed). */
+  about: React.ReactNode;
+}
+
+/**
+ * The top of the profile, laid out by the page style (pageStyles.PageHero).
+ * Classic and Glossy stack the logo over the name as the profile always has;
+ * the others move the name, the logo and the words round them as their
+ * template did on the 2026-11-13 canvas.
+ */
+export function ProfileHeroLayout({
+  pageStyle,
+  name,
+  kicker,
+  location,
+  heroText,
+  heroSub,
+  heroIsDark,
+  chips,
+  chipCard,
+  renderLogo,
+  renderName,
+  meta,
+  details,
+  about,
+}: ProfileHeroLayoutProps) {
+  const shadow = heroIsDark ? layout.shadow : null;
+
+  switch (pageStyle.hero) {
+    case "cover":
+      // No logo: the name is the cover line, low over the photo.
+      return (
+        <View style={layout.coverTop}>
+          <View style={layout.infoCenter}>
+            {renderName({ scale: 1.6 })}
+            {meta}
+            {details}
+          </View>
+        </View>
+      );
+
+    case "masthead": {
+      // Arch: the name as the page's heading, then the arched logo with
+      // what they do curved over it, beside "Meet …" and their About.
+      const firstName = name.split(" ")[0] ?? name;
+      return (
+        <>
+          <View style={layout.mastHead}>
+            <Text style={[layout.kicker, { color: heroSub }, shadow]}>WELCOME TO MY BOOKING PAGE</Text>
+            {renderName({ scale: 1.45 })}
+            {location ? (
+              <Text style={[layout.located, { color: heroSub }, shadow]}>Located in {location}</Text>
+            ) : null}
+          </View>
+          <View style={layout.mastRow}>
+            <View style={layout.mastLogo}>
+              {kicker ? <CurvedCaption text={kicker} color={heroText} width={158} /> : null}
+              {renderLogo(124)}
+            </View>
+            <View style={layout.mastAbout}>
+              <Text style={[layout.meet, { color: heroText }, shadow]}>Meet</Text>
+              <Text style={[layout.meetName, { color: heroText }, shadow]} numberOfLines={2}>{firstName}</Text>
+              {about}
+            </View>
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+    }
+
+    case "sideBySide":
+      // Framed: the logo on the left, the welcome on the right.
+      return (
+        <>
+          <View style={layout.sideRow}>
+            {renderLogo(118)}
+            <View style={layout.sideText}>
+              <Text style={[layout.welcome, { color: heroSub }, shadow]}>WELCOME TO</Text>
+              {renderName({ scale: 0.95 })}
+              {about}
+              {location ? (
+                <View style={layout.locatedRow}>
+                  <Ionicons name="location-outline" size={13} color={heroSub} />
+                  <Text style={[layout.locatedScript, { color: heroSub }, shadow]}>located in</Text>
+                  <Text style={[layout.locatedPlace, { color: heroText }, shadow]} numberOfLines={1}>{location}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+
+    case "poster":
+      // Scrapbook: a polaroid, a big name, and a card of what they do.
+      return (
+        <>
+          {renderLogo(112)}
+          <View style={layout.infoCenterTight}>
+            {renderName({ scale: 1.4 })}
+            {meta}
+          </View>
+          {chips.length > 0 ? (
+            <View style={[layout.chipCard, { backgroundColor: chipCard.background }]}>
+              {chips.map(chip => (
+                <Text key={chip} style={[layout.chipText, { color: chipCard.text }]} numberOfLines={1}>{chip}</Text>
+              ))}
+            </View>
+          ) : null}
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+
+    case "spa":
+      // Spa: a quiet line of what they do, the name spaced out, a ringed logo.
+      return (
+        <View style={layout.infoCenter}>
+          {kicker ? <Text style={[layout.spaKicker, { color: heroSub }, shadow]}>{kicker}</Text> : null}
+          {renderName({ scale: 1.15, letterSpacing: 4 })}
+          <View style={layout.spaLogo}>{renderLogo(116)}</View>
+          {details}
+        </View>
+      );
+
+    default:
+      return (
+        <>
+          {renderLogo(148)}
+          <View style={layout.infoCenter}>
+            {renderName({ scale: 1 })}
+            {meta}
+            {details}
+          </View>
+        </>
+      );
+  }
+}
+
+/** Words curved over the top of Arch's logo. */
+function CurvedCaption({ text, color, width }: { text: string; color: string; width: number }) {
+  const id = `arc${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const r = (width - 20) / 2;
+  return (
+    <Svg width={width} height={r * 0.62} viewBox={`0 0 ${width} ${r * 0.62}`} style={layout.caption} pointerEvents="none">
+      <Defs>
+        <Path id={id} d={`M10 ${r * 0.62 + r * 0.6} A${r} ${r} 0 0 1 ${width - 10} ${r * 0.62 + r * 0.6}`} fill="none" />
+      </Defs>
+      <SvgText fill={color} fontSize={9.5} letterSpacing={2.2} fontFamily="Jura-VariableFont_wght" fontWeight="700">
+        <TextPath href={`#${id}`} startOffset="50%" textAnchor="middle">
+          {text.toUpperCase()}
+        </TextPath>
+      </SvgText>
+    </Svg>
+  );
+}
+
+const layout = StyleSheet.create({
+  shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
+  infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
+  infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
+  coverTop: { paddingTop: 120 },
+  kicker: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 10, letterSpacing: 2.4, marginBottom: 8 },
+  mastHead: { alignItems: "center", paddingHorizontal: 20, marginBottom: 18 },
+  located: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12, letterSpacing: 0.6, marginTop: 4 },
+  mastRow: { flexDirection: "row", alignItems: "flex-end", gap: 14, paddingHorizontal: 20, marginBottom: 10 },
+  mastLogo: { alignItems: "center" },
+  caption: { marginBottom: -6 },
+  mastAbout: { flex: 1, paddingBottom: 20 },
+  meet: { fontFamily: "PinyonScript_400Regular", fontSize: 34, lineHeight: 40 },
+  meetName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 26, lineHeight: 30, marginBottom: 6 },
+  sideRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginBottom: 6 },
+  sideText: { flex: 1, alignItems: "center" },
+  welcome: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, letterSpacing: 2 },
+  locatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  locatedScript: { fontFamily: "Sacramento_400Regular", fontSize: 18 },
+  locatedPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12, flexShrink: 1 },
+  chipCard: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 14,
+    marginBottom: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 22,
+    shadowColor: "#26201E",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  chipText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 13, flexShrink: 1 },
+  spaKicker: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 4, marginBottom: 10, textAlign: "center" },
+  spaLogo: { marginTop: 16 },
+});
 
 /** Cover's white pills under the name. */
 export function HeroPills({ labels }: { labels: readonly string[] }) {

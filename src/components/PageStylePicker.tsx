@@ -189,13 +189,46 @@ function MiniProfile({
   return (
     <View style={[mini.root, { backgroundColor: sheet }]}>
       <LinearGradient colors={heroColours} style={mini.hero}>
-        {style.key === 'cover' ? (
+        {style.hero === 'cover' ? (
           <>
             <Text style={mini.coverName} numberOfLines={1}>Name</Text>
             <View style={mini.pillRow}>
               <View style={mini.pill} />
               <View style={mini.pill} />
             </View>
+          </>
+        ) : style.hero === 'masthead' ? (
+          // Arch: the name on top, the arched logo beside the About.
+          <>
+            <Text style={mini.mastName} numberOfLines={1}>Name</Text>
+            <View style={mini.sideRow}>
+              <View style={mini.smallLogo}>{logo}</View>
+              <View style={mini.sideLines}>
+                <View style={mini.heroBar} />
+                <View style={[mini.heroBar, mini.heroBarShort]} />
+              </View>
+            </View>
+          </>
+        ) : style.hero === 'sideBySide' ? (
+          // Framed: the logo left, the name and About right.
+          <View style={mini.sideRow}>
+            <View style={mini.smallLogo}>{logo}</View>
+            <View style={mini.sideLines}>
+              <Text style={mini.sideName} numberOfLines={1}>Name</Text>
+              <View style={mini.heroBar} />
+              <View style={[mini.heroBar, mini.heroBarShort]} />
+            </View>
+          </View>
+        ) : style.hero === 'spa' ? (
+          // Spa: a quiet line, the name spaced out, the ringed logo.
+          <>
+            <Text style={mini.spaName} numberOfLines={1}>N A M E</Text>
+            {logo}
+          </>
+        ) : style.hero === 'poster' ? (
+          <>
+            {logo}
+            <Text style={mini.posterName} numberOfLines={1}>Name</Text>
           </>
         ) : logo}
       </LinearGradient>
@@ -236,8 +269,8 @@ const styles = StyleSheet.create({
 });
 
 const mini = StyleSheet.create({
-  root: { height: 168 },
-  hero: { height: 64, alignItems: 'center', justifyContent: 'center' },
+  root: { height: 180 },
+  hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
   logo: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)' },
   logoNoRim: { borderWidth: 0 },
@@ -246,6 +279,15 @@ const mini = StyleSheet.create({
   polaroidPhoto: { width: 28, height: 28 },
   doubleRing: { padding: 3, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)' },
   glossRing: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  mastName: { fontFamily: 'Prata-Regular', fontSize: 15, color: '#FFFFFF', marginBottom: 2 },
+  sideRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
+  smallLogo: { transform: [{ scale: 0.75 }] },
+  sideLines: { flex: 1, gap: 4, alignItems: 'center' },
+  sideName: { fontFamily: 'Prata-Regular', fontSize: 12, color: '#FFFFFF' },
+  heroBar: { height: 4, width: '90%', borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.7)' },
+  heroBarShort: { width: '60%' },
+  spaName: { fontFamily: 'TenorSans_400Regular', fontSize: 9, letterSpacing: 2, color: '#FFFFFF', marginBottom: 3 },
+  posterName: { fontFamily: 'Prata-Regular', fontSize: 14, color: '#FFFFFF', marginTop: 2 },
   coverName: { fontFamily: 'Syne_700Bold', fontSize: 22, color: '#FFFFFF', letterSpacing: -0.5 },
   pillRow: { flexDirection: 'row', gap: 4, marginTop: 3 },
   pill: { width: 24, height: 7, borderRadius: 4, backgroundColor: '#FFFFFF' },
@@ -255,13 +297,13 @@ const mini = StyleSheet.create({
   pairLeft: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
   script: { fontFamily: 'PinyonScript_400Regular', fontSize: 15, lineHeight: 20 },
   serif: { fontFamily: 'PlayfairDisplay_700Bold', fontSize: 12, lineHeight: 16 },
-  caps: { fontFamily: 'Syne_700Bold', fontSize: 11, lineHeight: 15 },
+  caps: { fontFamily: 'BebasNeue_400Regular', fontSize: 15, lineHeight: 17 },
   capsScript: { fontFamily: 'Sacramento_400Regular', fontSize: 16, lineHeight: 19 },
   spaced: { fontFamily: 'TenorSans_400Regular', fontSize: 7, letterSpacing: 2.2, textAlign: 'center', marginTop: 2 },
   bubbly: { fontFamily: 'Shrikhand_400Regular', fontSize: 13, textAlign: 'center' },
   legendBox: { borderWidth: 1, marginTop: 8, paddingHorizontal: 6, paddingTop: 10, paddingBottom: 8 },
   legend: {
-    position: 'absolute', top: -8, alignSelf: 'center', fontFamily: 'Shrikhand_400Regular',
+    position: 'absolute', top: -8, alignSelf: 'center', fontFamily: 'Limelight_400Regular',
     fontSize: 10, paddingHorizontal: 4,
   },
   card: { height: 22, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 6, overflow: 'hidden' },

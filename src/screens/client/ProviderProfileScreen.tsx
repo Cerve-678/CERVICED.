@@ -36,7 +36,7 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
-import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills } from "../../features/providers/ProfileHero";
+import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "../../features/providers/ProfileHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -1930,6 +1930,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
+
+  // What they do, for Arch's curved caption, Spa's top line and the like.
+  const heroKicker = useMemo(() => {
+    if (!provider) return "";
+    const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
+    return [...new Set(types.map((type) => (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase()))].join(" · ");
+  }, [provider]);
+  // Scrapbook's card under the name: their specialities, else what they do.
+  const heroChips = useMemo(() => {
+    if (!provider) return [];
+    const picks = provider.specialties.length ? provider.specialties : heroKicker.split(" · ").filter(Boolean);
+    return picks.slice(0, 3);
+  }, [provider, heroKicker]);
 
   // Cover's pills under the name: every service type they offer, their area
   // and how they work — the same facts as the small-caps line other styles show.
@@ -5139,298 +5152,336 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
             <View style={styles.heroInfoWrap}>
-              {/* Provider Logo, in the page style's frame (shared with
-                  Branding's preview, so the two can't drift apart). */}
-              <HeroLogo
-                uri={provider.providerLogo?.uri}
-                framing={provider.providerLogoFraming}
-                name={provider.displayName}
-                fallbackColor={provider.accentColor ?? "#AF9197"}
-                accent={adaptiveAccentColor}
-                heroText={heroText}
+              {/* The page style decides where the logo, the name and the
+                  words round them sit (ProfileHero.ProfileHeroLayout, shared
+                  with Branding's preview). Classic is the profile as it was. */}
+              <ProfileHeroLayout
                 pageStyle={pageStyle}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  setShowFullLogo(true);
-                }}
-                accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
-              />
-
-              {/* Provider Info — editorial strip */}
-              <View style={styles.providerInfoCenter}>
-                {/* Name + verified */}
-                <View style={styles.providerNameRow}>
-                  <Text
-                    style={[
-                      styles.providerDisplayName,
-                      {
-                        color: heroText,
-                        fontFamily: resolveProviderFontFamily(provider.brandFont),
-                        // Thin scripts are drawn larger so they read at the same size.
-                        // Cover draws the name much bigger, across the photo.
-                        fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * pageStyle.nameScale,
-                        lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont) * pageStyle.nameScale,
-                      },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                  >
-                    {provider.displayName}
-                  </Text>
-                  {provider.isVerified && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={18}
-                      color={heroIsDark ? "#FFFFFF" : "#007AFF"}
-                    />
-                  )}
-                </View>
-
-                {/* SERVICE TYPE · LOCATION · business-type glyph, in small
-                    caps. The business type is the icon rather than its words
-                    — "HOME STUDIO" is long next to a service and a city, and
-                    BUSINESS_TYPE_ICON already carries the same meaning on
-                    search cards, so the two surfaces now read the same way.
-                    Laid out as a row rather than inline text so the glyph can
-                    be optically centred against the caps (which sit high in
-                    their line box) instead of riding the text baseline. */}
-                {pageStyle.heroPills ? (
-                  // Cover: what they do, where, and how they work, as white
-                  // pills under the name instead of one line of small caps.
-                  <HeroPills labels={heroPillLabels} />
-                ) : (
-                  <View style={styles.providerMetaRow}>
-                    <Text
-                      style={[
-                        styles.providerMeta,
-                        { color: heroSub },
-                        heroIsDark && styles.heroTextShadow,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {/* Every type they actually have services under, so a
-                          lashes-and-brows business doesn't read as only one.
-                          serviceTypes is already ordered by their declared set
-                          and already excludes types with nothing in them. */}
-                      {(provider.serviceTypes.length
-                        ? provider.serviceTypes
-                            .map((serviceType) =>
-                              serviceType === "OTHER"
-                                ? provider.customServiceType || "SERVICE"
-                                : serviceType,
-                            )
-                            .join(" · ")
-                        : provider.providerService === "OTHER"
-                          ? provider.customServiceType || "SERVICE"
-                          : provider.providerService
-                      ).toUpperCase()}
-                      {provider.location
-                        ? ` · ${provider.location.toUpperCase()}`
-                        : ""}
-                      {provider.businessType ? " · " : ""}
-                    </Text>
-                    {provider.businessType ? (
-                      <Ionicons
-                        name={BUSINESS_TYPE_ICON[provider.businessType] as keyof typeof Ionicons.glyphMap}
-                        size={13}
-                        color={heroSub}
-                        style={styles.providerMetaIcon}
-                        accessibilityLabel={BUSINESS_TYPE_LABEL[provider.businessType]}
-                      />
-                    ) : null}
-                  </View>
+                name={provider.displayName}
+                kicker={heroKicker}
+                location={provider.location}
+                heroText={heroText}
+                heroSub={heroSub}
+                heroIsDark={heroIsDark}
+                chips={heroChips}
+                chipCard={{ background: cardBg, text: OP.text }}
+                renderLogo={(size) => (
+                  <HeroLogo
+                    size={size}
+                    uri={provider.providerLogo?.uri}
+                    framing={provider.providerLogoFraming}
+                    name={provider.displayName}
+                    fallbackColor={provider.accentColor ?? "#AF9197"}
+                    accent={adaptiveAccentColor}
+                    heroText={heroText}
+                    pageStyle={pageStyle}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setShowFullLogo(true);
+                    }}
+                    accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
+                  />
                 )}
-
-                {/* Rating inline — not for a link-only provider: their
-                    bookings happen elsewhere, so there are no CERVICED
-                    reviews to rate them from. */}
-                {!isLinkOnly && (
-                <View style={styles.ratingRow}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <StarIcon key={star} size={12} color="#FFD700" />
-                  ))}
-                  <Text
-                    style={[
-                      styles.ratingInline,
-                      { color: heroText },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                  >
-                    {provider.rating}
-                  </Text>
-                </View>
-                )}
-
-                {/* Years experience (optional) */}
-                {provider.yearsExperience ? (
-                  <Text
-                    style={[
-                      styles.yearsExp,
-                      { color: heroSub },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                  >
-                    {provider.yearsExperience} years experience
-                  </Text>
-                ) : null}
-
-                {/* Slots + bell. The pill says when this provider's diary
-                    opens — "New slots drop on the 5th" — or, without a
-                    release day, "Stay updated" beside the bell that delivers
-                    their updates. See slotsPillText. */}
-                {(() => {
-                  if (isLinkOnly) {
-                    // In place of the availability pill: Book (their own
-                    // page, opened inside CERVICED) with their socials and
-                    // messaging beside it in the accent colour.
-                    const onAccentHero = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1B2740";
-                    const socialButton = (
-                      key: string,
-                      icon: keyof typeof Ionicons.glyphMap,
-                      label: string,
-                      onPress: () => void,
-                    ) => (
-                      <TouchableOpacity
-                        key={key}
-                        style={[styles.linkOnlySocialButton, { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
-                        activeOpacity={0.8}
-                        accessibilityLabel={label}
-                        accessibilityRole="button"
-                      >
-                        <Ionicons name={icon} size={20} color={onAccentHero} />
-                      </TouchableOpacity>
-                    );
-                    return (
-                      <View style={styles.linkOnlyBookBlock}>
-                        <View style={styles.linkOnlyBookRow}>
-                          <TouchableOpacity
-                            style={[styles.linkOnlyBookButton, { backgroundColor: OP.card, borderColor: OP.border }]}
-                            onPress={openLinkOnlyBooking}
-                            activeOpacity={0.85}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Book with ${provider.displayName} on their booking page`}
-                          >
-                            <Text style={[styles.linkOnlyBookText, { color: OP.text }]}>BOOK</Text>
-                            <Ionicons name="open-outline" size={15} color={OP.text} />
-                          </TouchableOpacity>
-                          {provider.instagram
-                            ? socialButton("instagram", "logo-instagram", `Open @${provider.instagram} on Instagram`, () => {
-                                recordStat("instagram_tap");
-                                Linking.openURL(`https://instagram.com/${provider.instagram}`).catch(() => {
-                                  Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
-                                });
-                              })
-                            : null}
-                          {provider.tiktok
-                            ? socialButton("tiktok", "logo-tiktok", `Open @${provider.tiktok} on TikTok`, () => {
-                                Linking.openURL(`https://www.tiktok.com/@${provider.tiktok.replace(/^@/, "")}`).catch(() => {
-                                  Alert.alert("Couldn't open TikTok", "Please try again in a moment.");
-                                });
-                              })
-                            : null}
-                          {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
-                        </View>
+                renderName={({ scale, letterSpacing }) => (
+                  <>
+                      {/* Name + verified */}
+                      <View style={styles.providerNameRow}>
                         <Text
-                          style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
-                        >
-                          Books on their own page — opens inside CERVICED
-                        </Text>
-                      </View>
-                    );
-                  }
-                  const pillText = slotsPillText(provider.scheduleReleaseDay, provider.scheduleReleaseTime);
-                  // The bell subscribes to this provider's release
-                  // notification, but it is also the general "tell me when
-                  // this provider opens up" control, so it renders for every
-                  // provider — not only the ones with a release day set. It
-                  // used to sit inside this block's early return and vanished
-                  // whenever there was no availability headline to print.
-                  const showInstagram = !!provider.instagram;
-                  return (
-                  // Instagram sits OUTSIDE the pill, as its own round button
-                  // beside it. Inside, it read as part of the availability
-                  // statement — a third element in a row that says "when you
-                  // can book" — when it's really a link off to another app.
-                  // The bell stays in: it acts on this provider's
-                  // availability, which is exactly what the pill is about.
-                  <View style={styles.slotsRowOuter}>
-                    <BlurView
-                      intensity={cardBlurIntensity}
-                      tint={cardBlurTint}
-                      style={[
-                        styles.slotsRow,
-                        { backgroundColor: cardBg, borderColor: OP.border },
-                      ]}
-                    >
-                      <LinearGradient
-                        colors={cardHighlightColors}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                        style={styles.slotsCardHighlight}
-                      />
-                      <Text style={[styles.slotsText, { color: OP.sub }]}>
-                        {pillText}
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.bellButtonInline}
-                        onPress={handleNotificationToggle}
-                        disabled={!canSaveProvider || isNotificationLoading}
-                        activeOpacity={0.8}
-                        accessibilityLabel="Notifications"
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isNotificationsEnabled, disabled: !canSaveProvider || isNotificationLoading }}
-                      >
-                        <BellIcon
-                          size={16}
-                          color={isNotificationsEnabled ? "#4CAF50" : OP.sub}
-                        />
-                      </TouchableOpacity>
-                    </BlurView>
-                    {showInstagram ? (
-                      <TouchableOpacity
-                        style={styles.instagramButtonOutside}
-                        onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
-                          Linking.openURL(
-                            `https://instagram.com/${provider.instagram}`,
-                          ).catch(() => {
-                            Alert.alert(
-                              "Couldn't open Instagram",
-                              "Please try again in a moment.",
-                            );
-                          });
-                        }}
-                        activeOpacity={0.8}
-                        accessibilityLabel={`Open @${provider.instagram} on Instagram`}
-                        accessibilityRole="button"
-                      >
-                        <BlurView
-                          intensity={cardBlurIntensity}
-                          tint={cardBlurTint}
                           style={[
-                            styles.instagramButtonSurface,
-                            { backgroundColor: cardBg, borderColor: OP.border },
+                            styles.providerDisplayName,
+                            {
+                              color: heroText,
+                              fontFamily: resolveProviderFontFamily(provider.brandFont),
+                              // Thin scripts are drawn larger so they read at the same size.
+                              // Each hero layout sets its own size (Cover's is 1.6×).
+                              fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
+                              lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont) * scale,
+                              ...(letterSpacing ? { letterSpacing } : null),
+                            },
+                            heroIsDark && styles.heroTextShadow,
                           ]}
                         >
-                          <LinearGradient
-                            colors={cardHighlightColors}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 0, y: 1 }}
-                            style={styles.slotsCardHighlight}
-                          />
+                          {provider.displayName}
+                        </Text>
+                        {provider.isVerified && (
                           <Ionicons
-                            name="logo-instagram"
-                            size={20}
-                            color={OP.sub}
+                            name="checkmark-circle"
+                            size={18}
+                            color={heroIsDark ? "#FFFFFF" : "#007AFF"}
                           />
-                        </BlurView>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  );
-                })()}
+                        )}
+                      </View>
 
-              </View>
+                      {/* SERVICE TYPE · LOCATION · business-type glyph, in small
+                          caps. The business type is the icon rather than its words
+                          — "HOME STUDIO" is long next to a service and a city, and
+                          BUSINESS_TYPE_ICON already carries the same meaning on
+                          search cards, so the two surfaces now read the same way.
+                          Laid out as a row rather than inline text so the glyph can
+                          be optically centred against the caps (which sit high in
+                          their line box) instead of riding the text baseline. */}
+                  </>
+                )}
+                meta={
+                  <>
+                      {pageStyle.heroPills ? (
+                        // Cover: what they do, where, and how they work, as white
+                        // pills under the name instead of one line of small caps.
+                        <HeroPills labels={heroPillLabels} />
+                      ) : (
+                        <View style={styles.providerMetaRow}>
+                          <Text
+                            style={[
+                              styles.providerMeta,
+                              { color: heroSub },
+                              heroIsDark && styles.heroTextShadow,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {/* Every type they actually have services under, so a
+                                lashes-and-brows business doesn't read as only one.
+                                serviceTypes is already ordered by their declared set
+                                and already excludes types with nothing in them. */}
+                            {(provider.serviceTypes.length
+                              ? provider.serviceTypes
+                                  .map((serviceType) =>
+                                    serviceType === "OTHER"
+                                      ? provider.customServiceType || "SERVICE"
+                                      : serviceType,
+                                  )
+                                  .join(" · ")
+                              : provider.providerService === "OTHER"
+                                ? provider.customServiceType || "SERVICE"
+                                : provider.providerService
+                            ).toUpperCase()}
+                            {provider.location
+                              ? ` · ${provider.location.toUpperCase()}`
+                              : ""}
+                            {provider.businessType ? " · " : ""}
+                          </Text>
+                          {provider.businessType ? (
+                            <Ionicons
+                              name={BUSINESS_TYPE_ICON[provider.businessType] as keyof typeof Ionicons.glyphMap}
+                              size={13}
+                              color={heroSub}
+                              style={styles.providerMetaIcon}
+                              accessibilityLabel={BUSINESS_TYPE_LABEL[provider.businessType]}
+                            />
+                          ) : null}
+                        </View>
+                      )}
+                  </>
+                }
+                details={
+                  <>
+                      {/* Rating inline — not for a link-only provider: their
+                          bookings happen elsewhere, so there are no CERVICED
+                          reviews to rate them from. */}
+                      {!isLinkOnly && (
+                      <View style={styles.ratingRow}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <StarIcon key={star} size={12} color="#FFD700" />
+                        ))}
+                        <Text
+                          style={[
+                            styles.ratingInline,
+                            { color: heroText },
+                            heroIsDark && styles.heroTextShadow,
+                          ]}
+                        >
+                          {provider.rating}
+                        </Text>
+                      </View>
+                      )}
+
+                      {/* Years experience (optional) */}
+                      {provider.yearsExperience ? (
+                        <Text
+                          style={[
+                            styles.yearsExp,
+                            { color: heroSub },
+                            heroIsDark && styles.heroTextShadow,
+                          ]}
+                        >
+                          {provider.yearsExperience} years experience
+                        </Text>
+                      ) : null}
+
+                      {/* Slots + bell. The pill says when this provider's diary
+                          opens — "New slots drop on the 5th" — or, without a
+                          release day, "Stay updated" beside the bell that delivers
+                          their updates. See slotsPillText. */}
+                      {(() => {
+                        if (isLinkOnly) {
+                          // In place of the availability pill: Book (their own
+                          // page, opened inside CERVICED) with their socials and
+                          // messaging beside it in the accent colour.
+                          const onAccentHero = isDarkColor(adaptiveAccentColor) ? "#FFFFFF" : "#1B2740";
+                          const socialButton = (
+                            key: string,
+                            icon: keyof typeof Ionicons.glyphMap,
+                            label: string,
+                            onPress: () => void,
+                          ) => (
+                            <TouchableOpacity
+                              key={key}
+                              style={[styles.linkOnlySocialButton, { backgroundColor: adaptiveAccentColor }]}
+                              onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+                              activeOpacity={0.8}
+                              accessibilityLabel={label}
+                              accessibilityRole="button"
+                            >
+                              <Ionicons name={icon} size={20} color={onAccentHero} />
+                            </TouchableOpacity>
+                          );
+                          return (
+                            <View style={styles.linkOnlyBookBlock}>
+                              <View style={styles.linkOnlyBookRow}>
+                                <TouchableOpacity
+                                  style={[styles.linkOnlyBookButton, { backgroundColor: OP.card, borderColor: OP.border }]}
+                                  onPress={openLinkOnlyBooking}
+                                  activeOpacity={0.85}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Book with ${provider.displayName} on their booking page`}
+                                >
+                                  <Text style={[styles.linkOnlyBookText, { color: OP.text }]}>BOOK</Text>
+                                  <Ionicons name="open-outline" size={15} color={OP.text} />
+                                </TouchableOpacity>
+                                {provider.instagram
+                                  ? socialButton("instagram", "logo-instagram", `Open @${provider.instagram} on Instagram`, () => {
+                                      recordStat("instagram_tap");
+                                      Linking.openURL(`https://instagram.com/${provider.instagram}`).catch(() => {
+                                        Alert.alert("Couldn't open Instagram", "Please try again in a moment.");
+                                      });
+                                    })
+                                  : null}
+                                {provider.tiktok
+                                  ? socialButton("tiktok", "logo-tiktok", `Open @${provider.tiktok} on TikTok`, () => {
+                                      Linking.openURL(`https://www.tiktok.com/@${provider.tiktok.replace(/^@/, "")}`).catch(() => {
+                                        Alert.alert("Couldn't open TikTok", "Please try again in a moment.");
+                                      });
+                                    })
+                                  : null}
+                                {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
+                              </View>
+                              <Text
+                                style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
+                              >
+                                Books on their own page — opens inside CERVICED
+                              </Text>
+                            </View>
+                          );
+                        }
+                        const pillText = slotsPillText(provider.scheduleReleaseDay, provider.scheduleReleaseTime);
+                        // The bell subscribes to this provider's release
+                        // notification, but it is also the general "tell me when
+                        // this provider opens up" control, so it renders for every
+                        // provider — not only the ones with a release day set. It
+                        // used to sit inside this block's early return and vanished
+                        // whenever there was no availability headline to print.
+                        const showInstagram = !!provider.instagram;
+                        return (
+                        // Instagram sits OUTSIDE the pill, as its own round button
+                        // beside it. Inside, it read as part of the availability
+                        // statement — a third element in a row that says "when you
+                        // can book" — when it's really a link off to another app.
+                        // The bell stays in: it acts on this provider's
+                        // availability, which is exactly what the pill is about.
+                        <View style={styles.slotsRowOuter}>
+                          <BlurView
+                            intensity={cardBlurIntensity}
+                            tint={cardBlurTint}
+                            style={[
+                              styles.slotsRow,
+                              { backgroundColor: cardBg, borderColor: OP.border },
+                            ]}
+                          >
+                            <LinearGradient
+                              colors={cardHighlightColors}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 0, y: 1 }}
+                              style={styles.slotsCardHighlight}
+                            />
+                            <Text style={[styles.slotsText, { color: OP.sub }]}>
+                              {pillText}
+                            </Text>
+                            <TouchableOpacity
+                              style={styles.bellButtonInline}
+                              onPress={handleNotificationToggle}
+                              disabled={!canSaveProvider || isNotificationLoading}
+                              activeOpacity={0.8}
+                              accessibilityLabel="Notifications"
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: isNotificationsEnabled, disabled: !canSaveProvider || isNotificationLoading }}
+                            >
+                              <BellIcon
+                                size={16}
+                                color={isNotificationsEnabled ? "#4CAF50" : OP.sub}
+                              />
+                            </TouchableOpacity>
+                          </BlurView>
+                          {showInstagram ? (
+                            <TouchableOpacity
+                              style={styles.instagramButtonOutside}
+                              onPress={() => {
+                                Haptics.selectionAsync().catch(() => {});
+                                Linking.openURL(
+                                  `https://instagram.com/${provider.instagram}`,
+                                ).catch(() => {
+                                  Alert.alert(
+                                    "Couldn't open Instagram",
+                                    "Please try again in a moment.",
+                                  );
+                                });
+                              }}
+                              activeOpacity={0.8}
+                              accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                              accessibilityRole="button"
+                            >
+                              <BlurView
+                                intensity={cardBlurIntensity}
+                                tint={cardBlurTint}
+                                style={[
+                                  styles.instagramButtonSurface,
+                                  { backgroundColor: cardBg, borderColor: OP.border },
+                                ]}
+                              >
+                                <LinearGradient
+                                  colors={cardHighlightColors}
+                                  start={{ x: 0, y: 0 }}
+                                  end={{ x: 0, y: 1 }}
+                                  style={styles.slotsCardHighlight}
+                                />
+                                <Ionicons
+                                  name="logo-instagram"
+                                  size={20}
+                                  color={OP.sub}
+                                />
+                              </BlurView>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                        );
+                      })()}
+                  </>
+                }
+                about={
+                  pageStyle.aboutInHero ? (
+                    // Arch and Framed carry their About up here, so the page
+                    // doesn't repeat it as a section.
+                    <View ref={aboutCardRef} collapsable={false}>
+                      <ExpandableAboutText
+                        text={provider.aboutText}
+                        translate
+                        textStyle={[styles.heroAboutText, { color: heroText }, heroIsDark && styles.heroTextShadow]}
+                        linkStyle={styles.moreButton}
+                        linkTextStyle={[styles.moreButtonText, { color: heroText }]}
+                        onCollapse={handleAboutCollapse}
+                      />
+                    </View>
+                  ) : null
+                }
+              />
             </View>
 
             {/* The content sheet rises over the hero photo with its own large
@@ -5707,18 +5758,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <>
                   {/* Every style but Classic gives About and Policies a
                       section each, in the style's own headings and layout. */}
-                  <View ref={aboutCardRef} collapsable={false}>
-                    <PageSection section="about" palette={sectionPalette}>
-                      <ExpandableAboutText
-                        text={provider.aboutText}
-                        translate
-                        textStyle={[styles.aboutText, { color: sectionInk(sectionPalette).sub }]}
-                        linkStyle={styles.moreButton}
-                        linkTextStyle={[styles.moreButtonText, { color: sectionInk(sectionPalette).text }]}
-                        onCollapse={handleAboutCollapse}
-                      />
-                    </PageSection>
-                  </View>
+                  {!pageStyle.aboutInHero ? (
+                    <View ref={aboutCardRef} collapsable={false}>
+                      <PageSection section="about" palette={sectionPalette}>
+                        <ExpandableAboutText
+                          text={provider.aboutText}
+                          translate
+                          textStyle={[styles.aboutText, { color: sectionInk(sectionPalette).sub }]}
+                          linkStyle={styles.moreButton}
+                          linkTextStyle={[styles.moreButtonText, { color: sectionInk(sectionPalette).text }]}
+                          onCollapse={handleAboutCollapse}
+                        />
+                      </PageSection>
+                    </View>
+                  ) : null}
                   {hasProviderPolicyInfo(provider) ? (
                     <View ref={policiesSectionRef} collapsable={false}>
                       {(() => {
@@ -5941,6 +5994,13 @@ const styles = StyleSheet.create({
     position: "relative",
     width: 148,
     height: 148,
+  },
+  heroAboutText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontWeight: "700",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 6,
   },
   heroTextShadow: {
     textShadowColor: "rgba(0,0,0,0.55)",
