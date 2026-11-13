@@ -87,13 +87,14 @@ describe('hero finish in profile_theme', () => {
       sheet: '#FBF6EC',
       finish: 'split',
       shape: 'rounded',
+      pageStyle: 'classic',
     });
   });
 
   it('reads keys saved before the finish existed as a blend', () => {
-    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded' });
-    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
-    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
+    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded', pageStyle: 'classic' });
+    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic' });
+    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic' });
   });
 
   it('round-trips Sheen, which builds before it read as a blend', () => {
@@ -102,6 +103,7 @@ describe('hero finish in profile_theme', () => {
       sheet: '#EBEBEA',
       finish: 'sheen',
       shape: 'rounded',
+      pageStyle: 'classic',
     });
   });
 
@@ -112,7 +114,7 @@ describe('hero finish in profile_theme', () => {
   it('keeps a custom set readable with a finish on the end', () => {
     const base = encodeCustomTheme('#1D4A3C', '#FCFBFA', '#A98235');
     const key = encodeThemeKey(base, '#FBF6EC', 'solid');
-    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded' });
+    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded', pageStyle: 'classic' });
     expect(resolveProviderTheme(key).accent).toBe('#A98235');
   });
 
@@ -172,6 +174,7 @@ describe('card shape in profile_theme', () => {
       sheet: '#F8ECF0',
       finish: 'glow',
       shape: 'square',
+      pageStyle: 'classic',
     });
   });
 
