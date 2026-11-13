@@ -381,7 +381,7 @@ Pay or PayPal.
 
 | Situation | Who starts it | What the client gets back | What the provider keeps | CERVICED's fee |
 |---|---|---|---|---|
-| Provider declines or cancels a paid booking | Provider | Everything, automatically | Nothing | Refunded |
+| Provider declines or cancels a paid booking. They can decline a request at any time, but can cancel a confirmed booking only before it starts (UK time). Once it has started, is in progress or is marked as their no-show, they use **Issue a refund** instead, which doesn't rewrite what happened. Live since 13 Nov (`20261113110000`) | Provider | Everything, automatically | Nothing | Refunded |
 | Provider doesn't accept within 24 hours, or by an hour before the start time if that's sooner (until the start time, for a request made less than an hour ahead). Live since 2026-11-05 (`20261105090833`). | Automatic (every 5 min) | Everything, automatically | Nothing | Refunded |
 | Client cancels **before** the provider's cancellation window | Client | Everything | Nothing | Refunded |
 | Client cancels and the booking's frozen policy has a **non-refundable deposit**, with no bigger late penalty | Client | Everything except the deposit | The deposit (at most half the service price if they paid in full) | Refunded |
