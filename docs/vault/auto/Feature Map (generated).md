@@ -248,7 +248,7 @@ Curated: [[Booking Flow]] · **211 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(338)_
 - `src/services/databaseService.ts` _(272)_
-- `src/screens/client/BookingDetailScreen.tsx` _(223)_
+- `src/screens/client/BookingDetailScreen.tsx` _(226)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/RescheduleScreen.tsx` _(158)_
@@ -259,7 +259,7 @@ Curated: [[Booking Flow]] · **211 files**
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
-- `src/utils/policyDisplay.ts` _(67)_
+- `src/utils/policyDisplay.ts` _(68)_
 - `src/screens/provider/InfoRegScreen.tsx` _(65)_
 - `src/screens/shared/NotificationsScreen.tsx` _(63)_
 - `src/services/bookingService.ts` _(60)_

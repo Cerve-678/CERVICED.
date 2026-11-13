@@ -136,7 +136,9 @@ function pushRow(rows: PolicyDisplayRow[], row: PolicyDisplayRow | null): void {
  * over the descriptive `cancelNotice` text, since that's what the cancel flow
  * actually enforces. A frozen booking snapshot has no equivalent enforced
  * number (only the descriptive text was ever captured), so callers reading a
- * snapshot should omit this parameter.
+ * snapshot should omit this parameter. Since 13 Nov the database keeps that
+ * text in step with the column (keep_cancel_notice_in_step), except for
+ * link-only providers, whose notice is only their own text.
  *
  * `linkOnly`: a link-only provider takes bookings on their own site, so
  * nothing on CERVICED applies a notice window, keeps a deposit or charges a
