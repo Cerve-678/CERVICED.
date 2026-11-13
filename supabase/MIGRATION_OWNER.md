@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-13 (promo code charged at checkout)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113100000 | `promo_code_charged_at_checkout` | **APPLIED 2026-11-13** after dry run + security review, via `supabase db query --linked -f` (absolute path); frontier right before: live max `20261113090000`. Verified live: version recorded (now live max); `prepare_checkout` md5 `c9a895da…`, authenticated executes, anon doesn't; both booking columns and both promotions CHECKs present. **#474 must rebuild `prepare_checkout` from md5 `c9a895da…` and renumber above `20261113100000`; #473 must renumber above it too.** Revised after security review: a batch that comes to £0 is refused with a plain message (Stripe can't take £0); `promotions` CHECKs (percent 0–100, amount ≥ 0; 0 rows violated); `validatePromoCode` orders newest first like the server; reschedule checked (`place_reschedule_hold` inserts a £0 placeholder, no repricing). Re-dry-run passed incl. 100%-off refused and 150% insert refused. Frontier at authoring: live max `20261113090000` (this session's, applied); unapplied on open PRs `20261112100000` (#473, #474; both must renumber above the frontier anyway). Redefines `prepare_checkout` from live with md5 guard (`ca918dae…`); adds `bookings.promotion_id` (FK → promotions, ON DELETE SET NULL, partial index) and `bookings.promo_discount numeric(10,2) NOT NULL DEFAULT 0 CHECK >= 0`. Forced-rollback dry runs 2026-11-13 as a real client with temporary promotions: Nails Studio (fixed £15 deposit) 20% → base £20, deposit unchanged, discount off the balance; FacebyJen (pay in full) £100, 20% → base £80, charged £84.40 (was £105.40), fixed £5 → £100.15; unknown code refused by name; out-of-scope code → no discount; grants unchanged; live unchanged after. **#474 must also carry the promo lines into its waitlist UPDATE branch.** Written on `fix/promo-code-charged` (stacked on #480). |
+
 ### Applied 2026-11-13 (card checkout saves policy and consent)
 
 | Authored version | Name | Status |

@@ -251,6 +251,27 @@ that, putting it right means taking money back from Jo (section 2.8).
    isn't caught (Part 6). *Live since 13 November (`20261113090000`); the app part needs a new
    build. Until then no card-paid booking had either (0 of 94 on 13 November), so their
    refunds use the provider's current policy; they are not backfilled.*
+   **Promo codes are priced here too.** A provider's promo code applied in
+   the cart is sent with each item and re-checked by the server (the
+   provider's own code, active, in date in UK time). The discount is a
+   percentage of the service and its add-ons, or a fixed amount, capped at
+   the service price, and nothing for a service or category outside the
+   code's scope. **The provider pays for it:** the booking's price
+   (`base_price`) is stored after the discount (`promo_discount` and
+   `promotion_id` record which code and how much), so the fee is worked out
+   on the discounted price and the payout, deposit, late/no-show caps and
+   refunds all follow what was actually charged. With a fixed deposit the
+   discount comes off the balance paid at the appointment, not the card
+   charge. An ended or invalid code is refused by name; the cart drops ended
+   codes before Confirm & Pay. A checkout that comes to £0 after a code is
+   refused (Stripe can't take £0); the provider can add that booking
+   themselves. Promotions can't be saved below 0% or above 100%, or with a
+   negative amount. Receipts don't show the discount as its own line yet
+   (`bookings.promo_discount` holds it). *Live since 13 November. Until
+   migration
+   `20261113100000_promo_code_charged_at_checkout` the code never reached the
+   server, so the card was charged full price while the cart showed the
+   discount. The app needs a new build to send the code.*
 2. **Add the fee** from section 1.3.
 3. **Check the provider can be paid.** If any provider in the basket hasn't
    finished setting up their Stripe account, checkout is refused.
@@ -1073,6 +1094,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 18 Oct | A payout is held while a refund request is open | A refund can then come out of money CERVICED still has |
 | 18 Oct | A provider who can't cover a reversal owes it from future payouts | Keeps the books whole without charging the provider directly |
 | 19 Oct | Fee agreement records are kept six years, including after account deletion | Evidence for disputes and claims |
+| 13 Nov | Promo codes are funded by the provider and the fee is charged on the discounted price | It is the provider's promotion; the cart already showed the fee on the discounted total |
 | 13 Nov | Card checkouts freeze the provider's live policy and refuse when it differs from what the cart showed | Refunds were using the provider's current policy for every card booking; binding a client to terms changed after they added the service would be unfair |
 | 19 Oct | A fee the card can't pay becomes a 7-day payment request, with up to 3 automatic retries on declines | A fair chance to pay before it lapses |
 | 19 Oct | A saved card can't be removed until 24 hours after its appointment | It may be needed for a fee |

@@ -3476,7 +3476,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         ...(existing ?? { selectedDate: '', selectedTime: '', isDepositOnly: false }),
         notes: [existing?.notes, promoNote].filter(Boolean).join('\n'),
       } as ServiceBooking;
-      return { ...item, price: Math.max(0, (Number(item.price) || 0) - discount) };
+      return {
+        ...item,
+        price: Math.max(0, (Number(item.price) || 0) - discount),
+        // Card checkouts are priced by the server, which only discounts what
+        // it is told about — without this the client saw the discount and
+        // was charged full price.
+        ...(promo?.promo_code ? { appliedPromoCode: promo.promo_code } : {}),
+      };
     });
     const snapshot = {
       items: snapshotItems,
@@ -4392,6 +4399,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               // copy and refuses if the money terms differ.
                               policy_accepted: agreedToPolicy,
                               policy_snapshot: item.policySnapshot ?? null,
+                              // The code whose discount the review screen
+                              // showed. prepare_checkout re-validates it and
+                              // works the discount out itself.
+                              ...(item.appliedPromoCode ? { promo_code: item.appliedPromoCode } : {}),
                               // Set when the client accepted the out-of-hours
                               // confirmation in the booking sheet. The ack
                               // travels with it because prepare_checkout

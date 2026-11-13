@@ -74,6 +74,13 @@ export function ukOffsetMinutes(instant: Date): number {
   return t >= start && t < end ? 60 : 0;
 }
 
+/** Today's date in the UK as YYYY-MM-DD: the date the server compares
+ *  against with `(now() AT TIME ZONE 'Europe/London')::date`. Not the UTC date,
+ *  which is still yesterday between midnight and 1am in summer. */
+export function ukTodayYMD(now: Date = new Date()): string {
+  return ukWall(now).toISOString().slice(0, 10);
+}
+
 /** `instant` shifted so its UTC getters read UK wall-clock time. */
 function ukWall(instant: Date): Date {
   return new Date(instant.getTime() + ukOffsetMinutes(instant) * 60_000);
