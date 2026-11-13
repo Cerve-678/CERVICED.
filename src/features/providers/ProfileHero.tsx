@@ -129,15 +129,12 @@ export function HeroLogo({
 export interface ProfileHeroLayoutProps {
   pageStyle: PageStyle;
   name: string;
-  /** What they do ("LASHES · BROWS"): Arch's curved caption, Spa's top line, Scrapbook's card. */
+  /** What they do ("LASHES · BROWS"): Arch's curved caption and Spa's top line. */
   kicker: string;
   location: string;
   heroText: string;
   heroSub: string;
   heroIsDark: boolean;
-  /** Scrapbook's card under the name: specialities, else service types. */
-  chips: readonly string[];
-  chipCard: { background: string; text: string };
   /** The logo at a given size. */
   renderLogo: (size: number) => React.ReactNode;
   /** The name row (name + verified tick) at a multiple of the standard size. */
@@ -165,8 +162,6 @@ export function ProfileHeroLayout({
   heroText,
   heroSub,
   heroIsDark,
-  chips,
-  chipCard,
   renderLogo,
   renderName,
   meta,
@@ -241,7 +236,7 @@ export function ProfileHeroLayout({
       );
 
     case "poster":
-      // Scrapbook: a polaroid, a big name, and a card of what they do.
+      // Scrapbook: a polaroid and a big name.
       return (
         <>
           {renderLogo(112)}
@@ -249,13 +244,6 @@ export function ProfileHeroLayout({
             {renderName({ scale: 1.4 })}
             {meta}
           </View>
-          {chips.length > 0 ? (
-            <View style={[layout.chipCard, { backgroundColor: chipCard.background }]}>
-              {chips.map(chip => (
-                <Text key={chip} style={[layout.chipText, { color: chipCard.text }]} numberOfLines={1}>{chip}</Text>
-              ))}
-            </View>
-          ) : null}
           <View style={layout.infoCenter}>{details}</View>
         </>
       );
@@ -323,23 +311,6 @@ const layout = StyleSheet.create({
   locatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   locatedScript: { fontFamily: "Sacramento_400Regular", fontSize: 18 },
   locatedPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12, flexShrink: 1 },
-  chipCard: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    gap: 8,
-    marginHorizontal: 20,
-    marginTop: 14,
-    marginBottom: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 22,
-    shadowColor: "#26201E",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  chipText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 13, flexShrink: 1 },
   spaKicker: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 4, marginBottom: 10, textAlign: "center" },
   spaLogo: { marginTop: 16 },
 });

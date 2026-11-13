@@ -55,7 +55,7 @@ export type PageHero =
   | 'cover'      // no logo: a huge name low over the photo, pills under it
   | 'masthead'   // the name at the top as a heading, then the arched logo beside "Meet" and their About
   | 'sideBySide' // the logo on the left; "Welcome to", the name, their About and area on the right
-  | 'poster'     // a polaroid logo, a big name, and a card of what they do overlapping the hero's foot
+  | 'poster'     // a polaroid logo and a big name
   | 'spa';       // what they do as a tiny spaced line, the name, a ringed logo and their opening line
 
 /** The frame round the logo in the hero. */
