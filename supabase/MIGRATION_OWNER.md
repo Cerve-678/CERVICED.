@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-13 (client cancel after the start is late)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113120000 | `client_cancel_after_start_is_late` | **APPLIED 2026-11-13** after dry run + cerviced-security-review (nothing blocking), via `supabase db query --linked -f` (absolute path), in order 110000 → 120000 → 130000 straight after 100000; live `cancel_own_booking` md5 `e73c89a5…`; all still SECURITY DEFINER, authenticated executes, anon doesn't. **`apply-cancellation-refund` NOT deployed yet** (the deploy was refused by the tool permission check in this session); until it is, a cancel after the start counts on the reliability record but is still settled as early. Narrowed after security review: the 'never late for an unaccepted request' change was taken out and left as a decision for the owner. Frontier at authoring: live max `20261113100000` (this session's); unapplied on open PRs `20261112100000` (#473, #474, both must renumber above the frontier). Redefines from live with md5 guard `cancel_own_booking` (`1dbe7f0e…`). **Deploy `apply-cancellation-refund` right after applying** (the money rule is `isLateClientCancel`). Item 6 (UK time, 20261113140000) redefines this function again, so it must be written from live after this is applied. Forced-rollback dry run 2026-11-13, applied together with 20261113110000/120000/130000 in one transaction (each redefines different functions) as real provider/client accounts, with a confirmed booking moved to 09:00 today (bookability trigger off for that one fixture inside the transaction): started confirmed → provider cancel refused; in_progress → refused; future confirmed → cancelled; pending created 2 days ago → accept refused; pending created 1 hour ago → accepted; client cancel of the started booking counted late, a 17-day-off cancel not; grants unchanged; live unchanged after (time restored, trigger enabled). Written on `fix/client-cancel-after-start-is-late`. |
+
 ### Applied 2026-11-12 (retry unsent refunds)
 
 | Authored version | Name | Status |

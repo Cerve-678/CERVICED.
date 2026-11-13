@@ -1,5 +1,6 @@
 import {
   computeCancellationSettlement,
+  isLateClientCancel,
   readCancelCustomFeePence,
   readCancelPenalty,
   type CancellationSettlementInput,
@@ -233,5 +234,24 @@ describe('computeCancellationSettlement', () => {
     // Provider keeps their £10, platform keeps the 99p, client gets 0 — NOT charged the unpaid balance.
     expect(s.clientRefundPence).toBe(0);
     expect(s.providerKeepPence).toBe(1000);
+  });
+});
+
+describe('isLateClientCancel', () => {
+  const base = { noticeHours: 24, hoursUntilStart: 48, movedLate: false };
+  it('is early outside the window', () => {
+    expect(isLateClientCancel(base)).toBe(false);
+  });
+  it('is late inside the window', () => {
+    expect(isLateClientCancel({ ...base, hoursUntilStart: 3 })).toBe(true);
+  });
+  it('is late after the start time, not a free cancel', () => {
+    expect(isLateClientCancel({ ...base, hoursUntilStart: -0.5 })).toBe(true);
+  });
+  it('stays late after a move made inside the window', () => {
+    expect(isLateClientCancel({ ...base, hoursUntilStart: 200, movedLate: true })).toBe(true);
+  });
+  it('is never late with no notice window', () => {
+    expect(isLateClientCancel({ ...base, noticeHours: 0, hoursUntilStart: -1 })).toBe(false);
   });
 });

@@ -53,6 +53,27 @@ export function readCancelCustomFeePence(value: unknown): number {
   return Math.round(Number(text) * 100);
 }
 
+/** Whether a client's cancellation counts as late under the provider's policy.
+ *
+ *  - Inside the notice window is late, and so is any time after the start:
+ *    cancelling a booking that has already begun is at least as late as
+ *    cancelling an hour before (it used to count as early, a full refund).
+ *  - A booking the client moved while already inside the window stays late
+ *    wherever it was moved to (decided 2026-10-25).
+ *  - With no notice window (0 hours) nothing is late. */
+export function isLateClientCancel(input: {
+  /** The booking's notice window in hours (bookings.cancel_notice_hours). */
+  noticeHours: number;
+  /** Hours from the cancellation to the UK start time; negative once started. */
+  hoursUntilStart: number;
+  /** The client moved it while already inside the window (late_reschedule_from). */
+  movedLate: boolean;
+}): boolean {
+  if (!(input.noticeHours > 0)) return false;
+  if (input.movedLate) return true;
+  return Number.isFinite(input.hoursUntilStart) && input.hoursUntilStart < input.noticeHours;
+}
+
 export interface CancellationSettlementInput {
   /** The provider's cancellation penalty for this booking (frozen snapshot preferred). */
   penalty: CancelPenalty;
