@@ -165,11 +165,14 @@ export interface CancelRefundCopy {
   confirmLine: string;
   /** The success message once the cancel has gone through. */
   doneMessage: string;
+  /** The confirm line says everything on its own, in place of the generic
+   *  "may be subject to their policy" warning. */
+  replacesWarning?: boolean;
 }
 
 export function describeCancelRefund(
-  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'amountPaid' | 'providerName'> & Partial<Pick<ConfirmedBooking, 'refundedAmount'>>,
-  opts: { policyApplies: boolean; depositNonRefundable: boolean },
+  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'amountPaid' | 'providerName'> & Partial<Pick<ConfirmedBooking, 'refundedAmount' | 'depositAmount'>>,
+  opts: { policyApplies: boolean; depositNonRefundable: boolean; lateCancelFeePence?: number | null },
 ): CancelRefundCopy | null {
   const inApp = booking.paymentStatus === PaymentStatus.DEPOSIT_PAID
     || booking.paymentStatus === PaymentStatus.PAID_IN_FULL
@@ -178,6 +181,19 @@ export function describeCancelRefund(
   if (!inApp || back <= 0) return null;
   const provider = booking.providerName?.trim() || 'your provider';
   const bank = 'Banks usually take 5–10 working days to show it.';
+  // Late, deposit only, half-price policy (user's chosen wording 2026-11-13):
+  // the deposit stays with the provider and they may charge the rest up to half.
+  const topUp = Number(opts.lateCancelFeePence ?? 0);
+  const deposit = Number(booking.depositAmount ?? 0);
+  if (opts.policyApplies && topUp > 0 && deposit > 0 && booking.paymentStatus === PaymentStatus.DEPOSIT_PAID) {
+    const more = `£${(topUp / 100).toFixed(2)}`;
+    const kept = `£${deposit.toFixed(2)}`;
+    return {
+      confirmLine: `Late cancellation: you'll lose your ${kept} deposit and may be charged up to ${more} more.`,
+      doneMessage: `Your appointment has been cancelled. ${provider} keeps your ${kept} deposit and may charge up to ${more} more to your saved card, as you agreed when booking.`,
+      replacesWarning: true,
+    };
+  }
   if (opts.policyApplies) {
     return {
       confirmLine: ` Anything ${provider}'s policy doesn't keep will be refunded to you.`,

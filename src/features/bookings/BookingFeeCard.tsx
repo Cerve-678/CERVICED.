@@ -10,10 +10,11 @@ import { buildPaymentSheetAppearance } from '../payments/paymentSheetAppearance'
 import { formatShortDayDate } from '../../utils/dateUtils';
 import { PaymentRequestError } from '../../utils/paymentRequestError';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { feeChargeWindow, feeDisputeOpen, liveFee } from './bookingFeeRules';
+import { feeChargeWindow, feeDisputeOpen, feeKindLabel, liveFee } from './bookingFeeRules';
 
-// Late-arrival and no-show fees on one booking (auto-memory
-// late-and-no-show-fees-decision). The provider charges within 24 hours and
+// Late-arrival, no-show and late cancellation fees on one booking (auto-memory
+// late-and-no-show-fees-decision, late-cancel-half-top-up). The provider
+// charges within 24 hours of the appointment's end and
 // answers disputes; the client sees the charge and can dispute it within 7
 // days. CERVICED never decides — the server enforces every rule shown here.
 //
@@ -50,7 +51,7 @@ interface Props {
 }
 
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
-const kindLabel = (kind: BookingFeeKind) => (kind === 'late' ? 'late arrival fee' : 'no-show fee');
+const kindLabel = feeKindLabel;
 
 function errorMessage(err: unknown, fallback: string, context: string): string {
   if (err instanceof PaymentRequestError) return err.message;
@@ -161,6 +162,15 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
     if (terms?.noShowFeePence && window.canCharge.no_show) {
       body.push(<Action key="no_show" C={C} busy={busy} label={`Charge no-show fee · ${pounds(terms.noShowFeePence)}`} onPress={() => confirmCharge('no_show', terms.noShowFeePence!)} />);
     }
+    if (terms?.lateCancelFeePence && window.canCharge.late_cancel) {
+      // The deposit is already kept; this is the rest up to half the price.
+      const half = terms.depositPence + terms.lateCancelFeePence;
+      body.push(<Text key="kept" style={[st.title, { color: C.text }]}>You kept the {pounds(terms.depositPence)} deposit.</Text>);
+      body.push(<Text key="why" style={[st.sub, { color: C.sub }]}>
+        Your policy is half the price ({pounds(half)}), so you can charge {otherName || 'the client'}'s saved card {pounds(terms.lateCancelFeePence)} more. If you don't, nothing more is taken.
+      </Text>);
+      body.push(<Action key="late_cancel" C={C} busy={busy} label={`Charge late-cancel fee · ${pounds(terms.lateCancelFeePence)}`} onPress={() => confirmCharge('late_cancel', terms.lateCancelFeePence!)} />);
+    }
     if (body.length > 0) {
       body.unshift(<Text key="until" style={[st.sub, { color: C.sub }]}>You can charge until {window.closesAtLabel}.</Text>);
       if (lastFailed) body.unshift(<Text key="failed" style={[st.sub, { color: C.sub }]}>Your last attempt couldn't be collected — the client's bank declined it.</Text>);
@@ -237,7 +247,7 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   if (body.length === 0) return null;
   return (
     <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
-      <Text style={[st.heading, { color: C.sub }]}>LATE & NO-SHOW FEES</Text>
+      <Text style={[st.heading, { color: C.sub }]}>{fee?.kind === 'late_cancel' || (window?.canCharge.late_cancel && !fee) ? 'LATE CANCELLATION' : 'LATE & NO-SHOW FEES'}</Text>
       {body}
     </View>
   );

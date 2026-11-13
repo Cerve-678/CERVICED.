@@ -387,11 +387,12 @@ Pay or PayPal.
 | Client cancels and the booking's frozen policy has a **non-refundable deposit**, with no bigger late penalty | Client | Everything except the deposit | The deposit (at most half the service price if they paid in full) | Refunded |
 | Same, but cancelled late under a penalty worth more than the deposit | Client | As the penalty rows below | The penalty, never less than the deposit | Kept |
 | Client cancels **inside** the window; the provider's policy is "no charge" | Client | Everything | Nothing | Refunded |
-| Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit or half the price | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is keep the deposit | Client | Nothing (the fee and deposit are all they paid) | The whole deposit | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is **half the price** | Client | Nothing. The provider may also charge the client's saved card the rest up to half the price (section 2.5.1) | The whole deposit, plus that charge if the provider makes it | Kept |
 | Client cancels inside the window, **paid in full**; the policy is **keep the deposit** | Client | Everything except the kept amount and the fee | The deposit's amount, at most half the service price | Kept |
-| Client cancels inside the window, **paid in full**; the policy is **half the price** (no longer offered; policies and bookings saved before 2 Nov can still say it) | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
-| Client cancels inside the window, **paid in full**; the policy is **custom** | Client | Everything except the kept amount and the fee | The £ amount the provider set, at most half the service price | Kept |
-| Client cancels inside the window, **paid only a deposit**; the policy is **custom** | Client | Whatever is left of the deposit | The £ amount the provider set, at most the deposit and at most half the service price | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **half the price** | Client | The other half | Half the service price (an odd penny goes to the client) | Kept |
+| Client cancels inside the window, **paid in full**; the policy is **custom** (no longer offered since 13 Nov; only bookings made 2–13 Nov can say it) | Client | Everything except the kept amount and the fee | The £ amount the provider set, at most half the service price | Kept |
+| Client cancels inside the window, **paid only a deposit**; the policy is **custom** (same) | Client | Whatever is left of the deposit | The £ amount the provider set, at most the deposit and at most half the service price | Kept |
 | Provider gives a **full** refund (any reason) | Provider | Everything not yet refunded | Nothing | Refunded |
 | Provider gives a **partial** refund | Provider | The amount they choose, from their share | The rest | Kept |
 | CERVICED approves a refund request | Admin | Same as the provider's full/partial rules | — | As above |
@@ -566,6 +567,25 @@ The fee's payout is paused while a dispute is open.
 **Legal flag:** the Terms §6 wording and the checkout tick box were written as
 directed, not by a lawyer. A fee must read as a genuine estimate of loss, not
 a penalty (LEGAL-COMPLIANCE-NOTES §17).
+
+### 2.5.1 Late cancellation fee (deposit only, half-price policy)
+
+On the Policies screen a late cancellation can be **No penalty**, **Deposit
+kept** or **Half the price** (the Custom £ amount was removed on 13 November;
+saved Custom policies became Half). When a client who paid **only a deposit**
+cancels inside the notice period under Half, the deposit is kept as before,
+and the provider may also charge the rest up to half the price.
+
+| Rule | Detail |
+|---|---|
+| Amount | Half of (service price + add-ons) minus the deposit, rounded down to the penny, frozen on the booking when it's made (`bookings.late_cancel_fee_pence`). None if the deposit is already half or more, if the client paid in full, or if there's no notice period. Example: £100 with a £20 deposit → £30 |
+| Agreement | Its own tick box at checkout, separate from the late and no-show fees (wording `2026-11-13-late-cancel`). The record keeps the amount per provider. Older app builds can't agree to it, so they can't check out with such a booking |
+| Who charges | The provider, from the cancelled booking's page ("Charge late-cancel fee"). Nothing is charged automatically; if they don't press it, nothing more is taken |
+| When | Any time after the late cancel until **24 hours after the appointment would have ended** |
+| Only if | The provider had accepted the booking, the client then cancelled it themselves inside the notice period (or after moving it once the window had started), paid only a deposit, and the booking's frozen policy is Half. A withdrawn request is never charged |
+| Notices | The client's cancel sheet says "Late cancellation: you'll lose your £X deposit and may be charged up to £Y more." After the cancel, both sides are told the charge is available |
+| Everything else | As the late and no-show fees above: same card, declines, payment requests, retries, disputes, payout minus Stripe's card fee, nothing to CERVICED, card can't be removed until the window closes |
+| Which booking | Every fee (late, no-show or late cancellation) is charged only on a booking that its checkout actually made (`checkout_batch_items`). A booking row a provider added themselves can't borrow a client's payment and agreement |
 
 ### 2.6 Tips
 
@@ -1068,6 +1088,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 5 Nov | Add-ons belong to the provider, not one service: one price everywhere, optional extra time, can be paused. Bookings keep the name and price paid | Providers retyped the same add-on per service, and a price change meant editing every copy |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 13 Nov | Custom on a late cancellation is replaced by one **Half the price** option. A client who paid only a deposit and cancels late under it keeps losing the deposit, and the provider may also charge their saved card the rest up to half the price, from the booking, within 24 hours of the appointment's end. Agreed in its own tick box at checkout. Clients can also be held to moving a booking within the same calendar month. Not live until migration `20261113160000_late_cancel_half_top_up` is applied, `booking-fee`, `apply-cancellation-refund`, `create-payment-intent` and `client-saved-cards` are deployed, and a new app build ships | The user's call: providers wanted half of the price, not just a small deposit, when a deposit-only client cancels late. **Not lawyer-reviewed** |
 | 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. Not live until `apply-cancellation-refund` is deployed from main, which must happen before an app build carrying this ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
 | 8 Nov | A paid deposit gets its own "Deposit paid" line on the client's receipt (booking details, PDF, confirmation email), under Total beside "Paid (incl. fee)". It's part of the price, so Total, Paid and Due don't change. (First built above Total; moved the same day because it read as an addition) | The client wanted to see the deposit amount itself, not only the Paid figure that includes the fee |
