@@ -51,6 +51,7 @@ import { shuffle } from '../../utils/shuffle';
 import { keepShownOrder } from '../../utils/keepShownOrder';
 import { withTimeout } from '../../utils/withTimeout';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { useWhatsNew, WhatsNewSheet } from '../../components/WhatsNewSheet';
 import { useCircleMoment } from '../../features/social/useCircleMoment';
 import { RecommendHomeCard } from '../../features/social/RecommendHomeCard';
 import { WhereIGoIntroSheet } from '../../features/social/WhereIGoIntroSheet';
@@ -295,6 +296,10 @@ export default function HomeScreen() {
 
   // Which step keys this account still has coming; null until resolved.
   const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+  // Whether the first-run tour is showing this launch; null while deciding.
+  // "What's new" waits for a definite false so the two never stack up.
+  const [homeTourShowing, setHomeTourShowing] = useState<boolean | null>(null);
+  const whatsNew = useWhatsNew('client', homeTourShowing === false);
 
   useEffect(() => {
     if (tourCheckedRef.current || !user?.id) return;
@@ -302,6 +307,7 @@ export default function HomeScreen() {
     const userId = user.id;
     void (async () => {
       const decision = await resolveTourForUser(TOUR_KEYS.CLIENT_HOME, tourSteps, userId);
+      setHomeTourShowing(decision.show);
       if (!decision.show) return;
       setTourStepKeys(decision.steps.map(step => step.key));
       // Recorded on SHOW, not on finish. The old flag was written only when
@@ -2151,6 +2157,14 @@ export default function HomeScreen() {
       </ScrollView>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
+      {/* Release notes after an update. Waits behind the Show where I go
+          intro rather than opening on top of it. */}
+      <WhatsNewSheet
+        audience="client"
+        releases={whatsNew.releases}
+        visible={whatsNew.visible && !(circleMoment.moment?.kind === 'notice' && circleMomentsActive)}
+        onClose={whatsNew.dismiss}
+      />
       {/* The one-time Show where I go intro; the Recommend card sits in the feed. */}
       <WhereIGoIntroSheet
         visible={circleMoment.moment?.kind === 'notice' && circleMomentsActive}

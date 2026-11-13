@@ -84,6 +84,7 @@ import { BecomeFullMemberSheet } from '../../features/providers/BecomeFullMember
 import { FULL_MEMBER_FREE_LINE, FULL_MEMBER_FREE_MONTHS } from '../../constants/fullMembership';
 import { joinNudgeBarDismissedKey } from '../../utils/storageKeys';
 import { logger } from '../../utils/logger';
+import { useWhatsNew, WhatsNewSheet } from '../../components/WhatsNewSheet';
 import type { ProviderHomeStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<ProviderHomeStackParamList, 'LinkOnlyHomeMain'>;
@@ -97,6 +98,8 @@ export default function LinkOnlyHomeScreen() {
   const { palette } = useTheme();
   const { user } = useAuth();
   const { showToast, DialogHost } = useAppDialog();
+  // No first-run tour on this Home, so nothing to wait for.
+  const whatsNew = useWhatsNew('linkOnlyProvider', true);
   const P = useMemo(
     () => ({
       bg: palette.bg,
@@ -696,6 +699,12 @@ export default function LinkOnlyHomeScreen() {
       )}
 
       <BecomeFullMemberSheet visible={showFullMemberSheet} onClose={() => setShowFullMemberSheet(false)} />
+      <WhatsNewSheet
+        audience="linkOnlyProvider"
+        releases={whatsNew.releases}
+        visible={whatsNew.visible && !showFullMemberSheet}
+        onClose={whatsNew.dismiss}
+      />
 
       <DialogHost />
     </ThemedBackground>

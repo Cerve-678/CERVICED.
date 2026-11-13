@@ -285,6 +285,7 @@ export default function UserProfileScreen({ navigation }: any) {
               onPress={() => navigation.navigate('LanguageRegion')}
               palette={P}
             />
+            <SettingsOption icon="devices" title={t('profile.access.whatsNew.title')} subtitle={t('profile.access.whatsNew.sub')} onPress={() => navigation.navigate('WhatsNew')} palette={P} />
             <SettingsOption icon="help" title={t('profile.access.help.title')} subtitle={t('profile.access.help.sub')} onPress={() => navigation.navigate('HelpCentre')} palette={P} />
           </View>
 

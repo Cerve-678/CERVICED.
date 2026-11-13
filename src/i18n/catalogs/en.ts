@@ -42,6 +42,16 @@ export const en = {
   'languageRegion.regionFootnote':
     "Dates display in your selected region's format ({date}). Prices are always shown in pounds (£), wherever you are.",
 
+  // ── What's New (sheet after an update + Settings screen) ──────────────────
+  // The labels only. The notes themselves are English-only, in
+  // src/data/whatsNew.ts, because they are rewritten every build.
+  'whatsNew.eyebrow': "WHAT'S NEW",
+  'whatsNew.sheetTitle': 'Fresh in this update',
+  'whatsNew.done': 'Got it',
+  'whatsNew.screenTitle': "What's New",
+  'whatsNew.screenSubtitle': "What's changed in recent updates.",
+  'whatsNew.empty': 'Nothing here yet. Notes on new updates will show up here.',
+
   // ── Help Centre screen ──────────────────────────────────────────────────────
   'helpCentre.title': 'Help Centre',
   'helpCentre.subtitle': 'Answers to common questions',
@@ -137,6 +147,8 @@ export const en = {
   'profile.access.language.sub': 'Language and region',
   'profile.access.help.title': 'Help Centre',
   'profile.access.help.sub': 'FAQs, contact support',
+  'profile.access.whatsNew.title': "What's New",
+  'profile.access.whatsNew.sub': 'Recent updates to the app',
 
   'profile.section.professionals': 'For Professionals',
   'profile.pro.switch.title': 'Switch to Provider Mode',
@@ -229,6 +241,8 @@ export const en = {
   'providerAccount.access.language.sub': 'Language and region',
   'providerAccount.access.help.title': 'Help Centre',
   'providerAccount.access.help.sub': 'FAQs, contact support',
+  'providerAccount.access.whatsNew.title': "What's New",
+  'providerAccount.access.whatsNew.sub': 'Recent updates to the app',
 
   'providerAccount.section.forClients': 'FOR CLIENTS',
   'providerAccount.forClients.switch.title': 'Switch to Client Mode',

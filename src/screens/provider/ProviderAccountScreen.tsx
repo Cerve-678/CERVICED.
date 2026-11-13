@@ -504,6 +504,8 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 P={P}
               />
               <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption icon="devices" title={t('providerAccount.access.whatsNew.title')} subtitle={t('providerAccount.access.whatsNew.sub')} onPress={() => navigation.navigate('WhatsNew')} P={P} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
               <SettingsOption icon="help" title={t('providerAccount.access.help.title')} subtitle={t('providerAccount.access.help.sub')} onPress={() => navigation.navigate('HelpCentre')} P={P} />
             </View>
 

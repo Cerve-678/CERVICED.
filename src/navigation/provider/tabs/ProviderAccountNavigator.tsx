@@ -11,6 +11,7 @@ import ProviderInboxScreen from '../../../screens/provider/ProviderInboxScreen';
 import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import ChangePasswordScreen from '../../../screens/shared/ChangePasswordScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
+import WhatsNewScreen from '../../../screens/shared/WhatsNewScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
@@ -259,6 +260,11 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="HelpCentre"
         component={HelpCentreScreen}
+        options={{ headerShown: false }}
+      />
+      <ProviderAccountStack.Screen
+        name="WhatsNew"
+        component={WhatsNewScreen}
         options={{ headerShown: false }}
       />
 

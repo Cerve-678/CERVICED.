@@ -195,6 +195,8 @@ export type ProfileStackParamList = {
   PaymentMethods: undefined;
   Subscription: undefined;
   HelpCentre: undefined;
+  /** Settings > What's New — past release notes for the current hat. */
+  WhatsNew: undefined;
   TextSizing: undefined;
   LanguageRegion: undefined;
   ReportProblem: undefined;
@@ -407,6 +409,8 @@ export type ProviderAccountStackParamList = {
   BusinessProfile: undefined;
   Branding: undefined;
   HelpCentre: undefined;
+  /** Settings > What's New — past release notes for the current hat. */
+  WhatsNew: undefined;
   // In-app Text & Sizing / Language & Region settings (shared screens). The
   // client ProfileStackParamList registers these too — the preference itself is
   // device-global (DisplaySettingsContext, mounted above the hat switch), so

@@ -5,9 +5,9 @@
 
 #generated
 
-**3704 functions** across **528 files**.
+**3717 functions** across **532 files**.
 
-### `src/components/` (65)
+### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -73,6 +73,7 @@
 - `TodoMark.tsx` — **TodoMark**
 - `TypedConfirmDialog.tsx` — **matchesConfirmWord** · **TypedConfirmDialog**
 - `WelcomeIntro.tsx` — DealtCard · DroppingLetter · onWordLayout · WelcomeIntro
+- `WhatsNewSheet.tsx` — close · dismiss · done · **useWhatsNew** · **WhatsNewReleaseList** · **WhatsNewSheet** · WhatsNewSheetBody
 
 ### `src/components/analytics/` (1)
 - `AnalyticsKit.tsx` — **accentColor** · **AnalyticsHeader** · **AnimatedNumber** · **BarChart** · **DeckCard** · handlePress · **HeroGradient** · **InsightStrip** · **LivePulse** · pressIn · pressOut · **PressScale** · **RangeSelector** · **Reveal** · **SectionLabel** · **StatTile** · **tileWidth**
@@ -425,7 +426,7 @@
 - `SchedulingScreen.tsx` — chooseHorizonMode · flash · handleSave · releaseStatus · saveReleaseChanges · SchedulingScreen · toggleChip
 - `ServicesPricingScreen.tsx` — flash · handleSave · ServicesPricingScreen · toggleChip
 
-### `src/screens/shared/` (14)
+### `src/screens/shared/` (15)
 - `AdminCreateAccountScreen.tsx` — AdminCreateAccountScreen · back · Field · handleCreate · resetForm · shareLogin · signInAsThem · startBlankProvider
 - `AdminCreatedAccountsScreen.tsx` — AccountCard · addDetails · AdminCreatedAccountsScreen · header · load · onRefresh · openProviderSide
 - `AdminDashboardScreen.tsx` — AdminDashboardScreen · deltaColor · go · load · onRefresh · problems · Row · StatTile · statusColors · ToolRow · WeeklyChart
@@ -440,6 +441,7 @@
 - `NotificationsScreen.tsx` — actionLabelFor · closeMessagePopup · dayHeadings · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
+- `WhatsNewScreen.tsx` — WhatsNewScreen
 
 ### `src/services/` (19)
 - `acuityTransferService.ts` — invoke · **transferFromAcuity**
@@ -492,7 +494,7 @@
 - `booking.ts` — **canDisputeNoShow** · **hasDirectionsDestination** · **hasMapDestination** · is · **isAddressPending** · **isMobileBooking** · **isTerminalBookingStatus** · **mapDbBookingStatus** · **pendingRescheduleStatusOverride**
 - `database.ts` — and
 
-### `src/utils/` (67)
+### `src/utils/` (68)
 - `aboutPage.ts` — **openAboutPage**
 - `accountDeletionError.ts` — **accountDeletionError** · list
 - `accountHats.ts` — **getAccountHatState** · **getOwnedHats** · **ownsHat** · **resolveActiveHat**
@@ -559,4 +561,5 @@
 - `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**
 - `userFacingError.ts` — **toUserMessage** · **toUserMessageAllowingDbGuard**
 - `validation.ts` — **getPasswordStrength**
+- `whatsNew.ts` — **hatForAudience** · **latestWhatsNewVersion** · **notesFor** · **releasesAfterSignup** · **releasesFor**
 - `withTimeout.ts` — **withTimeout**

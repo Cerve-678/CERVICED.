@@ -28,6 +28,13 @@ export const fr: Catalog = {
   'languageRegion.regionFootnote':
     'Les dates sont affichées au format de votre région ({date}). Les prix sont toujours indiqués en livres (£), où que vous soyez.',
 
+  'whatsNew.eyebrow': 'NOUVEAUTÉS',
+  'whatsNew.sheetTitle': 'Les nouveautés de cette mise à jour',
+  'whatsNew.done': 'Compris',
+  'whatsNew.screenTitle': 'Nouveautés',
+  'whatsNew.screenSubtitle': 'Ce qui a changé dans les dernières mises à jour.',
+  'whatsNew.empty': "Rien pour l'instant. Les notes de chaque mise à jour apparaîtront ici.",
+
   'helpCentre.title': "Centre d'aide",
   'helpCentre.subtitle': 'Réponses aux questions fréquentes',
   'helpCentre.section.faqs': 'QUESTIONS FRÉQUENTES',
@@ -91,6 +98,8 @@ export const fr: Catalog = {
   'profile.access.language.sub': 'Langue et région',
   'profile.access.help.title': "Centre d'aide",
   'profile.access.help.sub': 'Questions fréquentes, contacter le support',
+  'profile.access.whatsNew.title': 'Nouveautés',
+  'profile.access.whatsNew.sub': "Dernières mises à jour de l'app",
 
   'profile.section.professionals': 'Pour les professionnels',
   'profile.pro.switch.title': 'Passer en mode professionnel',
@@ -160,6 +169,8 @@ export const fr: Catalog = {
   'providerAccount.access.language.sub': 'Langue et région',
   'providerAccount.access.help.title': "Centre d'aide",
   'providerAccount.access.help.sub': 'Questions fréquentes, contacter le support',
+  'providerAccount.access.whatsNew.title': 'Nouveautés',
+  'providerAccount.access.whatsNew.sub': "Dernières mises à jour de l'app",
 
   'providerAccount.section.forClients': 'POUR LES CLIENTS',
   'providerAccount.forClients.switch.title': 'Passer en mode client',

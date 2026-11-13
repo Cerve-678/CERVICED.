@@ -22,6 +22,9 @@
 // version it arrived in; an account that has seen version N is shown only
 // steps newer than N. A new account has seen nothing and gets everything.
 
+import { WHATS_NEW_RELEASES } from '../data/whatsNew';
+import { latestWhatsNewVersion } from './whatsNew';
+
 /** Stable per-tour identifiers. These are persisted — in users.seen_tours and
  *  in the device cache — so renaming one makes every account look unseen and
  *  replays that tour for everybody. Add a new key instead. */
@@ -38,6 +41,10 @@ export const TOUR_KEYS = {
   /** "How Maintenance works", shown on the first visit to Maintenance and
    *  replayed from its "How this works" link. */
   CLIENT_MAINTENANCE_HOWTO: 'client_maintenance_howto',
+  /** "What's new" release notes, one key per hat. Each release in
+   *  src/data/whatsNew.ts is a versioned step — see src/utils/whatsNew.ts. */
+  WHATS_NEW_CLIENT: 'whats_new_client',
+  WHATS_NEW_PROVIDER: 'whats_new_provider',
 } as const;
 
 export type TourKey = (typeof TOUR_KEYS)[keyof typeof TOUR_KEYS];
@@ -58,6 +65,10 @@ export const TOUR_CURRENT_VERSION: Record<TourKey, number> = {
   provider_info_packs: 1,
   provider_forms: 1,
   client_maintenance_howto: 1,
+  // Follows the newest release with notes for that hat; raised by adding an
+  // entry to src/data/whatsNew.ts, never by hand.
+  whats_new_client: latestWhatsNewVersion(WHATS_NEW_RELEASES, 'client'),
+  whats_new_provider: latestWhatsNewVersion(WHATS_NEW_RELEASES, 'provider'),
 };
 
 /** A step's shape as far as this module cares — the real CoachMarkStep adds

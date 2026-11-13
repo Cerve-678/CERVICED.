@@ -12,6 +12,7 @@ import NotificationsSettingsScreen from '../../../screens/client/NotificationsSe
 import PaymentMethodsScreen from '../../../screens/client/PaymentMethodsScreen';
 import SubscriptionScreen from '../../../screens/client/SubscriptionScreen';
 import HelpCentreScreen from '../../../screens/shared/HelpCentreScreen';
+import WhatsNewScreen from '../../../screens/shared/WhatsNewScreen';
 import TextSizingScreen from '../../../screens/shared/TextSizingScreen';
 import LanguageRegionScreen from '../../../screens/shared/LanguageRegionScreen';
 import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
@@ -95,6 +96,11 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="HelpCentre"
         component={HelpCentreScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="WhatsNew"
+        component={WhatsNewScreen}
         options={{ headerShown: false }}
       />
       <ProfileStack.Screen

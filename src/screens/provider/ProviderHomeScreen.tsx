@@ -39,6 +39,7 @@ import { storage } from '../../utils/storage';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { useWhatsNew, WhatsNewSheet } from '../../components/WhatsNewSheet';
 import { FLOATING_TAB_BAR_CLEARANCE, tabBarSpotlightRect } from '../../components/IslandPillTabBar';
 import { tabBarOccupiedHeight } from '../../utils/tabBarGeometry';
 import {
@@ -1252,6 +1253,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
   // Which step keys this account still has coming; null until resolved.
   const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+  // Whether the first-run tour is showing this launch; null while deciding.
+  // "What's new" waits for a definite false so the two never stack up.
+  const [homeTourShowing, setHomeTourShowing] = useState<boolean | null>(null);
+  const whatsNew = useWhatsNew('provider', homeTourShowing === false);
 
   useEffect(() => {
     if (tourCheckedRef.current || !user?.id) return;
@@ -1259,6 +1264,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     const userId = user.id;
     void (async () => {
       const decision = await resolveTourForUser(TOUR_KEYS.PROVIDER_HOME, tourSteps, userId);
+      setHomeTourShowing(decision.show);
       if (!decision.show) return;
       setTourStepKeys(decision.steps.map(step => step.key));
       // Recorded on SHOW, not on finish — see tourService. This is also the
@@ -2217,6 +2223,13 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       </TouchableOpacity>
 
       <CoachMarkTour visible={showTour && isFocused} steps={visibleTourSteps} onFinish={finishTour} />
+      {/* Release notes after an update; waits behind the go-live celebration. */}
+      <WhatsNewSheet
+        audience="provider"
+        releases={whatsNew.releases}
+        visible={whatsNew.visible && !showGoLiveCelebration}
+        onClose={whatsNew.dismiss}
+      />
 
       {/* ── Go-live celebration ──────────────────────────────────── */}
       <Modal visible={showGoLiveCelebration} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={() => setShowGoLiveCelebration(false)}>

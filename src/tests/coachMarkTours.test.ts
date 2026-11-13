@@ -91,12 +91,17 @@ describe('the tours', () => {
       PROVIDER_INFO_PACKS: 'provider_info_packs',
       PROVIDER_FORMS: 'provider_forms',
       CLIENT_MAINTENANCE_HOWTO: 'client_maintenance_howto',
+      WHATS_NEW_CLIENT: 'whats_new_client',
+      WHATS_NEW_PROVIDER: 'whats_new_provider',
     });
   });
 
   it('declares a current version for every tour key', () => {
     for (const key of Object.values(TOUR_KEYS)) {
-      expect(TOUR_CURRENT_VERSION[key]).toBeGreaterThanOrEqual(1);
+      // What's New follows src/data/whatsNew.ts, where a side with no notes
+      // yet is legitimately at 0 (see whatsNew.test.ts).
+      const floor = key.startsWith('whats_new_') ? 0 : 1;
+      expect(TOUR_CURRENT_VERSION[key]).toBeGreaterThanOrEqual(floor);
     }
   });
 });
