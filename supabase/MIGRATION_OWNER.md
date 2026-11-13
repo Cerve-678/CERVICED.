@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-13 (no accept after the request deadline)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113130000 | `no_accept_after_request_deadline` | **APPLIED 2026-11-13** after dry run + cerviced-security-review (nothing blocking), via `supabase db query --linked -f` (absolute path), in order 110000 → 120000 → 130000 straight after 100000; live `provider_update_booking_status` md5 `11f09243…`, `provider_update_group_booking_status` `70ace8e7…`; all still SECURITY DEFINER, authenticated executes, anon doesn't. Frontier at authoring: live max `20261113100000` (this session's); unapplied on open PRs `20261112100000` (#473, #474, both must renumber above the frontier). Redefines from live with md5 guards `provider_update_booking_status` (`5d8dc58a…`), `provider_update_group_booking_status` (`b6eba255…`), `booking_request_deadline` (`274f72fb…`). Item 6 (20261113140000) redefines both status functions again, so it must be written from live after this is applied. Forced-rollback dry run 2026-11-13, applied together with 20261113110000/120000/130000 in one transaction (each redefines different functions) as real provider/client accounts, with a confirmed booking moved to 09:00 today (bookability trigger off for that one fixture inside the transaction): started confirmed → provider cancel refused; in_progress → refused; future confirmed → cancelled; pending created 2 days ago → accept refused; pending created 1 hour ago → accepted; client cancel of the started booking counted late, a 17-day-off cancel not; grants unchanged; live unchanged after (time restored, trigger enabled). Written on `fix/no-accept-after-request-deadline`. |
+
 ### Applied 2026-11-12 (retry unsent refunds)
 
 | Authored version | Name | Status |
