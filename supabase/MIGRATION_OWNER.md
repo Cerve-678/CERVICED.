@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-13 (refund requests close after five days), NOT applied
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113190000 | `refund_request_five_days` | **NOT APPLIED.** Frontier at authoring: live max `20261113150000` (now `20261113160000`, late-cancel-half-top-up, applied since; touches neither object, md5 guards still match 23:00 UTC); unapplied on open branches `20261113170000` (#490), `20261113180000` (#491), none touching these objects. New `refund_request_window_starts_at()` (stamped with the apply time via plain CREATE, so a re-run fails rather than moving it; EXECUTE to authenticated, service_role — client_bookings is security_invoker). Redefines from live with md5 guards `request_booking_refund` (`72a54e1b…`: refuses when `created_at >= start` and UK date > `booking_date + 5`, after the paid-in-app check) and `client_bookings` (`a70088d5…`, all columns kept, appends `refund_request_window_applies`, `security_invoker=true`). Forced-rollback dry run 2026-11-13 as real clients: a 7 Nov booking made before the rule accepted (view false); a 6 Nov booking made after it refused with the P0001 message (view true); an 8 Nov one made after it accepted on its last day; view options and all 28 grants unchanged; live unchanged after. Written on `feat/refund-request-five-days` (#503). |
+
 ### Applied 2026-11-13 (late cancellation Half + top-up, same-month reschedules)
 
 | Authored version | Name | Status |
