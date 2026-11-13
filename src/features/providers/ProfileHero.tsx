@@ -226,7 +226,7 @@ export function ProfileHeroLayout({
                 <View style={layout.locatedRow}>
                   <Ionicons name="location-outline" size={13} color={heroSub} />
                   <Text style={[layout.locatedScript, { color: heroSub }, shadow]}>located in</Text>
-                  <Text style={[layout.locatedPlace, { color: heroText }, shadow]} numberOfLines={1}>{location}</Text>
+                  <Text style={[layout.locatedPlace, { color: heroText }, shadow]} numberOfLines={2}>{location}</Text>
                 </View>
               ) : null}
             </View>
@@ -370,6 +370,7 @@ const styles = StyleSheet.create({
   glossRing: { position: "absolute", top: -8, left: -8, width: 164, height: 164, borderRadius: 82 },
   doubleRing: { position: "absolute", top: -11, left: -11, width: 170, height: 170, borderRadius: 85, borderWidth: 1.5 },
   pillRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, paddingHorizontal: 24, marginBottom: 12 },
-  pill: { height: 28, paddingHorizontal: 12, borderRadius: 100, backgroundColor: "#FFFFFF", justifyContent: "center", maxWidth: 220 },
+  // minHeight, not height: the label grows with the chosen text size.
+  pill: { minHeight: 28, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 100, backgroundColor: "#FFFFFF", justifyContent: "center", maxWidth: 220 },
   pillText: { fontFamily: "BakbakOne-Regular", fontSize: 10, letterSpacing: 1, color: "#1F1A18" },
 });
