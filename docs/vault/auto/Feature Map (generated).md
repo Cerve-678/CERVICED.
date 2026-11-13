@@ -109,7 +109,7 @@ Curated: [[Payments]] · **164 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **367 files**
-- `src/services/databaseService.ts` _(1119)_
+- `src/services/databaseService.ts` _(1124)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
 - `src/screens/client/CartScreen.tsx` _(682)_
@@ -247,7 +247,7 @@ Curated: [[Booking Flow]] · **67 files**
 Curated: [[Booking Flow]] · **211 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(338)_
-- `src/services/databaseService.ts` _(272)_
+- `src/services/databaseService.ts` _(273)_
 - `src/screens/client/BookingDetailScreen.tsx` _(223)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
@@ -347,8 +347,8 @@ Curated: [[Services]] · **55 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **86 files**
-- `src/screens/client/CartScreen.tsx` _(441)_
-- `src/services/databaseService.ts` _(108)_
+- `src/screens/client/CartScreen.tsx` _(442)_
+- `src/services/databaseService.ts` _(112)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
 - `src/components/BookingSheet.tsx` _(34)_

@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-13 (card checkout saves policy and consent)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113090000 | `card_checkout_saves_policy_and_consent` | **APPLIED 2026-11-13** after the forced-rollback dry run and security review the user asked for, via `supabase db query --linked -f` (absolute path) from the main folder; frontier right before: live max `20261112120000`, nothing unapplied above it on an open PR. Verified live: version recorded (now live max); `prepare_checkout` md5 `ca918dae…`, still SECURITY DEFINER, authenticated executes, anon doesn't. **`feat/waitlist-pay-at-confirm` (#474) must rebuild its `prepare_checkout` from this live version (md5 `ca918dae…`), keep the consent/snapshot lines in its waitlist UPDATE branch, and renumber above `20261113090000`; `feat/request-card-hold` (#473) must renumber above it too.** Revised after security review: absent, JSON null and "" compare equal (re-dry-run passed, incl. that case); the column-only cancel-window gap documented (PAYMENTS_AND_LOGIC Part 6 #12); confirmed live that `bookings` has no UPDATE policy, so the frozen copy can't be edited by a client. Frontier at authoring: live max `20261112120000`; unapplied on open PRs `20261112100000_request_card_hold` (#473, its branch holds a lock for its own file only, touches none of these objects) and `20261112100000_waitlist_pays_at_confirm` (#474, **also redefines `prepare_checkout`**: whichever applies second rebuilds from the other's live version; the md5 guard refuses otherwise), `20261110130000_marketing_studio`, `20261109230000_profile_import_reads`. Redefines from live with md5 guard `prepare_checkout` (`b781dde0…`); checks `get_provider_terms` (`97000329…`) unchanged. Forced-rollback dry run 2026-11-13 as a real client on Nails Studio: full copy → snapshot = live policy + written terms, consent stamped; older build (safety_ack only) → live policy, no terms, consent stamped; no consent refused; changed penalty refused; changed terms refused; Quick Book copy → no terms recorded; authenticated still executes, anon not; live max and md5 unchanged after. Written on `fix/card-checkout-policy-snapshot`. |
+
 ### Applied 2026-11-12 (retry unsent refunds)
 
 | Authored version | Name | Status |

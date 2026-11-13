@@ -4386,6 +4386,12 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               // service actually needs this and rejects
                               // if missing, regardless of this value.
                               safety_ack: agreedToPolicy,
+                              // The same checkbox, as consent to the Terms and
+                              // the provider's policy. The snapshot is the copy
+                              // this cart showed; the server freezes its own live
+                              // copy and refuses if the money terms differ.
+                              policy_accepted: agreedToPolicy,
+                              policy_snapshot: item.policySnapshot ?? null,
                               // Set when the client accepted the out-of-hours
                               // confirmation in the booking sheet. The ack
                               // travels with it because prepare_checkout
