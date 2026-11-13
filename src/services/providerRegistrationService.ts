@@ -224,6 +224,7 @@ export interface ProviderRegistrationData {
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     depositRequired?: boolean;
     depositOnly?: boolean;
     depositType?: string;

@@ -41,7 +41,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   submitReview, getProviderIdByDisplayName, hasReviewedBooking,
-  getIntakeFormsByBooking, IntakeForm, getBookedClientContact,
+  getIntakeFormsByBooking, IntakeForm, getBookedClientContact, getMyBookingLateCancelFee,
   ProviderContactInfo,
   getProviderBookingDetailMetadata,
   type ProviderBookingDetailMetadata,
@@ -501,11 +501,32 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const depositIsNonRefundable = booking?.policySnapshot?.['depositNonRefundable'] === true
     && (booking?.paymentStatus === PaymentStatus.DEPOSIT_PAID || Number(booking?.depositAmount ?? 0) > 0);
 
+  // What the provider could charge on top of a kept deposit if this is
+  // cancelled late (frozen at checkout). Read only for a deposit-only booking
+  // that can still be cancelled; a failed read just leaves the generic warning.
+  const [lateCancelFeePence, setLateCancelFeePence] = useState<number | null>(null);
+  const lateCancelBookingId = booking
+    && booking.paymentStatus === PaymentStatus.DEPOSIT_PAID
+    && (booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.PENDING)
+    ? booking.id : null;
+  useEffect(() => {
+    if (!lateCancelBookingId) { setLateCancelFeePence(null); return; }
+    let active = true;
+    getMyBookingLateCancelFee(lateCancelBookingId)
+      .then(pence => { if (active) setLateCancelFeePence(pence); })
+      .catch(err => { logger.error('BookingDetailScreen.lateCancelFee', err); });
+    return () => { active = false; };
+  }, [lateCancelBookingId]);
+
   // Worked out before the cancel, so the message reads the booking as it was
   // when the client agreed to it, not after the refund starts landing.
   const cancelRefund = useMemo(
-    () => (booking ? describeCancelRefund(booking, { policyApplies: cancelPolicyStillApplies, depositNonRefundable: depositIsNonRefundable }) : null),
-    [booking, cancelPolicyStillApplies, depositIsNonRefundable],
+    () => (booking ? describeCancelRefund(booking, {
+      policyApplies: cancelPolicyStillApplies,
+      depositNonRefundable: depositIsNonRefundable,
+      lateCancelFeePence,
+    }) : null),
+    [booking, cancelPolicyStillApplies, depositIsNonRefundable, lateCancelFeePence],
   );
 
   const handleCancelBooking = useCallback(async () => {
@@ -1616,13 +1637,19 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
                     <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cancelling Now</Text>
-                    <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
-                      {isPastCancellationWindow
-                        ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
-                        : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
-                      {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it.` : ''}
-                      {cancelRefund?.confirmLine ?? ''}
-                    </Text>
+                    {cancelRefund?.replacesWarning ? (
+                      <Text style={[st.sheetSub, { color: C.text, textAlign: 'center', fontWeight: '600' }]}>
+                        {cancelRefund.confirmLine}
+                      </Text>
+                    ) : (
+                      <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
+                        {isPastCancellationWindow
+                          ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
+                          : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
+                        {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it.` : ''}
+                        {cancelRefund?.confirmLine ?? ''}
+                      </Text>
+                    )}
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
                         <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Got It</Text>

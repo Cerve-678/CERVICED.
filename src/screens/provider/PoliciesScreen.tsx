@@ -80,10 +80,13 @@ import {
 } from '../../features/business-details/bookingInstructions';
 
 type CancelNotice     = '' | NoticeChoice;
-// 'half' is no longer offered, but policies saved before 'custom' still say it.
-type CancelPenalty    = '' | 'none' | 'deposit' | 'half' | 'custom';
+// 'custom' (a typed £ amount) was replaced by 'half' on 2026-11-13; saved
+// 'custom' and 'full' policies are read back as 'half'.
+type CancelPenalty    = '' | 'none' | 'deposit' | 'half';
 type RescheduleNotice = '' | 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '' | '1' | '2' | 'unlimited';
+// Enforced by request_reschedule_own_booking() (20261113160000).
+type RescheduleWithin = '' | 'any' | 'same_month';
 // 'charge_full' was offered once and enforced by nothing; it's read back as
 // 'charge_deposit' and the real charge is now the no-show fee below.
 type NoShowAction     = '' | 'none' | 'warn' | 'charge_deposit' | 'custom';
@@ -91,12 +94,10 @@ type NoShowAction     = '' | 'none' | 'warn' | 'charge_deposit' | 'custom';
 interface PolicyState {
   cancelNotice:     CancelNotice;
   cancelPenalty:    CancelPenalty;
-  // £ amount as typed, only under 'custom'. apply-cancellation-refund caps what
-  // the provider keeps at half the price.
-  cancelCustomFee:  string;
   cancelNote:       string;
   rescheduleNotice: RescheduleNotice;
   maxReschedules:   MaxReschedules;
+  rescheduleWithin: RescheduleWithin;
   rescheduleNote:   string;
   noShowAction:     NoShowAction;
   noShowGraceMinutes: string;
@@ -122,9 +123,8 @@ interface PolicyState {
 // happen on their own site, so none of it can apply to them: it's hidden
 // from their editor, cleared when they save, and left out of their profile
 // (buildPolicyDisplayRows' linkOnly option).
-const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'cancelCustomFee' | 'noShowAction' | 'noShowGraceMinutes' | 'lateFee' | 'noShowFee'> = {
+const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'noShowAction' | 'noShowGraceMinutes' | 'lateFee' | 'noShowFee'> = {
   cancelPenalty: '',
-  cancelCustomFee: '',
   noShowAction: '',
   noShowGraceMinutes: '',
   lateFee: '',
@@ -134,10 +134,10 @@ const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'cancelCustomFee' |
 const DEFAULT_POLICIES: PolicyState = {
   cancelNotice:     '',
   cancelPenalty:    '',
-  cancelCustomFee:  '',
   cancelNote:       '',
   rescheduleNotice: '',
   maxReschedules:   '',
+  rescheduleWithin: '',
   rescheduleNote:   '',
   noShowAction:     '',
   noShowGraceMinutes: '',
@@ -259,8 +259,11 @@ export default function PoliciesScreen({ navigation }: any) {
         // Reads the old single image too, so a provider's existing page stays.
         merged.policyImageUrls = policyImageUrls(saved);
         setImageEdges(policyImageEdges(saved));
-        // Saved before 'Full charge' became 'Half the price' (2026-11-01).
-        if ((merged.cancelPenalty as string) === 'full') merged.cancelPenalty = 'half';
+        // Saved as 'Full charge' (before 2026-11-01) or as a Custom amount
+        // (2026-11-02 to 11-13): both are 'Half the price' now.
+        if ((merged.cancelPenalty as string) === 'full' || (merged.cancelPenalty as string) === 'custom') {
+          merged.cancelPenalty = 'half';
+        }
         if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
         // Saved before the fee became the 'custom' action. It's cleared on save
         // under any other action, so this keeps a fee from vanishing unasked.
@@ -272,8 +275,9 @@ export default function PoliciesScreen({ navigation }: any) {
         }
         setLoadedNotice(merged.cancelNotice);
         setPolicies(merged);
+        // cancelCustomFee is retired with Custom: dropped on the next save.
         const carried = Object.fromEntries(
-          Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES)),
+          Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES) && k !== 'cancelCustomFee'),
         );
         setCarriedPolicies(carried);
       } catch {
@@ -356,10 +360,6 @@ export default function PoliciesScreen({ navigation }: any) {
       flash('Enter fees as pounds, like 10 or 12.50', 'error');
       return;
     }
-    if (policies.cancelPenalty === 'custom' && !isCustomAmount(policies.cancelCustomFee)) {
-      flash('Enter what you keep on a late cancellation, like 10 or 12.50', 'error');
-      return;
-    }
     if (policies.noShowAction === 'custom' && !isCustomAmount(policies.noShowFee)) {
       flash('Enter your no-show fee, like 10 or 12.50', 'error');
       return;
@@ -375,7 +375,6 @@ export default function PoliciesScreen({ navigation }: any) {
         ...policies,
         ...policyImageFields(policies.policyImageUrls),
         policyImageEdges: prunePolicyImageEdges(imageEdges, policies.policyImageUrls),
-        cancelCustomFee: policies.cancelPenalty === 'custom' ? policies.cancelCustomFee : '',
         noShowFee: policies.noShowAction === 'custom' ? policies.noShowFee : '',
         ...(isLinkOnly ? LINK_ONLY_CLEARED : {}),
       } as unknown as Record<string, unknown>);
@@ -455,9 +454,9 @@ export default function PoliciesScreen({ navigation }: any) {
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
                 <Pills
-                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'custom', l: 'Custom' }]}
-                  value={policies.cancelPenalty === 'half' ? 'custom' : policies.cancelPenalty}
-                  onChange={v => setPolicy('cancelPenalty', v === 'custom' && policies.cancelPenalty === 'half' ? 'half' : v)}
+                  options={[{ v: 'none', l: 'No penalty' }, { v: 'deposit', l: 'Deposit kept' }, { v: 'half', l: 'Half the price' }]}
+                  value={policies.cancelPenalty}
+                  onChange={v => setPolicy('cancelPenalty', v)}
                 />
                 {policies.cancelPenalty === 'deposit' && (
                   <>
@@ -465,24 +464,18 @@ export default function PoliciesScreen({ navigation }: any) {
                     <Text style={[capSt.note, { color: C.text }]}>If they paid in full, you can only charge up to half the service price.</Text>
                   </>
                 )}
-                {(policies.cancelPenalty === 'custom' || policies.cancelPenalty === 'half') && (
-                  <View style={{ marginTop: 10 }}>
-                    <Field
-                      label="Amount you keep (£)"
-                      value={policies.cancelCustomFee}
-                      onChange={v => setPolicies(prev => ({ ...prev, cancelPenalty: 'custom', cancelCustomFee: v.replace(/[^0-9.]/g, '') }))}
-                      placeholder="e.g. 20"
-                      keyboardType="decimal-pad"
-                      note={policies.cancelPenalty === 'half' ? 'Currently half the price. Enter an amount to change it.' : "If it's more than half the price, you keep half. If they only paid a deposit, you can't keep more than that deposit."}
-                    />
-                    <HalfPriceCap />
-                  </View>
+                {policies.cancelPenalty === 'half' && (
+                  <>
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Paid in full: you keep half and they get the rest back.</Text>
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid a deposit: you keep the deposit. If it's less than half the price and they agreed at checkout, you can also charge their saved card the difference, from the booking, until 24 hours after the appointment would have ended. Bookings made before 13 November keep the policy they were booked with.</Text>
+                    <Text style={[capSt.note, { color: C.text }]}>The app works out the amount for each booking. You don't type anything.</Text>
+                  </>
                 )}
               </>)}
               <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
             </Card>
 
-            <Card title="Rescheduling" sub="How much notice a client must give to move their appointment, and how many times they can move one booking.">
+            <Card title="Rescheduling" sub="How much notice a client must give to move their appointment, how many times they can move one booking, and to when.">
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'same_day', l: 'Same day' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
@@ -495,6 +488,15 @@ export default function PoliciesScreen({ navigation }: any) {
                 value={policies.maxReschedules}
                 onChange={v => setPolicy('maxReschedules', v)}
               />
+              <SectionLabel text="New date must be" />
+              <Pills
+                options={[{ v: 'any', l: 'Any date' }, { v: 'same_month', l: 'Same month' }]}
+                value={policies.rescheduleWithin}
+                onChange={v => setPolicy('rescheduleWithin', v)}
+              />
+              {policies.rescheduleWithin === 'same_month' && (
+                <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Clients can only move it to another day in the same calendar month. A booking on the 14th can move up to the last day of that month.</Text>
+              )}
               <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
             </Card>
 

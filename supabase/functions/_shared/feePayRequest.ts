@@ -2,6 +2,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.100.0';
 import type Stripe from 'npm:stripe@17.4.0';
 import { feePaymentRequestEmail } from './emailTemplates.ts';
 import { isRetryableDecline, nextRetryAt } from './feeRetrySchedule.ts';
+import { feeKindLabel, type FeeKind } from './bookingFeePlan.ts';
 export { isRetryableDecline, termsAllowRetries } from './feeRetrySchedule.ts';
 
 // Late/no-show fees the saved card couldn't pay (user decisions 2026-10-19,
@@ -20,11 +21,11 @@ export interface FeeRow {
   booking_id: string;
   provider_id: string;
   client_user_id: string;
-  kind: 'late' | 'no_show';
+  kind: FeeKind;
   amount_pence: number;
 }
 
-export const feeLabel = (kind: 'late' | 'no_show') => (kind === 'late' ? 'late arrival fee' : 'no-show fee');
+export const feeLabel = (kind: FeeKind) => feeKindLabel(kind);
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
 
 const UK_DAY = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' });
