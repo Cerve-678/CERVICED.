@@ -36,7 +36,7 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
-import { LogoCircle } from "../../components/FramedLogo";
+import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills } from "../../features/providers/ProfileHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -102,7 +102,6 @@ import { MultiBookingSheet, type MultiBookingSheetResult } from "../../component
 import { AddOnPickerModal } from "../../components/AddOnPickerModal";
 import type { ClientPromotion } from "../../types/database";
 import {
-  blend,
   parseThemeKey,
   resolveProviderTheme,
   withAlpha,
@@ -1931,17 +1930,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
-
-  // The logo's outline under the page style (see the frame drawn round it in
-  // the hero). Applied to the logo and to its gloss so both share one shape.
-  const logoFrameStyle =
-    pageStyle.logo === "arch"
-      ? styles.logoArch
-      : pageStyle.logo === "polaroid"
-        ? styles.logoPolaroidPhoto
-        : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
-          ? styles.logoThinRim
-          : null;
 
   // Cover's pills under the name: every service type they offer, their area
   // and how they work — the same facts as the small-caps line other styles show.
@@ -5151,88 +5139,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
             <View style={styles.heroInfoWrap}>
-              {/* Provider Logo - Bigger */}
-              <View style={styles.logoContainer}>
-                {/* The page style's frame: Scrapbook mounts the logo as a
-                    polaroid, Spa adds a fine outer ring, Glossy a shiny
-                    one, Arch and Framed round only its top. */}
-                <View style={pageStyle.logo === "polaroid" ? styles.logoPolaroid : undefined}>
-                <View style={styles.logoWrapper}>
-                  {pageStyle.logo === "glossRing" ? (
-                    <LinearGradient
-                      colors={["#FFFFFF", blend(adaptiveAccentColor, "#FFFFFF", 0.45), "#FFFFFF"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.logoGlossRing}
-                      pointerEvents="none"
-                    />
-                  ) : null}
-                  {pageStyle.logo === "doubleRing" ? (
-                    <View
-                      style={[styles.logoDoubleRing, { borderColor: withAlpha(heroText, 0.7) }]}
-                      pointerEvents="none"
-                    />
-                  ) : null}
-                  {provider.providerLogo?.uri ? (
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        setShowFullLogo(true);
-                      }}
-                      accessibilityRole="imagebutton"
-                      accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
-                    >
-                      <LogoCircle
-                        uri={provider.providerLogo.uri}
-                        framing={provider.providerLogoFraming}
-                        style={[styles.providerLogo, logoFrameStyle]}
-                      />
-                    </TouchableOpacity>
-                  ) : (
-                    <View
-                      style={[
-                        styles.providerLogo,
-                        logoFrameStyle,
-                        {
-                          backgroundColor: provider.accentColor ?? "#AF9197",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 28,
-                          fontWeight: "800",
-                        }}
-                      >
-                        {provider.displayName
-                          .split(" ")
-                          .map((w: string) => w[0])
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  {/* Sits on top of the logo, so it must let taps through
-                      to the logo's tap-to-see-it-in-full. */}
-                  <LinearGradient
-                    colors={
-                      ["rgba(255,255,255,0.3)", "transparent"] as [
-                        string,
-                        string,
-                        ...string[],
-                      ]
-                    }
-                    style={[styles.logoGloss, logoFrameStyle]}
-                    pointerEvents="none"
-                  />
-                </View>
-                </View>
-              </View>
+              {/* Provider Logo, in the page style's frame (shared with
+                  Branding's preview, so the two can't drift apart). */}
+              <HeroLogo
+                uri={provider.providerLogo?.uri}
+                framing={provider.providerLogoFraming}
+                name={provider.displayName}
+                fallbackColor={provider.accentColor ?? "#AF9197"}
+                accent={adaptiveAccentColor}
+                heroText={heroText}
+                pageStyle={pageStyle}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setShowFullLogo(true);
+                }}
+                accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
+              />
 
               {/* Provider Info — editorial strip */}
               <View style={styles.providerInfoCenter}>
@@ -5274,13 +5196,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 {pageStyle.heroPills ? (
                   // Cover: what they do, where, and how they work, as white
                   // pills under the name instead of one line of small caps.
-                  <View style={styles.heroPillRow}>
-                    {heroPillLabels.map((label) => (
-                      <View key={label} style={styles.heroPill}>
-                        <Text style={styles.heroPillText} numberOfLines={1}>{label}</Text>
-                      </View>
-                    ))}
-                  </View>
+                  <HeroPills labels={heroPillLabels} />
                 ) : (
                   <View style={styles.providerMetaRow}>
                     <Text
@@ -5949,10 +5865,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   );
 };
 
-/** The business name under the logo; a thin script is drawn larger than
- *  this (see resolveProviderFontScale). */
-const NAME_SIZE = 30;
-const NAME_LINE_HEIGHT = 40;
+const NAME_SIZE = HERO_NAME_SIZE;
+const NAME_LINE_HEIGHT = HERO_NAME_LINE_HEIGHT;
 
 const styles = StyleSheet.create({
   background: {
@@ -6016,6 +5930,17 @@ const styles = StyleSheet.create({
   },
   heroInfoWrap: {
     paddingTop: 100, // clears the status bar / back button over the hero photo
+  },
+  // The loading skeleton's logo slot: the same box ProfileHero's HeroLogo draws in.
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 0,
+  },
+  logoWrapper: {
+    position: "relative",
+    width: 148,
+    height: 148,
   },
   heroTextShadow: {
     textShadowColor: "rgba(0,0,0,0.55)",
@@ -6135,101 +6060,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-    marginTop: 0,
-  },
-  logoWrapper: {
-    position: "relative",
-    width: 148,
-    height: 148,
-  },
-  providerLogo: {
-    width: 148,
-    height: 148,
-    borderRadius: 74,
-    borderWidth: 4,
-    borderColor: "rgba(255, 253, 251, 0.9)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 10,
-  },
-  // ── Page style logo frames ──
-  logoArch: {
-    borderRadius: 10,
-    borderTopLeftRadius: 74,
-    borderTopRightRadius: 74,
-  },
-  logoPolaroidPhoto: {
-    borderRadius: 0,
-    borderWidth: 0,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  logoThinRim: {
-    borderWidth: 2,
-  },
-  logoPolaroid: {
-    backgroundColor: "#FFFFFF",
-    padding: 8,
-    paddingBottom: 30,
-    transform: [{ rotate: "-3deg" }],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  logoGlossRing: {
-    position: "absolute",
-    top: -8,
-    left: -8,
-    width: 164,
-    height: 164,
-    borderRadius: 82,
-  },
-  logoDoubleRing: {
-    position: "absolute",
-    top: -11,
-    left: -11,
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    borderWidth: 1.5,
-  },
-  heroPillRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 24,
-    marginBottom: 12,
-  },
-  heroPill: {
-    height: 28,
-    paddingHorizontal: 12,
-    borderRadius: 100,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    maxWidth: 220,
-  },
-  heroPillText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 10,
-    letterSpacing: 1,
-    color: "#1F1A18",
-  },
-  logoGloss: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: 148,
-    height: 148,
-    borderRadius: 74,
   },
   providerInfoCenter: {
     alignItems: "center",

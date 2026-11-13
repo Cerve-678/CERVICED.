@@ -8,9 +8,14 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ProfileStylePreview } from '../../features/providers/ProfileStylePreview';
+import { BUSINESS_TYPE_LABEL } from '../../features/providers/profilePresentation';
+import type { LogoFraming } from '../../types/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -42,6 +47,7 @@ import PageStylePicker from '../../components/PageStylePicker';
 import {
   DEFAULT_PAGE_STYLE,
   DEFAULT_POLICY_PICTURE_LOOK,
+  PAGE_STYLES,
   POLICY_PICTURE_LOOKS,
   type PageStyleKey,
   type PolicyPictureLook,
@@ -114,6 +120,13 @@ export default function BrandingScreen({ navigation }: any) {
   const [cardShape, setCardShape]             = useState<CardShape>(DEFAULT_CARD_SHAPE);
   const [pageStyle, setPageStyle]             = useState<PageStyleKey>(DEFAULT_PAGE_STYLE);
   const [policyLook, setPolicyLook]           = useState<PolicyPictureLook>(DEFAULT_POLICY_PICTURE_LOOK);
+  // What the full preview needs that Branding doesn't edit: the name, the
+  // logo's framing and the line under the name. From the saved profile cache.
+  const [previewOpen, setPreviewOpen]         = useState(false);
+  const [profileName, setProfileName]         = useState('Your Business');
+  const [logoFraming, setLogoFraming]         = useState<LogoFraming | null>(null);
+  const [metaLabels, setMetaLabels]           = useState<string[]>([]);
+  const [pillLabels, setPillLabels]           = useState<string[]>([]);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
@@ -143,6 +156,18 @@ export default function BrandingScreen({ navigation }: any) {
         setBackgroundImage(cached.backgroundImage);
         setLogoUrl(cached.logo);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
+        if (cached.providerName?.trim()) setProfileName(cached.providerName.trim());
+        setLogoFraming(cached.logoFraming ?? null);
+        {
+          // The same line the profile prints under the name (and Cover's pills).
+          const types = (cached.serviceCategories?.length ? cached.serviceCategories : [cached.providerService])
+            .filter(Boolean)
+            .map(type => (type === 'OTHER' ? cached.customServiceType || 'SERVICE' : type).toUpperCase());
+          const where = cached.location ? [cached.location.toUpperCase()] : [];
+          const how = cached.businessType ? [BUSINESS_TYPE_LABEL[cached.businessType].toUpperCase()] : [];
+          setMetaLabels([...new Set([...types, ...where])]);
+          setPillLabels([...new Set([...types, ...where, ...how])]);
+        }
         const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
         setPageStyle(cachedPageStyle);
@@ -337,6 +362,16 @@ export default function BrandingScreen({ navigation }: any) {
     }
   }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, navigation]);
 
+  // The profile_theme the on-screen choices would save, for the preview.
+  const liveThemeKey = encodeThemeKey(
+    themeChoice === 'custom' ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice,
+    sheetColor,
+    heroFinish,
+    cardShape,
+    pageStyle,
+    policyLook,
+  );
+
   // Both stacks that open Branding for a link-only pro (Home, Settings) have
   // the Full CERVICED experience page.
   const showLocked = useCallback(() => setLockedOpen(true), []);
@@ -382,6 +417,40 @@ export default function BrandingScreen({ navigation }: any) {
         onCancel={() => setImageToCrop(null)}
         onDone={handleImageCropped}
       />
+      <Modal
+        visible={previewOpen}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setPreviewOpen(false)}
+      >
+        {/* A Modal is its own native surface, so it needs its own safe-area provider. */}
+        <SafeAreaProvider>
+          <ProfilePreviewScreen
+            onClose={() => setPreviewOpen(false)}
+            pageStyle={pageStyle}
+            onPickStyle={setPageStyle}
+            isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
+            onLockedPress={() => {
+              setPreviewOpen(false);
+              showLocked();
+            }}
+            accent={accentColor}
+          >
+            <ProfileStylePreview
+              themeKey={liveThemeKey}
+              gradient={gradient}
+              accent={accentColor}
+              backgroundImage={backgroundImage}
+              brandFont={brandFont}
+              name={profileName}
+              logoUri={logoUrl}
+              logoFraming={logoFraming}
+              metaLabels={metaLabels}
+              pillLabels={pillLabels}
+            />
+          </ProfilePreviewScreen>
+        </SafeAreaProvider>
+      </Modal>
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} scrollEnabled={!colourDragging}>
 
@@ -412,6 +481,21 @@ export default function BrandingScreen({ navigation }: any) {
             ) : (
               <ProfileHeroBackdrop colors={gradient} finish={heroFinish} style={StyleSheet.absoluteFill} />
             )}
+            {/* Opens the full preview: the top of the profile as clients
+                will see it with these choices, saved or not. */}
+            <TouchableOpacity
+              style={styles.previewButton}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setPreviewOpen(true);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Preview your profile"
+            >
+              <Ionicons name="eye-outline" size={15} color="#1F1A18" />
+              <Text style={styles.previewButtonText}>Preview</Text>
+            </TouchableOpacity>
             <View style={styles.previewContent}>
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
                 <Text style={[styles.previewAccentLabel, { color: accentInk }]}>ACCENT</Text>
@@ -703,6 +787,24 @@ const styles = StyleSheet.create({
   previewBg: {
     ...StyleSheet.absoluteFill,
   },
+  previewButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  previewButtonText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    color: '#1F1A18',
+  },
   previewContent: {
     padding: 18,
   },
@@ -849,4 +951,117 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 0.5,
   },
+});
+
+/**
+ * The full preview's frame: the preview itself, a close button over the
+ * hero, and the page styles along the bottom so a tap swaps the style and the
+ * hero changes in place. Picking one here is the same as picking it in the
+ * Page Style section; nothing saves until Save.
+ */
+function ProfilePreviewScreen({
+  children,
+  onClose,
+  pageStyle,
+  onPickStyle,
+  isLocked,
+  onLockedPress,
+  accent,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  pageStyle: PageStyleKey;
+  onPickStyle: (key: PageStyleKey) => void;
+  isLocked: (key: PageStyleKey) => boolean;
+  onLockedPress: () => void;
+  accent: string;
+}) {
+  const insets = useSafeAreaInsets();
+  const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
+  return (
+    <View style={previewStyles.root}>
+      {children}
+      <TouchableOpacity
+        style={[previewStyles.close, { top: insets.top + 10 }]}
+        onPress={onClose}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Close the preview"
+      >
+        <Ionicons name="close" size={22} color="#1F1A18" />
+      </TouchableOpacity>
+      <View style={[previewStyles.badge, { top: insets.top + 14 }]} pointerEvents="none">
+        <Text style={previewStyles.badgeText}>PREVIEW</Text>
+      </View>
+      <View style={[previewStyles.bar, { paddingBottom: insets.bottom + 12 }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={previewStyles.chips}>
+          {PAGE_STYLES.map(style => {
+            const selected = style.key === pageStyle;
+            const locked = isLocked(style.key);
+            return (
+              <TouchableOpacity
+                key={style.key}
+                style={[previewStyles.chip, selected && { backgroundColor: accent, borderColor: accent }]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  if (locked) onLockedPress();
+                  else onPickStyle(style.key);
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${style.name}${locked ? ', locked' : ''}`}
+              >
+                {locked ? <Ionicons name="lock-closed" size={11} color="#FFFFFF" /> : null}
+                <Text style={[previewStyles.chipText, selected && { color: onAccent }]}>{style.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
+const previewStyles = StyleSheet.create({
+  root: { flex: 1 },
+  close: {
+    position: 'absolute',
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: 'rgba(20,16,14,0.6)',
+  },
+  badgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.2, color: '#FFFFFF' },
+  bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 12,
+    backgroundColor: 'rgba(20,16,14,0.78)',
+  },
+  chips: { gap: 8, paddingHorizontal: 16 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+  },
+  chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: '#FFFFFF' },
 });

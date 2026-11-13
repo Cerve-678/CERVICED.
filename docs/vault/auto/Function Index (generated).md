@@ -5,7 +5,7 @@
 
 #generated
 
-**3777 functions** across **536 files**.
+**3783 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -254,7 +254,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (47)
+### `src/features/providers/` (49)
 - `aboutPreview.ts` — **aboutPreview**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
@@ -279,9 +279,11 @@
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · go · InlinePage · label · **PolicyPagesInline** · **PolicyStoryRings** · **PolicyStoryViewer** · StoryBody · top · **usePolicyEdgeColours**
+- `ProfileHero.tsx` — **HeroLogo** · **HeroPills** · **logoInitials**
 - `profileMapper.ts` — **mapProviderProfileData**
 - `ProfilePageStyle.tsx` — **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · **PolicyBandSection** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **sheetInk** · **StyledPolicyList** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
+- `ProfileStylePreview.tsx` — lines · **ProfileStylePreview**
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
 - `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialitiesSection** · tileHeight · venueImages
 - `recentBookingActivity.ts` — bookedAgo · **describeRecentBooking**
@@ -401,7 +403,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · removeImage · showLocked · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
