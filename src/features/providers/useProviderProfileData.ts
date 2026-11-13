@@ -19,6 +19,7 @@ import type { UnclaimedProviderDetail } from "../../services/providerClaimServic
 import userLearningService from "../../services/userLearningService";
 import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
+import { isProviderProfileUuid } from "../../utils/providerProfileDeepLink";
 import { mapProviderProfileData } from "./profileMapper";
 import type { ProviderProfileData } from "./profileTypes";
 import { mapProviderReviews } from "./reviewPresentation";
@@ -139,7 +140,14 @@ export function useProviderProfileData(
         if (!data) data = await fullProfileRequest;
         if (cancelled) return;
         if (!data) {
-          const unclaimed = await getUnclaimedProviderDetail(providerSlug);
+          // Unclaimed directory listings are only ever opened by their UUID,
+          // and the lookup matches providers.id (a uuid column). Passing a
+          // slug — which is what the cart, Home and Explore send — makes
+          // Postgres reject the query, so a provider that has simply gone
+          // offline showed "Could not load provider" instead of "not found".
+          const unclaimed = isProviderProfileUuid(providerSlug)
+            ? await getUnclaimedProviderDetail(providerSlug)
+            : null;
           if (!cancelled) setUnclaimedProvider(unclaimed);
           return;
         }

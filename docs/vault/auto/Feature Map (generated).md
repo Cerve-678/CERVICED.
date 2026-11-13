@@ -22,7 +22,7 @@ Curated: [[Address Release]] · **103 files**
 - `src/screens/client/BookingsScreen.tsx` _(38)_
 - `src/types/booking.ts` _(35)_
 - `supabase/restrict_provider_full_address.sql` _(35)_
-- `src/types/database.ts` _(33)_
+- `src/types/database.ts` _(34)_
 - `supabase/address_release_notification.sql` _(33)_
 - `supabase/require_provider_address.sql` _(32)_
 - `src/services/bookingService.ts` _(31)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **372 files**
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(598)_
 - `src/services/becca/capabilities/client.ts` _(598)_
-- `src/screens/client/BookingDetailScreen.tsx` _(517)_
+- `src/screens/client/BookingDetailScreen.tsx` _(519)_
 - `src/screens/client/BookingsScreen.tsx` _(409)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(255)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **372 files**
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
-- `src/types/booking.ts` _(108)_
+- `src/types/booking.ts` _(109)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/types/database.ts` _(102)_
 - `src/components/BookingSheet.tsx` _(100)_
@@ -346,7 +346,7 @@ Curated: [[Services]] · **55 files**
 - … +25 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **86 files**
+Curated: [[Payments]] · **87 files**
 - `src/screens/client/CartScreen.tsx` _(441)_
 - `src/services/databaseService.ts` _(110)_
 - `src/contexts/BookingContext.tsx` _(70)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **86 files**
 - `src/services/bookingService.ts` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/features/bookings/addOnTime.ts` _(4)_
-- … +56 more
+- … +57 more

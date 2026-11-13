@@ -983,3 +983,36 @@ lawyer-reviewed**:
   - Providers contracting with consumers carry their own unfair-terms risk for
     the Half policy they choose; the Provider Terms don't tell them so.
 
+## 26. Refund requests close five days after the appointment (2026-11-13)
+
+The owner's rule: "client has five days after the day of the appointment to
+request for a refund". In-app refund requests close at the end of the fifth
+UK day after the appointment day (`request_booking_refund()`, migration
+`20261113190000`; `REFUND_REQUEST_DAYS` in the app). Complaints, emailing
+support, a provider refunding on their own, requests already open, and
+chargebacks are not limited. Terms: Client Terms §15, Fees policy §9,
+Provider Terms §10, Complaints §1. Not lawyer-reviewed. Same untested area as
+section 6.
+
+Owner's answers (2026-11-13): applies only to bookings made after the
+migration is applied (`refund_request_window_starts_at()`), so earlier
+bookings keep the open-ended rule, as Client Terms §34 promises; no Terms
+notice is sent; the five days apply to every reason, including a wrong
+charge.
+
+To raise (not lawyer-reviewed):
+- **Notice (owner chose none).** Client Terms §34 promises notice before a
+  significant change, and Provider Terms §12 promises providers 15 days'
+  notice; §10 changed. Only the page's "Last updated" date moves.
+- **Billing errors (owner chose five days for all).** "I was charged the
+  wrong amount" is one of the request reasons. A wrong or duplicate charge is
+  a payment-services question as well as a consumer one; "statutory rights"
+  alone may not cover it.
+- **Consumer Rights Act.** The Act's remedies against the provider have no
+  five-day limit. The in-app channel is not the remedy itself, and each place
+  that closes it says statutory rights are unaffected; whether the overall
+  refund/complaint structure is fair under Part 2 is unchecked.
+- **Late/no-show fees** have their own 7-day dispute route (Client Terms §16),
+  decided by the provider; the page does not say which route applies to a fee
+  after day 5.
+
