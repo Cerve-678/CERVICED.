@@ -35,6 +35,16 @@ const RNStyleSheet = ReactNative['StyleSheet'] as {
  */
 export const MAX_FONT_SCALE = 1.3;
 
+/**
+ * How far the OS setting may enlarge text on top of the in-app size, so the
+ * two together never pass {@link MAX_FONT_SCALE}. Otherwise Larger in the app
+ * plus a large phone text size stacked to far more than any layout can hold.
+ * A smaller in-app size leaves the OS its full allowance.
+ */
+export function osMultiplierFor(appScale: number): number {
+  return appScale > 1 ? Math.max(1, MAX_FONT_SCALE / appScale) : MAX_FONT_SCALE;
+}
+
 const CLAMPED: ReadonlyArray<'Text' | 'TextInput'> = ['Text', 'TextInput'];
 
 let applied = false;
@@ -113,7 +123,7 @@ export function applyFontScaleClamp(): void {
       // the spread; `style` last so our scaled fontSize / base font wins over
       // props.style where we set it (but only where the call site didn't).
       return React.createElement(original, {
-        maxFontSizeMultiplier: MAX_FONT_SCALE,
+        maxFontSizeMultiplier: osMultiplierFor(appearance.scale),
         ...props,
         style,
       });

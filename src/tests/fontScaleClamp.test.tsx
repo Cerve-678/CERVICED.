@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TextInput } from 'react-native';
 import type { TextInputInstance } from 'react-native';
 import { act, render } from '@testing-library/react-native';
-import { applyFontScaleClamp, composeAppearanceStyle, MAX_FONT_SCALE } from '../utils/fontScaleClamp';
+import { applyFontScaleClamp, composeAppearanceStyle, MAX_FONT_SCALE, osMultiplierFor } from '../utils/fontScaleClamp';
 import { setTextAppearance } from '../utils/textAppearanceStore';
 
 // The clamp swaps the shared Text/TextInput exports, so it is applied once
@@ -75,5 +75,15 @@ describe('in-app text size', () => {
   it('does not invent a line height where the call site set none', () => {
     expect(composeAppearanceStyle({ fontSize: 10 }, { scale: 1.15, fontFamily: undefined }))
       .toEqual([{ fontSize: 10 }, { fontSize: 11.5 }]);
+  });
+
+  it('never lets the phone setting and the in-app size stack past the overall cap', () => {
+    for (const appScale of [1.06, 1.12]) {
+      expect(appScale * osMultiplierFor(appScale)).toBeCloseTo(MAX_FONT_SCALE);
+    }
+    expect(osMultiplierFor(0.92)).toBe(MAX_FONT_SCALE);
+    act(() => setTextAppearance({ scale: 1.12, fontFamily: undefined }));
+    const { getByText } = render(<Text style={{ fontSize: 14 }}>Larger</Text>);
+    expect(getByText('Larger').props['maxFontSizeMultiplier']).toBeCloseTo(MAX_FONT_SCALE / 1.12);
   });
 });
