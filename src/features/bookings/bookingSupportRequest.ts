@@ -104,7 +104,8 @@ export function isRefundRequestWindowOpen(
  *   deliberately never tracks off-app payments, so the client is told it's
  *   between them and the provider rather than offered a ticket.
  * - `closed`  — paid in the app, but more than REFUND_REQUEST_DAYS have gone
- *   by since the appointment. A complaint is still open to them.
+ *   by since the appointment. Complaints stay in the ⋯ menu as usual; the
+ *   sheet doesn't push them (owner's call).
  * - `settled` — already refunded or a refund is on its way; nothing to ask.
  */
 export type RefundRequestScope = 'in_app' | 'off_app' | 'closed' | 'settled';
@@ -163,7 +164,6 @@ export function describeRefundScope(
       title: 'Refund requests have closed',
       lines: [
         `You can ask for a refund up to ${REFUND_REQUEST_DAYS} days after the day of your appointment. For this booking, the last day was ${lastDay}.`,
-        "If something went wrong, you can still make a complaint and Cerviced support will look into it.",
         'This does not affect your statutory rights.',
       ],
     };

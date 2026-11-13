@@ -508,7 +508,7 @@ Client asks  ──►  WITH PROVIDER  ──► provider refunds ────�
 - **A client can ask until the end of the fifth UK day after the day of the
   appointment** (appointment on the 10th, last day the 15th). After that
   `request_booking_refund()` refuses, and the app's ⋯ sheet says when it
-  closed and offers a complaint instead. **Only bookings made after migration
+  closed (complaints stay in the ⋯ menu as usual). **Only bookings made after migration
   `20261113190000` is applied** (`refund_request_window_starts_at()`;
   `client_bookings.refund_request_window_applies`); older bookings have no
   limit. The same five days cover every reason, a wrong charge included.

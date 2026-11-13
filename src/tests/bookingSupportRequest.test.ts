@@ -134,11 +134,12 @@ describe('describeRefundScope', () => {
     expect(lines.join(' ')).not.toMatch(/You can ask until/);
   });
 
-  it('says when it closed, and that a complaint is still open', () => {
+  it('says when it closed, without pushing a complaint', () => {
     const { title, lines } = describeRefundScope({ ...base, bookingDate: '2026-11-07', paymentStatus: PaymentStatus.PAID_IN_FULL, paymentType: 'full' }, NOW);
     expect(title).toBe('Refund requests have closed');
     expect(lines[0]).toContain('the last day was Thursday 12th November');
-    expect(lines[1]).toMatch(/still make a complaint/);
+    expect(lines.join(' ')).not.toMatch(/complaint/);
+    expect(lines[1]).toBe('This does not affect your statutory rights.');
   });
 });
 

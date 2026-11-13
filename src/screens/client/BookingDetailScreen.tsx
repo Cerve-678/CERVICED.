@@ -472,7 +472,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const refundScope = booking ? getRefundRequestScope(booking) : 'settled';
   const refundScopeCopy = useMemo(() => (booking ? describeRefundScope(booking) : null), [booking]);
   const isOffAppRefund = supportKind === 'refund' && refundScope === 'off_app';
-  // Past the five days: the sheet explains and offers a complaint instead.
+  // Past the five days: the sheet only explains when it closed.
   const isClosedRefund = supportKind === 'refund' && refundScope === 'closed';
   const latestRefundRequest = refundRequests[0] ?? null;
   const hasOpenRefundRequest = !!latestRefundRequest && isRefundRequestOpen(latestRefundRequest);
@@ -1952,24 +1952,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </TouchableOpacity>
                   </View>
                 ) : isClosedRefund ? (
-                  <View style={{ gap: 8 }}>
-                    <TouchableOpacity
-                      style={[st.supportSend, { backgroundColor: C.accent }]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        // Same sheet, so swap its contents rather than closing it.
-                        setSupportReason(null);
-                        setSupportMessage('');
-                        setSupportKind('complaint');
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 15 }}>Make a complaint</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={{ paddingVertical: 10, alignItems: 'center' }} onPress={() => setSupportKind(null)} activeOpacity={0.7}>
-                      <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity style={{ paddingVertical: 10, alignItems: 'center' }} onPress={() => setSupportKind(null)} activeOpacity={0.7}>
+                    <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>
+                  </TouchableOpacity>
                 ) : (() => {
                   const ready = isSupportRequestReady(supportReason, supportMessage);
                   return (

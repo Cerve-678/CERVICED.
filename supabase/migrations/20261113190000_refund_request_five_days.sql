@@ -106,7 +106,7 @@ BEGIN
   -- A complaint is not affected: it goes to support, not through here.
   IF v_created_at >= public.refund_request_window_starts_at()
      AND (now() AT TIME ZONE 'Europe/London')::date > v_booking_date + 5 THEN
-    RAISE EXCEPTION 'Refund requests for this booking closed at the end of %, 5 days after the appointment. If something went wrong, you can still make a complaint from the booking.',
+    RAISE EXCEPTION 'Refund requests for this booking closed at the end of %, 5 days after the appointment.',
       TO_CHAR(v_booking_date + 5, 'FMDay FMDD FMMonth');
   END IF;
 
