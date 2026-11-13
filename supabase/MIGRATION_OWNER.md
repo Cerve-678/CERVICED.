@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-13 (calendar sync busy times)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113150000 | `provider_calendar_busy_blocks` | **APPLIED 2026-11-13** on the user's go-ahead ("apply it"), via `supabase db query --linked -f` (absolute path) from the main folder; version recorded by the file. Authored as 20261113120000; renumbered because `20261113120000_client_cancel_after_start_is_late`, `20261113130000_no_accept_after_request_deadline` and `20261113140000_booking_times_in_uk_time` were applied first (none touch these objects; md5 guards matched). Frontier right before applying: live max `20261113140000`, nothing unapplied above it on an open PR; all peer sessions idle; the `feat/request-card-hold` claim covers only its own `20261112100000`. New tables `provider_calendar_busy_blocks` and `provider_calendar_sync` (RLS on, all grants revoked); `my_calendar_sync_provider_id()` (revoked from authenticated); `sync_my_calendar_busy_blocks`, `clear_my_calendar_busy_blocks`, `get_my_calendar_sync_status` (authenticated only). Redefines from live with md5 guards `get_provider_busy_spans` (`ae1ca14b…`, now also returns the blocks) and `enforce_booking_bookability` (`f5bc8a99…`, refuses a new booking or a move into a block unless it's the provider's own). Two forced-rollback dry runs passed (sync as a real provider, status, spans, trigger refusal, grants; live unchanged). Verified live: version present (now live max); both tables present, RLS on, unreadable by authenticated; anon can't sync; both functions carry the change, trigger still SECURITY DEFINER; a live provider's busy spans still return their bookings; 0 blocks. Written on `feat/provider-calendar-sync` (#482). |
+
 ### Applied 2026-11-12 (retry unsent refunds)
 
 | Authored version | Name | Status |

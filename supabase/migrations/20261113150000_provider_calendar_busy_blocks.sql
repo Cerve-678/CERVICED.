@@ -27,6 +27,10 @@
 -- The app only syncs while the provider opens it, so the blocks are as fresh
 -- as their last visit; the settings card says when that was.
 -- Redefined from live with md5 guards, per supabase/MIGRATION_OWNER.md.
+-- Authored as 20261113120000; renumbered because
+-- 20261113120000_client_cancel_after_start_is_late, 20261113130000 and
+-- 20261113140000 were applied first (none touch these objects; the md5
+-- guards check).
 
 BEGIN;
 
@@ -515,5 +519,9 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20261113150000', 'provider_calendar_busy_blocks')
+ON CONFLICT DO NOTHING;
 
 COMMIT;
