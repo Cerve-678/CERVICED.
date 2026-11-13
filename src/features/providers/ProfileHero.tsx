@@ -251,7 +251,7 @@ export function ProfileHeroLayout({
     case "spa":
       // Spa: a quiet line of what they do, the name spaced out, a ringed logo.
       return (
-        <View style={layout.infoCenter}>
+        <View style={[layout.infoCenter, layout.textFirst]}>
           {kicker ? <Text style={[layout.spaKicker, { color: heroSub }, shadow]}>{kicker}</Text> : null}
           {renderName({ scale: 1.15, letterSpacing: 4 })}
           <View style={layout.spaLogo}>{renderLogo(116)}</View>
@@ -291,13 +291,18 @@ function CurvedCaption({ text, color, width }: { text: string; color: string; wi
   );
 }
 
+/** How much lower a hero that opens on text starts than one that opens on the logo. */
+const TEXT_FIRST_DROP = 28;
+
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
   coverTop: { paddingTop: 120 },
   kicker: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 10, letterSpacing: 2.4, marginBottom: 8 },
-  mastHead: { alignItems: "center", paddingHorizontal: 20, marginBottom: 18 },
+  // Arch and Spa open on a line of text, not the logo, so they start lower:
+  // at the logo's height the first line sat under the header buttons.
+  mastHead: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 18 },
   located: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12, letterSpacing: 0.6, marginTop: 4 },
   mastRow: { flexDirection: "row", alignItems: "flex-end", gap: 14, paddingHorizontal: 20, marginBottom: 10 },
   mastLogo: { alignItems: "center" },
@@ -311,6 +316,7 @@ const layout = StyleSheet.create({
   locatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   locatedScript: { fontFamily: "Sacramento_400Regular", fontSize: 18 },
   locatedPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12, flexShrink: 1 },
+  textFirst: { marginTop: TEXT_FIRST_DROP },
   spaKicker: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 4, marginBottom: 10, textAlign: "center" },
   spaLogo: { marginTop: 16 },
 });
