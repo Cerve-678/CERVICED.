@@ -31,12 +31,12 @@ import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import { isDeclinedRequest } from '../../features/bookings/statusPresentation';
 import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import {
-  describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
+  describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady, refundRequestLastDay,
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
 } from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
-import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -59,7 +59,7 @@ import { clientRequestNote, requestAnswerDeadline } from '../../features/booking
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { FullImageViewer } from '../../components/FullImageViewer';
 import { policyImageUrls, type PolicyImageFields } from '../../features/providers/policyImages';
-import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
+import { formatShortDate, formatShortDayDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
   calculateBookingPaymentBreakdown,
@@ -472,6 +472,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const refundScope = booking ? getRefundRequestScope(booking) : 'settled';
   const refundScopeCopy = useMemo(() => (booking ? describeRefundScope(booking) : null), [booking]);
   const isOffAppRefund = supportKind === 'refund' && refundScope === 'off_app';
+  // Past the five days: the sheet explains and offers a complaint instead.
+  const isClosedRefund = supportKind === 'refund' && refundScope === 'closed';
   const latestRefundRequest = refundRequests[0] ?? null;
   const hasOpenRefundRequest = !!latestRefundRequest && isRefundRequestOpen(latestRefundRequest);
   const refundTimeline = useMemo(
@@ -640,7 +642,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       Alert.alert(
         "Couldn't Send",
         // Never say it sent when it didn't — hand them the address instead.
-        `${toUserMessage(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitSupport')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+        // A server refusal (e.g. past the five days) says why in its own words.
+        `${toUserMessageAllowingDbGuard(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitSupport')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
       );
     } finally {
       setSupportBusy(false);
@@ -1810,7 +1813,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openSupportForm('refund'); }}>
                     <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}><Ionicons name="arrow-undo-outline" size={20} color={C.accentText} /></View>
-                    <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Request a refund</Text><Text style={{ color: C.sub, fontSize: 12 }}>Ask {booking.providerName} for a refund</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Request a refund</Text><Text style={{ color: C.sub, fontSize: 12 }}>{refundScope === 'closed' ? `Closed after ${formatShortDayDate(refundRequestLastDay(booking.bookingDate))}` : `Ask ${booking.providerName} for a refund`}</Text></View>
                     <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                   </TouchableOpacity>
                 )}
@@ -1876,7 +1879,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
                 {supportKind === 'refund' && refundScopeCopy && (
                   <View style={[st.supportNext, { backgroundColor: C.accent + '14', marginTop: 12 }]}>
-                    <Ionicons name={refundScope === 'off_app' ? 'cash-outline' : 'shield-checkmark-outline'} size={16} color={C.accentText} style={{ marginTop: 1 }} />
+                    <Ionicons name={refundScope === 'off_app' ? 'cash-outline' : refundScope === 'closed' ? 'time-outline' : 'shield-checkmark-outline'} size={16} color={C.accentText} style={{ marginTop: 1 }} />
                     <View style={{ flex: 1, gap: 6 }}>
                       <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>{refundScopeCopy.title}</Text>
                       {refundScopeCopy.lines.map(line => (
@@ -1886,7 +1889,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </View>
                 )}
 
-                {!isOffAppRefund && (<>
+                {!isOffAppRefund && !isClosedRefund && (<>
                 <Text style={[st.supportHeading, { color: C.sub }]}>{supportKind === 'refund' ? "WHAT'S THE REFUND FOR?" : 'WHAT WENT WRONG?'}</Text>
                 <View style={{ gap: 8 }}>
                   {(supportKind ? SUPPORT_REASONS[supportKind] : []).map(r => {
@@ -1943,6 +1946,25 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       activeOpacity={0.7}
                     >
                       <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 15 }}>Contact {booking.providerName}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={{ paddingVertical: 10, alignItems: 'center' }} onPress={() => setSupportKind(null)} activeOpacity={0.7}>
+                      <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : isClosedRefund ? (
+                  <View style={{ gap: 8 }}>
+                    <TouchableOpacity
+                      style={[st.supportSend, { backgroundColor: C.accent }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        // Same sheet, so swap its contents rather than closing it.
+                        setSupportReason(null);
+                        setSupportMessage('');
+                        setSupportKind('complaint');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 15 }}>Make a complaint</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={{ paddingVertical: 10, alignItems: 'center' }} onPress={() => setSupportKind(null)} activeOpacity={0.7}>
                       <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>

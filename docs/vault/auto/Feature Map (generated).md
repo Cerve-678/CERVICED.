@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **372 files**
 - `src/screens/client/CartScreen.tsx` _(682)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(598)_
 - `src/services/becca/capabilities/client.ts` _(598)_
-- `src/screens/client/BookingDetailScreen.tsx` _(506)_
+- `src/screens/client/BookingDetailScreen.tsx` _(508)_
 - `src/screens/client/BookingsScreen.tsx` _(409)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(255)_

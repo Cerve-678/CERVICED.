@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-13 (refund requests close after five days), NOT applied
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113190000 | `refund_request_five_days` | **NOT APPLIED.** Frontier at authoring: live max `20261113150000`; unapplied on open branches `20261113160000` (late-cancel-half-top-up), `20261113170000` (#490), `20261113180000` (#491), none touching this function. Redefines `request_booking_refund` from live with md5 guard `72a54e1b…`; adds one refusal after the ownership check: `(now() AT TIME ZONE 'Europe/London')::date > booking_date + 5`. Grants unchanged (authenticated, postgres, service_role). Forced-rollback dry run 2026-11-13 as real clients: an 8 Nov booking (last day today) accepted, 7 Nov and 6 Nov refused with the P0001 message naming the last day; live md5, request rows, notifications and version unchanged after. Written on `feat/refund-request-five-days`. |
+
 ### Applied 2026-11-13 (calendar sync busy times)
 
 | Authored version | Name | Status |

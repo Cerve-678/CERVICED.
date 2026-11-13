@@ -926,3 +926,33 @@ To raise (not lawyer-reviewed):
 - **Section 5 still says messages go to NVIDIA,** but the AI router is off in
   production (user's call: switch on only after a scorecard). It overstates,
   which is the safe direction; recheck when the router changes.
+
+## 25. Refund requests close five days after the appointment (2026-11-13)
+
+The owner's rule: "client has five days after the day of the appointment to
+request for a refund". In-app refund requests close at the end of the fifth
+UK day after the appointment day (`request_booking_refund()`, migration
+`20261113190000`; `REFUND_REQUEST_DAYS` in the app). Complaints, emailing
+support, a provider refunding on their own, requests already open, and
+chargebacks are not limited. Terms: Client Terms §15, Fees policy §9,
+Provider Terms §10, Complaints §1. Not lawyer-reviewed. Same untested area as
+section 6.
+
+To raise (not lawyer-reviewed):
+- **Bookings made before the change.** Client Terms §34 says changes do not
+  affect bookings already made, and promises notice before a significant
+  change. Applying the window to every booking at once cuts off a route that
+  was open the day before.
+- **Notice.** Provider Terms §12 promises providers 15 days' notice of a
+  change; §10 changed. Clients have no notice yet either.
+- **Billing errors.** "I was charged the wrong amount" is one of the request
+  reasons. A wrong or duplicate charge is a payment-services question as well
+  as a consumer one; "statutory rights" alone may not cover it.
+- **Consumer Rights Act.** The Act's remedies against the provider have no
+  five-day limit. The in-app channel is not the remedy itself, and each place
+  that closes it says statutory rights are unaffected; whether the overall
+  refund/complaint structure is fair under Part 2 is unchecked.
+- **Late/no-show fees** have their own 7-day dispute route (Client Terms §16),
+  decided by the provider; the page does not say which route applies to a fee
+  after day 5.
+

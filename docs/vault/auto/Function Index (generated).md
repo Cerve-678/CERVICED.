@@ -5,7 +5,7 @@
 
 #generated
 
-**3789 functions** across **538 files**.
+**3791 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -158,7 +158,7 @@
 - `bookingFeeRules.ts` — **feeChargeWindow** · **feeDisputeOpen** · **liveFee**
 - `bookingForms.ts` — **formsToDoFirst**
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
-- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · **isSupportRequestReady** · money · **passRefundRequestOn** · ticket
+- `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · **isRefundRequestWindowOpen** · **isSupportRequestReady** · money · **passRefundRequestOn** · **refundRequestLastDay** · ticket
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `ExternalBookingCard.tsx` — createStyles · styles
