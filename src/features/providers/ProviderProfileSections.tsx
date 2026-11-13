@@ -9,9 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -20,24 +18,17 @@ import { SafeAreaView, WindowControlsInsetProvider } from "../../components/Safe
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./reviewPresentation";
+import {
+  PageSection,
+  PageSectionHeading,
+  sectionInk,
+  type PageStylePalette,
+} from "./ProfilePageStyle";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
 
-interface SectionPalette {
-  text: string;
-  sub: string;
-  border: string;
-  separator: string;
-  background: string;
-  cardBackground: string;
-  accent: string;
-  blurTint: "dark" | "light";
-  blurIntensity: number;
-  highlightColors: [string, string];
-  /** Branding → Card Shape: square corners on the section cards. Photos stay round. */
-  squareCards?: boolean;
-}
+type SectionPalette = PageStylePalette;
 
 /** A link-only profile's own Specialities section. Link-only profiles carry
  *  no price list, so specialities are the main signal of what they do and get
@@ -81,45 +72,40 @@ export const ProviderReviewPreviewSection = React.memo(function ProviderReviewPr
   palette: SectionPalette;
   onSeeAll: () => void;
 }) {
+  const ink = sectionInk(palette);
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Reviews</Text>
+    <PageSection section="reviews" palette={palette}>
       {loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: palette.sub }]}>Loading reviews…</Text>
+        <Text style={[styles.bodyText, { color: ink.sub }]}>Loading reviews…</Text>
       ) : null}
       {!loading && reviews.length === 0 ? (
-        <Text style={[styles.bodyText, { color: palette.sub }]}>No reviews yet.</Text>
+        <Text style={[styles.bodyText, { color: ink.sub }]}>No reviews yet.</Text>
       ) : null}
       {reviews.slice(0, 5).map(review => (
-        <View key={review.id} style={[styles.review, { borderBottomColor: palette.separator }]}>
+        <View key={review.id} style={[styles.review, { borderBottomColor: ink.separator }]}>
           <View style={styles.reviewHeader}>
-            <Text style={[styles.reviewer, { color: palette.text }]}>{review.name}</Text>
+            <Text style={[styles.reviewer, { color: ink.text }]}>{review.name}</Text>
             <View style={styles.stars}>
               {[1, 2, 3, 4, 5].map(star => (
                 <TabIcon
                   key={star}
                   name="star"
                   size={12}
-                  color={star <= review.rating ? "#FFD700" : palette.border}
+                  color={star <= review.rating ? "#FFD700" : ink.border}
                 />
               ))}
             </View>
-            <Text style={[styles.reviewDate, { color: palette.sub }]}>{review.date}</Text>
+            <Text style={[styles.reviewDate, { color: ink.sub }]}>{review.date}</Text>
           </View>
           {review.comment ? (
-            <Text style={[styles.bodyText, { color: palette.sub }]}>{review.comment}</Text>
+            <Text style={[styles.bodyText, { color: ink.sub }]}>{review.comment}</Text>
           ) : null}
         </View>
       ))}
       <TouchableOpacity style={styles.textButton} onPress={onSeeAll} activeOpacity={0.6}>
-        <Text style={[styles.textButtonLabel, { color: palette.text }]}>See All Reviews</Text>
+        <Text style={[styles.textButtonLabel, { color: ink.text }]}>See All Reviews</Text>
       </TouchableOpacity>
-    </BlurView>
+    </PageSection>
   );
 });
 
@@ -142,33 +128,28 @@ export const ProviderOpeningHoursSection = React.memo(function ProviderOpeningHo
     );
   }
   if (!openingHours || openingHours.length === 0) return null;
+  const ink = sectionInk(palette);
   const today = new Date().getDay();
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Opening Hours</Text>
+    <PageSection section="hours" palette={palette}>
       {openingHours.map((day, index) => (
         <View
           key={day.dayOfWeek}
           style={[
             styles.hoursRow,
-            { borderBottomColor: palette.separator },
+            { borderBottomColor: ink.separator },
             index === openingHours.length - 1 && styles.lastRow,
           ]}
         >
-          <Text style={[styles.hoursLabel, { color: day.dayOfWeek === today ? palette.accent : palette.sub }]}>
+          <Text style={[styles.hoursLabel, { color: day.dayOfWeek === today ? palette.accent : ink.sub }]}>
             {day.label}
           </Text>
-          <Text style={[styles.hoursValue, { color: day.isOpen ? palette.text : palette.sub }]}>
+          <Text style={[styles.hoursValue, { color: day.isOpen ? ink.text : ink.sub }]}>
             {day.isOpen ? day.hours : "Closed"}
           </Text>
         </View>
       ))}
-    </BlurView>
+    </PageSection>
   );
 });
 
@@ -195,6 +176,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   onOpenPublicLink: (url: string) => void;
   onGetInTouch: () => void;
 }) {
+  const ink = sectionInk(palette);
   type ContactRow = { label: string; value: string; url: string | null; publicLink: boolean };
   const rows = ([
     contact.location
@@ -208,31 +190,25 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
   ] as (ContactRow | null)[]).filter((row): row is ContactRow => row != null);
 
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Contact</Text>
+    <PageSection section="contact" palette={palette}>
       {rows.map(row => {
         const content = (
           <>
-            <Text style={[styles.hoursLabel, { color: palette.sub }]}>{row.label}</Text>
-            <Text style={[styles.contactValue, { color: palette.text }]} numberOfLines={row.label === "Location" ? 2 : 1}>{row.value}</Text>
+            <Text style={[styles.hoursLabel, { color: ink.sub }]}>{row.label}</Text>
+            <Text style={[styles.contactValue, { color: ink.text }]} numberOfLines={row.label === "Location" ? 2 : 1}>{row.value}</Text>
           </>
         );
         return row.url ? (
           <TouchableOpacity
             key={row.label}
-            style={[styles.contactRow, { borderBottomColor: palette.separator }]}
+            style={[styles.contactRow, { borderBottomColor: ink.separator }]}
             onPress={() => (row.publicLink ? onOpenPublicLink(row.url!) : onOpenLink(row.url!))}
             activeOpacity={0.75}
           >
             {content}
           </TouchableOpacity>
         ) : (
-          <View key={row.label} style={[styles.contactRow, { borderBottomColor: palette.separator }]}>
+          <View key={row.label} style={[styles.contactRow, { borderBottomColor: ink.separator }]}>
             {content}
           </View>
         );
@@ -244,7 +220,7 @@ export const ProviderContactSection = React.memo(function ProviderContactSection
       >
         <Text style={styles.contactButtonText}>Get In Touch</Text>
       </TouchableOpacity>
-    </BlurView>
+    </PageSection>
   );
 });
 
@@ -270,22 +246,17 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
     () => venueItems.map(item => ({ uri: item.image_url })),
     [venueItems],
   );
+  const ink = sectionInk(palette);
   if (groups.length === 0 && !qualifications && !goodToKnow && !howToGetThere && venueItems.length === 0) return null;
   return (
-    <BlurView
-      intensity={palette.blurIntensity}
-      tint={palette.blurTint}
-      style={[styles.card, { backgroundColor: palette.cardBackground, borderColor: palette.border }, palette.squareCards && styles.square]}
-    >
-      <LinearGradient colors={palette.highlightColors} style={styles.highlight} />
-      <Text style={[styles.cardTitle, { color: palette.text }]}>Additional Information</Text>
+    <PageSection section="info" palette={palette}>
       {groups.map((group, index) => (
         <View key={group.label} style={[styles.infoBlock, index === 0 && styles.infoBlockFirst]}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>{group.label}</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>{group.label}</Text>
           <View style={styles.chipRow}>
             {group.chips.map(chip => (
               <View key={chip} style={[styles.chip, { borderColor: `${palette.accent}55`, backgroundColor: `${palette.accent}18` }]}>
-                <Text style={[styles.chipText, { color: palette.text }]}>{chip}</Text>
+                <Text style={[styles.chipText, { color: ink.text }]}>{chip}</Text>
               </View>
             ))}
           </View>
@@ -293,25 +264,25 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
       ))}
       {qualifications ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Qualifications</Text>
-          <Text style={[styles.infoText, { color: palette.text }]}>{qualifications}</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>Qualifications</Text>
+          <Text style={[styles.infoText, { color: ink.text }]}>{qualifications}</Text>
         </View>
       ) : null}
       {goodToKnow ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Good to know</Text>
-          <Text style={[styles.infoText, { color: palette.text }]}>{goodToKnow}</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>Good to know</Text>
+          <Text style={[styles.infoText, { color: ink.text }]}>{goodToKnow}</Text>
         </View>
       ) : null}
       {howToGetThere ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>How to get there</Text>
-          <Text style={[styles.infoText, { color: palette.text }]}>{howToGetThere}</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>How to get there</Text>
+          <Text style={[styles.infoText, { color: ink.text }]}>{howToGetThere}</Text>
         </View>
       ) : null}
       {venueItems.length > 0 ? (
         <View style={styles.infoBlock}>
-          <Text style={[styles.infoLabel, { color: palette.sub }]}>Venue</Text>
+          <Text style={[styles.infoLabel, { color: ink.sub }]}>Venue</Text>
           <FlatList
             data={venueItems}
             horizontal
@@ -335,7 +306,7 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
           />
         </View>
       ) : null}
-    </BlurView>
+    </PageSection>
   );
 });
 
@@ -401,7 +372,16 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   return (
     <View style={styles.portfolioSection}>
       <View style={styles.portfolioHeading}>
-        <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        {/* Classic's Portfolio title has always sat on the page in Bakbak, not
+            inside a card, so it keeps its own Text; a page style draws its
+            own heading here. */}
+        {palette.pageStyle && palette.pageStyle.heading !== "plain" ? (
+          <View style={styles.portfolioStyledHeading}>
+            <PageSectionHeading section="portfolio" palette={palette} />
+          </View>
+        ) : (
+          <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
+        )}
         {items.length > INLINE_PORTFOLIO_LIMIT ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
             <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
@@ -502,15 +482,7 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },
   chipText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12 },
-  card: {
-    padding: 22,
-    borderRadius: 26,
-    marginBottom: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
   square: { borderRadius: 0 },
-  highlight: { ...StyleSheet.absoluteFill },
   cardTitle: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   bodyText: { fontFamily: "Jura-VariableFont_wght", fontSize: 12, lineHeight: 18, marginTop: 7 },
   review: { marginBottom: 15, paddingBottom: 15, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -553,6 +525,7 @@ const styles = StyleSheet.create({
   loadingLine: { height: 12, borderRadius: 6, width: "100%" },
   loadingLineShort: { width: "68%" },
   portfolioHeading: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  portfolioStyledHeading: { flexShrink: 1, paddingTop: 16 },
   portfolioSeeAll: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12 },
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },

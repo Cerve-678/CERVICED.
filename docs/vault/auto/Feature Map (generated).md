@@ -108,7 +108,7 @@ Curated: [[Payments]] · **164 files**
 - … +134 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **370 files**
+Curated: [[Booking Flow]] · **371 files**
 - `src/services/databaseService.ts` _(1120)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **370 files**
 - `src/screens/client/RescheduleScreen.tsx` _(191)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(147)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(149)_
 - `src/screens/shared/NotificationsScreen.tsx` _(141)_
 - `src/services/AvailabilityService.ts` _(139)_
 - `supabase/waitlist_holds.sql` _(134)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **370 files**
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/components/BookingSheet.tsx` _(98)_
 - `src/features/bookings/activityCentre.ts` _(95)_
-- … +340 more
+- … +341 more
 
 ## Notifications
 Curated: [[Notifications]] · **190 files**

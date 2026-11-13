@@ -38,6 +38,8 @@ import {
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
+import PageStylePicker from '../../components/PageStylePicker';
+import { DEFAULT_PAGE_STYLE, type PageStyleKey } from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
@@ -104,6 +106,7 @@ export default function BrandingScreen({ navigation }: any) {
   const [sheetColor, setSheetColor]           = useState(SHEET_BG);
   const [heroFinish, setHeroFinish]           = useState<HeroFinish>(DEFAULT_HERO_FINISH);
   const [cardShape, setCardShape]             = useState<CardShape>(DEFAULT_CARD_SHAPE);
+  const [pageStyle, setPageStyle]             = useState<PageStyleKey>(DEFAULT_PAGE_STYLE);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
@@ -133,8 +136,9 @@ export default function BrandingScreen({ navigation }: any) {
         setBackgroundImage(cached.backgroundImage);
         setLogoUrl(cached.logo);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
-        const { base, sheet, finish, shape } = parseThemeKey(cached.profileTheme);
+        const { base, sheet, finish, shape, pageStyle: cachedPageStyle } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
+        setPageStyle(cachedPageStyle);
         setSheetColor(sheet);
         setHeroFinish(finish);
         const custom = decodeCustomTheme(base);
@@ -161,8 +165,9 @@ export default function BrandingScreen({ navigation }: any) {
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
           if (data.logo_url) setLogoUrl(data.logo_url);
           if (data.brand_font) setBrandFont(data.brand_font);
-          const { base, sheet, finish, shape } = parseThemeKey(data.profile_theme);
+          const { base, sheet, finish, shape, pageStyle: savedPageStyle } = parseThemeKey(data.profile_theme);
           setCardShape(shape);
+          setPageStyle(savedPageStyle);
           setSheetColor(sheet);
           setHeroFinish(finish);
           const custom = decodeCustomTheme(base);
@@ -292,7 +297,7 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape);
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape, pageStyle);
 
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
@@ -321,7 +326,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, brandFont, navigation]);
 
   // Both stacks that open Branding for a link-only pro (Home, Settings) have
   // the Full CERVICED experience page.
@@ -469,6 +474,26 @@ export default function BrandingScreen({ navigation }: any) {
                 );
               })}
             </View>
+          </View>
+
+          {/* Page style — the layout and decoration of the whole profile */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              How your whole profile is laid out: the headings, the cards, how your policies show and the frame round your logo. Your colours and font stay as you set them.
+            </Text>
+            <PageStylePicker
+              value={pageStyle}
+              onChange={setPageStyle}
+              isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
+              onLockedPress={showLocked}
+              gradient={gradient}
+              accent={accentColor}
+              sheet={sheetColor}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+            />
           </View>
 
           {/* Card shape — corners of the service cards and category pills */}

@@ -10,11 +10,13 @@
 // Custom sets are stored in the same column, colon-encoded:
 //   custom:#RRGGBB:#RRGGBB:#RRGGBB   (backdrop : card : accent)
 //
-// The whole stored value is  base[|#sheet[|finish]]  — the content-area colour
+// The whole stored value is  base[|#sheet[|finish[|shape[|pageStyle]]]]  — the content-area colour
 // and the hero finish ride along as suffixes (see encodeThemeKey), so neither
 // needs a column of its own. Builds that predate the finish read only the
 // first two parts and show the plain blend.
 
+
+import { DEFAULT_PAGE_STYLE, isPageStyleKey, type PageStyleKey } from './pageStyles';
 // Default beige content backdrop — matches the app background.
 export const SHEET_BG = '#F5F1EC';
 
@@ -380,14 +382,16 @@ export function decodeCustomTheme(key: string | null | undefined): { backdrop: s
 // ── Full key encoding (base theme + optional content-area suffix) ────────────
 
 /** Compose the stored profile_theme value from a base key, a sheet colour, a
- *  hero finish and a card shape. Every part before a non-default one is
+ *  hero finish, a card shape and a page style (constants/pageStyles). Every part before a non-default one is
  *  written out, so the parts never shift position. */
 export function encodeThemeKey(
   base: string,
   sheet?: string,
   finish: HeroFinish = DEFAULT_HERO_FINISH,
   shape: CardShape = DEFAULT_CARD_SHAPE,
+  pageStyle: PageStyleKey = DEFAULT_PAGE_STYLE,
 ): string {
+  if (pageStyle !== DEFAULT_PAGE_STYLE) return `${base}|${sheet || SHEET_BG}|${finish}|${shape}|${pageStyle}`;
   if (shape !== DEFAULT_CARD_SHAPE) return `${base}|${sheet || SHEET_BG}|${finish}|${shape}`;
   if (finish !== DEFAULT_HERO_FINISH) return `${base}|${sheet || SHEET_BG}|${finish}`;
   return sheet && sheet !== SHEET_BG ? `${base}|${sheet}` : base;
@@ -400,15 +404,17 @@ export function parseThemeKey(key: string | null | undefined): {
   sheet: string;
   finish: HeroFinish;
   shape: CardShape;
+  pageStyle: PageStyleKey;
 } {
-  if (!key) return { base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH, shape: DEFAULT_CARD_SHAPE };
-  const [base, sheet, finish, shape] = key.split('|');
+  if (!key) return { base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH, shape: DEFAULT_CARD_SHAPE, pageStyle: DEFAULT_PAGE_STYLE };
+  const [base, sheet, finish, shape, pageStyle] = key.split('|');
   const validSheet = /^#[0-9a-fA-F]{6}$/.test(sheet ?? '') ? sheet! : SHEET_BG;
   return {
     base: base ?? null,
     sheet: validSheet,
     finish: isHeroFinish(finish) ? finish : DEFAULT_HERO_FINISH,
     shape: isCardShape(shape) ? shape : DEFAULT_CARD_SHAPE,
+    pageStyle: isPageStyleKey(pageStyle) ? pageStyle : DEFAULT_PAGE_STYLE,
   };
 }
 

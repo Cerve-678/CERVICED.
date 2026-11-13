@@ -96,6 +96,7 @@ import { MultiBookingSheet, type MultiBookingSheetResult } from "../../component
 import { AddOnPickerModal } from "../../components/AddOnPickerModal";
 import type { ClientPromotion } from "../../types/database";
 import {
+  blend,
   parseThemeKey,
   resolveProviderTheme,
   withAlpha,
@@ -112,6 +113,20 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
+import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
+import {
+  GlossShine,
+  onAccentInk,
+  PageSection,
+  PageSectionHeading,
+  PolicyBandSection,
+  policiesBringOwnSurface,
+  sectionInk,
+  sectionsSitOnPage,
+  serviceCardSurface,
+  sheetInk,
+  StyledPolicyList,
+} from "../../features/providers/ProfilePageStyle";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
@@ -1481,6 +1496,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // always had. The availability pill and Instagram button beside it stay
   // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
+  // Branding → Page Style (constants/pageStyles): headings, card treatment,
+  // the policy layout and the logo frame, on top of the colours. Classic is
+  // the profile exactly as it was.
+  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1674,6 +1693,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     });
   }, []);
 
+  // The Cover page style's bar of section links scrolls to these.
+  const policiesSectionRef = useRef<ViewInstance>(null);
+  const reviewsSectionRef = useRef<ViewInstance>(null);
+  const scrollToSection = useCallback((target: ViewInstance | null) => {
+    const scrollNode = scrollRef.current;
+    if (!scrollNode || !target) return;
+    // Static UIManager.measureLayout with node handles, as the Services jump
+    // does — see the note there on why not the instance method.
+    const scrollHandle = findNodeHandle(scrollNode);
+    const targetHandle = findNodeHandle(target);
+    if (!scrollHandle || !targetHandle) return;
+    UIManager.measureLayout(
+      targetHandle,
+      scrollHandle,
+      () => {},
+      (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
+    );
+  }, []);
+
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
     new Animated.Value(100),
@@ -1716,6 +1754,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     blurIntensity: cardBlurIntensity,
     highlightColors: cardHighlightColors,
     squareCards,
+    pageStyle,
   }), [
     OP.text,
     OP.sub,
@@ -1728,7 +1767,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     cardBlurIntensity,
     cardHighlightColors,
     squareCards,
+    pageStyle,
   ]);
+
+  // A style that draws sections straight on the page (Cover, Spa, Framed)
+  // takes its text colours from the content area, not the card — the
+  // theme's own text colours follow the card's brightness. SV is what the
+  // service list reads; every other style keeps OP.
+  const pageInk = sheetInk(OP.bg);
+  const SV = sectionsSitOnPage(pageStyle)
+    ? { ...OP, text: pageInk.text, sub: pageInk.sub, border: pageInk.border, sep: pageInk.separator }
+    : OP;
+  const serviceSurfaceStyle = serviceCardSurface(pageStyle, {
+    card: OP.card,
+    accent: adaptiveAccentColor,
+    sheet: OP.bg,
+  });
 
   // Venue/workspace shots are stamped with their own category by
   // InfoRegScreen's "Address & venue photos" uploader. They're a picture of
@@ -1871,6 +1925,30 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
+
+  // The logo's outline under the page style (see the frame drawn round it in
+  // the hero). Applied to the logo and to its gloss so both share one shape.
+  const logoFrameStyle =
+    pageStyle.logo === "arch"
+      ? styles.logoArch
+      : pageStyle.logo === "polaroid"
+        ? styles.logoPolaroidPhoto
+        : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
+          ? styles.logoThinRim
+          : null;
+
+  // Cover's pills under the name: every service type they offer, their area
+  // and how they work — the same facts as the small-caps line other styles show.
+  const heroPillLabels = useMemo(() => {
+    if (!provider || !pageStyle.heroPills) return [];
+    const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
+    const labels = types.map((type) =>
+      (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase(),
+    );
+    if (provider.location) labels.push(provider.location.toUpperCase());
+    if (provider.businessType) labels.push(BUSINESS_TYPE_LABEL[provider.businessType].toUpperCase());
+    return [...new Set(labels)];
+  }, [provider, pageStyle.heroPills]);
 
   // Slide in the offers tab from the right when promotions are available
   useEffect(() => {
@@ -2141,6 +2219,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [showPolicyImage, setShowPolicyImage] = useState(false);
   // Every page of the detailed policy, in order (the old single image too).
   const policyPages = useMemo(() => policyImageUrls(provider?.bookingPolicies), [provider?.bookingPolicies]);
+
+  // Cover's section links, only for sections this profile actually shows.
+  const jumpTargets = useMemo(() => {
+    if (!provider || !pageStyle.jumpBar) return [];
+    const targets: { key: PageSectionKey; ref: React.RefObject<ViewInstance | null> }[] = [
+      { key: "about", ref: aboutCardRef },
+    ];
+    if (!provider.isLinkOnly) targets.push({ key: "services", ref: servicesSectionRef });
+    if (hasProviderPolicyInfo(provider) || policyPages.length > 0) {
+      targets.push({ key: "policies", ref: policiesSectionRef });
+    }
+    if (!provider.isLinkOnly) targets.push({ key: "reviews", ref: reviewsSectionRef });
+    return targets;
+  }, [provider, pageStyle.jumpBar, policyPages.length]);
+
   const [showFullLogo, setShowFullLogo] = useState(false);
   const openImageViewer = useCallback((images: any[], currentIndex: number) => {
     setServiceImageModal((prev) => ({
@@ -3634,7 +3727,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           treatment (and same reasoning) as the History / To Do switch on
           ProviderBookingHistoryScreen. */}
       {provider.serviceTypes.length > 1 ? (
-        <View style={[styles.serviceTypeSwitch, { borderBottomColor: OP.border }]}>
+        <View style={[styles.serviceTypeSwitch, { borderBottomColor: SV.border }]}>
           {provider.serviceTypes.map((serviceType) => {
             const active = serviceType === selectedServiceType;
             const count = serviceCountsByType[serviceType] ?? 0;
@@ -3655,7 +3748,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   style={[
                     styles.serviceTypeTabText,
                     {
-                      color: active ? OP.text : OP.sub,
+                      color: active ? SV.text : SV.sub,
                       fontWeight: active ? "700" : "600",
                     },
                   ]}
@@ -3684,9 +3777,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               blurIntensity={cardBlurIntensity}
               blurTint={cardBlurTint}
               borderColor={
-                selectedCategory === category ? "transparent" : OP.border
+                selectedCategory === category ? "transparent" : SV.border
               }
-              textColor={selectedCategory === category ? "#FFFFFF" : OP.text}
+              textColor={selectedCategory === category ? "#FFFFFF" : SV.text}
               square={squareCards}
             />
           )}
@@ -3698,14 +3791,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           nestedScrollEnabled={true}
         />
       ) : (
-        <Text style={[styles.emptyServiceTypeText, { color: OP.sub }]}>
+        <Text style={[styles.emptyServiceTypeText, { color: SV.sub }]}>
           Services for {selectedServiceType} are coming soon.
         </Text>
       )}
 
       {/* Selected category's description — what it includes, benefits, etc. */}
       {provider.categoryDescriptions[selectedCategory] ? (
-        <Text style={[styles.categoryDescriptionText, { color: OP.sub }]}>
+        <Text style={[styles.categoryDescriptionText, { color: SV.sub }]}>
           {provider.categoryDescriptions[selectedCategory]}
         </Text>
       ) : null}
@@ -3733,23 +3826,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
       {/* Services List */}
       <View style={styles.categoryServicesContainer}>
-        {services.map((service) => (
+        {services.map((service, serviceIndex) => (
           <BlurView
             key={service.id}
-            intensity={cardBlurIntensity}
+            // A page style other than Classic draws its own surface (see
+            // serviceCardSurface), so the frosted blur and its highlight go.
+            intensity={serviceSurfaceStyle ? 0 : cardBlurIntensity}
             tint={cardBlurTint}
             style={[
               styles.serviceItemCard,
-              { backgroundColor: cardBg, borderColor: OP.border },
+              { backgroundColor: cardBg, borderColor: SV.border },
+              serviceSurfaceStyle,
               squareCards && styles.squareCard,
             ]}
           >
-            <LinearGradient
-              colors={cardHighlightColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={[styles.cardHighlight, squareCards && styles.squareCard]}
-            />
+            {serviceSurfaceStyle ? null : (
+              <LinearGradient
+                colors={cardHighlightColors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={[styles.cardHighlight, squareCards && styles.squareCard]}
+              />
+            )}
+            {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
             <View style={styles.serviceCardBlur}>
               <View style={styles.serviceItem}>
                 {(() => {
@@ -3790,7 +3889,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             { color: adaptiveAccentColor },
                           ]}
                         >
-                          {service.name.charAt(0).toUpperCase()}
+                          {/* Spa numbers its menu (01, 02…) */}
+                          {pageStyle.numberedServices
+                            ? menuNumber(serviceIndex)
+                            : service.name.charAt(0).toUpperCase()}
                         </Text>
                       </View>
                     );
@@ -3821,7 +3923,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 })()}
 
                 <View style={styles.serviceInfo}>
-                  <Text style={[styles.serviceName, { color: OP.text }]}>
+                  <Text style={[styles.serviceName, { color: SV.text }]}>
                     {service.name}
                   </Text>
                   {service.serviceType === "consultation" &&
@@ -3849,8 +3951,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         return next;
                       })
                     }
-                    textColor={OP.sub}
-                    linkColor={OP.text}
+                    textColor={SV.sub}
+                    linkColor={SV.text}
                   />
 
                   {/* Treatment Safety — plain text, no box/border — only shown
@@ -3862,34 +3964,34 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     (service.contraindications?.length ?? 0) > 0) && (
                     <View style={styles.serviceSafetyInline}>
                       <Text
-                        style={[styles.serviceSafetyTitle, { color: OP.text }]}
+                        style={[styles.serviceSafetyTitle, { color: SV.text }]}
                       >
                         Treatment Safety
                       </Text>
                       {service.patchTestRequired && (
                         <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
+                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
                         >
                           • Patch test required before this treatment
                         </Text>
                       )}
                       {!service.isPregnancySafe && (
                         <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
+                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
                         >
                           • Not recommended during pregnancy
                         </Text>
                       )}
                       {!!service.minAge && (
                         <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
+                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
                         >
                           • Minimum age {service.minAge}
                         </Text>
                       )}
                       {(service.contraindications?.length ?? 0) > 0 && (
                         <Text
-                          style={[styles.serviceSafetyLine, { color: OP.sub }]}
+                          style={[styles.serviceSafetyLine, { color: SV.sub }]}
                         >
                           • Not suitable if:{" "}
                           {service.contraindications!.join(", ")}
@@ -3898,10 +4000,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     </View>
                   )}
                   <View style={styles.serviceDetails}>
-                    <Text style={[styles.serviceDuration, { color: OP.sub }]}>
+                    <Text style={[styles.serviceDuration, { color: SV.sub }]}>
                       {service.duration}
                     </Text>
-                    <Text style={[styles.servicePrice, { color: OP.text }]}>
+                    <Text style={[styles.servicePrice, { color: SV.text }]}>
                       £{service.price}
                     </Text>
                   </View>
@@ -3939,7 +4041,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             }}
                             style={[
                               styles.selectCheckbox,
-                              { borderColor: fullyBooked ? OP.border : adaptiveAccentColor },
+                              { borderColor: fullyBooked ? SV.border : adaptiveAccentColor },
                               isSelected && {
                                 backgroundColor: adaptiveAccentColor,
                                 borderColor: adaptiveAccentColor,
@@ -3979,7 +4081,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           {
                             backgroundColor:
                               fullyBooked
-                                ? withAlpha(OP.sub, 0.18)
+                                ? withAlpha(SV.sub, 0.18)
                                 : adaptiveAccentColor,
                           },
                         ]}
@@ -3993,7 +4095,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           style={[
                             styles.bookButtonText,
                             fullyBooked
-                              ? { color: OP.sub, fontSize: 10 }
+                              ? { color: SV.sub, fontSize: 10 }
                               : { color: "#fff" },
                           ]}
                         >
@@ -4086,7 +4188,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <Text
                           style={[
                             styles.fullyBookedNote,
-                            { color: OP.sub },
+                            { color: SV.sub },
                           ]}
                         >
                           No openings next 2 wks
@@ -5023,7 +5125,26 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <View style={styles.heroInfoWrap}>
               {/* Provider Logo - Bigger */}
               <View style={styles.logoContainer}>
+                {/* The page style's frame: Scrapbook mounts the logo as a
+                    polaroid, Spa adds a fine outer ring, Glossy a shiny
+                    one, Arch and Framed round only its top. */}
+                <View style={pageStyle.logo === "polaroid" ? styles.logoPolaroid : undefined}>
                 <View style={styles.logoWrapper}>
+                  {pageStyle.logo === "glossRing" ? (
+                    <LinearGradient
+                      colors={["#FFFFFF", blend(adaptiveAccentColor, "#FFFFFF", 0.45), "#FFFFFF"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.logoGlossRing}
+                      pointerEvents="none"
+                    />
+                  ) : null}
+                  {pageStyle.logo === "doubleRing" ? (
+                    <View
+                      style={[styles.logoDoubleRing, { borderColor: withAlpha(heroText, 0.7) }]}
+                      pointerEvents="none"
+                    />
+                  ) : null}
                   {provider.providerLogo?.uri ? (
                     <TouchableOpacity
                       activeOpacity={0.85}
@@ -5037,13 +5158,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <LogoCircle
                         uri={provider.providerLogo.uri}
                         framing={provider.providerLogoFraming}
-                        style={styles.providerLogo}
+                        style={[styles.providerLogo, logoFrameStyle]}
                       />
                     </TouchableOpacity>
                   ) : (
                     <View
                       style={[
                         styles.providerLogo,
+                        logoFrameStyle,
                         {
                           backgroundColor: provider.accentColor ?? "#AF9197",
                           alignItems: "center",
@@ -5077,9 +5199,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         ...string[],
                       ]
                     }
-                    style={styles.logoGloss}
+                    style={[styles.logoGloss, logoFrameStyle]}
                     pointerEvents="none"
                   />
+                </View>
                 </View>
               </View>
 
@@ -5094,8 +5217,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         color: heroText,
                         fontFamily: resolveProviderFontFamily(provider.brandFont),
                         // Thin scripts are drawn larger so they read at the same size.
-                        fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont),
-                        lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont),
+                        // Cover draws the name much bigger, across the photo.
+                        fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * pageStyle.nameScale,
+                        lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont) * pageStyle.nameScale,
                       },
                       heroIsDark && styles.heroTextShadow,
                     ]}
@@ -5119,46 +5243,58 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     Laid out as a row rather than inline text so the glyph can
                     be optically centred against the caps (which sit high in
                     their line box) instead of riding the text baseline. */}
-                <View style={styles.providerMetaRow}>
-                  <Text
-                    style={[
-                      styles.providerMeta,
-                      { color: heroSub },
-                      heroIsDark && styles.heroTextShadow,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {/* Every type they actually have services under, so a
-                        lashes-and-brows business doesn't read as only one.
-                        serviceTypes is already ordered by their declared set
-                        and already excludes types with nothing in them. */}
-                    {(provider.serviceTypes.length
-                      ? provider.serviceTypes
-                          .map((serviceType) =>
-                            serviceType === "OTHER"
-                              ? provider.customServiceType || "SERVICE"
-                              : serviceType,
-                          )
-                          .join(" · ")
-                      : provider.providerService === "OTHER"
-                        ? provider.customServiceType || "SERVICE"
-                        : provider.providerService
-                    ).toUpperCase()}
-                    {provider.location
-                      ? ` · ${provider.location.toUpperCase()}`
-                      : ""}
-                    {provider.businessType ? " · " : ""}
-                  </Text>
-                  {provider.businessType ? (
-                    <Ionicons
-                      name={BUSINESS_TYPE_ICON[provider.businessType] as keyof typeof Ionicons.glyphMap}
-                      size={13}
-                      color={heroSub}
-                      style={styles.providerMetaIcon}
-                      accessibilityLabel={BUSINESS_TYPE_LABEL[provider.businessType]}
-                    />
-                  ) : null}
-                </View>
+                {pageStyle.heroPills ? (
+                  // Cover: what they do, where, and how they work, as white
+                  // pills under the name instead of one line of small caps.
+                  <View style={styles.heroPillRow}>
+                    {heroPillLabels.map((label) => (
+                      <View key={label} style={styles.heroPill}>
+                        <Text style={styles.heroPillText} numberOfLines={1}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.providerMetaRow}>
+                    <Text
+                      style={[
+                        styles.providerMeta,
+                        { color: heroSub },
+                        heroIsDark && styles.heroTextShadow,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {/* Every type they actually have services under, so a
+                          lashes-and-brows business doesn't read as only one.
+                          serviceTypes is already ordered by their declared set
+                          and already excludes types with nothing in them. */}
+                      {(provider.serviceTypes.length
+                        ? provider.serviceTypes
+                            .map((serviceType) =>
+                              serviceType === "OTHER"
+                                ? provider.customServiceType || "SERVICE"
+                                : serviceType,
+                            )
+                            .join(" · ")
+                        : provider.providerService === "OTHER"
+                          ? provider.customServiceType || "SERVICE"
+                          : provider.providerService
+                      ).toUpperCase()}
+                      {provider.location
+                        ? ` · ${provider.location.toUpperCase()}`
+                        : ""}
+                      {provider.businessType ? " · " : ""}
+                    </Text>
+                    {provider.businessType ? (
+                      <Ionicons
+                        name={BUSINESS_TYPE_ICON[provider.businessType] as keyof typeof Ionicons.glyphMap}
+                        size={13}
+                        color={heroSub}
+                        style={styles.providerMetaIcon}
+                        accessibilityLabel={BUSINESS_TYPE_LABEL[provider.businessType]}
+                      />
+                    ) : null}
+                  </View>
+                )}
 
                 {/* Rating inline — not for a link-only provider: their
                     bookings happen elsewhere, so there are no CERVICED
@@ -5379,203 +5515,309 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 onError={showAlert}
               />
 
-              {/* About / Policy tabbed card */}
-              <View ref={aboutCardRef} style={[styles.aboutCardShadowWrap, squareCards && styles.squareCard]}>
-                <BlurView
-                  intensity={cardBlurIntensity}
-                  tint={cardBlurTint}
+              {/* Cover: a bar of links to the main sections. */}
+              {pageStyle.jumpBar ? (
+                <View
                   style={[
-                    styles.aboutCard,
-                    { backgroundColor: cardBg, borderColor: OP.border },
+                    styles.jumpBar,
+                    { backgroundColor: adaptiveAccentColor },
                     squareCards && styles.squareCard,
-                    // Room under the last line for the policy button, so it
-                    // never sits on top of the text.
-                    policyPages.length > 0 && styles.aboutCardWithPolicyFab,
                   ]}
                 >
-                  <LinearGradient
-                    colors={cardHighlightColors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={[styles.cardHighlight, squareCards && styles.squareCard]}
-                  />
-                  {/* Tab switcher — only show if there are policy rows */}
-                  {(() => {
-                    if (!hasProviderPolicyInfo(provider)) return null;
-                    return (
-                      <View
-                        style={[
-                          styles.infoTabRow,
-                          { borderBottomColor: OP.border },
-                        ]}
+                  {jumpTargets.map(({ key, ref }) => (
+                    <TouchableOpacity
+                      key={key}
+                      style={styles.jumpBarItem}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        scrollToSection(ref.current);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Go to ${PAGE_SECTION_TITLES[key]}`}
+                    >
+                      <Text
+                        style={[styles.jumpBarText, { color: onAccentInk(adaptiveAccentColor).text }]}
+                        numberOfLines={1}
                       >
-                        <TouchableOpacity
-                          style={[
-                            styles.infoTab,
-                            infoTab === "about" && {
-                              borderBottomColor: adaptiveAccentColor,
-                              borderBottomWidth: 2,
-                            },
-                          ]}
-                          onPress={() => setInfoTab("about")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.infoTabText,
-                              { color: infoTab === "about" ? OP.text : OP.sub },
-                            ]}
-                          >
-                            About
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.infoTab,
-                            infoTab === "policy" && {
-                              borderBottomColor: adaptiveAccentColor,
-                              borderBottomWidth: 2,
-                            },
-                          ]}
-                          onPress={() => setInfoTab("policy")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.infoTabText,
-                              { color: infoTab === "policy" ? OP.text : OP.sub },
-                            ]}
-                          >
-                            Policy
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })()}
+                        {PAGE_SECTION_TITLES[key].toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
 
-                  {infoTab === "about" ? (
-                    <>
-                      {!hasProviderPolicyInfo(provider) && (
-                        <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                          Relevant Information
-                        </Text>
-                      )}
-                      {/* Provider-WRITTEN bio: `translate` renders it via DynamicText so it
-                          translates live to the active language when the paid
-                          translation feature is enabled, and shows the original
-                          English otherwise (the default in every current
-                          build). Not legal/health copy, so routing it through
-                          the dynamic path is safe. */}
+              {!pageStyle.separateAboutAndPolicies ? (
+                <>
+                {/* About / Policy tabbed card */}
+                <View ref={aboutCardRef} style={[styles.aboutCardShadowWrap, squareCards && styles.squareCard]}>
+                  <BlurView
+                    intensity={cardBlurIntensity}
+                    tint={cardBlurTint}
+                    style={[
+                      styles.aboutCard,
+                      { backgroundColor: cardBg, borderColor: OP.border },
+                      squareCards && styles.squareCard,
+                      // Room under the last line for the policy button, so it
+                      // never sits on top of the text.
+                      policyPages.length > 0 && styles.aboutCardWithPolicyFab,
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={cardHighlightColors}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={[styles.cardHighlight, squareCards && styles.squareCard]}
+                    />
+                    {/* Tab switcher — only show if there are policy rows */}
+                    {(() => {
+                      if (!hasProviderPolicyInfo(provider)) return null;
+                      return (
+                        <View
+                          style={[
+                            styles.infoTabRow,
+                            { borderBottomColor: OP.border },
+                          ]}
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.infoTab,
+                              infoTab === "about" && {
+                                borderBottomColor: adaptiveAccentColor,
+                                borderBottomWidth: 2,
+                              },
+                            ]}
+                            onPress={() => setInfoTab("about")}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.infoTabText,
+                                { color: infoTab === "about" ? OP.text : OP.sub },
+                              ]}
+                            >
+                              About
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.infoTab,
+                              infoTab === "policy" && {
+                                borderBottomColor: adaptiveAccentColor,
+                                borderBottomWidth: 2,
+                              },
+                            ]}
+                            onPress={() => setInfoTab("policy")}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.infoTabText,
+                                { color: infoTab === "policy" ? OP.text : OP.sub },
+                              ]}
+                            >
+                              Policy
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })()}
+
+                    {infoTab === "about" ? (
+                      <>
+                        {!hasProviderPolicyInfo(provider) && (
+                          <Text style={[styles.sectionTitle, { color: OP.text }]}>
+                            Relevant Information
+                          </Text>
+                        )}
+                        {/* Provider-WRITTEN bio: `translate` renders it via DynamicText so it
+                            translates live to the active language when the paid
+                            translation feature is enabled, and shows the original
+                            English otherwise (the default in every current
+                            build). Not legal/health copy, so routing it through
+                            the dynamic path is safe. */}
+                        <ExpandableAboutText
+                          text={provider.aboutText}
+                          translate
+                          textStyle={[styles.aboutText, { color: OP.sub }]}
+                          linkStyle={styles.moreButton}
+                          linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
+                          onCollapse={handleAboutCollapse}
+                        />
+                      </>
+                    ) : (
+                      /* Policy tab content */
+                      (() => {
+                        const rows = buildPolicyDisplayRows(
+                          provider.bookingPolicies,
+                          provider.cancellationNoticeHours,
+                          { linkOnly: isLinkOnly },
+                        );
+                        return (
+                          <View style={{ paddingTop: 8 }}>
+                            {rows.map((row, i) => (
+                              <View
+                                key={i}
+                                style={[
+                                  styles.policyRow,
+                                  i < rows.length - 1 && {
+                                    borderBottomColor: OP.sep,
+                                    borderBottomWidth: StyleSheet.hairlineWidth,
+                                  },
+                                ]}
+                              >
+                                <View style={styles.policyIcon}>
+                                  <Ionicons
+                                    name={row.icon}
+                                    size={18}
+                                    color={OP.sub}
+                                  />
+                                </View>
+                                <View style={styles.policyRowText}>
+                                  <View style={styles.policyLabelRow}>
+                                    <Text
+                                      style={[styles.policyLabel, { color: OP.sub }]}
+                                    >
+                                      {row.label}
+                                    </Text>
+                                    {!!row.tag && (
+                                      <View
+                                        style={[
+                                          styles.policyTag,
+                                          { backgroundColor: adaptiveAccentColor },
+                                        ]}
+                                      >
+                                        <Text style={styles.policyTagText}>
+                                          {row.tag}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <Text
+                                    style={[styles.policyValue, { color: OP.text }]}
+                                  >
+                                    {row.value}
+                                  </Text>
+                                  {row.notes?.map((note) => (
+                                    <Text
+                                      key={note}
+                                      style={[styles.policyNote, { color: OP.sub }]}
+                                    >
+                                      {note}
+                                    </Text>
+                                  ))}
+                                </View>
+                              </View>
+                            ))}
+                            {/* Link-only: the booking happens on their own
+                                site, so CERVICED applies none of this. */}
+                            {isLinkOnly && rows.length > 0 && (
+                              <Text style={[styles.policyHandledNote, { color: OP.sub }]}>
+                                These policies are handled on their booking site.
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })()
+                    )}
+
+                    {/* Floating policy-photo button — bottom-right of the card,
+                        on top of whichever tab (or lack of tabs) is showing. This
+                        is the only way in for a provider who uploaded this photo
+                        but filled in none of the structured fields above (which
+                        is why the tab switcher itself doesn't gate on it). */}
+                    {policyPages.length > 0 ? (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => setShowPolicyImage(true)}
+                        style={[
+                          styles.policyImageFab,
+                          { backgroundColor: adaptiveAccentColor },
+                        ]}
+                        accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons
+                          name="document-text-outline"
+                          size={20}
+                          color="#FFFFFF"
+                        />
+                      </TouchableOpacity>
+                    ) : null}
+                  </BlurView>
+                </View>
+                </>
+              ) : (
+                <>
+                  {/* Every style but Classic gives About and Policies a
+                      section each, in the style's own headings and layout. */}
+                  <View ref={aboutCardRef} collapsable={false}>
+                    <PageSection section="about" palette={sectionPalette}>
                       <ExpandableAboutText
                         text={provider.aboutText}
                         translate
-                        textStyle={[styles.aboutText, { color: OP.sub }]}
+                        textStyle={[styles.aboutText, { color: sectionInk(sectionPalette).sub }]}
                         linkStyle={styles.moreButton}
-                        linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
+                        linkTextStyle={[styles.moreButtonText, { color: sectionInk(sectionPalette).text }]}
                         onCollapse={handleAboutCollapse}
                       />
-                    </>
-                  ) : (
-                    /* Policy tab content */
-                    (() => {
-                      const rows = buildPolicyDisplayRows(
-                        provider.bookingPolicies,
-                        provider.cancellationNoticeHours,
-                        { linkOnly: isLinkOnly },
-                      );
-                      return (
-                        <View style={{ paddingTop: 8 }}>
-                          {rows.map((row, i) => (
-                            <View
-                              key={i}
-                              style={[
-                                styles.policyRow,
-                                i < rows.length - 1 && {
-                                  borderBottomColor: OP.sep,
-                                  borderBottomWidth: StyleSheet.hairlineWidth,
-                                },
-                              ]}
-                            >
-                              <View style={styles.policyIcon}>
-                                <Ionicons
-                                  name={row.icon}
-                                  size={18}
-                                  color={OP.sub}
-                                />
-                              </View>
-                              <View style={styles.policyRowText}>
-                                <View style={styles.policyLabelRow}>
-                                  <Text
-                                    style={[styles.policyLabel, { color: OP.sub }]}
-                                  >
-                                    {row.label}
-                                  </Text>
-                                  {!!row.tag && (
-                                    <View
-                                      style={[
-                                        styles.policyTag,
-                                        { backgroundColor: adaptiveAccentColor },
-                                      ]}
-                                    >
-                                      <Text style={styles.policyTagText}>
-                                        {row.tag}
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-                                <Text
-                                  style={[styles.policyValue, { color: OP.text }]}
-                                >
-                                  {row.value}
+                    </PageSection>
+                  </View>
+                  {hasProviderPolicyInfo(provider) || policyPages.length > 0 ? (
+                    <View ref={policiesSectionRef} collapsable={false}>
+                      {(() => {
+                        const rows = hasProviderPolicyInfo(provider)
+                          ? buildPolicyDisplayRows(
+                              provider.bookingPolicies,
+                              provider.cancellationNoticeHours,
+                              { linkOnly: isLinkOnly },
+                            )
+                          : [];
+                        const footer = (ink: { text: string; sub: string }) => (
+                          <>
+                            {isLinkOnly && rows.length > 0 ? (
+                              <Text style={[styles.policyHandledNote, { color: ink.sub }]}>
+                                These policies are handled on their booking site.
+                              </Text>
+                            ) : null}
+                            {policyPages.length > 0 ? (
+                              <TouchableOpacity
+                                activeOpacity={0.8}
+                                onPress={() => setShowPolicyImage(true)}
+                                style={[styles.policyPagesButton, { borderColor: ink.sub }]}
+                                accessibilityRole="button"
+                                accessibilityLabel={policyPages.length > 1 ? `Read their full policy, ${policyPages.length} pages` : "Read their full policy"}
+                              >
+                                <Ionicons name="document-text-outline" size={17} color={ink.text} />
+                                <Text style={[styles.policyPagesButtonText, { color: ink.text }]}>
+                                  {policyPages.length > 1 ? `Read their full policy · ${policyPages.length} pages` : "Read their full policy"}
                                 </Text>
-                                {row.notes?.map((note) => (
-                                  <Text
-                                    key={note}
-                                    style={[styles.policyNote, { color: OP.sub }]}
-                                  >
-                                    {note}
-                                  </Text>
-                                ))}
-                              </View>
-                            </View>
-                          ))}
-                          {/* Link-only: the booking happens on their own
-                              site, so CERVICED applies none of this. */}
-                          {isLinkOnly && rows.length > 0 && (
-                            <Text style={[styles.policyHandledNote, { color: OP.sub }]}>
-                              These policies are handled on their booking site.
-                            </Text>
-                          )}
-                        </View>
-                      );
-                    })()
-                  )}
-
-                  {/* Floating policy-photo button — bottom-right of the card,
-                      on top of whichever tab (or lack of tabs) is showing. This
-                      is the only way in for a provider who uploaded this photo
-                      but filled in none of the structured fields above (which
-                      is why the tab switcher itself doesn't gate on it). */}
-                  {policyPages.length > 0 ? (
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => setShowPolicyImage(true)}
-                      style={[
-                        styles.policyImageFab,
-                        { backgroundColor: adaptiveAccentColor },
-                      ]}
-                      accessibilityLabel={policyPages.length > 1 ? `View full policy details, ${policyPages.length} pages` : 'View full policy details'}
-                      accessibilityRole="button"
-                    >
-                      <Ionicons
-                        name="document-text-outline"
-                        size={20}
-                        color="#FFFFFF"
-                      />
-                    </TouchableOpacity>
+                              </TouchableOpacity>
+                            ) : null}
+                          </>
+                        );
+                        if (pageStyle.policies === "band") {
+                          const ink = onAccentInk(adaptiveAccentColor);
+                          return (
+                            <PolicyBandSection palette={sectionPalette}>
+                              <StyledPolicyList rows={rows} palette={sectionPalette} ink={ink} />
+                              {footer(ink)}
+                            </PolicyBandSection>
+                          );
+                        }
+                        const bare = policiesBringOwnSurface(pageStyle);
+                        const ink = bare ? pageInk : sectionInk(sectionPalette);
+                        return (
+                          <PageSection section="policies" palette={sectionPalette} bare={bare}>
+                            <StyledPolicyList rows={rows} palette={sectionPalette} ink={ink} />
+                            {footer(ink)}
+                          </PageSection>
+                        );
+                      })()}
+                    </View>
                   ) : null}
-                </BlurView>
-              </View>
+                </>
+              )}
 
               {isLinkOnly && (
                 <ProviderSpecialitiesSection
@@ -5593,9 +5835,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 ref={servicesSectionRef}
                 collapsable={false}
               >
-                <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>
-                  Services
-                </Text>
+                {pageStyle.heading === "plain" ? (
+                  <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>
+                    Services
+                  </Text>
+                ) : (
+                  <View
+                    style={[
+                      styles.styledServicesHeading,
+                      pageStyle.cards === "none" && [styles.styledServicesRule, { borderTopColor: pageInk.separator }],
+                    ]}
+                  >
+                    <PageSectionHeading section="services" palette={sectionPalette} />
+                  </View>
+                )}
 
                 {!takingBookings && closureReason ? (
                   <Text style={{ color: OP.sub, fontSize: 13, marginBottom: 10 }}>
@@ -5611,12 +5864,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               )}
 
               {!isLinkOnly && (
-              <ProviderReviewPreviewSection
-                reviews={reviews}
-                loading={reviewsLoading}
-                palette={sectionPalette}
-                onSeeAll={handleOpenReviews}
-              />
+              <View ref={reviewsSectionRef} collapsable={false}>
+                <ProviderReviewPreviewSection
+                  reviews={reviews}
+                  loading={reviewsLoading}
+                  palette={sectionPalette}
+                  onSeeAll={handleOpenReviews}
+                />
+              </View>
               )}
 
               <ProviderContactSection
@@ -5866,6 +6121,71 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 14,
     elevation: 10,
+  },
+  // ── Page style logo frames ──
+  logoArch: {
+    borderRadius: 10,
+    borderTopLeftRadius: 74,
+    borderTopRightRadius: 74,
+  },
+  logoPolaroidPhoto: {
+    borderRadius: 0,
+    borderWidth: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  logoThinRim: {
+    borderWidth: 2,
+  },
+  logoPolaroid: {
+    backgroundColor: "#FFFFFF",
+    padding: 8,
+    paddingBottom: 30,
+    transform: [{ rotate: "-3deg" }],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  logoGlossRing: {
+    position: "absolute",
+    top: -8,
+    left: -8,
+    width: 164,
+    height: 164,
+    borderRadius: 82,
+  },
+  logoDoubleRing: {
+    position: "absolute",
+    top: -11,
+    left: -11,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    borderWidth: 1.5,
+  },
+  heroPillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    marginBottom: 12,
+  },
+  heroPill: {
+    height: 28,
+    paddingHorizontal: 12,
+    borderRadius: 100,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    maxWidth: 220,
+  },
+  heroPillText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 10,
+    letterSpacing: 1,
+    color: "#1F1A18",
   },
   logoGloss: {
     position: "absolute",
@@ -6340,6 +6660,46 @@ const styles = StyleSheet.create({
   // Services Section
   servicesSection: {
     marginBottom: 20,
+  },
+  styledServicesHeading: {
+    alignSelf: "stretch",
+  },
+  styledServicesRule: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 22,
+  },
+  jumpBar: {
+    flexDirection: "row",
+    borderRadius: 100,
+    marginBottom: 22,
+    paddingHorizontal: 6,
+  },
+  jumpBarItem: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  jumpBarText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 10,
+    letterSpacing: 1.6,
+  },
+  policyPagesButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 44,
+    borderRadius: 100,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  policyPagesButtonText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontWeight: "700",
+    fontSize: 13,
   },
   sectionTitleNoCard: {
     fontFamily: "BakbakOne-Regular",
