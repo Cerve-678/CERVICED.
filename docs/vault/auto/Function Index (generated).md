@@ -5,7 +5,7 @@
 
 #generated
 
-**3704 functions** across **528 files**.
+**3705 functions** across **528 files**.
 
 ### `src/components/` (65)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -500,7 +500,7 @@
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `beautyProfileTodo.ts` — **beautyProfileTodo** · isBlank
-- `bookingHorizon.ts` — **bookableDayCount** · fromUkWall · **isBeyondHorizon** · **isMonthlyRelease** · **isReleaseTime** · **lastBookableDate** · lastSundayUtc · **nextReleaseMoment** · **parseBookingWindowDays** · releaseMinutes · releaseMomentFor · **releaseMomentInMonth** · **releaseSettingsPatch** · **releaseTimeLabel** · **rollingWindowExplainer** · **toReleaseDay** · **toReleaseTime** · **ukOffsetMinutes** · ukWall · **whenDateOpens**
+- `bookingHorizon.ts` — **bookableDayCount** · fromUkWall · **isBeyondHorizon** · **isMonthlyRelease** · **isReleaseTime** · **lastBookableDate** · lastSundayUtc · **nextReleaseMoment** · **parseBookingWindowDays** · releaseMinutes · releaseMomentFor · **releaseMomentInMonth** · **releaseSettingsPatch** · **releaseTimeLabel** · **rollingWindowExplainer** · **toReleaseDay** · **toReleaseTime** · **ukOffsetMinutes** · **ukTodayYMD** · ukWall · **whenDateOpens**
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `clientArea.ts` — **serviceLocationsFromArea** · **townOfArea**

@@ -47,6 +47,10 @@ export interface CartItem {
   /** Promo code to auto-apply in the cart — set when the item was added via
    *  a promotion's "Book Now" button, so the offer isn't silently dropped. */
   initialPromoCode?: string;
+  /** The promo code whose discount is baked into this item's price. Set only
+   *  on CartScreen's frozen checkout snapshot, and sent to prepare_checkout,
+   *  which re-validates and prices it server-side. */
+  appliedPromoCode?: string;
   providerImage: any;
   providerService: string;
   serviceName: string;
