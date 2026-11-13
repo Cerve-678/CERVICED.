@@ -39,7 +39,13 @@ import ProviderThemePicker, { type ThemeSelection } from '../../components/Provi
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
 import PageStylePicker from '../../components/PageStylePicker';
-import { DEFAULT_PAGE_STYLE, type PageStyleKey } from '../../constants/pageStyles';
+import {
+  DEFAULT_PAGE_STYLE,
+  DEFAULT_POLICY_PICTURE_LOOK,
+  POLICY_PICTURE_LOOKS,
+  type PageStyleKey,
+  type PolicyPictureLook,
+} from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
@@ -107,6 +113,7 @@ export default function BrandingScreen({ navigation }: any) {
   const [heroFinish, setHeroFinish]           = useState<HeroFinish>(DEFAULT_HERO_FINISH);
   const [cardShape, setCardShape]             = useState<CardShape>(DEFAULT_CARD_SHAPE);
   const [pageStyle, setPageStyle]             = useState<PageStyleKey>(DEFAULT_PAGE_STYLE);
+  const [policyLook, setPolicyLook]           = useState<PolicyPictureLook>(DEFAULT_POLICY_PICTURE_LOOK);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
@@ -136,9 +143,10 @@ export default function BrandingScreen({ navigation }: any) {
         setBackgroundImage(cached.backgroundImage);
         setLogoUrl(cached.logo);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
-        const { base, sheet, finish, shape, pageStyle: cachedPageStyle } = parseThemeKey(cached.profileTheme);
+        const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
         setPageStyle(cachedPageStyle);
+        setPolicyLook(cachedPolicyLook);
         setSheetColor(sheet);
         setHeroFinish(finish);
         const custom = decodeCustomTheme(base);
@@ -165,9 +173,10 @@ export default function BrandingScreen({ navigation }: any) {
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
           if (data.logo_url) setLogoUrl(data.logo_url);
           if (data.brand_font) setBrandFont(data.brand_font);
-          const { base, sheet, finish, shape, pageStyle: savedPageStyle } = parseThemeKey(data.profile_theme);
+          const { base, sheet, finish, shape, pageStyle: savedPageStyle, policyLook: savedPolicyLook } = parseThemeKey(data.profile_theme);
           setCardShape(shape);
           setPageStyle(savedPageStyle);
+          setPolicyLook(savedPolicyLook);
           setSheetColor(sheet);
           setHeroFinish(finish);
           const custom = decodeCustomTheme(base);
@@ -297,7 +306,7 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape, pageStyle);
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape, pageStyle, policyLook);
 
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
@@ -326,7 +335,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, navigation]);
 
   // Both stacks that open Branding for a link-only pro (Home, Settings) have
   // the Full CERVICED experience page.
@@ -495,6 +504,57 @@ export default function BrandingScreen({ navigation }: any) {
               borderColor={P.border}
             />
           </View>
+
+          {/* Policy pictures — how their uploaded policy pages sit in the
+              profile. Templates only: Classic keeps them behind the button. */}
+          {pageStyle !== DEFAULT_PAGE_STYLE && (
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              If you've added policy pictures in Policies, they show in your profile after your services, in their own colours.
+            </Text>
+            <View style={styles.finishRow}>
+              {POLICY_PICTURE_LOOKS.map(look => {
+                const selected = policyLook === look.key;
+                const pageColour = accentColor;
+                return (
+                  <TouchableOpacity
+                    key={look.key}
+                    style={styles.policyLookOption}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setPolicyLook(look.key);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${look.name}: ${look.description}`}
+                  >
+                    <View style={[styles.policyLookPreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                      {look.key === 'melt' ? (
+                        <LinearGradient colors={[sheetColor, pageColour]} style={styles.policyLookFade} />
+                      ) : (
+                        <View style={[styles.policyLookWave, { backgroundColor: pageColour }]} />
+                      )}
+                      <View style={[styles.policyLookPage, { backgroundColor: pageColour }]}>
+                        <View style={styles.policyLookLine} />
+                        <View style={[styles.policyLookLine, styles.policyLookLineShort]} />
+                        <View style={styles.policyLookLine} />
+                      </View>
+                      {look.key === 'melt' ? (
+                        <LinearGradient colors={[pageColour, sheetColor]} style={styles.policyLookFade} />
+                      ) : (
+                        <View style={[styles.policyLookWave, styles.policyLookWaveBottom, { backgroundColor: pageColour }]} />
+                      )}
+                    </View>
+                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{look.name}</Text>
+                    <Text style={[styles.policyLookDescription, { color: P.sub }]}>{look.description}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+          )}
 
           {/* Card shape — corners of the service cards and category pills */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -713,6 +773,15 @@ const styles = StyleSheet.create({
   finishSwatchOn: { borderWidth: 2.5 },
   finishLocked: { opacity: 0.55 },
   finishLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  policyLookOption: { flex: 1 },
+  policyLookPreview: { height: 116, borderRadius: 14, borderWidth: 1.5, overflow: 'hidden', justifyContent: 'center' },
+  policyLookFade: { height: 18 },
+  policyLookWave: { height: 12, marginTop: 6, borderTopLeftRadius: 60, borderTopRightRadius: 14 },
+  policyLookWaveBottom: { marginTop: 0, marginBottom: 6, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 14, borderBottomRightRadius: 60 },
+  policyLookPage: { height: 54, paddingHorizontal: 14, justifyContent: 'center', gap: 6 },
+  policyLookLine: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.75)', width: '80%', alignSelf: 'center' },
+  policyLookLineShort: { width: '55%' },
+  policyLookDescription: { fontSize: 11, lineHeight: 14, marginTop: 2 },
   finishName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
 
   // Card Shape previews: a mini category-pill row over a mini service card.

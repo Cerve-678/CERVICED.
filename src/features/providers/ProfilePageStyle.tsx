@@ -144,7 +144,8 @@ export function PageSectionHeading({
       );
     default:
       return (
-        <Text {...a11y} style={[headingStyles.plain, { color: color ?? palette.text }]}>
+        // Only ever drawn on the page: Classic's in-card title is PageSection's own Text.
+        <Text {...a11y} style={[headingStyles.plain, { color: ink }]}>
           {title}
         </Text>
       );

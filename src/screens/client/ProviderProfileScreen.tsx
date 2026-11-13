@@ -46,7 +46,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { FullImageViewer } from "../../components/FullImageViewer";
 import { LogoZoomViewer } from "../../components/LogoZoomViewer";
-import { policyImageUrls } from "../../features/providers/policyImages";
+import { policyImageEdges, policyImageUrls } from "../../features/providers/policyImages";
+import {
+  PolicyPagesInline,
+  PolicyStoryRings,
+  PolicyStoryViewer,
+  usePolicyEdgeColours,
+} from "../../features/providers/PolicyPages";
 import { StackScreenProps } from "@react-navigation/stack";
 import { usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
@@ -2219,6 +2225,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [showPolicyImage, setShowPolicyImage] = useState(false);
   // Every page of the detailed policy, in order (the old single image too).
   const policyPages = useMemo(() => policyImageUrls(provider?.bookingPolicies), [provider?.bookingPolicies]);
+  // Each page's edge colours, so the pages can run into the page around them.
+  const savedPolicyEdges = useMemo(() => policyImageEdges(provider?.bookingPolicies), [provider?.bookingPolicies]);
+  const policyEdges = usePolicyEdgeColours(policyPages, savedPolicyEdges);
+  // The page the story view is open on (the rings at the top), or null.
+  const [policyStoryIndex, setPolicyStoryIndex] = useState<number | null>(null);
+  const policyPagesRef = useRef<ViewInstance>(null);
 
   // Cover's section links, only for sections this profile actually shows.
   const jumpTargets = useMemo(() => {
@@ -2227,8 +2239,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       { key: "about", ref: aboutCardRef },
     ];
     if (!provider.isLinkOnly) targets.push({ key: "services", ref: servicesSectionRef });
-    if (hasProviderPolicyInfo(provider) || policyPages.length > 0) {
+    if (hasProviderPolicyInfo(provider)) {
       targets.push({ key: "policies", ref: policiesSectionRef });
+    } else if (policyPages.length > 0) {
+      targets.push({ key: "policies", ref: policyPagesRef });
     }
     if (!provider.isLinkOnly) targets.push({ key: "reviews", ref: reviewsSectionRef });
     return targets;
@@ -4343,6 +4357,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerKey={provider?.providerName ?? ""}
           providerServiceCategory={provider?.providerService}
           bookingPolicies={provider?.bookingPolicies ?? null}
+          showPolicyPagesCard={pageStyle.key !== "classic"}
         />
 
         {/* Multi-service booking modal — for services picked via "Select" mode */}
@@ -4519,6 +4534,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           visible={showPolicyImage}
           onClose={() => setShowPolicyImage(false)}
           label="Policy document"
+        />
+        <PolicyStoryViewer
+          urls={policyPages}
+          edges={policyEdges}
+          startIndex={policyStoryIndex}
+          title={provider ? `${provider.displayName} · Policy` : "Policy"}
+          onClose={() => setPolicyStoryIndex(null)}
+          onZoom={() => {
+            // One modal closes before the next opens: two at once can leave
+            // the new one behind the old on Android.
+            setPolicyStoryIndex(null);
+            setTimeout(() => setShowPolicyImage(true), 300);
+          }}
         />
 
         {/* A tap on the profile circle zooms the logo in over the page. */}
@@ -5547,6 +5575,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </View>
               ) : null}
 
+              {/* Templates only: their policy pictures as story circles; a
+                  tap opens them full screen, one page at a time. Classic keeps
+                  the round button on the About card. */}
+              {pageStyle.key !== "classic" ? (
+                <PolicyStoryRings
+                  urls={policyPages}
+                  accent={adaptiveAccentColor}
+                  sheet={OP.bg}
+                  onOpen={setPolicyStoryIndex}
+                />
+              ) : null}
+
               {!pageStyle.separateAboutAndPolicies ? (
                 <>
                 {/* About / Policy tabbed card */}
@@ -5763,39 +5803,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       />
                     </PageSection>
                   </View>
-                  {hasProviderPolicyInfo(provider) || policyPages.length > 0 ? (
+                  {hasProviderPolicyInfo(provider) ? (
                     <View ref={policiesSectionRef} collapsable={false}>
                       {(() => {
-                        const rows = hasProviderPolicyInfo(provider)
-                          ? buildPolicyDisplayRows(
-                              provider.bookingPolicies,
-                              provider.cancellationNoticeHours,
-                              { linkOnly: isLinkOnly },
-                            )
-                          : [];
-                        const footer = (ink: { text: string; sub: string }) => (
-                          <>
-                            {isLinkOnly && rows.length > 0 ? (
-                              <Text style={[styles.policyHandledNote, { color: ink.sub }]}>
-                                These policies are handled on their booking site.
-                              </Text>
-                            ) : null}
-                            {policyPages.length > 0 ? (
-                              <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={() => setShowPolicyImage(true)}
-                                style={[styles.policyPagesButton, { borderColor: ink.sub }]}
-                                accessibilityRole="button"
-                                accessibilityLabel={policyPages.length > 1 ? `Read their full policy, ${policyPages.length} pages` : "Read their full policy"}
-                              >
-                                <Ionicons name="document-text-outline" size={17} color={ink.text} />
-                                <Text style={[styles.policyPagesButtonText, { color: ink.text }]}>
-                                  {policyPages.length > 1 ? `Read their full policy · ${policyPages.length} pages` : "Read their full policy"}
-                                </Text>
-                              </TouchableOpacity>
-                            ) : null}
-                          </>
+                        const rows = buildPolicyDisplayRows(
+                          provider.bookingPolicies,
+                          provider.cancellationNoticeHours,
+                          { linkOnly: isLinkOnly },
                         );
+                        const footer = (ink: { text: string; sub: string }) =>
+                          isLinkOnly && rows.length > 0 ? (
+                            <Text style={[styles.policyHandledNote, { color: ink.sub }]}>
+                              These policies are handled on their booking site.
+                            </Text>
+                          ) : null;
                         if (pageStyle.policies === "band") {
                           const ink = onAccentInk(adaptiveAccentColor);
                           return (
@@ -5862,6 +5883,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 })}
               </View>
               )}
+
+              {/* Templates only: their policy pictures in the page itself,
+                  after the price list (Branding → Policy Pictures picks Melt
+                  in or Bleed). Classic keeps them behind the round button. */}
+              {pageStyle.key !== "classic" && policyPages.length > 0 ? (
+                <View ref={policyPagesRef} collapsable={false}>
+                  <PolicyPagesInline
+                    urls={policyPages}
+                    edges={policyEdges}
+                    look={parseThemeKey(provider.profileTheme).policyLook}
+                    palette={sectionPalette}
+                    onOpen={() => setShowPolicyImage(true)}
+                  />
+                </View>
+              ) : null}
 
               {!isLinkOnly && (
               <View ref={reviewsSectionRef} collapsable={false}>
@@ -6658,6 +6694,26 @@ const styles = StyleSheet.create({
   },
 
   // Services Section
+  // Floating circular button, bottom-right of the About/Policy card — opens
+  // the provider's uploaded policy photo. Absolutely positioned so it stays
+  // put regardless of which tab (About/Policy) is active, or whether the
+  // tab switcher is even showing (a provider can have this image with no
+  // structured policy fields at all, in which case it's the only way in).
+  policyImageFab: {
+    position: "absolute",
+    bottom: 10,
+    right: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   servicesSection: {
     marginBottom: 20,
   },
@@ -6684,22 +6740,6 @@ const styles = StyleSheet.create({
     fontFamily: "BakbakOne-Regular",
     fontSize: 10,
     letterSpacing: 1.6,
-  },
-  policyPagesButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    minHeight: 44,
-    borderRadius: 100,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    marginTop: 16,
-  },
-  policyPagesButtonText: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 13,
   },
   sectionTitleNoCard: {
     fontFamily: "BakbakOne-Regular",
@@ -7159,21 +7199,6 @@ const styles = StyleSheet.create({
   // put regardless of which tab (About/Policy) is active, or whether the
   // tab switcher is even showing (a provider can have this image with no
   // structured policy fields at all, in which case it's the only way in).
-  policyImageFab: {
-    position: "absolute",
-    bottom: 10,
-    right: 14,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
   contactCard: {
     padding: 22,
     borderRadius: 26,
