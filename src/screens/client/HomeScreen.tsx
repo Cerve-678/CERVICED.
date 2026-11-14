@@ -1872,7 +1872,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
                 </View>
-                <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} logoSlot="small" />
+                <RoundProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               </View>
             )}
 
