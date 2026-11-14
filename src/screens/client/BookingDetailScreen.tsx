@@ -445,9 +445,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   // Prefer the frozen snapshot (what the client actually agreed to at
   // booking time) over the live fallback (today's policy, for older bookings
-  // that predate policy_snapshot). No enforced-hours override here — that
-  // Automations-screen number is a live-only concept with no snapshot
-  // equivalent, so both branches read purely from the descriptive text.
+  // that predate policy_snapshot). No enforced-hours override here: the
+  // snapshot's cancelNotice text already says the window applied, because the
+  // database keeps it in step with providers.cancellation_notice_hours
+  // (keep_cancel_notice_in_step, 13 Nov; earlier snapshots may differ).
   const policyRows = useMemo(
     () => buildPolicyDisplayRows(booking?.policySnapshot ?? livePolicyFallback),
     [booking?.policySnapshot, livePolicyFallback],
