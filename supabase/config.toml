@@ -60,6 +60,9 @@ verify_jwt = true
 [functions.settle-held-payment]
 verify_jwt = true
 
+[functions.request-card-hold]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

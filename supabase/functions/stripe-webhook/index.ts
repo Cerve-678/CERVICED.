@@ -1,5 +1,6 @@
 import { reconcileRefund } from '../_shared/reconcileRefund.ts';
 import { settleCheckout } from '../_shared/settleCheckout.ts';
+import { checkRequestHold, REQUEST_HOLD_METADATA_KEY } from '../_shared/requestCardHolds.ts';
 import { recordFeePaid } from '../_shared/feePayRequest.ts';
 import { recordTipPaid } from '../_shared/recordTipPaid.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
@@ -71,6 +72,12 @@ Deno.serve(async (req: Request) => {
       case 'payment_intent.succeeded': {
         const intent = event.data.object as Stripe.PaymentIntent;
         if (intent.metadata.checkout_batch_id) await settleCheckout(admin, stripe, intent.id);
+        // A request's own card hold: its bank check was confirmed (the app
+        // normally reports it first; this covers an app closed mid-check).
+        // Capture is the database's decision, so 'succeeded' needs nothing.
+        if (intent.metadata[REQUEST_HOLD_METADATA_KEY] && event.type === 'payment_intent.amount_capturable_updated') {
+          await checkRequestHold(admin, stripe, intent.metadata[REQUEST_HOLD_METADATA_KEY]);
+        }
         // A late/no-show fee: charged off-session, or paid by the client after
         // a request (in the app or on Stripe's emailed page). Idempotent.
         if (intent.metadata.fee_charge_id && event.type === 'payment_intent.succeeded') {
