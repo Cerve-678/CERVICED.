@@ -2,7 +2,7 @@
 
 How the in-app waitlist works: a client joins a fully booked service, a freed
 slot is held for them, and they pay for it at checkout. Rewritten for
-`supabase/migrations/20261112100000_waitlist_pays_at_confirm.sql` (10 Nov 2026),
+`supabase/migrations/20261113210000_waitlist_pays_at_confirm.sql` (10 Nov 2026),
 which replaced the earlier free "claim". The money side is also in
 `docs/PAYMENTS_AND_LOGIC.md` §2.1. See `BOOKINGS.md` for the booking lifecycle.
 
@@ -43,7 +43,7 @@ which replaced the earlier free "claim". The money side is also in
 
 Who can change it (RLS): a client inserts their own row as `waiting`, reads
 and deletes their own (not while held). A provider reads their own. Every
-other change goes through a function. Before 20261112100000 the one policy was
+other change goes through a function. Before 20261113210000 the one policy was
 `FOR ALL`, so a client could set their own `position`.
 
 **`bookings`**: a hold is a real row with `status = 'on_hold'`,

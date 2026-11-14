@@ -112,7 +112,7 @@ describe('paying for a held slot', () => {
 describe('the migration keeps waitlist slots paid for', () => {
   // Comments describe the old bugs by name, so assertions read the code only.
   const sql = readFileSync(
-    join(__dirname, '..', '..', 'supabase/migrations/20261112100000_waitlist_pays_at_confirm.sql'),
+    join(__dirname, '..', '..', 'supabase/migrations/20261113210000_waitlist_pays_at_confirm.sql'),
     'utf8',
   ).split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
   const fn = (name: string) => {
@@ -146,6 +146,19 @@ describe('the migration keeps waitlist slots paid for', () => {
     const prepare = fn('prepare_checkout');
     expect(prepare).toContain('cb.id = v_wl_hold.hold_batch_id');
     expect(prepare).toContain('cb.payment_intent_id IS NOT NULL');
+  });
+
+  it("keeps checkout's policy and promo rules, and applies them to the held row too", () => {
+    // prepare_checkout was rebuilt on top of 20261113090000 (policy snapshot
+    // and consent) and 20261113100000 (promo priced at checkout); losing
+    // either would charge full price or bind a client to terms they never saw.
+    const prepare = fn('prepare_checkout');
+    expect(prepare).toContain('changed their booking policy after you added');
+    expect(prepare).toContain('v_subtotal := v_service.price - v_discount + v_add_ons_total');
+    expect(prepare).toContain('policy_snapshot, policy_accepted_at, promotion_id, promo_discount');
+    expect(prepare).toContain('base_price = v_service.price - v_discount');
+    expect(prepare).toContain('policy_snapshot = v_policy_snapshot');
+    expect(prepare).toContain('promo_discount = v_discount');
   });
 
   it('writes the names on a waitlist row on the server', () => {

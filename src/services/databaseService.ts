@@ -2875,7 +2875,7 @@ export type CheckoutIntentItem = {
   // A waitlist slot held for this client (bookings.id of the on_hold row).
   // prepare_checkout reuses that row instead of inserting one, keeps its own
   // 15 minutes, and refuses it if the hold has ended or isn't theirs. One per
-  // checkout. See 20261112100000_waitlist_pays_at_confirm.sql.
+  // checkout. See 20261113210000_waitlist_pays_at_confirm.sql.
   waitlist_hold_id?: string;
   // Where a MOBILE provider should travel to. prepare_checkout() reads the
   // provider's business_type server-side and rejects a mobile item with no
@@ -4612,7 +4612,7 @@ export interface WaitlistEntry {
   notified_at: string | null;
   /** The slot last offered to this client (a 15-minute hold), and when that
    *  hold ends or ended. offer_expires_at is the hold's real end, not an
-   *  estimate. See 20261112100000_waitlist_pays_at_confirm.sql. */
+   *  estimate. See 20261113210000_waitlist_pays_at_confirm.sql. */
   offered_booking_id: string | null;
   offered_date: string | null;
   offered_time: string | null;

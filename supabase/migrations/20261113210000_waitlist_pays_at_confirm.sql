@@ -35,13 +35,19 @@
 -- other change goes through a function here.
 --
 -- Changed functions are rebuilt from live (pg_get_functiondef, 2026-11-10);
--- the md5 guards refuse to run if any changed since.
+-- the md5 guards refuse to run if any changed since. prepare_checkout was
+-- rebuilt again from live on 2026-11-14, keeping 20261113090000 (policy
+-- snapshot and consent) and 20261113100000 (promo priced at checkout); the
+-- waitlist hold it reuses gets the same policy snapshot, consent time and
+-- promo discount an inserted booking would. Authored as 20261112100000,
+-- renumbered above the applied frontier (20261113190000) and #505's
+-- 20261113200000.
 
 BEGIN;
 
 DO $guard$
 BEGIN
-  IF md5(pg_get_functiondef('public.prepare_checkout(jsonb)'::regprocedure)) <> 'b781dde02286e477413e34e2313c562d' THEN
+  IF md5(pg_get_functiondef('public.prepare_checkout(jsonb)'::regprocedure)) <> 'c9a895da316a661bb43f6ae046ca339e' THEN
     RAISE EXCEPTION 'prepare_checkout changed live since this migration was written; redo it from live';
   END IF;
   IF md5(pg_get_functiondef('public.cancel_checkout(uuid)'::regprocedure)) <> '6d280d53b5c69b435d1913cf36266ad5' THEN
@@ -276,7 +282,7 @@ DECLARE
   v_waitlist_enabled BOOLEAN;
 BEGIN
   -- p_base_price, p_add_ons_total, p_service_charge and
-  -- p_service_category_snapshot are unused since 20261112100000: the hold is
+  -- p_service_category_snapshot are unused since 20261113210000: the hold is
   -- priced at checkout. Kept so callers don't change.
   SELECT COALESCE((automation_settings->>'waitlistEnabled')::boolean, TRUE)
     INTO v_waitlist_enabled
@@ -809,7 +815,23 @@ DECLARE
   v_emergency boolean;
   v_emergency_ack boolean;
   v_stale_batch_id uuid;
-  -- A waitlist hold paid for through this checkout (20261112100000).
+  -- Consent and the policy it was given to (20261113090000).
+  v_policy_accepted boolean;
+  v_policies jsonb;
+  v_client_snapshot jsonb;
+  v_terms_title text;
+  v_terms_body text;
+  v_agreed_terms boolean;
+  v_policy_snapshot jsonb;
+  v_key text;
+  v_seen jsonb;
+  v_live jsonb;
+  -- The provider's promo code, priced here (20261113100000).
+  v_promo_code text;
+  v_promo public.promotions%ROWTYPE;
+  v_discount numeric(10,2);
+  v_uk_today date := (now() AT TIME ZONE 'Europe/London')::date;
+  -- A waitlist hold paid for through this checkout (20261113210000).
   v_wl_hold public.bookings%ROWTYPE;
   v_wl_count integer;
   v_is_wl boolean;
@@ -910,6 +932,42 @@ BEGIN
       RAISE EXCEPTION 'One or more add-ons are unavailable';
     END IF;
 
+    -- Promo code. The cart shows the discount and used to send nothing, so the
+    -- card was charged full price. Validated and priced here, never from the
+    -- app: same rule as the cart's itemPromoDiscounts (CartScreen.tsx), a
+    -- percentage of service + add-ons or a fixed amount, capped at the
+    -- service price, and nothing for a service or category outside the
+    -- code's scope. The provider funds it: base_price is stored discounted, so
+    -- the fee, payout, deposit and refund maths all follow what was charged.
+    v_discount := 0;
+    v_promo := NULL;
+    v_promo_code := NULLIF(btrim(v_item->>'promo_code'), '');
+    IF v_promo_code IS NOT NULL THEN
+      SELECT pr.* INTO v_promo
+        FROM public.promotions pr
+       WHERE pr.provider_id = v_provider.id
+         AND lower(btrim(pr.promo_code)) = lower(v_promo_code)
+         AND pr.is_active
+         AND pr.valid_from <= v_uk_today
+         AND pr.valid_until >= v_uk_today
+       ORDER BY pr.created_at DESC
+       LIMIT 1;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'The code % has ended or isn''t valid for %. Go back to your cart to see the price without it.',
+          upper(v_promo_code), v_provider.display_name;
+      END IF;
+      IF (COALESCE(cardinality(v_promo.service_ids), 0) = 0 OR v_service.id = ANY (v_promo.service_ids))
+         AND (NULLIF(btrim(v_promo.service_category), '') IS NULL
+              OR upper(v_promo.service_category) = upper(COALESCE(v_provider.service_category, 'General'))) THEN
+        v_discount := CASE
+          WHEN COALESCE(v_promo.discount_percent, 0) > 0
+            THEN round((v_service.price + v_add_ons_total) * v_promo.discount_percent / 100, 2)
+          WHEN COALESCE(v_promo.discount_amount, 0) > 0 THEN round(v_promo.discount_amount, 2)
+          ELSE 0 END;
+        v_discount := GREATEST(0, LEAST(v_discount, v_service.price));
+      END IF;
+    END IF;
+
     v_safety_required := COALESCE(v_service.patch_test_required, false)
       OR v_service.is_pregnancy_safe = false;
     v_safety_ack := COALESCE((v_item->>'safety_ack')::boolean, false);
@@ -935,6 +993,67 @@ BEGIN
       RAISE EXCEPTION 'Please confirm you have read this provider''s policy before requesting a time outside their availability';
     END IF;
 
+    -- Agreement to CERVICED's Terms and the provider's cancellation policy:
+    -- the Confirm & Pay checkbox gates the button that gets here. Builds from
+    -- before 20261113090000 send that same checkbox only as safety_ack (the
+    -- cart sets safety_ack := agreedToPolicy), so it stands in when
+    -- policy_accepted is absent. Same refusal as hold_cart_booking_slots().
+    v_policy_accepted := COALESCE((v_item->>'policy_accepted')::boolean,
+                                  (v_item->>'safety_ack')::boolean, false);
+    IF NOT v_policy_accepted THEN
+      RAISE EXCEPTION 'Please agree to the booking terms before continuing';
+    END IF;
+
+    -- The policy this booking is judged by is the provider's live one, read
+    -- here, never the app's copy: apply-cancellation-refund reads
+    -- cancelPenalty / cancelCustomFee / depositNonRefundable from it. The cart
+    -- shows the client the copy frozen when the item was added (e.g. the
+    -- non-refundable deposit notice), so when the app sends that copy and any
+    -- money term differs from live, the client never saw the terms they would
+    -- be charged under: refuse rather than bind them to it.
+    v_policies := CASE WHEN jsonb_typeof(v_provider.booking_policies) = 'object'
+                       THEN v_provider.booking_policies END;
+    v_client_snapshot := CASE WHEN jsonb_typeof(v_item->'policy_snapshot') = 'object'
+                              THEN v_item->'policy_snapshot' END;
+    SELECT t.title, t.body INTO v_terms_title, v_terms_body
+      FROM public.get_provider_terms(v_provider.id) AS t;
+    IF v_client_snapshot IS NOT NULL THEN
+      FOREACH v_key IN ARRAY ARRAY['cancelNotice', 'cancelPenalty', 'cancelCustomFee',
+          'depositNonRefundable', 'depositMode', 'depositRequired', 'depositOnly',
+          'depositType', 'depositAmount', 'lateFee', 'noShowFee']
+      LOOP
+        -- Absent, JSON null and "" all mean "not set", so a copy that
+        -- dropped an empty key isn't mistaken for a changed policy.
+        v_seen := v_client_snapshot->v_key;
+        v_live := v_policies->v_key;
+        IF v_seen IN ('null'::jsonb, '""'::jsonb) THEN v_seen := NULL; END IF;
+        IF v_live IN ('null'::jsonb, '""'::jsonb) THEN v_live := NULL; END IF;
+        IF v_seen IS DISTINCT FROM v_live THEN
+          RAISE EXCEPTION '% changed their booking policy after you added %. Remove it from your cart and add it again to see the new policy.',
+            v_provider.display_name, v_service.name;
+        END IF;
+      END LOOP;
+      -- The provider's own written terms, agreed to in the booking sheet.
+      IF v_client_snapshot ? 'providerTerms'
+         AND (v_client_snapshot->'providerTerms'->>'body') IS DISTINCT FROM v_terms_body THEN
+        RAISE EXCEPTION '% changed their terms after you added %. Remove it from your cart and add it again to see the new terms.',
+          v_provider.display_name, v_service.name;
+      END IF;
+    END IF;
+    -- Terms are recorded only when the client's own copy shows they agreed to
+    -- them (Quick Book and older builds never showed them).
+    v_agreed_terms := v_client_snapshot IS NOT NULL
+      AND v_client_snapshot ? 'providerTerms' AND v_terms_body IS NOT NULL;
+    -- Same shape buildPolicySnapshot() (src/utils/policyDisplay.ts) writes.
+    v_policy_snapshot := CASE
+      WHEN v_policies IS NULL AND NOT v_agreed_terms THEN NULL
+      ELSE COALESCE(v_policies, '{}'::jsonb)
+        || CASE WHEN v_agreed_terms
+                THEN jsonb_build_object('providerTerms', jsonb_build_object(
+                       'title', COALESCE(v_terms_title, 'Terms & Conditions'), 'body', v_terms_body))
+                ELSE '{}'::jsonb END
+    END;
+
     -- Mobile-address gate: a mobile provider travels TO the client, so a mobile
     -- booking with no client address is a provider sent nowhere. Fail closed
     -- here -- same shape as the two gates above. business_type is read from the
@@ -944,7 +1063,7 @@ BEGIN
       RAISE EXCEPTION 'A mobile booking needs the client''s address before payment';
     END IF;
 
-    v_subtotal := v_service.price + v_add_ons_total;
+    v_subtotal := v_service.price - v_discount + v_add_ons_total;
     v_use_deposit := COALESCE((v_item->>'use_deposit')::boolean, false);
     v_deposit_type := COALESCE(v_provider.booking_policies->>'depositType', 'percentage');
     v_deposit_amount := NULLIF(v_provider.booking_policies->>'depositAmount', '')::numeric;
@@ -977,7 +1096,7 @@ BEGIN
       UPDATE public.bookings SET
         notes = NULLIF(btrim(v_item->>'notes'), ''),
         payment_type = CASE WHEN v_use_deposit THEN 'deposit' ELSE 'full' END,
-        base_price = v_service.price,
+        base_price = v_service.price - v_discount,
         add_ons_total = v_add_ons_total,
         service_charge = 0,
         deposit_amount = v_deposit,
@@ -995,7 +1114,11 @@ BEGIN
         safety_ack_required = v_safety_required,
         safety_ack_at = CASE WHEN v_safety_required THEN now() ELSE NULL END,
         client_address = CASE WHEN v_provider.business_type = 'mobile' THEN NULLIF(btrim(v_item->>'client_address'), '') ELSE NULL END,
-        client_area = CASE WHEN v_provider.business_type = 'mobile' THEN NULLIF(btrim(v_item->>'client_area'), '') ELSE NULL END
+        client_area = CASE WHEN v_provider.business_type = 'mobile' THEN NULLIF(btrim(v_item->>'client_area'), '') ELSE NULL END,
+        policy_snapshot = v_policy_snapshot,
+        policy_accepted_at = now(),
+        promotion_id = CASE WHEN v_discount > 0 THEN v_promo.id END,
+        promo_discount = v_discount
       WHERE id = v_wl_hold.id;
       -- Only when add-ons make it longer: writing end_time re-runs the
       -- booking gate, which must not refuse an unchanged held time.
@@ -1010,11 +1133,12 @@ BEGIN
       remaining_balance, payment_status, provider_name_snapshot, service_name_snapshot,
       service_category_snapshot, provider_logo_snapshot, customer_name, customer_email,
       customer_phone, hold_batch_id, hold_expires_at, safety_ack_required, safety_ack_at,
-      is_emergency_request, emergency_ack_at, client_address, client_area
+      is_emergency_request, emergency_ack_at, client_address, client_area,
+      policy_snapshot, policy_accepted_at, promotion_id, promo_discount
     ) VALUES (
       auth.uid(), v_provider.id, v_service.id, 'on_hold', (v_item->>'booking_date')::date,
       (v_item->>'booking_time')::time, v_end_time, NULLIF(btrim(v_item->>'notes'), ''),
-      CASE WHEN v_use_deposit THEN 'deposit' ELSE 'full' END, v_service.price, v_add_ons_total, 0,
+      CASE WHEN v_use_deposit THEN 'deposit' ELSE 'full' END, v_service.price - v_discount, v_add_ons_total, 0,
       v_deposit, CASE WHEN v_use_deposit THEN v_deposit ELSE v_subtotal END,
       CASE WHEN v_use_deposit THEN v_subtotal - v_deposit ELSE 0 END,
       CASE WHEN v_use_deposit THEN 'deposit_paid' ELSE 'fully_paid' END,
@@ -1023,12 +1147,20 @@ BEGIN
       v_safety_required, CASE WHEN v_safety_required THEN now() ELSE NULL END,
       v_emergency, CASE WHEN v_emergency THEN now() ELSE NULL END,
       CASE WHEN v_provider.business_type = 'mobile' THEN NULLIF(btrim(v_item->>'client_address'), '') ELSE NULL END,
-      CASE WHEN v_provider.business_type = 'mobile' THEN NULLIF(btrim(v_item->>'client_area'), '') ELSE NULL END
+      CASE WHEN v_provider.business_type = 'mobile' THEN NULLIF(btrim(v_item->>'client_area'), '') ELSE NULL END,
+      v_policy_snapshot, now(),
+      CASE WHEN v_discount > 0 THEN v_promo.id END, v_discount
     ) RETURNING id INTO v_booking_id;
     END IF;
     INSERT INTO public.checkout_batch_items (checkout_batch_id, booking_id, add_on_ids)
     VALUES (v_batch_id, v_booking_id, v_add_on_ids);
   END LOOP;
+
+  -- A 100%-off code can leave nothing to charge, and Stripe can't take £0
+  -- (create-payment-intent answers "Invalid amount"). Say so plainly instead.
+  IF v_due <= 0 THEN
+    RAISE EXCEPTION 'This comes to £0 after the promo code, so there''s nothing to pay by card. Ask the provider to add the booking for you.';
+  END IF;
 
   UPDATE public.checkout_batches SET amount_due = v_due WHERE id = v_batch_id;
   RETURN QUERY SELECT v_batch_id, v_due, v_expiry;
@@ -1058,7 +1190,7 @@ BEGIN
   END IF;
 
   -- A waitlist hold outlives a checkout that was closed: it stays held for
-  -- its own 15 minutes so the client can try again (20261112100000).
+  -- its own 15 minutes so the client can try again (20261113210000).
   UPDATE public.bookings
      SET hold_batch_id = NULL
    WHERE hold_batch_id = p_checkout_batch_id
@@ -1098,7 +1230,7 @@ BEGIN
      AND b.status = 'on_hold'
      AND b.hold_batch_id IS NOT NULL
      -- A waitlist hold ends through expire_waitlist_holds(), which tells the
-     -- client and offers the slot on (20261112100000).
+     -- client and offers the slot on (20261113210000).
      AND b.waitlist_entry_id IS NULL
      AND b.hold_expires_at < NOW()
      AND NOT EXISTS (SELECT 1 FROM public.transactions t WHERE t.booking_id = b.id)
@@ -1108,7 +1240,7 @@ BEGIN
    WHERE b.status = 'on_hold'
      AND b.hold_batch_id IS NOT NULL
      -- A waitlist hold ends through expire_waitlist_holds(), which tells the
-     -- client and offers the slot on (20261112100000).
+     -- client and offers the slot on (20261113210000).
      AND b.waitlist_entry_id IS NULL
      AND b.hold_expires_at < NOW()
      AND NOT EXISTS (SELECT 1 FROM public.transactions t WHERE t.booking_id = b.id)
@@ -1117,7 +1249,7 @@ END;
 $function$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261112100000', 'waitlist_pays_at_confirm')
+VALUES ('20261113210000', 'waitlist_pays_at_confirm')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;

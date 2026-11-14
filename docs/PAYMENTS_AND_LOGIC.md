@@ -300,7 +300,7 @@ passes, the hold row is deleted (never a cancelled booking), they come off that
 waitlist, and the slot goes to the next person (provider's "offer automatically"
 setting on) or opens to everyone and back to the provider to offer (off). A
 provider offering a time by hand also creates a 15-minute hold, never an unpaid
-booking. *Not live until migration `20261112100000` is applied and a new app
+booking. *Not live until migration `20261113210000` is applied and a new app
 build ships. Until then the old path booked waitlist slots with £0 paid, though
 none ever was.*
 
@@ -762,7 +762,7 @@ one broken, it's a top-severity bug: stop and escalate.
 | 11 | Card data never touches CERVICED | Stripe's own card fields; only brand, last 4 and expiry are read from Stripe |
 | 12 | Only the server can move money. App users can't call any payout, debt or refund function directly | Function permissions (service role only) |
 | 13 | Off-app payments are never tracked | Product rule (section 2.9) |
-| 14 | A waitlist slot is never booked without the client paying for it | `claim_waitlist_hold` was dropped; a hold only becomes a booking in `finalize_checkout` (20261112100000) |
+| 14 | A waitlist slot is never booked without the client paying for it | `claim_waitlist_hold` was dropped; a hold only becomes a booking in `finalize_checkout` (20261113210000) |
 
 ---
 

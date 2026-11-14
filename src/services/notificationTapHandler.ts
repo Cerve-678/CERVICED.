@@ -78,7 +78,7 @@ const BOOKING_TYPES = new Set([
   'address_released',
   // Carries the hold's booking_id when a slot is held for the client. Bookings
   // shows a held slot at the top, or "this slot has gone" if the hold has
-  // ended since (20261112100000). Notices with no booking are routed above.
+  // ended since (20261113210000). Notices with no booking are routed above.
   'waitlist_slot_available',
 ]);
 

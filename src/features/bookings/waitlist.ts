@@ -15,7 +15,7 @@ import {
  * normal checkout (prepare_checkout with waitlist_hold_id), and the 15
  * minutes keep running while the client pays. Missing them, or passing, takes
  * the client off that waitlist. See
- * supabase/migrations/20261112100000_waitlist_pays_at_confirm.sql.
+ * supabase/migrations/20261113210000_waitlist_pays_at_confirm.sql.
  */
 
 /** "2nd in line". A place the database couldn't count reads as just "In line". */

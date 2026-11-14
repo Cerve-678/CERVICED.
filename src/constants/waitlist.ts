@@ -5,7 +5,7 @@
  * The authority is the DATABASE — public.waitlist_hold_duration(), which
  * offer_waitlist_slot() uses to stamp bookings.hold_expires_at and to build
  * the wording of the "held for you for N minutes" notification (see
- * supabase/migrations/20261112100000_waitlist_pays_at_confirm.sql).
+ * supabase/migrations/20261113210000_waitlist_pays_at_confirm.sql).
  * Nothing here enforces anything; this exists so the app can DISPLAY the
  * window without a second copy of the number appearing in a screen.
  *
