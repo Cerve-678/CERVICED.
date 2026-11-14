@@ -204,8 +204,10 @@ export function buildPolicyDisplayRows(
   const grace = Number(policy.noShowGraceMinutes) || 0;
   const noShowRule = policy.noShowAction && policy.noShowAction !== 'none' && policy.noShowAction !== 'custom'
     // 'charge_full' was never enforced and is read as keeping the deposit;
-    // an actual extra charge is the no-show fee row below.
-    ? (policy.noShowAction === 'warn' ? 'Warning issued' : 'Deposit kept')
+    // an extra £ charge from older policies is the no-show fee row below.
+    // 'half': the deposit, plus the rest up to half the price (20261113200000).
+    ? (policy.noShowAction === 'warn' ? 'Warning issued'
+      : policy.noShowAction === 'half' ? 'Half the price charged' : 'Deposit kept')
     : null;
   pushRow(rows, sectionRow('close-circle-outline', 'No-show', [
     noShowRule,

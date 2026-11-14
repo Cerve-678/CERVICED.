@@ -542,8 +542,13 @@ their grace period) and **no-show**. Each is capped at **50% of the service
 price**.
 
 On the Policies screen, the late fee and grace period sit in the Late section.
-The no-show fee appears when the provider picks **Custom** as the no-show
-action, and picking any other action clears it. The one grace period still
+The no-show charge comes from the no-show action **Half the price** (since
+13 November; it replaced Custom, a typed £ fee, and saved Custom fees became
+Half). On a deposit-only booking it's half of (service price + add-ons)
+minus the deposit, frozen on the booking at checkout, like the late
+cancellation fee in 2.5.1; the deposit itself is kept because a no-show gets
+no refund. A client who paid in full has nothing more to pay. Bookings made
+before then keep the £ fee they were booked with The one grace period still
 stops a no-show being marked until it has passed.
 
 | Rule | Detail |
@@ -1098,6 +1103,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 5 Nov | Add-ons belong to the provider, not one service: one price everywhere, optional extra time, can be paused. Bookings keep the name and price paid | Providers retyped the same add-on per service, and a price change meant editing every copy |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 13 Nov | The no-show action Custom (a typed £ fee) is replaced by **Half the price**: on a deposit-only booking the provider keeps the deposit and may charge the rest up to half the price after marking the no-show. Paid in full: nothing more. Saved Custom fees became Half (one live provider, £25). Not live until migration `20261113200000_no_show_half` is applied and a new app build ships; no edge function changes | The user's call: the same rule as a late cancellation, no typed amounts. **Not lawyer-reviewed** |
 | 13 Nov | Custom on a late cancellation is replaced by one **Half the price** option. A client who paid only a deposit and cancels late under it keeps losing the deposit, and the provider may also charge their saved card the rest up to half the price, from the booking, within 24 hours of the appointment's end. Agreed in its own tick box at checkout. Clients can also be held to moving a booking within the same calendar month. Not live until migration `20261113160000_late_cancel_half_top_up` is applied, `booking-fee`, `apply-cancellation-refund`, `create-payment-intent` and `client-saved-cards` are deployed, and a new app build ships | The user's call: providers wanted half of the price, not just a small deposit, when a deposit-only client cancels late. **Not lawyer-reviewed** |
 | 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. Not live until `apply-cancellation-refund` is deployed from main, which must happen before an app build carrying this ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |
