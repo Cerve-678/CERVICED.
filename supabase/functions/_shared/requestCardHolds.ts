@@ -25,6 +25,7 @@ type PlacedOutcome = 'authorised' | 'needs_action' | 'refused' | 'lapsed' | 'fai
 
 interface HoldRow {
   id: string;
+  booking_id: string | null;
   checkout_batch_id: string;
   user_id: string;
   amount_pence: number;
@@ -36,7 +37,7 @@ interface HoldRow {
   alerted_at: string | null;
 }
 
-const HOLD_COLUMNS = 'id, checkout_batch_id, user_id, amount_pence, currency, state, on_sheet, payment_intent_id, action_deadline, alerted_at';
+const HOLD_COLUMNS = 'id, booking_id, checkout_batch_id, user_id, amount_pence, currency, state, on_sheet, payment_intent_id, action_deadline, alerted_at';
 
 function idOf(value: string | { id: string } | null | undefined): string | null {
   if (!value) return null;
@@ -149,6 +150,12 @@ export async function placeRequestHolds(
   const failures: string[] = [];
   for (const hold of holds) {
     try {
+      // Its reservation lapsed before the hold could be placed: say so,
+      // rather than holding money for a request that can't be booked.
+      if (!hold.booking_id) {
+        await recordPlaced(admin, stripe, hold.id, null, 'failed');
+        continue;
+      }
       await placeOne(admin, stripe, hold, customer, paymentMethod);
     } catch (err) {
       failures.push(`${hold.id}: ${String(err)}`);

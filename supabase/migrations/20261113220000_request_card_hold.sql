@@ -455,8 +455,10 @@ BEGIN
     RAISE EXCEPTION 'Payment does not match this request hold';
   END IF;
 
+  -- Still reserved: a reservation past its time is about to be freed by
+  -- expire_cart_holds and must not be booked now.
   SELECT * INTO v_booking FROM public.bookings
-   WHERE id = v_hold.booking_id AND status = 'on_hold' FOR UPDATE;
+   WHERE id = v_hold.booking_id AND status = 'on_hold' AND hold_expires_at > now() FOR UPDATE;
 
   IF p_outcome = 'authorised'
      AND (v_hold.state = 'planned' OR v_hold.action_deadline > now())
