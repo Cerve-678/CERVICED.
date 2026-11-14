@@ -6,6 +6,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LogoCircle } from '../../components/FramedLogo';
 import type { AppTheme } from '../../constants/theme';
 import { FONT_BODY, FONT_DISPLAY, GhostButton, PrimaryButton, hapticLight } from '../maintenance/ui';
 import { initialsFor } from './presentation';
@@ -15,6 +16,7 @@ const HEART = '#FF2D78';
 
 interface Props {
   providerName: string;
+  providerLogoUri: string | null;
   bookingDate: string;
   busy: boolean;
   error: string | null;
@@ -26,15 +28,19 @@ interface Props {
 }
 
 export function RecommendHomeCard({
-  providerName, bookingDate, busy, error, onRecommend, onBookAgain, onNotNow, P, errorColour,
+  providerName, providerLogoUri, bookingDate, busy, error, onRecommend, onBookAgain, onNotNow, P, errorColour,
 }: Props) {
   return (
     <View style={[styles.card, { backgroundColor: P.card, borderColor: P.accent }]}>
       <View style={styles.top}>
         <View style={styles.logoWrap}>
-          <View style={[styles.logo, { backgroundColor: P.secondary }]}>
-            <Text style={[styles.logoText, { color: P.secondaryText }]}>{initialsFor(providerName)}</Text>
-          </View>
+          {providerLogoUri ? (
+            <LogoCircle uri={providerLogoUri} style={[styles.logo, { backgroundColor: P.secondary }]} />
+          ) : (
+            <View style={[styles.logo, { backgroundColor: P.secondary }]}>
+              <Text style={[styles.logoText, { color: P.secondaryText }]}>{initialsFor(providerName)}</Text>
+            </View>
+          )}
           <View style={[styles.heart, { borderColor: P.card }]}>
             <Ionicons name="heart" size={9} color="#FFFFFF" />
           </View>

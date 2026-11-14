@@ -99,6 +99,11 @@ export function useCircleMoment(
           bookingDate: chosen.bookingDate,
           providerId: chosen.providerId,
           providerName: chosen.providerName,
+          providerLogoUri: typeof chosen.providerImage === 'string'
+            ? chosen.providerImage
+            : chosen.providerImage && typeof chosen.providerImage === 'object' && 'uri' in chosen.providerImage
+              ? String(chosen.providerImage.uri ?? '') || null
+              : null,
         });
       } catch (err) {
         // Decoration: a failed check means nothing this session.

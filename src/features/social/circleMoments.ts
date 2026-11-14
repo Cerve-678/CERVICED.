@@ -89,6 +89,7 @@ export interface CompletedBookingLike {
   id: string;
   providerId?: string | undefined;
   providerName: string;
+  providerImage?: unknown;
   /** YYYY-MM-DD */
   bookingDate: string;
   status: string;
@@ -96,7 +97,7 @@ export interface CompletedBookingLike {
 
 export type CircleMoment =
   | { kind: 'notice' }
-  | { kind: 'recommend'; bookingId: string; bookingDate: string; providerId: string; providerName: string };
+  | { kind: 'recommend'; bookingId: string; bookingDate: string; providerId: string; providerName: string; providerLogoUri: string | null };
 
 /** Local midnight of a YYYY-MM-DD date, or null when it doesn't parse. */
 function dayStart(ymd: string): Date | null {
