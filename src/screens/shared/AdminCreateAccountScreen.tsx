@@ -25,6 +25,7 @@ import {
   adminCreateAccount,
   AdminCreateAccountRefused,
   adminStartBlankProvider,
+  completeMyBlankProviderDetails,
   type AdminCreateAccountInput,
 } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -44,6 +45,8 @@ import { logger } from '../../utils/logger';
 //   and signs straight into it, for setting a profile up before anything else.
 // - With route param addDetailsForUserId (from Accounts you created), the form
 //   gives that blank account its owner's details instead of creating one.
+// - From a blank provider's Go Live step, the same form hands over the
+//   currently signed-in account without returning to the admin account.
 // Internal tool, so its copy is English only.
 
 type AccountType = AdminCreateAccountInput['accountType'];
@@ -62,7 +65,8 @@ export default function AdminCreateAccountScreen({ navigation, route }: any) {
   const signInAs = useSignInAsAccount();
   const addDetailsForUserId: string | undefined =
     typeof route?.params?.addDetailsForUserId === 'string' ? route.params.addDetailsForUserId : undefined;
-  const addingDetails = addDetailsForUserId !== undefined;
+  const addingCurrentUserDetails = route?.params?.addDetailsForCurrentUser === true;
+  const addingDetails = addDetailsForUserId !== undefined || addingCurrentUserDetails;
 
   const [accountType, setAccountType] = useState<AccountType>('provider');
   const [name, setName] = useState('');
@@ -118,13 +122,15 @@ export default function AdminCreateAccountScreen({ navigation, route }: any) {
         ...(phone.trim() ? { phone: phone.trim() } : {}),
         ...(password ? { password } : {}),
       };
-      const result = addDetailsForUserId !== undefined
-        ? await adminAddAccountDetails({ userId: addDetailsForUserId, ...common })
-        : await adminCreateAccount({
-          accountType,
-          ...common,
-          ...(isProvider ? { businessName: businessName.trim() } : {}),
-        });
+      const result = addingCurrentUserDetails
+        ? await completeMyBlankProviderDetails(common)
+        : addDetailsForUserId !== undefined
+          ? await adminAddAccountDetails({ userId: addDetailsForUserId, ...common })
+          : await adminCreateAccount({
+              accountType,
+              ...common,
+              ...(isProvider ? { businessName: businessName.trim() } : {}),
+            });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setCreated({
         accountType: result.accountType,
@@ -180,7 +186,7 @@ export default function AdminCreateAccountScreen({ navigation, route }: any) {
     showConfirm(
       'Start a provider now?',
       'This makes a provider account with no details yet and signs you into it, so you can set their profile up straight away. ' +
-        "Add their name, email and password later from Admin → Accounts you created. You'll need to sign back into your own account when you're done.",
+        "Add their name, email and password from the provider profile when you're ready to hand it over.",
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -231,7 +237,7 @@ export default function AdminCreateAccountScreen({ navigation, route }: any) {
           <Text style={[styles.title, { color: P.text }]}>{addingDetails ? 'ADD THEIR DETAILS' : 'CREATE AN ACCOUNT'}</Text>
           <Text style={[styles.subtitle, { color: P.sub }]}>
             {addingDetails
-              ? "Gives the profile you set up its owner's sign-in. After this the account is theirs. No emails are sent."
+              ? "Give the profile you set up its owner's sign-in. After this the account is theirs. No emails are sent."
               : 'Ready to sign in to straight away. No verification code, and no emails are sent. You hand them their login.'}
           </Text>
 
@@ -239,7 +245,7 @@ export default function AdminCreateAccountScreen({ navigation, route }: any) {
             <>
               <View style={card}>
                 <Text style={[styles.label, { color: P.sub }]}>
-                  {created.accountType === 'provider' ? 'PROVIDER ACCOUNT READY' : 'CLIENT ACCOUNT READY'}
+                  {addingDetails ? 'ACCOUNT HOLDER DETAILS SAVED' : created.accountType === 'provider' ? 'PROVIDER ACCOUNT READY' : 'CLIENT ACCOUNT READY'}
                 </Text>
                 <Text style={[styles.name, { color: P.text }]}>{created.name}</Text>
                 <View style={[styles.sep, { backgroundColor: P.sep }]} />
@@ -264,16 +270,18 @@ export default function AdminCreateAccountScreen({ navigation, route }: any) {
               >
                 <Text style={[styles.primaryText, { color: P.onAccent }]}>SEND THEM THEIR LOGIN</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.secondaryBtn, { borderColor: P.border }]}
-                onPress={() => signInAsThem(created)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.secondaryText, { color: P.accentText }]}>
-                  {created.accountType === 'provider' ? 'SET UP THEIR PROFILE NOW' : 'SIGN IN AS THEM'}
-                </Text>
-              </TouchableOpacity>
+              {!addingCurrentUserDetails && (
+                <TouchableOpacity
+                  style={[styles.secondaryBtn, { borderColor: P.border }]}
+                  onPress={() => signInAsThem(created)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.secondaryText, { color: P.accentText }]}>
+                    {created.accountType === 'provider' ? 'SET UP THEIR PROFILE NOW' : 'SIGN IN AS THEM'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.secondaryBtn, { borderColor: P.border }]}
                 onPress={() => {

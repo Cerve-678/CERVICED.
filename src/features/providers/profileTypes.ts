@@ -122,6 +122,7 @@ export interface ProviderProfileData {
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
     depositMode?: string;
     depositRequired?: boolean;
     depositOnly?: boolean;

@@ -1265,9 +1265,10 @@ export function moneySummaryEmail(params: {
   failed: MoneySummaryLine[];
   owed: MoneySummaryLine[];
   refunds: MoneySummaryLine[];
+  unsentRefunds: MoneySummaryLine[];
 }) {
   const P = PROVIDER;
-  const total = params.failed.length + params.owed.length + params.refunds.length;
+  const total = params.failed.length + params.owed.length + params.refunds.length + params.unsentRefunds.length;
   const section = (label: string, lines: MoneySummaryLine[]) =>
     lines.length === 0
       ? ''
@@ -1291,13 +1292,14 @@ export function moneySummaryEmail(params: {
     subject: `Today: ${total} money ${total === 1 ? 'thing' : 'things'} waiting`,
     html: letter(P, {
       audience: 'alert',
-      preview: `${params.failed.length} failed, ${params.owed.length} owed, ${params.refunds.length} refund requests`,
+      preview: `${params.failed.length} failed, ${params.owed.length} owed, ${params.refunds.length} refund requests, ${params.unsentRefunds.length} refunds not sent`,
       content:
         eyebrow(P, 'Daily money summary') +
         headline(P, `${total} ${total === 1 ? 'thing is' : 'things are'} waiting`) +
         section('Failed payments to providers', params.failed) +
         section('Money providers owe', params.owed) +
         section('Refund requests', params.refunds) +
+        section('Refunds that never went out', params.unsentRefunds) +
         note(P, 'Open Money (admin) in your settings in the CERVICED app to deal with these.', 0),
     }),
   };

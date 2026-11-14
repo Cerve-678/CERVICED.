@@ -2,6 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
 import { isServiceRoleRequest } from '../_shared/serviceAuth.ts';
 import { outcomeOfCancelledIntent, settleCheckout } from '../_shared/settleCheckout.ts';
+import { sendSupportAlert } from '../_shared/supportAlert.ts';
+import { escapeHtml } from '../_shared/escapeHtml.ts';
 
 // Finishes checkouts that a payment was started for but nobody finished.
 //
@@ -22,7 +24,12 @@ import { outcomeOfCancelledIntent, settleCheckout } from '../_shared/settleCheck
 //   - still processing at the bank     → leave it for the next run;
 //   - approved, captured or cancelled  → settleCheckout, which books it, or
 //                                        cancels or refunds it and tells the
-//                                        client (record_checkout_outcome).
+//                                        client (record_checkout_outcome);
+//   - Stripe has no such payment       → mark it abandoned and email support.
+//                                        This account never took the money (a
+//                                        payment from a Stripe account the app
+//                                        no longer uses, say), and asking again
+//                                        every 5 minutes would never change.
 // Every step is safe to repeat: Stripe calls carry the same idempotency keys
 // settleCheckout always uses, and an outcome is recorded once.
 
@@ -67,7 +74,15 @@ Deno.serve(async (req: Request) => {
 
     for (const batch of stale ?? []) {
       try {
-        const intent = await stripe.paymentIntents.retrieve(batch.payment_intent_id!);
+        let intent: Stripe.PaymentIntent;
+        try {
+          intent = await stripe.paymentIntents.retrieve(batch.payment_intent_id!);
+        } catch (err) {
+          if ((err as { code?: string }).code !== 'resource_missing') throw err;
+          await closeMissingPayment(batch.id, batch.payment_intent_id!);
+          tally('missing_payment');
+          continue;
+        }
         const holdOver = Date.parse(batch.expires_at) <= Date.now();
         if (UNPAID.has(intent.status)) {
           if (!holdOver) { tally('still_paying'); continue; }
@@ -102,3 +117,19 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
+
+// A checkout whose payment this Stripe account has never heard of. Nothing was
+// taken here, so it closes as abandoned (which tells the client nothing), and
+// support gets the ids to check by hand.
+async function closeMissingPayment(batchId: string, paymentIntentId: string) {
+  const { error } = await admin.rpc('record_checkout_outcome', {
+    p_checkout_batch_id: batchId, p_outcome: 'abandoned',
+  });
+  if (error) throw error;
+  console.error(`[reconcile-checkouts] ${batchId}: Stripe has no payment ${paymentIntentId}; closed as abandoned`);
+  await sendSupportAlert({
+    subject: 'A checkout pointed at a payment Stripe doesn\'t have',
+    html: `<p>Checkout <code>${escapeHtml(batchId)}</code> was still open with payment <code>${escapeHtml(paymentIntentId)}</code>, which the app's Stripe account has no record of. It has been closed as abandoned, and the client wasn't told anything.</p>`
+      + '<p>Usually this is an old test payment from a Stripe account the app no longer uses. If it is recent, check that Stripe account for the payment before doing anything else.</p>',
+  }, 'reconcile-checkouts');
+}

@@ -82,7 +82,7 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
     const { data: holds, error: holdsError } = await admin.from('bookings')
-      .select('provider_id, late_fee_pence, no_show_fee_pence').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
+      .select('provider_id, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence').eq('hold_batch_id', batch.id).eq('status', 'on_hold');
     if (holdsError || !holds?.length) throw new Error('No active reservations');
     const providerIds = [...new Set(holds.map(row => row.provider_id))];
     const { data: providers, error: providersError } = await admin.from('providers')
@@ -94,17 +94,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // A provider with a late or no-show fee needs the card saved for an
-    // off-session charge after the appointment — and the client's recorded
+    // A provider with a late, no-show or late cancellation fee needs the card
+    // saved for an off-session charge later — and the client's recorded
     // agreement (fee_consent_records, written by accept_checkout_fees before
     // this call), or nothing is saved for off-session use.
-    const hasFees = holds.some(row => (row.late_fee_pence ?? 0) > 0 || (row.no_show_fee_pence ?? 0) > 0);
+    const hasFees = holds.some(row => (row.late_fee_pence ?? 0) > 0 || (row.no_show_fee_pence ?? 0) > 0
+      || (row.late_cancel_fee_pence ?? 0) > 0);
     if (hasFees) {
       const { data: consent, error: consentError } = await admin.from('fee_consent_records')
         .select('id').eq('checkout_batch_id', batch.id).eq('user_id', user.id).maybeSingle();
       if (consentError) throw consentError;
       if (!consent) {
-        return new Response(JSON.stringify({ code: 'fee_consent_required', error: 'Please agree to the provider\'s late and no-show fees to continue.' }), {
+        return new Response(JSON.stringify({ code: 'fee_consent_required', error: 'Please agree to the provider\'s fees and late cancellation charge to continue.' }), {
           status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

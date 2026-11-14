@@ -154,8 +154,10 @@ import { toUserMessage } from '../../utils/userFacingError';
 
 import {
   ADDRESS_RELEASE_OPTS,
+  BUSINESS_TYPE_OPTS,
   businessTypeLabel,
   isAddressReleaseAllowed,
+  reconcileAddressReleasePolicy,
   ALL_SERVICE_TYPE_OPTS,
   SERVICE_CATEGORY_OPTS,
   SERVICE_TYPE_OPTS,
@@ -2975,6 +2977,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // The cached profile can be edited while its live refresh is still in
   // flight. Preserve service changes if that refresh completes afterwards.
   const editedServiceCategoriesRef = useRef<Record<string, ServiceData[]>>({});
+  // A live profile read can finish after a local rename. Keep the old keys
+  // out of that read so it cannot bring the renamed category back.
+  const renamedCategoryKeysRef = useRef<Set<string>>(new Set());
   // The release day is also edited in Scheduling & Availability. True once
   // it's changed here; until then the save leaves it alone and focus
   // re-reads it, so this screen never writes back an older day.
@@ -3103,9 +3108,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           .then(data => {
             if (cancelled) return;
             if (data) {
-              setProviderData({
-                ...data,
-                categories: { ...data.categories, ...editedServiceCategoriesRef.current },
+              setProviderData(prev => {
+                const categories = { ...data.categories };
+                const categoryDescriptions = { ...data.categoryDescriptions };
+                const categoryServiceTypes = { ...data.categoryServiceTypes };
+                for (const oldName of renamedCategoryKeysRef.current) {
+                  delete categories[oldName];
+                  delete categoryDescriptions[oldName];
+                  delete categoryServiceTypes[oldName];
+                }
+                for (const newName of Object.keys(editedServiceCategoriesRef.current)) {
+                  categoryDescriptions[newName] = prev.categoryDescriptions[newName] ?? '';
+                  categoryServiceTypes[newName] = prev.categoryServiceTypes[newName] ?? data.providerService;
+                }
+                return {
+                  ...data,
+                  categories: { ...categories, ...editedServiceCategoriesRef.current },
+                  categoryDescriptions,
+                  categoryServiceTypes,
+                  addOnLibrary: renamedCategoryKeysRef.current.size
+                    ? prev.addOnLibrary ?? data.addOnLibrary ?? []
+                    : data.addOnLibrary ?? [],
+                };
               });
               setIsEditMode(true);
               // Being in edit mode means this profile was published, which
@@ -3113,8 +3137,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // tick in the render — a box that draws checked but holds false
               // does nothing on the first tap and looks broken.
               setTermsAccepted(true);
-              const firstCat = Object.keys(data.categories)[0];
-              if (firstCat) setSelectedCategory(firstCat);
+              setSelectedCategory(current => {
+                if (current && !renamedCategoryKeysRef.current.has(current)) return current;
+                return Object.keys(editedServiceCategoriesRef.current)[0]
+                  ?? Object.keys(data.categories).find(name => !renamedCategoryKeysRef.current.has(name))
+                  ?? '';
+              });
               // A contact field that exists elsewhere should already be in the
               // box, not blank with a note telling you where to go and type it.
               // The signup prefill below only runs on the very first save, so
@@ -3543,6 +3571,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Add service category
   const handleAddCategory = useCallback((name: string, description: string) => {
+    renamedCategoryKeysRef.current.delete(name);
     setProviderData(prev => ({
       ...prev,
       categories: { ...prev.categories, [name]: [] },
@@ -3569,15 +3598,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            delete editedServiceCategoriesRef.current[name];
+            renamedCategoryKeysRef.current.add(name);
             setProviderData(prev => {
               const newCategories = { ...prev.categories };
               delete newCategories[name];
               const newDescriptions = { ...prev.categoryDescriptions };
               delete newDescriptions[name];
+              const newServiceTypes = { ...prev.categoryServiceTypes };
+              delete newServiceTypes[name];
               return {
                 ...prev,
                 categories: newCategories,
                 categoryDescriptions: newDescriptions,
+                categoryServiceTypes: newServiceTypes,
                 ...(prev.addOnLibrary ? { addOnLibrary: removeCategoryFromLibrary(prev.addOnLibrary, name) } : {}),
               };
             });
@@ -3595,19 +3629,35 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const handleRenameCategory = useCallback((oldName: string, newName: string, description: string) => {
     if (!newName.trim()) return;
     const trimmedNew = newName.trim();
+    if (Object.keys(providerData.categories).some(name =>
+      name !== oldName && name.toLocaleLowerCase() === trimmedNew.toLocaleLowerCase())) {
+      Alert.alert('Category already exists', 'Choose a different category name.');
+      return;
+    }
+
+    if (oldName !== trimmedNew) {
+      const services = editedServiceCategoriesRef.current[oldName] ?? providerData.categories[oldName] ?? [];
+      delete editedServiceCategoriesRef.current[oldName];
+      editedServiceCategoriesRef.current[trimmedNew] = services;
+      renamedCategoryKeysRef.current.add(oldName);
+      renamedCategoryKeysRef.current.delete(trimmedNew);
+    }
 
     setProviderData(prev => {
       const newCategories: Record<string, ServiceData[]> = {};
       const newDescriptions: Record<string, string> = {};
+      const newServiceTypes: Record<string, string> = {};
       Object.keys(prev.categories).forEach(key => {
         const targetKey = key === oldName ? trimmedNew : key;
         newCategories[targetKey] = prev.categories[key] || [];
         newDescriptions[targetKey] = key === oldName ? description : (prev.categoryDescriptions?.[key] ?? '');
+        newServiceTypes[targetKey] = prev.categoryServiceTypes?.[key] ?? prev.providerService;
       });
       return {
         ...prev,
         categories: newCategories,
         categoryDescriptions: newDescriptions,
+        categoryServiceTypes: newServiceTypes,
         // An add-on set to "All <category>" follows the category's new name.
         ...(prev.addOnLibrary && oldName !== trimmedNew
           ? { addOnLibrary: renameCategoryInLibrary(prev.addOnLibrary, oldName, trimmedNew) }
@@ -3620,7 +3670,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }
     setShowEditCategoryModal(false);
     setEditingCategory('');
-  }, [selectedCategory]);
+  }, [providerData.categories, selectedCategory]);
 
   // Add/Edit service
   const handleSaveService = useCallback(async (service: ServiceData, newAddOns: AddOnLibraryItem[]) => {
@@ -3756,6 +3806,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setHasAttemptedSave(true);
     if (!providerData.providerName.trim()) {
       Alert.alert('Missing Information', 'Please enter your business name.');
+      return;
+    }
+    if (!providerData.providerService) {
+      Alert.alert('Missing Information', 'Please choose your service type.');
       return;
     }
     if (!providerData.location.trim()) {
@@ -3937,6 +3991,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setProviderData(prev => ({ ...prev, serviceCategories: [category], providerService: category }));
   }, []);
 
+  const selectBusinessType = useCallback((businessType: BusinessType) => {
+    setProviderData(prev => ({
+      ...prev,
+      businessType,
+      addressReleasePolicy: reconcileAddressReleasePolicy(businessType, prev.addressReleasePolicy),
+    }));
+  }, []);
+
   // Only the categories under the type currently selected in the switch —
   // this is what the pill strip renders and what drag-reorder operates on.
   const categoryNames = useMemo(
@@ -3989,7 +4051,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           title: 'Business identity',
           rows: [
             { label: 'Business name', value: filled(providerData.providerName), required: true },
-            { label: 'Service type', value: serviceTypeLabel },
+            { label: 'Service type', value: serviceTypeLabel, required: true },
             { label: 'Where you\'re based', value: filled(providerData.location), required: true },
             { label: 'Logo', value: providerData.logo ? 'Added' : '' },
           ],
@@ -4653,15 +4715,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ref={registerField('businessName')}
               >
                 <RequiredLabel required missing={visibleMissingRequiredSet.has('Business name')} styles={styles}>Business Name</RequiredLabel>
-                <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                  <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
-                  <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                    {providerData.providerName || 'Not set'}
-                  </Text>
-                </View>
-                <Text style={styles.inputHint}>
-                  Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 14 days.
-                </Text>
+                {isEditMode ? (
+                  <>
+                    <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                      <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                        {providerData.providerName || 'Not set'}
+                      </Text>
+                    </View>
+                    <Text style={styles.inputHint}>
+                      Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 14 days.
+                    </Text>
+                  </>
+                ) : (
+                  <View style={[styles.inputBlur, styles.profileInputBox]}>
+                    <TextInput
+                      style={styles.textInput}
+                      value={providerData.providerName}
+                      onChangeText={providerName => setProviderData(prev => ({ ...prev, providerName }))}
+                      placeholder="Business name"
+                      placeholderTextColor={chrome.fg(0.45)}
+                    />
+                  </View>
+                )}
               </View>
 
               {/* Service Category — free to pick at sign-up, and locked here
@@ -4675,7 +4751,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   no longer sends the column, so a pick made here would not
                   save. */}
               <View style={styles.inputGroup}>
-                <RequiredLabel required styles={styles}>Service Type</RequiredLabel>
+                <RequiredLabel required missing={visibleMissingRequiredSet.has('Service type')} styles={styles}>Service Type</RequiredLabel>
                 {isEditMode ? (
                   <>
                     {/* Every type they ticked at sign-up, each locked. One
@@ -4729,21 +4805,36 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 )}
               </View>
 
-              {/* Business Type, for link-only pros only. Everyone else sees it
-                  on 05 · Address Confirmation, a page link-only pros don't
-                  get. Locked here like Business Name and Service Type above:
-                  Business Info is its one editor. */}
+              {/* Link-only providers have no Address Confirmation page, so
+                  first-time setup chooses business type here. */}
               {isLinkOnly && (
                 <View style={styles.inputGroup}>
                   <RequiredLabel styles={styles}>Business Type</RequiredLabel>
-                  <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                    <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
-                    <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
-                      {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
-                    </Text>
-                  </View>
+                  {isEditMode ? (
+                    <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
+                      <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                        {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.serviceCategoryGrid}>
+                      {BUSINESS_TYPE_OPTS.map(({ value, label }) => (
+                        <TouchableOpacity
+                          key={value}
+                          activeOpacity={0.75}
+                          style={[styles.serviceCategoryChip, providerData.businessType === value && styles.serviceCategoryChipSelected]}
+                          onPress={() => { tapSelect(); selectBusinessType(value); }}
+                        >
+                          <Text style={[styles.serviceCategoryText, providerData.businessType === value && styles.serviceCategoryTextSelected]}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                   <Text style={styles.inputHint}>
-                    Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.
+                    {isEditMode
+                      ? 'Where you see clients. Shown on your profile. Change it in Business Profile → Business Details → Business Info.'
+                      : 'Where you see clients. Shown on your profile.'}
                   </Text>
                 </View>
               )}
@@ -5660,25 +5751,37 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Text style={styles.docFieldFlag}>Required</Text>
                 )}
               </View>
-                {/* Always locked in InfoReg: business_type decides who travels to
-                    whom (mobile goes to the client; every other type is a venue
-                    the client comes to) and drives the address-release timings
-                    below — changing it later could silently leave an
-                    already-live profile in an inconsistent state. The private
-                    address itself is required for every type, mobile included;
-                    an earlier version of this comment said mobile was exempt,
-                    which has not been true since require_provider_address.sql. */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
-                  <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                    <Ionicons name="lock-closed" size={11} color={isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740'} />
-                    <Text style={[styles.policyPillText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                      {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                {/* Admin-created accounts have no sign-up answer to prefill.
+                    Choose the type before the provider row is first saved;
+                    existing profiles keep Business Info as their editor. */}
+                {isEditMode ? (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
+                      <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                        <Ionicons name="lock-closed" size={11} color={isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740'} />
+                        <Text style={[styles.policyPillText, { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>
+                          {providerData.businessType ? businessTypeLabel(providerData.businessType) : 'Not set'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.inputHint}>
+                      Not editable here — change it in Business Profile → Business Details → Business Info.
                     </Text>
+                  </>
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {BUSINESS_TYPE_OPTS.map(({ value, label }) => (
+                      <TouchableOpacity
+                        key={value}
+                        activeOpacity={0.75}
+                        style={[styles.policyPill, providerData.businessType === value && { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => { tapSelect(); selectBusinessType(value); }}
+                      >
+                        <Text style={[styles.policyPillText, providerData.businessType === value && { color: isDarkColor(adaptiveAccentColor) ? '#FFFFFF' : '#1B2740' }]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                </View>
-                <Text style={styles.inputHint}>
-                  Not editable here — change it in Business Profile → Business Details → Business Info.
-                </Text>
+                )}
 
               <View style={[styles.docFieldRow, { marginTop: 14 }]}>
                 <Text style={styles.policyLabel}>

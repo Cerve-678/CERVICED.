@@ -56,6 +56,7 @@ import {
   getMyProviderProfile,
   getProviderAvailability,
   hasMyProviderGoLiveAddress,
+  getCurrentAccountDetailsPending,
 } from '../../services/databaseService';
 import { resolveDepositMode } from '../../utils/depositPolicy';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
@@ -93,6 +94,9 @@ export interface GoLiveStatus {
    *  whether clients can actually find this provider — never re-derive it
    *  from the steps below. */
   isLive: boolean;
+  /** Server gate for admin-made blank providers. The admin must assign the
+   * owner's login details before the profile can be published. */
+  detailsPending?: boolean | undefined;
   /** Recommended, Profile-Health-only. Optional and left `undefined` by
    *  ProviderHomeScreen's fetch (it never renders them — its checklist
    *  filters on `blocking`, which these never are — so there's no reason to
@@ -108,7 +112,7 @@ export interface GoLiveStatus {
 }
 
 export type GoLiveStepKey =
-  | 'profile' | 'schedule' | 'services' | 'address'
+  | 'ownerDetails' | 'profile' | 'schedule' | 'services' | 'address'
   | 'policies' | 'payment' | 'logo' | 'stripe' | 'portfolio' | 'terms'
   | 'automations';
 
@@ -185,6 +189,15 @@ export function buildGoLiveSteps(status: GoLiveStatus): GoLiveStep[] {
       blocking: true,
     },
   ];
+  if (status.detailsPending) {
+    steps.unshift({
+      key: 'ownerDetails',
+      label: "Add the account owner's details",
+      done: false,
+      required: true,
+      blocking: true,
+    });
+  }
   // Blocking, but conditional on the Stripe Connect payouts feature being on
   // (see the `stripeSet` doc on GoLiveStatus and the header comment). Kept
   // adjacent to the money steps (policies/payment) it belongs with. When the
@@ -243,6 +256,9 @@ export type GoLiveTone =
    *  them. In practice that always means the address never geocoded. */
   | 'stalled';
 
+export const OWNER_DETAILS_GO_LIVE_MESSAGE =
+  "Add the account holder's name, email and date of birth below. Set a sign-in password or have one generated. Once saved, we'll check the profile for publishing again.";
+
 export interface GoLiveHeadline {
   tone: GoLiveTone;
   title: string;
@@ -269,6 +285,14 @@ export function buildGoLiveHeadline(status: GoLiveStatus): GoLiveHeadline {
       tone: 'liveWithExtras',
       title: 'Live — a few things left to finish',
       detail: `Clients can already find and book you. ${recommendedOutstanding.length} more recommended step${recommendedOutstanding.length === 1 ? '' : 's'} below.`,
+    };
+  }
+
+  if (status.detailsPending) {
+    return {
+      tone: 'blocked',
+      title: 'Account details needed before going live',
+      detail: OWNER_DETAILS_GO_LIVE_MESSAGE,
     };
   }
 
@@ -368,10 +392,11 @@ export async function fetchGoLiveStatus(
   // Three independent reads — one round trip, not three in sequence. The
   // address check takes the id we already have so it doesn't re-resolve the
   // same provider row from the auth session a second time.
-  const [availability, serviceCount, addressSet] = await Promise.all([
+  const [availability, serviceCount, addressSet, detailsPending] = await Promise.all([
     getProviderAvailability(profile.id),
     countProviderServices(profile.id),
     hasMyProviderGoLiveAddress(profile.id),
+    getCurrentAccountDetailsPending(),
   ]);
 
   return {
@@ -382,6 +407,7 @@ export async function fetchGoLiveStatus(
     brandingSet: !!profile.logo_url,
     stripeSet: deriveStripeGoLiveField(profile),
     isLive: !!profile.has_gone_live,
+    detailsPending,
   };
 }
 

@@ -5,7 +5,8 @@ import { moneySummaryEmail } from '../_shared/emailTemplates.ts';
 import { summarizeMoneyAttention, type MoneyAttention } from '../_shared/payoutRetry.ts';
 
 // The daily email to support listing every money thing waiting on a person:
-// failed payouts to providers, money providers owe, open refund requests.
+// failed payouts to providers, money providers owe, open refund requests, and
+// cancelled bookings whose refund never went out.
 // Called by pg_cron through process_money_daily_summary() at 08:00 UTC, which
 // already skips the call on a day with nothing waiting. Service role only.
 
@@ -25,7 +26,7 @@ Deno.serve(async (req: Request) => {
     const { data, error } = await admin.rpc('money_needing_attention');
     if (error) throw error;
     const lines = summarizeMoneyAttention(data as MoneyAttention);
-    const total = lines.failed.length + lines.owed.length + lines.refunds.length;
+    const total = lines.failed.length + lines.owed.length + lines.refunds.length + lines.unsentRefunds.length;
     const sent = total > 0 ? await sendSupportAlert(moneySummaryEmail(lines), 'money-daily-summary') : false;
     console.log(`[money-daily-summary] waiting=${total} sent=${sent}`);
     return new Response(JSON.stringify({ waiting: total, sent }), {

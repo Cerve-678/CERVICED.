@@ -46,7 +46,9 @@ describe('rescheduling inside the cancellation window', () => {
 
   it('settles a late-moved booking as a late cancel', () => {
     expect(fn).toMatch(/late_reschedule_from/);
-    expect(fn).toMatch(/const isLateCancel = movedLate \|\|/);
+    // The shared test (cancellationSettlement.ts) treats a late move as late
+    // however early the cancel; booking-fee uses the same one.
+    expect(fn).toMatch(/const isLateCancel = isLateClientCancel\(\{[^}]*movedLate \}\)/);
   });
 
   it('only stamps the booking for a request the client made inside the window', () => {

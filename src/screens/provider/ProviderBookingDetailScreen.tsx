@@ -37,7 +37,7 @@ import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { useAppDialog } from '../../components/AppDialog';
-import { getRescheduleBlock, getStaleRequestBlock } from '../../utils/rescheduleBlockedReason';
+import { getRescheduleBlock, getStaleRequestBlock, PROVIDER_STARTED_BLOCK } from '../../utils/rescheduleBlockedReason';
 import { AvailabilityService, BackToBackSlot } from '../../services/AvailabilityService';
 import {
   getActiveRescheduleRequest,
@@ -724,9 +724,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       setInitSent(true);
     } catch (err) {
       logger.error('[ProviderBookingDetail] send reschedule response failed:', err);
+      // A DB guard (P0001) is written for the provider, e.g. the appointment
+      // started while this sheet was open; show it as it is.
       setInitInputError(err instanceof Error && (err.message.startsWith('Cancel if declined is not available yet') || err.message.startsWith('Reschedule notes are not available yet'))
         ? err.message
-        : respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.');
+        : toUserMessageAllowingDbGuard(
+            err,
+            respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.',
+            'ProviderBookingDetail.sendReschedule',
+          ));
     } finally {
       setInitLoading(false);
     }
@@ -2245,7 +2251,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         ))}
                       </View>
                     )}
-                    {canRespondToReschedule && (
+                    {canRespondToReschedule && !apptStartPassed && (
                       <TouchableOpacity
                         style={[styles.respondBtn, { backgroundColor: '#FF9500' }]}
                         onPress={() => setShowInitRescheduleModal(true)}
@@ -2253,6 +2259,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       >
                         <Text style={styles.respondBtnText}>Respond to Reschedule</Text>
                       </TouchableOpacity>
+                    )}
+                    {/* After the start the server refuses new times (see
+                        PROVIDER_STARTED_BLOCK), so offer the way forward instead. */}
+                    {canRespondToReschedule && apptStartPassed && (
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={[styles.rescheduleNote, { color: P.sub }]}>{PROVIDER_STARTED_BLOCK.message}</Text>
+                        {!!clientUserId && (
+                          <TouchableOpacity onPress={handleOpenChat} activeOpacity={0.7} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+                            <Text style={[styles.rescheduleNote, { color: P.accent, fontWeight: '600' }]}>Message the client</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
                 </>
