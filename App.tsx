@@ -183,6 +183,20 @@ export default Sentry.wrap(function App() {
     'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
     'Prata-Regular': require('./assets/fonts/Prata-Regular.ttf'),
+    // Page styles 11–16 (Branding → Page Style, 2026-11-14). Static instances
+    // from Google Fonts (OFL), one weight each, bundled as files rather than
+    // packages so no dependency changes.
+    'LeagueSpartan-Light': require('./assets/fonts/LeagueSpartan-Light.ttf'),
+    'LeagueSpartan-ExtraBold': require('./assets/fonts/LeagueSpartan-ExtraBold.ttf'),
+    'BodoniModa-ExtraBold': require('./assets/fonts/BodoniModa-ExtraBold.ttf'),
+    'Montserrat-Medium': require('./assets/fonts/Montserrat-Medium.ttf'),
+    'Montserrat-ExtraBold': require('./assets/fonts/Montserrat-ExtraBold.ttf'),
+    'Fraunces-SoftBlackItalic': require('./assets/fonts/Fraunces-SoftBlackItalic.ttf'),
+    'InstrumentSerif-Regular': require('./assets/fonts/InstrumentSerif-Regular.ttf'),
+    'InstrumentSerif-Italic': require('./assets/fonts/InstrumentSerif-Italic.ttf'),
+    'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
+    'CormorantGaramond-SemiBold': require('./assets/fonts/CormorantGaramond-SemiBold.ttf'),
+    'CormorantGaramond-MediumItalic': require('./assets/fonts/CormorantGaramond-MediumItalic.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,

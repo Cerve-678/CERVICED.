@@ -27,9 +27,10 @@ import {
   onAccentInk,
   PageSection,
   PageSectionHeading,
-  PolicyBandSection,
+  AccentBandSection,
   policiesBringOwnSurface,
   sectionInk,
+  sectionsSitOnPage,
   serviceCardSurface,
   sheetInk,
   StyledPolicyList,
@@ -111,7 +112,7 @@ export function ProfileStylePreview({
   const page = sheetInk(OP.bg);
   const cardInk = sectionInk(palette);
   const surface = serviceCardSurface(pageStyle, { card: OP.card, accent, sheet: OP.bg });
-  const serviceInk = surface && (pageStyle.cards === "none" || pageStyle.cards === "outline") ? page : { text: OP.text, sub: OP.sub };
+  const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
   const lines = (colour: string, widths: number[] = [100, 92, 64]) => (
@@ -153,6 +154,8 @@ export function ProfileStylePreview({
             heroText={heroText}
             heroSub={heroSub}
             heroIsDark={heroIsDark}
+            accent={accent}
+            rating="5.0"
             renderLogo={size => (
               <HeroLogo
                 size={size}
@@ -241,15 +244,19 @@ export function ProfileStylePreview({
             </BlurView>
           ) : (
             <>
-              {!pageStyle.aboutInHero ? (
+              {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
+                <AccentBandSection section="about" palette={palette} waves={false}>
+                  {lines(withAlpha(onAccentInk(accent).text, 0.35))}
+                </AccentBandSection>
+              ) : !pageStyle.aboutInHero ? (
                 <PageSection section="about" palette={palette}>
                   {lines(cardInk.separator)}
                 </PageSection>
               ) : null}
               {pageStyle.policies === "band" ? (
-                <PolicyBandSection palette={palette}>
+                <AccentBandSection section="policies" palette={palette}>
                   <StyledPolicyList rows={PREVIEW_POLICY_ROWS} palette={palette} ink={onAccentInk(accent)} />
-                </PolicyBandSection>
+                </AccentBandSection>
               ) : (
                 <PageSection section="policies" palette={palette} bare={policiesBringOwnSurface(pageStyle)}>
                   <StyledPolicyList
