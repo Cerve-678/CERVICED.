@@ -88,6 +88,12 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   scrapbook: { lead: 'THE', text: 'services' },
   spa: { text: 'SERVICES' },
   glossy: { text: 'services' },
+  editorial: { lead: 'The', text: 'SERVICES' },
+  heritage: { lead: 'The', text: 'SERVICES' },
+  duet: { lead: 'The', text: 'SERVICES' },
+  groovy: { text: 'the services' },
+  gallery: { lead: 'ON VIEW', text: 'The Services' },
+  apothecary: { text: 'THE SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -129,6 +135,26 @@ function MiniProfile({
             <View style={[mini.logo, mini.logoNoRim, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
           </LinearGradient>
         );
+      case 'tilted':
+        return <View style={[mini.logo, mini.logoTilted, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />;
+      case 'accentRing':
+        return (
+          <View style={[mini.ring, { borderColor: accent }]}>
+            <View style={[mini.logo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
+          </View>
+        );
+      case 'flower':
+        return (
+          <View style={[mini.flower, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]}>
+            <View style={[mini.logo, { backgroundColor: blend(accent, '#FFFFFF', 0.6) }]} />
+          </View>
+        );
+      case 'mat':
+        return (
+          <View style={mini.matFrame}>
+            <View style={[mini.matPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
+          </View>
+        );
       default:
         return <View style={[mini.logo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />;
     }
@@ -158,6 +184,37 @@ function MiniProfile({
         return <Text style={[mini.bubbly, { color: accent }]}>{heading.text}</Text>;
       case 'legend':
         return null;
+      case 'dotCaps':
+        return (
+          <Text style={[mini.dotLight, { color: ink }]} numberOfLines={1}>
+            {heading.lead} <Text style={mini.dotBold}><Text style={{ color: accent }}>.</Text>{heading.text}</Text>
+          </Text>
+        );
+      case 'scriptCaps':
+        return (
+          <View style={mini.stack}>
+            <Text style={[mini.script, { color: accent }]}>{heading.lead}</Text>
+            <Text style={[mini.bodoni, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
+      case 'layered':
+        return (
+          <View style={mini.stack}>
+            <Text style={[mini.vibes, { color: accent }]}>{heading.lead}</Text>
+            <Text style={[mini.montserrat, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
+      case 'groovy':
+        return <Text style={[mini.groovy, { color: ink }]}>{heading.text}</Text>;
+      case 'room':
+        return (
+          <View>
+            <Text style={[mini.roomKicker, { color: withAlpha(ink, 0.6) }]}>{heading.lead}</Text>
+            <Text style={[mini.roomTitle, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
+      case 'labelCaps':
+        return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -174,6 +231,24 @@ function MiniProfile({
         return <View key={key} style={[mini.card, { borderWidth: 1, borderColor: withAlpha(accent, 0.6), borderRadius: 0 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'paper':
         return <View key={key} style={[mini.card, mini.paper]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'open':
+        return <View key={key} style={[mini.card, mini.cardNone, { borderBottomColor: line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'offset':
+      case 'chunky':
+        return (
+          <View
+            key={key}
+            style={[
+              mini.card,
+              mini.hard,
+              { borderWidth: style.cards === 'chunky' ? 1.5 : 1, shadowColor: style.cards === 'chunky' ? accent : blend(accent, '#FFFFFF', 0.5) },
+            ]}
+          >
+            <View style={[mini.bar, { backgroundColor: line }]} />
+          </View>
+        );
+      case 'label':
+        return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -225,6 +300,46 @@ function MiniProfile({
             <Text style={mini.spaName} numberOfLines={1}>N A M E</Text>
             {logo}
           </>
+        ) : style.hero === 'editorial' ? (
+          // Editorial: the name left in light and bold, a tilted card right.
+          <View style={mini.sideRow}>
+            <View style={mini.sideLinesLeft}>
+              <Text style={mini.edLight} numberOfLines={1}>Name</Text>
+              <Text style={mini.edBold} numberOfLines={1}>NAME<Text style={{ color: blend(accent, '#FFFFFF', 0.5) }}>.</Text></Text>
+            </View>
+            <View style={mini.smallLogo}>{logo}</View>
+          </View>
+        ) : style.hero === 'crest' ? (
+          <>
+            <View style={mini.smallLogo}>{logo}</View>
+            <Text style={mini.crestName} numberOfLines={1}>Name</Text>
+            <Text style={mini.crestScript} numberOfLines={1}>Rooms</Text>
+          </>
+        ) : style.hero === 'duet' ? (
+          <View style={mini.sideRow}>
+            <View style={mini.sideLinesLeft}>
+              <Text style={mini.duetScript} numberOfLines={1}>Name</Text>
+              <Text style={mini.duetCaps} numberOfLines={1}>BY NAME</Text>
+            </View>
+            <View style={[mini.film, { backgroundColor: accent }]}>
+              <View style={mini.filmFrame} />
+              <View style={mini.filmFrame} />
+            </View>
+          </View>
+        ) : style.hero === 'groovy' ? (
+          <View style={mini.sideRow}>
+            <View style={mini.smallLogo}>{logo}</View>
+            <Text style={mini.groovyName} numberOfLines={1}>name</Text>
+          </View>
+        ) : style.hero === 'exhibition' ? (
+          <View style={mini.sideRow}>
+            <Text style={mini.galleryName} numberOfLines={2}>Name</Text>
+            <View style={mini.smallLogo}>{logo}</View>
+          </View>
+        ) : style.hero === 'label' ? (
+          <View style={mini.oval}>
+            <Text style={mini.ovalName} numberOfLines={1}>NAME</Text>
+          </View>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -317,5 +432,41 @@ const mini = StyleSheet.create({
   shine: { position: 'absolute', top: 2, left: 6, right: 6, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.7)' },
   bar: { height: 4, borderRadius: 2, width: '70%' },
   barShort: { width: '45%', marginTop: 4 },
+  logoTilted: { borderRadius: 6, transform: [{ rotate: '6deg' }] },
+  ring: { padding: 2, borderRadius: 20, borderWidth: 1.5 },
+  flower: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '45deg' }] },
+  matFrame: { backgroundColor: '#1F1F1F', padding: 2 },
+  matPhoto: { width: 30, height: 30, borderWidth: 4, borderColor: '#FBFAF7' },
+  sideLinesLeft: { flex: 1, gap: 1 },
+  edLight: { fontFamily: 'LeagueSpartan-Light', fontSize: 15, color: '#FFFFFF', lineHeight: 16 },
+  edBold: { fontFamily: 'LeagueSpartan-ExtraBold', fontSize: 15, color: '#FFFFFF', lineHeight: 16 },
+  crestName: { fontFamily: 'BodoniModa-ExtraBold', fontSize: 13, color: '#FFFFFF', marginTop: -2 },
+  crestScript: { fontFamily: 'PinyonScript_400Regular', fontSize: 14, color: '#FFFFFF', marginTop: -6, marginLeft: 22 },
+  duetScript: { fontFamily: 'GreatVibes_400Regular', fontSize: 22, color: '#FFFFFF', lineHeight: 28 },
+  duetCaps: { fontFamily: 'Montserrat-ExtraBold', fontSize: 8, color: '#FFFFFF', marginTop: -8, marginLeft: 10 },
+  film: { width: 24, padding: 2, gap: 2, marginRight: -10 },
+  filmFrame: { height: 22, backgroundColor: 'rgba(255,255,255,0.6)' },
+  groovyName: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 22, color: '#FFFFFF', flex: 1 },
+  galleryName: { fontFamily: 'InstrumentSerif-Regular', fontSize: 20, lineHeight: 20, color: '#FFFFFF', flex: 1 },
+  oval: {
+    width: 84, height: 50, borderRadius: 25, backgroundColor: '#FBFCF8', borderWidth: 1, borderColor: '#2C3527',
+    alignItems: 'center', justifyContent: 'center', marginTop: 18,
+  },
+  ovalName: { fontFamily: 'CormorantGaramond-SemiBold', fontSize: 10, letterSpacing: 2, color: '#2C3527' },
+  dotLight: { fontFamily: 'LeagueSpartan-Light', fontSize: 12 },
+  dotBold: { fontFamily: 'LeagueSpartan-ExtraBold' },
+  stack: { alignItems: 'center' },
+  bodoni: { fontFamily: 'BodoniModa-ExtraBold', fontSize: 9, letterSpacing: 2, marginTop: -4 },
+  vibes: { fontFamily: 'GreatVibes_400Regular', fontSize: 18, lineHeight: 22 },
+  montserrat: { fontFamily: 'Montserrat-ExtraBold', fontSize: 9, marginTop: -8 },
+  groovy: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 14 },
+  roomKicker: { fontFamily: 'DidactGothic-Regular', fontSize: 6, letterSpacing: 1 },
+  roomTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 13, lineHeight: 14 },
+  labelCaps: { fontFamily: 'CormorantGaramond-SemiBold', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
+  hard: {
+    backgroundColor: '#FFFFFF', borderColor: '#1F1A1C', overflow: 'visible',
+    shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0,
+  },
+  labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
   band: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 26, borderTopLeftRadius: 30, borderTopRightRadius: 10 },
 });

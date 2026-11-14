@@ -37,7 +37,8 @@ function renderPreview(styleKey: (typeof PAGE_STYLES)[number]['key']) {
 describe('Branding preview', () => {
   it.each(PAGE_STYLES.map(style => style.key))('draws the %s profile with the name and every key heading', key => {
     renderPreview(key);
-    expect(screen.getByText('Amara Lashes')).toBeTruthy();
+    // Some heroes set the name in two voices; screen readers still hear it whole.
+    expect(screen.queryAllByText('Amara Lashes').length + screen.queryAllByLabelText('Amara Lashes').length).toBeGreaterThan(0);
     // Every style names its sections; screen readers hear the plain title.
     for (const title of ['Services', 'Reviews']) {
       expect(screen.queryAllByLabelText(title).length + screen.queryAllByText(title).length).toBeGreaterThan(0);
@@ -89,5 +90,43 @@ describe('hero layouts', () => {
   it('prints what they do above the name on Spa', () => {
     renderPreview('spa');
     expect(screen.getByText('LASHES')).toBeTruthy();
+  });
+});
+
+describe('the 2026-11-14 heroes', () => {
+  it('splits Editorial\'s name into a light word and bold caps with a full stop', () => {
+    renderPreview('editorial');
+    expect(screen.getByText('Amara')).toBeTruthy();
+    expect(screen.getByText('LASHES.')).toBeTruthy();
+  });
+
+  it('sets Heritage\'s last word in script under the serif', () => {
+    renderPreview('heritage');
+    expect(screen.getByText('Amara')).toBeTruthy();
+    expect(screen.getByText('Lashes')).toBeTruthy();
+    expect(screen.getByText('PECKHAM · LASHES')).toBeTruthy();
+  });
+
+  it('greets on Duet and introduces the artist', () => {
+    renderPreview('duet');
+    expect(screen.getByText('HEY GORGEOUS! WELCOME TO')).toBeTruthy();
+    expect(screen.getByText('YOUR ARTIST')).toBeTruthy();
+  });
+
+  it('puts the rating in Groovy\'s starburst', () => {
+    renderPreview('groovy');
+    expect(screen.getByLabelText('Rated 5.0')).toBeTruthy();
+  });
+
+  it('hangs a placard under Gallery\'s framed logo', () => {
+    renderPreview('gallery');
+    expect(screen.getByText('NO. 01 · THE ARTIST')).toBeTruthy();
+    expect(screen.getByText('Lashes.')).toBeTruthy();
+  });
+
+  it('prints the name in capitals on Apothecary\'s label', () => {
+    renderPreview('apothecary');
+    expect(screen.getByText('AMARA LASHES')).toBeTruthy();
+    expect(screen.getByText('lashes')).toBeTruthy();
   });
 });

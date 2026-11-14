@@ -7,13 +7,17 @@
 //
 // Chosen by the owner on 2026-11-13 from the concept canvas
 // https://claude.ai/artifact/Q3iiDvPo8zuXkbPBHYtqW3 (templates 1, 2, 3, 4, 8
-// and 9). Stored as the fifth `|` part of providers.profile_theme (see
+// and 9), then six more on 2026-11-14 from
+// https://claude.ai/artifact/5jGhmNUFgb2cY8SZhdeQYc (templates 11–16:
+// Editorial, Heritage, Duet, Groovy, Gallery, Apothecary). Stored as the fifth `|` part of providers.profile_theme (see
 // encodeThemeKey), so it needs no column of its own.
 //
 // Each style is a small set of switches the profile reads, not a layout of its
 // own: the profile keeps one structure, and these decide how each part looks.
 
-export type PageStyleKey = 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy';
+export type PageStyleKey =
+  | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
+  | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -23,7 +27,13 @@ export type PageHeading =
   | 'legend'     // set into the top line of an outlined box
   | 'capsScript' // heavy caps then a handwritten word
   | 'spacedCaps' // tiny, widely spaced caps, centred
-  | 'bubbly';    // a fat rounded display face, centred
+  | 'bubbly'     // a fat rounded display face, centred
+  | 'dotCaps'    // a light word, then a full stop in the accent and bold caps, between hairlines
+  | 'scriptCaps' // a handwritten word between short rules, spaced serif caps under it
+  | 'layered'    // a big handwritten word in the accent, heavy caps laid over its foot
+  | 'groovy'     // a soft, chunky italic in lowercase with a squiggle under it
+  | 'room'       // a tiny caps label like a gallery wall, a serif title under it
+  | 'labelCaps'; // spaced serif caps between hairlines, like a printed label
 
 /** What a section sits on. */
 export type PageCards =
@@ -32,7 +42,11 @@ export type PageCards =
   | 'flat'    // a flat, solid tile with no shadow
   | 'outline' // a thin outlined box, no fill
   | 'paper'   // a solid card with a soft drop shadow
-  | 'gloss';  // a rounder card with a tinted rim and a shine along the top
+  | 'gloss'   // a rounder card with a tinted rim and a shine along the top
+  | 'open'    // straight on the page with no rule (the heading carries its own lines)
+  | 'offset'  // a white card, a dark outline and a hard shadow in a soft accent
+  | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
+  | 'label';  // a square card with a fine outline and an inner accent rule
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -42,7 +56,12 @@ export type PagePolicies =
   | 'circles'   // two-up, each under an outlined circle icon
   | 'band'      // two-up on a band of the accent colour with wavy edges
   | 'hairline'  // quiet rows between hairlines
-  | 'bubbles';  // two-up rounded tiles
+  | 'bubbles'   // two-up rounded tiles
+  | 'tiles'     // two-up tiles tinted with the accent, a bold caps label
+  | 'numerals'  // rows numbered in roman numerals
+  | 'divided'   // a two-up grid split by accent lines, each with its icon
+  | 'stickers'  // two-up filled tiles, each tilted a little
+  | 'definition'; // a small caps label beside each value, between hairlines
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -56,10 +75,21 @@ export type PageHero =
   | 'masthead'   // the name at the top as a heading, then the arched logo beside "Meet" and their About
   | 'sideBySide' // the logo on the left; "Welcome to", the name, their About and area on the right
   | 'poster'     // a polaroid logo and a big name
-  | 'spa';       // what they do as a tiny spaced line, the name, a ringed logo and their opening line
+  | 'spa'        // what they do as a tiny spaced line, the name, a ringed logo and their opening line
+  | 'editorial'  // the name left in light and bold caps with an accent full stop, two tilted cards beside it
+  | 'crest'      // a ringed monogram, a spaced caps line, a serif name with its last word in script, double rules
+  | 'duet'       // "Hey gorgeous! Welcome to", the name as script over caps, a film strip of their photos
+  | 'groovy'     // a scalloped logo, the name huge in a soft italic, a starburst with their rating
+  | 'exhibition' // a gallery wall label, the name large, the logo framed and matted with a placard
+  | 'label';     // an oval label like a bottle's, over their photo
 
 /** The frame round the logo in the hero. */
-export type PageLogoFrame = 'circle' | 'arch' | 'polaroid' | 'doubleRing' | 'glossRing';
+export type PageLogoFrame =
+  | 'circle' | 'arch' | 'polaroid' | 'doubleRing' | 'glossRing'
+  | 'tilted'     // a rounded square card, tilted (Editorial)
+  | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
+  | 'flower'     // a scalloped flower of the accent behind the logo (Groovy)
+  | 'mat';       // square, in a white mat and a thin dark frame (Gallery)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -80,6 +110,10 @@ export interface PageStyle {
   separateAboutAndPolicies: boolean;
   /** A service without a photo shows its number in the menu (01, 02…) instead of its first letter. */
   numberedServices: boolean;
+  /** Their About on a full-width band of the accent (Editorial). */
+  aboutOnBand?: boolean;
+  /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
+  numeralsLower?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -126,6 +160,42 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'bubbly', cards: 'gloss', policies: 'bubbles', logo: 'glossRing',
     hero: 'stacked', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'editorial', name: 'Editorial', description: 'Your name in light and bold with a full stop, colour bands',
+    heading: 'dotCaps', cards: 'open', policies: 'tiles', logo: 'tilted',
+    hero: 'editorial', aboutInHero: false, aboutOnBand: true,
+    heroPills: false, jumpBar: true, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'heritage', name: 'Heritage', description: 'Old-money serif and script, a crest, house rules',
+    heading: 'scriptCaps', cards: 'open', policies: 'numerals', logo: 'doubleRing',
+    hero: 'crest', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'duet', name: 'Duet', description: 'Script over bold caps, cards with a pop of colour',
+    heading: 'layered', cards: 'offset', policies: 'divided', logo: 'accentRing',
+    hero: 'duet', aboutInHero: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'groovy', name: 'Groovy', description: 'Retro and fun: chunky type, stickers, bold outlines',
+    heading: 'groovy', cards: 'chunky', policies: 'stickers', logo: 'flower',
+    hero: 'groovy', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'gallery', name: 'Gallery', description: 'Your work like an exhibition: wall labels, framed logo',
+    heading: 'room', cards: 'none', policies: 'definition', logo: 'mat',
+    hero: 'exhibition', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  {
+    key: 'apothecary', name: 'Apothecary', description: 'An oval label over your photo, numbered treatments',
+    heading: 'labelCaps', cards: 'label', policies: 'numerals', logo: 'circle',
+    hero: 'label', aboutInHero: false, numeralsLower: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
 ];
 
@@ -174,6 +244,27 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
 
 export function headingPair(section: PageSectionKey): [string, string] {
   return HEADING_PAIRS[section];
+}
+
+/** Gallery's small wall-label line over each section's title. */
+export const GALLERY_KICKERS: Record<PageSectionKey, string> = {
+  about: 'INTRODUCTION',
+  policies: 'VISITOR INFORMATION',
+  services: 'ON VIEW',
+  reviews: 'VISITOR BOOK',
+  hours: 'OPENING TIMES',
+  contact: 'ENQUIRIES',
+  info: 'NOTES',
+  portfolio: 'SELECTED WORKS',
+  specialities: 'IN FOCUS',
+  policyPages: 'IN FULL',
+};
+
+/** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
+export function romanNumeral(index: number, lower = false): string {
+  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+  const value = numerals[index] ?? String(index + 1);
+  return lower ? `${value.toLowerCase()}.` : value;
 }
 
 /** Two-digit menu numbers for the Spa style: 1 → "01". */

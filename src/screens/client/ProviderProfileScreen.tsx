@@ -124,7 +124,7 @@ import {
   onAccentInk,
   PageSection,
   PageSectionHeading,
-  PolicyBandSection,
+  AccentBandSection,
   policiesBringOwnSurface,
   sectionInk,
   sectionsSitOnPage,
@@ -1799,6 +1799,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
+  // Two of their portfolio photos for the heroes that show them (Editorial's
+  // tilted card, Duet's film strip).
+  const heroPhotoUris = useMemo(
+    () => workPortfolio.slice(0, 2).map((item) => item.image_url).filter(Boolean),
+    [workPortfolio],
+  );
   // A salon/studio on "Always visible" shows its full address in Contact
   // instead of the area. The server decides who qualifies and returns null for
   // everyone else, so the area stays the default and a failed fetch just
@@ -5157,6 +5163,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroText={heroText}
                 heroSub={heroSub}
                 heroIsDark={heroIsDark}
+                accent={adaptiveAccentColor}
+                photoUris={heroPhotoUris}
+                rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
+                isVerified={provider.isVerified}
                 renderLogo={(size) => (
                   <HeroLogo
                     size={size}
@@ -5755,7 +5765,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <>
                   {/* Every style but Classic gives About and Policies a
                       section each, in the style's own headings and layout. */}
-                  {!pageStyle.aboutInHero ? (
+                  {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
+                    // Editorial: their About on a full-width band of the accent.
+                    <View ref={aboutCardRef} collapsable={false}>
+                      <AccentBandSection section="about" palette={sectionPalette} waves={false}>
+                        <ExpandableAboutText
+                          text={provider.aboutText}
+                          translate
+                          textStyle={[styles.aboutText, { color: onAccentInk(adaptiveAccentColor).sub }]}
+                          linkStyle={styles.moreButton}
+                          linkTextStyle={[styles.moreButtonText, { color: onAccentInk(adaptiveAccentColor).text }]}
+                          onCollapse={handleAboutCollapse}
+                        />
+                      </AccentBandSection>
+                    </View>
+                  ) : !pageStyle.aboutInHero ? (
                     <View ref={aboutCardRef} collapsable={false}>
                       <PageSection section="about" palette={sectionPalette}>
                         <ExpandableAboutText
@@ -5786,10 +5810,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         if (pageStyle.policies === "band") {
                           const ink = onAccentInk(adaptiveAccentColor);
                           return (
-                            <PolicyBandSection palette={sectionPalette}>
+                            <AccentBandSection section="policies" palette={sectionPalette}>
                               <StyledPolicyList rows={rows} palette={sectionPalette} ink={ink} />
                               {footer(ink)}
-                            </PolicyBandSection>
+                            </AccentBandSection>
                           );
                         }
                         const bare = policiesBringOwnSurface(pageStyle);

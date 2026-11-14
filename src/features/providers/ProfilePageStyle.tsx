@@ -14,8 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 import {
+  GALLERY_KICKERS,
   headingPair,
   PAGE_SECTION_TITLES,
+  romanNumeral,
   type PageSectionKey,
   type PageStyle,
 } from "../../constants/pageStyles";
@@ -62,7 +64,12 @@ export function onAccentInk(accent: string): { text: string; sub: string } {
 
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
-  return style?.cards === "none" || style?.cards === "outline";
+  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open";
+}
+
+/** Dark ink for an outline on a card of this colour (Duet, Groovy, Apothecary). */
+function outlineInk(card: string): string {
+  return isDarkColor(card) ? "#F2EDEA" : "#1F1A1C";
 }
 
 /** The colours content inside a section should use under this style. */
@@ -142,6 +149,77 @@ export function PageSectionHeading({
           {title}
         </Text>
       );
+    case "dotCaps": {
+      // Editorial: "The .SERVICES" between hairlines.
+      const [lead, rest] = headingPair(section);
+      const line = color ? withAlpha(color, 0.35) : sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+          <Text style={[headingStyles.dotLight, { color: ink }]} numberOfLines={1}>
+            {lead}{" "}
+            <Text style={headingStyles.dotBold}>
+              <Text style={{ color: accent }}>.</Text>
+              {rest.toUpperCase()}
+            </Text>
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
+    case "scriptCaps": {
+      // Heritage: a script word between short rules, spaced serif caps under it.
+      const [lead, rest] = headingPair(section);
+      return (
+        <View {...a11y} accessible style={headingStyles.stack}>
+          <View style={headingStyles.shortRuleRow}>
+            <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
+            <Text style={[headingStyles.heritageScript, { color: accent }]}>{lead}</Text>
+            <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
+          </View>
+          <Text style={[headingStyles.heritageCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
+        </View>
+      );
+    }
+    case "layered": {
+      // Duet: a big script word with heavy caps laid over its foot.
+      const [lead, rest] = headingPair(section);
+      return (
+        <View {...a11y} accessible style={headingStyles.stack}>
+          <Text style={[headingStyles.layeredScript, { color: accent }]}>{lead}</Text>
+          <Text style={[headingStyles.layeredCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
+        </View>
+      );
+    }
+    case "groovy":
+      return (
+        <View {...a11y} accessible style={headingStyles.groovyWrap}>
+          <Text style={[headingStyles.groovy, { color: ink }]}>{headingPair(section).join(" ").toLowerCase()}</Text>
+          <Squiggle color={accent} />
+        </View>
+      );
+    case "room":
+      // Gallery: a wall label over the title.
+      return (
+        <View {...a11y} accessible style={headingStyles.roomWrap}>
+          <Text style={[headingStyles.roomKicker, { color: color ?? sheetInk(palette.background).sub }]}>
+            {GALLERY_KICKERS[section]}
+          </Text>
+          <Text style={[headingStyles.roomTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
+        </View>
+      );
+    case "labelCaps": {
+      const line = sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+          <Text style={[headingStyles.labelCaps, { color: ink }]} numberOfLines={1}>
+            {headingPair(section).join(" ").toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
     default:
       return (
         // Only ever drawn on the page: Classic's in-card title is PageSection's own Text.
@@ -228,7 +306,7 @@ export function PageSection({
     </HeadingLine>
   );
 
-  if (bare || pageStyle.cards === "none") {
+  if (bare || pageStyle.cards === "none" || pageStyle.cards === "open") {
     return (
       <View
         style={[
@@ -244,7 +322,54 @@ export function PageSection({
     );
   }
 
-  const radius = square ? 0 : pageStyle.cards === "flat" ? 6 : pageStyle.cards === "gloss" ? 28 : 18;
+  const radius = square || pageStyle.cards === "label"
+    ? 0
+    : pageStyle.cards === "flat" ? 6
+    : pageStyle.cards === "gloss" ? 28
+    : pageStyle.cards === "chunky" ? 26
+    : pageStyle.cards === "offset" ? 22
+    : 18;
+
+  if (pageStyle.cards === "offset" || pageStyle.cards === "chunky" || pageStyle.cards === "label") {
+    // Duet and Groovy: an outlined card on a hard shadow (a backing block, so
+    // Android draws it too). Apothecary: an outline with a fine inner rule.
+    const outline = outlineInk(palette.cardBackground);
+    const chunky = pageStyle.cards === "chunky";
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <View>
+          {pageStyle.cards !== "label" ? (
+            <View
+              style={[
+                surfaceStyles.hardShadow,
+                chunky ? surfaceStyles.hardShadowChunky : null,
+                { borderRadius: radius, backgroundColor: chunky ? palette.accent : blend(palette.accent, "#FFFFFF", 0.55) },
+              ]}
+              pointerEvents="none"
+            />
+          ) : null}
+          <View
+            style={[
+              surfaceStyles.solid,
+              {
+                backgroundColor: palette.cardBackground,
+                borderRadius: radius,
+                borderWidth: chunky ? 2 : pageStyle.cards === "offset" ? 1.5 : 1,
+                borderColor: outline,
+              },
+            ]}
+          >
+            {pageStyle.cards === "label" ? (
+              <View style={[surfaceStyles.innerRule, { borderColor: withAlpha(palette.accent, 0.7) }]} pointerEvents="none" />
+            ) : null}
+            {children}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[surfaceStyles.block, style]}>
       {heading}
@@ -264,7 +389,19 @@ export function PageSection({
 }
 
 function isCentredHeading(style: PageStyle): boolean {
-  return style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly";
+  return (
+    style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
+    || style.heading === "scriptCaps" || style.heading === "layered"
+  );
+}
+
+/** Groovy's wavy underline. */
+function Squiggle({ color }: { color: string }) {
+  return (
+    <Svg width={132} height={12} viewBox="0 0 140 12" pointerEvents="none">
+      <Path d="M2 8Q12 0 22 8T42 8T62 8T82 8T102 8T122 8T138 6" fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" />
+    </Svg>
+  );
 }
 
 function HeadingLine({
@@ -323,6 +460,7 @@ export function serviceCardSurface(
   const flat = { borderWidth: 0, shadowOpacity: 0 } as const;
   switch (style.cards) {
     case "none":
+    case "open":
       return {
         ...flat,
         backgroundColor: "transparent",
@@ -357,33 +495,72 @@ export function serviceCardSurface(
         borderColor: withAlpha(colours.accent, 0.35),
         borderRadius: 28,
       };
+    // The hard shadows below are iOS shadows with no blur; Android draws the
+    // outline alone (its elevation shadow can't be offset or solid).
+    case "offset":
+      return {
+        backgroundColor: colours.card,
+        borderWidth: 1.5,
+        borderColor: outlineInk(colours.card),
+        borderRadius: 22,
+        shadowColor: blend(colours.accent, "#FFFFFF", 0.55),
+        shadowOffset: { width: 4, height: 5 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 0,
+        // The card clips by default, which would cut the shadow off.
+        overflow: "visible",
+      };
+    case "chunky":
+      return {
+        backgroundColor: colours.card,
+        borderWidth: 2,
+        borderColor: outlineInk(colours.card),
+        borderRadius: 26,
+        shadowColor: colours.accent,
+        shadowOffset: { width: 4, height: 5 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 0,
+        // The card clips by default, which would cut the shadow off.
+        overflow: "visible",
+      };
+    case "label":
+      return { ...flat, backgroundColor: colours.card, borderWidth: 1, borderColor: outlineInk(colours.card), borderRadius: 0 };
     default:
       return null;
   }
 }
 
-// ── Scrapbook's policy band ───────────────────────────────────────────────────
+// ── Accent bands ─────────────────────────────────────────────────────────────
 
-/** Scrapbook's Policies: a full-width band of the accent colour with wavy
- *  edges, the heading and policies drawn on it. Bleeds out of the content
- *  sheet's 20pt side padding. */
-export function PolicyBandSection({
+/** A section on a full-width band of the accent colour, heading and all:
+ *  Scrapbook's Policies (with wavy edges) and Editorial's About (straight).
+ *  Bleeds out of the content sheet's 20pt side padding. Content inside reads
+ *  onAccentInk(palette.accent). */
+export function AccentBandSection({
+  section,
   palette,
+  waves = true,
   children,
 }: {
+  section: PageSectionKey;
   palette: PageStylePalette;
+  waves?: boolean;
   children: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
   const ink = onAccentInk(palette.accent);
   return (
     <View style={bandStyles.wrap}>
-      <WaveEdge color={palette.accent} position="top" width={width} />
-      <View style={[bandStyles.band, { backgroundColor: palette.accent }]}>
-        <PageSectionHeading section="policies" palette={palette} color={ink.text} />
+      {waves ? <WaveEdge color={palette.accent} position="top" width={width} /> : null}
+      <View style={[bandStyles.band, !waves && bandStyles.straight, { backgroundColor: palette.accent }]}>
+        <HeadingLine centered={palette.pageStyle ? isCentredHeading(palette.pageStyle) : false}>
+          <PageSectionHeading section={section} palette={palette} color={ink.text} accentColor={ink.sub} />
+        </HeadingLine>
         {children}
       </View>
-      <WaveEdge color={palette.accent} position="bottom" width={width} />
+      {waves ? <WaveEdge color={palette.accent} position="bottom" width={width} /> : null}
     </View>
   );
 }
@@ -391,6 +568,7 @@ export function PolicyBandSection({
 const bandStyles = StyleSheet.create({
   wrap: { marginHorizontal: -20, marginBottom: 24 },
   band: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14, marginVertical: -1 },
+  straight: { paddingTop: 22, paddingBottom: 22, marginVertical: 0 },
 });
 
 // ── Policies ─────────────────────────────────────────────────────────────────
@@ -398,7 +576,10 @@ const bandStyles = StyleSheet.create({
 /** Whether this style's policy list brings its own tiles (so its section drops the card). */
 export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   const layout = style?.policies;
-  return layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band";
+  return (
+    layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
+    || layout === "tiles" || layout === "divided" || layout === "stickers"
+  );
 }
 
 /**
@@ -419,6 +600,81 @@ export function StyledPolicyList({
   const layout = palette.pageStyle?.policies ?? "hairline";
   const square = !!palette.squareCards;
   const page = sheetInk(palette.background);
+
+  if (layout === "numerals") {
+    // Heritage's House Rules (I, II…) and Apothecary's "Before your visit" (i., ii.).
+    const lower = !!palette.pageStyle?.numeralsLower;
+    return (
+      <View>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[policyStyles.numeralRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
+          >
+            <Text style={[lower ? policyStyles.numeralLower : policyStyles.numeral, { color: palette.accent }]}>
+              {romanNumeral(index, lower)}
+            </Text>
+            <View style={policyStyles.numeralBody}>
+              <Text style={[policyStyles.numeralLabel, { color: ink.text }]}>{row.label}</Text>
+              <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "definition") {
+    // Gallery's visitor information: a small caps label beside each value.
+    return (
+      <View>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[policyStyles.defRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
+          >
+            <Text style={[policyStyles.defLabel, { color: ink.sub }]}>{row.label.toUpperCase()}</Text>
+            <View style={policyStyles.hairValueCol}>
+              <Text style={[policyStyles.defValue, { color: ink.text }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "divided") {
+    // Duet: a grid split by accent lines, each policy under its icon.
+    const lastRowStart = rows.length - (rows.length % 2 === 0 ? 2 : 1);
+    return (
+      <View style={policyStyles.dividedGrid}>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[
+              policyStyles.dividedCell,
+              { borderColor: palette.accent },
+              index % 2 === 0 && index < rows.length - 1 && policyStyles.dividedRight,
+              index < lastRowStart && policyStyles.dividedBottom,
+            ]}
+          >
+            <Ionicons name={row.icon} size={22} color={ink.text} />
+            <Text style={[policyStyles.dividedLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.smallValue, policyStyles.centreText, { color: ink.sub }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, policyStyles.centreText, { color: ink.sub }]}>{note}</Text>
+            ))}
+          </View>
+        ))}
+      </View>
+    );
+  }
 
   if (layout === "hairline" || layout === "rows") {
     return (
@@ -501,6 +757,51 @@ export function StyledPolicyList({
           );
         }
 
+        if (layout === "tiles") {
+          // Editorial: tiles tinted with the accent.
+          return (
+            <View
+              key={row.label}
+              style={[policyStyles.cell, policyStyles.tile, { backgroundColor: withAlpha(palette.accent, 0.1) }, square && policyStyles.square]}
+            >
+              <View style={policyStyles.boxLabelRow}>
+                <Text style={[policyStyles.tileLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+                {tag}
+              </View>
+              <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
+              {notes}
+            </View>
+          );
+        }
+
+        if (layout === "stickers") {
+          // Groovy: filled tiles, each tilted a little, cycling through the accent,
+          // a pale accent, an outlined card and the ink.
+          const index = rows.indexOf(row);
+          const fills = [palette.accent, blend(palette.accent, "#FFFFFF", 0.7), palette.cardBackground, page.text];
+          const fill = fills[index % 4]!;
+          const stickerInk = onAccentInk(fill);
+          return (
+            <View
+              key={row.label}
+              style={[
+                policyStyles.cell,
+                policyStyles.sticker,
+                { backgroundColor: fill, transform: [{ rotate: index % 2 === 0 ? "-2deg" : "2deg" }] },
+                index % 4 === 2 && { borderWidth: 2, borderColor: outlineInk(fill) },
+                square && policyStyles.square,
+              ]}
+            >
+              <Text style={[policyStyles.stickerLabel, { color: stickerInk.text }]}>{row.label.toLowerCase()}</Text>
+              <Text style={[policyStyles.smallValue, { color: stickerInk.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: stickerInk.sub }]}>{note}</Text>
+              ))}
+              {tag}
+            </View>
+          );
+        }
+
         if (layout === "band") {
           return (
             <View key={row.label} style={[policyStyles.cell, policyStyles.circleCell]}>
@@ -553,6 +854,26 @@ const headingStyles = StyleSheet.create({
   spaced: { fontFamily: "TenorSans_400Regular", fontSize: 11, letterSpacing: 4, textAlign: "center", marginBottom: 16 },
   bubbly: { fontFamily: "Shrikhand_400Regular", fontSize: 26, lineHeight: 34, textAlign: "center", marginBottom: 12 },
   legend: { fontFamily: "Limelight_400Regular", fontSize: 20, lineHeight: 28, paddingHorizontal: 12 },
+  // 2026-11-14 styles: League Spartan (Editorial), Pinyon + Bodoni Moda
+  // (Heritage), Great Vibes + Montserrat (Duet), Fraunces (Groovy), Didact
+  // Gothic + Instrument Serif (Gallery), Cormorant Garamond (Apothecary).
+  ruledRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  rule: { flex: 1, height: StyleSheet.hairlineWidth * 2, minWidth: 12 },
+  dotLight: { fontFamily: "LeagueSpartan-Light", fontSize: 26, lineHeight: 32, flexShrink: 1 },
+  dotBold: { fontFamily: "LeagueSpartan-ExtraBold" },
+  stack: { alignItems: "center", marginBottom: 14 },
+  shortRuleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  shortRule: { width: 36, height: 1 },
+  heritageScript: { fontFamily: "PinyonScript_400Regular", fontSize: 30, lineHeight: 42 },
+  heritageCaps: { fontFamily: "BodoniModa-ExtraBold", fontSize: 21, letterSpacing: 5, marginTop: -4, textAlign: "center" },
+  layeredScript: { fontFamily: "GreatVibes_400Regular", fontSize: 50, lineHeight: 62 },
+  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -26, textAlign: "center" },
+  groovyWrap: { marginBottom: 14 },
+  groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 42, letterSpacing: -0.8 },
+  roomWrap: { marginBottom: 14 },
+  roomKicker: { fontFamily: "DidactGothic-Regular", fontSize: 10, letterSpacing: 2 },
+  roomTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 36, marginTop: 2 },
+  labelCaps: { fontFamily: "CormorantGaramond-SemiBold", fontSize: 14, letterSpacing: 4 },
 });
 
 const surfaceStyles = StyleSheet.create({
@@ -591,6 +912,9 @@ const surfaceStyles = StyleSheet.create({
   legendRight: { position: "absolute", top: 6, right: 10 },
   centred: { alignItems: "center" },
   headingLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
+  hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
+  hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
+  innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
   headingFlex: { flexShrink: 1 },
 });
 
@@ -616,6 +940,23 @@ const policyStyles = StyleSheet.create({
   bubble: { borderRadius: 22, borderWidth: 1.5, padding: 14, alignItems: "center" },
   bubbleLabel: { fontFamily: "Fredoka_600SemiBold", fontSize: 14 },
   hairRow: { flexDirection: "row", gap: 16, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  numeralRow: { flexDirection: "row", gap: 14, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  numeral: { fontFamily: "BodoniModa-ExtraBold", fontSize: 17, width: 30 },
+  numeralLower: { fontFamily: "CormorantGaramond-MediumItalic", fontSize: 18, width: 30 },
+  numeralBody: { flex: 1, gap: 2 },
+  numeralLabel: { fontSize: 14, fontWeight: "600" },
+  defRow: { flexDirection: "row", gap: 12, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth },
+  defLabel: { fontFamily: "DidactGothic-Regular", fontSize: 10.5, letterSpacing: 1.2, width: 104, paddingTop: 2 },
+  defValue: { fontSize: 13, lineHeight: 18 },
+  dividedGrid: { flexDirection: "row", flexWrap: "wrap" },
+  dividedCell: { width: "50%", alignItems: "center", paddingHorizontal: 10, paddingVertical: 14, gap: 4 },
+  dividedRight: { borderRightWidth: 1.5 },
+  dividedBottom: { borderBottomWidth: 1.5 },
+  dividedLabel: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1.6, marginTop: 4, textAlign: "center" },
+  tile: { borderRadius: 14, padding: 14, gap: 6 },
+  tileLabel: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 13, letterSpacing: 1 },
+  sticker: { borderRadius: 22, padding: 14 },
+  stickerLabel: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 16 },
   hairFirst: { borderTopWidth: 0 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
