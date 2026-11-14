@@ -1,6 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderMyProfileScreen from '../../../screens/provider/ProviderMyProfileScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
 import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
@@ -33,6 +34,12 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="ProviderServicesMain"
         component={ProviderMyProfileScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderServicesStack.Screen
+        name="AccountHolderDetails"
+        component={AdminCreateAccountScreen}
         options={{ headerShown: false }}
       />
 

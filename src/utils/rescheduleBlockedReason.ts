@@ -45,7 +45,15 @@ export function hasBookingDatePassed(bookingDate: string, bookingTime: string, n
   return new Date(y, mo - 1, d, hours, minutes, 0, 0).getTime() < now.getTime();
 }
 
-/** Null when the booking can be rescheduled (upcoming or in progress, and not past). */
+/** What a provider is told once an appointment has started. Same words as the
+ *  refusal in provider_initiate_reschedule() / respond_to_reschedule_request(). */
+export const PROVIDER_STARTED_BLOCK: RescheduleBlock = {
+  title: 'This appointment has started',
+  message: "You can't offer new times once an appointment has started. If something's gone wrong, message the client to sort it out.",
+};
+
+/** Null when the booking can be rescheduled: upcoming and not past, or (for a
+ *  client only) in progress. */
 export function getRescheduleBlock(
   status: BookingStatus,
   bookingDate: string,
@@ -68,6 +76,16 @@ export function getRescheduleBlock(
       title: 'Rescheduling is closed',
       message: 'This appointment has passed, so it can no longer be rescheduled.',
     };
+  }
+  // A provider can't offer new times once it has started: the server refuses,
+  // since an offer set to cancel if declined would fully refund a started
+  // booking. Say so, with what to do instead.
+  if (
+    audience === 'provider' &&
+    (status === BookingStatus.IN_PROGRESS ||
+      (status === BookingStatus.UPCOMING && hasBookingDatePassed(bookingDate, bookingTime, now)))
+  ) {
+    return PROVIDER_STARTED_BLOCK;
   }
   if (hasBookingDatePassed(bookingDate, bookingTime, now) && status !== BookingStatus.IN_PROGRESS) {
     return {

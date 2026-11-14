@@ -1,6 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderHomeScreen from '../../../screens/provider/ProviderHomeScreen';
+import AdminCreateAccountScreen from '../../../screens/shared/AdminCreateAccountScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../../screens/provider/ProviderIntakeFormScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
@@ -64,6 +65,12 @@ export default function ProviderHomeNavigator({ linkOnly = false }: { linkOnly?:
       <ProviderHomeStack.Screen
         name="ProviderHomeMain"
         component={ProviderHomeScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="AccountHolderDetails"
+        component={AdminCreateAccountScreen}
         options={{ headerShown: false }}
       />
 

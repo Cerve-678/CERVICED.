@@ -21,8 +21,10 @@
 // follow-ups refuse any account that isn't an admin-made blank one, so neither
 // can be pointed at a real person's account.
 //
-// Only admin_users may call this, checked here against the caller's own
-// session. Each account created is logged in admin_actions ('create_account'),
+// Only admin_users may create or reopen accounts. The sole non-admin action
+// lets a still-blank admin-created provider set its own owner's details;
+// the verified caller id is the only account it may change. Each account
+// created is logged in admin_actions ('create_account'),
 // which Admin → Accounts you created lists (admin_created_accounts()), and
 // also stamped on the auth user's app_metadata, which its holder can't edit.
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
@@ -194,6 +196,20 @@ Deno.serve(async (req) => {
     const caller = callerData?.user;
     if (callerError || !caller) return json({ error: 'Not signed in.' }, 401);
 
+    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+    const action = body?.action ?? 'create';
+
+    // The person currently setting up an admin-made blank provider account
+    // can hand it to its owner without signing back into the admin account.
+    // The caller can update only their own still-blank account; addDetails
+    // performs the same validation and handover as the admin path below.
+    if (action === 'complete_my_blank_details') {
+      if (!caller.app_metadata?.created_by_admin || caller.app_metadata?.details_pending !== true) {
+        return json({ error: 'This account is not waiting for owner details.' }, 403);
+      }
+      return await addDetails(admin, caller.id, { ...body, userId: caller.id }, true);
+    }
+
     const { data: adminRow, error: adminError } = await admin
       .from('admin_users')
       .select('user_id')
@@ -205,8 +221,6 @@ Deno.serve(async (req) => {
     }
     if (!adminRow) return json({ error: 'Admin accounts only.' }, 403);
 
-    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-    const action = body?.action ?? 'create';
     if (action === 'create') return await createAccount(admin, caller.id, body);
     if (action === 'start_blank_provider') return await startBlankProvider(admin, caller.id);
     if (action === 'open_blank') return await openBlank(admin, caller.id, body);
@@ -357,7 +371,7 @@ async function openBlank(admin: Admin, callerId: string, body: Record<string, un
   return json({ userId: user.id, email: user.email, password });
 }
 
-async function addDetails(admin: Admin, callerId: string, body: Record<string, unknown> | null): Promise<Response> {
+async function addDetails(admin: Admin, callerId: string, body: Record<string, unknown> | null, self = false): Promise<Response> {
   const input = parseAddDetails(body ?? {});
   if (typeof input === 'string') return json({ error: input }, 400);
   const user = await loadBlank(admin, input.userId);
@@ -397,7 +411,7 @@ async function addDetails(admin: Admin, callerId: string, body: Record<string, u
     app_metadata: {
       ...(user.app_metadata ?? {}),
       details_pending: false,
-      details_added_by_admin: callerId,
+      ...(self ? { details_added_by_holder: true } : { details_added_by_admin: callerId }),
       details_added_at: new Date().toISOString(),
     },
   });

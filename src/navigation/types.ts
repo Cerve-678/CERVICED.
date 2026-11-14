@@ -247,6 +247,7 @@ export type ProviderHomeStackParamList = {
   // viewMode: lets a caller (the daily-recap notification) open the calendar
   // straight into the list view rather than whichever mode was last used.
   ProviderHomeMain: { jumpToDate?: string; viewMode?: 'list' } | undefined;
+  AccountHolderDetails: { addDetailsForCurrentUser: true };
   // Link-only providers (booking_mode 'external') start this stack here
   // instead of the booking calendar — see ProviderTabNavigator.
   LinkOnlyHomeMain: undefined;
@@ -305,6 +306,7 @@ export type ProviderHomeStackParamList = {
 // Provider Services Stack (profile preview + edit via InfoRegScreen)
 export type ProviderServicesStackParamList = {
   ProviderServicesMain: undefined;
+  AccountHolderDetails: { addDetailsForCurrentUser: true };
   EditProfile: { transferProviderId?: string } | undefined;
   // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
   // builder opens with the profile editor beneath it instead of at a bare tab

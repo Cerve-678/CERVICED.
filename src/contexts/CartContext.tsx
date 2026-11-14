@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import { logger } from '../utils/logger';
 import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
+import { getLiveProviderIds, getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
 import type { EmergencyReason } from '../services/AvailabilityService';
 import type { ChosenAddOn } from '../features/bookings/addOnTime';
 
@@ -25,6 +25,21 @@ async function resolveCartItemProviderId(p: {
     if (bySlug?.id) return bySlug.id;
   }
   return getProviderIdByDisplayName(p.providerName).catch(() => null);
+}
+/**
+ * The stored items whose provider is linked but no longer live. Items with no
+ * resolved provider are left to the caller — they're removed for a different
+ * reason (no link at all), not for being offline.
+ */
+export function offlineProviderItems(
+  items: CartItem[],
+  providerIdByItem: ReadonlyMap<string, string>,
+  liveIds: ReadonlySet<string>,
+): CartItem[] {
+  return items.filter(it => {
+    const providerId = providerIdByItem.get(it.id);
+    return providerId !== undefined && !liveIds.has(providerId);
+  });
 }
 // CartItem interface
 /** A time the provider's own scheduling rules exclude, that they've opted
@@ -509,29 +524,62 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // launch until the user next changed the cart.
           hydratedRef.current = true;
 
+          const removed: CartItem[] = [];
+
           // Repair or drop any stored item that lost its provider link while the
-          // cart sat in storage (provider went offline, was renamed, or the item
-          // predates providerId). Items already carrying a providerId are trusted
-          // and skipped, so this is a no-op DB call in the common case.
-          const needLink = stored.filter(i => !i.providerId);
-          if (needLink.length > 0) {
-            const removedNames: string[] = [];
-            for (const it of needLink) {
-              const resolvedId = await resolveCartItemProviderId(it).catch(() => null);
-              if (resolvedId) {
-                dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
-              } else {
-                dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } });
-                removedNames.push(it.providerDisplayName ?? it.providerName);
-              }
+          // cart sat in storage (provider renamed, or the item predates
+          // providerId). Each distinct provider is looked up once, all in
+          // parallel — several items from one provider share the lookup.
+          const providerIdByItem = new Map<string, string>();
+          const lookupKey = (it: CartItem) => `${it.providerSlug ?? ''}|${it.providerName}`;
+          const unlinked = stored.filter(it => !it.providerId);
+          const lookups = new Map<string, CartItem>();
+          unlinked.forEach(it => {
+            if (!lookups.has(lookupKey(it))) lookups.set(lookupKey(it), it);
+          });
+          const resolvedByKey = new Map(
+            await Promise.all(
+              [...lookups].map(async ([key, it]) =>
+                [key, await resolveCartItemProviderId(it).catch(() => null)] as const,
+              ),
+            ),
+          );
+          for (const it of stored) {
+            if (it.providerId) {
+              providerIdByItem.set(it.id, it.providerId);
+              continue;
             }
-            if (removedNames.length > 0) {
-              const names = [...new Set(removedNames)].join(', ');
-              Alert.alert(
-                'Some items removed',
-                `${names} ${removedNames.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removedNames.length > 1 ? 'them' : 'it'} from your cart.`
-              );
+            const resolvedId = resolvedByKey.get(lookupKey(it)) ?? null;
+            if (resolvedId) {
+              providerIdByItem.set(it.id, resolvedId);
+              dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
+            } else {
+              removed.push(it);
             }
+          }
+
+          // A linked item is not proof the provider is still bookable: one who
+          // went offline while the cart sat in storage stayed in it until
+          // checkout, and tapping their logo opened a profile that couldn't
+          // find them. One batched check for every provider in the cart. If
+          // the check itself fails, keep everything — not knowing isn't the
+          // same as being told they're gone.
+          const linkedIds = [...new Set(providerIdByItem.values())];
+          const liveIds = await getLiveProviderIds(linkedIds).catch((error: unknown) => {
+            logger.warn('Could not check cart providers are still live:', error);
+            return null;
+          });
+          if (liveIds) {
+            removed.push(...offlineProviderItems(stored, providerIdByItem, liveIds));
+          }
+
+          if (removed.length > 0) {
+            removed.forEach(it => dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } }));
+            const names = [...new Set(removed.map(it => it.providerDisplayName ?? it.providerName))];
+            Alert.alert(
+              'Some items removed',
+              `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removed.length > 1 ? 'them' : 'it'} from your cart.`
+            );
           }
         }
       } catch (error) {
