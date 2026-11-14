@@ -437,6 +437,14 @@ Pay or PayPal.
   applies to new bookings only. Bookings older than that column were filled
   with the window in force when it was added; a row without one falls back to
   the provider's current window. Migration `20261103040000`, applied 3 November; `apply-cancellation-refund` v13 reads it.
+  The written choice (`booking_policies.cancelNotice`, the copy frozen into a
+  booking's policy and shown on the client's booking page) always says the
+  window applied: a database trigger rewrites it from the column whenever
+  either changes, never the other way round. Three providers whose two copies
+  disagreed were brought in line, with no change to any window applied.
+  Link-only providers are left alone: their notice is only their own text.
+  *Migration `20261113180000_cancel_notice_one_value`, on branch
+  `fix/cancel-notice-one-value`.*
 - **Rescheduling doesn't reset the window.** If the client *asks* to
   reschedule once the window has already started, and the move goes ahead,
   the booking is marked (`bookings.late_reschedule_from`). Cancelling it
@@ -1125,6 +1133,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 12 Nov | Deleting an account or profile waits until no money on it is still moving (`account_deletion_blockers`); the 30-day job re-checks and deletes each account on its own. Live since 12 November (migration `20261112110000_account_deletion_waits_for_money`) | Deleting used to erase held payouts, open refund requests and debts with nothing paid, refunded or recovered, and one tipped client made every deletion in a run fail |
 | 12 Nov | A cancelled booking whose refund never went out is sent again (`process_unsent_refunds`, every 10 minutes: 5 tries, then daily) and listed in support's daily email after an hour. Live since 12 November (migration `20261112120000_retry_unsent_refunds`; `apply-cancellation-refund`, `refund-payment` and `money-daily-summary` deployed) | Every refund after a cancel was a single unchecked call: if it failed, the client's money stayed taken and nothing noticed |
 | 13 Nov | A provider can't offer new times once an appointment has started, and a client can't decline a cancel-if-declined offer after the start. Each side is told to message the other. Live since 13 November (migration `20261113170000`); the in-app note needs a new build | A "cancel if declined" offer was a side door to the full refund that a provider cancel after the start is refused |
+| 13 Nov | A provider's written cancellation notice always says the window actually applied; the database rewrites the text from the window, never the reverse. Daminkfinesse (24h → 48h), Nails Studio (48h → 24h) and CuratedByCilva (12h → 24h) were corrected; no window applied changed. Live since 13 November (migration `20261113180000`) | Clients saw one notice on the profile and another on their booking page |
 | 13 Nov | Refund requests close at the end of the fifth UK day after the appointment day, for bookings made from then on, for every reason; complaints stay open | Gives clients time to notice a problem while letting a booking's money settle; older bookings keep the terms they were booked under; the owner's rule |
 
 ---

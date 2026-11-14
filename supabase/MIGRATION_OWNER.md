@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-13 (cancel notice one value)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113180000 | `cancel_notice_one_value` | **APPLIED 2026-11-13** on the user's go-ahead ("u do it"), via `supabase db query --linked -f` (absolute path) from the main folder, after 170000 and before 190000; guard matched. Verified live: version recorded; trigger on providers present; 0 providers out of step (Daminkfinesse 48h, Nails Studio 24h, CuratedByCilva 24h now match); Uniquely Aesthetics (external) untouched at 48h text. Authoring notes: New `cancel_notice_choice(int)`, trigger function `keep_cancel_notice_in_step()` + trigger on `providers`; one-off sync of 3 providers' `booking_policies.cancelNotice` to their enforced column (Daminkfinesse 24h→48h, Nails Studio 48h→24h, CuratedByCilva 12h→24h; link-only Uniquely Aesthetics untouched). Forced-rollback dry run 2026-11-13 passed, including saves as a real provider through RLS; live unchanged. Security review: no blocking findings. Authored as 20261113160000; renumbered because the late-cancel top-up worktree took that number. Apply was blocked by the session's permission check. Written on `fix/cancel-notice-one-value`. |
+
 ### Applied 2026-11-13 (no reschedule offer after start)
 
 | Authored version | Name | Status |

@@ -234,8 +234,8 @@ export interface ProviderRegistrationData {
     policyImageUrls?: string[];
   } | null;
   // Enforced cancellation window (providers.cancellation_notice_hours) — set
-  // via the separate Automations screen, not this form, but the client-facing
-  // Policy tab prefers it over bookingPolicies.cancelNotice when both exist.
+  // from Policies, not this form. The database keeps bookingPolicies.cancelNotice
+  // saying the same thing (keep_cancel_notice_in_step), and wins if they differ.
   cancellationNoticeHours: number;
 }
 
