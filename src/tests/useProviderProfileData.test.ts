@@ -206,4 +206,37 @@ describe("useProviderProfileData", () => {
     );
     expect(result.current.provider?.id).toBe("studio-new");
   });
+  it("treats an offline provider opened by slug as not found, not a load failure", async () => {
+    // The cart, Home and Explore open profiles by slug. When that provider is
+    // no longer live, the unclaimed-listing fallback must not run: it matches
+    // providers.id (uuid), so a slug made the whole load fail.
+    (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue(null);
+    (getProviderBySlug as jest.Mock).mockResolvedValue(null);
+    (getUnclaimedProviderDetail as jest.Mock).mockRejectedValue(
+      new Error('invalid input syntax for type uuid: "studio-a"'),
+    );
+
+    const { result } = renderHook(() => useProviderProfileData("studio-a"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(getUnclaimedProviderDetail).not.toHaveBeenCalled();
+    expect(result.current.loadFailed).toBe(false);
+    expect(result.current.provider).toBeNull();
+    expect(result.current.unclaimedProvider).toBeNull();
+  });
+
+  it("still opens an unclaimed listing by its id", async () => {
+    const id = "6f1c2b0a-3d4e-4f5a-8b6c-7d8e9f0a1b2c";
+    const listing = { id, displayName: "Unclaimed Studio" };
+    (getProviderProfilePreviewBySlug as jest.Mock).mockResolvedValue(null);
+    (getProviderBySlug as jest.Mock).mockResolvedValue(null);
+    (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(listing);
+
+    const { result } = renderHook(() => useProviderProfileData(id));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(getUnclaimedProviderDetail).toHaveBeenCalledWith(id);
+    expect(result.current.unclaimedProvider).toBe(listing);
+    expect(result.current.loadFailed).toBe(false);
+  });
 });

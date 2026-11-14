@@ -87,13 +87,15 @@ describe('hero finish in profile_theme', () => {
       sheet: '#FBF6EC',
       finish: 'split',
       shape: 'rounded',
+      pageStyle: 'classic',
+      policyLook: 'melt',
     });
   });
 
   it('reads keys saved before the finish existed as a blend', () => {
-    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded' });
-    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
-    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded' });
+    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
+    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
+    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
   });
 
   it('round-trips Sheen, which builds before it read as a blend', () => {
@@ -102,6 +104,8 @@ describe('hero finish in profile_theme', () => {
       sheet: '#EBEBEA',
       finish: 'sheen',
       shape: 'rounded',
+      pageStyle: 'classic',
+      policyLook: 'melt',
     });
   });
 
@@ -112,7 +116,7 @@ describe('hero finish in profile_theme', () => {
   it('keeps a custom set readable with a finish on the end', () => {
     const base = encodeCustomTheme('#1D4A3C', '#FCFBFA', '#A98235');
     const key = encodeThemeKey(base, '#FBF6EC', 'solid');
-    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded' });
+    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
     expect(resolveProviderTheme(key).accent).toBe('#A98235');
   });
 
@@ -128,6 +132,21 @@ describe('Sheen', () => {
     const [a, b, light, c, d] = sheenColors('#FFFFFF', '#F2E7D2');
     expect([a, b, c, d]).toEqual(['#FFFFFF', '#F2E7D2', '#F2E7D2', '#FFFFFF']);
     expect(lum(light)).toBeGreaterThan(lum('#F2E7D2'));
+  });
+
+  it('runs a soft band across a custom colour instead of a stripe of the pale content area', () => {
+    // A custom set is saved as backdrop → content area (Branding's save).
+    const custom = sheenColors('#7A2E4D', SHEET_BG);
+    expect(custom[0]).toBe('#7A2E4D');
+    expect(custom[4]).toBe('#7A2E4D');
+    expect(custom).not.toContain(SHEET_BG);
+    // The band stays close to their colour, nowhere near the near-white sheet.
+    expect(contrast(custom[2], '#7A2E4D')).toBeLessThan(2);
+    expect(contrast(custom[2], SHEET_BG)).toBeGreaterThan(2.5);
+  });
+
+  it('leaves real two-colour sets as they were', () => {
+    expect(sheenColors('#1A1A1A', '#C9A227').slice(0, 2)).toEqual(['#1A1A1A', '#C9A227']);
   });
 
   it('keeps the band softer on a dark hero', () => {
@@ -172,6 +191,8 @@ describe('card shape in profile_theme', () => {
       sheet: '#F8ECF0',
       finish: 'glow',
       shape: 'square',
+      pageStyle: 'classic',
+      policyLook: 'melt',
     });
   });
 

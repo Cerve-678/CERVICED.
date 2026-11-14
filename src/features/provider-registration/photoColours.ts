@@ -13,6 +13,7 @@ import { File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { decode } from 'jpeg-js';
 import { paletteFromPixels } from '../../utils/color';
+import { edgeColoursFromPixels, type PolicyImageEdge } from '../providers/policyImages';
 
 const THUMBNAIL_WIDTH_PX = 64;
 
@@ -47,6 +48,21 @@ export async function coloursFromPhoto(uri: string, count = 6): Promise<string[]
     if (!saved.base64) throw new Error('Photo thumbnail came back without pixel data');
     const { data } = decode(base64ToBytes(saved.base64), { useTArray: true, formatAsRGBA: true });
     return paletteFromPixels(data, count);
+  } finally {
+    cleanup();
+  }
+}
+
+/** The colour along the top and bottom edge of the picture at `uri` (a
+ *  policy page), from a small thumbnail. Throws if it can't be read. */
+export async function edgeColoursFromPhoto(uri: string): Promise<PolicyImageEdge> {
+  const { local, cleanup } = await toLocalUri(uri);
+  try {
+    const rendered = await ImageManipulator.manipulate(local).resize({ width: 32 }).renderAsync();
+    const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.95, base64: true });
+    if (!saved.base64) throw new Error('Picture thumbnail came back without pixel data');
+    const { data, width, height } = decode(base64ToBytes(saved.base64), { useTArray: true, formatAsRGBA: true });
+    return edgeColoursFromPixels(data, width, height);
   } finally {
     cleanup();
   }

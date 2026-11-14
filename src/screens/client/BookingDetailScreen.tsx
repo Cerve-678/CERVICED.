@@ -31,17 +31,17 @@ import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import { isDeclinedRequest } from '../../features/bookings/statusPresentation';
 import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
 import {
-  describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady,
+  describeRefundScope, fileBookingSupportRequest, getRefundRequestScope, isSupportRequestReady, refundRequestLastDay,
   OTHER_SUPPORT_REASON, SUPPORT_REASONS, type BookingSupportKind,
 } from '../../features/bookings/bookingSupportRequest';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
-import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   submitReview, getProviderIdByDisplayName, hasReviewedBooking,
-  getIntakeFormsByBooking, IntakeForm, getBookedClientContact,
+  getIntakeFormsByBooking, IntakeForm, getBookedClientContact, getMyBookingLateCancelFee,
   ProviderContactInfo,
   getProviderBookingDetailMetadata,
   type ProviderBookingDetailMetadata,
@@ -59,7 +59,7 @@ import { clientRequestNote, requestAnswerDeadline } from '../../features/booking
 import RefundRequestTimeline from '../../components/RefundRequestTimeline';
 import { FullImageViewer } from '../../components/FullImageViewer';
 import { policyImageUrls, type PolicyImageFields } from '../../features/providers/policyImages';
-import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
+import { formatShortDate, formatShortDayDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
   calculateBookingPaymentBreakdown,
@@ -473,6 +473,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const refundScope = booking ? getRefundRequestScope(booking) : 'settled';
   const refundScopeCopy = useMemo(() => (booking ? describeRefundScope(booking) : null), [booking]);
   const isOffAppRefund = supportKind === 'refund' && refundScope === 'off_app';
+  // Past the five days: the sheet only explains when it closed.
+  const isClosedRefund = supportKind === 'refund' && refundScope === 'closed';
   const latestRefundRequest = refundRequests[0] ?? null;
   const hasOpenRefundRequest = !!latestRefundRequest && isRefundRequestOpen(latestRefundRequest);
   const refundTimeline = useMemo(
@@ -502,11 +504,32 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const depositIsNonRefundable = booking?.policySnapshot?.['depositNonRefundable'] === true
     && (booking?.paymentStatus === PaymentStatus.DEPOSIT_PAID || Number(booking?.depositAmount ?? 0) > 0);
 
+  // What the provider could charge on top of a kept deposit if this is
+  // cancelled late (frozen at checkout). Read only for a deposit-only booking
+  // that can still be cancelled; a failed read just leaves the generic warning.
+  const [lateCancelFeePence, setLateCancelFeePence] = useState<number | null>(null);
+  const lateCancelBookingId = booking
+    && booking.paymentStatus === PaymentStatus.DEPOSIT_PAID
+    && (booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.PENDING)
+    ? booking.id : null;
+  useEffect(() => {
+    if (!lateCancelBookingId) { setLateCancelFeePence(null); return; }
+    let active = true;
+    getMyBookingLateCancelFee(lateCancelBookingId)
+      .then(pence => { if (active) setLateCancelFeePence(pence); })
+      .catch(err => { logger.error('BookingDetailScreen.lateCancelFee', err); });
+    return () => { active = false; };
+  }, [lateCancelBookingId]);
+
   // Worked out before the cancel, so the message reads the booking as it was
   // when the client agreed to it, not after the refund starts landing.
   const cancelRefund = useMemo(
-    () => (booking ? describeCancelRefund(booking, { policyApplies: cancelPolicyStillApplies, depositNonRefundable: depositIsNonRefundable }) : null),
-    [booking, cancelPolicyStillApplies, depositIsNonRefundable],
+    () => (booking ? describeCancelRefund(booking, {
+      policyApplies: cancelPolicyStillApplies,
+      depositNonRefundable: depositIsNonRefundable,
+      lateCancelFeePence,
+    }) : null),
+    [booking, cancelPolicyStillApplies, depositIsNonRefundable, lateCancelFeePence],
   );
 
   const handleCancelBooking = useCallback(async () => {
@@ -641,7 +664,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       Alert.alert(
         "Couldn't Send",
         // Never say it sent when it didn't — hand them the address instead.
-        `${toUserMessage(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitSupport')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
+        // A server refusal (e.g. past the five days) says why in its own words.
+        `${toUserMessageAllowingDbGuard(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitSupport')}\n\nYou can also email us at ${SUPPORT_EMAIL}.`,
       );
     } finally {
       setSupportBusy(false);
@@ -1617,13 +1641,19 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
                     <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cancelling Now</Text>
-                    <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
-                      {isPastCancellationWindow
-                        ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
-                        : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
-                      {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it.` : ''}
-                      {cancelRefund?.confirmLine ?? ''}
-                    </Text>
+                    {cancelRefund?.replacesWarning ? (
+                      <Text style={[st.sheetSub, { color: C.text, textAlign: 'center', fontWeight: '600' }]}>
+                        {cancelRefund.confirmLine}
+                      </Text>
+                    ) : (
+                      <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
+                        {isPastCancellationWindow
+                          ? `${booking.providerName} requires ${noticeWindowText} notice to cancel — cancelling now may be subject to their policy.`
+                          : `You moved this booking after ${booking.providerName}'s ${noticeWindowText} cancellation notice had started, so cancelling it may still be subject to their policy.`}
+                        {depositIsNonRefundable ? ` Your deposit is non-refundable, so ${booking.providerName} keeps it.` : ''}
+                        {cancelRefund?.confirmLine ?? ''}
+                      </Text>
+                    )}
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
                         <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
@@ -1811,7 +1841,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openSupportForm('refund'); }}>
                     <View style={[st.contactIcon, { backgroundColor: C.accent + '22' }]}><Ionicons name="arrow-undo-outline" size={20} color={C.accentText} /></View>
-                    <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Request a refund</Text><Text style={{ color: C.sub, fontSize: 12 }}>Ask {booking.providerName} for a refund</Text></View>
+                    <View style={{ flex: 1 }}><Text style={{ fontWeight: '600', color: C.text }}>Request a refund</Text><Text style={{ color: C.sub, fontSize: 12 }}>{refundScope === 'closed' ? `Closed after ${formatShortDayDate(refundRequestLastDay(booking.bookingDate))}` : `Ask ${booking.providerName} for a refund`}</Text></View>
                     <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                   </TouchableOpacity>
                 )}
@@ -1877,7 +1907,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
                 {supportKind === 'refund' && refundScopeCopy && (
                   <View style={[st.supportNext, { backgroundColor: C.accent + '14', marginTop: 12 }]}>
-                    <Ionicons name={refundScope === 'off_app' ? 'cash-outline' : 'shield-checkmark-outline'} size={16} color={C.accentText} style={{ marginTop: 1 }} />
+                    <Ionicons name={refundScope === 'off_app' ? 'cash-outline' : refundScope === 'closed' ? 'time-outline' : 'shield-checkmark-outline'} size={16} color={C.accentText} style={{ marginTop: 1 }} />
                     <View style={{ flex: 1, gap: 6 }}>
                       <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>{refundScopeCopy.title}</Text>
                       {refundScopeCopy.lines.map(line => (
@@ -1887,7 +1917,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </View>
                 )}
 
-                {!isOffAppRefund && (<>
+                {!isOffAppRefund && !isClosedRefund && (<>
                 <Text style={[st.supportHeading, { color: C.sub }]}>{supportKind === 'refund' ? "WHAT'S THE REFUND FOR?" : 'WHAT WENT WRONG?'}</Text>
                 <View style={{ gap: 8 }}>
                   {(supportKind ? SUPPORT_REASONS[supportKind] : []).map(r => {
@@ -1949,6 +1979,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>
                     </TouchableOpacity>
                   </View>
+                ) : isClosedRefund ? (
+                  <TouchableOpacity style={{ paddingVertical: 10, alignItems: 'center' }} onPress={() => setSupportKind(null)} activeOpacity={0.7}>
+                    <Text style={{ color: C.sub, fontWeight: '600', fontSize: 14 }}>Close</Text>
+                  </TouchableOpacity>
                 ) : (() => {
                   const ready = isSupportRequestReady(supportReason, supportMessage);
                   return (

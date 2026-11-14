@@ -429,6 +429,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     policyRetainedAmount: db.policy_retained_amount != null ? Number(db.policy_retained_amount) : undefined,
     lateRescheduleFrom: db.late_reschedule_from ?? undefined,
     lateRescheduleRuleApplies: db.late_reschedule_rule_applies ?? undefined,
+    refundRequestWindowApplies: db.refund_request_window_applies ?? undefined,
     cancelledBy: db.cancelled_by ?? undefined,
     declinedAt: db.declined_at ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
