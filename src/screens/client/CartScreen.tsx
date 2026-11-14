@@ -3893,12 +3893,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
-      const slug = providerItems[0]?.providerSlug;
-      if (!slug) {
+      // The database id first: it's what checkout books against, the restore
+      // re-links any item missing it, and the profile loads by id as well as
+      // by slug. The saved slug is only a fallback for an item with no id.
+      const first = providerItems[0];
+      const key = first?.providerId ?? first?.providerSlug;
+      if (!key) {
         showAlert('Something went wrong', "We couldn't open that provider's profile.");
         return;
       }
-      navigation.navigate('ProviderProfile', { providerId: slug, source: 'cart' });
+      navigation.navigate('ProviderProfile', { providerId: key, source: 'cart' });
     },
     [navigation, showAlert]
   );
