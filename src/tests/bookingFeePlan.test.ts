@@ -35,3 +35,30 @@ test('refuses without a fee, consent, an in-app payment, or when already charged
   expect(checkFeeEligibility({ ...base, paidInApp: false }).ok).toBe(false);
   expect(checkFeeEligibility({ ...base, alreadyCharged: true }).ok).toBe(false);
 });
+
+describe('late cancellation fee', () => {
+  const cancel: FeeEligibilityInput = {
+    ...base, kind: 'late_cancel', status: 'cancelled', lateFeePence: null, noShowFeePence: null,
+    lateCancelFeePence: 3000, lateClientCancel: true,
+    // The morning of the appointment, before it starts.
+    nowMs: Date.UTC(2026, 6, 1, 9, 0),
+  };
+
+  test('charges the frozen amount right after a late cancel, before the start', () => {
+    expect(checkFeeEligibility(cancel)).toEqual({ ok: true, amountPence: 3000 });
+  });
+
+  test('until 24 hours after the appointment would have ended', () => {
+    const endUtc = Date.UTC(2026, 6, 1, 14, 0);
+    expect(checkFeeEligibility({ ...cancel, nowMs: endUtc + 24 * 3600e3 }).ok).toBe(true);
+    expect(checkFeeEligibility({ ...cancel, nowMs: endUtc + 24 * 3600e3 + 1 }).ok).toBe(false);
+  });
+
+  test('only on a booking the client cancelled late, with an agreed amount', () => {
+    expect(checkFeeEligibility({ ...cancel, lateClientCancel: false }).ok).toBe(false);
+    expect(checkFeeEligibility({ ...cancel, status: 'confirmed' }).ok).toBe(false);
+    expect(checkFeeEligibility({ ...cancel, lateCancelFeePence: null }).ok).toBe(false);
+    expect(checkFeeEligibility({ ...cancel, clientConsented: false }).ok).toBe(false);
+    expect(checkFeeEligibility({ ...cancel, alreadyCharged: true }).ok).toBe(false);
+  });
+});

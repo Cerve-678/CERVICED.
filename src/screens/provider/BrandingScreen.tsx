@@ -8,9 +8,14 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ProfileStylePreview } from '../../features/providers/ProfileStylePreview';
+import { BUSINESS_TYPE_LABEL } from '../../features/providers/profilePresentation';
+import type { LogoFraming } from '../../types/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -38,6 +43,14 @@ import {
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
+import PageStylePicker from '../../components/PageStylePicker';
+import {
+  DEFAULT_PAGE_STYLE,
+  DEFAULT_POLICY_PICTURE_LOOK,
+  POLICY_PICTURE_LOOKS,
+  type PageStyleKey,
+  type PolicyPictureLook,
+} from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
@@ -104,6 +117,17 @@ export default function BrandingScreen({ navigation }: any) {
   const [sheetColor, setSheetColor]           = useState(SHEET_BG);
   const [heroFinish, setHeroFinish]           = useState<HeroFinish>(DEFAULT_HERO_FINISH);
   const [cardShape, setCardShape]             = useState<CardShape>(DEFAULT_CARD_SHAPE);
+  const [pageStyle, setPageStyle]             = useState<PageStyleKey>(DEFAULT_PAGE_STYLE);
+  const [policyLook, setPolicyLook]           = useState<PolicyPictureLook>(DEFAULT_POLICY_PICTURE_LOOK);
+  // What the full preview needs that Branding doesn't edit: the name, the
+  // logo's framing and the line under the name. From the saved profile cache.
+  const [previewOpen, setPreviewOpen]         = useState(false);
+  const [profileName, setProfileName]         = useState('Your Business');
+  const [logoFraming, setLogoFraming]         = useState<LogoFraming | null>(null);
+  const [metaLabels, setMetaLabels]           = useState<string[]>([]);
+  const [pillLabels, setPillLabels]           = useState<string[]>([]);
+  const [heroKicker, setHeroKicker]           = useState('');
+  const [heroLocation, setHeroLocation]       = useState('');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [brandFont, setBrandFont]             = useState<string>(DEFAULT_PROVIDER_FONT);
@@ -133,8 +157,24 @@ export default function BrandingScreen({ navigation }: any) {
         setBackgroundImage(cached.backgroundImage);
         setLogoUrl(cached.logo);
         setBrandFont((cached as { brandFont?: string }).brandFont ?? DEFAULT_PROVIDER_FONT);
-        const { base, sheet, finish, shape } = parseThemeKey(cached.profileTheme);
+        if (cached.providerName?.trim()) setProfileName(cached.providerName.trim());
+        setLogoFraming(cached.logoFraming ?? null);
+        {
+          // The same line the profile prints under the name (and Cover's pills).
+          const types = (cached.serviceCategories?.length ? cached.serviceCategories : [cached.providerService])
+            .filter(Boolean)
+            .map(type => (type === 'OTHER' ? cached.customServiceType || 'SERVICE' : type).toUpperCase());
+          const where = cached.location ? [cached.location.toUpperCase()] : [];
+          const how = cached.businessType ? [BUSINESS_TYPE_LABEL[cached.businessType].toUpperCase()] : [];
+          setMetaLabels([...new Set([...types, ...where])]);
+          setPillLabels([...new Set([...types, ...where, ...how])]);
+          setHeroKicker([...new Set(types)].join(' · '));
+          setHeroLocation(cached.location ?? '');
+        }
+        const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
+        setPageStyle(cachedPageStyle);
+        setPolicyLook(cachedPolicyLook);
         setSheetColor(sheet);
         setHeroFinish(finish);
         const custom = decodeCustomTheme(base);
@@ -161,8 +201,10 @@ export default function BrandingScreen({ navigation }: any) {
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
           if (data.logo_url) setLogoUrl(data.logo_url);
           if (data.brand_font) setBrandFont(data.brand_font);
-          const { base, sheet, finish, shape } = parseThemeKey(data.profile_theme);
+          const { base, sheet, finish, shape, pageStyle: savedPageStyle, policyLook: savedPolicyLook } = parseThemeKey(data.profile_theme);
           setCardShape(shape);
+          setPageStyle(savedPageStyle);
+          setPolicyLook(savedPolicyLook);
           setSheetColor(sheet);
           setHeroFinish(finish);
           const custom = decodeCustomTheme(base);
@@ -292,7 +334,7 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape);
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape, pageStyle, policyLook);
 
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
@@ -321,7 +363,17 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, navigation]);
+
+  // The profile_theme the on-screen choices would save, for the preview.
+  const liveThemeKey = encodeThemeKey(
+    themeChoice === 'custom' ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice,
+    sheetColor,
+    heroFinish,
+    cardShape,
+    pageStyle,
+    policyLook,
+  );
 
   // Both stacks that open Branding for a link-only pro (Home, Settings) have
   // the Full CERVICED experience page.
@@ -368,6 +420,32 @@ export default function BrandingScreen({ navigation }: any) {
         onCancel={() => setImageToCrop(null)}
         onDone={handleImageCropped}
       />
+      <Modal
+        visible={previewOpen}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setPreviewOpen(false)}
+      >
+        {/* A Modal is its own native surface, so it needs its own safe-area provider. */}
+        <SafeAreaProvider>
+          <ProfilePreviewScreen onClose={() => setPreviewOpen(false)}>
+            <ProfileStylePreview
+              themeKey={liveThemeKey}
+              gradient={gradient}
+              accent={accentColor}
+              backgroundImage={backgroundImage}
+              brandFont={brandFont}
+              name={profileName}
+              logoUri={logoUrl}
+              logoFraming={logoFraming}
+              metaLabels={metaLabels}
+              pillLabels={pillLabels}
+              kicker={heroKicker}
+              location={heroLocation}
+            />
+          </ProfilePreviewScreen>
+        </SafeAreaProvider>
+      </Modal>
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} scrollEnabled={!colourDragging}>
 
@@ -398,6 +476,21 @@ export default function BrandingScreen({ navigation }: any) {
             ) : (
               <ProfileHeroBackdrop colors={gradient} finish={heroFinish} style={StyleSheet.absoluteFill} />
             )}
+            {/* Opens the full preview: the top of the profile as clients
+                will see it with these choices, saved or not. */}
+            <TouchableOpacity
+              style={styles.previewButton}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setPreviewOpen(true);
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Preview your profile"
+            >
+              <Ionicons name="eye-outline" size={15} color="#1F1A18" />
+              <Text style={styles.previewButtonText}>Preview</Text>
+            </TouchableOpacity>
             <View style={styles.previewContent}>
               <View style={[styles.previewAccentChip, { backgroundColor: accentColor }]}>
                 <Text style={[styles.previewAccentLabel, { color: accentInk }]}>ACCENT</Text>
@@ -470,6 +563,77 @@ export default function BrandingScreen({ navigation }: any) {
               })}
             </View>
           </View>
+
+          {/* Page style — the layout and decoration of the whole profile */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              How your whole profile is laid out: the headings, the cards, how your policies show and the frame round your logo. Your colours and font stay as you set them.
+            </Text>
+            <PageStylePicker
+              value={pageStyle}
+              onChange={setPageStyle}
+              isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
+              onLockedPress={showLocked}
+              gradient={gradient}
+              accent={accentColor}
+              sheet={sheetColor}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+            />
+          </View>
+
+          {/* Policy pictures — how their uploaded policy pages sit in the
+              profile. Templates only: Classic keeps them behind the button. */}
+          {pageStyle !== DEFAULT_PAGE_STYLE && (
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              If you've added policy pictures in Policies, they show in your profile after your services, in their own colours.
+            </Text>
+            <View style={styles.finishRow}>
+              {POLICY_PICTURE_LOOKS.map(look => {
+                const selected = policyLook === look.key;
+                const pageColour = accentColor;
+                return (
+                  <TouchableOpacity
+                    key={look.key}
+                    style={styles.policyLookOption}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setPolicyLook(look.key);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${look.name}: ${look.description}`}
+                  >
+                    <View style={[styles.policyLookPreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                      {look.key === 'melt' ? (
+                        <LinearGradient colors={[sheetColor, pageColour]} style={styles.policyLookFade} />
+                      ) : (
+                        <View style={[styles.policyLookWave, { backgroundColor: pageColour }]} />
+                      )}
+                      <View style={[styles.policyLookPage, { backgroundColor: pageColour }]}>
+                        <View style={styles.policyLookLine} />
+                        <View style={[styles.policyLookLine, styles.policyLookLineShort]} />
+                        <View style={styles.policyLookLine} />
+                      </View>
+                      {look.key === 'melt' ? (
+                        <LinearGradient colors={[pageColour, sheetColor]} style={styles.policyLookFade} />
+                      ) : (
+                        <View style={[styles.policyLookWave, styles.policyLookWaveBottom, { backgroundColor: pageColour }]} />
+                      )}
+                    </View>
+                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{look.name}</Text>
+                    <Text style={[styles.policyLookDescription, { color: P.sub }]}>{look.description}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+          )}
 
           {/* Card shape — corners of the service cards and category pills */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -618,6 +782,24 @@ const styles = StyleSheet.create({
   previewBg: {
     ...StyleSheet.absoluteFill,
   },
+  previewButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  previewButtonText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    color: '#1F1A18',
+  },
   previewContent: {
     padding: 18,
   },
@@ -688,6 +870,15 @@ const styles = StyleSheet.create({
   finishSwatchOn: { borderWidth: 2.5 },
   finishLocked: { opacity: 0.55 },
   finishLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  policyLookOption: { flex: 1 },
+  policyLookPreview: { height: 116, borderRadius: 14, borderWidth: 1.5, overflow: 'hidden', justifyContent: 'center' },
+  policyLookFade: { height: 18 },
+  policyLookWave: { height: 12, marginTop: 6, borderTopLeftRadius: 60, borderTopRightRadius: 14 },
+  policyLookWaveBottom: { marginTop: 0, marginBottom: 6, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 14, borderBottomRightRadius: 60 },
+  policyLookPage: { height: 54, paddingHorizontal: 14, justifyContent: 'center', gap: 6 },
+  policyLookLine: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.75)', width: '80%', alignSelf: 'center' },
+  policyLookLineShort: { width: '55%' },
+  policyLookDescription: { fontSize: 11, lineHeight: 14, marginTop: 2 },
   finishName: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 11 },
 
   // Card Shape previews: a mini category-pill row over a mini service card.
@@ -755,4 +946,55 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 0.5,
   },
+});
+
+/** The full preview's frame: the preview itself and a close button over the hero. */
+function ProfilePreviewScreen({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={previewStyles.root}>
+      {children}
+      <TouchableOpacity
+        style={[previewStyles.close, { top: insets.top + 10 }]}
+        onPress={onClose}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Close the preview"
+      >
+        <Ionicons name="close" size={22} color="#1F1A18" />
+      </TouchableOpacity>
+      <View style={[previewStyles.badge, { top: insets.top + 14 }]} pointerEvents="none">
+        <Text style={previewStyles.badgeText}>PREVIEW</Text>
+      </View>
+    </View>
+  );
+}
+
+const previewStyles = StyleSheet.create({
+  root: { flex: 1 },
+  close: {
+    position: 'absolute',
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: 'rgba(20,16,14,0.6)',
+  },
+  badgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.2, color: '#FFFFFF' },
 });

@@ -39,8 +39,9 @@ describe('display settings storage helpers', () => {
       .toEqual(DEFAULT_DISPLAY_SETTINGS);
     expect(resolveStoredDisplaySettings({ textScale: 'big', fontChoice: 'comic-sans', language: 'xx', region: 'ZZ' }))
       .toEqual(DEFAULT_DISPLAY_SETTINGS);
+    // 1.3 was the old Larger; it now reads as the current Larger.
     expect(resolveStoredDisplaySettings({ textScale: '1.3', fontChoice: 'prata', language: 'fr', region: 'US' }))
-      .toEqual({ textScale: 1.3, fontChoice: 'prata', language: 'fr', region: 'US' });
+      .toEqual({ textScale: 1.12, fontChoice: 'prata', language: 'fr', region: 'US' });
   });
 });
 
@@ -49,7 +50,7 @@ describe('display settings are per account', () => {
     mockUserId = 'account-a';
     const { result, rerender } = renderHook(() => useDisplaySettings(), { wrapper });
     act(() => {
-      result.current.setTextScale(1.3);
+      result.current.setTextScale(1.12);
       result.current.setFontChoice('prata');
       result.current.setLanguage('fr');
       result.current.setRegion('US');
@@ -71,7 +72,7 @@ describe('display settings are per account', () => {
     mockUserId = 'account-a';
     rerender({});
     await waitFor(() =>
-      expect(settingsOf(result.current)).toEqual({ textScale: 1.3, fontChoice: 'prata', language: 'fr', region: 'US' }),
+      expect(settingsOf(result.current)).toEqual({ textScale: 1.12, fontChoice: 'prata', language: 'fr', region: 'US' }),
     );
   });
 
@@ -85,7 +86,7 @@ describe('display settings are per account', () => {
     mockUserId = 'account-a';
     const { result, rerender } = renderHook(() => useDisplaySettings(), { wrapper });
     await waitFor(() =>
-      expect(settingsOf(result.current)).toEqual({ textScale: 1.15, fontChoice: 'bakbak', language: 'es', region: 'GB' }),
+      expect(settingsOf(result.current)).toEqual({ textScale: 1.12, fontChoice: 'bakbak', language: 'es', region: 'GB' }),
     );
     expect(await AsyncStorage.getItem(LEGACY_DISPLAY_SETTING_KEYS.fontChoice)).toBeNull();
     expect(await AsyncStorage.getItem(LEGACY_DISPLAY_SETTING_KEYS.textScale)).toBeNull();

@@ -1,5 +1,6 @@
 import {
   computeCancellationSettlement,
+  isLateClientCancel,
   readCancelCustomFeePence,
   readCancelPenalty,
   type CancellationSettlementInput,
@@ -233,5 +234,18 @@ describe('computeCancellationSettlement', () => {
     // Provider keeps their £10, platform keeps the 99p, client gets 0 — NOT charged the unpaid balance.
     expect(s.clientRefundPence).toBe(0);
     expect(s.providerKeepPence).toBe(1000);
+  });
+});
+
+describe('isLateClientCancel', () => {
+  const start = Date.UTC(2026, 10, 14, 10, 0);
+  const hours = (h: number) => start - h * 3_600_000;
+  it('is late inside the notice period, from when they cancelled', () => {
+    expect(isLateClientCancel({ noticeHours: 24, appointmentMs: start, cancelledMs: hours(6), movedLate: false })).toBe(true);
+    expect(isLateClientCancel({ noticeHours: 24, appointmentMs: start, cancelledMs: hours(30), movedLate: false })).toBe(false);
+  });
+  it('is never late without a notice period, and always late after a late move', () => {
+    expect(isLateClientCancel({ noticeHours: 0, appointmentMs: start, cancelledMs: hours(1), movedLate: true })).toBe(false);
+    expect(isLateClientCancel({ noticeHours: 24, appointmentMs: start, cancelledMs: hours(100), movedLate: true })).toBe(true);
   });
 });

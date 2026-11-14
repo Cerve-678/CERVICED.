@@ -7292,6 +7292,8 @@ export interface ProviderReschedulePolicy {
   maxReschedules: number | null;
   /** hours of notice required before the appointment; 0 = same day allowed */
   rescheduleNoticeHours: number;
+  /** The new date must stay in the booking's calendar month (rescheduleWithin 'same_month'). */
+  sameMonthOnly: boolean;
 }
 
 /** Parse the provider's booking_policies reschedule settings.
@@ -7302,10 +7304,12 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
   const fallback: ProviderReschedulePolicy = {
     maxReschedules: null,
     rescheduleNoticeHours: 0,
+    sameMonthOnly: false,
   };
   const bp = (data as any)?.booking_policies as {
     rescheduleNotice?: string;
     maxReschedules?: string;
+    rescheduleWithin?: string;
   } | null;
   if (!bp) return fallback;
 
@@ -7320,7 +7324,7 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
     "72h": 72,
   };
   const notice = bp.rescheduleNotice ? (noticeMap[bp.rescheduleNotice] ?? 0) : 0;
-  return { maxReschedules: max, rescheduleNoticeHours: notice };
+  return { maxReschedules: max, rescheduleNoticeHours: notice, sameMonthOnly: bp.rescheduleWithin === 'same_month' };
 }
 
 export async function getProviderReschedulePolicyByDisplayName(
@@ -7684,6 +7688,27 @@ export async function getMobileProviderDisplayNames(
       .filter((p) => p.business_type === "mobile")
       .map((p) => p.display_name),
   );
+}
+
+/**
+ * Of the given provider ids, which ones are live and active — i.e. a client
+ * can still open their profile and book them. Used to drop a saved cart's
+ * items from providers who went offline while the cart sat in storage.
+ * Throws on error so the caller can tell "not live" apart from "couldn't check".
+ */
+export async function getLiveProviderIds(
+  providerIds: string[],
+): Promise<Set<string>> {
+  if (providerIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from("providers")
+    .select("id")
+    .in("id", providerIds)
+    .eq("is_active", true)
+    .eq("has_gone_live", true)
+    .limit(providerIds.length);
+  if (error) throw error;
+  return new Set(((data ?? []) as { id: string }[]).map((p) => p.id));
 }
 
 /** Of the given provider ids, which ones require a consultation before a new client's first booking. */
@@ -11739,14 +11764,21 @@ export async function removeSavedCard(paymentMethodId: string): Promise<void> {
   forgetSavedCards();
 }
 
-/** A provider's late-arrival and no-show fees for one checkout, frozen on the
- *  held bookings by the database — what the client is agreeing to. */
+/** A provider's late-arrival, no-show and late cancellation fees for one
+ *  checkout, frozen on the held bookings by the database — what the client is
+ *  agreeing to. */
 export interface CheckoutFee {
   providerId: string;
   providerName: string;
   lateFeePence: number | null;
   noShowFeePence: number | null;
   graceMinutes: number;
+  /** The most they could be charged on top of a kept deposit after a late cancel. */
+  lateCancelFeePence: number | null;
+  /** The deposit that charge sits on top of. */
+  lateCancelDepositPence: number | null;
+  /** The provider's notice period for cancelling, in hours. */
+  cancelNoticeHours: number;
 }
 
 interface CheckoutFeeRow {
@@ -11755,6 +11787,9 @@ interface CheckoutFeeRow {
   late_fee_pence: number | null;
   no_show_fee_pence: number | null;
   grace_minutes: number | null;
+  late_cancel_fee_pence?: number | null;
+  late_cancel_deposit_pence?: number | null;
+  cancel_notice_hours?: number | null;
 }
 
 export async function getCheckoutFees(checkoutBatchId: string): Promise<CheckoutFee[]> {
@@ -11766,6 +11801,9 @@ export async function getCheckoutFees(checkoutBatchId: string): Promise<Checkout
     lateFeePence: row.late_fee_pence,
     noShowFeePence: row.no_show_fee_pence,
     graceMinutes: row.grace_minutes ?? 0,
+    lateCancelFeePence: row.late_cancel_fee_pence ?? null,
+    lateCancelDepositPence: row.late_cancel_deposit_pence ?? null,
+    cancelNoticeHours: row.cancel_notice_hours ?? 0,
   }));
 }
 
@@ -11796,9 +11834,9 @@ export async function acceptCheckoutFees(
   return data as string;
 }
 
-export type BookingFeeKind = 'late' | 'no_show';
+export type BookingFeeKind = 'late' | 'no_show' | 'late_cancel';
 
-/** One late/no-show fee attempt on a booking, as either party may read it (RLS). */
+/** One late/no-show/late cancellation fee attempt on a booking, as either party may read it (RLS). */
 export interface BookingFeeCharge {
   id: string;
   kind: BookingFeeKind;
@@ -11867,22 +11905,76 @@ export interface BookingFeeTerms {
   endTime: string | null;
   lateFeePence: number | null;
   noShowFeePence: number | null;
+  lateCancelFeePence: number | null;
+  /** The deposit the client paid, in pence; 0 when they paid in full. */
+  depositPence: number;
+  paymentStatus: string | null;
+  cancelledBy: string | null;
+  cancelledAt: string | null;
+  /** When the provider accepted it; null for a request that was never accepted. */
+  confirmedAt: string | null;
+  /** The notice period frozen on the booking, in hours. */
+  cancelNoticeHours: number;
+  lateRescheduleFrom: string | null;
+  /** cancelPenalty from the policy frozen on the booking. */
+  cancelPenalty: string | null;
+}
+
+interface BookingFeeTermsRow {
+  status: string;
+  booking_date: string;
+  booking_time: string;
+  end_time: string | null;
+  late_fee_pence: number | null;
+  no_show_fee_pence: number | null;
+  late_cancel_fee_pence: number | null;
+  deposit_amount: number | string | null;
+  payment_status: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  confirmed_at: string | null;
+  cancel_notice_hours: number | null;
+  late_reschedule_from: string | null;
+  policy_snapshot: Record<string, unknown> | null;
 }
 
 export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
   const { data, error } = await supabase.from('bookings')
-    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence')
+    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, deposit_amount, payment_status, cancelled_by, cancelled_at, confirmed_at, cancel_notice_hours, late_reschedule_from, policy_snapshot')
     .eq('id', bookingId)
     .single();
   if (error) throw error;
+  const row = data as BookingFeeTermsRow;
   return {
-    status: data.status,
-    bookingDate: data.booking_date,
-    bookingTime: data.booking_time,
-    endTime: data.end_time,
-    lateFeePence: data.late_fee_pence,
-    noShowFeePence: data.no_show_fee_pence,
+    status: row.status,
+    bookingDate: row.booking_date,
+    bookingTime: row.booking_time,
+    endTime: row.end_time,
+    lateFeePence: row.late_fee_pence,
+    noShowFeePence: row.no_show_fee_pence,
+    lateCancelFeePence: row.late_cancel_fee_pence,
+    depositPence: Math.round(Number(row.deposit_amount ?? 0) * 100),
+    paymentStatus: row.payment_status,
+    cancelledBy: row.cancelled_by,
+    cancelledAt: row.cancelled_at,
+    confirmedAt: row.confirmed_at,
+    cancelNoticeHours: Number(row.cancel_notice_hours ?? 0),
+    lateRescheduleFrom: row.late_reschedule_from,
+    cancelPenalty: typeof row.policy_snapshot?.['cancelPenalty'] === 'string' ? row.policy_snapshot['cancelPenalty'] as string : null,
   };
+}
+
+/** The client's own booking: what the provider could charge on top of the
+ *  deposit if it's cancelled late (bookings.late_cancel_fee_pence), for the
+ *  cancel sheet's warning. Null when nothing more could be charged. */
+export async function getMyBookingLateCancelFee(bookingId: string): Promise<number | null> {
+  const { data, error } = await supabase.from('bookings')
+    .select('late_cancel_fee_pence')
+    .eq('id', bookingId)
+    .single();
+  if (error) throw error;
+  const pence = (data as { late_cancel_fee_pence: number | null }).late_cancel_fee_pence;
+  return pence && pence > 0 ? pence : null;
 }
 
 /** Every field booking-fee may answer with; each action reads its own. */
