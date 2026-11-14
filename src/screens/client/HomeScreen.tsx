@@ -1352,6 +1352,7 @@ export default function HomeScreen() {
         {!selectedService && circleMoment.moment?.kind === 'recommend' && (
           <RecommendHomeCard
             providerName={circleMoment.moment.providerName}
+            providerLogoUri={circleMoment.moment.providerLogoUri}
             bookingDate={circleMoment.moment.bookingDate}
             busy={circleMoment.busy}
             error={circleMoment.error}

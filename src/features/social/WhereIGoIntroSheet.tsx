@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { AppTheme } from '../../constants/theme';
 import { FONT_BODY, FONT_DISPLAY, GhostButton, PrimaryButton, Sheet } from '../maintenance/ui';
 
@@ -23,12 +24,15 @@ interface Props {
 export function WhereIGoIntroSheet({ visible, busy, error, onGotIt, onTurnOff, onClose, P, errorColour }: Props) {
   return (
     <Sheet visible={visible} onClose={onClose} P={P}>
-      {/* What a follower sees: your face on a provider's card. */}
+      {/* A gradient stands in for a provider until there is a real one to show. */}
       <View style={[styles.preview, { backgroundColor: P.accentDim }]} accessible={false}>
         <View style={styles.faces}>
-          <View style={[styles.face, { backgroundColor: P.secondary, borderColor: P.card }]}>
-            <Text style={[styles.faceText, { color: P.secondaryText }]}>AK</Text>
-          </View>
+          <LinearGradient
+            colors={['#F5B7D2', '#9A84C5', '#4A6B8F']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.face, { borderColor: P.card }]}
+          />
           <View style={[styles.face, styles.overlap, { backgroundColor: P.accent, borderColor: P.card }]}>
             <Text style={[styles.faceText, { color: P.onAccent }]}>YOU</Text>
           </View>
@@ -51,7 +55,7 @@ export function WhereIGoIntroSheet({ visible, busy, error, onGotIt, onTurnOff, o
 const styles = StyleSheet.create({
   preview: { height: 110, borderRadius: 18, padding: 12, justifyContent: 'space-between' },
   faces: { flexDirection: 'row', alignSelf: 'flex-end' },
-  face: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  face: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   overlap: { marginLeft: -8 },
   faceText: { fontSize: 8, fontWeight: '700' },
   previewLabel: { fontFamily: FONT_DISPLAY, fontSize: 15 },
