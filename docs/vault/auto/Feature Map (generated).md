@@ -246,12 +246,12 @@ Curated: [[Booking Flow]] · **67 files**
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **214 files**
 - `src/contexts/BookingContext.tsx` _(351)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(338)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/services/databaseService.ts` _(329)_
 - `src/screens/client/BookingDetailScreen.tsx` _(240)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
-- `src/screens/client/RescheduleScreen.tsx` _(162)_
+- `src/screens/client/RescheduleScreen.tsx` _(164)_
 - `src/screens/client/CartScreen.tsx` _(154)_
 - `src/services/becca/capabilities/client.ts` _(149)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
