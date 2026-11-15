@@ -200,20 +200,25 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
   const onBarClose = useCallback(() => setPhase('none'), []);
 
   const onHeartPress = useCallback(() => {
-    hapticLight();
     if (menuOpen) {
+      hapticLight();
       setMenuOpen(false);
       return;
     }
     setPhase('none');
     measureHeart();
     setMenuOpen(true);
-    if (sharing && !sharing.recommended && !sharing.hidden && !saving) void setRecommended(true);
+    if (sharing && !sharing.recommended && !sharing.hidden && !saving) {
+      // The saved recommendation gives its own success haptic.
+      void setRecommended(true);
+    } else {
+      hapticLight();
+    }
   }, [menuOpen, measureHeart, sharing, saving, setRecommended]);
 
   const onToggleRecommend = useCallback(() => {
     if (!sharing || saving || sharing.hidden) return;
-    hapticLight();
+    // setRecommended gives one haptic after the change is saved.
     void setRecommended(!sharing.recommended);
   }, [sharing, saving, setRecommended]);
 
