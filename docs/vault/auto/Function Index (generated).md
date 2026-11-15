@@ -308,11 +308,11 @@
 
 ### `src/features/providers/heroes/` (8)
 - `BoutiqueHero.tsx` — **BoutiqueHero**
-- `CallingCardHero.tsx` — **CallingCardHero** · **callingCardInk** · **GoldClip** · **SatinBackdrop**
-- `EmbossedHero.tsx` — **EmbossedText** · **plateMarkEdges** · **pressEdges** · **PressedHero**
+- `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
+- `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **gazetteHeadline** · **GazetteHero** · **gazetteMasthead** · **HalftoneScreen**
 - `LaceHero.tsx` — LaceDrape · **LaceHero** · **LaceRosette** · **LaceTrim** · scallopXs
-- `NovelHero.tsx` — **clothColour** · **NovelHero** · subtitle
+- `NovelHero.tsx` — **NovelHero** · subtitle
 - `SealedHero.tsx` — Postmark · **SealedEnvelope**
 - `SheerHero.tsx` — **SheerHero**
 

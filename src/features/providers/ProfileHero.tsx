@@ -191,6 +191,9 @@ export interface ProfileHeroLayoutProps {
   rating?: string | null;
   /** The verified tick beside the name, for the layouts that draw the name themselves. */
   isVerified?: boolean;
+  /** The theme's backdrop colour (the gradient's first stop): Calling Card's
+   *  satin, Embossed's pressed letters and Novel's title page are drawn in it. */
+  heroColour: string;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -237,6 +240,7 @@ export function ProfileHeroLayout({
   photoUris,
   rating,
   isVerified,
+  heroColour,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
@@ -744,12 +748,14 @@ export function ProfileHeroLayout({
       );
 
     case "pressed":
-      // Embossed: a sheet of pressed paper over their photo (heroes/EmbossedHero).
+      // Embossed: the name pressed straight into the theme backdrop (heroes/EmbossedHero).
       return (
         <PressedHero
           name={name}
           phrase={kickerPhrase(kicker)}
           location={location}
+          backdrop={heroColour}
+          heroSub={heroSub}
           logo={renderLogo(84)}
           details={details}
           tick={tick}
@@ -757,7 +763,7 @@ export function ProfileHeroLayout({
       );
 
     case "callingCard":
-      // Calling Card: satin folds, and a cream card held by a gold clip with
+      // Calling Card: satin folds in the theme colour, and a cream card held by an accent clip with
       // the logo, the name and the details on it (heroes/CallingCardHero).
       return (
         <CallingCardHero
@@ -765,14 +771,15 @@ export function ProfileHeroLayout({
           kicker={kicker}
           location={location}
           accent={accent}
+          heroColour={heroColour}
           logo={renderLogo(76)}
           details={details}
           tick={tick}
         />
       );
 
-    case "shoppingBag":
-      // Boutique: a shopping bag with their logo and name printed on it.
+    case "basket":
+      // Boutique: a woven basket with their logo and name on a shop label (heroes/BoutiqueHero).
       return (
         <BoutiqueHero
           name={name}
@@ -806,17 +813,20 @@ export function ProfileHeroLayout({
         </>
       );
 
-    case "hardback":
-      // Novel: a cloth-bound cover, drawn in heroes/NovelHero.
+    case "titlePage":
+      // Novel: a book's title page set straight on the backdrop (heroes/NovelHero).
       return (
         <NovelHero
           name={name}
           kicker={kicker}
           location={location}
-          accent={accent}
+          heroText={heroText}
+          heroSub={heroSub}
+          heroAccent={heroAccent}
+          shadow={shadow}
           renderLogo={renderLogo}
           details={details}
-          isVerified={isVerified}
+          tick={tick}
         />
       );
 

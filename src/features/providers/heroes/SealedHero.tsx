@@ -78,7 +78,7 @@ export function SealedEnvelope({
 }
 
 /** The logo's size on the tucked card. */
-export const SEALED_LOGO_SIZE = 64;
+export const SEALED_LOGO_SIZE = 74;
 
 /** A round postmark with their area round its ring, and wavy cancel lines. */
 function Postmark({ text }: { text: string }) {
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   },
   cardRule: { position: "absolute", top: 5, left: 5, right: 5, bottom: 5, borderWidth: 1, borderColor: "rgba(90,58,53,0.25)" },
   // HeroLogo keeps 20pt under itself; cancel it so the logo sits in the corner.
-  cardLogo: { position: "absolute", right: 12, bottom: 12 - 20 },
+  cardLogo: { position: "absolute", right: 10, bottom: 10 - 20 },
   seal: {
     position: "absolute", left: ENVELOPE_X + ENVELOPE_W / 2 - SEAL / 2, top: FLAP_TIP_Y * SCALE - SEAL / 2,
     shadowColor: "#000000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 4,

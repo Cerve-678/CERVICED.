@@ -42,6 +42,9 @@ export function EmbossedText({
   numberOfLines,
   adjustsFontSizeToFit,
   minimumFontScale,
+  edges,
+  face,
+  depth = 1,
 }: {
   children: string;
   paper: string;
@@ -50,12 +53,18 @@ export function EmbossedText({
   numberOfLines?: number;
   adjustsFontSizeToFit?: boolean;
   minimumFontScale?: number;
+  /** Stronger edges than the paper's own, for a press that has to read from a distance (the hero). */
+  edges?: { high: string; shade: string; drop: string };
+  /** The letters' own face, when it should sit a shade off the paper so they read more clearly. */
+  face?: string;
+  /** How far the edges stand off the letter, in points. */
+  depth?: number;
 }) {
-  const { high, shade, drop } = pressEdges(paper);
+  const { high, shade, drop } = edges ?? pressEdges(paper);
   const fit = { numberOfLines, adjustsFontSizeToFit, minimumFontScale };
   // Raised: lit from the top left, so the light edge is up-left and the shade
   // down-right. Pressed in, the other way round.
-  const lit = raised ? -1 : 1;
+  const lit = (raised ? -1 : 1) * depth;
   const hidden = { accessible: false, importantForAccessibility: "no-hide-descendants" as const, accessibilityElementsHidden: true };
   return (
     <View style={pressStyles.stack}>
@@ -77,7 +86,7 @@ export function EmbossedText({
         {...fit}
         style={[
           style,
-          { color: paper },
+          { color: face ?? paper },
           raised ? { textShadowColor: drop, textShadowOffset: { width: 1, height: 3 }, textShadowRadius: 5 } : null,
         ]}
       >
@@ -87,21 +96,35 @@ export function EmbossedText({
   );
 }
 
-/** The hero's paper. It's a physical sheet, so its colours are fixed. */
-export const PRESS_PAPER = "#ECE6DF";
-const PRESS_SUB = "#5C534D";
+/**
+ * The hero's press: deeper and higher-contrast than a card's, because it's
+ * pressed straight into the theme backdrop with no sheet of paper round it,
+ * and the name has to read clearly at a glance.
+ */
+function heroPress(backdrop: string): { edges: { high: string; shade: string; drop: string }; face: string } {
+  return isDarkColor(backdrop)
+    ? {
+        edges: { high: "rgba(255,255,255,0.34)", shade: "rgba(0,0,0,0.78)", drop: "rgba(0,0,0,0.42)" },
+        face: blend(backdrop, "#FFFFFF", 0.14),
+      }
+    : {
+        edges: { high: "rgba(255,255,255,1)", shade: "rgba(50,36,28,0.55)", drop: "rgba(50,36,28,0.2)" },
+        face: blend(backdrop, "#FFFFFF", 0.3),
+      };
+}
 
 /**
- * Embossed's hero: a sheet of pressed paper laid over their photo. The logo
- * sits in a ring blind-stamped into the sheet, the name is pressed up out of
- * it in Libre Caslon Display, and what they do runs over its foot in an
- * embossed Italianno script. The stars, years and slots pill stay on the
- * photo under the sheet, as in the other heroes.
+ * Embossed's hero, pressed straight into the theme backdrop (no card, owner
+ * 2026-11-15): the logo sits in a blind-stamped ring, the name is raised out
+ * of the backdrop in Libre Caslon Display, and what they do runs over its foot
+ * in an embossed Italianno script. The stars, years and slots pill sit under it.
  */
 export function PressedHero({
   name,
   phrase,
   location,
+  backdrop,
+  heroSub,
   logo,
   details,
   tick,
@@ -110,35 +133,54 @@ export function PressedHero({
   /** "Lashes & brows", from kickerPhrase. */
   phrase: string;
   location: string;
+  /** The theme's backdrop colour, which the letters are pressed into. */
+  backdrop: string;
+  heroSub: string;
   logo: React.ReactNode;
   details: React.ReactNode;
   tick: React.ReactNode;
 }) {
-  const edges = pressEdges(PRESS_PAPER);
+  const { edges, face } = heroPress(backdrop);
   return (
     <View style={pressStyles.wrap}>
-      <View style={pressStyles.paper}>
-        <View style={pressStyles.stamp}>
-          {/* A blind stamp: a shaded ring up-left and a lit one down-right read as pressed in. */}
-          <View style={[pressStyles.ring, { borderColor: edges.shade }]} pointerEvents="none" />
-          <View style={[pressStyles.ring, pressStyles.ringLit, { borderColor: edges.high }]} pointerEvents="none" />
-          {logo}
-        </View>
-        <View style={pressStyles.nameBlock} accessible accessibilityRole="header" accessibilityLabel={name}>
-          <EmbossedText paper={PRESS_PAPER} style={pressStyles.name} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.45}>
-            {name.toUpperCase()}
-          </EmbossedText>
-          {phrase ? (
-            <View style={pressStyles.scriptWrap}>
-              <EmbossedText paper={PRESS_PAPER} style={pressStyles.script} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {phrase}
-              </EmbossedText>
-            </View>
-          ) : null}
-        </View>
-        {tick}
-        {location ? <Text style={pressStyles.located} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+      <View style={pressStyles.stamp}>
+        {/* A blind stamp: a shaded ring up-left and a lit one down-right read as pressed in. */}
+        <View style={[pressStyles.ring, { borderColor: edges.shade }]} pointerEvents="none" />
+        <View style={[pressStyles.ring, pressStyles.ringLit, { borderColor: edges.high }]} pointerEvents="none" />
+        {logo}
       </View>
+      <View style={pressStyles.nameBlock} accessible accessibilityRole="header" accessibilityLabel={name}>
+        <EmbossedText
+          paper={backdrop}
+          face={face}
+          edges={edges}
+          depth={1.5}
+          style={pressStyles.name}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.45}
+        >
+          {name.toUpperCase()}
+        </EmbossedText>
+        {phrase ? (
+          <View style={pressStyles.scriptWrap}>
+            <EmbossedText
+              paper={backdrop}
+              face={face}
+              edges={edges}
+              depth={1.25}
+              style={pressStyles.script}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {phrase}
+            </EmbossedText>
+          </View>
+        ) : null}
+      </View>
+      {tick}
+      {location ? <Text style={[pressStyles.located, { color: heroSub }]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
       <View style={pressStyles.details}>{details}</View>
     </View>
   );
@@ -149,29 +191,16 @@ const PRESS_TOP = 56;
 
 const pressStyles = StyleSheet.create({
   stack: { alignSelf: "stretch" },
-  wrap: { paddingHorizontal: 20, marginTop: PRESS_TOP, marginBottom: 24 },
-  paper: {
-    backgroundColor: PRESS_PAPER,
-    borderRadius: 3,
-    paddingTop: 24,
-    paddingBottom: 22,
-    paddingHorizontal: 18,
-    alignItems: "center",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  stamp: { width: 104, height: 104, alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  wrap: { paddingHorizontal: 20, marginTop: PRESS_TOP, marginBottom: 24, alignItems: "center" },
+  stamp: { width: 104, height: 104, alignItems: "center", justifyContent: "center", marginBottom: 8 },
   ring: { position: "absolute", top: 0, left: 0, width: 102, height: 102, borderRadius: 51, borderWidth: 1.5 },
   ringLit: { top: 1.5, left: 1.5 },
   nameBlock: { alignSelf: "stretch", alignItems: "center" },
   // Libre Caslon Display has tall caps; 1.28x keeps their tops from being cropped.
-  name: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 58, lineHeight: 75, letterSpacing: 1, textAlign: "center" },
+  name: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 64, lineHeight: 82, letterSpacing: 1.5, textAlign: "center" },
   scriptWrap: { alignSelf: "stretch", marginTop: -30 },
   // A looping script: 1.5x line height and room either side for its swashes.
-  script: { fontFamily: "Italianno-Regular", fontSize: 46, lineHeight: 70, paddingHorizontal: 16, textAlign: "center" },
-  located: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 12, lineHeight: 17, letterSpacing: 3, color: PRESS_SUB, marginTop: 2, textAlign: "center" },
-  details: { alignItems: "center", marginTop: 16 },
+  script: { fontFamily: "Italianno-Regular", fontSize: 52, lineHeight: 78, paddingHorizontal: 16, textAlign: "center" },
+  located: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 12, lineHeight: 17, letterSpacing: 3, marginTop: 2, textAlign: "center" },
+  details: { alignItems: "center", alignSelf: "stretch", marginTop: 16 },
 });
