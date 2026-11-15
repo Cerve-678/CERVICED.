@@ -13,11 +13,15 @@
 //   ASK_GAP_DAYS for all providers, once per provider, never on a day the
 //   intro was shown, and not at all after NOT_NOW_LIMIT "Not now"s in a row.
 // - Nobody is asked while Show where I go is off: nobody would see it.
+// - A provider's profile offers Recommend once, with the same bar, the first
+//   time it's opened by someone who's been there, unless they were already
+//   asked about that provider anywhere else (or said "Not now" too often).
+//   After that it's only the heart in the profile's header (2026-11-15).
 // - The intro comes the day after the first completed visit. Closing it
 //   without a button brings it back, at most INTRO_MAX_SHOWS times in all,
 //   INTRO_GAP_DAYS apart. Until it's been seen, visits aren't shared.
 
-import type { SocialSettings } from './types';
+import type { ProviderSharing, SocialSettings } from './types';
 
 export const RECOMMEND_WINDOW_DAYS = 7;
 export const ASK_GAP_DAYS = 7;
@@ -82,6 +86,19 @@ export function withAnswer(memory: MomentsMemory, recommended: boolean): Moments
 
 export function withIntroShown(memory: MomentsMemory, now: Date): MomentsMemory {
   return { ...memory, introShownAt: [...memory.introShownAt, now.getTime()].slice(-INTRO_MAX_SHOWS) };
+}
+
+/** Whether a provider's profile shows its one-time Recommend bar. */
+export function shouldOfferOnProfile(
+  settings: Pick<SocialSettings, 'showWhereIGo'>,
+  sharing: ProviderSharing,
+  memory: MomentsMemory,
+  providerId: string,
+): boolean {
+  if (!settings.showWhereIGo) return false;
+  if (!sharing.canRecommend || sharing.recommended || sharing.hidden) return false;
+  if (memory.notNowStreak >= NOT_NOW_LIMIT) return false;
+  return !memory.prompted.includes(providerId);
 }
 
 /** The bits of a booking the moments need (ConfirmedBooking satisfies it). */

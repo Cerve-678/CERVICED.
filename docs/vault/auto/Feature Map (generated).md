@@ -123,7 +123,7 @@ Curated: [[Booking Flow]] · **372 files**
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(193)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(152)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(151)_
 - `src/screens/shared/NotificationsScreen.tsx` _(141)_
 - `src/services/AvailabilityService.ts` _(139)_
 - `supabase/waitlist_holds.sql` _(134)_

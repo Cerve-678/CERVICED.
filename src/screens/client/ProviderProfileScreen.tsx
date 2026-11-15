@@ -6,7 +6,11 @@ import React, {
   useEffect,
 } from "react";
 import { useBookmarkStore } from "../../stores/useBookmarkStore";
-import { ProviderSharingRow } from "../../features/social/ProviderSharingRow";
+import {
+  ProviderRecommendLayer,
+  RecommendHeartButton,
+  useProviderRecommend,
+} from "../../features/social/ProviderRecommend";
 import {
   View,
   Text,
@@ -2145,6 +2149,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
+  // Recommend, for a client who has had a completed appointment here: a
+  // one-time bar, then a heart in the header with a menu under it.
+  const recommend = useProviderRecommend({
+    providerId: providerDbId,
+    providerName: provider?.displayName ?? "",
+    enabled: canSaveProvider && hatState.active === "client",
+    onError: showAlert,
+  });
+  const recommendHeart = recommend.heart;
 
   const refuseBookingAsProvider = useCallback((): boolean => {
     if (!viewingOtherAsProvider) return false;
@@ -2675,6 +2688,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       },
       headerRight: () => (
         <View style={styles.navHeaderActions}>
+          {recommendHeart ? (
+            <RecommendHeartButton {...recommendHeart} style={styles.headerActionButton} />
+          ) : null}
           <TouchableOpacity
             style={[
               styles.headerActionButton,
@@ -2743,6 +2759,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     handleBookmarkToggle,
     canSaveProvider,
     handleShare,
+    recommendHeart,
     OP.bg,
     OP.text,
     provider?.brandFont,
@@ -3649,7 +3666,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           <Text style={{ color: OP.sub, fontFamily: "Jura-VariableFont_wght" }}>
             {loadFailed
               ? "Could not load provider. Please try again."
-              : "This provider is currently not accepting bookings."}
+              : "Provider not found"}
           </Text>
         </View>
       );
@@ -5148,6 +5165,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             contentContainerStyle={styles.scrollContent}
             scrollEventThrottle={16}
             onScroll={handleScroll}
+            // Touching the page closes Recommend's menu and bubble.
+            onTouchStart={recommend.dismissFloating}
             nestedScrollEnabled={true}
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
@@ -5503,19 +5522,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 provider.backgroundImage ? styles.contentSheetFloating : null,
               ]}
             >
-              {/* Recommend + "Don't show me" — only for a client who has had
-                  a completed appointment here; renders nothing otherwise. */}
-              <ProviderSharingRow
-                providerId={providerDbId}
-                providerName={provider.displayName}
-                enabled={canSaveProvider && hatState.active === "client"}
-                tokens={OP}
-                accent={adaptiveAccentColor}
-                cardBg={cardBg}
-                square={squareCards}
-                onError={showAlert}
-              />
-
               {/* Cover: a bar of links to the main sections. */}
               {pageStyle.jumpBar ? (
                 <View
@@ -5937,6 +5943,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             </View>
           </ScrollView>
         </SafeAreaView>
+
+        {/* Last, so the bar, bubble and menu sit over the page. */}
+        <ProviderRecommendLayer {...recommend.layer} bottomOffset={FLOATING_TAB_BAR_CLEARANCE} />
       </ThemedBackground>
     </WindowControlsInsetProvider>
     </SafeAreaProvider>

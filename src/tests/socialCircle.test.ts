@@ -8,6 +8,7 @@ import {
   parseMomentsMemory,
   RECOMMEND_WINDOW_DAYS,
   recommendCandidates,
+  shouldOfferOnProfile,
   shouldShowWhereIGoNotice,
   visitWhenLabel,
   withAnswer,
@@ -163,6 +164,30 @@ describe('nextCircleStep', () => {
   it('asks nothing while Show where I go is off, or inside the weekly gap', () => {
     expect(nextCircleStep({ showWhereIGo: false, whereIGoNoticeSeen: true }, [booking({})], EMPTY_MEMORY, NOW)).toBeNull();
     expect(nextCircleStep(on, [booking({})], mem({ lastAskAt: NOW.getTime() }), NOW)).toBeNull();
+  });
+});
+
+describe('shouldOfferOnProfile', () => {
+  const been = { canRecommend: true, recommended: false, hidden: false };
+
+  it('offers once to someone who has been and was never asked', () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, EMPTY_MEMORY, 'p1')).toBe(true);
+  });
+
+  it("doesn't offer when they were already asked about this provider anywhere", () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, withAsked(EMPTY_MEMORY, 'p1', NOW), 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, withAsked(EMPTY_MEMORY, 'p2', NOW), 'p1')).toBe(true);
+  });
+
+  it("doesn't offer when nobody would see it, or there's nothing to ask", () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: false }, been, EMPTY_MEMORY, 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, { ...been, canRecommend: false }, EMPTY_MEMORY, 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, { ...been, recommended: true }, EMPTY_MEMORY, 'p1')).toBe(false);
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, { ...been, hidden: true }, EMPTY_MEMORY, 'p1')).toBe(false);
+  });
+
+  it('stops after too many Not nows in a row', () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, mem({ notNowStreak: NOT_NOW_LIMIT }), 'p1')).toBe(false);
   });
 });
 
