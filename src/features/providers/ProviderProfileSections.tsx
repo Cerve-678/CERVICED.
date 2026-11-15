@@ -25,6 +25,7 @@ import {
   sectionInk,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import { plateMarkEdges } from "./heroes/EmbossedHero";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -332,8 +333,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   interactiveImages?: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
-  // Calling Card: each photo a cream-bordered print pinned by a gold clip.
-  const clipped = !!palette.pageStyle?.clippedPhotos;
   // Measured per render rather than captured at module load, so the two-column
   // maths stays right after a rotation or in split-screen.
   const { width: screenWidth } = useWindowDimensions();
@@ -366,6 +365,13 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   }
 
   if (items.length === 0) return null;
+
+  // Sealed: each photo a perforated postage stamp.
+  const stamps = !!palette.pageStyle?.stampPhotos;
+  // Embossed: each photo sits in a plate mark pressed into the page, like a print.
+  const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
+  // Calling Card: each photo a cream-bordered print pinned by a gold clip.
+  const clipped = !!palette.pageStyle?.clippedPhotos;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -401,13 +407,21 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                 onPress={() => onOpenImage(images, item.globalIndex)}
                 disabled={!interactiveImages}
                 style={
-                  clipped
+                  stamps
                     ? [
-                        styles.clippedPrint,
-                        // A slight, alternating tilt, as if pinned by hand.
-                        { transform: [{ rotate: (columnIndex + rowIndex) % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
+                        styles.stampTile,
+                        // The dotted border in the page's own colour reads as the perforations.
+                        { borderColor: palette.background, transform: [{ rotate: item.globalIndex % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
                       ]
-                    : styles.portfolioTile
+                    : plate
+                      ? [styles.plateTile, plate]
+                      : clipped
+                        ? [
+                            styles.clippedPrint,
+                            // A slight, alternating tilt, as if pinned by hand.
+                            { transform: [{ rotate: (columnIndex + rowIndex) % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
+                          ]
+                        : styles.portfolioTile
                 }
               >
                 <Image
@@ -558,6 +572,11 @@ const styles = StyleSheet.create({
   },
   clippedCaption: { left: 6, right: 6, bottom: 18 },
   clippedClip: { position: "absolute", top: -14, alignSelf: "center" },
+  stampTile: {
+    padding: 6, borderWidth: 4, borderStyle: "dotted", backgroundColor: "#FBF6EE",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 6, elevation: 2,
+  },
+  plateTile: { padding: 7, borderWidth: 1.5, borderRadius: 1, overflow: "hidden" },
   loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
     position: "absolute", left: 0, right: 0, bottom: 0,

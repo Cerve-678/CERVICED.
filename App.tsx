@@ -205,6 +205,19 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Sealed (round 4, 2026-11-15).
+    'Corinthia-Bold': require('./assets/fonts/Corinthia-Bold.ttf'),
+    'EBGaramond-SemiBold': require('./assets/fonts/EBGaramond-SemiBold.ttf'),
+    'EBGaramond-Italic': require('./assets/fonts/EBGaramond-Italic.ttf'),
+    // Lace (round 4, 2026-11-15).
+    'Allura-Regular': require('./assets/fonts/Allura-Regular.ttf'),
+    'GildaDisplay-Regular': require('./assets/fonts/GildaDisplay-Regular.ttf'),
+    // Sheer (page style, round 4, 2026-11-15).
+    'Bellefair-Regular': require('./assets/fonts/Bellefair-Regular.ttf'),
+    'Jost-Light': require('./assets/fonts/Jost-Light.ttf'),
+    // Embossed (round 4, 2026-11-15).
+    'LibreCaslonDisplay-Regular': require('./assets/fonts/LibreCaslonDisplay-Regular.ttf'),
+    'Italianno-Regular': require('./assets/fonts/Italianno-Regular.ttf'),
     // Calling Card (round 4, 2026-11-15): a copperplate script and engraved caps.
     'MonsieurLaDoulaise-Regular': require('./assets/fonts/MonsieurLaDoulaise-Regular.ttf'),
     'Forum-Regular': require('./assets/fonts/Forum-Regular.ttf'),
