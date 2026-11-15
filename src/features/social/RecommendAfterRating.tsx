@@ -2,7 +2,7 @@
 //
 // After a client rates a visit 4 or 5 stars, a slim bar slides up offering
 // Recommend (style B, chosen 2026-11-09). It goes away by itself after a few
-// seconds; × counts as "Not now". Not offered while Show where I go is off
+// seconds; × simply closes it. Not offered while Show where I go is off
 // (nobody would see it), or for a provider already recommended or hidden.
 //
 // Usage: const after = useRecommendAfterRating(userId); call
@@ -31,7 +31,7 @@ export interface RecommendBarProps {
   offer: Offer | null;
   busy: boolean;
   onYes: () => void;
-  onClose: (byTap: boolean) => void;
+  onClose: () => void;
 }
 
 export function useRecommendAfterRating(userId: string | null, onRecommended?: (providerId: string) => void) {
@@ -56,10 +56,7 @@ export function useRecommendAfterRating(userId: string | null, onRecommended?: (
     }
   }, [userId]);
 
-  const onClose = useCallback((byTap: boolean) => {
-    if (byTap && userId) void updateMomentsMemory(userId, (m) => withAnswer(m, false));
-    setOfferState(null);
-  }, [userId]);
+  const onClose = useCallback(() => setOfferState(null), []);
 
   const onYes = useCallback(async () => {
     if (!offerState || busy) return;
@@ -116,7 +113,7 @@ export function RecommendAfterRatingBar({
     if (offer) {
       setShown(offer);
       Animated.spring(slide, { toValue: 1, useNativeDriver: true, friction: 9 }).start();
-      const t = setTimeout(() => onClose(false), AUTO_HIDE_MS);
+      const t = setTimeout(onClose, AUTO_HIDE_MS);
       return () => clearTimeout(t);
     }
     Animated.timing(slide, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShown(null));
@@ -165,9 +162,9 @@ export function RecommendAfterRatingBar({
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.close}
-        onPress={() => { hapticLight(); onClose(true); }}
+        onPress={() => { hapticLight(); onClose(); }}
         accessibilityRole="button"
-        accessibilityLabel="Not now"
+        accessibilityLabel="Close recommendation"
         activeOpacity={0.6}
       >
         <Ionicons name="close" size={18} color={ink} />

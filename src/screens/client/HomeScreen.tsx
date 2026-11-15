@@ -1358,7 +1358,7 @@ export default function HomeScreen() {
             error={circleMoment.error}
             onRecommend={circleMoment.recommend}
             onBookAgain={openRecommendProvider}
-            onNotNow={circleMoment.notNow}
+            onClose={circleMoment.closeRecommend}
             P={P}
             errorColour={semanticColors(isDarkMode).bad}
           />
