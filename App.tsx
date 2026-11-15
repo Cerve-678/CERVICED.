@@ -31,6 +31,8 @@ import { PinyonScript_400Regular } from '@expo-google-fonts/pinyon-script/400Reg
 import { Sacramento_400Regular } from '@expo-google-fonts/sacramento/400Regular';
 import { Syne_700Bold } from '@expo-google-fonts/syne/700Bold';
 import { JosefinSans_600SemiBold } from '@expo-google-fonts/josefin-sans/600SemiBold';
+// Quiet's lighter line under the name (ProfileHero quietPhrase).
+import { JosefinSans_400Regular } from '@expo-google-fonts/josefin-sans/400Regular';
 import { TenorSans_400Regular } from '@expo-google-fonts/tenor-sans/400Regular';
 import { PoiretOne_400Regular } from '@expo-google-fonts/poiret-one/400Regular';
 import { Limelight_400Regular } from '@expo-google-fonts/limelight/400Regular';
@@ -217,6 +219,7 @@ export default Sentry.wrap(function App() {
     Sacramento_400Regular,
     Syne_700Bold,
     JosefinSans_600SemiBold,
+    JosefinSans_400Regular,
     TenorSans_400Regular,
     PoiretOne_400Regular,
     Limelight_400Regular,

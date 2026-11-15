@@ -36,7 +36,8 @@ export type PageHeading =
   | 'serifTitle' // a large serif title, nothing above it (Gallery)
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
-  | 'condensed'; // huge condensed caps over a short accent bar (Snapshot)
+  | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
+  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
 
 /** What a section sits on. */
 export type PageCards =
@@ -221,7 +222,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   },
   {
     key: 'quiet', name: 'Quiet', description: 'Your photo left clear, your name on a calm band',
-    heading: 'labelCaps', cards: 'none', policies: 'definition', logo: 'circle',
+    heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },

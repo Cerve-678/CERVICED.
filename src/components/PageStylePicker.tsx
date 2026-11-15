@@ -216,6 +216,8 @@ function MiniProfile({
         );
       case 'labelCaps':
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'quietCaps':
+        return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -271,6 +273,7 @@ function MiniProfile({
       <LinearGradient colors={heroColours} style={mini.hero}>
         {style.hero === 'cover' ? (
           <>
+            <View style={[mini.coverLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
             <Text style={mini.coverName} numberOfLines={1}>Name</Text>
             <View style={mini.pillRow}>
               <View style={mini.pill} />
@@ -357,7 +360,7 @@ function MiniProfile({
           </View>
         ) : style.hero === 'quietBand' ? (
           <View style={mini.quietBand}>
-            <Text style={mini.tagName} numberOfLines={1}>NAME</Text>
+            <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
           </View>
         ) : style.hero === 'poster' ? (
           <>
@@ -423,6 +426,7 @@ const mini = StyleSheet.create({
   spaName: { fontFamily: 'TenorSans_400Regular', fontSize: 9, letterSpacing: 2, color: '#FFFFFF', marginBottom: 3 },
   posterName: { fontFamily: 'Prata-Regular', fontSize: 14, color: '#FFFFFF', marginTop: 2 },
   coverName: { fontFamily: 'Syne_700Bold', fontSize: 22, color: '#FFFFFF', letterSpacing: -0.5 },
+  coverLogo: { alignSelf: 'flex-end', width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: '#FFFFFF', marginRight: 8, marginBottom: -2 },
   pillRow: { flexDirection: 'row', gap: 4, marginTop: 3 },
   pill: { width: 24, height: 7, borderRadius: 4, backgroundColor: '#FFFFFF' },
   plain: { fontFamily: 'BakbakOne-Regular', fontSize: 11 },
@@ -483,6 +487,8 @@ const mini = StyleSheet.create({
   groovy: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 14 },
   serifTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 13, lineHeight: 17 },
   labelCaps: { fontFamily: 'MarcellusSC-Regular', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
+  quietCaps: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 8, letterSpacing: 2 },
+  quietName: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 11, letterSpacing: 2, color: '#2C3527' },
   hard: {
     backgroundColor: '#FFFFFF', borderColor: '#1F1A1C', overflow: 'visible',
     shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0,

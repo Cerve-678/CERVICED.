@@ -40,7 +40,15 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
-import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "../../features/providers/ProfileHero";
+import {
+  DETAILS_ON_CARD_INK,
+  HERO_NAME_LINE_HEIGHT,
+  HERO_NAME_SIZE,
+  HeroLogo,
+  HeroPills,
+  ProfileHeroLayout,
+  detailsSitOnCard,
+} from "../../features/providers/ProfileHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -1867,6 +1875,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // Salon, studio, home-based or mobile. Classic already shows it as the
+    // icon in the line under the name; most page styles' heroes have no such
+    // line, so there it is said here in words (owner, 2026-11-15).
+    if (provider.businessType && pageStyle.key !== "classic") {
+      groups.push({ label: "Business type", chips: [BUSINESS_TYPE_LABEL[provider.businessType]] });
+    }
     // Who they work with (clients, skin tones, hair types) from About You's
     // "I Work With" — here, not in the About/Policy card, which is the bio.
     groups.push(...workWithGroups(provider));
@@ -1907,7 +1921,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       groups.push({ label: "Payment methods", chips: paymentLabels });
     }
     return groups;
-  }, [provider]);
+  }, [provider, pageStyle.key]);
 
   // One natural-language paragraph rather than a label/value dump — these are
   // unrelated one-liners, and as rows they read like a spec sheet for
@@ -1940,6 +1954,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
+  // Duet draws the stars, years and link-only caption on its white card, so
+  // they take dark ink there whatever is behind the hero.
+  const detailsOnCard = detailsSitOnCard(pageStyle);
+  const detailsText = detailsOnCard ? DETAILS_ON_CARD_INK.text : heroText;
+  const detailsSub = detailsOnCard ? DETAILS_ON_CARD_INK.sub : heroSub;
+  const detailsShadow = heroIsDark && !detailsOnCard;
 
   // What they do, for Arch's curved caption, Spa's top line and the like.
   const heroKicker = useMemo(() => {
@@ -5310,8 +5330,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <Text
                           style={[
                             styles.ratingInline,
-                            { color: heroText },
-                            heroIsDark && styles.heroTextShadow,
+                            { color: detailsText },
+                            detailsShadow && styles.heroTextShadow,
                           ]}
                         >
                           {provider.rating}
@@ -5324,8 +5344,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <Text
                           style={[
                             styles.yearsExp,
-                            { color: heroSub },
-                            heroIsDark && styles.heroTextShadow,
+                            { color: detailsSub },
+                            detailsShadow && styles.heroTextShadow,
                           ]}
                         >
                           {provider.yearsExperience} years experience
@@ -5390,7 +5410,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
                               </View>
                               <Text
-                                style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
+                                style={[styles.linkOnlyCaption, { color: detailsSub }, detailsShadow && styles.heroTextShadow]}
                               >
                                 Books on their own page — opens inside CERVICED
                               </Text>
