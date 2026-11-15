@@ -15,14 +15,14 @@ jest.mock('react-native-svg', () => ({ __esModule: true, default: () => null, Pa
 jest.mock('../components/ProfileHeroBackdrop', () => () => null);
 jest.mock('../components/FramedLogo', () => ({ LogoCircle: () => null }));
 
-function renderPreview(styleKey: (typeof PAGE_STYLES)[number]['key']) {
+function renderPreview(styleKey: (typeof PAGE_STYLES)[number]['key'], brandFont = 'default') {
   return render(
     <ProfileStylePreview
       themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', styleKey)}
       gradient={['#4A2C20', '#F5F1EC']}
       accent="#4A2C1E"
       backgroundImage={null}
-      brandFont="default"
+      brandFont={brandFont}
       name="Amara Lashes"
       logoUri={null}
       logoFraming={null}
@@ -100,22 +100,26 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('LASHES.')).toBeTruthy();
   });
 
-  it('sets Heritage\'s last word in script under the serif', () => {
+  it('puts Heritage\'s name round a seal, with what they do under it', () => {
     renderPreview('heritage');
-    expect(screen.getByText('Amara')).toBeTruthy();
+    expect(screen.getByLabelText('Amara Lashes')).toBeTruthy();
     expect(screen.getByText('Lashes')).toBeTruthy();
-    expect(screen.getByText('PECKHAM · LASHES')).toBeTruthy();
   });
 
-  it('greets on Duet and introduces the artist', () => {
+  it('welcomes on Duet\'s card and lists what they do as pills', () => {
     renderPreview('duet');
-    expect(screen.getByText('HEY GORGEOUS! WELCOME TO')).toBeTruthy();
-    expect(screen.getByText('YOUR ARTIST')).toBeTruthy();
+    expect(screen.getByText('HEY GORGEOUS, WELCOME TO')).toBeTruthy();
+    expect(screen.getByText('Amara')).toBeTruthy();
+    // Once in the name's caps, once as the pill for what they do.
+    expect(screen.getAllByText('LASHES')).toHaveLength(2);
+    expect(screen.queryByText('YOUR ARTIST')).toBeNull();
   });
 
-  it('puts the rating in Groovy\'s starburst', () => {
+  it('puts Groovy\'s name on a pill beside a rating starburst and tag stickers', () => {
     renderPreview('groovy');
     expect(screen.getByLabelText('Rated 5.0')).toBeTruthy();
+    expect(screen.getByText('amara lashes')).toBeTruthy();
+    expect(screen.getByText('PECKHAM')).toBeTruthy();
   });
 
   it('leaves Gallery without a placard or wall labels', () => {
@@ -126,9 +130,18 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('Lashes.')).toBeTruthy();
   });
 
-  it('prints the name in capitals on Apothecary\'s label', () => {
+  it('prints the name in capitals on Apothecary\'s tag', () => {
     renderPreview('apothecary');
     expect(screen.getByText('AMARA LASHES')).toBeTruthy();
     expect(screen.getByText('lashes')).toBeTruthy();
+    expect(screen.getByText('PECKHAM')).toBeTruthy();
   });
+
+  it('keeps a provider\'s own Branding font for the name, as typed', () => {
+    renderPreview('groovy', 'great-vibes');
+    expect(screen.getByText('Amara Lashes')).toBeTruthy();
+    renderPreview('apothecary', 'great-vibes');
+    expect(screen.getAllByText('Amara Lashes').length).toBeGreaterThan(0);
+  });
+
 });

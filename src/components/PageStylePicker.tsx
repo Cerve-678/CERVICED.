@@ -143,12 +143,6 @@ function MiniProfile({
             <View style={[mini.logo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
           </View>
         );
-      case 'flower':
-        return (
-          <View style={[mini.flower, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]}>
-            <View style={[mini.logo, { backgroundColor: blend(accent, '#FFFFFF', 0.6) }]} />
-          </View>
-        );
       case 'mat':
         return (
           <View style={mini.matFrame}>
@@ -190,11 +184,11 @@ function MiniProfile({
             {heading.lead} <Text style={mini.dotBold}><Text style={{ color: accent }}>.</Text>{heading.text}</Text>
           </Text>
         );
-      case 'scriptCaps':
+      case 'italicCaps':
         return (
           <View style={mini.stack}>
-            <Text style={[mini.script, { color: accent }]}>{heading.lead}</Text>
-            <Text style={[mini.bodoni, { color: ink }]}>{heading.text}</Text>
+            <Text style={[mini.italic, { color: accent }]}>{heading.lead}</Text>
+            <Text style={[mini.cinzel, { color: ink }]}>{heading.text}</Text>
           </View>
         );
       case 'layered':
@@ -305,25 +299,17 @@ function MiniProfile({
             <View style={mini.smallLogo}>{logo}</View>
           </View>
         ) : style.hero === 'crest' ? (
-          <>
-            <View style={mini.smallLogo}>{logo}</View>
-            <Text style={mini.crestName} numberOfLines={1}>Name</Text>
-            <Text style={mini.crestScript} numberOfLines={1}>Rooms</Text>
-          </>
+          // Heritage: a dotted seal round the logo.
+          <View style={mini.seal}>{logo}</View>
         ) : style.hero === 'duet' ? (
-          <View style={mini.sideRow}>
-            <View style={mini.sideLinesLeft}>
-              <Text style={mini.duetScript} numberOfLines={1}>Name</Text>
-              <Text style={mini.duetCaps} numberOfLines={1}>BY NAME</Text>
-            </View>
-            <View style={[mini.film, { backgroundColor: accent }]}>
-              <View style={mini.filmFrame} />
-              <View style={mini.filmFrame} />
-            </View>
+          // Duet: a white welcome card.
+          <View style={mini.welcome}>
+            <View style={[mini.welcomeLogo, { borderColor: accent }]} />
+            <Text style={[mini.duetScript, { color: accent }]} numberOfLines={1}>Name</Text>
           </View>
         ) : style.hero === 'groovy' ? (
-          <View style={mini.sideRow}>
-            <View style={mini.smallLogo}>{logo}</View>
+          // Groovy: the name on a tilted pill.
+          <View style={[mini.badge, { backgroundColor: accent }]}>
             <Text style={mini.groovyName} numberOfLines={1}>name</Text>
           </View>
         ) : style.hero === 'exhibition' ? (
@@ -332,8 +318,9 @@ function MiniProfile({
             <View style={mini.smallLogo}>{logo}</View>
           </View>
         ) : style.hero === 'label' ? (
-          <View style={mini.oval}>
-            <Text style={mini.ovalName} numberOfLines={1}>NAME</Text>
+          // Apothecary: a hanging paper tag.
+          <View style={mini.tag}>
+            <Text style={mini.tagName} numberOfLines={1}>NAME</Text>
           </View>
         ) : style.hero === 'poster' ? (
           <>
@@ -429,34 +416,36 @@ const mini = StyleSheet.create({
   barShort: { width: '45%', marginTop: 4 },
   logoTilted: { borderRadius: 6, transform: [{ rotate: '6deg' }] },
   ring: { padding: 2, borderRadius: 20, borderWidth: 1.5 },
-  flower: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '45deg' }] },
   matFrame: { backgroundColor: '#1F1F1F', padding: 2 },
   matPhoto: { width: 30, height: 30, borderWidth: 4, borderColor: '#FBFAF7' },
   sideLinesLeft: { flex: 1, gap: 1 },
   edLight: { fontFamily: 'LeagueSpartan-Light', fontSize: 15, color: '#FFFFFF', lineHeight: 16 },
   edBold: { fontFamily: 'LeagueSpartan-ExtraBold', fontSize: 15, color: '#FFFFFF', lineHeight: 16 },
-  crestName: { fontFamily: 'BodoniModa-ExtraBold', fontSize: 13, color: '#FFFFFF', marginTop: -2 },
-  crestScript: { fontFamily: 'PinyonScript_400Regular', fontSize: 14, color: '#FFFFFF', marginTop: -6, marginLeft: 22 },
-  duetScript: { fontFamily: 'GreatVibes_400Regular', fontSize: 22, color: '#FFFFFF', lineHeight: 28 },
-  duetCaps: { fontFamily: 'Montserrat-ExtraBold', fontSize: 8, color: '#FFFFFF', marginTop: -8, marginLeft: 10 },
-  film: { width: 24, padding: 2, gap: 2, marginRight: -10 },
-  filmFrame: { height: 22, backgroundColor: 'rgba(255,255,255,0.6)' },
-  groovyName: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 22, color: '#FFFFFF', flex: 1 },
-  galleryName: { fontFamily: 'InstrumentSerif-Regular', fontSize: 20, lineHeight: 20, color: '#FFFFFF', flex: 1 },
-  oval: {
-    width: 84, height: 50, borderRadius: 25, backgroundColor: '#FBFCF8', borderWidth: 1, borderColor: '#2C3527',
-    alignItems: 'center', justifyContent: 'center', marginTop: 18,
+  duetScript: { fontFamily: 'MsMadi-Regular', fontSize: 20, lineHeight: 24, flexShrink: 1 },
+  groovyName: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 18, color: '#1E2A4A' },
+  seal: { padding: 5, borderRadius: 30, borderWidth: 2, borderStyle: 'dotted', borderColor: 'rgba(255,255,255,0.9)' },
+  welcome: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFFFFF', borderRadius: 10,
+    borderWidth: 1, borderColor: '#1F1A1C', paddingHorizontal: 7, paddingVertical: 6, width: 92,
   },
-  ovalName: { fontFamily: 'CormorantGaramond-SemiBold', fontSize: 10, letterSpacing: 2, color: '#2C3527' },
+  welcomeLogo: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, backgroundColor: '#EEE' },
+  badge: {
+    borderRadius: 100, borderWidth: 1.5, borderColor: '#1E2A4A', paddingHorizontal: 12, paddingVertical: 3,
+    transform: [{ rotate: '-4deg' }],
+  },
+  tag: { backgroundColor: '#F6F1E4', paddingHorizontal: 10, paddingVertical: 12, transform: [{ rotate: '-4deg' }], marginTop: 8 },
+  tagName: { fontFamily: 'MarcellusSC-Regular', fontSize: 11, letterSpacing: 2, color: '#2C3527' },
+  galleryName: { fontFamily: 'InstrumentSerif-Regular', fontSize: 20, lineHeight: 20, color: '#FFFFFF', flex: 1 },
   dotLight: { fontFamily: 'LeagueSpartan-Light', fontSize: 12 },
   dotBold: { fontFamily: 'LeagueSpartan-ExtraBold' },
   stack: { alignItems: 'center' },
-  bodoni: { fontFamily: 'BodoniModa-ExtraBold', fontSize: 9, letterSpacing: 2, marginTop: -4 },
-  vibes: { fontFamily: 'GreatVibes_400Regular', fontSize: 18, lineHeight: 22 },
+  italic: { fontFamily: 'LibreBaskerville-Italic', fontSize: 11, lineHeight: 15 },
+  cinzel: { fontFamily: 'Cinzel-Bold', fontSize: 9, letterSpacing: 2 },
+  vibes: { fontFamily: 'MsMadi-Regular', fontSize: 18, lineHeight: 22 },
   montserrat: { fontFamily: 'Montserrat-ExtraBold', fontSize: 9, marginTop: -8 },
   groovy: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 14 },
   serifTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 13, lineHeight: 14 },
-  labelCaps: { fontFamily: 'CormorantGaramond-SemiBold', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
+  labelCaps: { fontFamily: 'MarcellusSC-Regular', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
   hard: {
     backgroundColor: '#FFFFFF', borderColor: '#1F1A1C', overflow: 'visible',
     shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0,

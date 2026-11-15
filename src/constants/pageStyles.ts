@@ -29,7 +29,7 @@ export type PageHeading =
   | 'spacedCaps' // tiny, widely spaced caps, centred
   | 'bubbly'     // a fat rounded display face, centred
   | 'dotCaps'    // a light word, then a full stop in the accent and bold caps, between hairlines
-  | 'scriptCaps' // a handwritten word between short rules, spaced serif caps under it
+  | 'italicCaps' // an italic word between short rules, spaced engraved caps under it
   | 'layered'    // a big handwritten word in the accent, heavy caps laid over its foot
   | 'groovy'     // a soft, chunky italic in lowercase with a squiggle under it
   | 'serifTitle' // a large serif title, nothing above it (Gallery)
@@ -77,18 +77,17 @@ export type PageHero =
   | 'poster'     // a polaroid logo and a big name
   | 'spa'        // what they do as a tiny spaced line, the name, a ringed logo and their opening line
   | 'editorial'  // the name left in light and bold caps with an accent full stop, two tilted cards beside it
-  | 'crest'      // a ringed monogram, a spaced caps line, a serif name with its last word in script, double rules
-  | 'duet'       // "Hey gorgeous! Welcome to", the name as script over caps, a film strip of their photos
-  | 'groovy'     // a scalloped logo, the name huge in a soft italic, a starburst with their rating
+  | 'crest'      // a seal: the name curved round the top of a dotted ring, the logo inside
+  | 'duet'       // a white welcome card: the logo beside the name in signature script over caps
+  | 'groovy'     // a sticker sheet: logo sticker, rating starburst, the name on a tilted pill
   | 'exhibition' // a gallery wall label, the name large, the logo framed and matted
-  | 'label';     // an oval label like a bottle's, over their photo
+  | 'label';     // a paper tag hanging on a string
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
   | 'circle' | 'arch' | 'polaroid' | 'doubleRing' | 'glossRing'
   | 'tilted'     // a rounded square card, tilted (Editorial)
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
-  | 'flower'     // a scalloped flower of the accent behind the logo (Groovy)
   | 'mat';       // square, in a white mat and a thin dark frame (Gallery)
 
 export interface PageStyle {
@@ -168,20 +167,20 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: true, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'heritage', name: 'Heritage', description: 'Old-money serif and script, a crest, house rules',
-    heading: 'scriptCaps', cards: 'open', policies: 'numerals', logo: 'doubleRing',
+    key: 'heritage', name: 'Heritage', description: 'Old-money engraved caps, a seal, house rules',
+    heading: 'italicCaps', cards: 'open', policies: 'numerals', logo: 'circle',
     hero: 'crest', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'duet', name: 'Duet', description: 'Script over bold caps, cards with a pop of colour',
+    key: 'duet', name: 'Duet', description: 'A welcome card, signature script, cards with a pop of colour',
     heading: 'layered', cards: 'offset', policies: 'divided', logo: 'accentRing',
-    hero: 'duet', aboutInHero: true,
+    hero: 'duet', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'groovy', name: 'Groovy', description: 'Retro and fun: chunky type, stickers, bold outlines',
-    heading: 'groovy', cards: 'chunky', policies: 'stickers', logo: 'flower',
+    key: 'groovy', name: 'Groovy', description: 'Retro and fun: a sticker sheet, chunky type, bold outlines',
+    heading: 'groovy', cards: 'chunky', policies: 'stickers', logo: 'circle',
     hero: 'groovy', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
@@ -192,7 +191,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
-    key: 'apothecary', name: 'Apothecary', description: 'An oval label over your photo, numbered treatments',
+    key: 'apothecary', name: 'Apothecary', description: 'A hanging paper tag, numbered treatments',
     heading: 'labelCaps', cards: 'label', policies: 'numerals', logo: 'circle',
     hero: 'label', aboutInHero: false, numeralsLower: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
