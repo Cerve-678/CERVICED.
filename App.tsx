@@ -209,6 +209,9 @@ export default Sentry.wrap(function App() {
     'Corinthia-Bold': require('./assets/fonts/Corinthia-Bold.ttf'),
     'EBGaramond-SemiBold': require('./assets/fonts/EBGaramond-SemiBold.ttf'),
     'EBGaramond-Italic': require('./assets/fonts/EBGaramond-Italic.ttf'),
+    // Lace (round 4, 2026-11-15).
+    'Allura-Regular': require('./assets/fonts/Allura-Regular.ttf'),
+    'GildaDisplay-Regular': require('./assets/fonts/GildaDisplay-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
