@@ -5,7 +5,7 @@
 
 #generated
 
-**3828 functions** across **538 files**.
+**3833 functions** across **540 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -254,7 +254,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (49)
+### `src/features/providers/` (50)
 - `aboutPreview.ts` — **aboutPreview**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
@@ -303,7 +303,11 @@
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
+- `WaxSeal.tsx` — **sealLetter** · **waxColour** · **WaxSeal**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
+
+### `src/features/providers/heroes/` (1)
+- `SealedHero.tsx` — Postmark · **SealedEnvelope**
 
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**

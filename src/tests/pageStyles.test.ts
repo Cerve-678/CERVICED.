@@ -10,6 +10,7 @@ import {
   type PageSectionKey,
 } from '../constants/pageStyles';
 import { encodeThemeKey, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
+import { sealLetter, waxColour } from '../features/providers/WaxSeal';
 import {
   policiesBringOwnSurface,
   sectionsSitOnPage,
@@ -50,12 +51,24 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the fifteen picked styles plus Classic, each once', () => {
+  it('has the sixteen picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
-      'snapshot', 'signature', 'quiet',
+      'snapshot', 'signature', 'quiet', 'sealed',
     ]);
+  });
+
+  it('seals Sealed\'s envelope and policy notes with a first letter', () => {
+    expect(sealLetter('Amara Okafor')).toBe('A');
+    expect(sealLetter('  1st Class Lashes')).toBe('S');
+    expect(sealLetter('Late arrival')).toBe('L');
+    expect(sealLetter('123')).toBe('');
+  });
+
+  it('presses a pale accent darker so the wax reads as wax', () => {
+    expect(waxColour('#3F1E36')).toBe('#3F1E36');
+    expect(waxColour('#F4D6DC')).not.toBe('#F4D6DC');
   });
 
   it('gives every style but Classic and Glossy a hero of its own', () => {
