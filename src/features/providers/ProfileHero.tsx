@@ -782,7 +782,7 @@ export function ProfileHeroLayout({
       );
 
     case "basket":
-      // Boutique: a woven basket with their logo and name on a shop label (heroes/BoutiqueHero).
+      // Boutique: a handheld shop basket with their logo and name on a shop label (heroes/BoutiqueHero).
       return (
         <BoutiqueHero
           name={name}

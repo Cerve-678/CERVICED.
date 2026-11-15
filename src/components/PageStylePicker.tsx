@@ -484,11 +484,18 @@ function MiniProfile({
             </View>
           </>
         ) : style.hero === 'basket' ? (
-          // Boutique: a woven basket with a label carrying the logo.
+          // Boutique: a handheld shop basket, slots in its side, a label carrying the logo.
           <View style={mini.basketWrap}>
-            <View style={[mini.basketHandle, { borderColor: blend(accent, '#000000', 0.34) }]} />
-            <View style={[mini.basket, { backgroundColor: accent, borderTopColor: blend(accent, '#000000', 0.34) }]}>
-              <View style={[mini.basketWeave, { borderColor: blend(accent, '#000000', 0.45) }]} />
+            <View style={mini.basketHandles}>
+              <View style={[mini.basketHandle, mini.basketHandleLeft, { borderColor: blend(accent, '#000000', 0.26) }]} />
+              <View style={[mini.basketHandle, mini.basketHandleRight, { borderColor: blend(accent, '#000000', 0.4) }]} />
+            </View>
+            <View style={[mini.basket, { backgroundColor: accent, borderTopColor: blend(accent, '#000000', 0.26) }]}>
+              <View style={mini.basketSlots}>
+                {Array.from({ length: 10 }, (_, i) => (
+                  <View key={i} style={[mini.basketSlot, { backgroundColor: blend(accent, '#000000', 0.5) }]} />
+                ))}
+              </View>
               <View style={mini.basketLabel}>
                 <View style={[mini.basketLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.45) }]} />
               </View>
@@ -707,12 +714,19 @@ const mini = StyleSheet.create({
   productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
   basketWrap: { alignItems: 'center' },
-  basketHandle: { width: 30, height: 16, borderWidth: 2.5, borderBottomWidth: 0, borderTopLeftRadius: 15, borderTopRightRadius: 15, marginBottom: -2 },
+  basketHandles: { width: 50, height: 16, marginBottom: -2 },
+  basketHandle: { position: 'absolute', top: 0, width: 30, height: 16, borderWidth: 2.5, borderBottomWidth: 0 },
+  basketHandleLeft: { left: 1, borderTopLeftRadius: 14, borderTopRightRadius: 4, zIndex: 1 },
+  basketHandleRight: { right: 1, borderTopLeftRadius: 4, borderTopRightRadius: 14 },
   basket: {
     width: 50, height: 36, borderTopWidth: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
-  basketWeave: { position: 'absolute', top: 3, left: 3, right: 3, bottom: 3, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 5, opacity: 0.6 },
+  basketSlots: {
+    position: 'absolute', top: 4, left: 4, right: 4, bottom: 6,
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'space-between',
+  },
+  basketSlot: { width: 7, height: 5, borderRadius: 2 },
   basketLabel: { backgroundColor: '#FBF6EE', borderRadius: 2, padding: 3 },
   basketLogo: { width: 16, height: 16, borderRadius: 8 },
   blockHero: { alignSelf: 'stretch', flex: 1 },
