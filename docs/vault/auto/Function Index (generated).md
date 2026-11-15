@@ -5,7 +5,7 @@
 
 #generated
 
-**3814 functions** across **538 files**.
+**3829 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -306,12 +306,12 @@
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
 ### `src/features/social/` (12)
-- `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
+- `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
 - `contacts.ts` — **buildInviteList** · **cachedContacts** · **collectContactNumbers** · **findContactsOnCerviced** · **getContactsAccess** · **hashNormalisedNumber** · **inviteContact** · **isContactsLimitError** · **rememberContacts** · **requestContactsAccess**
 - `momentsMemory.ts` — **readMomentsMemory** · **updateMomentsMemory**
 - `people.ts` — **personAction** · **withMyStatus** · **withoutPerson** · **withPersonFirst**
 - `presentation.ts` — **circleLine** · **compareCirclePeople** · **firstName** · **groupCircleRows** · **initialsFor** · **stackAccessibilityLabel** · **stackLayout**
-- `ProviderSharingRow.tsx` — **ProviderSharingRow** · toggleHidden · toggleRecommend
+- `ProviderRecommend.tsx` — barOffer · dismissFloating · measureHeart · onBarClose · onBarYes · onBarYesSync · onCloseMenu · onDismissHint · onHeartPress · onToggleHidden · onToggleHiddenSync · onToggleRecommend · **ProviderRecommendLayer** · **RecommendHeartButton** · setRecommended · showHint · **useProviderRecommend**
 - `recommend.ts` — **recommendProvider**
 - `RecommendAfterRating.tsx` — offer · offerSync · onClose · onYes · onYesSync · **RecommendAfterRatingBar** · **useRecommendAfterRating**
 - `RecommendBookingButton.tsx` — **RecommendBookingButton** · toggle
