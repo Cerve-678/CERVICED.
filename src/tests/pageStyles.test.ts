@@ -1,6 +1,7 @@
 import {
   DEFAULT_PAGE_STYLE,
   romanNumeral,
+  SECTION_NUMBERS,
   getPageStyle,
   headingPair,
   menuNumber,
@@ -49,11 +50,17 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the twelve picked styles plus Classic, each once', () => {
+  it('has the fifteen picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
+      'snapshot', 'signature', 'quiet',
     ]);
+  });
+
+  it('gives every style but Classic and Glossy a hero of its own', () => {
+    const heroes = PAGE_STYLES.filter(s => s.key !== 'classic' && s.key !== 'glossy').map(s => s.hero);
+    expect(new Set(heroes).size).toBe(heroes.length);
   });
 
   it('gives each of the 2026-11-14 styles a hero and heading of its own', () => {
@@ -189,5 +196,19 @@ describe('the 2026-11-15 heroes', () => {
     expect(getPageStyle('groovy').logo).toBe('circle');
     expect(getPageStyle('apothecary').logo).toBe('circle');
     expect(getPageStyle('duet').aboutInHero).toBe(false);
+  });
+});
+
+describe('Signature', () => {
+  it('numbers its sections in the order the profile shows them', () => {
+    expect(getPageStyle('signature').heading).toBe('indexed');
+    expect(SECTION_NUMBERS.about).toBe('01');
+    expect(SECTION_NUMBERS.services).toBe('03');
+    expect(new Set(Object.values(SECTION_NUMBERS)).size).toBe(Object.keys(SECTION_NUMBERS).length);
+  });
+
+  it('puts a heavy rule along the top of its square service cards', () => {
+    expect(serviceCardSurface(getPageStyle('signature'), { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG }))
+      .toMatchObject({ borderRadius: 0, borderTopWidth: 3 });
   });
 });
