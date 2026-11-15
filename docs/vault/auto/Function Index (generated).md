@@ -5,7 +5,7 @@
 
 #generated
 
-**3813 functions** across **538 files**.
+**3814 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -99,7 +99,7 @@
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
-- `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale**
+- `providerFonts.ts` — **chosenProviderFont** · **resolveProviderFontFamily** · **resolveProviderFontScale**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · isCardShape · **isDarkColor** · isHeroFinish · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
 - `reschedule.ts` — changes
 - `serviceTypes.ts` — **isServiceTypeKey** · **serviceTypeOptionsFor**
@@ -279,7 +279,7 @@
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · go · InlinePage · label · **PolicyPagesInline** · **PolicyStoryRings** · **PolicyStoryViewer** · StoryBody · top · **usePolicyEdgeColours**
-- `ProfileHero.tsx` — CurvedCaption · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · splitFirst · splitLast · Sprig · Starburst
+- `ProfileHero.tsx` — CurvedCaption · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
 - `ProfilePageStyle.tsx` — **AccentBandSection** · **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · outlineInk · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**

@@ -166,8 +166,8 @@ export function PageSectionHeading({
         </View>
       );
     }
-    case "scriptCaps": {
-      // Heritage: a script word between short rules, spaced serif caps under it.
+    case "italicCaps": {
+      // Heritage: an italic word between short rules, engraved caps under it.
       const [lead, rest] = headingPair(section);
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
@@ -386,7 +386,7 @@ export function PageSection({
 function isCentredHeading(style: PageStyle): boolean {
   return (
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
-    || style.heading === "scriptCaps" || style.heading === "layered"
+    || style.heading === "italicCaps" || style.heading === "layered"
   );
 }
 
@@ -849,9 +849,9 @@ const headingStyles = StyleSheet.create({
   spaced: { fontFamily: "TenorSans_400Regular", fontSize: 11, letterSpacing: 4, textAlign: "center", marginBottom: 16 },
   bubbly: { fontFamily: "Shrikhand_400Regular", fontSize: 26, lineHeight: 34, textAlign: "center", marginBottom: 12 },
   legend: { fontFamily: "Limelight_400Regular", fontSize: 20, lineHeight: 28, paddingHorizontal: 12 },
-  // 2026-11-14 styles: League Spartan (Editorial), Pinyon + Bodoni Moda
-  // (Heritage), Great Vibes + Montserrat (Duet), Fraunces (Groovy), Didact
-  // Gothic + Instrument Serif (Gallery), Cormorant Garamond (Apothecary).
+  // 2026-11-14 styles: League Spartan (Editorial), Libre Baskerville italic +
+  // Cinzel (Heritage), Ms Madi + Montserrat (Duet), Fraunces (Groovy),
+  // Instrument Serif (Gallery), Marcellus (Apothecary): no two styles share a face.
   ruledRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   rule: { flex: 1, height: StyleSheet.hairlineWidth * 2, minWidth: 12 },
   dotLight: { fontFamily: "LeagueSpartan-Light", fontSize: 26, lineHeight: 32, flexShrink: 1 },
@@ -859,14 +859,14 @@ const headingStyles = StyleSheet.create({
   stack: { alignItems: "center", marginBottom: 14 },
   shortRuleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   shortRule: { width: 36, height: 1 },
-  heritageScript: { fontFamily: "PinyonScript_400Regular", fontSize: 30, lineHeight: 42 },
-  heritageCaps: { fontFamily: "BodoniModa-ExtraBold", fontSize: 21, letterSpacing: 5, marginTop: -4, textAlign: "center" },
-  layeredScript: { fontFamily: "GreatVibes_400Regular", fontSize: 50, lineHeight: 62 },
+  heritageScript: { fontFamily: "LibreBaskerville-Italic", fontSize: 20, lineHeight: 30 },
+  heritageCaps: { fontFamily: "Cinzel-Bold", fontSize: 20, letterSpacing: 4, marginTop: 2, textAlign: "center" },
+  layeredScript: { fontFamily: "MsMadi-Regular", fontSize: 54, lineHeight: 66 },
   layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -26, textAlign: "center" },
   groovyWrap: { marginBottom: 14 },
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 42, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 36, marginBottom: 14 },
-  labelCaps: { fontFamily: "CormorantGaramond-SemiBold", fontSize: 14, letterSpacing: 4 },
+  labelCaps: { fontFamily: "MarcellusSC-Regular", fontSize: 14, letterSpacing: 4 },
 });
 
 const surfaceStyles = StyleSheet.create({
@@ -934,8 +934,8 @@ const policyStyles = StyleSheet.create({
   bubbleLabel: { fontFamily: "Fredoka_600SemiBold", fontSize: 14 },
   hairRow: { flexDirection: "row", gap: 16, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
   numeralRow: { flexDirection: "row", gap: 14, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  numeral: { fontFamily: "BodoniModa-ExtraBold", fontSize: 17, width: 30 },
-  numeralLower: { fontFamily: "CormorantGaramond-MediumItalic", fontSize: 18, width: 30 },
+  numeral: { fontFamily: "Cinzel-Bold", fontSize: 16, width: 30 },
+  numeralLower: { fontFamily: "Marcellus-Regular", fontSize: 16, width: 30 },
   numeralBody: { flex: 1, gap: 2 },
   numeralLabel: { fontSize: 14, fontWeight: "600" },
   defRow: { flexDirection: "row", gap: 12, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth },

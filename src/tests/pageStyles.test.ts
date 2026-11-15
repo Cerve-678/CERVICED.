@@ -16,6 +16,7 @@ import {
   sheetInk,
 } from '../features/providers/ProfilePageStyle';
 import { kickerPhrase } from '../features/providers/ProfileHero';
+import { chosenProviderFont } from '../constants/providerFonts';
 
 describe('page style in the stored theme key', () => {
   it('reads keys saved before page styles existed as Classic', () => {
@@ -180,5 +181,21 @@ describe('the 2026-11-14 styles', () => {
     expect(kickerPhrase('BRAIDS · LOCS')).toBe('Braids & locs');
     expect(kickerPhrase('FACIALS · MASSAGE · BROWS')).toBe('Facials, massage & brows');
     expect(kickerPhrase('')).toBe('');
+  });
+});
+
+describe('the provider\'s own font in the 2026-11-14 heroes', () => {
+  it('is used only when they chose one', () => {
+    expect(chosenProviderFont('default')).toBeNull();
+    expect(chosenProviderFont(null)).toBeNull();
+    expect(chosenProviderFont('not-a-font')).toBeNull();
+    expect(chosenProviderFont('great-vibes')).toEqual({ family: 'GreatVibes_400Regular', scale: 1.2 });
+  });
+
+  it('gives Heritage, Groovy and Apothecary a plain round logo, and keeps Duet\'s About as its own section', () => {
+    expect(getPageStyle('heritage').logo).toBe('circle');
+    expect(getPageStyle('groovy').logo).toBe('circle');
+    expect(getPageStyle('apothecary').logo).toBe('circle');
+    expect(getPageStyle('duet').aboutInHero).toBe(false);
   });
 });
