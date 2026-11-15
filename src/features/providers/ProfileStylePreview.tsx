@@ -17,11 +17,11 @@ import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { getPageStyle, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
-import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
-import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "./ProfileHero";
+import { HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "./ProfileHero";
 import {
   GlossShine,
   onAccentInk,
@@ -176,7 +176,7 @@ export function ProfileStylePreview({
                     color: heroText,
                     fontFamily: resolveProviderFontFamily(brandFont),
                     fontSize: HERO_NAME_SIZE * fontScale * scale,
-                    lineHeight: HERO_NAME_LINE_HEIGHT * fontScale * scale,
+                    lineHeight: resolveProviderNameLineHeight(brandFont, HERO_NAME_SIZE * fontScale * scale),
                     ...(letterSpacing ? { letterSpacing } : null),
                   },
                   heroIsDark && styles.textShadow,

@@ -73,7 +73,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
-import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
@@ -5197,7 +5197,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               // Thin scripts are drawn larger so they read at the same size.
                               // Each hero layout sets its own size (Cover's is 1.6×).
                               fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
-                              lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont) * scale,
+                              // Scripts loop high (f, k), so their line is taller.
+                              lineHeight: resolveProviderNameLineHeight(
+                                provider.brandFont,
+                                NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
+                              ),
                               ...(letterSpacing ? { letterSpacing } : null),
                             },
                             heroIsDark && styles.heroTextShadow,
