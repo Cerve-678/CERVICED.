@@ -68,7 +68,7 @@ export function onAccentInk(accent: string): { text: string; sub: string } {
 
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
-  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer";
+  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer" || style?.cards === "ruled";
 }
 
 /** Sheer's see-through box on the content area: a hairline and a faint wash, never a solid card. */
@@ -92,6 +92,20 @@ export function sectionInk(palette: PageStylePalette): { text: string; sub: stri
 }
 
 // ── Headings ──────────────────────────────────────────────────────────────────
+
+/** Gazette's section headlines: what a newspaper would call each section. */
+const GAZETTE_HEADLINES: Record<PageSectionKey, string> = {
+  about: "Meet the Artist",
+  policies: "Booking Policies",
+  services: "The Services",
+  reviews: "Letters to the Editor",
+  hours: "Business Hours",
+  contact: "Contact",
+  info: "Good to Know",
+  portfolio: "My Portfolio",
+  specialities: "My Specialities",
+  policyPages: "Before You Book",
+};
 
 /** A section heading in the page style's voice. Classic's heading lives inside
  *  the card, so it's drawn by PageSection, not here. */
@@ -290,6 +304,15 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "newsRule":
+      // Gazette: condensed caps between a thick rule and a thin one.
+      return (
+        <View {...a11y} accessible style={[headingStyles.newsRule, { borderColor: ink }]}>
+          <Text style={[headingStyles.newsTitle, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {GAZETTE_HEADLINES[section].toUpperCase()}
+          </Text>
+        </View>
+      );
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -417,7 +440,7 @@ export function PageSection({
     );
   }
 
-  if (bare || pageStyle.cards === "none" || pageStyle.cards === "open") {
+  if (bare || pageStyle.cards === "none" || pageStyle.cards === "open" || pageStyle.cards === "ruled") {
     return (
       <View
         style={[
@@ -765,6 +788,16 @@ export function serviceCardSurface(
         borderColor: withAlpha(outlineInk(colours.card), 0.14),
         borderRadius: 6,
       };
+    case "ruled":
+      // Gazette: classified rows straight on the page, each over a printed rule.
+      return {
+        ...flat,
+        backgroundColor: "transparent",
+        borderRadius: 0,
+        borderBottomWidth: 1,
+        borderBottomColor: withAlpha(sheetInk(colours.sheet).text, 0.4),
+        marginBottom: 0,
+      };
     default:
       return null;
   }
@@ -817,7 +850,7 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   return (
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
     || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
-    || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion"
+    || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion" || layout === "columns"
   );
 }
 
@@ -946,6 +979,28 @@ export function StyledPolicyList({
             {row.tag ? (
               <View style={[policyStyles.tag, { backgroundColor: palette.accent }]}>
                 <Text style={[policyStyles.tagText, { color: onAccentInk(palette.accent).text }]}>{row.tag}</Text>
+              </View>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "columns") {
+    // Gazette: two-up newspaper columns boxed by ink rules.
+    return (
+      <View style={[policyStyles.columnsGrid, { borderColor: ink.text }]}>
+        {rows.map(row => (
+          <View key={row.label} style={[policyStyles.columnCell, { borderColor: ink.text }]}>
+            <Text style={[policyStyles.columnLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+            ))}
+            {row.tag ? (
+              <View style={[policyStyles.columnTag, { borderColor: ink.text }]}>
+                <Text style={[policyStyles.columnTagText, { color: ink.text }]}>{row.tag.toUpperCase()}</Text>
               </View>
             ) : null}
           </View>
@@ -1311,6 +1366,9 @@ const headingStyles = StyleSheet.create({
   // Calling Card's engraved caps (Forum), its own face.
   engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
   shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
+  // Gazette: Oswald, between a thick rule and a thin one.
+  newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
+  newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
   condensedWrap: { marginBottom: 14 },
   condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 49, letterSpacing: 0.3 },
   condensedBar: { width: 36, height: 5, marginTop: 4 },
@@ -1447,6 +1505,11 @@ const policyStyles = StyleSheet.create({
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
   hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },
+  columnsGrid: { flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderLeftWidth: 1 },
+  columnCell: { width: "50%", borderRightWidth: 1, borderBottomWidth: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
+  columnLabel: { fontFamily: "Oswald-Medium", fontSize: 14, lineHeight: 19, letterSpacing: 0.8, textAlign: "center" },
+  columnTag: { alignSelf: "center", borderWidth: 1, paddingHorizontal: 6, paddingVertical: 1, marginTop: 4 },
+  columnTagText: { fontFamily: "Oswald-Medium", fontSize: 9, lineHeight: 12, letterSpacing: 0.8 },
   ribbonCard: { borderRadius: 2, overflow: "hidden", paddingHorizontal: 18, paddingTop: 46, paddingBottom: 20 },
   ribbonShadow: {
     borderRadius: 2,

@@ -18,6 +18,7 @@ import { SafeAreaView, WindowControlsInsetProvider } from "../../components/Safe
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./reviewPresentation";
+import { HalftoneScreen } from "./heroes/GazetteHero";
 import { CALLING_CARD_PAPER, GoldClip } from "./heroes/CallingCardHero";
 import {
   PageSection,
@@ -372,6 +373,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
   // Calling Card: each photo a cream-bordered print pinned by a gold clip.
   const clipped = !!palette.pageStyle?.clippedPhotos;
+  // Gazette: each photo square in a fine ink frame, under a newsprint dot screen.
+  const halftone = !!palette.pageStyle?.halftonePhotos;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -415,6 +418,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                       ]
                     : plate
                       ? [styles.plateTile, plate]
+                      : halftone
+                        ? [styles.halftoneTile, { borderColor: palette.text }]
                       : clipped
                         ? [
                             styles.clippedPrint,
@@ -431,6 +436,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                   transition={0}
                   recyclingKey={item.id}
                 />
+                {halftone ? <HalftoneScreen /> : null}
                 {item.caption ? (
                   <View style={[styles.captionWrap, clipped && styles.clippedCaption]}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
@@ -556,6 +562,7 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  halftoneTile: { borderRadius: 0, borderWidth: 1, padding: 3, overflow: "hidden" },
   // Calling Card: room above each row for the clips, and the print's cream border.
   clippedColumns: { paddingTop: 14 },
   clippedColumn: { gap: COLUMN_GAP + 18 },

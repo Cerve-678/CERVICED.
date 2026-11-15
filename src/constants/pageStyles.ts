@@ -25,7 +25,8 @@ export type PageStyleKey =
   | 'sheer'
   | 'embossed'
   | 'callingCard'
-  | 'boutique';
+  | 'boutique'
+  | 'gazette';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -50,7 +51,8 @@ export type PageHeading =
   | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
   | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
   | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
-  | 'shopSerif'; // a big serif title on the left, like a shop's department heading (Boutique)
+  | 'shopSerif' // a big serif title on the left, like a shop's department heading (Boutique)
+  | 'newsRule';  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
 
 /** What a section sits on. */
 export type PageCards =
@@ -71,7 +73,8 @@ export type PageCards =
   | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
   | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
   | 'clipped' // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
-  | 'product'; // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
+  | 'product' // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
+  | 'ruled';   // straight on the page, each item over a printed rule (Gazette)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -92,7 +95,8 @@ export type PagePolicies =
   | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
   | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
   | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
-  | 'accordion';  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
+  | 'accordion'  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
+  | 'columns';   // two-up newspaper columns boxed by ink rules (Gazette)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -122,7 +126,8 @@ export type PageHero =
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
   | 'pressed'  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
   | 'callingCard' // satin folds, and a cream calling card held by a gold clip with the logo and name
-  | 'shoppingBag'; // a shopping bag with rope handles, the logo and name printed on its front (Boutique)
+  | 'shoppingBag' // a shopping bag with rope handles, the logo and name printed on its front (Boutique)
+  | 'gazette';  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -165,6 +170,8 @@ export interface PageStyle {
   /** The word on each service's book button, when the style has its own (Boutique: "Add to bag").
    *  Only the word changes: the button still opens the booking sheet. */
   bookLabel?: string;
+  /** Portfolio photos square, in a fine ink frame with a halftone dot screen (Gazette). */
+  halftonePhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -317,6 +324,13 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'shoppingBag', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     bookLabel: 'Add to bag',
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS, board 25).
+  {
+    key: 'gazette', name: 'Gazette', description: 'A newspaper front page: blackletter masthead, headlines, printed rules',
+    heading: 'newsRule', cards: 'ruled', policies: 'columns', logo: 'square',
+    hero: 'gazette', aboutInHero: false, halftonePhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
 ];
 

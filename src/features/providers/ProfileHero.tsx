@@ -15,6 +15,7 @@ import { LogoCircle } from "../../components/FramedLogo";
 import { LaceHero } from "./heroes/LaceHero";
 import { PressedHero } from "./heroes/EmbossedHero";
 import { BoutiqueHero } from "./heroes/BoutiqueHero";
+import { GazetteHero } from "./heroes/GazetteHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
@@ -782,6 +783,26 @@ export function ProfileHeroLayout({
           details={details}
           tick={tick}
         />
+      );
+
+    case "gazette":
+      // Gazette: a newsprint front page over their photo, the logo in the
+      // masthead's left ear; the stars, years and slots pill under the sheet.
+      return (
+        <>
+          <View style={layout.textFirst}>
+            <GazetteHero
+              name={name}
+              kicker={kicker}
+              location={location}
+              rating={rating}
+              logo={<View style={layout.logoNoGap}>{renderLogo(44)}</View>}
+              // The sheet is always pale newsprint, so the tick is always blue.
+              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color="#007AFF" accessibilityLabel="Verified" /> : null}
+            />
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
       );
 
     default:

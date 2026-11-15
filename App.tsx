@@ -224,6 +224,13 @@ export default Sentry.wrap(function App() {
     // Boutique (round 4, 2026-11-15).
     'DMSerifDisplay-Regular': require('./assets/fonts/DMSerifDisplay-Regular.ttf'),
     'Manrope-Bold': require('./assets/fonts/Manrope-Bold.ttf'),
+    // Gazette (round 4, 2026-11-15): a blackletter masthead, condensed
+    // headlines and an old newspaper serif.
+    'UnifrakturMaguntia-Book': require('./assets/fonts/UnifrakturMaguntia-Book.ttf'),
+    'Oswald-Bold': require('./assets/fonts/Oswald-Bold.ttf'),
+    'Oswald-Medium': require('./assets/fonts/Oswald-Medium.ttf'),
+    'OldStandardTT-Regular': require('./assets/fonts/OldStandardTT-Regular.ttf'),
+    'OldStandardTT-Italic': require('./assets/fonts/OldStandardTT-Italic.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
