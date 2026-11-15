@@ -196,6 +196,9 @@ export interface ProfileHeroLayoutProps {
   heroColour: string;
   /** The theme's card colour, used by Gazette's hero sheet. */
   cardColour: string;
+  /** Jumps to Services: Boutique's Book now button. Left out when there are
+   *  no services on the page (a link-only provider), and then there's no button. */
+  onBookNow?: (() => void) | undefined;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -244,6 +247,7 @@ export function ProfileHeroLayout({
   isVerified,
   heroColour,
   cardColour,
+  onBookNow,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
@@ -781,18 +785,23 @@ export function ProfileHeroLayout({
         />
       );
 
-    case "basket":
-      // Boutique: a handheld shop basket with their logo and name on a shop label (heroes/BoutiqueHero).
+    case "shop":
+      // Boutique: the top of an online boutique, their photo in the window (heroes/BoutiqueHero).
       return (
         <BoutiqueHero
           name={name}
           location={location}
+          kicker={kicker}
+          caption={kickerPhrase(kicker)}
           accent={accent}
+          heroText={heroText}
           heroSub={heroSub}
           shadow={shadow}
+          photoUri={photoUris?.[0]}
           renderLogo={renderLogo}
           details={details}
           tick={tick}
+          onBookNow={onBookNow}
         />
       );
 

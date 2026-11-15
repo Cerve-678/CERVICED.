@@ -38,6 +38,8 @@ import {
   type PageStylePalette,
 } from "./ProfilePageStyle";
 
+const noop = () => {};
+
 /** The policy headings an empty profile shows: the titles, no values. */
 const PREVIEW_POLICY_ROWS: PolicyDisplayRow[] = [
   { icon: "card-outline", label: "Deposit", value: "" },
@@ -165,6 +167,9 @@ export function ProfileStylePreview({
             heroColour={gradient[0] ?? OP.hero}
             cardColour={OP.card}
             rating="5.0"
+            // The preview has no Services to jump to, but Boutique's Book now
+            // still shows, so the provider sees the hero as clients will.
+            onBookNow={noop}
             renderLogo={size => (
               <HeroLogo
                 size={size}
