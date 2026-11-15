@@ -10,7 +10,7 @@
 // render <RecommendAfterRatingBar {...after.bar} P={P} /> last in the screen.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AppTheme } from '../../constants/theme';
@@ -18,7 +18,7 @@ import { getMyProviderSharing } from '../../services/databaseService';
 import { recommendProvider } from './recommend';
 import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { logger } from '../../utils/logger';
-import { FONT_BODY, FONT_DISPLAY, hapticLight, hapticSuccess } from '../maintenance/ui';
+import { FONT_DISPLAY, hapticLight, hapticSuccess } from '../maintenance/ui';
 import { initialsFor } from './presentation';
 import { RECOMMEND_AFTER_RATING_MIN, withAnswer, withAsked } from './circleMoments';
 import { updateMomentsMemory } from './momentsMemory';
@@ -95,33 +95,29 @@ export function useRecommendAfterRating(userId: string | null, onRecommended?: (
 /**
  * Also the provider profile's one-time Recommend bar (ProviderRecommend.tsx).
  * `bottomOffset`: distance from the screen's bottom edge, e.g. above a floating tab bar.
- * `subtitle`: the second line. `countdown`: a thin line drains until it goes.
+ * `subtitle`: the second line.
  */
 export function RecommendAfterRatingBar({
-  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it', countdown = false,
+  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it',
 }: RecommendBarProps & {
   P: AppTheme;
   bottomOffset?: number | undefined;
   subtitle?: string;
-  countdown?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const slide = useRef(new Animated.Value(0)).current;
-  const remaining = useRef(new Animated.Value(1)).current;
   const [shown, setShown] = useState<Offer | null>(offer);
 
   useEffect(() => {
     if (offer) {
       setShown(offer);
       Animated.spring(slide, { toValue: 1, useNativeDriver: true, friction: 9 }).start();
-      remaining.setValue(1);
-      Animated.timing(remaining, { toValue: 0, duration: AUTO_HIDE_MS, easing: Easing.linear, useNativeDriver: true }).start();
       const t = setTimeout(() => onClose(false), AUTO_HIDE_MS);
       return () => clearTimeout(t);
     }
     Animated.timing(slide, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShown(null));
     return undefined;
-  }, [offer, slide, remaining, onClose]);
+  }, [offer, slide, onClose]);
 
   if (!shown) return null;
   return (
@@ -172,17 +168,6 @@ export function RecommendAfterRatingBar({
       >
         <Ionicons name="close" size={18} color={P.onAccent} />
       </TouchableOpacity>
-      {countdown ? (
-        <View style={styles.timerTrack} pointerEvents="none">
-          <View style={[StyleSheet.absoluteFill, styles.timerTrackTint, { backgroundColor: P.onAccent }]} />
-          <Animated.View
-            style={[
-              styles.timerFill,
-              { backgroundColor: P.onAccent, transform: [{ scaleX: remaining }], transformOrigin: 'left' },
-            ]}
-          />
-        </View>
-      ) : null}
     </Animated.View>
   );
 }
@@ -213,13 +198,9 @@ const styles = StyleSheet.create({
     backgroundColor: HEART, alignItems: 'center', justifyContent: 'center',
   },
   copy: { flex: 1, minWidth: 0 },
-  title: { fontFamily: FONT_BODY, fontSize: 14, fontWeight: '700' },
-  sub: { fontFamily: FONT_BODY, fontSize: 12, opacity: 0.8 },
+  title: { fontFamily: FONT_DISPLAY, fontSize: 14 },
+  sub: { fontFamily: FONT_DISPLAY, fontSize: 12, opacity: 0.8 },
   yes: { height: 44, paddingHorizontal: 16, borderRadius: 100, flexDirection: 'row', alignItems: 'center', gap: 6 },
   yesText: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  timerTrack: { position: 'absolute', left: 32, right: 32, bottom: 6, height: 3, borderRadius: 2, overflow: 'hidden' },
-  // The track is the fill colour, faint, so it reads on any accent.
-  timerTrackTint: { opacity: 0.3 },
-  timerFill: { flex: 1, borderRadius: 2 },
 });
