@@ -15,7 +15,6 @@ import Svg, { Polygon } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
-import { PRESS_PAPER } from '../features/providers/heroes/EmbossedHero';
 
 interface Props {
   value: PageStyleKey;
@@ -26,6 +25,8 @@ interface Props {
   gradient: readonly string[];
   accent: string;
   sheet: string;
+  /** The theme's card colour: Gazette's front page is printed on it. */
+  cardColour: string;
   textColor: string;
   subColor: string;
   borderColor: string;
@@ -39,6 +40,7 @@ export default function PageStylePicker({
   gradient,
   accent,
   sheet,
+  cardColour,
   textColor,
   subColor,
   borderColor,
@@ -67,7 +69,7 @@ export default function PageStylePicker({
             accessibilityLabel={`${style.name}: ${style.description}${locked ? ', locked' : ''}`}
           >
             <View style={[styles.frame, { borderColor: selected ? textColor : borderColor }, selected && styles.frameOn]}>
-              <MiniProfile style={style} gradient={gradient} accent={accent} sheet={sheet} />
+              <MiniProfile style={style} gradient={gradient} accent={accent} sheet={sheet} cardColour={cardColour} />
               {locked ? (
                 <View style={styles.lock}>
                   <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
@@ -116,13 +118,16 @@ function MiniProfile({
   gradient,
   accent,
   sheet,
+  cardColour,
 }: {
   style: PageStyle;
   gradient: readonly string[];
   accent: string;
   sheet: string;
+  cardColour: string;
 }) {
   const ink = isDarkColor(sheet) ? '#F2EDEA' : '#26201E';
+  const gazetteInk = isDarkColor(cardColour) ? '#FFFFFF' : '#1F1D1A';
   const line = withAlpha(ink, 0.18);
   const heroColours = (gradient.length >= 2 ? [gradient[0], gradient[1]] : [accent, sheet]) as [string, string];
   const heading = MINI_HEADING[style.key];
@@ -461,49 +466,56 @@ function MiniProfile({
             <Text style={mini.veilName} numberOfLines={1}>N A M E</Text>
           </View>
         ) : style.hero === 'pressed' ? (
-          // Embossed: a sheet of pressed paper with the name raised in it.
-          <View style={mini.pressPaper}>
-            <Text style={mini.pressName} numberOfLines={1}>NAME</Text>
-          </View>
+          // Embossed: the name raised straight out of the theme backdrop.
+          <Text style={[mini.pressName, { color: blend(heroColours[0], '#FFFFFF', isDarkColor(heroColours[0]) ? 0.14 : 0.3) }]} numberOfLines={1}>NAME</Text>
         ) : style.hero === 'callingCard' ? (
-          // Calling Card: satin, and a cream card held by a gold clip.
+          // Calling Card: satin in the theme colour, and a cream card held by a clip.
           <>
             <LinearGradient
-              colors={[blend(accent, '#000000', 0.55), accent, blend(accent, '#000000', 0.55), blend(accent, '#FFFFFF', 0.2), blend(accent, '#000000', 0.55)]}
+              colors={[blend(heroColours[0], '#000000', 0.25), heroColours[0], blend(heroColours[0], '#000000', 0.25), blend(heroColours[0], '#FFFFFF', 0.35), blend(heroColours[0], '#000000', 0.25)]}
               start={{ x: 0, y: 0.2 }}
               end={{ x: 1, y: 0.8 }}
               style={StyleSheet.absoluteFill}
             />
             <View style={mini.callingCard}>
-              <View style={mini.callingClip} />
+              <View style={[mini.callingClip, { backgroundColor: accent }]} />
               {logo}
               <Text style={[mini.callingName, { color: blend(accent, '#000000', 0.4) }]} numberOfLines={1}>Name</Text>
             </View>
           </>
-        ) : style.hero === 'shoppingBag' ? (
-          // Boutique: a shopping bag with the logo printed on it.
-          <View style={mini.bagWrap}>
-            <View style={[mini.bagHandle, { borderColor: blend(accent, '#000000', 0.5) }]} />
-            <View style={[mini.bag, { backgroundColor: accent }]}>
-              <View style={[mini.bagLogo, { borderColor: isDarkColor(accent) ? '#F8EDE6' : '#2A0A10' }]} />
+        ) : style.hero === 'basket' ? (
+          // Boutique: a handheld shop basket, slots in its side, a label carrying the logo.
+          <View style={mini.basketWrap}>
+            <View style={mini.basketHandles}>
+              <View style={[mini.basketHandle, mini.basketHandleLeft, { borderColor: blend(accent, '#000000', 0.26) }]} />
+              <View style={[mini.basketHandle, mini.basketHandleRight, { borderColor: blend(accent, '#000000', 0.4) }]} />
+            </View>
+            <View style={[mini.basket, { backgroundColor: accent, borderTopColor: blend(accent, '#000000', 0.26) }]}>
+              <View style={mini.basketSlots}>
+                {Array.from({ length: 10 }, (_, i) => (
+                  <View key={i} style={[mini.basketSlot, { backgroundColor: blend(accent, '#000000', 0.5) }]} />
+                ))}
+              </View>
+              <View style={mini.basketLabel}>
+                <View style={[mini.basketLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.45) }]} />
+              </View>
             </View>
           </View>
         ) : style.hero === 'gazette' ? (
           // Gazette: a newsprint front page with a blackletter masthead.
-          <View style={mini.newsPaper}>
-            <View style={mini.paperRule} />
-            <Text style={mini.blackletter} numberOfLines={1}>The Gazette</Text>
-            <View style={mini.paperRule} />
-            <Text style={mini.headline} numberOfLines={1}>LASHES</Text>
+          <View style={[mini.newsPaper, { backgroundColor: cardColour }]}>
+            <View style={[mini.paperRule, { borderColor: gazetteInk }]} />
+            <Text style={[mini.blackletter, { color: gazetteInk }]} numberOfLines={1}>The Gazette</Text>
+            <View style={[mini.paperRule, { borderColor: gazetteInk }]} />
+            <Text style={[mini.headline, { color: gazetteInk }]} numberOfLines={1}>AMARA</Text>
           </View>
-        ) : style.hero === 'hardback' ? (
-          // Novel: a small cloth-bound book with its name in gold foil.
-          <View style={[mini.book, { backgroundColor: blend(accent, '#000000', 0.55) }]}>
-            <View style={mini.bookFrame}>
-              <Text style={mini.bookName} numberOfLines={2}>Name</Text>
-            </View>
-            <View style={[mini.bookRibbon, { backgroundColor: blend(accent, '#FFFFFF', 0.15) }]} />
-          </View>
+        ) : style.hero === 'titlePage' ? (
+          // Novel: a title page, the logo ringed, the name in old type over an ornament.
+          <>
+            <View style={[mini.doubleRing, { borderColor: blend(accent, '#FFFFFF', 0.4) }]}>{logo}</View>
+            <Text style={mini.titlePageName} numberOfLines={1}>Name</Text>
+            <View style={[mini.titlePageRule, { backgroundColor: blend(accent, '#FFFFFF', 0.4) }]} />
+          </>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -552,10 +564,8 @@ const mini = StyleSheet.create({
     backgroundColor: '#FFFFFF', borderRadius: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(38,32,30,0.3)',
     shadowColor: '#26201E', shadowOpacity: 0.25, shadowRadius: 0, shadowOffset: { width: 2, height: 2 }, overflow: 'visible',
   },
-  book: { width: 40, height: 52, borderRadius: 2, padding: 4, paddingLeft: 7 },
-  bookFrame: { flex: 1, borderWidth: 0.5, borderColor: '#D6B46E', alignItems: 'center', justifyContent: 'center' },
-  bookName: { fontFamily: 'IMFellEnglish-Regular', fontSize: 9, lineHeight: 12, color: '#D6B46E', textAlign: 'center' },
-  bookRibbon: { position: 'absolute', bottom: -7, right: 9, width: 4, height: 10 },
+  titlePageName: { fontFamily: 'IMFellEnglish-Regular', fontSize: 15, lineHeight: 20, color: '#FFFFFF', marginTop: 2 },
+  titlePageRule: { width: 34, height: 1, marginTop: 2 },
   chapterNumber: { fontFamily: 'IMFellEnglishSC-Regular', fontSize: 6, letterSpacing: 1.5, lineHeight: 8 },
   chapterTitle: { fontFamily: 'IMFellEnglish-Italic', fontSize: 12, lineHeight: 16 },
   // Gazette's front page and headings.
@@ -570,13 +580,9 @@ const mini = StyleSheet.create({
     backgroundColor: '#FFFFFF', borderRadius: 2, overflow: 'visible',
     shadowColor: '#463428', shadowOpacity: 0.16, shadowRadius: 2, shadowOffset: { width: 1, height: 2 },
   },
-  pressPaper: {
-    backgroundColor: PRESS_PAPER, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 2,
-    shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
-  },
   pressName: {
-    fontFamily: 'LibreCaslonDisplay-Regular', fontSize: 18, lineHeight: 24, letterSpacing: 1, color: PRESS_PAPER,
-    textShadowColor: 'rgba(70,52,40,0.45)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 0.5,
+    fontFamily: 'LibreCaslonDisplay-Regular', fontSize: 20, lineHeight: 26, letterSpacing: 1,
+    textShadowColor: 'rgba(50,36,28,0.55)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 0.5,
   },
   root: { height: 180 },
   sealRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -686,7 +692,7 @@ const mini = StyleSheet.create({
   },
   callingClip: {
     position: 'absolute', top: -5, alignSelf: 'center', left: '40%', width: 22, height: 7,
-    borderRadius: 2, backgroundColor: '#D9B062',
+    borderRadius: 2,
   },
   callingName: { fontFamily: 'MonsieurLaDoulaise-Regular', fontSize: 15, lineHeight: 24, paddingHorizontal: 4, flexShrink: 1 },
   quietName: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 11, letterSpacing: 2, color: '#2C3527' },
@@ -707,10 +713,22 @@ const mini = StyleSheet.create({
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
   productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
-  bagWrap: { alignItems: 'center' },
-  bagHandle: { width: 16, height: 10, borderWidth: 2, borderBottomWidth: 0, borderTopLeftRadius: 8, borderTopRightRadius: 8, marginBottom: -1 },
-  bag: { width: 36, height: 38, borderRadius: 2, alignItems: 'center', justifyContent: 'center' },
-  bagLogo: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
+  basketWrap: { alignItems: 'center' },
+  basketHandles: { width: 50, height: 16, marginBottom: -2 },
+  basketHandle: { position: 'absolute', top: 0, width: 30, height: 16, borderWidth: 2.5, borderBottomWidth: 0 },
+  basketHandleLeft: { left: 1, borderTopLeftRadius: 14, borderTopRightRadius: 4, zIndex: 1 },
+  basketHandleRight: { right: 1, borderTopLeftRadius: 4, borderTopRightRadius: 14 },
+  basket: {
+    width: 50, height: 36, borderTopWidth: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  basketSlots: {
+    position: 'absolute', top: 4, left: 4, right: 4, bottom: 6,
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'space-between',
+  },
+  basketSlot: { width: 7, height: 5, borderRadius: 2 },
+  basketLabel: { backgroundColor: '#FBF6EE', borderRadius: 2, padding: 3 },
+  basketLogo: { width: 16, height: 16, borderRadius: 8 },
   blockHero: { alignSelf: 'stretch', flex: 1 },
   blockPhotos: { flexDirection: 'row', height: 48 },
   blockPhoto: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)' },

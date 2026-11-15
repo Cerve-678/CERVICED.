@@ -12,11 +12,18 @@ import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "rea
 
 import { WaxSeal } from "../WaxSeal";
 
-const ENVELOPE_W = 250;
-const ENVELOPE_H = 162;
+/** The envelope is drawn on a 250 x 162 grid and scaled down to fit, so the
+ *  tucked card beside it is big enough for the logo to show clearly. */
+const VIEW_W = 250;
+const VIEW_H = 162;
+const ENVELOPE_W = 206;
+const SCALE = ENVELOPE_W / VIEW_W;
+const ENVELOPE_H = Math.round(VIEW_H * SCALE);
 /** The envelope's left edge inside the stage; the stage is wider so the card can peek out. */
-const ENVELOPE_X = 18;
-const SEAL = 82;
+const ENVELOPE_X = 10;
+/** Where the flap's tip (and so the seal) sits, in the 250 x 162 grid. */
+const FLAP_TIP_Y = 100;
+const SEAL = 68;
 
 const PAPER = {
   back: "#EADCC8",
@@ -52,13 +59,13 @@ export function SealedEnvelope({
       </View>
 
       <View style={styles.envelope} pointerEvents="none">
-        <Svg width={ENVELOPE_W} height={ENVELOPE_H} viewBox={`0 0 ${ENVELOPE_W} ${ENVELOPE_H}`}>
-          <Polygon points={`0,0 135,90 0,${ENVELOPE_H}`} fill={PAPER.left} />
-          <Polygon points={`${ENVELOPE_W},0 115,90 ${ENVELOPE_W},${ENVELOPE_H}`} fill={PAPER.right} />
-          <Polygon points={`0,${ENVELOPE_H} 125,74 ${ENVELOPE_W},${ENVELOPE_H}`} fill={PAPER.bottom} />
+        <Svg width={ENVELOPE_W} height={ENVELOPE_H} viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}>
+          <Polygon points={`0,0 135,90 0,${VIEW_H}`} fill={PAPER.left} />
+          <Polygon points={`${VIEW_W},0 115,90 ${VIEW_W},${VIEW_H}`} fill={PAPER.right} />
+          <Polygon points={`0,${VIEW_H} 125,74 ${VIEW_W},${VIEW_H}`} fill={PAPER.bottom} />
           {/* The flap's shadow, then the flap. */}
-          <Polygon points={`0,2 ${ENVELOPE_W},2 125,104`} fill="rgba(0,0,0,0.12)" />
-          <Polygon points={`0,0 ${ENVELOPE_W},0 125,100`} fill={PAPER.flap} />
+          <Polygon points={`0,2 ${VIEW_W},2 125,${FLAP_TIP_Y + 4}`} fill="rgba(0,0,0,0.12)" />
+          <Polygon points={`0,0 ${VIEW_W},0 125,${FLAP_TIP_Y}`} fill={PAPER.flap} />
         </Svg>
         {postmark ? <Postmark text={postmark} /> : null}
       </View>
@@ -71,7 +78,7 @@ export function SealedEnvelope({
 }
 
 /** The logo's size on the tucked card. */
-export const SEALED_LOGO_SIZE = 58;
+export const SEALED_LOGO_SIZE = 74;
 
 /** A round postmark with their area round its ring, and wavy cancel lines. */
 function Postmark({ text }: { text: string }) {
@@ -85,7 +92,7 @@ function Postmark({ text }: { text: string }) {
   }
   return (
     <View style={styles.postmark}>
-      <Svg width={124} height={70} viewBox="0 0 124 70">
+      <Svg width={124 * SCALE} height={70 * SCALE} viewBox="0 0 124 70">
         <Defs>
           <Path id={id} d="M35 35 m-25 0 a25 25 0 1 1 50 0 a25 25 0 1 1 -50 0" fill="none" />
         </Defs>
@@ -107,24 +114,25 @@ function Postmark({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  stage: { width: 300, height: 222, alignSelf: "center" },
+  stage: { width: 300, height: 226, alignSelf: "center" },
   envelope: {
     position: "absolute", left: ENVELOPE_X, top: 0, width: ENVELOPE_W, height: ENVELOPE_H,
     backgroundColor: PAPER.back, borderRadius: 4,
     shadowColor: "#000000", shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
   },
-  // Tucked behind the envelope's lower-right corner; about a third of it shows.
+  // Tucked behind the envelope's lower-right corner, with its whole lower-right
+  // quarter (where the logo sits) clear of the envelope.
   card: {
-    position: "absolute", left: 186, top: 98, width: 108, height: 116,
+    position: "absolute", left: 150, top: 62, width: 140, height: 150,
     backgroundColor: PAPER.card, borderRadius: 3, transform: [{ rotate: "-9deg" }],
     shadowColor: "#000000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 8, elevation: 4,
   },
   cardRule: { position: "absolute", top: 5, left: 5, right: 5, bottom: 5, borderWidth: 1, borderColor: "rgba(90,58,53,0.25)" },
   // HeroLogo keeps 20pt under itself; cancel it so the logo sits in the corner.
-  cardLogo: { position: "absolute", right: 9, bottom: 9 - 20 },
+  cardLogo: { position: "absolute", right: 10, bottom: 10 - 20 },
   seal: {
-    position: "absolute", left: ENVELOPE_X + ENVELOPE_W / 2 - SEAL / 2, top: 100 - SEAL / 2,
+    position: "absolute", left: ENVELOPE_X + ENVELOPE_W / 2 - SEAL / 2, top: FLAP_TIP_Y * SCALE - SEAL / 2,
     shadowColor: "#000000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 4,
   },
-  postmark: { position: "absolute", top: 8, right: -18, opacity: 0.55, transform: [{ rotate: "-10deg" }] },
+  postmark: { position: "absolute", top: 7, right: -15, opacity: 0.55, transform: [{ rotate: "-10deg" }] },
 });

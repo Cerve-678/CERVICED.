@@ -6,8 +6,8 @@
 // then moved out of the header onto the logo, placement B):
 //
 // - The first time the profile is opened, the Recommend bar slides up from
-//   the bottom (the same bar as after rating a visit) and goes by itself
-//   after a few seconds (shouldOfferOnProfile decides; once per provider).
+//   the bottom (the same bar as after rating a visit) and closes after 15
+//   seconds or when acted on (shouldOfferOnProfile decides; once per provider).
 // - From then on it's a small thumbs-up badge on the provider's logo. A
 //   successful Recommend shows a brief bubble pointing at the badge.
 // - Tapping the badge recommends and drops a menu down under it with
@@ -191,27 +191,34 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
   const onBarYes = useCallback(async () => {
     if (saving) return;
     const ok = await setRecommended(true);
-    if (userId && ok) void updateMomentsMemory(userId, (m) => withAnswer(m, true));
-    showHint(ok ? 'Recommended. Tap the heart to change it.' : 'You can recommend from the heart any time.');
+    if (!ok) return;
+    if (userId) void updateMomentsMemory(userId, (m) => withAnswer(m, true));
+    setPhase('none');
+    showHint('Recommended. Tap the thumbs up to change it.');
   }, [saving, setRecommended, userId, showHint]);
 
   const onBarClose = useCallback(() => setPhase('none'), []);
 
   const onHeartPress = useCallback(() => {
-    hapticLight();
     if (menuOpen) {
+      hapticLight();
       setMenuOpen(false);
       return;
     }
     setPhase('none');
     measureHeart();
     setMenuOpen(true);
-    if (sharing && !sharing.recommended && !sharing.hidden && !saving) void setRecommended(true);
+    if (sharing && !sharing.recommended && !sharing.hidden && !saving) {
+      // The saved recommendation gives its own success haptic.
+      void setRecommended(true);
+    } else {
+      hapticLight();
+    }
   }, [menuOpen, measureHeart, sharing, saving, setRecommended]);
 
   const onToggleRecommend = useCallback(() => {
     if (!sharing || saving || sharing.hidden) return;
-    hapticLight();
+    // setRecommended gives one haptic after the change is saved.
     void setRecommended(!sharing.recommended);
   }, [sharing, saving, setRecommended]);
 
@@ -422,6 +429,7 @@ export function ProviderRecommendLayer({
         bottomOffset={bottomOffset}
         subtitle="You've been here"
         colors={theme}
+        autoHideMs={15_000}
       />
 
       {phase === 'hint' ? (

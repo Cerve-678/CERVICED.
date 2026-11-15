@@ -21,6 +21,7 @@ import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNam
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
+import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
 import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle } from "./ProfileHero";
 import {
   GlossShine,
@@ -67,7 +68,7 @@ export interface ProfileStylePreviewProps {
 export function ProfileStylePreview({
   themeKey,
   gradient,
-  accent,
+  accent: rawAccent,
   backgroundImage,
   brandFont,
   name,
@@ -80,7 +81,11 @@ export function ProfileStylePreview({
 }: ProfileStylePreviewProps) {
   const { finish, shape, pageStyle: styleKey } = parseThemeKey(themeKey);
   const pageStyle = getPageStyle(styleKey);
-  const OP = resolveProviderTheme(themeKey);
+  const baseTheme = resolveProviderTheme(themeKey);
+  // As on the profile: a veil page (Sheer) puts the content on dark glass.
+  const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
+  const OP = veilTheme ?? baseTheme;
+  const accent = veilTheme ? veilAccent(rawAccent) : rawAccent;
   const squareCards = shape === "square";
 
   // As ProviderProfileScreen works them out.
@@ -129,8 +134,9 @@ export function ProfileStylePreview({
     <ScrollView style={{ backgroundColor: OP.bg }} showsVerticalScrollIndicator={false}>
       <View>
         {/* The hero: the backdrop runs behind the logo and name, and the
-            content sheet rises over its foot, as on the profile. */}
-        <View style={styles.backdrop}>
+            content sheet rises over its foot, as on the profile. On a veil
+            page it runs behind the whole page, under the veil. */}
+        <View style={[styles.backdrop, veilTheme && styles.backdropFull]}>
           {backgroundImage ? (
             <>
               <Image source={{ uri: backgroundImage }} style={StyleSheet.absoluteFill} resizeMode="cover" fadeDuration={0} />
@@ -143,6 +149,7 @@ export function ProfileStylePreview({
           ) : (
             <ProfileHeroBackdrop colors={gradient} finish={finish} style={StyleSheet.absoluteFill} />
           )}
+          {veilTheme ? <VeilBackdrop /> : null}
         </View>
 
         <View style={styles.heroInfo}>
@@ -155,6 +162,8 @@ export function ProfileStylePreview({
             heroSub={heroSub}
             heroIsDark={heroIsDark}
             accent={accent}
+            heroColour={gradient[0] ?? OP.hero}
+            cardColour={OP.card}
             rating="5.0"
             renderLogo={size => (
               <HeroLogo
@@ -214,7 +223,7 @@ export function ProfileStylePreview({
           />
         </View>
 
-        <View style={[styles.sheet, { backgroundColor: OP.bg }]}>
+        <View style={[styles.sheet, { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg }, veilTheme && styles.sheetGlass]}>
           {pageStyle.jumpBar ? (
             <View style={[styles.jumpBar, { backgroundColor: accent }, squareCards && styles.square]}>
               {jumpKeys.map(key => (
@@ -325,6 +334,7 @@ export function ProfileStylePreview({
 
 const styles = StyleSheet.create({
   backdrop: { position: "absolute", top: 0, left: 0, right: 0, height: 640 },
+  backdropFull: { height: undefined, bottom: 0 },
   heroInfo: { paddingTop: 100 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   name: { textAlign: "center", marginBottom: 4 },
@@ -359,6 +369,13 @@ const styles = StyleSheet.create({
     minHeight: 900,
   },
   square: { borderRadius: 0 },
+  // Sheer: see-through glass over the veil, inset so the photo shows down its sides.
+  sheetGlass: {
+    marginHorizontal: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
   jumpBar: { flexDirection: "row", borderRadius: 100, marginBottom: 22, paddingHorizontal: 6 },
   jumpItem: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center" },
   jumpText: { fontFamily: "BakbakOne-Regular", fontSize: 10, letterSpacing: 1.6 },

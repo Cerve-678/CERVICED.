@@ -74,7 +74,7 @@ export type PageCards =
   | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
   | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
   | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
-  | 'clipped' // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
+  | 'clipped' // a near-square card with an inner rule, held at the top by a clip in the accent (Calling Card)
   | 'product' // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
   | 'ruled'   // straight on the page, each item over a printed rule (Gazette)
   | 'pages';   // a square card with two page edges showing behind it, like a closed book (Novel)
@@ -100,7 +100,7 @@ export type PagePolicies =
   | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
   | 'accordion'  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
   | 'columns'   // two-up newspaper columns boxed by ink rules (Gazette)
-  | 'houseRules'; // numbered paragraphs, the label in small caps running into its value (Novel)
+  | 'numberedRules'; // numbered paragraphs, the label in small caps running into its value (Novel)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -126,13 +126,13 @@ export type PageHero =
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
   | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
   | 'lace'      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
-  | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps, outlined How to book boxes
+  | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
-  | 'pressed'  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
-  | 'callingCard' // satin folds, and a cream calling card held by a gold clip with the logo and name
-  | 'shoppingBag' // a shopping bag with rope handles, the logo and name printed on its front (Boutique)
+  | 'pressed'  // pressed straight into the theme backdrop, no card: the logo in a blind-stamped ring, the name raised out of it
+  | 'callingCard' // satin in the theme colour, and a cream calling card held by an accent clip with the logo and name
+  | 'basket'    // a handheld shop basket in the accent, a cream shop label on its front with a big logo and the name (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
-  | 'hardback';  // a cloth-bound book cover: the logo in a foil ring, the name in gold foil, a ribbon bookmark
+  | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -170,15 +170,19 @@ export interface PageStyle {
   stampPhotos?: boolean;
   /** Portfolio photos sit in a plate mark pressed into the page, like prints (Embossed). */
   plateMarkPhotos?: boolean;
-  /** Portfolio photos as cream-bordered prints, each pinned by a small gold clip (Calling Card). */
+  /** Portfolio photos as cream-bordered prints, each pinned by a small accent clip (Calling Card). */
   clippedPhotos?: boolean;
-  /** The word on each service's book button, when the style has its own (Boutique: "Add to bag").
+  /** The word on each service's book button, when the style has its own (Boutique: "Add to basket").
    *  Only the word changes: the button still opens the booking sheet. */
   bookLabel?: string;
   /** Portfolio photos square, in a fine ink frame with a halftone dot screen (Gazette). */
   halftonePhotos?: boolean;
-  /** Portfolio photos captioned like a book's plates: "Plate I — their caption" (Novel). */
-  plateCaptions?: boolean;
+  /** Portfolio photos set on a page, their caption in italic under each (Novel). */
+  pagePhotos?: boolean;
+  /** The page itself is the veil: the photo and the black veil stay behind the
+   *  whole profile, and the content sits on a see-through dark glass sheet in
+   *  white ink (Sheer, owner 2026-11-15). */
+  veilPage?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -301,9 +305,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
   // a see-through black veil over their photo, like the owner's sheer-black reference.
   {
-    key: 'sheer', name: 'Sheer', description: 'Your photo under a see-through black veil, fine outlined boxes',
+    key: 'sheer', name: 'Sheer', description: 'Your photo under a black veil down the whole page, content on see-through glass',
     heading: 'sheerCaps', cards: 'sheer', policies: 'outlined', logo: 'circle',
-    hero: 'veil', aboutInHero: false,
+    hero: 'veil', aboutInHero: false, veilPage: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
@@ -316,9 +320,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
-  // board 23): satin and a calling card held by a gold clip.
+  // board 23): satin and a calling card held by a clip, both in the theme colours.
   {
-    key: 'callingCard', name: 'Calling Card', description: 'Your name on a cream card held by a gold clip, over satin',
+    key: 'callingCard', name: 'Calling Card', description: 'Your name on a cream card held by a clip, over satin in your colours',
     heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', logo: 'circle',
     hero: 'callingCard', aboutInHero: false, clippedPhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
@@ -326,11 +330,11 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
   // board 24): "shopping cart vibes", the logo printed on the bag.
   {
-    key: 'boutique', name: 'Boutique', description: 'A shopping bag with your logo on it, services like a shop',
+    key: 'boutique', name: 'Boutique', description: 'A shop basket with your logo on its label, services like a shop',
     heading: 'shopSerif', cards: 'product', policies: 'accordion', logo: 'circle',
-    hero: 'shoppingBag', aboutInHero: false,
+    hero: 'basket', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    bookLabel: 'Add to bag',
+    bookLabel: 'Add to basket',
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS, board 25).
   {
@@ -340,12 +344,13 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
-  // the elements of a hardback, not a literal book — the cover, chapters,
-  // house rules and plates — round the provider's own content.
+  // a book's type and chapters round the provider's own content. The
+  // cloth-bound cover hero and the bookish section names (The Author, House
+  // Rules, Praise, Plates) were dropped at the owner's request on 2026-11-15.
   {
-    key: 'novel', name: 'Novel', description: 'A cloth-bound cover with your name in gold foil, chapters, house rules',
-    heading: 'chapter', cards: 'pages', policies: 'houseRules', logo: 'circle',
-    hero: 'hardback', aboutInHero: false, plateCaptions: true,
+    key: 'novel', name: 'Novel', description: 'A book\'s title page with your name set in old type, sections as chapters',
+    heading: 'chapter', cards: 'pages', policies: 'numberedRules', logo: 'circle',
+    hero: 'titlePage', aboutInHero: false, pagePhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
@@ -411,14 +416,14 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   specialities: '10',
 };
 
-/** Novel's chapter titles: the book's word for each section where it has one. */
+/** Novel's chapter titles: plain section names under each "Chapter" line. */
 const CHAPTER_TITLES: Record<PageSectionKey, string> = {
-  about: 'The Author',
-  policies: 'House Rules',
+  about: 'About Me',
+  policies: 'Booking Policies',
   services: 'The Services',
   policyPages: 'Before You Book',
-  portfolio: 'Plates',
-  reviews: 'Praise',
+  portfolio: 'My Portfolio',
+  reviews: 'Client Reviews',
   hours: 'Opening Hours',
   contact: 'Get in Touch',
   info: 'Good to Know',

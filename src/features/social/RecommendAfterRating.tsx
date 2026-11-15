@@ -1,8 +1,8 @@
 // src/features/social/RecommendAfterRating.tsx
 //
 // After a client rates a visit 4 or 5 stars, a slim bar slides up offering
-// Recommend (style B, chosen 2026-11-09). It goes away by itself after a few
-// seconds; × simply closes it. Not offered while Show where I go is off
+// Recommend (style B, chosen 2026-11-09). It stays until answered or closed
+// with ×. Not offered while Show where I go is off
 // (nobody would see it), or for a provider already recommended or hidden.
 //
 // Usage: const after = useRecommendAfterRating(userId); call
@@ -22,8 +22,6 @@ import { FONT_DISPLAY, hapticLight, hapticSuccess } from '../maintenance/ui';
 import { initialsFor } from './presentation';
 import { RECOMMEND_AFTER_RATING_MIN, withAnswer, withAsked } from './circleMoments';
 import { updateMomentsMemory } from './momentsMemory';
-
-const AUTO_HIDE_MS = 8000;
 
 interface Offer { providerId: string; providerName: string }
 
@@ -96,12 +94,14 @@ export function useRecommendAfterRating(userId: string | null, onRecommended?: (
  * own (on their profile) rather than the app's accent.
  */
 export function RecommendAfterRatingBar({
-  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it', colors,
+  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it', colors, autoHideMs,
 }: RecommendBarProps & {
   P: AppTheme;
   bottomOffset?: number | undefined;
   subtitle?: string;
   colors?: { accent: string; onAccent: string } | undefined;
+  /** Optional auto-close for the provider-profile prompt. */
+  autoHideMs?: number;
 }) {
   const fill = colors?.accent ?? P.accent;
   const ink = colors?.onAccent ?? P.onAccent;
@@ -113,12 +113,17 @@ export function RecommendAfterRatingBar({
     if (offer) {
       setShown(offer);
       Animated.spring(slide, { toValue: 1, useNativeDriver: true, friction: 9 }).start();
-      const t = setTimeout(onClose, AUTO_HIDE_MS);
-      return () => clearTimeout(t);
+      return undefined;
     }
     Animated.timing(slide, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShown(null));
     return undefined;
-  }, [offer, slide, onClose]);
+  }, [offer, slide]);
+
+  useEffect(() => {
+    if (!offer || !autoHideMs || busy) return undefined;
+    const timer = setTimeout(onClose, autoHideMs);
+    return () => clearTimeout(timer);
+  }, [offer, autoHideMs, busy, onClose]);
 
   if (!shown) return null;
   return (

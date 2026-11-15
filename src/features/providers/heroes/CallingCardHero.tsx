@@ -2,10 +2,11 @@
 //
 // The Calling Card page style (round 4, board 23 on
 // https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS): satin folds behind the
-// hero, and a cream calling card held by a gold bulldog clip carrying the
-// logo, the name in a copperplate script, and the stars, years and slots pill.
-// The clip and the satin are drawn from Views and gradients, not SVG, so they
-// render the same on every platform.
+// hero, and a cream calling card held by a bulldog clip carrying the logo, the
+// name in a copperplate script, and the stars, years and slots pill. The satin
+// is the theme's own backdrop colour and the clip is the theme accent, so both
+// change with the theme (owner, 2026-11-15). The clip and the satin are drawn
+// from Views and gradients, not SVG, so they render the same on every platform.
 
 import React from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
@@ -22,36 +23,47 @@ export function callingCardInk(accent: string): string {
   return isDarkColor(accent) ? accent : blend(accent, "#000000", 0.62);
 }
 
-const GOLD_LEVER = ["#7A5520", "#C99A4A", "#F6E2A8", "#D2A653", "#8A6428"] as const;
-const GOLD_HINGE = ["#6E4B1B", "#E9CF8C", "#6E4B1B"] as const;
-const GOLD_JAW = ["#F8E7B4", "#D9B062", "#B4893C", "#8C6428"] as const;
+/** The clip's metal: a polished press of one colour, dark at the edges with a bright catch-light. */
+function clipMetal(colour: string) {
+  const lo = blend(colour, "#000000", 0.5);
+  const mid = blend(colour, "#000000", 0.12);
+  const hi = blend(colour, "#FFFFFF", 0.7);
+  return {
+    lever: [lo, mid, hi, colour, lo] as const,
+    hinge: [lo, hi, lo] as const,
+    jaw: [hi, colour, mid, lo] as const,
+  };
+}
 
 /**
- * A gold bulldog clip: a rounded lever, a hinge bar, and the jaw that grips the
- * card's top edge. `width` is the jaw's width; the rest scales from it. The
- * caller positions it (absolutely, over the card's top edge).
+ * A bulldog clip in the given colour (the theme accent): a rounded lever, a
+ * hinge bar, and the jaw that grips the card's top edge. `width` is the jaw's
+ * width; the rest scales from it. The caller positions it (absolutely, over
+ * the card's top edge).
  */
-export function GoldClip({ width, style }: { width: number; style?: StyleProp<ViewStyle> }) {
+export function BulldogClip({ width, colour, style }: { width: number; colour: string; style?: StyleProp<ViewStyle> }) {
+  const metal = clipMetal(colour);
   const lever = { width: width * 0.28, height: width * 0.33, borderTopLeftRadius: width * 0.14, borderTopRightRadius: width * 0.14, borderBottomLeftRadius: width * 0.06, borderBottomRightRadius: width * 0.06 };
   const hinge = { width: width * 0.36, height: Math.max(3, width * 0.065), marginTop: -2 };
   const jaw = { width, height: width * 0.23, borderTopLeftRadius: width * 0.07, borderTopRightRadius: width * 0.07, borderBottomLeftRadius: 3, borderBottomRightRadius: 3 };
   return (
     <View style={[clip.wrap, style]} pointerEvents="none">
-      <LinearGradient colors={GOLD_LEVER} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={lever} />
-      <LinearGradient colors={GOLD_HINGE} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={hinge} />
-      <LinearGradient colors={GOLD_JAW} style={[jaw, clip.jaw]} />
+      <LinearGradient colors={metal.lever} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={lever} />
+      <LinearGradient colors={metal.hinge} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={hinge} />
+      <LinearGradient colors={metal.jaw} style={[jaw, clip.jaw]} />
     </View>
   );
 }
 
-/** Satin folds in the brand colour: deep burgundy-like folds for a dark accent,
- *  champagne for a pale one. Fills its parent, behind everything else. */
-export function SatinBackdrop({ accent, style }: { accent: string; style?: StyleProp<ViewStyle> }) {
-  const dark = isDarkColor(accent);
-  const deep = dark ? blend(accent, "#000000", 0.62) : blend(accent, "#5C4636", 0.32);
-  const mid = dark ? accent : blend(accent, "#FFFFFF", 0.55);
-  const high = dark ? blend(accent, "#FFFFFF", 0.18) : blend(accent, "#FFFFFF", 0.88);
-  const sheen = dark ? "rgba(255,190,200,0.22)" : "rgba(255,255,255,0.55)";
+/** Satin folds in the theme's backdrop colour: the colour itself on the lit
+ *  folds, pressed a little darker in the hollows, so the hero reads as the
+ *  same colour as the theme. Fills its parent, behind everything else. */
+export function SatinBackdrop({ colour, style }: { colour: string; style?: StyleProp<ViewStyle> }) {
+  const dark = isDarkColor(colour);
+  const deep = blend(colour, "#000000", dark ? 0.4 : 0.16);
+  const mid = colour;
+  const high = blend(colour, "#FFFFFF", dark ? 0.16 : 0.45);
+  const sheen = dark ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.5)";
   return (
     <View style={[StyleSheet.absoluteFill, satin.clip, style]} pointerEvents="none">
       <LinearGradient
@@ -84,6 +96,7 @@ export function CallingCardHero({
   kicker,
   location,
   accent,
+  heroColour,
   logo,
   details,
   tick,
@@ -92,6 +105,8 @@ export function CallingCardHero({
   kicker: string;
   location: string;
   accent: string;
+  /** The theme's backdrop colour: the satin is drawn in it. */
+  heroColour: string;
   /** The logo, already sized (renderLogo). */
   logo: React.ReactNode;
   /** Stars, years and the slots pill: inked dark by the profile (detailsSitOnCard). */
@@ -102,7 +117,7 @@ export function CallingCardHero({
   const sub = blend(ink, CALLING_CARD_PAPER, 0.35);
   return (
     <View style={hero.wrap}>
-      <SatinBackdrop accent={accent} style={hero.satin} />
+      <SatinBackdrop colour={heroColour} style={hero.satin} />
       <View style={hero.cardWrap}>
         <View style={[hero.card, { backgroundColor: CALLING_CARD_PAPER }]}>
           <View style={hero.cardRow}>
@@ -119,7 +134,7 @@ export function CallingCardHero({
           <View style={[hero.rule, { backgroundColor: CARD_RULE }]} />
           <View style={hero.details}>{details}</View>
         </View>
-        <GoldClip width={124} style={hero.clip} />
+        <BulldogClip width={124} colour={accent} style={hero.clip} />
       </View>
     </View>
   );

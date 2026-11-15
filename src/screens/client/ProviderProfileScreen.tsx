@@ -52,6 +52,7 @@ import {
   detailsSitOnCard,
   heroIsDarkForStyle,
 } from "../../features/providers/ProfileHero";
+import { VeilBackdrop, veilAccent, veilPageTheme } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -1509,17 +1510,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
-  const OP = resolveProviderTheme(provider?.profileTheme);
+  // Branding → Page Style (constants/pageStyles): headings, card treatment,
+  // the policy layout and the logo frame, on top of the colours. Classic is
+  // the profile exactly as it was.
+  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
+  // A veil page (Sheer) keeps the theme's hero and accent but puts the
+  // content on see-through dark glass, so every section inks itself white.
+  const baseTheme = resolveProviderTheme(provider?.profileTheme);
+  const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
+  const OP = veilTheme ?? baseTheme;
   // Branding → Card Shape: square corners on the profile's cards (the service
   // cards and category pills, About/Policies, the sharing card, Reviews,
   // Contact, Opening hours, Additional info), or the rounded look it has
   // always had. The availability pill and Instagram button beside it stay
   // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
-  // Branding → Page Style (constants/pageStyles): headings, card treatment,
-  // the policy layout and the logo frame, on top of the colours. Classic is
-  // the profile exactly as it was.
-  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1748,7 +1753,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // brown for the default theme). There used to be a middle step that guessed
   // an accent from the gradient's first colour through a table of old
   // placeholder presets, falling back to purple for anything else.
-  const adaptiveAccentColor = provider?.accentColor ?? OP.accent;
+  const rawAccentColor = provider?.accentColor ?? OP.accent;
+  // On a veil page's dark glass a dark accent is lifted so it still reads.
+  const adaptiveAccentColor = veilTheme ? veilAccent(rawAccentColor) : rawAccentColor;
   // Recommend's badge on the logo wears this page's colours.
   const recommendBadgeTheme = useMemo<RecommendBadgeTheme>(() => ({
     card: OP.card,
@@ -4179,7 +4186,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               ? "Not taking bookings"
                               : fullyBooked
                               ? "Fully Booked"
-                              // Boutique says "Add to bag"; it still opens the booking sheet.
+                              // Boutique says "Add to basket"; it still opens the booking sheet.
                               : pageStyle.bookLabel ?? "Book"}
                         </Text>
                       </TouchableOpacity>
@@ -4350,11 +4357,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </>
         ) : (
           <ProfileHeroBackdrop
-            colors={provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]}
+            colors={provider.hasCustomGradient ? provider.gradient : [baseTheme.hero, baseTheme.bg]}
             finish={parseThemeKey(provider.profileTheme).finish}
             style={styles.heroImage}
           />
         )}
+        {/* Sheer: the black veil over the whole backdrop, behind the hero and
+            the see-through content sheet alike. */}
+        {veilTheme ? <VeilBackdrop style={styles.heroImage} /> : null}
 
         {/* Driven by this provider's hero, not theme.statusBar: their profile
             theme never follows the viewer's dark mode, so reading the viewer's
@@ -5228,6 +5238,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroSub={heroSub}
                 heroIsDark={heroIsDark}
                 accent={adaptiveAccentColor}
+                heroColour={heroBgColor ?? OP.hero}
+                cardColour={OP.card}
                 photoUris={heroPhotoUris}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}
@@ -5566,11 +5578,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <View
               style={[
                 styles.contentSheet,
-                { minHeight: screenHeight, backgroundColor: OP.bg },
+                { minHeight: screenHeight, backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg },
                 // With a background image, inset the sheet so the photo shows
                 // along its sides — the content reads as a card floating over
-                // the image rather than covering it edge to edge.
-                provider.backgroundImage ? styles.contentSheetFloating : null,
+                // the image rather than covering it edge to edge. A veil page
+                // always floats: its sheet is a see-through glass card.
+                provider.backgroundImage || veilTheme ? styles.contentSheetFloating : null,
+                veilTheme ? styles.contentSheetGlass : null,
               ]}
             >
               {/* Cover: a bar of links to the main sections. */}
@@ -6115,6 +6129,14 @@ const styles = StyleSheet.create({
   // from both edges so the photo stays visible down its sides.
   contentSheetFloating: {
     marginHorizontal: 10,
+  },
+  // Sheer: the sheet is see-through glass over the veil, edged in a hairline.
+  contentSheetGlass: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.22)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   skeletonShell: {
     flex: 1,

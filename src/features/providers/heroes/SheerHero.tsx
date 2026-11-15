@@ -2,14 +2,18 @@
 //
 // The Sheer page style's hero (round 4, 2026-11-15): their cover photo or
 // colours seen through a see-through black veil, an oval monogram round the
-// logo, the name in thin, widely spaced Bellefair caps, and a "How to book"
-// box of hairline-outlined steps. The veil is always dark, so everything here
-// is drawn in white whatever is behind it; the profile and the preview treat a
-// veil hero as dark for the same reason (heroIsDarkForStyle).
+// logo and the name in thin, widely spaced Bellefair caps. (The "How to book"
+// box was removed at the owner's request, 2026-11-15.) The veil itself isn't
+// drawn here: it runs down the whole page (VeilBackdrop, drawn by the profile
+// and the preview behind everything), and the content sits on see-through
+// dark glass over it (veilPageTheme). The veil is always dark, so everything
+// here is drawn in white whatever is behind it; the profile and the preview
+// treat a veil hero as dark for the same reason (heroIsDarkForStyle).
 
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+
+import { blend, buildThemeTokens, isDarkColor, type ProviderThemeTokens } from "../../../constants/providerThemes";
 
 /** White ink on the veil, and the lines and panels drawn on it. */
 export const VEIL_INK = {
@@ -21,6 +25,33 @@ export const VEIL_INK = {
 
 /** How dark the veil is: the photo still shows through, but white type reads on any of them. */
 const VEIL = "rgba(8,6,6,0.6)";
+
+/** The glass the content sits on: a near-black, drawn see-through over the veil. */
+const VEIL_SHEET = "#120E0E";
+const VEIL_CARD = "#1E1817";
+/** How much of the glass shows: enough to read on, light enough to see the photo through. */
+const VEIL_SHEET_ALPHA = 0.42;
+
+/** The veil, behind the whole page. Fills its parent, under the content. */
+export function VeilBackdrop({ style }: { style?: StyleProp<ViewStyle> }) {
+  return <View style={[StyleSheet.absoluteFill, { backgroundColor: VEIL }, style]} pointerEvents="none" />;
+}
+
+/**
+ * The page's colours on a veil page: the theme's own hero and accent, but a
+ * dark sheet and card so every section, sheet and modal inks itself white.
+ * `sheetFill` is what the content sheet is actually painted with (see-through);
+ * `bg` stays solid because it's what the ink and edges are worked out from.
+ */
+export function veilPageTheme(base: ProviderThemeTokens): ProviderThemeTokens & { sheetFill: string } {
+  const tokens = buildThemeTokens(base.hero, VEIL_CARD, base.accent, VEIL_SHEET, base.gradient);
+  return { ...tokens, sheetFill: `rgba(18,14,14,${VEIL_SHEET_ALPHA})` };
+}
+
+/** A dark accent lifted so it still reads on the dark glass; a light one is kept. */
+export function veilAccent(accent: string): string {
+  return isDarkColor(accent) ? blend(accent, "#FFFFFF", 0.5) : accent;
+}
 
 export function SheerHero({
   name,
@@ -42,10 +73,6 @@ export function SheerHero({
 }) {
   return (
     <View style={styles.wrap}>
-      {/* Runs up past the top of the hero and down under the sheet's rounded
-          edge, so no strip of bare photo shows at either end. */}
-      <View style={styles.veil} pointerEvents="none" />
-
       <View style={styles.center}>
         <View style={styles.oval}>
           <View style={styles.ovalInner} pointerEvents="none" />
@@ -63,26 +90,12 @@ export function SheerHero({
         <View style={styles.details}>{details}</View>
       </View>
 
-      <View style={styles.howTo}>
-        <Text style={styles.howToTitle} accessibilityRole="header">HOW TO BOOK?</Text>
-        <View style={styles.steps}>
-          <View style={styles.step}>
-            <Ionicons name="information-circle-outline" size={26} color={VEIL_INK.text} />
-            <Text style={styles.stepText}>READ MY POLICIES BEFORE BOOKING</Text>
-          </View>
-          <View style={styles.step}>
-            <Ionicons name="checkmark" size={26} color={VEIL_INK.text} />
-            <Text style={styles.stepText}>CHOOSE YOUR TREATMENT & TIME</Text>
-          </View>
-        </View>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingBottom: 40 },
-  veil: { position: "absolute", top: -700, bottom: -60, left: 0, right: 0, backgroundColor: VEIL },
   center: { alignItems: "center" },
   // A tall capsule with a second hairline inside it, round a small logo.
   oval: {
@@ -107,18 +120,4 @@ const styles = StyleSheet.create({
     color: VEIL_INK.sub, marginTop: 8, marginBottom: 16, textAlign: "center",
   },
   details: { alignItems: "center", alignSelf: "stretch" },
-  howTo: {
-    borderWidth: 1, borderColor: VEIL_INK.line, backgroundColor: VEIL_INK.panel,
-    paddingVertical: 22, paddingHorizontal: 16, alignItems: "center", gap: 16, marginTop: 8,
-  },
-  howToTitle: { fontFamily: "Bellefair-Regular", fontSize: 24, lineHeight: 32, letterSpacing: 2.6, color: VEIL_INK.text },
-  steps: { flexDirection: "row", gap: 10, alignSelf: "stretch" },
-  step: {
-    flex: 1, borderWidth: 1, borderColor: VEIL_INK.text, paddingVertical: 16, paddingHorizontal: 8,
-    alignItems: "center", gap: 10,
-  },
-  stepText: {
-    fontFamily: "Jost-Light", fontSize: 11, lineHeight: 16, letterSpacing: 1.2,
-    color: VEIL_INK.text, textAlign: "center",
-  },
 });

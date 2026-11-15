@@ -25,7 +25,7 @@ import {
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import { LaceRosette, LaceTrim } from "./heroes/LaceHero";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
-import { GoldClip } from "./heroes/CallingCardHero";
+import { BulldogClip } from "./heroes/CallingCardHero";
 import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 
@@ -583,8 +583,8 @@ export function PageSection({
           <View style={[surfaceStyles.clippedRule, { borderColor: withAlpha(palette.accent, 0.28) }]} pointerEvents="none" />
         ) : null}
         {children}
-        {/* Calling Card: a gold clip holds each card at the top. */}
-        {pageStyle.cards === "clipped" ? <GoldClip width={96} style={surfaceStyles.clippedClip} /> : null}
+        {/* Calling Card: a clip in the theme accent holds each card at the top. */}
+        {pageStyle.cards === "clipped" ? <BulldogClip width={96} colour={palette.accent} style={surfaceStyles.clippedClip} /> : null}
       </View>
     </View>
   );
@@ -981,8 +981,8 @@ export function StyledPolicyList({
     );
   }
 
-  if (layout === "houseRules") {
-    // Novel's House Rules: numbered paragraphs, the rule's name in small caps
+  if (layout === "numberedRules") {
+    // Novel's policies: numbered paragraphs, the rule's name in small caps
     // running straight into what it says.
     return (
       <View style={policyStyles.rulesList}>
