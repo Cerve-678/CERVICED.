@@ -97,6 +97,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  boutique: { text: 'The Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -218,6 +219,8 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'shopSerif':
+        return <Text style={[mini.shopSerif, { color: ink }]}>{heading.text}</Text>;
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -256,6 +259,8 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'product':
+        return <View key={key} style={[mini.card, mini.productCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -361,6 +366,14 @@ function MiniProfile({
         ) : style.hero === 'quietBand' ? (
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
+          </View>
+        ) : style.hero === 'shoppingBag' ? (
+          // Boutique: a shopping bag with the logo printed on it.
+          <View style={mini.bagWrap}>
+            <View style={[mini.bagHandle, { borderColor: blend(accent, '#000000', 0.5) }]} />
+            <View style={[mini.bag, { backgroundColor: accent }]}>
+              <View style={[mini.bagLogo, { borderColor: isDarkColor(accent) ? '#F8EDE6' : '#2A0A10' }]} />
+            </View>
           </View>
         ) : style.hero === 'poster' ? (
           <>
@@ -498,6 +511,12 @@ const mini = StyleSheet.create({
   indexTitle: { fontFamily: 'Gloock-Regular', fontSize: 13 },
   topRuleCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderTopWidth: 2, borderTopColor: '#1F1A1C' },
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
+  productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
+  shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
+  bagWrap: { alignItems: 'center' },
+  bagHandle: { width: 16, height: 10, borderWidth: 2, borderBottomWidth: 0, borderTopLeftRadius: 8, borderTopRightRadius: 8, marginBottom: -1 },
+  bag: { width: 36, height: 38, borderRadius: 2, alignItems: 'center', justifyContent: 'center' },
+  bagLogo: { width: 14, height: 14, borderRadius: 7, borderWidth: 1 },
   blockHero: { alignSelf: 'stretch', flex: 1 },
   blockPhotos: { flexDirection: 'row', height: 48 },
   blockPhoto: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)' },

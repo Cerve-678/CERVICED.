@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
+import { BoutiqueHero } from "./heroes/BoutiqueHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
@@ -668,6 +669,21 @@ export function ProfileHeroLayout({
         </View>
       );
     }
+
+    case "shoppingBag":
+      // Boutique: a shopping bag with their logo and name printed on it.
+      return (
+        <BoutiqueHero
+          name={name}
+          location={location}
+          accent={accent}
+          heroSub={heroSub}
+          shadow={shadow}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
 
     default:
       return (

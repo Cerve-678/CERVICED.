@@ -18,7 +18,8 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet'
+  | 'boutique';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -37,7 +38,8 @@ export type PageHeading =
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
-  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'shopSerif'; // a big serif title on the left, like a shop's department heading (Boutique)
 
 /** What a section sits on. */
 export type PageCards =
@@ -52,7 +54,8 @@ export type PageCards =
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
-  | 'block';   // a square card with a thick dark outline
+  | 'block'    // a square card with a thick dark outline
+  | 'product'; // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -67,7 +70,8 @@ export type PagePolicies =
   | 'numerals'  // rows numbered in roman numerals
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
-  | 'definition'; // a small caps label beside each value, between hairlines
+  | 'definition' // a small caps label beside each value, between hairlines
+  | 'accordion';  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -90,7 +94,8 @@ export type PageHero =
   | 'label'      // a paper tag hanging on a string
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
+  | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
+  | 'shoppingBag'; // a shopping bag with rope handles, the logo and name printed on its front (Boutique)
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -123,6 +128,9 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** The word on each service's book button, when the style has its own (Boutique: "Add to bag").
+   *  Only the word changes: the button still opens the booking sheet. */
+  bookLabel?: string;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -225,6 +233,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
+  // board 24): "shopping cart vibes", the logo printed on the bag.
+  {
+    key: 'boutique', name: 'Boutique', description: 'A shopping bag with your logo on it, services like a shop',
+    heading: 'shopSerif', cards: 'product', policies: 'accordion', logo: 'circle',
+    hero: 'shoppingBag', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    bookLabel: 'Add to bag',
   },
 ];
 

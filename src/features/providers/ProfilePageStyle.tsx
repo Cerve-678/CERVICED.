@@ -6,8 +6,8 @@
 // frosted card with its Bakbak title inside — so a provider who never picks a
 // style sees no change.
 
-import React from "react";
-import { StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
+import React, { useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -247,6 +247,13 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "shopSerif":
+      // Boutique: a big serif title on the left, like a shop's department.
+      return (
+        <Text {...a11y} style={[headingStyles.shopSerif, { color: ink }]}>
+          {headingPair(section).join(" ")}
+        </Text>
+      );
     default:
       return (
         // Only ever drawn on the page: Classic's in-card title is PageSection's own Text.
@@ -351,7 +358,7 @@ export function PageSection({
 
   const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
-    : pageStyle.cards === "flat" ? 6
+    : pageStyle.cards === "flat" || pageStyle.cards === "product" ? 6
     : pageStyle.cards === "gloss" ? 28
     : pageStyle.cards === "chunky" ? 26
     : pageStyle.cards === "offset" ? 22
@@ -408,6 +415,7 @@ export function PageSection({
           pageStyle.cards === "topRule" && [surfaceStyles.topRule, { borderTopColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "block" && [surfaceStyles.blockCard, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "gloss" && [surfaceStyles.gloss, { borderColor: withAlpha(palette.accent, 0.35) }],
+          pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -560,6 +568,15 @@ export function serviceCardSurface(
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 2, borderColor: outlineInk(colours.card) };
     case "topRule":
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderTopWidth: 3, borderTopColor: outlineInk(colours.card) };
+    case "product":
+      // Boutique: a clean product tile, a fine outline and small corners.
+      return {
+        ...flat,
+        backgroundColor: colours.card,
+        borderWidth: 1,
+        borderColor: withAlpha(outlineInk(colours.card), 0.14),
+        borderRadius: 6,
+      };
     default:
       return null;
   }
@@ -611,7 +628,7 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   const layout = style?.policies;
   return (
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
-    || layout === "tiles" || layout === "divided" || layout === "stickers"
+    || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "accordion"
   );
 }
 
@@ -707,6 +724,10 @@ export function StyledPolicyList({
         ))}
       </View>
     );
+  }
+
+  if (layout === "accordion") {
+    return <AccordionPolicies rows={rows} ink={ink} separator={page.separator} />;
   }
 
   if (layout === "hairline" || layout === "rows") {
@@ -871,6 +892,52 @@ export function StyledPolicyList({
   );
 }
 
+/**
+ * Boutique's policies: rows that open and close like a shop's "Delivery &
+ * returns". The first is open so a client sees how it works without tapping.
+ */
+function AccordionPolicies({
+  rows,
+  ink,
+  separator,
+}: {
+  rows: PolicyDisplayRow[];
+  ink: { text: string; sub: string };
+  separator: string;
+}) {
+  const [open, setOpen] = useState<string | null>(rows[0]?.label ?? null);
+  return (
+    <View style={[policyStyles.accordion, { borderBottomColor: separator }]}>
+      {rows.map(row => {
+        const isOpen = open === row.label;
+        return (
+          <View key={row.label} style={[policyStyles.accordionRow, { borderTopColor: separator }]}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setOpen(isOpen ? null : row.label)}
+              style={policyStyles.accordionHead}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isOpen }}
+              accessibilityLabel={row.label}
+            >
+              <Text style={[policyStyles.accordionLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+              <Ionicons name={isOpen ? "remove" : "add"} size={18} color={ink.text} />
+            </TouchableOpacity>
+            {isOpen ? (
+              <View style={policyStyles.accordionBody}>
+                <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
+                {row.notes?.map(note => (
+                  <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 const headingStyles = StyleSheet.create({
   plain: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   bigLower: { fontFamily: "Syne_700Bold", fontSize: 38, lineHeight: 49, letterSpacing: -1.2, marginBottom: 14 },
@@ -918,6 +985,7 @@ const headingStyles = StyleSheet.create({
   indexNumber: { fontFamily: "Gloock-Regular", fontSize: 15 },
   indexRule: { width: 22, height: 1.5 },
   indexTitle: { fontFamily: "Gloock-Regular", fontSize: 28, lineHeight: 36, flexShrink: 1 },
+  shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
 });
 
 const surfaceStyles = StyleSheet.create({
@@ -958,6 +1026,7 @@ const surfaceStyles = StyleSheet.create({
   headingLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
   topRule: { borderTopWidth: 3 },
   blockCard: { borderWidth: 2 },
+  product: { borderWidth: 1 },
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
@@ -1004,6 +1073,11 @@ const policyStyles = StyleSheet.create({
   sticker: { borderRadius: 22, padding: 14 },
   stickerLabel: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 16 },
   hairFirst: { borderTopWidth: 0 },
+  accordion: { borderBottomWidth: StyleSheet.hairlineWidth },
+  accordionRow: { borderTopWidth: StyleSheet.hairlineWidth },
+  accordionHead: { minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  accordionLabel: { fontFamily: "Manrope-Bold", fontSize: 13, letterSpacing: 0.8, flexShrink: 1 },
+  accordionBody: { paddingBottom: 14 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
   hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },

@@ -4177,7 +4177,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               ? "Not taking bookings"
                               : fullyBooked
                               ? "Fully Booked"
-                              : "Book"}
+                              // Boutique says "Add to bag"; it still opens the booking sheet.
+                              : pageStyle.bookLabel ?? "Book"}
                         </Text>
                       </TouchableOpacity>
                     );

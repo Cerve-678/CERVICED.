@@ -205,6 +205,9 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Boutique (round 4, 2026-11-15).
+    'DMSerifDisplay-Regular': require('./assets/fonts/DMSerifDisplay-Regular.ttf'),
+    'Manrope-Bold': require('./assets/fonts/Manrope-Bold.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
