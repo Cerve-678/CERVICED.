@@ -24,6 +24,7 @@ import {
   sectionInk,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import { plateMarkEdges } from "./heroes/EmbossedHero";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -364,6 +365,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   if (items.length === 0) return null;
 
+  // Embossed: each photo sits in a plate mark pressed into the page, like a print.
+  const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
+
   const openFromModal = (index: number) => {
     setShowAll(false);
     setTimeout(() => onOpenImage(images, index), 220);
@@ -397,7 +401,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                 activeOpacity={0.88}
                 onPress={() => onOpenImage(images, item.globalIndex)}
                 disabled={!interactiveImages}
-                style={styles.portfolioTile}
+                style={plate ? [styles.plateTile, plate] : styles.portfolioTile}
               >
                 <Image
                   source={{ uri: item.image_url }}
@@ -530,6 +534,7 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  plateTile: { padding: 7, borderWidth: 1.5, borderRadius: 1, overflow: "hidden" },
   loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
     position: "absolute", left: 0, right: 0, bottom: 0,

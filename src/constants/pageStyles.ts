@@ -18,7 +18,8 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet'
+  | 'embossed';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -37,7 +38,8 @@ export type PageHeading =
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
-  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'embossCaps'; // display caps pressed up out of the page, in the page's own colour (Embossed)
 
 /** What a section sits on. */
 export type PageCards =
@@ -52,7 +54,8 @@ export type PageCards =
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
-  | 'block';   // a square card with a thick dark outline
+  | 'block'    // a square card with a thick dark outline
+  | 'raised';  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -67,7 +70,8 @@ export type PagePolicies =
   | 'numerals'  // rows numbered in roman numerals
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
-  | 'definition'; // a small caps label beside each value, between hairlines
+  | 'definition' // a small caps label beside each value, between hairlines
+  | 'recessed';  // label-and-value rows inside a panel pressed down into the page (Embossed)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -90,7 +94,8 @@ export type PageHero =
   | 'label'      // a paper tag hanging on a string
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
+  | 'quietBand' // their photo left clear, the name and logo on a pale band across it
+  | 'pressed';  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -98,7 +103,8 @@ export type PageLogoFrame =
   | 'tilted'     // a rounded square card, tilted (Editorial)
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
   | 'mat'        // square, in a white mat and a thin dark frame (Gallery)
-  | 'square';    // a square with barely rounded corners (Snapshot)
+  | 'square'     // a square with barely rounded corners (Snapshot)
+  | 'stamped';   // a ring pressed into the paper round it (Embossed)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -123,6 +129,8 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** Portfolio photos sit in a plate mark pressed into the page, like prints (Embossed). */
+  plateMarkPhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -224,6 +232,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     key: 'quiet', name: 'Quiet', description: 'Your photo left clear, your name on a calm band',
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // blind emboss, everything tone on tone, after the owner's embossed
+  // "BOOKING for September" reference.
+  {
+    key: 'embossed', name: 'Embossed', description: 'Pressed paper: your name raised in the page, your photos in plate marks',
+    heading: 'embossCaps', cards: 'raised', policies: 'recessed', logo: 'stamped',
+    hero: 'pressed', aboutInHero: false, plateMarkPhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
 ];

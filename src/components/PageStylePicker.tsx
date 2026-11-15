@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
+import { PRESS_PAPER } from '../features/providers/heroes/EmbossedHero';
 
 interface Props {
   value: PageStyleKey;
@@ -97,6 +98,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  embossed: { text: 'THE SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -218,6 +220,13 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'embossCaps':
+        // Paper-coloured caps with a shaded edge, as on the profile.
+        return (
+          <Text style={[mini.embossCaps, { color: sheet, textShadowColor: withAlpha(isDarkColor(sheet) ? '#000000' : '#463428', 0.45) }]}>
+            {heading.text}
+          </Text>
+        );
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -256,6 +265,8 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'raised':
+        return <View key={key} style={[mini.card, mini.raisedCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -362,6 +373,11 @@ function MiniProfile({
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
           </View>
+        ) : style.hero === 'pressed' ? (
+          // Embossed: a sheet of pressed paper with the name raised in it.
+          <View style={mini.pressPaper}>
+            <Text style={mini.pressName} numberOfLines={1}>NAME</Text>
+          </View>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -406,6 +422,19 @@ const styles = StyleSheet.create({
 });
 
 const mini = StyleSheet.create({
+  embossCaps: { fontFamily: 'LibreCaslonDisplay-Regular', fontSize: 12, lineHeight: 16, letterSpacing: 1, textAlign: 'center', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 0.5 },
+  raisedCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 2, overflow: 'visible',
+    shadowColor: '#463428', shadowOpacity: 0.16, shadowRadius: 2, shadowOffset: { width: 1, height: 2 },
+  },
+  pressPaper: {
+    backgroundColor: PRESS_PAPER, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 2,
+    shadowColor: '#000000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+  },
+  pressName: {
+    fontFamily: 'LibreCaslonDisplay-Regular', fontSize: 18, lineHeight: 24, letterSpacing: 1, color: PRESS_PAPER,
+    textShadowColor: 'rgba(70,52,40,0.45)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 0.5,
+  },
   root: { height: 180 },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },

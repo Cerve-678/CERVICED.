@@ -50,12 +50,20 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the fifteen picked styles plus Classic, each once', () => {
+  it('has the picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
-      'snapshot', 'signature', 'quiet',
+      'snapshot', 'signature', 'quiet', 'embossed',
     ]);
+  });
+
+  it('presses Embossed into the page: raised cards, a recessed policy panel, photos in plate marks', () => {
+    const embossed = getPageStyle('embossed');
+    expect(embossed).toMatchObject({ heading: 'embossCaps', cards: 'raised', policies: 'recessed', hero: 'pressed', plateMarkPhotos: true });
+    expect(policiesBringOwnSurface(embossed)).toBe(true);
+    expect(sectionsSitOnPage(embossed)).toBe(false);
+    expect(serviceCardSurface(embossed, { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG })).toMatchObject({ borderRadius: 3, borderWidth: 1 });
   });
 
   it('gives every style but Classic and Glossy a hero of its own', () => {

@@ -205,6 +205,9 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Embossed (round 4, 2026-11-15).
+    'LibreCaslonDisplay-Regular': require('./assets/fonts/LibreCaslonDisplay-Regular.ttf'),
+    'Italianno-Regular': require('./assets/fonts/Italianno-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
