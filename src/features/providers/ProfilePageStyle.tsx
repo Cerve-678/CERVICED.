@@ -319,7 +319,7 @@ export function PageSectionHeading({
       // ornament under it (rule, diamond, rule) in the accent.
       const [number, chapterTitle] = chapterHeading(section);
       return (
-        <View {...a11y} accessible accessibilityLabel={chapterTitle} style={headingStyles.stack}>
+        <View {...a11y} accessible style={headingStyles.stack}>
           <Text style={[headingStyles.chapterNumber, { color: color ?? sheetInk(palette.background).sub }]}>
             {number.toUpperCase()}
           </Text>
