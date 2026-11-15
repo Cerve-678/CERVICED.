@@ -23,7 +23,8 @@ export type PageStyleKey =
   | 'sealed'
   | 'lace'
   | 'sheer'
-  | 'embossed';
+  | 'embossed'
+  | 'callingCard';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -46,7 +47,8 @@ export type PageHeading =
   | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
   | 'lacePair'  // a lowercase script word in the accent over spaced display caps (Lace)
   | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
-  | 'embossCaps'; // display caps pressed up out of the page, in the page's own colour (Embossed)
+  | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
+  | 'engravedCaps'; // engraved serif caps, centred between hairlines (Calling Card)
 
 /** What a section sits on. */
 export type PageCards =
@@ -65,7 +67,8 @@ export type PageCards =
   | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
   | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
   | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
-  | 'raised';  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
+  | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
+  | 'clipped'; // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -84,7 +87,8 @@ export type PagePolicies =
   | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
   | 'rosettes'  // one card, each policy beside a small lace rosette (Lace)
   | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
-  | 'recessed';  // label-and-value rows inside a panel pressed down into the page (Embossed)
+  | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
+  | 'ribbon';    // two-up on one card with a ribbon across its corner (Calling Card)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -112,7 +116,8 @@ export type PageHero =
   | 'lace'      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
   | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps, outlined How to book boxes
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
-  | 'pressed';  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
+  | 'pressed'  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
+  | 'callingCard'; // satin folds, and a cream calling card held by a gold clip with the logo and name
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -150,6 +155,8 @@ export interface PageStyle {
   stampPhotos?: boolean;
   /** Portfolio photos sit in a plate mark pressed into the page, like prints (Embossed). */
   plateMarkPhotos?: boolean;
+  /** Portfolio photos as cream-bordered prints, each pinned by a small gold clip (Calling Card). */
+  clippedPhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -285,6 +292,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'embossCaps', cards: 'raised', policies: 'recessed', logo: 'stamped',
     hero: 'pressed', aboutInHero: false, plateMarkPhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
+  // board 23): satin and a calling card held by a gold clip.
+  {
+    key: 'callingCard', name: 'Calling Card', description: 'Your name on a cream card held by a gold clip, over satin',
+    heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', logo: 'circle',
+    hero: 'callingCard', aboutInHero: false, clippedPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
 

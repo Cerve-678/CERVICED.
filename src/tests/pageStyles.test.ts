@@ -51,11 +51,11 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the nineteen picked styles plus Classic, each once', () => {
+  it('has the twenty picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
-      'snapshot', 'signature', 'quiet', 'sealed', 'lace', 'sheer', 'embossed',
+      'snapshot', 'signature', 'quiet', 'sealed', 'lace', 'sheer', 'embossed', 'callingCard',
     ]);
   });
 
@@ -240,5 +240,26 @@ describe('Snapshot', () => {
     expect(snapshot).toMatchObject({ hero: 'blockName', heading: 'condensed', cards: 'block', logo: 'square', numberedServices: true });
     expect(serviceCardSurface(snapshot, { card: '#FFFFFF', accent: '#D43F2B', sheet: SHEET_BG }))
       .toMatchObject({ borderRadius: 0, borderWidth: 2 });
+  });
+});
+
+describe('Calling Card', () => {
+  const callingCard = getPageStyle('callingCard');
+
+  it('is satin and a clipped card: its own hero, engraved headings, clipped cards, ribbon policies', () => {
+    expect(callingCard).toMatchObject({
+      hero: 'callingCard', heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', clippedPhotos: true,
+    });
+  });
+
+  it('draws its service cards near-square on a soft shadow, and its policies on a card of their own', () => {
+    expect(serviceCardSurface(callingCard, { card: '#FFFFFF', accent: '#6E1220', sheet: SHEET_BG }))
+      .toMatchObject({ borderRadius: 2, overflow: 'visible' });
+    expect(policiesBringOwnSurface(callingCard)).toBe(true);
+    expect(sectionsSitOnPage(callingCard)).toBe(false);
+  });
+
+  it('is the only style with clipped photos', () => {
+    expect(PAGE_STYLES.filter(s => s.clippedPhotos).map(s => s.key)).toEqual(['callingCard']);
   });
 });

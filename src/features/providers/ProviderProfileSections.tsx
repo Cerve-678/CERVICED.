@@ -18,6 +18,7 @@ import { SafeAreaView, WindowControlsInsetProvider } from "../../components/Safe
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./reviewPresentation";
+import { CALLING_CARD_PAPER, GoldClip } from "./heroes/CallingCardHero";
 import {
   PageSection,
   PageSectionHeading,
@@ -369,6 +370,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const stamps = !!palette.pageStyle?.stampPhotos;
   // Embossed: each photo sits in a plate mark pressed into the page, like a print.
   const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
+  // Calling Card: each photo a cream-bordered print pinned by a gold clip.
+  const clipped = !!palette.pageStyle?.clippedPhotos;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -394,10 +397,10 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
           </TouchableOpacity>
         ) : null}
       </View>
-      <View style={styles.columns}>
+      <View style={[styles.columns, clipped && styles.clippedColumns]}>
         {columns.map((column, columnIndex) => (
-          <View key={columnIndex} style={styles.column}>
-            {column.map(item => (
+          <View key={columnIndex} style={[styles.column, clipped && styles.clippedColumn]}>
+            {column.map((item, rowIndex) => (
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.88}
@@ -412,7 +415,13 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                       ]
                     : plate
                       ? [styles.plateTile, plate]
-                      : styles.portfolioTile
+                      : clipped
+                        ? [
+                            styles.clippedPrint,
+                            // A slight, alternating tilt, as if pinned by hand.
+                            { transform: [{ rotate: (columnIndex + rowIndex) % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
+                          ]
+                        : styles.portfolioTile
                 }
               >
                 <Image
@@ -423,10 +432,11 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                   recyclingKey={item.id}
                 />
                 {item.caption ? (
-                  <View style={styles.captionWrap}>
+                  <View style={[styles.captionWrap, clipped && styles.clippedCaption]}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
                   </View>
                 ) : null}
+                {clipped ? <GoldClip width={40} style={styles.clippedClip} /> : null}
               </TouchableOpacity>
             ))}
           </View>
@@ -546,6 +556,22 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  // Calling Card: room above each row for the clips, and the print's cream border.
+  clippedColumns: { paddingTop: 14 },
+  clippedColumn: { gap: COLUMN_GAP + 18 },
+  clippedPrint: {
+    backgroundColor: CALLING_CARD_PAPER,
+    padding: 6,
+    paddingBottom: 18,
+    borderRadius: 1,
+    shadowColor: "#14040A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  clippedCaption: { left: 6, right: 6, bottom: 18 },
+  clippedClip: { position: "absolute", top: -14, alignSelf: "center" },
   stampTile: {
     padding: 6, borderWidth: 4, borderStyle: "dotted", backgroundColor: "#FBF6EE",
     shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 6, elevation: 2,
