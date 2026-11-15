@@ -2,14 +2,16 @@
 //
 // Recommend on a provider's profile, for a client who has had a completed
 // appointment there (the server decides that: get_my_provider_sharing).
-// Chosen 2026-11-15 (concepts A1 + A2 + B1–B3, with the long-press dropped):
+// Chosen 2026-11-15 (concepts A1 + A2 + B1–B3, with the long-press dropped;
+// then moved out of the header onto the logo, placement B):
 //
 // - The first time the profile is opened, the Recommend bar slides up from
 //   the bottom (the same bar as after rating a visit) and goes by itself
 //   after a few seconds (shouldOfferOnProfile decides; once per provider).
-// - From then on it's a heart in the header beside Bookmark and Share. When
-//   the bar goes, the heart glows once with a bubble pointing at it.
-// - Tapping the heart recommends and drops a menu down under it with
+// - From then on it's a small thumbs-up badge on the provider's logo (beside the
+//   bell on Cover, which has no logo). When the bar goes, the badge glows
+//   once with a bubble pointing at it.
+// - Tapping the badge recommends and drops a menu down under it with
 //   Recommend and "Don't show me on their cards". Tapping anywhere else, or
 //   starting to scroll, closes the menu (and the bubble).
 //
@@ -29,9 +31,7 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
-  type StyleProp,
   type ViewInstance,
-  type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,7 +42,7 @@ import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { useCircleStore } from '../../stores/useCircleStore';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
-import { FONT_BODY, hapticLight, hapticSelection, hapticSuccess } from '../maintenance/ui';
+import { FONT_DISPLAY, hapticLight, hapticSelection, hapticSuccess } from '../maintenance/ui';
 import { recommendProvider } from './recommend';
 import { RecommendAfterRatingBar } from './RecommendAfterRating';
 import { shouldOfferOnProfile, withAnswer, withAsked } from './circleMoments';
@@ -294,10 +294,13 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
   return useMemo(() => ({ heart, layer, dismissFloating }), [heart, layer, dismissFloating]);
 }
 
-/** The header's heart, beside Bookmark and Share. `style`: the header's own round button. */
-export function RecommendHeartButton({
-  recommended, glowing, busy, providerName, onPress, anchorRef, style,
-}: RecommendHeartProps & { style: StyleProp<ViewStyle> }) {
+/**
+ * The small round thumbs-up badge on the provider's logo (HeroLogo's `badge`), or
+ * beside the bell on Cover. 30pt, with a hit area padded to 46.
+ */
+export function RecommendBadge({
+  recommended, glowing, busy, providerName, onPress, anchorRef,
+}: RecommendHeartProps) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -326,17 +329,18 @@ export function RecommendHeartButton({
         />
       ) : null}
       <TouchableOpacity
-        style={style}
+        style={[styles.badge, recommended ? styles.badgeOn : styles.badgeOff]}
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={0.75}
+        hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={recommended ? `You recommend ${providerName}` : `Recommend ${providerName}`}
         accessibilityHint="Opens your recommend options"
       >
         {busy ? (
-          <ActivityIndicator size="small" color="#000" />
+          <ActivityIndicator size="small" color={recommended ? '#FFFFFF' : HEART} />
         ) : (
-          <Ionicons name={recommended ? 'heart' : 'heart-outline'} size={19} color={recommended ? HEART : '#000'} />
+          <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={recommended ? '#FFFFFF' : HEART} />
         )}
       </TouchableOpacity>
     </View>
@@ -406,7 +410,6 @@ export function ProviderRecommendLayer({
         P={P}
         bottomOffset={bottomOffset}
         subtitle="You've been here"
-        countdown
       />
 
       {phase === 'hint' ? (
@@ -448,7 +451,7 @@ export function ProviderRecommendLayer({
             accessibilityState={{ checked: recommended, disabled: saving !== null || sharing.hidden }}
             accessibilityLabel={`Recommend ${providerName}`}
           >
-            <Ionicons name={recommended ? 'heart' : 'heart-outline'} size={19} color={recommended ? HEART : P.text} />
+            <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={19} color={recommended ? HEART : P.text} />
             <Text style={[styles.rowText, { color: P.text }]}>{recommended ? 'Recommended' : 'Recommend'}</Text>
             {saving === 'recommend' ? (
               <ActivityIndicator size="small" color={P.sub} />
@@ -482,6 +485,22 @@ export function ProviderRecommendLayer({
 }
 
 const styles = StyleSheet.create({
+  badge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: HEART,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  badgeOff: { backgroundColor: '#FFFFFF' },
+  badgeOn: { backgroundColor: HEART },
   glow: {
     position: 'absolute',
     top: 0,
@@ -504,7 +523,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-  bubbleText: { fontFamily: FONT_BODY, fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  bubbleText: { fontFamily: FONT_DISPLAY, fontSize: 13, lineHeight: 18 },
   menu: {
     position: 'absolute',
     width: MENU_WIDTH,
@@ -517,8 +536,8 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14 },
-  rowText: { flex: 1, fontFamily: FONT_BODY, fontSize: 14, fontWeight: '600' },
+  rowText: { flex: 1, fontFamily: FONT_DISPLAY, fontSize: 14 },
   sep: { height: StyleSheet.hairlineWidth },
-  note: { fontFamily: FONT_BODY, fontSize: 12, lineHeight: 17, paddingHorizontal: 14, paddingBottom: 13, paddingTop: 2 },
+  note: { fontFamily: FONT_DISPLAY, fontSize: 12, lineHeight: 17, paddingHorizontal: 14, paddingBottom: 13, paddingTop: 2 },
   disabled: { opacity: 0.5 },
 });
