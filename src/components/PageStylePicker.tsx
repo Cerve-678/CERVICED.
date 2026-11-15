@@ -11,8 +11,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
+import Svg, { Polygon } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
+import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
 import { PRESS_PAPER } from '../features/providers/heroes/EmbossedHero';
 
 interface Props {
@@ -98,6 +100,9 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  sealed: { text: 'THE SERVICES' },
+  lace: { lead: 'the', text: 'SERVICES' },
+  sheer: { text: 'THE SERVICES' },
   embossed: { text: 'THE SERVICES' },
 };
 
@@ -220,6 +225,22 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'sealCaps':
+        return (
+          <View style={mini.sealRow}>
+            <WaxSeal size={11} wax={waxColour(accent)} />
+            <Text style={[mini.sealCaps, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
+      case 'lacePair':
+        return (
+          <View style={mini.stack}>
+            <Text style={[mini.laceScript, { color: accent }]}>{heading.lead}</Text>
+            <Text style={[mini.laceCaps, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
+      case 'sheerCaps':
+        return <Text style={[mini.sheerCaps, { color: ink }]}>{heading.text}</Text>;
       case 'embossCaps':
         // Paper-coloured caps with a shaded edge, as on the profile.
         return (
@@ -265,6 +286,16 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'stationery':
+        return <View key={key} style={[mini.card, mini.paper, mini.stationeryCard, { borderColor: withAlpha(accent, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'lace':
+        return (
+          <View key={key} style={[mini.card, mini.laceCard, { borderColor: withAlpha(accent, 0.3) }]}>
+            <View style={[mini.bar, { backgroundColor: line }]} />
+          </View>
+        );
+      case 'sheer':
+        return <View key={key} style={[mini.card, mini.sheerCard, { borderColor: withAlpha(ink, 0.42) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'raised':
         return <View key={key} style={[mini.card, mini.raisedCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
@@ -373,6 +404,34 @@ function MiniProfile({
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
           </View>
+        ) : style.hero === 'envelope' ? (
+          // Sealed: an envelope closed with a wax seal, a card peeking from its corner.
+          <View style={mini.envelopeStage}>
+            <View style={mini.envelopeCard} />
+            <Svg width={56} height={36} viewBox="0 0 56 36" style={mini.envelope}>
+              <Polygon points="0,0 56,0 56,36 0,36" fill="#EADCC8" />
+              <Polygon points="0,36 28,16 56,36" fill="#E2D2BC" />
+              <Polygon points="0,0 56,0 28,22" fill="#F3E9DA" />
+            </Svg>
+            <View style={mini.envelopeSeal}>
+              <WaxSeal size={16} wax={waxColour(accent)} />
+            </View>
+          </View>
+        ) : style.hero === 'lace' ? (
+          // Lace: the logo clean, a script name, lace lying across the foot.
+          <View style={mini.laceHero}>
+            {logo}
+            <Text style={mini.laceName} numberOfLines={1}>Name</Text>
+            <View style={mini.laceDrape} />
+          </View>
+        ) : style.hero === 'veil' ? (
+          // Sheer: a see-through black veil over the hero, an oval round the logo, spaced caps.
+          <View style={mini.veil}>
+            <View style={mini.veilOval}>
+              <View style={[mini.veilLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
+            </View>
+            <Text style={mini.veilName} numberOfLines={1}>N A M E</Text>
+          </View>
         ) : style.hero === 'pressed' ? (
           // Embossed: a sheet of pressed paper with the name raised in it.
           <View style={mini.pressPaper}>
@@ -436,6 +495,24 @@ const mini = StyleSheet.create({
     textShadowColor: 'rgba(70,52,40,0.45)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 0.5,
   },
   root: { height: 180 },
+  sealRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sealCaps: { fontFamily: 'EBGaramond-SemiBold', fontSize: 8, lineHeight: 12, letterSpacing: 1.6 },
+  stationeryCard: { borderRadius: 2, borderWidth: 1 },
+  envelopeStage: { width: 70, height: 50 },
+  envelope: { position: 'absolute', left: 4, top: 4 },
+  envelopeCard: { position: 'absolute', left: 44, top: 24, width: 22, height: 24, backgroundColor: '#FBF6EE', borderRadius: 2, transform: [{ rotate: '-9deg' }] },
+  envelopeSeal: { position: 'absolute', left: 24, top: 18 },
+  laceHero: { alignItems: 'center', alignSelf: 'stretch' },
+  laceName: { fontFamily: 'Allura-Regular', fontSize: 20, lineHeight: 30, color: '#FFFFFF', paddingHorizontal: 6 },
+  // A sheer diagonal band standing in for the lace drape.
+  laceDrape: {
+    position: 'absolute', left: -20, right: -20, bottom: -26, height: 26,
+    backgroundColor: 'rgba(255,255,255,0.32)', borderTopWidth: 2, borderStyle: 'dotted',
+    borderColor: 'rgba(255,255,255,0.9)', transform: [{ rotate: '-8deg' }],
+  },
+  laceScript: { fontFamily: 'Allura-Regular', fontSize: 15, lineHeight: 22, paddingHorizontal: 4 },
+  laceCaps: { fontFamily: 'GildaDisplay-Regular', fontSize: 8, letterSpacing: 2, marginTop: -6 },
+  laceCard: { borderRadius: 2, borderWidth: 1, backgroundColor: '#FFFFFF' },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
   logo: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)' },
@@ -518,6 +595,12 @@ const mini = StyleSheet.create({
   labelCaps: { fontFamily: 'MarcellusSC-Regular', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
   quietCaps: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 8, letterSpacing: 2 },
   quietName: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 11, letterSpacing: 2, color: '#2C3527' },
+  sheerCaps: { fontFamily: 'Bellefair-Regular', fontSize: 9, lineHeight: 12, letterSpacing: 2, textAlign: 'center' },
+  sheerCard: { borderRadius: 0, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.38)' },
+  veil: { alignSelf: 'stretch', flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(8,6,6,0.6)', gap: 3 },
+  veilOval: { width: 24, height: 32, borderRadius: 12, borderWidth: 1, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  veilLogo: { width: 16, height: 16, borderRadius: 8 },
+  veilName: { fontFamily: 'Bellefair-Regular', fontSize: 10, lineHeight: 13, letterSpacing: 1.5, color: '#FFFFFF' },
   hard: {
     backgroundColor: '#FFFFFF', borderColor: '#1F1A1C', overflow: 'visible',
     shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0,

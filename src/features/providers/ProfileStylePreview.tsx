@@ -21,7 +21,7 @@ import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNam
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
-import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard } from "./ProfileHero";
+import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle } from "./ProfileHero";
 import {
   GlossShine,
   onAccentInk,
@@ -84,7 +84,7 @@ export function ProfileStylePreview({
   const squareCards = shape === "square";
 
   // As ProviderProfileScreen works them out.
-  const heroIsDark = !!backgroundImage || isDarkColor(gradient[0] ?? OP.hero);
+  const heroIsDark = heroIsDarkForStyle(pageStyle) || !!backgroundImage || isDarkColor(gradient[0] ?? OP.hero);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
   const cardBg = withAlpha(OP.card, OP.isDark ? 0.5 : 0.9);

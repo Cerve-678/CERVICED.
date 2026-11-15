@@ -365,6 +365,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   if (items.length === 0) return null;
 
+  // Sealed: each photo a perforated postage stamp.
+  const stamps = !!palette.pageStyle?.stampPhotos;
   // Embossed: each photo sits in a plate mark pressed into the page, like a print.
   const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
 
@@ -401,7 +403,17 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                 activeOpacity={0.88}
                 onPress={() => onOpenImage(images, item.globalIndex)}
                 disabled={!interactiveImages}
-                style={plate ? [styles.plateTile, plate] : styles.portfolioTile}
+                style={
+                  stamps
+                    ? [
+                        styles.stampTile,
+                        // The dotted border in the page's own colour reads as the perforations.
+                        { borderColor: palette.background, transform: [{ rotate: item.globalIndex % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
+                      ]
+                    : plate
+                      ? [styles.plateTile, plate]
+                      : styles.portfolioTile
+                }
               >
                 <Image
                   source={{ uri: item.image_url }}
@@ -534,6 +546,10 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  stampTile: {
+    padding: 6, borderWidth: 4, borderStyle: "dotted", backgroundColor: "#FBF6EE",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 6, elevation: 2,
+  },
   plateTile: { padding: 7, borderWidth: 1.5, borderRadius: 1, overflow: "hidden" },
   loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
