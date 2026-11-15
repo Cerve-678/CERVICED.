@@ -5483,13 +5483,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               />
                             </TouchableOpacity>
                           </BlurView>
-                          {/* Cover has no logo to carry Recommend's badge, so
-                              it sits here beside the bell instead. */}
-                          {recommendHeart && pageStyle.hero === "cover" ? (
-                            <View style={styles.recommendBesideBell}>
-                              <RecommendBadge {...recommendHeart} theme={recommendBadgeTheme} />
-                            </View>
-                          ) : null}
                           {showInstagram ? (
                             <TouchableOpacity
                               style={styles.instagramButtonOutside}
@@ -5991,7 +5984,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         </SafeAreaView>
 
         {/* Last, so the bar, bubble and menu sit over the page. */}
-        <ProviderRecommendLayer {...recommend.layer} bottomOffset={FLOATING_TAB_BAR_CLEARANCE} />
+        <ProviderRecommendLayer
+          {...recommend.layer}
+          bottomOffset={FLOATING_TAB_BAR_CLEARANCE}
+          theme={recommendBadgeTheme}
+        />
       </ThemedBackground>
     </WindowControlsInsetProvider>
     </SafeAreaProvider>
@@ -6431,9 +6428,6 @@ const styles = StyleSheet.create({
   },
   instagramButtonOutside: {
     borderRadius: 20,
-  },
-  recommendBesideBell: {
-    alignSelf: "center",
   },
   instagramButtonSurface: {
     flex: 1,

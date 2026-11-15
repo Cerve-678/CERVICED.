@@ -24,7 +24,6 @@ import { RECOMMEND_AFTER_RATING_MIN, withAnswer, withAsked } from './circleMomen
 import { updateMomentsMemory } from './momentsMemory';
 
 const AUTO_HIDE_MS = 8000;
-const HEART = '#FF2D78';
 
 interface Offer { providerId: string; providerName: string }
 
@@ -96,14 +95,19 @@ export function useRecommendAfterRating(userId: string | null, onRecommended?: (
  * Also the provider profile's one-time Recommend bar (ProviderRecommend.tsx).
  * `bottomOffset`: distance from the screen's bottom edge, e.g. above a floating tab bar.
  * `subtitle`: the second line.
+ * `colors`: the bar's fill and the ink on it, when they should be a provider's
+ * own (on their profile) rather than the app's accent.
  */
 export function RecommendAfterRatingBar({
-  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it',
+  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it', colors,
 }: RecommendBarProps & {
   P: AppTheme;
   bottomOffset?: number | undefined;
   subtitle?: string;
+  colors?: { accent: string; onAccent: string } | undefined;
 }) {
+  const fill = colors?.accent ?? P.accent;
+  const ink = colors?.onAccent ?? P.onAccent;
   const insets = useSafeAreaInsets();
   const slide = useRef(new Animated.Value(0)).current;
   const [shown, setShown] = useState<Offer | null>(offer);
@@ -125,7 +129,7 @@ export function RecommendAfterRatingBar({
       style={[
         styles.bar,
         {
-          backgroundColor: P.accent,
+          backgroundColor: fill,
           bottom: bottomOffset ?? insets.bottom + 16,
           opacity: slide,
           transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
@@ -133,29 +137,29 @@ export function RecommendAfterRatingBar({
       ]}
     >
       <View style={styles.logoWrap}>
-        <View style={[styles.logo, { backgroundColor: P.secondary }]}>
-          <Text style={[styles.logoText, { color: P.secondaryText }]}>{initialsFor(shown.providerName)}</Text>
+        <View style={[styles.logo, { backgroundColor: colors ? ink : P.secondary }]}>
+          <Text style={[styles.logoText, { color: colors ? fill : P.secondaryText }]}>{initialsFor(shown.providerName)}</Text>
         </View>
-        <View style={[styles.heart, { borderColor: P.accent }]}>
-          <Ionicons name="heart" size={8} color="#FFFFFF" />
+        <View style={[styles.thumb, { backgroundColor: ink, borderColor: fill }]}>
+          <Ionicons name="thumbs-up" size={9} color={fill} />
         </View>
       </View>
       <View style={styles.copy}>
-        <Text style={[styles.title, { color: P.onAccent }]} numberOfLines={1}>Recommend {shown.providerName}?</Text>
-        <Text style={[styles.sub, { color: P.onAccent }]} numberOfLines={1}>{subtitle}</Text>
+        <Text style={[styles.title, { color: ink }]} numberOfLines={1}>Recommend {shown.providerName}?</Text>
+        <Text style={[styles.sub, { color: ink }]} numberOfLines={1}>{subtitle}</Text>
       </View>
       <TouchableOpacity
-        style={[styles.yes, { backgroundColor: P.onAccent }]}
+        style={[styles.yes, { backgroundColor: ink }]}
         onPress={onYes}
         disabled={busy}
         activeOpacity={0.75}
         accessibilityRole="button"
         accessibilityLabel={`Recommend ${shown.providerName}`}
       >
-        {busy ? <ActivityIndicator size="small" color={P.accent} /> : (
+        {busy ? <ActivityIndicator size="small" color={fill} /> : (
           <>
-            <Ionicons name="heart" size={12} color={HEART} />
-            <Text style={[styles.yesText, { color: P.accent }]}>YES</Text>
+            <Ionicons name="thumbs-up" size={12} color={fill} />
+            <Text style={[styles.yesText, { color: fill }]}>YES</Text>
           </>
         )}
       </TouchableOpacity>
@@ -166,7 +170,7 @@ export function RecommendAfterRatingBar({
         accessibilityLabel="Not now"
         activeOpacity={0.6}
       >
-        <Ionicons name="close" size={18} color={P.onAccent} />
+        <Ionicons name="close" size={18} color={ink} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -193,9 +197,9 @@ const styles = StyleSheet.create({
   logoWrap: { width: 44, height: 44 },
   logo: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   logoText: { fontFamily: FONT_DISPLAY, fontSize: 13 },
-  heart: {
+  thumb: {
     position: 'absolute', right: -3, bottom: -3, width: 18, height: 18, borderRadius: 9, borderWidth: 2,
-    backgroundColor: HEART, alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   copy: { flex: 1, minWidth: 0 },
   title: { fontFamily: FONT_DISPLAY, fontSize: 14 },
