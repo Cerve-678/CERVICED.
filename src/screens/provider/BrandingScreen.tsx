@@ -500,70 +500,8 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Profile theme — accent + card colour + backdrop sets */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Each set pairs two backdrop colours with an accent that suits them.
-              Swipe through the collections, or tap Custom to build your own.
-            </Text>
-            <ProviderThemePicker
-              value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
-              onChange={handleThemeChange}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-              sepColor={P.sep}
-              unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
-              onLockedPress={showLocked}
-              photoColours={photoColours}
-              photoColoursLoading={photoColoursLoading}
-              onChoosePhoto={chooseColourPhoto}
-              onColourDraggingChange={setColourDragging}
-            />
-          </View>
-
-          {/* Hero finish — how the two backdrop colours are drawn */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              {backgroundImage
-                ? 'Your background photo is showing instead. Remove it to use a finish.'
-                : 'How your two backdrop colours sit behind the top of your profile.'}
-            </Text>
-            <View style={styles.finishRow}>
-              {HERO_FINISHES.map(f => {
-                const selected = heroFinish === f.key;
-                const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
-                return (
-                  <TouchableOpacity
-                    key={f.key}
-                    style={[styles.finishOption, locked && styles.finishLocked]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      if (locked) showLocked();
-                      else setHeroFinish(f.key);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
-                  >
-                    <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
-                      <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
-                      {locked && (
-                        <View style={styles.finishLock}>
-                          <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
+          {/* Sections run from the choice that changes the most (the
+              page style) to the least (card corners, a photo). */}
           {/* Page style — the layout and decoration of the whole profile */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
@@ -635,6 +573,87 @@ export default function BrandingScreen({ navigation }: any) {
           </View>
           )}
 
+          {/* Profile theme — accent + card colour + backdrop sets */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Each set pairs two backdrop colours with an accent that suits them.
+              Swipe through the collections, or tap Custom to build your own.
+            </Text>
+            <ProviderThemePicker
+              value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
+              onChange={handleThemeChange}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+              sepColor={P.sep}
+              unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
+              onLockedPress={showLocked}
+              photoColours={photoColours}
+              photoColoursLoading={photoColoursLoading}
+              onChoosePhoto={chooseColourPhoto}
+              onColourDraggingChange={setColourDragging}
+            />
+          </View>
+
+          {/* Business name font */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Choose how your business name appears on your public profile.</Text>
+            <ProviderFontPicker
+              value={brandFont}
+              onChange={setBrandFont}
+              accentColor={accentColor}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+              cardColor={P.surface}
+              unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
+              onLockedPress={showLocked}
+            />
+          </View>
+
+          {/* Hero finish — how the two backdrop colours are drawn */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              {backgroundImage
+                ? 'Your background photo is showing instead. Remove it to use a finish.'
+                : 'How your two backdrop colours sit behind the top of your profile.'}
+            </Text>
+            <View style={styles.finishRow}>
+              {HERO_FINISHES.map(f => {
+                const selected = heroFinish === f.key;
+                const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[styles.finishOption, locked && styles.finishLocked]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      if (locked) showLocked();
+                      else setHeroFinish(f.key);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
+                  >
+                    <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                      <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
+                      {locked && (
+                        <View style={styles.finishLock}>
+                          <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           {/* Card shape — corners of the service cards and category pills */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Card Shape</Text>
@@ -676,22 +695,6 @@ export default function BrandingScreen({ navigation }: any) {
                 );
               })}
             </View>
-          </View>
-
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>Choose how your business name appears on your public profile.</Text>
-            <ProviderFontPicker
-              value={brandFont}
-              onChange={setBrandFont}
-              accentColor={accentColor}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-              cardColor={P.surface}
-              unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
-              onLockedPress={showLocked}
-            />
           </View>
 
           {/* Background image */}
