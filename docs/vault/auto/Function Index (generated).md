@@ -5,7 +5,7 @@
 
 #generated
 
-**3864 functions** across **547 files**.
+**3867 functions** across **547 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -314,7 +314,7 @@
 - `LaceHero.tsx` — LaceDrape · **LaceHero** · **LaceRosette** · **LaceTrim** · scallopXs
 - `NovelHero.tsx` — **NovelHero** · subtitle
 - `SealedHero.tsx` — Postmark · **SealedEnvelope**
-- `SheerHero.tsx` — **SheerHero**
+- `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
 
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
