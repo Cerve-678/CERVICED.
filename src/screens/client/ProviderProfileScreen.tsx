@@ -3649,7 +3649,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           <Text style={{ color: OP.sub, fontFamily: "Jura-VariableFont_wght" }}>
             {loadFailed
               ? "Could not load provider. Please try again."
-              : "This provider is currently not accepting bookings."}
+              : "Provider not found"}
           </Text>
         </View>
       );
