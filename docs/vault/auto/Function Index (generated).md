@@ -5,7 +5,7 @@
 
 #generated
 
-**3867 functions** across **547 files**.
+**3866 functions** across **547 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -310,7 +310,7 @@
 - `BoutiqueHero.tsx` — **BoutiqueHero**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
-- `GazetteHero.tsx` — dateline · **gazetteDate** · **gazetteHeadline** · **GazetteHero** · **gazetteMasthead** · **HalftoneScreen**
+- `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
 - `LaceHero.tsx` — LaceDrape · **LaceHero** · **LaceRosette** · **LaceTrim** · scallopXs
 - `NovelHero.tsx` — **NovelHero** · subtitle
 - `SealedHero.tsx` — Postmark · **SealedEnvelope**

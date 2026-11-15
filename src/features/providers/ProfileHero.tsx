@@ -194,6 +194,8 @@ export interface ProfileHeroLayoutProps {
   /** The theme's backdrop colour (the gradient's first stop): Calling Card's
    *  satin, Embossed's pressed letters and Novel's title page are drawn in it. */
   heroColour: string;
+  /** The theme's card colour, used by Gazette's hero sheet. */
+  cardColour: string;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -241,6 +243,7 @@ export function ProfileHeroLayout({
   rating,
   isVerified,
   heroColour,
+  cardColour,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
@@ -804,9 +807,9 @@ export function ProfileHeroLayout({
               kicker={kicker}
               location={location}
               rating={rating}
-              logo={<View style={layout.logoNoGap}>{renderLogo(44)}</View>}
-              // The sheet is always pale newsprint, so the tick is always blue.
-              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color="#007AFF" accessibilityLabel="Verified" /> : null}
+              cardColour={cardColour}
+              logo={<View style={layout.logoNoGap}>{renderLogo(64)}</View>}
+              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
             />
           </View>
           <View style={layout.infoCenter}>{details}</View>

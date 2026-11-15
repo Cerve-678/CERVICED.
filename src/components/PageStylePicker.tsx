@@ -25,6 +25,8 @@ interface Props {
   gradient: readonly string[];
   accent: string;
   sheet: string;
+  /** The theme's card colour: Gazette's front page is printed on it. */
+  cardColour: string;
   textColor: string;
   subColor: string;
   borderColor: string;
@@ -38,6 +40,7 @@ export default function PageStylePicker({
   gradient,
   accent,
   sheet,
+  cardColour,
   textColor,
   subColor,
   borderColor,
@@ -66,7 +69,7 @@ export default function PageStylePicker({
             accessibilityLabel={`${style.name}: ${style.description}${locked ? ', locked' : ''}`}
           >
             <View style={[styles.frame, { borderColor: selected ? textColor : borderColor }, selected && styles.frameOn]}>
-              <MiniProfile style={style} gradient={gradient} accent={accent} sheet={sheet} />
+              <MiniProfile style={style} gradient={gradient} accent={accent} sheet={sheet} cardColour={cardColour} />
               {locked ? (
                 <View style={styles.lock}>
                   <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
@@ -115,13 +118,16 @@ function MiniProfile({
   gradient,
   accent,
   sheet,
+  cardColour,
 }: {
   style: PageStyle;
   gradient: readonly string[];
   accent: string;
   sheet: string;
+  cardColour: string;
 }) {
   const ink = isDarkColor(sheet) ? '#F2EDEA' : '#26201E';
+  const gazetteInk = isDarkColor(cardColour) ? '#FFFFFF' : '#1F1D1A';
   const line = withAlpha(ink, 0.18);
   const heroColours = (gradient.length >= 2 ? [gradient[0], gradient[1]] : [accent, sheet]) as [string, string];
   const heading = MINI_HEADING[style.key];
@@ -490,11 +496,11 @@ function MiniProfile({
           </View>
         ) : style.hero === 'gazette' ? (
           // Gazette: a newsprint front page with a blackletter masthead.
-          <View style={mini.newsPaper}>
-            <View style={mini.paperRule} />
-            <Text style={mini.blackletter} numberOfLines={1}>The Gazette</Text>
-            <View style={mini.paperRule} />
-            <Text style={mini.headline} numberOfLines={1}>LASHES</Text>
+          <View style={[mini.newsPaper, { backgroundColor: cardColour }]}>
+            <View style={[mini.paperRule, { borderColor: gazetteInk }]} />
+            <Text style={[mini.blackletter, { color: gazetteInk }]} numberOfLines={1}>The Gazette</Text>
+            <View style={[mini.paperRule, { borderColor: gazetteInk }]} />
+            <Text style={[mini.headline, { color: gazetteInk }]} numberOfLines={1}>AMARA</Text>
           </View>
         ) : style.hero === 'titlePage' ? (
           // Novel: a title page, the logo ringed, the name in old type over an ornament.
