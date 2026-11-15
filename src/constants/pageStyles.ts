@@ -24,7 +24,8 @@ export type PageStyleKey =
   | 'lace'
   | 'sheer'
   | 'embossed'
-  | 'callingCard';
+  | 'callingCard'
+  | 'boutique';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -48,7 +49,8 @@ export type PageHeading =
   | 'lacePair'  // a lowercase script word in the accent over spaced display caps (Lace)
   | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
   | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
-  | 'engravedCaps'; // engraved serif caps, centred between hairlines (Calling Card)
+  | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
+  | 'shopSerif'; // a big serif title on the left, like a shop's department heading (Boutique)
 
 /** What a section sits on. */
 export type PageCards =
@@ -68,7 +70,8 @@ export type PageCards =
   | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
   | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
   | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
-  | 'clipped'; // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
+  | 'clipped' // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
+  | 'product'; // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -88,7 +91,8 @@ export type PagePolicies =
   | 'rosettes'  // one card, each policy beside a small lace rosette (Lace)
   | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
   | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
-  | 'ribbon';    // two-up on one card with a ribbon across its corner (Calling Card)
+  | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
+  | 'accordion';  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -117,7 +121,8 @@ export type PageHero =
   | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps, outlined How to book boxes
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
   | 'pressed'  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
-  | 'callingCard'; // satin folds, and a cream calling card held by a gold clip with the logo and name
+  | 'callingCard' // satin folds, and a cream calling card held by a gold clip with the logo and name
+  | 'shoppingBag'; // a shopping bag with rope handles, the logo and name printed on its front (Boutique)
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -157,6 +162,9 @@ export interface PageStyle {
   plateMarkPhotos?: boolean;
   /** Portfolio photos as cream-bordered prints, each pinned by a small gold clip (Calling Card). */
   clippedPhotos?: boolean;
+  /** The word on each service's book button, when the style has its own (Boutique: "Add to bag").
+   *  Only the word changes: the button still opens the booking sheet. */
+  bookLabel?: string;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -300,6 +308,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', logo: 'circle',
     hero: 'callingCard', aboutInHero: false, clippedPhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
+  // board 24): "shopping cart vibes", the logo printed on the bag.
+  {
+    key: 'boutique', name: 'Boutique', description: 'A shopping bag with your logo on it, services like a shop',
+    heading: 'shopSerif', cards: 'product', policies: 'accordion', logo: 'circle',
+    hero: 'shoppingBag', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    bookLabel: 'Add to bag',
   },
 ];
 

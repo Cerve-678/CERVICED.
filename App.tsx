@@ -221,6 +221,9 @@ export default Sentry.wrap(function App() {
     // Calling Card (round 4, 2026-11-15): a copperplate script and engraved caps.
     'MonsieurLaDoulaise-Regular': require('./assets/fonts/MonsieurLaDoulaise-Regular.ttf'),
     'Forum-Regular': require('./assets/fonts/Forum-Regular.ttf'),
+    // Boutique (round 4, 2026-11-15).
+    'DMSerifDisplay-Regular': require('./assets/fonts/DMSerifDisplay-Regular.ttf'),
+    'Manrope-Bold': require('./assets/fonts/Manrope-Bold.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
