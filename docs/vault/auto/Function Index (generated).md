@@ -571,7 +571,7 @@
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · endsWithPlace · fixCompassTypo · nearestPlace · **parseSearchQuery** · takePrice
 - `serviceFilterMatch.ts` — **candidateServices** · **hasServiceCriteria** · **priceRangeAcrossServices** · **serviceMatchesCriteria** · **serviceRange**
 - `serviceImageDraft.ts` — **normalizeServiceImages**
-- `shuffle.ts` — **shuffle**
+- `shuffle.ts` — **shuffle** · **shuffleWithDifferentFirst**
 - `slotsRowText.ts` — **slotsPillText**
 - `spreadApart.ts` — **spreadApart**
 - `stripeConnectReturn.ts` — **parseStripeConnectReturn**

@@ -47,7 +47,7 @@ import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServic
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm, formatMiles, KM_PER_MILE } from '../../utils/distance';
-import { shuffle } from '../../utils/shuffle';
+import { shuffle, shuffleWithDifferentFirst } from '../../utils/shuffle';
 import { keepShownOrder } from '../../utils/keepShownOrder';
 import { withTimeout } from '../../utils/withTimeout';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
@@ -469,12 +469,8 @@ export default function HomeScreen() {
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
-  // Trending is shuffled when Home loads, but Home stays mounted while the
-  // client moves between tabs, so coming back used to show the same order.
-  // The rail gets a fresh order for each return to Home (no refetch, the
-  // same trending providers). It's reshuffled just after Home is left, once
-  // the next screen has slid over it, never on focus: reshuffling on focus
-  // made the cards jump while Home was sliding back into view.
+  // Refresh the order of these three browse rails after leaving Home. Doing
+  // it after the next screen slides over Home avoids cards jumping on return.
   const trendingReshuffleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useFocusEffect(
     useCallback(() => {
@@ -485,7 +481,9 @@ export default function HomeScreen() {
       return () => {
         trendingReshuffleTimer.current = setTimeout(() => {
           trendingReshuffleTimer.current = null;
-          setTrending(current => (current.length > 1 ? shuffle(current) : current));
+          setTrending(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+          setNewProviders(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
+          setTopRated(current => (current.length > 1 ? shuffleWithDifferentFirst(current) : current));
         }, TRENDING_RESHUFFLE_AFTER_LEAVE_MS);
       };
     }, []),
@@ -615,8 +613,8 @@ export default function HomeScreen() {
         // the primary list, and keeping this group separate from service
         // discovery avoids another burst of joined services queries.
         await Promise.allSettled([
-          getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))),
-          getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))),
+          getNewProviders(15).then(data => setNewProviders(shuffle(data.map(mapDbProvider)))),
+          getTopRatedProviders(15).then(data => setTopRated(shuffle(data.map(mapDbProvider)))),
           // Trending is ranked by 7-day bookings, which barely moves between
           // visits — so the same provider always led the rail. Shuffle the
           // trending set on each Home load so a client sees a different one
@@ -2227,12 +2225,13 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -11,
+    right: -10,
     backgroundColor: '#FF1744',
-    borderRadius: 10.5,
-    minWidth: 21,
-    height: 21,
+    borderRadius: 11,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 2,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,

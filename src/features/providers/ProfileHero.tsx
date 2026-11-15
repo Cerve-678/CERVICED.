@@ -632,7 +632,7 @@ export function ProfileHeroLayout({
         <View style={[layout.infoCenter, layout.textFirst]}>
           <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
           <View style={layout.signedLogo}>{renderLogo(148)}</View>
-          <View style={layout.signedNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+          <View style={layout.signedNameRow} pointerEvents="none" accessible accessibilityRole="header" accessibilityLabel={name}>
             <Text
               style={[layout.signedName, { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
               numberOfLines={1}
