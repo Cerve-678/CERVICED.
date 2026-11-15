@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **215 files**
 - … +185 more
 
 ## Auth
-Curated: [[Contexts]] · **220 files**
+Curated: [[Contexts]] · **221 files**
 - `src/services/databaseService.ts` _(340)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **220 files**
 - `src/features/admin/useSignInAsAccount.ts` _(14)_
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
-- … +190 more
+- … +191 more
 
 ## Becca / AI
 Curated: [[Services]] · **55 files**

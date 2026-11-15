@@ -107,6 +107,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   callingCard: { text: 'THE SERVICES' },
   boutique: { text: 'The Services' },
   gazette: { text: 'THE SERVICES' },
+  novel: { lead: 'CHAPTER III', text: 'The Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -261,6 +262,13 @@ function MiniProfile({
             <Text style={[mini.newsTitle, { color: ink }]}>{heading.text}</Text>
           </View>
         );
+      case 'chapter':
+        return (
+          <View style={mini.stack}>
+            <Text style={[mini.chapterNumber, { color: withAlpha(ink, 0.7) }]}>{heading.lead}</Text>
+            <Text style={[mini.chapterTitle, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -316,6 +324,8 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.paper, mini.clippedCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'product':
         return <View key={key} style={[mini.card, mini.productCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'pages':
+        return <View key={key} style={[mini.card, mini.pagesCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -486,6 +496,14 @@ function MiniProfile({
             <View style={mini.paperRule} />
             <Text style={mini.headline} numberOfLines={1}>LASHES</Text>
           </View>
+        ) : style.hero === 'hardback' ? (
+          // Novel: a small cloth-bound book with its name in gold foil.
+          <View style={[mini.book, { backgroundColor: blend(accent, '#000000', 0.55) }]}>
+            <View style={mini.bookFrame}>
+              <Text style={mini.bookName} numberOfLines={2}>Name</Text>
+            </View>
+            <View style={[mini.bookRibbon, { backgroundColor: blend(accent, '#FFFFFF', 0.15) }]} />
+          </View>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -530,6 +548,16 @@ const styles = StyleSheet.create({
 });
 
 const mini = StyleSheet.create({
+  pagesCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(38,32,30,0.3)',
+    shadowColor: '#26201E', shadowOpacity: 0.25, shadowRadius: 0, shadowOffset: { width: 2, height: 2 }, overflow: 'visible',
+  },
+  book: { width: 40, height: 52, borderRadius: 2, padding: 4, paddingLeft: 7 },
+  bookFrame: { flex: 1, borderWidth: 0.5, borderColor: '#D6B46E', alignItems: 'center', justifyContent: 'center' },
+  bookName: { fontFamily: 'IMFellEnglish-Regular', fontSize: 9, lineHeight: 12, color: '#D6B46E', textAlign: 'center' },
+  bookRibbon: { position: 'absolute', bottom: -7, right: 9, width: 4, height: 10 },
+  chapterNumber: { fontFamily: 'IMFellEnglishSC-Regular', fontSize: 6, letterSpacing: 1.5, lineHeight: 8 },
+  chapterTitle: { fontFamily: 'IMFellEnglish-Italic', fontSize: 12, lineHeight: 16 },
   // Gazette's front page and headings.
   newsPaper: { backgroundColor: '#EEEBE4', paddingHorizontal: 6, paddingVertical: 4, alignItems: 'center', width: '82%' },
   paperRule: { alignSelf: 'stretch', borderTopWidth: 2, borderBottomWidth: 0.5, borderColor: '#1F1D1A', height: 3 },

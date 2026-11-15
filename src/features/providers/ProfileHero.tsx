@@ -16,6 +16,7 @@ import { LaceHero } from "./heroes/LaceHero";
 import { PressedHero } from "./heroes/EmbossedHero";
 import { BoutiqueHero } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
+import { NovelHero } from "./heroes/NovelHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
@@ -803,6 +804,20 @@ export function ProfileHeroLayout({
           </View>
           <View style={layout.infoCenter}>{details}</View>
         </>
+      );
+
+    case "hardback":
+      // Novel: a cloth-bound cover, drawn in heroes/NovelHero.
+      return (
+        <NovelHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          isVerified={isVerified}
+        />
       );
 
     default:

@@ -5,7 +5,7 @@
 
 #generated
 
-**3859 functions** across **546 files**.
+**3863 functions** across **547 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -95,7 +95,7 @@
 
 ### `src/constants/` (12)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
-- `pageStyles.ts` — **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **romanNumeral**
+- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
@@ -306,12 +306,13 @@
 - `WaxSeal.tsx` — **sealLetter** · **waxColour** · **WaxSeal**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (7)
+### `src/features/providers/heroes/` (8)
 - `BoutiqueHero.tsx` — **BoutiqueHero**
 - `CallingCardHero.tsx` — **CallingCardHero** · **callingCardInk** · **GoldClip** · **SatinBackdrop**
 - `EmbossedHero.tsx` — **EmbossedText** · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **gazetteHeadline** · **GazetteHero** · **gazetteMasthead** · **HalftoneScreen**
 - `LaceHero.tsx` — LaceDrape · **LaceHero** · **LaceRosette** · **LaceTrim** · scallopXs
+- `NovelHero.tsx` — **clothColour** · **NovelHero** · subtitle
 - `SealedHero.tsx` — Postmark · **SealedEnvelope**
 - `SheerHero.tsx` — **SheerHero**
 

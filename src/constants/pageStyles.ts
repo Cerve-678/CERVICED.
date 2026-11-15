@@ -26,7 +26,8 @@ export type PageStyleKey =
   | 'embossed'
   | 'callingCard'
   | 'boutique'
-  | 'gazette';
+  | 'gazette'
+  | 'novel';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -52,7 +53,8 @@ export type PageHeading =
   | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
   | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
   | 'shopSerif' // a big serif title on the left, like a shop's department heading (Boutique)
-  | 'newsRule';  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
+  | 'newsRule'  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
+  | 'chapter';   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
 
 /** What a section sits on. */
 export type PageCards =
@@ -74,7 +76,8 @@ export type PageCards =
   | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
   | 'clipped' // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
   | 'product' // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
-  | 'ruled';   // straight on the page, each item over a printed rule (Gazette)
+  | 'ruled'   // straight on the page, each item over a printed rule (Gazette)
+  | 'pages';   // a square card with two page edges showing behind it, like a closed book (Novel)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -96,7 +99,8 @@ export type PagePolicies =
   | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
   | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
   | 'accordion'  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
-  | 'columns';   // two-up newspaper columns boxed by ink rules (Gazette)
+  | 'columns'   // two-up newspaper columns boxed by ink rules (Gazette)
+  | 'houseRules'; // numbered paragraphs, the label in small caps running into its value (Novel)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -127,7 +131,8 @@ export type PageHero =
   | 'pressed'  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
   | 'callingCard' // satin folds, and a cream calling card held by a gold clip with the logo and name
   | 'shoppingBag' // a shopping bag with rope handles, the logo and name printed on its front (Boutique)
-  | 'gazette';  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
+  | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
+  | 'hardback';  // a cloth-bound book cover: the logo in a foil ring, the name in gold foil, a ribbon bookmark
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -172,6 +177,8 @@ export interface PageStyle {
   bookLabel?: string;
   /** Portfolio photos square, in a fine ink frame with a halftone dot screen (Gazette). */
   halftonePhotos?: boolean;
+  /** Portfolio photos captioned like a book's plates: "Plate I — their caption" (Novel). */
+  plateCaptions?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -332,6 +339,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'gazette', aboutInHero: false, halftonePhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // the elements of a hardback, not a literal book — the cover, chapters,
+  // house rules and plates — round the provider's own content.
+  {
+    key: 'novel', name: 'Novel', description: 'A cloth-bound cover with your name in gold foil, chapters, house rules',
+    heading: 'chapter', cards: 'pages', policies: 'houseRules', logo: 'circle',
+    hero: 'hardback', aboutInHero: false, plateCaptions: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
 ];
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {
@@ -394,6 +410,25 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   info: '09',
   specialities: '10',
 };
+
+/** Novel's chapter titles: the book's word for each section where it has one. */
+const CHAPTER_TITLES: Record<PageSectionKey, string> = {
+  about: 'The Author',
+  policies: 'House Rules',
+  services: 'The Services',
+  policyPages: 'Before You Book',
+  portfolio: 'Plates',
+  reviews: 'Praise',
+  hours: 'Opening Hours',
+  contact: 'Get in Touch',
+  info: 'Good to Know',
+  specialities: 'My Specialities',
+};
+
+/** Novel's heading for a section: ["Chapter III", "The Services"], numbered in page order. */
+export function chapterHeading(section: PageSectionKey): [string, string] {
+  return [`Chapter ${romanNumeral(Number(SECTION_NUMBERS[section]) - 1)}`, CHAPTER_TITLES[section]];
+}
 
 /** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
 export function romanNumeral(index: number, lower = false): string {

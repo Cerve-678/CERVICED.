@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import TabIcon from "../../components/TabIcon";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
+import { romanNumeral } from "../../constants/pageStyles";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./reviewPresentation";
 import { HalftoneScreen } from "./heroes/GazetteHero";
@@ -376,6 +377,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   // Gazette: each photo square in a fine ink frame, under a newsprint dot screen.
   const halftone = !!palette.pageStyle?.halftonePhotos;
 
+  // Novel captions its photos like a book's plates, under each one.
+  const plates = !!palette.pageStyle?.plateCaptions;
+
   const openFromModal = (index: number) => {
     setShowAll(false);
     setTimeout(() => onOpenImage(images, index), 220);
@@ -420,6 +424,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                       ? [styles.plateTile, plate]
                       : halftone
                         ? [styles.halftoneTile, { borderColor: palette.text }]
+                      : plates
+                        ? [styles.bookPlateTile, { backgroundColor: palette.cardBackground }]
                       : clipped
                         ? [
                             styles.clippedPrint,
@@ -437,7 +443,11 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                   recyclingKey={item.id}
                 />
                 {halftone ? <HalftoneScreen /> : null}
-                {item.caption ? (
+                {plates ? (
+                  <Text style={[styles.plateCaption, { color: palette.sub }]} numberOfLines={2}>
+                    Plate {romanNumeral(item.globalIndex)}{item.caption ? ` — ${item.caption}` : ""}
+                  </Text>
+                ) : item.caption ? (
                   <View style={[styles.captionWrap, clipped && styles.clippedCaption]}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
                   </View>
@@ -563,6 +573,8 @@ const styles = StyleSheet.create({
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
   halftoneTile: { borderRadius: 0, borderWidth: 1, padding: 3, overflow: "hidden" },
+  bookPlateTile: { borderRadius: 2, padding: 5, paddingBottom: 0 },
+  plateCaption: { fontFamily: "IMFellEnglish-Italic", fontSize: 13, lineHeight: 18, paddingVertical: 6, textAlign: "center" },
   // Calling Card: room above each row for the clips, and the print's cream border.
   clippedColumns: { paddingTop: 14 },
   clippedColumn: { gap: COLUMN_GAP + 18 },

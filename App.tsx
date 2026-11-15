@@ -231,6 +231,10 @@ export default Sentry.wrap(function App() {
     'Oswald-Medium': require('./assets/fonts/Oswald-Medium.ttf'),
     'OldStandardTT-Regular': require('./assets/fonts/OldStandardTT-Regular.ttf'),
     'OldStandardTT-Italic': require('./assets/fonts/OldStandardTT-Italic.ttf'),
+    // Novel (round 4, 2026-11-15): IM Fell English, OFL, static files.
+    'IMFellEnglish-Regular': require('./assets/fonts/IMFellEnglish-Regular.ttf'),
+    'IMFellEnglish-Italic': require('./assets/fonts/IMFellEnglish-Italic.ttf'),
+    'IMFellEnglishSC-Regular': require('./assets/fonts/IMFellEnglishSC-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
