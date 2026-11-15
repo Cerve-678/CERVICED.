@@ -44,7 +44,7 @@ export async function findPayoutTransfer<T extends TransferLike>(
 /**
  * The provider's transfer whose metadata[key] is value, made since `since`
  * (less a day), or null. Same rules as findPayoutTransfer, which is this for
- * payout_id; also finds a bank-dispute payback (dispute_payback_for_payout),
+ * payout_id; also finds a bank-dispute payback (dispute_payback = <dispute>:<payout>),
  * so one retried after Stripe forgot its idempotency key isn't sent twice.
  */
 export async function findTransferTagged<T extends TransferLike>(

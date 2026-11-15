@@ -214,7 +214,9 @@ async function applyClose(admin: SupabaseClient, stripe: Stripe, dispute: Stripe
   }
   if (row.outcome !== 'won') return;
 
-  await payBackForDispute(admin, stripe, ref, null);
+  // Every redelivery retries the payback (it can't double); the debt alert
+  // goes out on the first close only.
+  await payBackForDispute(admin, stripe, ref, null, row.newly_closed);
 
   // A late/no-show fee's own payout taken back for this dispute isn't paid
   // back automatically.
@@ -241,7 +243,7 @@ async function applyClose(admin: SupabaseClient, stripe: Stripe, dispute: Stripe
  *  null = every booking the dispute is about. Looks for an earlier payback in
  *  Stripe before sending, so a retry days later can't pay twice. */
 async function payBackForDispute(
-  admin: SupabaseClient, stripe: Stripe, ref: DisputeRef, bookingIds: string[] | null,
+  admin: SupabaseClient, stripe: Stripe, ref: DisputeRef, bookingIds: string[] | null, alertDebts = true,
 ): Promise<void> {
   let linkQuery = admin.from('payment_dispute_bookings')
     .select('booking_id').eq('dispute_id', ref.rowId).eq('role', 'disputed');
@@ -264,7 +266,9 @@ async function payBackForDispute(
       .filter(r => r.metadata?.dispute_id === ref.stripeId)
       .reduce((sum, r) => sum + r.amount, 0);
     if (taken > 0) {
-      const earlier = await findTransferTagged(stripe, payout.stripe_account_id, 'dispute_payback_for_payout', payout.id, payout.created_at);
+      // Tagged with the dispute too: a second dispute on the same charge is its own payback.
+      const tag = `${ref.stripeId}:${payout.id}`;
+      const earlier = await findTransferTagged(stripe, payout.stripe_account_id, 'dispute_payback', tag, payout.created_at);
       const transfer = earlier ?? await stripe.transfers.create(
         {
           amount: taken,
@@ -272,9 +276,9 @@ async function payBackForDispute(
           destination: payout.stripe_account_id,
           // Not payout_id: that names the original payout's transfer
           // (findPayoutTransfer), and this is a separate one.
-          metadata: { dispute_payback_for_payout: payout.id, booking_id: payout.booking_id, dispute_id: ref.stripeId },
+          metadata: { dispute_payback: tag, booking_id: payout.booking_id, dispute_id: ref.stripeId },
         },
-        { idempotencyKey: `dispute_payback_${payout.id}` },
+        { idempotencyKey: `dispute_payback_${ref.stripeId}_${payout.id}` },
       );
       const sum = paidBack.get(payout.booking_id);
       paidBack.set(payout.booking_id, { pence: (sum?.pence ?? 0) + taken, transferId: transfer.id });
@@ -295,7 +299,7 @@ async function payBackForDispute(
       .eq('dispute_id', ref.rowId).eq('booking_id', bookingId);
     if (writeError) throw writeError;
   }
-  if (stillOwed.length) {
+  if (stillOwed.length && alertDebts) {
     await sendSupportAlert(bankDisputeSupportEmail({
       title: 'A bank dispute was won: a provider debt needs cancelling',
       amount: '—',

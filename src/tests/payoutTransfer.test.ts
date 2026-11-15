@@ -58,10 +58,12 @@ describe('findTransferTagged', () => {
   it("finds a dispute payback, and never mistakes the payout's own transfer for it", async () => {
     const stripe = fakeStripe([
       { id: 'tr_payout', metadata: { payout_id: 'payout-b' } },
-      { id: 'tr_payback', metadata: { dispute_payback_for_payout: 'payout-b', dispute_id: 'dp_1' } },
+      { id: 'tr_payback', metadata: { dispute_payback: 'dp_1:payout-b', dispute_id: 'dp_1' } },
     ]);
-    const payback = await findTransferTagged(stripe, 'acct_1', 'dispute_payback_for_payout', 'payout-b', createdAt);
+    const payback = await findTransferTagged(stripe, 'acct_1', 'dispute_payback', 'dp_1:payout-b', createdAt);
     expect(payback?.id).toBe('tr_payback');
+    // A second dispute on the same payout is its own payback.
+    expect(await findTransferTagged(stripe, 'acct_1', 'dispute_payback', 'dp_2:payout-b', createdAt)).toBeNull();
     // The payout lookup doesn't see the payback either.
     expect((await findPayoutTransfer(stripe, 'acct_1', 'payout-b', createdAt))?.id).toBe('tr_payout');
   });
