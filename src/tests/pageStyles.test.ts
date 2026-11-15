@@ -1,5 +1,7 @@
 import {
   DEFAULT_PAGE_STYLE,
+  GALLERY_KICKERS,
+  romanNumeral,
   getPageStyle,
   headingPair,
   menuNumber,
@@ -14,6 +16,7 @@ import {
   serviceCardSurface,
   sheetInk,
 } from '../features/providers/ProfilePageStyle';
+import { kickerPhrase } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
   it('reads keys saved before page styles existed as Classic', () => {
@@ -47,8 +50,17 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the six picked styles plus Classic, each once', () => {
-    expect(PAGE_STYLES.map(s => s.key)).toEqual(['classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy']);
+  it('has the twelve picked styles plus Classic, each once', () => {
+    expect(PAGE_STYLES.map(s => s.key)).toEqual([
+      'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
+      'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
+    ]);
+  });
+
+  it('gives each of the 2026-11-14 styles a hero and heading of its own', () => {
+    const added = ['editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary'].map(getPageStyle);
+    expect(new Set(added.map(s => s.hero)).size).toBe(6);
+    expect(new Set(added.map(s => s.heading)).size).toBe(6);
   });
 
   it('keeps Classic exactly as the profile always was', () => {
@@ -117,5 +129,58 @@ describe('two-part headings say what the section is', () => {
 describe('the services heading', () => {
   it('says "The Services", not "The Menu"', () => {
     expect(headingPair('services')).toEqual(['The', 'Services']);
+  });
+});
+
+describe('the 2026-11-14 styles', () => {
+  const colours = { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG };
+
+  it('draws Editorial and Heritage straight on the page, the rest on their own cards', () => {
+    expect(sectionsSitOnPage(getPageStyle('editorial'))).toBe(true);
+    expect(sectionsSitOnPage(getPageStyle('heritage'))).toBe(true);
+    expect(sectionsSitOnPage(getPageStyle('duet'))).toBe(false);
+    expect(sectionsSitOnPage(getPageStyle('apothecary'))).toBe(false);
+  });
+
+  it('lets Duet and Groovy service cards show their hard shadow', () => {
+    for (const key of ['duet', 'groovy']) {
+      const surface = serviceCardSurface(getPageStyle(key), colours);
+      expect(surface).toMatchObject({ shadowRadius: 0, shadowOpacity: 1, overflow: 'visible' });
+    }
+    expect(serviceCardSurface(getPageStyle('apothecary'), colours)).toMatchObject({ borderRadius: 0, borderWidth: 1 });
+  });
+
+  it('drops the policy card for the tiled layouts only', () => {
+    expect(policiesBringOwnSurface(getPageStyle('editorial'))).toBe(true);
+    expect(policiesBringOwnSurface(getPageStyle('duet'))).toBe(true);
+    expect(policiesBringOwnSurface(getPageStyle('groovy'))).toBe(true);
+    expect(policiesBringOwnSurface(getPageStyle('heritage'))).toBe(false);
+    expect(policiesBringOwnSurface(getPageStyle('gallery'))).toBe(false);
+    expect(policiesBringOwnSurface(getPageStyle('apothecary'))).toBe(false);
+  });
+
+  it('numbers Heritage\'s rules in capitals and Apothecary\'s in lower case', () => {
+    expect(romanNumeral(0)).toBe('I');
+    expect(romanNumeral(3)).toBe('IV');
+    expect(romanNumeral(1, true)).toBe('ii.');
+    expect(getPageStyle('apothecary').numeralsLower).toBe(true);
+    expect(getPageStyle('heritage').numeralsLower).toBeFalsy();
+  });
+
+  it('only puts Editorial\'s About on a band', () => {
+    expect(PAGE_STYLES.filter(s => s.aboutOnBand).map(s => s.key)).toEqual(['editorial']);
+  });
+
+  it('gives every section a Gallery wall label', () => {
+    (Object.keys(PAGE_SECTION_TITLES) as PageSectionKey[]).forEach(section => {
+      expect(GALLERY_KICKERS[section]).toMatch(/^[A-Z ]+$/);
+    });
+  });
+
+  it('turns what they do into a phrase', () => {
+    expect(kickerPhrase('LASHES')).toBe('Lashes');
+    expect(kickerPhrase('BRAIDS · LOCS')).toBe('Braids & locs');
+    expect(kickerPhrase('FACIALS · MASSAGE · BROWS')).toBe('Facials, massage & brows');
+    expect(kickerPhrase('')).toBe('');
   });
 });

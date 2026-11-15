@@ -7,8 +7,9 @@
 import React, { useId } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Defs, Path, Text as SvgText, TextPath } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, G, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
 import type { PageStyle } from "../../constants/pageStyles";
@@ -70,11 +71,14 @@ export function HeroLogo({
   const frame =
     pageStyle.logo === "arch"
       ? [styles.arch, { borderTopLeftRadius: size / 2, borderTopRightRadius: size / 2 }]
-      : pageStyle.logo === "polaroid"
+      : pageStyle.logo === "polaroid" || pageStyle.logo === "mat"
         ? styles.polaroidPhoto
-        : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
-          ? styles.thinRim
-          : null;
+        : pageStyle.logo === "tilted"
+          ? [styles.tilted, { borderRadius: Math.round(size * 0.16) }]
+          : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
+            || pageStyle.logo === "accentRing" || pageStyle.logo === "flower"
+            ? styles.thinRim
+            : null;
 
   const logo = uri ? (
     <LogoCircle uri={uri} framing={framing} style={[styles.logo, box, frame]} />
@@ -86,8 +90,35 @@ export function HeroLogo({
 
   return (
     <View style={styles.container}>
-      <View style={pageStyle.logo === "polaroid" ? styles.polaroid : undefined}>
+      <View
+        style={
+          pageStyle.logo === "polaroid" ? styles.polaroid
+          : pageStyle.logo === "mat" ? styles.matFrame
+          : undefined
+        }
+      >
+        <View style={pageStyle.logo === "mat" ? [styles.mat, { padding: Math.round(size * 0.08) }] : undefined}>
         <View style={[styles.wrapper, { width: size, height: size }]}>
+          {pageStyle.logo === "flower" ? (
+            // Groovy: a scalloped flower of the accent behind the logo.
+            <Svg
+              width={size * 1.4}
+              height={size * 1.4}
+              viewBox="0 0 100 100"
+              style={{ position: "absolute", top: -size * 0.2, left: -size * 0.2 }}
+              pointerEvents="none"
+            >
+              <G fill={accent}>
+                {FLOWER_PETALS.map(([cx, cy]) => (
+                  <Circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={17} />
+                ))}
+                <Circle cx={50} cy={50} r={36} />
+              </G>
+            </Svg>
+          ) : null}
+          {pageStyle.logo === "accentRing" ? (
+            <View style={[styles.doubleRing, ringOut(9 * (size / 148)), { borderColor: accent, borderWidth: 2 }]} pointerEvents="none" />
+          ) : null}
           {pageStyle.logo === "glossRing" ? (
             <LinearGradient
               colors={["#FFFFFF", blend(accent, "#FFFFFF", 0.45), "#FFFFFF"]}
@@ -119,10 +150,16 @@ export function HeroLogo({
             pointerEvents="none"
           />
         </View>
+        </View>
       </View>
     </View>
   );
 }
+
+/** Petal centres round Groovy's flower frame (viewBox 0–100). */
+const FLOWER_PETALS: readonly [number, number][] = [
+  [84, 50], [74, 74], [50, 84], [26, 74], [16, 50], [26, 26], [50, 16], [74, 26],
+];
 
 // ── Hero layouts ─────────────────────────────────────────────────────────────
 
@@ -144,8 +181,37 @@ export interface ProfileHeroLayoutProps {
   /** Stars, years of experience and the slots pill with its bell (or a
    *  link-only provider's Book block). Every layout shows these. */
   details: React.ReactNode;
-  /** Their About, for the layouts that carry it in the hero (Arch, Framed). */
+  /** Their About, for the layouts that carry it in the hero (Arch, Framed, Duet). */
   about: React.ReactNode;
+  /** The theme accent: Editorial's full stop, Heritage's script, Duet's film strip. */
+  accent: string;
+  /** Up to two of their portfolio photos (Editorial's back card, Duet's film strip). */
+  photoUris?: readonly string[];
+  /** Their star rating, for Groovy's starburst. Left out when there are no CERVICED reviews. */
+  rating?: string | null;
+  /** The verified tick beside the name, for the layouts that draw the name themselves. */
+  isVerified?: boolean;
+}
+
+/** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
+export function kickerPhrase(kicker: string): string {
+  const parts = kicker.split("·").map(part => part.trim().toLowerCase()).filter(Boolean);
+  if (parts.length === 0) return "";
+  const joined = parts.length === 1 ? parts[0]! : `${parts.slice(0, -1).join(", ")} & ${parts[parts.length - 1]}`;
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+/** The name split for the two-voice heroes: all but the last word, and the last word. */
+function splitLast(name: string): [string, string] {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return [words[0] ?? "", ""];
+  return [words.slice(0, -1).join(" "), words[words.length - 1]!];
+}
+
+/** The name split the other way: the first word, and the rest. */
+function splitFirst(name: string): [string, string] {
+  const words = name.trim().split(/\s+/);
+  return [words[0] ?? "", words.slice(1).join(" ")];
 }
 
 /**
@@ -167,8 +233,18 @@ export function ProfileHeroLayout({
   meta,
   details,
   about,
+  accent,
+  photoUris,
+  rating,
+  isVerified,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
+  const tick = isVerified ? (
+    <Ionicons name="checkmark-circle" size={18} color={heroIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+  ) : null;
+  // The accent stays the accent on a pale hero; over a dark photo it is lifted
+  // so it still reads.
+  const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
     case "cover":
@@ -259,6 +335,246 @@ export function ProfileHeroLayout({
         </View>
       );
 
+    case "editorial": {
+      // Editorial: "Zara" light over "OKAFOR." bold, two tilted cards beside it.
+      const [first, rest] = splitFirst(name);
+      const bold = (rest || first).toUpperCase();
+      return (
+        <View style={layout.edWrap}>
+          <View style={layout.edTop}>
+            <View style={layout.edNameCol} accessible accessibilityRole="header" accessibilityLabel={name}>
+              {rest ? (
+                <Text style={[layout.edLight, { color: heroText }, shadow]} numberOfLines={1} adjustsFontSizeToFit>
+                  {first}
+                </Text>
+              ) : null}
+              <View style={layout.tickRow}>
+                <Text
+                  style={[layout.edBold, { color: heroText }, shadow]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.55}
+                >
+                  {bold}
+                  <Text style={{ color: heroAccent }}>.</Text>
+                </Text>
+                {tick}
+              </View>
+            </View>
+            <View style={layout.edCards}>
+              <View style={[layout.edBack, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]}>
+                {photoUris?.[0] ? (
+                  <Image source={{ uri: photoUris[0] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                ) : null}
+              </View>
+              <View style={layout.edFront}>{renderLogo(86)}</View>
+            </View>
+          </View>
+          <View style={[layout.edRule, { borderTopColor: heroText }]}>
+            <Text style={[layout.edKicker, { color: heroText }, shadow]} numberOfLines={1}>{kicker}</Text>
+            {location ? (
+              <Text style={[layout.edLocation, { color: heroSub }, shadow]} numberOfLines={1}>{location}</Text>
+            ) : null}
+          </View>
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "crest": {
+      // Heritage: a ringed monogram, a spaced caps line, the name in serif with
+      // its last word in script, then double rules.
+      const [serif, script] = splitLast(name);
+      const caption = [location, kicker].filter(Boolean).join(" · ").toUpperCase();
+      const rule = heroIsDark ? withAlpha(heroText, 0.7) : accent;
+      return (
+        <View style={[layout.infoCenter, layout.crestTop]}>
+          {renderLogo(84)}
+          {caption ? (
+            <Text style={[layout.crestCaption, { color: heroSub }, shadow]} numberOfLines={2}>{caption}</Text>
+          ) : null}
+          <View style={layout.crestName} accessible accessibilityRole="header" accessibilityLabel={name}>
+          <View style={layout.tickRow}>
+            <Text style={[layout.crestSerif, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {serif}
+            </Text>
+            {script ? null : tick}
+          </View>
+          {script ? (
+            <View style={[layout.tickRow, layout.crestScriptRow]}>
+              <Text style={[layout.crestScript, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit>{script}</Text>
+              {tick}
+            </View>
+          ) : null}
+          </View>
+          <View style={layout.doubleRuleRow}>
+            <View style={[layout.doubleRule, { borderColor: rule }]} />
+            <Text style={[layout.crestStar, { color: rule }]}>✦</Text>
+            <View style={[layout.doubleRule, { borderColor: rule }]} />
+          </View>
+          {details}
+        </View>
+      );
+    }
+
+    case "duet": {
+      // Duet: "Hey gorgeous!", the first word as script with the rest in caps
+      // over its foot, and a film strip of their photos at the right edge.
+      const [script, caps] = splitFirst(name);
+      const firstName = name.split(" ")[0] ?? name;
+      const pills = kicker.split("·").map(part => part.trim()).filter(Boolean);
+      return (
+        <>
+          <View style={layout.duetRow}>
+            <View style={layout.duetText}>
+              <Text style={[layout.duetHey, { color: heroText }, shadow]}>HEY GORGEOUS! WELCOME TO</Text>
+              <View accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.duetScript, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit>
+                {script}
+              </Text>
+              {caps ? (
+                <View style={[layout.tickRow, layout.duetCapsRow]}>
+                  <Text style={[layout.duetCaps, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit>
+                    {caps.toUpperCase()}
+                  </Text>
+                  {tick}
+                </View>
+              ) : tick}
+              </View>
+              {location ? (
+                <Text style={[layout.duetLocated, { color: heroSub }, shadow]} numberOfLines={2}>
+                  {location.toUpperCase()}
+                </Text>
+              ) : null}
+            </View>
+            <View style={[layout.filmStrip, { backgroundColor: accent }]}>
+              {(["first", "second"] as const).map((frame, i) => (
+                <View key={frame} style={[layout.filmFrame, { backgroundColor: blend(accent, "#FFFFFF", 0.5) }]}>
+                  {photoUris?.[i] ? (
+                    <Image source={{ uri: photoUris[i] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          </View>
+          {pills.length ? (
+            <View style={layout.duetPills}>
+              {pills.map(label => (
+                <View key={label} style={[layout.duetPill, { shadowColor: blend(accent, "#FFFFFF", 0.5) }]}>
+                  <Text style={layout.duetPillText} numberOfLines={1}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <View style={layout.duetMeet}>
+            <View style={layout.duetMeetLogo}>{renderLogo(100)}</View>
+            <View style={layout.duetMeetText}>
+              <Text style={[layout.duetMeetScript, { color: heroAccent }, shadow]} numberOfLines={1}>{firstName}</Text>
+              <Text style={[layout.duetMeetCaps, { color: heroText }, shadow]}>YOUR ARTIST</Text>
+              {about}
+            </View>
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+    }
+
+    case "groovy": {
+      // Groovy: a flower logo, the name huge and soft, the rest in the accent
+      // with a hard offset shadow, and a starburst with their rating.
+      const [first, rest] = splitFirst(name);
+      const shadowInk = heroIsDark ? "rgba(0,0,0,0.6)" : heroText;
+      return (
+        <View style={layout.groovyWrap}>
+          <View style={layout.groovyTop}>
+            {renderLogo(78)}
+            <Text style={[layout.groovyCaption, { color: heroText }, shadow]} numberOfLines={3}>
+              {kicker}
+              {location ? `\n${location.toUpperCase()}` : ""}
+            </Text>
+          </View>
+          <View accessible accessibilityRole="header" accessibilityLabel={name}>
+          <View style={layout.tickRow}>
+            <Text style={[layout.groovyBig, { color: heroText }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+              {first.toLowerCase()}
+            </Text>
+            {rest ? null : tick}
+          </View>
+          {rest ? (
+            <View style={[layout.tickRow, layout.groovyRestRow]}>
+              <Text
+                style={[layout.groovyRest, { color: heroAccent, textShadowColor: shadowInk }]}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+              >
+                {rest.toLowerCase()}
+              </Text>
+              {tick}
+            </View>
+          ) : null}
+          </View>
+          {rating ? <Starburst rating={rating} fill={heroText} ink={heroIsDark ? "#1F1A18" : "#FFFFFF"} /> : null}
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "exhibition": {
+      // Gallery: a wall label over a rule, the name large, then the logo
+      // framed and matted with a placard beside it.
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.galleryWrap}>
+          <View style={[layout.galleryLabels, { borderTopColor: heroText }]}>
+            <Text style={[layout.galleryLabel, { color: heroSub }, shadow]} numberOfLines={2}>{name.toUpperCase()}</Text>
+            <Text style={[layout.galleryLabel, { color: heroSub }, shadow]} numberOfLines={2}>{kicker}</Text>
+            <Text style={[layout.galleryLabel, layout.galleryLabelEnd, { color: heroSub }, shadow]} numberOfLines={2}>
+              {location.toUpperCase()}
+            </Text>
+          </View>
+          <View style={layout.tickRow}>
+            <Text style={[layout.galleryName, { color: heroText }, shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {phrase ? <Text style={[layout.galleryPhrase, { color: heroSub }, shadow]}>{phrase}.</Text> : null}
+          <View style={layout.galleryArt}>{renderLogo(176)}</View>
+          <View style={layout.placard}>
+            <Text style={layout.placardKicker}>NO. 01 · THE ARTIST</Text>
+            <Text style={layout.placardTitle} numberOfLines={2}>{name}</Text>
+            {location ? <Text style={layout.placardSub} numberOfLines={1}>{location}</Text> : null}
+          </View>
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "label": {
+      // Apothecary: an oval label like a bottle's, low over their photo.
+      const phrase = kickerPhrase(kicker).toLowerCase();
+      const caption = [kicker, location.toUpperCase()].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.labelWrap}>
+          <View style={layout.labelOval}>
+            <View style={[layout.labelInner, { borderColor: withAlpha(accent, 0.8) }]} pointerEvents="none" />
+            <View style={layout.labelLogo}>{renderLogo(46)}</View>
+            {caption ? <Text style={layout.labelCaption} numberOfLines={2}>{caption}</Text> : null}
+            <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={layout.labelName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {name.toUpperCase()}
+              </Text>
+              {tick}
+            </View>
+            {phrase ? <Text style={layout.labelPhrase}>{phrase}</Text> : null}
+            <Sprig color={accent} />
+          </View>
+          <View style={layout.labelDetails}>{details}</View>
+        </View>
+      );
+    }
+
     default:
       return (
         <>
@@ -287,6 +603,40 @@ function CurvedCaption({ text, color, width }: { text: string; color: string; wi
           {text.toUpperCase()}
         </TextPath>
       </SvgText>
+    </Svg>
+  );
+}
+
+/** Groovy's starburst sticker with their rating. */
+function Starburst({ rating, fill, ink }: { rating: string; fill: string; ink: string }) {
+  return (
+    <View style={layout.starburst} pointerEvents="none" accessible accessibilityLabel={`Rated ${rating}`}>
+      <Svg width={100} height={100} viewBox="0 0 100 100" style={StyleSheet.absoluteFill}>
+        <Polygon
+          fill={fill}
+          points="100,50 89.6,60.6 93.3,75 79,79 75,93.3 60.6,89.6 50,100 39.4,89.6 25,93.3 21,79 6.7,75 10.4,60.6 0,50 10.4,39.4 6.7,25 21,21 25,6.7 39.4,10.4 50,0 60.6,10.4 75,6.7 79,21 93.3,25 89.6,39.4"
+        />
+      </Svg>
+      <Text style={[layout.starburstStar, { color: ink }]}>★</Text>
+      <Text style={[layout.starburstRating, { color: ink }]}>{rating}</Text>
+      <Text style={[layout.starburstWord, { color: ink }]}>RATED</Text>
+    </View>
+  );
+}
+
+/** Apothecary's little sprig under the name. */
+function Sprig({ color }: { color: string }) {
+  return (
+    <Svg width={70} height={16} viewBox="0 0 70 16" style={layout.sprig} pointerEvents="none">
+      <Path d="M4 8H66" stroke={color} strokeWidth={1} />
+      <G fill={color}>
+        {[18, 35, 52].map(x => (
+          <React.Fragment key={x}>
+            <Ellipse cx={x} cy={5} rx={6} ry={2.2} transform={`rotate(-30 ${x} 5)`} />
+            <Ellipse cx={x} cy={11} rx={6} ry={2.2} transform={`rotate(30 ${x} 11)`} />
+          </React.Fragment>
+        ))}
+      </G>
     </Svg>
   );
 }
@@ -320,6 +670,104 @@ const layout = StyleSheet.create({
   textFirst: { marginTop: TEXT_FIRST_DROP },
   spaKicker: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 4, marginBottom: 10, textAlign: "center" },
   spaLogo: { marginTop: 16 },
+  tickRow: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
+  leftDetails: { alignItems: "flex-start", marginTop: 12 },
+  // Editorial
+  edWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  edTop: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginBottom: 14 },
+  edNameCol: { flex: 1, minWidth: 0 },
+  edLight: { fontFamily: "LeagueSpartan-Light", fontSize: 50, lineHeight: 52, letterSpacing: -1 },
+  edBold: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 44, lineHeight: 46, letterSpacing: -1.2, flexShrink: 1 },
+  edCards: { width: 132, height: 146 },
+  edBack: {
+    position: "absolute", left: 0, top: 14, width: 84, height: 118, borderRadius: 12, overflow: "hidden",
+    transform: [{ rotate: "-5deg" }],
+  },
+  edFront: { position: "absolute", right: 0, top: 4, transform: [{ rotate: "5deg" }] },
+  edRule: { flexDirection: "row", justifyContent: "space-between", gap: 12, borderTopWidth: 1.5, paddingTop: 10 },
+  edKicker: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 11, letterSpacing: 1.6, flexShrink: 1 },
+  edLocation: { fontFamily: "LeagueSpartan-Light", fontSize: 12, flexShrink: 1, textAlign: "right" },
+  // Heritage
+  crestTop: { marginTop: 20 },
+  crestName: { alignItems: "center" },
+  crestCaption: { fontSize: 10, letterSpacing: 3, textAlign: "center", marginTop: -6 },
+  crestSerif: { fontFamily: "BodoniModa-ExtraBold", fontSize: 46, lineHeight: 52, letterSpacing: -1.2, textAlign: "center", marginTop: 10, flexShrink: 1 },
+  crestScriptRow: { marginTop: -16, paddingLeft: 70 },
+  crestScript: { fontFamily: "PinyonScript_400Regular", fontSize: 54, lineHeight: 74 },
+  doubleRuleRow: { flexDirection: "row", alignItems: "center", gap: 10, alignSelf: "stretch", marginTop: 6, marginBottom: 12 },
+  doubleRule: { flex: 1, height: 4, borderTopWidth: 1, borderBottomWidth: 1 },
+  crestStar: { fontSize: 12 },
+  // Duet
+  duetRow: { flexDirection: "row", gap: 12, paddingLeft: 20, marginTop: TEXT_FIRST_DROP },
+  duetText: { flex: 1, minWidth: 0, paddingTop: 4 },
+  duetHey: { fontFamily: "Montserrat-Medium", fontSize: 9.5, letterSpacing: 2.4 },
+  duetScript: { fontFamily: "GreatVibes_400Regular", fontSize: 76, lineHeight: 96, marginLeft: -4 },
+  duetCapsRow: { marginTop: -30, paddingLeft: 44 },
+  duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 0.5, flexShrink: 1 },
+  duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 9.5, letterSpacing: 2.2, marginTop: 10 },
+  filmStrip: { width: 112, paddingVertical: 6, paddingLeft: 6, borderTopLeftRadius: 4, borderBottomLeftRadius: 4, gap: 6 },
+  filmFrame: { height: 92, overflow: "hidden" },
+  duetPills: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingHorizontal: 20, marginTop: 16 },
+  duetPill: {
+    minHeight: 30, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 5, borderRadius: 100,
+    borderWidth: 1.5, borderColor: "#1F1A1C", backgroundColor: "#FFFFFF",
+    shadowOffset: { width: 3, height: 4 }, shadowOpacity: 1, shadowRadius: 0,
+  },
+  duetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1, color: "#1F1A1C" },
+  duetMeet: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginTop: 24 },
+  duetMeetLogo: { marginBottom: -20 },
+  duetMeetText: { flex: 1, paddingBottom: 6 },
+  duetMeetScript: { fontFamily: "GreatVibes_400Regular", fontSize: 44, lineHeight: 58, paddingLeft: 18 },
+  duetMeetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 14, letterSpacing: 0.5, marginTop: -18, marginBottom: 6 },
+  // Groovy
+  groovyWrap: { paddingHorizontal: 20, marginTop: 12, marginBottom: 26 },
+  groovyTop: { flexDirection: "row", alignItems: "center", gap: 14 },
+  groovyCaption: { fontSize: 11, fontWeight: "800", letterSpacing: 1.6, lineHeight: 16, flexShrink: 1, marginTop: -20 },
+  groovyBig: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 88, lineHeight: 92, letterSpacing: -2, marginTop: -4, flexShrink: 1 },
+  groovyRestRow: { paddingLeft: 70, marginTop: -10 },
+  groovyRest: {
+    fontFamily: "Fraunces-SoftBlackItalic", fontSize: 58, lineHeight: 64, letterSpacing: -1, flexShrink: 1,
+    textShadowOffset: { width: 3, height: 3 }, textShadowRadius: 0,
+  },
+  starburst: {
+    position: "absolute", right: 14, top: 104, width: 100, height: 100,
+    alignItems: "center", justifyContent: "center", transform: [{ rotate: "12deg" }],
+  },
+  starburstStar: { fontSize: 12, lineHeight: 14 },
+  starburstRating: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 24, lineHeight: 28 },
+  starburstWord: { fontSize: 8.5, fontWeight: "800", letterSpacing: 1 },
+  // Gallery
+  galleryWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  galleryLabels: { flexDirection: "row", gap: 10, borderTopWidth: 1, paddingTop: 8 },
+  galleryLabel: { flex: 1, fontFamily: "DidactGothic-Regular", fontSize: 10, letterSpacing: 1.2, lineHeight: 15 },
+  galleryLabelEnd: { textAlign: "right" },
+  galleryName: { fontFamily: "InstrumentSerif-Regular", fontSize: 60, lineHeight: 60, letterSpacing: -1.5, marginTop: 22, flexShrink: 1 },
+  galleryPhrase: { fontFamily: "InstrumentSerif-Italic", fontSize: 21, marginTop: 6 },
+  galleryArt: { alignItems: "center", marginTop: 26 },
+  placard: {
+    alignSelf: "flex-end", width: 178, backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 10, marginTop: -6,
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2,
+  },
+  placardKicker: { fontFamily: "DidactGothic-Regular", fontSize: 9.5, letterSpacing: 1.2, color: "#666666" },
+  placardTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 17, lineHeight: 19, color: "#161616", marginTop: 2 },
+  placardSub: { fontFamily: "DidactGothic-Regular", fontSize: 10.5, color: "#666666", marginTop: 3 },
+  // Apothecary: the label is a cream object, so its ink is fixed.
+  labelWrap: { paddingHorizontal: 24, marginTop: 90, marginBottom: 26 },
+  labelOval: {
+    minHeight: 200, borderRadius: 120, backgroundColor: "#FBFCF8", borderWidth: 1, borderColor: "#2C3527",
+    alignItems: "center", justifyContent: "center", paddingVertical: 22, paddingHorizontal: 34,
+    shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 6,
+  },
+  labelInner: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderRadius: 114, borderWidth: 1 },
+  labelLogo: { marginBottom: -12 },
+  labelCaption: { fontSize: 9, letterSpacing: 2.4, color: "#56614F", textAlign: "center", marginTop: 4 },
+  labelName: {
+    fontFamily: "CormorantGaramond-SemiBold", fontSize: 34, lineHeight: 40, letterSpacing: 6, color: "#2C3527",
+    textAlign: "center", flexShrink: 1,
+  },
+  labelPhrase: { fontFamily: "CormorantGaramond-MediumItalic", fontSize: 17, color: "#56614F" },
+  sprig: { marginTop: 4 },
+  labelDetails: { alignItems: "center", marginTop: 18 },
 });
 
 /** Cover's white pills under the name. */
@@ -356,6 +804,12 @@ const styles = StyleSheet.create({
   arch: { borderRadius: 10, borderTopLeftRadius: 74, borderTopRightRadius: 74 },
   polaroidPhoto: { borderRadius: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 },
   thinRim: { borderWidth: 2 },
+  tilted: { borderWidth: 3, borderColor: "#FFFFFF" },
+  matFrame: {
+    backgroundColor: "#1F1F1F", padding: 4,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 8,
+  },
+  mat: { backgroundColor: "#FBFAF7" },
   polaroid: {
     backgroundColor: "#FFFFFF",
     padding: 8,
