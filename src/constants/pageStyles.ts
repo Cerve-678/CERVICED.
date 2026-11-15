@@ -179,6 +179,10 @@ export interface PageStyle {
   halftonePhotos?: boolean;
   /** Portfolio photos set on a page, their caption in italic under each (Novel). */
   pagePhotos?: boolean;
+  /** The page itself is the veil: the photo and the black veil stay behind the
+   *  whole profile, and the content sits on a see-through dark glass sheet in
+   *  white ink (Sheer, owner 2026-11-15). */
+  veilPage?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -301,9 +305,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
   // a see-through black veil over their photo, like the owner's sheer-black reference.
   {
-    key: 'sheer', name: 'Sheer', description: 'Your photo under a see-through black veil, fine outlined boxes',
+    key: 'sheer', name: 'Sheer', description: 'Your photo under a black veil down the whole page, content on see-through glass',
     heading: 'sheerCaps', cards: 'sheer', policies: 'outlined', logo: 'circle',
-    hero: 'veil', aboutInHero: false,
+    hero: 'veil', aboutInHero: false, veilPage: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
