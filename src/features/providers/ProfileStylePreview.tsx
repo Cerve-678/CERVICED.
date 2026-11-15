@@ -21,7 +21,7 @@ import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNam
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
-import { HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "./ProfileHero";
+import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard } from "./ProfileHero";
 import {
   GlossShine,
   onAccentInk,
@@ -196,15 +196,17 @@ export function ProfileStylePreview({
             }
             details={
               <>
-                <View style={styles.ratingRow}>
+                <View style={[styles.ratingRow, detailsSitOnCard(pageStyle) && styles.ratingInline]}>
                   {[1, 2, 3, 4, 5].map(star => (
                     <Ionicons key={star} name="star" size={12} color="#FFD700" />
                   ))}
                 </View>
-                <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
-                  <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
-                  <Ionicons name="notifications-outline" size={16} color={OP.sub} />
-                </BlurView>
+                <View style={detailsSitOnCard(pageStyle) ? DETAILS_OWN_LINE : undefined}>
+                  <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
+                    <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
+                    <Ionicons name="notifications-outline" size={16} color={OP.sub} />
+                  </BlurView>
+                </View>
               </>
             }
             about={pageStyle.aboutInHero ? lines(withAlpha(heroText, 0.45), [100, 94, 70]) : null}
@@ -335,6 +337,8 @@ const styles = StyleSheet.create({
   },
   textShadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   ratingRow: { flexDirection: "row", gap: 3, marginBottom: 8 },
+  // Beside the pills on Duet's card.
+  ratingInline: { marginBottom: 0 },
   slots: {
     flexDirection: "row",
     alignItems: "center",
