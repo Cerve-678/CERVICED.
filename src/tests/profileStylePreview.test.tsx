@@ -147,10 +147,12 @@ describe('the 2026-11-14 heroes', () => {
 });
 
 describe('the 2026-11-15 templates', () => {
-  it('signs Snapshot\'s name across its photo strip, with what they do as pills', () => {
+  it('puts Snapshot\'s name in caps on its colour block, with the area and square tags under it', () => {
     renderPreview('snapshot');
-    expect(screen.getByText('Amara')).toBeTruthy();
-    expect(screen.getAllByText('LASHES')).toHaveLength(2);
+    expect(screen.getByText('AMARA LASHES')).toBeTruthy();
+    expect(screen.getByText('PECKHAM')).toBeTruthy();
+    expect(screen.getByText('LASHES')).toBeTruthy();
+    expect(screen.getByText('THE SERVICES')).toBeTruthy();
   });
 
   it('signs the whole name across Signature\'s logo', () => {

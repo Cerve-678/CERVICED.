@@ -213,6 +213,16 @@ export function PageSectionHeading({
           <Text style={[headingStyles.indexTitle, { color: ink }]} numberOfLines={1}>{headingPair(section).join(" ")}</Text>
         </View>
       );
+    case "condensed":
+      // Snapshot: huge condensed caps over a short accent bar.
+      return (
+        <View {...a11y} accessible style={headingStyles.condensedWrap}>
+          <Text style={[headingStyles.condensed, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit>
+            {headingPair(section).join(" ").toUpperCase()}
+          </Text>
+          <View style={[headingStyles.condensedBar, { backgroundColor: accent }]} />
+        </View>
+      );
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -327,7 +337,7 @@ export function PageSection({
     );
   }
 
-  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule"
+  const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
     : pageStyle.cards === "flat" ? 6
     : pageStyle.cards === "gloss" ? 28
@@ -384,6 +394,7 @@ export function PageSection({
           { backgroundColor: palette.cardBackground, borderRadius: radius },
           pageStyle.cards === "paper" && surfaceStyles.paper,
           pageStyle.cards === "topRule" && [surfaceStyles.topRule, { borderTopColor: outlineInk(palette.cardBackground) }],
+          pageStyle.cards === "block" && [surfaceStyles.blockCard, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "gloss" && [surfaceStyles.gloss, { borderColor: withAlpha(palette.accent, 0.35) }],
         ]}
       >
@@ -533,6 +544,8 @@ export function serviceCardSurface(
       };
     case "label":
       return { ...flat, backgroundColor: colours.card, borderWidth: 1, borderColor: outlineInk(colours.card), borderRadius: 0 };
+    case "block":
+      return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 2, borderColor: outlineInk(colours.card) };
     case "topRule":
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderTopWidth: 3, borderTopColor: outlineInk(colours.card) };
     default:
@@ -880,6 +893,9 @@ const headingStyles = StyleSheet.create({
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 42, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 36, marginBottom: 14 },
   labelCaps: { fontFamily: "MarcellusSC-Regular", fontSize: 14, letterSpacing: 4 },
+  condensedWrap: { marginBottom: 14 },
+  condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 44, letterSpacing: 0.3 },
+  condensedBar: { width: 36, height: 5, marginTop: 4 },
   indexRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   indexNumber: { fontFamily: "Gloock-Regular", fontSize: 15 },
   indexRule: { width: 22, height: 1.5 },
@@ -923,6 +939,7 @@ const surfaceStyles = StyleSheet.create({
   centred: { alignItems: "center" },
   headingLine: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 },
   topRule: { borderTopWidth: 3 },
+  blockCard: { borderWidth: 2 },
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },

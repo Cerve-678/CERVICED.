@@ -94,7 +94,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   groovy: { text: 'the services' },
   gallery: { text: 'The Services' },
   apothecary: { text: 'THE SERVICES' },
-  snapshot: { lead: 'The', text: 'SERVICES' },
+  snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
 };
@@ -205,6 +205,8 @@ function MiniProfile({
         return <Text style={[mini.groovy, { color: ink }]}>{heading.text}</Text>;
       case 'serifTitle':
         return <Text style={[mini.serifTitle, { color: ink }]}>{heading.text}</Text>;
+      case 'condensed':
+        return <Text style={[mini.condensed, { color: ink }]}>{heading.text}</Text>;
       case 'indexed':
         return (
           <View style={mini.indexRow}>
@@ -246,6 +248,8 @@ function MiniProfile({
             <View style={[mini.bar, { backgroundColor: line }]} />
           </View>
         );
+      case 'block':
+        return <View key={key} style={[mini.card, mini.blockCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'topRule':
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
@@ -334,13 +338,17 @@ function MiniProfile({
           <View style={mini.tag}>
             <Text style={mini.tagName} numberOfLines={1}>NAME</Text>
           </View>
-        ) : style.hero === 'photoStrip' ? (
-          // Snapshot: three tilted photos with the name signed across them.
-          <View style={mini.stripRow}>
-            <View style={[mini.stripPhoto, { transform: [{ rotate: '-6deg' }] }]} />
-            <View style={mini.stripPhoto} />
-            <View style={[mini.stripPhoto, { transform: [{ rotate: '6deg' }] }]} />
-            <Text style={mini.stripName} numberOfLines={1}>Name</Text>
+        ) : style.hero === 'blockName' ? (
+          // Snapshot: photos edge to edge, the name on an accent block.
+          <View style={mini.blockHero}>
+            <View style={mini.blockPhotos}>
+              <View style={mini.blockPhoto} />
+              <View style={[mini.blockPhoto, mini.blockPhotoMid]} />
+              <View style={mini.blockPhoto} />
+            </View>
+            <View style={[mini.blockBox, { backgroundColor: accent }]}>
+              <Text style={mini.blockName} numberOfLines={1}>NAME</Text>
+            </View>
           </View>
         ) : style.hero === 'signed' ? (
           <View style={mini.stack}>
@@ -484,9 +492,14 @@ const mini = StyleSheet.create({
   indexTitle: { fontFamily: 'Gloock-Regular', fontSize: 13 },
   topRuleCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderTopWidth: 2, borderTopColor: '#1F1A1C' },
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
-  stripRow: { flexDirection: 'row', gap: 3, alignItems: 'center' },
-  stripPhoto: { width: 22, height: 30, backgroundColor: 'rgba(255,255,255,0.75)', borderWidth: 2, borderColor: '#FFFFFF' },
-  stripName: { position: 'absolute', left: 0, right: 0, bottom: -10, textAlign: 'center', fontFamily: 'MsMadi-Regular', fontSize: 20, color: '#FFFFFF' },
+  blockHero: { alignSelf: 'stretch', flex: 1 },
+  blockPhotos: { flexDirection: 'row', height: 48 },
+  blockPhoto: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)' },
+  blockPhotoMid: { backgroundColor: 'rgba(255,255,255,0.75)' },
+  blockBox: { marginTop: -12, marginRight: 22, paddingHorizontal: 8, paddingVertical: 4 },
+  blockName: { fontFamily: 'Anton-Regular', fontSize: 16, color: '#FFFFFF' },
+  condensed: { fontFamily: 'Anton-Regular', fontSize: 15 },
+  blockCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1.5, borderColor: '#111111' },
   signedName: { fontFamily: 'MrsSaintDelafield-Regular', fontSize: 22, color: '#FFFFFF', marginTop: -10 },
   quietBand: { alignSelf: 'stretch', backgroundColor: '#FBFCF8', paddingVertical: 6, paddingHorizontal: 10, marginTop: 30 },
   band: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 26, borderTopLeftRadius: 30, borderTopRightRadius: 10 },
