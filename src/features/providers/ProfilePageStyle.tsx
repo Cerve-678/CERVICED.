@@ -900,9 +900,9 @@ const headingStyles = StyleSheet.create({
   heritageScript: { fontFamily: "LibreBaskerville-Italic", fontSize: 20, lineHeight: 30 },
   heritageCaps: { fontFamily: "Cinzel-Bold", fontSize: 20, letterSpacing: 4, marginTop: 2, textAlign: "center" },
   layeredScript: { fontFamily: "MsMadi-Regular", fontSize: 54, lineHeight: 79 },
-  // Overlaps the script's foot slightly. The owner tried -32 and -22 (too
-  // much) and -12 (too far apart) on 2026-11-15.
-  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -17, textAlign: "center" },
+  // Overlaps the script's foot slightly. Tuned by the owner on 2026-11-15:
+  // -32 too much, -12 too far apart, -17 wanted the script a bit lower.
+  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -20, textAlign: "center" },
   groovyWrap: { marginBottom: 14 },
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 47, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 41, marginBottom: 14 },
