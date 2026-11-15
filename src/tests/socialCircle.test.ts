@@ -3,7 +3,6 @@ import {
   canAskOnHome,
   EMPTY_MEMORY,
   INTRO_GAP_DAYS,
-  NOT_NOW_LIMIT,
   nextCircleStep,
   parseMomentsMemory,
   RECOMMEND_WINDOW_DAYS,
@@ -114,11 +113,8 @@ describe('canAskOnHome', () => {
     expect(canAskOnHome(mem({ lastAskAt: NOW.getTime() - ASK_GAP_DAYS * DAY }), NOW)).toBe(true);
   });
 
-  it('stops after two "Not now"s in a row, and a Recommend resets that', () => {
-    let m = EMPTY_MEMORY;
-    for (let i = 0; i < NOT_NOW_LIMIT; i++) m = withAnswer(m, false);
-    expect(canAskOnHome(m, NOW)).toBe(false);
-    expect(canAskOnHome(withAnswer(m, true), NOW)).toBe(true);
+  it('ignores legacy dismissals when deciding whether to show a new prompt', () => {
+    expect(canAskOnHome(mem({ notNowStreak: 2 }), NOW)).toBe(true);
   });
 
   it('never asks on a day the intro was shown', () => {
@@ -186,8 +182,8 @@ describe('shouldOfferOnProfile', () => {
     expect(shouldOfferOnProfile({ showWhereIGo: true }, { ...been, hidden: true }, EMPTY_MEMORY, 'p1')).toBe(false);
   });
 
-  it('stops after too many Not nows in a row', () => {
-    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, mem({ notNowStreak: NOT_NOW_LIMIT }), 'p1')).toBe(false);
+  it('ignores legacy dismissals on a provider profile', () => {
+    expect(shouldOfferOnProfile({ showWhereIGo: true }, been, mem({ notNowStreak: 2 }), 'p1')).toBe(true);
   });
 });
 

@@ -5,7 +5,7 @@
 
 #generated
 
-**3829 functions** across **538 files**.
+**3828 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -316,7 +316,7 @@
 - `RecommendAfterRating.tsx` — offer · offerSync · onClose · onYes · onYesSync · **RecommendAfterRatingBar** · **useRecommendAfterRating**
 - `RecommendBookingButton.tsx` — **RecommendBookingButton** · toggle
 - `RecommendHomeCard.tsx` — **RecommendHomeCard**
-- `useCircleMoment.ts` — clear · finishIntro · notNow · recommend · **useCircleMoment**
+- `useCircleMoment.ts` — clear · finishIntro · recommend · **useCircleMoment**
 - `WhereIGoIntroSheet.tsx` — **WhereIGoIntroSheet**
 
 ### `src/i18n/` (3)

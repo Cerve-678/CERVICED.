@@ -10,12 +10,12 @@
 // - After rating a visit 4 or 5 stars, a slim bar offers Recommend.
 // - Home asks with a card only for a visit that wasn't rated: the day after
 //   it (not on the day), within RECOMMEND_WINDOW_DAYS, at most once every
-//   ASK_GAP_DAYS for all providers, once per provider, never on a day the
-//   intro was shown, and not at all after NOT_NOW_LIMIT "Not now"s in a row.
+//   ASK_GAP_DAYS for all providers, once per provider, and never on a day the
+//   intro was shown. Closing a prompt does not count as a negative answer.
 // - Nobody is asked while Show where I go is off: nobody would see it.
 // - A provider's profile offers Recommend once, with the same bar, the first
 //   time it's opened by someone who's been there, unless they were already
-//   asked about that provider anywhere else (or said "Not now" too often).
+//   asked about that provider anywhere else.
 //   After that it's only the heart in the profile's header (2026-11-15).
 // - The intro comes the day after the first completed visit. Closing it
 //   without a button brings it back, at most INTRO_MAX_SHOWS times in all,
@@ -25,7 +25,6 @@ import type { ProviderSharing, SocialSettings } from './types';
 
 export const RECOMMEND_WINDOW_DAYS = 7;
 export const ASK_GAP_DAYS = 7;
-export const NOT_NOW_LIMIT = 2;
 export const INTRO_MAX_SHOWS = 3;
 export const INTRO_GAP_DAYS = 7;
 /** Only ratings this high get the Recommend bar. */
@@ -41,7 +40,7 @@ export interface MomentsMemory {
   prompted: string[];
   /** When the last Recommend ask was shown (ms). */
   lastAskAt: number | null;
-  /** "Not now"s in a row; a Recommend resets it. */
+  /** Legacy saved dismissals, retained for storage compatibility; no longer gates prompts. */
   notNowStreak: number;
   /** Each time the intro was shown (ms). */
   introShownAt: number[];
@@ -79,7 +78,7 @@ export function withAsked(memory: MomentsMemory, providerId: string, now: Date):
   return { ...memory, prompted: prompted.slice(-PROMPTED_KEEP), lastAskAt: now.getTime() };
 }
 
-/** Memory after the client answered an ask: Recommend resets the streak, "Not now" adds to it. */
+/** Retained for saved-memory compatibility; closing a prompt no longer calls this with false. */
 export function withAnswer(memory: MomentsMemory, recommended: boolean): MomentsMemory {
   return { ...memory, notNowStreak: recommended ? 0 : memory.notNowStreak + 1 };
 }
@@ -97,7 +96,6 @@ export function shouldOfferOnProfile(
 ): boolean {
   if (!settings.showWhereIGo) return false;
   if (!sharing.canRecommend || sharing.recommended || sharing.hidden) return false;
-  if (memory.notNowStreak >= NOT_NOW_LIMIT) return false;
   return !memory.prompted.includes(providerId);
 }
 
@@ -157,7 +155,6 @@ export function shouldShowWhereIGoNotice(
 
 /** Whether Home may ask about anyone right now (the caps, not the candidates). */
 export function canAskOnHome(memory: MomentsMemory, now: Date): boolean {
-  if (memory.notNowStreak >= NOT_NOW_LIMIT) return false;
   if (memory.lastAskAt !== null && now.getTime() - memory.lastAskAt < ASK_GAP_DAYS * DAY_MS) return false;
   const lastIntro = memory.introShownAt[memory.introShownAt.length - 1];
   if (lastIntro !== undefined && startOfDay(new Date(lastIntro)).getTime() === startOfDay(now).getTime()) return false;

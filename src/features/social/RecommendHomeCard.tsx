@@ -3,7 +3,7 @@
 // Home's Recommend ask (style A, chosen 2026-11-09): a card in the feed, not
 // a pop-up. Shown by useCircleMoment for a recent visit that wasn't rated.
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LogoCircle } from '../../components/FramedLogo';
@@ -13,6 +13,7 @@ import { initialsFor } from './presentation';
 import { visitWhenLabel } from './circleMoments';
 
 const HEART = '#FF2D78';
+const AUTO_HIDE_SECONDS = 8;
 
 interface Props {
   providerName: string;
@@ -22,14 +23,23 @@ interface Props {
   error: string | null;
   onRecommend: () => void;
   onBookAgain: () => void;
-  onNotNow: () => void;
+  onClose: () => void;
   P: AppTheme;
   errorColour: string;
 }
 
 export function RecommendHomeCard({
-  providerName, providerLogoUri, bookingDate, busy, error, onRecommend, onBookAgain, onNotNow, P, errorColour,
+  providerName, providerLogoUri, bookingDate, busy, error, onRecommend, onBookAgain, onClose, P, errorColour,
 }: Props) {
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_HIDE_SECONDS);
+
+  useEffect(() => {
+    if (busy || error) return undefined;
+    const interval = setInterval(() => setSecondsLeft(seconds => Math.max(0, seconds - 1)), 1000);
+    const timeout = setTimeout(onClose, AUTO_HIDE_SECONDS * 1000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [busy, error, onClose]);
+
   return (
     <View style={[styles.card, { backgroundColor: P.card, borderColor: P.accent }]}>
       <View style={styles.top}>
@@ -51,13 +61,14 @@ export function RecommendHomeCard({
           </Text>
           <Text style={[styles.title, { color: P.text }]}>How was it?</Text>
           <Text style={[styles.body, { color: P.sub }]}>Recommend them to the people who follow you.</Text>
+          {!busy && !error ? <Text style={[styles.timer, { color: P.sub }]}>Closes in {secondsLeft}s</Text> : null}
         </View>
         <TouchableOpacity
-          onPress={() => { hapticLight(); onNotNow(); }}
+          onPress={() => { hapticLight(); onClose(); }}
           style={styles.close}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
-          accessibilityLabel="Not now"
+          accessibilityLabel="Close recommendation"
           activeOpacity={0.6}
         >
           <Ionicons name="close" size={18} color={P.sub} />
@@ -105,6 +116,7 @@ const styles = StyleSheet.create({
   label: { fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: 1.4 },
   title: { fontFamily: FONT_BODY, fontSize: 17, fontWeight: '700', marginTop: 2 },
   body: { fontFamily: FONT_BODY, fontSize: 13, lineHeight: 18, marginTop: 2 },
+  timer: { fontFamily: FONT_BODY, fontSize: 11, marginTop: 3 },
   close: { alignSelf: 'flex-start', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginTop: -6, marginRight: -6 },
   error: { fontFamily: FONT_BODY, fontSize: 13 },
   buttons: { flexDirection: 'row', gap: 8 },

@@ -8,8 +8,8 @@
 // - The first time the profile is opened, the Recommend bar slides up from
 //   the bottom (the same bar as after rating a visit) and goes by itself
 //   after a few seconds (shouldOfferOnProfile decides; once per provider).
-// - From then on it's a small thumbs-up badge on the provider's logo. When
-//   the bar goes, the badge glows once with a bubble pointing at it.
+// - From then on it's a small thumbs-up badge on the provider's logo. A
+//   successful Recommend shows a brief bubble pointing at the badge.
 // - Tapping the badge recommends and drops a menu down under it with
 //   Recommend and "Don't show me on their cards". Tapping anywhere else, or
 //   starting to scroll, closes the menu (and the bubble).
@@ -76,7 +76,7 @@ export interface ProviderRecommendLayerProps {
   anchor: Anchor | null;
   saving: 'recommend' | 'hidden' | null;
   onBarYes: () => void;
-  onBarClose: (byTap: boolean) => void;
+  onBarClose: () => void;
   onDismissHint: () => void;
   onToggleRecommend: () => void;
   onToggleHidden: () => void;
@@ -195,10 +195,7 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
     showHint(ok ? 'Recommended. Tap the heart to change it.' : 'You can recommend from the heart any time.');
   }, [saving, setRecommended, userId, showHint]);
 
-  const onBarClose = useCallback((byTap: boolean) => {
-    if (byTap && userId) void updateMomentsMemory(userId, (m) => withAnswer(m, false));
-    showHint('Changed your mind? Tap the heart any time.');
-  }, [userId, showHint]);
+  const onBarClose = useCallback(() => setPhase('none'), []);
 
   const onHeartPress = useCallback(() => {
     hapticLight();
