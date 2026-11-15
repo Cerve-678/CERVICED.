@@ -18,7 +18,8 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet'
+  | 'lace';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -37,7 +38,8 @@ export type PageHeading =
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
-  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'lacePair';  // a lowercase script word in the accent over spaced display caps (Lace)
 
 /** What a section sits on. */
 export type PageCards =
@@ -52,7 +54,8 @@ export type PageCards =
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
-  | 'block';   // a square card with a thick dark outline
+  | 'block'    // a square card with a thick dark outline
+  | 'lace';    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -67,7 +70,8 @@ export type PagePolicies =
   | 'numerals'  // rows numbered in roman numerals
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
-  | 'definition'; // a small caps label beside each value, between hairlines
+  | 'definition' // a small caps label beside each value, between hairlines
+  | 'rosettes';  // one card, each policy beside a small lace rosette (Lace)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -90,7 +94,8 @@ export type PageHero =
   | 'label'      // a paper tag hanging on a string
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
+  | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
+  | 'lace';      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -225,6 +230,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // lace cloth dropped across the hero, the way fabric falls, not framing the logo (owner).
+  {
+    key: 'lace', name: 'Lace', description: 'Lace cloth draped over your photo, a script name, a lace-trimmed price list',
+    heading: 'lacePair', cards: 'lace', policies: 'rosettes', logo: 'doubleRing',
+    hero: 'lace', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
 

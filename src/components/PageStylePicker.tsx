@@ -97,6 +97,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  lace: { lead: 'the', text: 'SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -218,6 +219,13 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'lacePair':
+        return (
+          <View style={mini.stack}>
+            <Text style={[mini.laceScript, { color: accent }]}>{heading.lead}</Text>
+            <Text style={[mini.laceCaps, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -256,6 +264,12 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'lace':
+        return (
+          <View key={key} style={[mini.card, mini.laceCard, { borderColor: withAlpha(accent, 0.3) }]}>
+            <View style={[mini.bar, { backgroundColor: line }]} />
+          </View>
+        );
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -362,6 +376,13 @@ function MiniProfile({
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
           </View>
+        ) : style.hero === 'lace' ? (
+          // Lace: the logo clean, a script name, lace lying across the foot.
+          <View style={mini.laceHero}>
+            {logo}
+            <Text style={mini.laceName} numberOfLines={1}>Name</Text>
+            <View style={mini.laceDrape} />
+          </View>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -407,6 +428,17 @@ const styles = StyleSheet.create({
 
 const mini = StyleSheet.create({
   root: { height: 180 },
+  laceHero: { alignItems: 'center', alignSelf: 'stretch' },
+  laceName: { fontFamily: 'Allura-Regular', fontSize: 20, lineHeight: 30, color: '#FFFFFF', paddingHorizontal: 6 },
+  // A sheer diagonal band standing in for the lace drape.
+  laceDrape: {
+    position: 'absolute', left: -20, right: -20, bottom: -26, height: 26,
+    backgroundColor: 'rgba(255,255,255,0.32)', borderTopWidth: 2, borderStyle: 'dotted',
+    borderColor: 'rgba(255,255,255,0.9)', transform: [{ rotate: '-8deg' }],
+  },
+  laceScript: { fontFamily: 'Allura-Regular', fontSize: 15, lineHeight: 22, paddingHorizontal: 4 },
+  laceCaps: { fontFamily: 'GildaDisplay-Regular', fontSize: 8, letterSpacing: 2, marginTop: -6 },
+  laceCard: { borderRadius: 2, borderWidth: 1, backgroundColor: '#FFFFFF' },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
   logo: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)' },
