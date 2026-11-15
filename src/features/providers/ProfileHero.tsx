@@ -774,13 +774,13 @@ const layout = StyleSheet.create({
   mastLogo: { alignItems: "center" },
   caption: { marginBottom: -6 },
   mastAbout: { flex: 1, paddingBottom: 20 },
-  meet: { fontFamily: "PinyonScript_400Regular", fontSize: 34, lineHeight: 50 },
+  meet: { fontFamily: "PinyonScript_400Regular", fontSize: 34, lineHeight: 50, paddingHorizontal: 6 },
   meetName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 26, lineHeight: 34, marginBottom: 6 },
   sideRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 6 },
   sideText: { flex: 1, alignItems: "center" },
   welcome: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, letterSpacing: 2 },
   locatedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  locatedScript: { fontFamily: "Sacramento_400Regular", fontSize: 18 },
+  locatedScript: { fontFamily: "Sacramento_400Regular", fontSize: 18, paddingHorizontal: 3 },
   locatedPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12, flexShrink: 1 },
   textFirst: { marginTop: TEXT_FIRST_DROP },
   spaKicker: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 4, marginBottom: 10, textAlign: "center" },
@@ -823,7 +823,8 @@ const layout = StyleSheet.create({
   duetHey: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60" },
   // paddingLeft: Ms Madi's capitals start left of the text box, and RN clips
   // whatever falls outside it, so the first letter looked cut by the logo.
-  duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20, paddingLeft: 10 },
+  // Room both sides: the script's swashes reach past its box and were clipped.
+  duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20, paddingHorizontal: 12 },
   duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 15, letterSpacing: 4, color: "#1F1A1C", paddingLeft: 28 },
   duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", marginTop: 8 },
   duetInfoRow: {
