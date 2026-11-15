@@ -223,6 +223,18 @@ export function PageSectionHeading({
           <View style={[headingStyles.condensedBar, { backgroundColor: accent }]} />
         </View>
       );
+    case "quietCaps": {
+      // Quiet: Josefin Sans caps on the left, a hairline running out after them.
+      const line = sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <Text style={[headingStyles.quietCaps, { color: ink }]} numberOfLines={1}>
+            {headingPair(section).join(" ").toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -893,6 +905,8 @@ const headingStyles = StyleSheet.create({
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 47, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 41, marginBottom: 14 },
   labelCaps: { fontFamily: "MarcellusSC-Regular", fontSize: 14, letterSpacing: 4 },
+  // Quiet's own face, so it no longer reads as Apothecary (owner, 2026-11-15).
+  quietCaps: { fontFamily: "JosefinSans_600SemiBold", fontSize: 14, lineHeight: 20, letterSpacing: 4, flexShrink: 1 },
   condensedWrap: { marginBottom: 14 },
   condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 49, letterSpacing: 0.3 },
   condensedBar: { width: 36, height: 5, marginTop: 4 },
