@@ -169,11 +169,6 @@ export interface ProfileHeroLayoutProps {
   rating?: string | null;
   /** The verified tick beside the name, for the layouts that draw the name themselves. */
   isVerified?: boolean;
-  /** The font they chose in Branding, or null if they left it on the default.
-   *  The 2026-11-14 heroes set the name in the style's own fonts unless the
-   *  provider chose one (chosenProviderFont), so a template looks as designed
-   *  out of the box and a deliberate brand font is kept. */
-  brandFont?: { family: string; scale: number } | null;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -220,7 +215,6 @@ export function ProfileHeroLayout({
   photoUris,
   rating,
   isVerified,
-  brandFont,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
@@ -327,30 +321,12 @@ export function ProfileHeroLayout({
         <View style={layout.edWrap}>
           <View style={layout.edTop}>
             <View style={layout.edNameCol} accessible accessibilityRole="header" accessibilityLabel={name}>
-              {brandFont ? (
-                <View style={layout.tickRow}>
-                  <Text
-                    style={[
-                      layout.edBrandName,
-                      { color: heroText, fontFamily: brandFont.family, fontSize: 40 * brandFont.scale, lineHeight: 48 * brandFont.scale },
-                      shadow,
-                    ]}
-                    numberOfLines={3}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.55}
-                  >
-                    {name}
-                    <Text style={{ color: heroAccent }}>.</Text>
-                  </Text>
-                  {tick}
-                </View>
-              ) : null}
-              {!brandFont && rest ? (
+              {rest ? (
                 <Text style={[layout.edLight, { color: heroText }, shadow]} numberOfLines={1} adjustsFontSizeToFit>
                   {first}
                 </Text>
               ) : null}
-              {!brandFont ? <View style={layout.tickRow}>
+              <View style={layout.tickRow}>
                 <Text
                   style={[layout.edBold, { color: heroText }, shadow]}
                   numberOfLines={2}
@@ -361,7 +337,7 @@ export function ProfileHeroLayout({
                   <Text style={{ color: heroAccent }}>.</Text>
                 </Text>
                 {tick}
-              </View> : null}
+              </View>
             </View>
             <View style={layout.edCards}>
               <View style={[layout.edBack, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]}>
@@ -386,9 +362,8 @@ export function ProfileHeroLayout({
     case "crest": {
       // Heritage: their name curved round the top of a dotted seal, their area
       // round the foot, the logo in the middle.
-      const upper = !brandFont;
-      const curveName = upper ? name.toUpperCase() : name;
-      const curveSize = Math.max(9, Math.min(17 * (brandFont?.scale ?? 1), (290 / Math.max(curveName.length, 1) - 3) / 0.72));
+      const curveName = name.toUpperCase();
+      const curveSize = Math.max(9, Math.min(17, (290 / Math.max(curveName.length, 1) - 3) / 0.72));
       const phrase = kickerPhrase(kicker);
       return (
         <View style={[layout.infoCenter, layout.sealTop]}>
@@ -396,7 +371,7 @@ export function ProfileHeroLayout({
             <SealRing
               name={curveName}
               location={location}
-              font={brandFont?.family ?? "Cinzel-Bold"}
+              font="Cinzel-Bold"
               size={curveSize}
               text={heroText}
               sub={heroSub}
@@ -426,30 +401,14 @@ export function ProfileHeroLayout({
               <View style={layout.logoNoGap}>{renderLogo(92)}</View>
               <View style={layout.duetCardText} accessible accessibilityRole="header" accessibilityLabel={name}>
                 <Text style={layout.duetHey}>HEY GORGEOUS, WELCOME TO</Text>
-                {brandFont ? (
-                  <Text
-                    style={[
-                      layout.duetBrandName,
-                      { color: cardAccent, fontFamily: brandFont.family, fontSize: 28 * brandFont.scale, lineHeight: 36 * brandFont.scale },
-                    ]}
-                    numberOfLines={3}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.6}
-                  >
-                    {name}
+                <Text style={[layout.duetScript, { color: cardAccent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                  {script}
+                </Text>
+                {caps ? (
+                  <Text style={layout.duetCaps} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {caps.toUpperCase()}
                   </Text>
-                ) : (
-                  <>
-                    <Text style={[layout.duetScript, { color: cardAccent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-                      {script}
-                    </Text>
-                    {caps ? (
-                      <Text style={layout.duetCaps} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
-                        {caps.toUpperCase()}
-                      </Text>
-                    ) : null}
-                  </>
-                )}
+                ) : null}
                 {location ? <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
                 {tick}
               </View>
@@ -486,13 +445,12 @@ export function ProfileHeroLayout({
                 style={[
                   layout.groovyBadgeName,
                   { color: badgeInk },
-                  brandFont ? { fontFamily: brandFont.family, fontSize: 40 * brandFont.scale, lineHeight: 48 * brandFont.scale } : null,
                 ]}
                 numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.5}
               >
-                {brandFont ? name : name.toLowerCase()}
+                {name.toLowerCase()}
               </Text>
               {tick}
             </View>
@@ -532,7 +490,6 @@ export function ProfileHeroLayout({
               style={[
                 layout.galleryName,
                 { color: heroText },
-                brandFont ? { fontFamily: brandFont.family, fontSize: 48 * brandFont.scale, lineHeight: 56 * brandFont.scale, letterSpacing: 0 } : null,
                 shadow,
               ]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
               {name}
@@ -570,13 +527,12 @@ export function ProfileHeroLayout({
                 <Text
                   style={[
                     layout.tagName,
-                    brandFont ? { fontFamily: brandFont.family, letterSpacing: 0, fontSize: 28 * brandFont.scale, lineHeight: 36 * brandFont.scale } : null,
                   ]}
                   numberOfLines={2}
                   adjustsFontSizeToFit
                   minimumFontScale={0.6}
                 >
-                  {brandFont ? name : name.toUpperCase()}
+                  {name.toUpperCase()}
                 </Text>
                 {tick}
               </View>
@@ -702,7 +658,6 @@ const layout = StyleSheet.create({
   edTop: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginBottom: 14 },
   edNameCol: { flex: 1, minWidth: 0 },
   edLight: { fontFamily: "LeagueSpartan-Light", fontSize: 50, lineHeight: 52, letterSpacing: -1 },
-  edBrandName: { flexShrink: 1 },
   edBold: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 44, lineHeight: 46, letterSpacing: -1.2, flexShrink: 1 },
   edCards: { width: 132, height: 146 },
   edBack: {
@@ -730,7 +685,6 @@ const layout = StyleSheet.create({
   duetHey: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60" },
   duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 72, marginBottom: -12 },
   duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 15, letterSpacing: 4, color: "#1F1A1C", paddingLeft: 28 },
-  duetBrandName: { marginTop: 4 },
   duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", marginTop: 8 },
   duetPills: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 26 },
   duetPill: { minHeight: 30, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 5, borderRadius: 100 },

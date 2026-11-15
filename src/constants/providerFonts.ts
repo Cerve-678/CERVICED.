@@ -72,15 +72,6 @@ export function resolveProviderFontFamily(key: string | null | undefined): strin
 
 /** How much larger than the usual size to draw the name in this font: 1 for
  *  everything but the thin scripts. */
-/** The font they chose in Branding, or null when they left it on the
- *  default (or the key is unknown). The 2026-11-14 page-style heroes use the
- *  style's own fonts for the name unless a provider chose one. */
-export function chosenProviderFont(key: string | null | undefined): { family: string; scale: number } | null {
-  if (!key || key === DEFAULT_PROVIDER_FONT) return null;
-  const font = PROVIDER_FONTS.find(option => option.key === key);
-  return font ? { family: font.fontFamily, scale: font.sizeScale ?? 1 } : null;
-}
-
 export function resolveProviderFontScale(key: string | null | undefined): number {
   return PROVIDER_FONTS.find(font => font.key === key)?.sizeScale ?? 1;
 }

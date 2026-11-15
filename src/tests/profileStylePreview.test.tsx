@@ -137,11 +137,11 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('PECKHAM')).toBeTruthy();
   });
 
-  it('keeps a provider\'s own Branding font for the name, as typed', () => {
+  it('sets the name in the style\'s own font even when the provider chose a Branding font', () => {
     renderPreview('groovy', 'great-vibes');
-    expect(screen.getByText('Amara Lashes')).toBeTruthy();
+    expect(screen.getByText('amara lashes')).toBeTruthy();
     renderPreview('apothecary', 'great-vibes');
-    expect(screen.getAllByText('Amara Lashes').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('AMARA LASHES').length).toBeGreaterThan(0);
   });
 
 });
