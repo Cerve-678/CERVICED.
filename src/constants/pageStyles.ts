@@ -21,7 +21,8 @@ export type PageStyleKey =
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
   | 'snapshot' | 'signature' | 'quiet'
   | 'sealed'
-  | 'lace';
+  | 'lace'
+  | 'sheer';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -42,7 +43,8 @@ export type PageHeading =
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
   | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
   | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
-  | 'lacePair';  // a lowercase script word in the accent over spaced display caps (Lace)
+  | 'lacePair'  // a lowercase script word in the accent over spaced display caps (Lace)
+  | 'sheerCaps'; // thin, widely spaced serif caps, centred (Sheer)
 
 /** What a section sits on. */
 export type PageCards =
@@ -59,7 +61,8 @@ export type PageCards =
   | 'topRule'  // a square card with a heavy rule along its top edge
   | 'block'    // a square card with a thick dark outline
   | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
-  | 'lace';    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
+  | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
+  | 'sheer';   // a square hairline outline over a faint wash, see-through (Sheer)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -76,7 +79,8 @@ export type PagePolicies =
   | 'stickers'  // two-up filled tiles, each tilted a little
   | 'definition' // a small caps label beside each value, between hairlines
   | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
-  | 'rosettes';  // one card, each policy beside a small lace rosette (Lace)
+  | 'rosettes'  // one card, each policy beside a small lace rosette (Lace)
+  | 'outlined';   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -101,7 +105,8 @@ export type PageHero =
   | 'signed'     // a big ringed logo with the whole name signed across its foot
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
   | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
-  | 'lace';      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
+  | 'lace'      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
+  | 'veil';      // their photo under a see-through black veil: an oval monogram, spaced caps, outlined How to book boxes
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -253,6 +258,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     key: 'lace', name: 'Lace', description: 'Lace cloth draped over your photo, a script name, a lace-trimmed price list',
     heading: 'lacePair', cards: 'lace', policies: 'rosettes', logo: 'doubleRing',
     hero: 'lace', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // a see-through black veil over their photo, like the owner's sheer-black reference.
+  {
+    key: 'sheer', name: 'Sheer', description: 'Your photo under a see-through black veil, fine outlined boxes',
+    heading: 'sheerCaps', cards: 'sheer', policies: 'outlined', logo: 'circle',
+    hero: 'veil', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];

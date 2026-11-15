@@ -66,7 +66,16 @@ export function onAccentInk(accent: string): { text: string; sub: string } {
 
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
-  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open";
+  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer";
+}
+
+/** Sheer's see-through box on the content area: a hairline and a faint wash, never a solid card. */
+function sheerBox(sheet: string): { borderColor: string; backgroundColor: string } {
+  const ink = sheetInk(sheet);
+  return {
+    borderColor: withAlpha(ink.text, 0.42),
+    backgroundColor: isDarkColor(sheet) ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.38)",
+  };
 }
 
 /** Dark ink for an outline on a card of this colour (Duet, Groovy, Apothecary). */
@@ -250,6 +259,13 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "sheerCaps":
+      // Sheer: thin Bellefair caps, widely spaced, centred.
+      return (
+        <Text {...a11y} style={[headingStyles.sheerCaps, { color: ink }]}>
+          {headingPair(section).join(" ").toUpperCase()}
+        </Text>
+      );
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -357,6 +373,18 @@ export function PageSection({
       <PageSectionHeading section={section} palette={palette} />
     </HeadingLine>
   );
+
+  if (pageStyle.cards === "sheer") {
+    // Sheer: the heading on the page, the content in a see-through hairline box.
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        {bare ? children : (
+          <View style={[surfaceStyles.sheer, sheerBox(palette.background)]}>{children}</View>
+        )}
+      </View>
+    );
+  }
 
   if (bare || pageStyle.cards === "none" || pageStyle.cards === "open") {
     return (
@@ -466,6 +494,7 @@ function isCentredHeading(style: PageStyle): boolean {
   return (
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
     || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "lacePair"
+    || style.heading === "sheerCaps"
   );
 }
 
@@ -652,6 +681,8 @@ export function serviceCardSurface(
       };
     case "lace":
       return { ...flat, backgroundColor: colours.card, borderRadius: 4, borderWidth: 1, borderColor: withAlpha(colours.accent, 0.3) };
+    case "sheer":
+      return { ...flat, ...sheerBox(colours.sheet), borderWidth: 1, borderRadius: 0 };
     default:
       return null;
   }
@@ -704,6 +735,7 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   return (
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
     || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
+    || layout === "outlined"
   );
 }
 
@@ -905,6 +937,21 @@ export function StyledPolicyList({
           );
         }
 
+        if (layout === "outlined") {
+          // Sheer: square hairline boxes, a fine icon over thin serif caps.
+          return (
+            <View key={row.label} style={[policyStyles.cell, policyStyles.outlined, sheerBox(palette.background)]}>
+              <Ionicons name={row.icon} size={22} color={ink.text} />
+              <Text style={[policyStyles.outlinedLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+              <Text style={[policyStyles.smallValue, policyStyles.centreText, { color: ink.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, policyStyles.centreText, { color: ink.sub }]}>{note}</Text>
+              ))}
+              {tag}
+            </View>
+          );
+        }
+
         if (layout === "discTiles") {
           return (
             <View key={row.label} style={[policyStyles.cell, policyStyles.discCell]}>
@@ -1070,6 +1117,8 @@ const headingStyles = StyleSheet.create({
   // Lace: Allura over Gilda Display. The script's swashes need the padding.
   laceScript: { fontFamily: "Allura-Regular", fontSize: 40, lineHeight: 60, paddingHorizontal: 12 },
   laceCaps: { fontFamily: "GildaDisplay-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 5, marginTop: -14, textAlign: "center" },
+  // Sheer (round 4): Bellefair, thin and widely spaced.
+  sheerCaps: { fontFamily: "Bellefair-Regular", fontSize: 26, lineHeight: 34, letterSpacing: 3.2, textAlign: "center", marginBottom: 16 },
 });
 
 const surfaceStyles = StyleSheet.create({
@@ -1118,6 +1167,7 @@ const surfaceStyles = StyleSheet.create({
   laceCard: { borderWidth: 1 },
   // Overlaps the card's foot by a hair so no seam shows between card and trim.
   laceTrim: { marginTop: -1 },
+  sheer: { borderWidth: 1, padding: 18 },
 });
 
 const policyStyles = StyleSheet.create({
@@ -1159,6 +1209,8 @@ const policyStyles = StyleSheet.create({
   tileLabel: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 13, letterSpacing: 1 },
   sticker: { borderRadius: 22, padding: 14 },
   stickerLabel: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 16 },
+  outlined: { borderWidth: 1, paddingVertical: 16, paddingHorizontal: 10, alignItems: "center", gap: 6 },
+  outlinedLabel: { fontFamily: "Bellefair-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 2, textAlign: "center" },
   hairFirst: { borderTopWidth: 0 },
   note2: {
     borderRadius: 3, paddingHorizontal: 12, paddingTop: 70, paddingBottom: 16, alignItems: "center",

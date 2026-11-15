@@ -212,6 +212,9 @@ export default Sentry.wrap(function App() {
     // Lace (round 4, 2026-11-15).
     'Allura-Regular': require('./assets/fonts/Allura-Regular.ttf'),
     'GildaDisplay-Regular': require('./assets/fonts/GildaDisplay-Regular.ttf'),
+    // Sheer (page style, round 4, 2026-11-15).
+    'Bellefair-Regular': require('./assets/fonts/Bellefair-Regular.ttf'),
+    'Jost-Light': require('./assets/fonts/Jost-Light.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
