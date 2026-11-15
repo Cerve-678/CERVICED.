@@ -1,7 +1,9 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import AdminMoneyScreen from '../screens/shared/AdminMoneyScreen';
-import { adminDeclineRefundRequest, getAdminMoneyOverview, refundProviderBooking } from '../services/databaseService';
+import {
+  adminDeclineRefundRequest, assignBankDispute, getAdminBankDisputes, getAdminMoneyOverview, refundProviderBooking,
+} from '../services/databaseService';
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn().mockResolvedValue(undefined), selectionAsync: jest.fn().mockResolvedValue(undefined),
@@ -16,11 +18,13 @@ jest.mock('../contexts/ThemeContext', () => ({
     palette: { bg: '#F5F1EC', card: '#FFFFFF', surface: '#EDE8E2', accent: '#5C4033', accentText: '#5C4033', onAccent: '#FFFFFF', text: '#000000', sub: '#7E6667', border: '#eee', sep: '#eee' },
   }),
 }));
+const mockShowConfirm = jest.fn();
 jest.mock('../components/AppDialog', () => ({
-  useAppDialog: () => ({ showAlert: jest.fn(), showConfirm: jest.fn(), DialogHost: () => null }),
+  useAppDialog: () => ({ showAlert: jest.fn(), showConfirm: mockShowConfirm, DialogHost: () => null }),
 }));
 jest.mock('../services/databaseService', () => ({
   getAdminMoneyOverview: jest.fn(), adminRetryPayout: jest.fn(), adminDeclineRefundRequest: jest.fn(), refundProviderBooking: jest.fn(),
+  getAdminBankDisputes: jest.fn(), assignBankDispute: jest.fn(),
 }));
 jest.mock('../utils/logger', () => ({ logger: { error: jest.fn() } }));
 
@@ -34,6 +38,7 @@ const overview = {
 beforeEach(() => {
   jest.clearAllMocks();
   (getAdminMoneyOverview as jest.Mock).mockResolvedValue(overview);
+  (getAdminBankDisputes as jest.Mock).mockResolvedValue([]);
 });
 
 test('shows the three lists and counts', async () => {
@@ -61,4 +66,39 @@ test('a decline needs a note, and approving the full amount sends a full refund'
   const call = (refundProviderBooking as jest.Mock).mock.calls[0][0];
   expect(call.bookingId).toBe('b9');
   expect(call.amountPence).toBeUndefined();
+});
+
+test('a bank dispute is matched to the booking the admin picks, and only that one', async () => {
+  (getAdminBankDisputes as jest.Mock).mockResolvedValue([{
+    dispute_id: 'd1', amount_pence: 5000, reason: 'product_not_received', stripe_status: 'needs_response',
+    opened_at: '2026-11-14T09:00:00Z', closed: false, outcome: null,
+    bookings: [
+      { booking_id: 'bk1', provider_name: 'Nail Room', client_name: 'Amy', service_name: 'Gel nails', booking_date: '2026-11-10', paid_pence: 5000, refunded_pence: 0 },
+      { booking_id: 'bk2', provider_name: 'Lash Lab', client_name: 'Amy', service_name: 'Lash lift', booking_date: '2026-11-10', paid_pence: 5000, refunded_pence: 0 },
+    ],
+  }]);
+  (assignBankDispute as jest.Mock).mockResolvedValue(undefined);
+  const ui = render(<AdminMoneyScreen navigation={{ goBack: jest.fn() }} />);
+  await waitFor(() => expect(ui.getByText('Lash Lab')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: /DISPUTES/ }));
+  expect(ui.getByText("Says they didn't get the service")).toBeTruthy();
+  // Both are £50, so both are flagged and nothing is chosen for the admin.
+  expect(ui.getAllByText('Same amount as the dispute')).toHaveLength(2);
+  fireEvent.press(ui.getByText('PICK A BOOKING'));
+  expect(mockShowConfirm).not.toHaveBeenCalled();
+
+  fireEvent.press(ui.getByText('Gel nails · Nail Room'));
+  fireEvent.press(ui.getByText("IT'S ABOUT THIS ONE"));
+  expect(mockShowConfirm).toHaveBeenCalledTimes(1);
+  const buttons = mockShowConfirm.mock.calls[0][2] as Array<{ text: string; onPress?: () => Promise<void> }>;
+  await buttons.find(b => b.text === 'Yes, these')!.onPress!();
+  expect(assignBankDispute).toHaveBeenCalledWith('d1', ['bk1']);
+});
+
+test("the other lists still load when the dispute list can't", async () => {
+  (getAdminBankDisputes as jest.Mock).mockRejectedValue(new Error('function admin_bank_disputes() does not exist'));
+  const ui = render(<AdminMoneyScreen navigation={{ goBack: jest.fn() }} />);
+  await waitFor(() => expect(ui.getByText('Lash Lab')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: /DISPUTES/ }));
+  expect(ui.getByText("Couldn't load the disputes.")).toBeTruthy();
 });

@@ -83,7 +83,7 @@ import type {
 } from "../features/social/types";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
-import type { AdminMoneyOverview } from "../types/adminMoney";
+import type { AdminBankDispute, AdminMoneyOverview } from "../types/adminMoney";
 import type { AdminDashboardOverview, AdminDashboardPeriod } from "../types/adminDashboard";
 import type { ProviderAchievements } from "../types/achievements";
 import {
@@ -12932,6 +12932,32 @@ export async function getAdminDashboardOverview(days: AdminDashboardPeriod): Pro
 export async function adminRetryPayout(payoutId: string): Promise<void> {
   const { error } = await supabase.rpc('admin_retry_payout', { p_payout_id: payoutId });
   if (error) throw error;
+}
+
+/** Bank disputes an admin has to match to a booking. Throws for a non-admin. */
+export async function getAdminBankDisputes(): Promise<AdminBankDispute[]> {
+  const { data, error } = await supabase.rpc('admin_bank_disputes');
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error('The dispute list came back in an unexpected shape.');
+  return data as AdminBankDispute[];
+}
+
+/** An admin's answer to which booking(s) a bank dispute is about. Takes the
+ *  money back from those providers only (assign-bank-dispute). Throws with a
+ *  message written for the admin when the server refuses. */
+export async function assignBankDispute(disputeId: string, bookingIds: string[]): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('assign-bank-dispute', { body: { disputeId, bookingIds } });
+  if (error) {
+    // assign-bank-dispute's 4xx bodies are written for the admin, so lift
+    // them out. A 5xx body is not shown.
+    const res = (error as { context?: Response }).context;
+    if (res && res.status >= 400 && res.status < 500) {
+      const body = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof body?.error === 'string' && body.error) throw new Error(body.error);
+    }
+    throw new Error("Couldn't save that. Nothing was taken twice; try again.");
+  }
+  if (!data?.ok) throw new Error("Couldn't save that. Nothing was taken twice; try again.");
 }
 
 /** Cerviced's "no" to a passed-on refund request. The note is what the client is told. */

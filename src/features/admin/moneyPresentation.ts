@@ -1,9 +1,9 @@
 import { formatShortDayDate } from '../../utils/dateUtils';
 import type {
-  AdminFailedPayout, AdminOwedShortfall, AdminRefundRequest, PayoutFailureCause,
+  AdminBankDispute, AdminFailedPayout, AdminOwedShortfall, AdminRefundRequest, PayoutFailureCause,
 } from '../../types/adminMoney';
 
-// Wording for the admin Money screen's three lists. Display only: the server
+// Wording for the admin Money screen's lists. Display only: the server
 // decides what can be retried or declined and refuses anything else.
 
 /** Mirrors PAYOUT_MAX_ATTEMPTS in supabase/functions/_shared/payoutRetry.ts
@@ -107,4 +107,58 @@ export function parsePounds(text: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
   const pence = Math.round(Number(cleaned) * 100);
   return pence > 0 ? pence : null;
+}
+
+/** Stripe's reason codes, in words. Anything else shows as Stripe sent it. */
+const DISPUTE_REASON: Record<string, string> = {
+  fraudulent: "Says they didn't make the payment",
+  product_not_received: "Says they didn't get the service",
+  product_unacceptable: 'Unhappy with the service',
+  duplicate: 'Says they were charged twice',
+  subscription_canceled: 'Says they had cancelled',
+  credit_not_processed: 'Says a refund never arrived',
+  unrecognized: "Doesn't recognise the payment",
+  general: 'No specific reason',
+};
+
+export interface BankDisputeBookingView {
+  key: string;
+  title: string;
+  detail: string;
+  amount: string;
+  /** This booking's amount (after refunds) is exactly what was disputed. */
+  matchesAmount: boolean;
+}
+
+export interface BankDisputeView {
+  key: string;
+  amount: string;
+  reason: string;
+  status: string;
+  /** Lost before anyone picked: the bank kept the money. */
+  lost: boolean;
+  bookings: BankDisputeBookingView[];
+}
+
+export function describeBankDispute(d: AdminBankDispute): BankDisputeView {
+  const opened = day(d.opened_at);
+  const lost = d.closed && d.outcome === 'lost';
+  return {
+    key: d.dispute_id,
+    amount: formatPence(d.amount_pence),
+    reason: (d.reason && DISPUTE_REASON[d.reason]) || d.reason || 'No reason given',
+    status: lost ? 'LOST · PICK THE BOOKING' : `OPEN${opened ? ` · SINCE ${opened.toUpperCase()}` : ''}`,
+    lost,
+    bookings: d.bookings.map(b => {
+      const left = Math.max(0, b.paid_pence - b.refunded_pence);
+      return {
+        key: b.booking_id,
+        title: `${b.service_name || 'Booking'} · ${b.provider_name || 'Unknown provider'}`,
+        detail: [b.booking_date ? day(b.booking_date) : null, b.client_name, b.refunded_pence > 0 ? `${formatPence(b.refunded_pence)} refunded` : null]
+          .filter(Boolean).join(' · '),
+        amount: formatPence(left),
+        matchesAmount: left === d.amount_pence || b.paid_pence === d.amount_pence,
+      };
+    }),
+  };
 }

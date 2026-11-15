@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-15, NOT applied (bank disputes per booking)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261115090000 | `bank_dispute_per_booking` | **NOT applied.** Waiting for the user's go-ahead and for the lock: `feat/no-show-half` holds it for `20261113200000`, and the agreed queue is 200000 → 210000 → 220000 → 230000. This one shares no objects with them, so it can go after them unchanged. Frontier at authoring: live max `20261113190000`; highest unapplied on an open PR `20261113230000_reschedule_taken_time_message`. New tables `payment_disputes` and `payment_dispute_bookings` (RLS on, all grants revoked); `record_bank_dispute` and `assign_bank_dispute` (service role only); `admin_bank_disputes` (admins, via `is_cerviced_admin`). Guards `admin_actions_action_check` by its exact live definition and adds `assign_bank_dispute`. Forced-rollback dry run 2026-11-15 passed on live data: a redelivered dispute isn't recorded twice; a booking from another payment is refused; the same admin answer twice is a no-op and a different second answer is refused; one `admin_actions` row; service_role can run both writers and authenticated/anon can't; authenticated can't read the tables; live max unchanged and no table left behind. **Apply BEFORE deploying `stripe-webhook`, `release-payouts` and `assign-bank-dispute`**: they read the new tables. Written on `fix/dispute-per-booking`. |
+
 ### Applied 2026-11-13 (cancel notice one value)
 
 | Authored version | Name | Status |
