@@ -23,7 +23,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -79,7 +78,6 @@ export interface ProviderRecommendLayerProps {
   onBarYes: () => void;
   onBarClose: (byTap: boolean) => void;
   onDismissHint: () => void;
-  onCloseMenu: () => void;
   onToggleRecommend: () => void;
   onToggleHidden: () => void;
 }
@@ -240,7 +238,6 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
     }
   }, [providerId, sharing, saving, onError]);
 
-  const onCloseMenu = useCallback(() => setMenuOpen(false), []);
   const onDismissHint = useCallback(() => setPhase((p) => (p === 'hint' ? 'none' : p)), []);
 
   /** For the page's own touches and scrolls: closes the menu and the bubble. */
@@ -281,12 +278,11 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
     onBarYes: onBarYesSync,
     onBarClose,
     onDismissHint,
-    onCloseMenu,
     onToggleRecommend,
     onToggleHidden: onToggleHiddenSync,
   }), [
     providerId, providerName, canRecommend, sharing, showWhereIGo, phase, hintText, menuOpen, anchor, saving,
-    onBarYesSync, onBarClose, onDismissHint, onCloseMenu, onToggleRecommend, onToggleHiddenSync,
+    onBarYesSync, onBarClose, onDismissHint, onToggleRecommend, onToggleHiddenSync,
   ]);
 
   return useMemo(() => ({ heart, layer, dismissFloating }), [heart, layer, dismissFloating]);
@@ -369,7 +365,7 @@ const EDGE = 12;
 /** The bar, the bubble and the menu. Render it last in the screen, over everything. */
 export function ProviderRecommendLayer({
   providerId, providerName, sharing, showWhereIGo, phase, hintText, menuOpen, anchor, saving,
-  onBarYes, onBarClose, onDismissHint, onCloseMenu, onToggleRecommend, onToggleHidden, bottomOffset,
+  onBarYes, onBarClose, onDismissHint, onToggleRecommend, onToggleHidden, bottomOffset,
   theme,
 }: ProviderRecommendLayerProps & { bottomOffset: number; theme: RecommendBadgeTheme }) {
   const { palette: P } = useTheme();
@@ -390,7 +386,8 @@ export function ProviderRecommendLayer({
 
   if (!sharing) return null;
 
-  // Window coordinates of the heart; the menu's Modal is the window itself.
+  // Window coordinates of the badge; the bubble and menu subtract this
+  // layer's own top (originY) to sit under it.
   const heartCenter = anchor ? anchor.x + anchor.width / 2 : windowWidth - 100;
   const below = anchor ? anchor.y + anchor.height + 10 : insets.top + 56;
   // Lined up with the heart's right edge, but never past the screen's left
@@ -446,18 +443,15 @@ export function ProviderRecommendLayer({
         </Animated.View>
       ) : null}
 
-      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={onCloseMenu} statusBarTranslucent>
-        {/* Any touch outside the menu closes it, including the start of a scroll. */}
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPressIn={onCloseMenu}
-          accessibilityRole="button"
-          accessibilityLabel="Close recommend options"
-        />
+      {/* Over the page, not in a Modal: a Modal's backdrop took the first
+          touch, so the page wouldn't scroll until the menu was closed. Now the
+          page's own touch closes it (dismissFloating, from the screen's
+          ScrollView) and the same swipe scrolls. */}
+      {menuOpen ? (
         <View
           style={[
             styles.menu,
-            { top: below, right: menuRight, backgroundColor: P.card, borderColor: P.border },
+            { top: below - originY, right: menuRight, backgroundColor: P.card, borderColor: P.border },
           ]}
         >
           <TouchableOpacity
@@ -497,7 +491,7 @@ export function ProviderRecommendLayer({
           </TouchableOpacity>
           <Text style={[styles.note, { color: P.sub }]}>{note}</Text>
         </View>
-      </Modal>
+      ) : null}
     </View>
   );
 }
