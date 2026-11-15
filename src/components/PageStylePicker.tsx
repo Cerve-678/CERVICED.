@@ -462,7 +462,7 @@ const mini = StyleSheet.create({
   sideLinesLeft: { flex: 1, gap: 1 },
   edLight: { fontFamily: 'LeagueSpartan-Light', fontSize: 15, color: '#FFFFFF', lineHeight: 20 },
   edBold: { fontFamily: 'LeagueSpartan-ExtraBold', fontSize: 15, color: '#FFFFFF', lineHeight: 20 },
-  duetScript: { fontFamily: 'MsMadi-Regular', fontSize: 20, lineHeight: 29, flexShrink: 1 },
+  duetScript: { fontFamily: 'MsMadi-Regular', fontSize: 20, lineHeight: 29, flexShrink: 1, paddingHorizontal: 4 },
   groovyName: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 18, color: '#1E2A4A' },
   seal: { padding: 5, borderRadius: 30, borderWidth: 2, borderStyle: 'dotted', borderColor: 'rgba(255,255,255,0.9)' },
   welcome: {
@@ -482,7 +482,7 @@ const mini = StyleSheet.create({
   stack: { alignItems: 'center' },
   italic: { fontFamily: 'LibreBaskerville-Italic', fontSize: 11, lineHeight: 15 },
   cinzel: { fontFamily: 'Cinzel-Bold', fontSize: 9, letterSpacing: 2 },
-  vibes: { fontFamily: 'MsMadi-Regular', fontSize: 18, lineHeight: 27 },
+  vibes: { fontFamily: 'MsMadi-Regular', fontSize: 18, lineHeight: 27, paddingHorizontal: 4 },
   montserrat: { fontFamily: 'Montserrat-ExtraBold', fontSize: 9, marginTop: -8 },
   groovy: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 14 },
   serifTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 13, lineHeight: 17 },
