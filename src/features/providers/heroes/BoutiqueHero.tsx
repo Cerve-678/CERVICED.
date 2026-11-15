@@ -1,14 +1,16 @@
 // src/features/providers/heroes/BoutiqueHero.tsx
 //
-// The Boutique page style's hero (pageStyles hero 'basket'): a woven shopping
-// basket in their accent with tissue paper peeking out, and a cream shop label
-// tied to its front carrying a big logo, their name and their area. It
-// replaced a shopping bag with a small printed logo (owner, 2026-11-15: "change
-// to a basket, make logo bigger"). Their stars, years and slots sit under it.
+// The Boutique page style's hero (pageStyles hero 'basket'): a handheld shop
+// basket in their accent, rows of slots moulded into its sides and two handles
+// folded up to meet over the middle, with a cream shop label on its front
+// carrying a big logo, their name and their area. It replaced a woven basket
+// with tissue paper (owner, 2026-11-15: "change to a shopping cart, the
+// handheld one"), which had replaced a shopping bag with a small printed logo.
+// Their stars, years and slots sit under it.
 
 import React, { useId } from "react";
 import { StyleSheet, Text, View, type TextStyle } from "react-native";
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Pattern, Polygon, Rect, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, Pattern, Rect, Stop } from "react-native-svg";
 
 import { blend, isDarkColor } from "../../../constants/providerThemes";
 
@@ -18,7 +20,13 @@ const LABEL_PAPER = "#FBF6EE";
 const BASKET_W = 270;
 const HANDLE_H = 92;
 const BODY_TOP = HANDLE_H - 6;
-const BODY_H = 214;
+const BODY_H = 210;
+/** The moulded bands with no slots: the rim on top, the foot below. */
+const RIM_H = 18;
+const FOOT_H = 26;
+/** One row of slots; the slotted area holds whole rows so none is cut off. */
+const SLOT_ROW = 22;
+const SLOTS_H = Math.floor((BODY_H - RIM_H - FOOT_H - 8) / SLOT_ROW) * SLOT_ROW;
 
 export function BoutiqueHero({
   name,
@@ -41,76 +49,62 @@ export function BoutiqueHero({
   tick: React.ReactNode;
 }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
-  // The weave is their accent: strands lit and shaded off it, darker gaps between.
-  const strand = accent;
-  const strandHi = blend(accent, "#FFFFFF", isDarkColor(accent) ? 0.22 : 0.3);
-  const strandLo = blend(accent, "#000000", 0.22);
-  const gap = blend(accent, "#000000", 0.55);
-  const rim = blend(accent, "#000000", 0.34);
-  const tissue = blend(accent, "#FFFFFF", 0.78);
-  const tissueLight = blend(accent, "#FFFFFF", 0.9);
+  // Moulded plastic in their accent: the slots show the darker inside.
+  const shell = accent;
+  const shellHi = blend(accent, "#FFFFFF", isDarkColor(accent) ? 0.2 : 0.32);
+  const inside = blend(accent, "#000000", 0.5);
+  const rim = blend(accent, "#000000", 0.26);
+  const handleBack = blend(accent, "#000000", 0.4);
   const ink = isDarkColor(accent) ? accent : blend(accent, "#000000", 0.6);
   const inkSub = blend(ink, LABEL_PAPER, 0.35);
 
   // The body narrows a little towards its rounded foot, like a real basket.
-  const body = `M6 0 H${BASKET_W - 6} L${BASKET_W - 22} ${BODY_H - 14} Q${BASKET_W - 24} ${BODY_H} ${BASKET_W - 40} ${BODY_H} H40 Q24 ${BODY_H} 22 ${BODY_H - 14} Z`;
+  const body = `M0 0 H${BASKET_W} L${BASKET_W - 14} ${BODY_H - 12} Q${BASKET_W - 16} ${BODY_H} ${BASKET_W - 30} ${BODY_H} H30 Q16 ${BODY_H} 14 ${BODY_H - 12} Z`;
+  // Each handle hinges at one end of the basket and folds up to the middle,
+  // where the two grips lie side by side.
+  const mid = BASKET_W / 2;
+  const leftHandle = `M18 ${HANDLE_H + 4} C14 34 40 12 ${mid + 22} 12`;
+  const rightHandle = `M${BASKET_W - 18} ${HANDLE_H + 4} C${BASKET_W - 14} 34 ${BASKET_W - 40} 12 ${mid - 22} 12`;
 
   return (
     <View style={styles.wrap}>
       <Text style={[styles.kicker, { color: heroSub }, shadow]}>NOW BOOKING</Text>
       <View style={styles.basketArea}>
-        {/* One arched, wrapped handle from rim to rim. */}
+        {/* Two handles folded up to meet: the far one behind, the near one in front. */}
         <Svg width={BASKET_W} height={HANDLE_H + 10} style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Path
-            d={`M44 ${HANDLE_H + 4} C44 -18 ${BASKET_W - 44} -18 ${BASKET_W - 44} ${HANDLE_H + 4}`}
-            stroke={rim}
-            strokeWidth={11}
-            fill="none"
-            strokeLinecap="round"
-          />
-          <Path
-            d={`M44 ${HANDLE_H + 4} C44 -18 ${BASKET_W - 44} -18 ${BASKET_W - 44} ${HANDLE_H + 4}`}
-            stroke={strandHi}
-            strokeWidth={3}
-            strokeDasharray="5 6"
-            fill="none"
-          />
-        </Svg>
-        <Svg width={200} height={70} viewBox="0 0 200 70" style={styles.tissue} pointerEvents="none">
-          <Polygon points="20,70 46,12 70,46 92,2 112,70" fill={tissue} />
-          <Polygon points="86,70 108,16 132,50 160,6 182,70" fill={tissueLight} />
+          <Path d={rightHandle} stroke={handleBack} strokeWidth={12} fill="none" strokeLinecap="round" />
+          <Path d={leftHandle} stroke={rim} strokeWidth={12} fill="none" strokeLinecap="round" />
+          <Path d={leftHandle} stroke={shellHi} strokeWidth={2.5} fill="none" strokeLinecap="round" opacity={0.7} />
+          {/* The hinges where each handle meets the rim. */}
+          <Circle cx={18} cy={HANDLE_H + 2} r={5} fill={handleBack} />
+          <Circle cx={BASKET_W - 18} cy={HANDLE_H + 2} r={5} fill={handleBack} />
         </Svg>
 
         <View style={styles.bodyShadow}>
           <Svg width={BASKET_W} height={BODY_H} pointerEvents="none">
             <Defs>
-              {/* Basket weave: pairs of strands, across then down, checkered. */}
-              <Pattern id={`weave${id}`} width={24} height={24} patternUnits="userSpaceOnUse">
-                <Rect width={24} height={24} fill={gap} />
-                <Rect x={0.5} y={0.8} width={11} height={4.6} rx={2.3} fill={strand} />
-                <Rect x={0.5} y={6.4} width={11} height={4.6} rx={2.3} fill={strandHi} />
-                <Rect x={12.8} y={0.5} width={4.6} height={11} rx={2.3} fill={strandHi} />
-                <Rect x={18.4} y={0.5} width={4.6} height={11} rx={2.3} fill={strand} />
-                <Rect x={0.8} y={12.5} width={4.6} height={11} rx={2.3} fill={strand} />
-                <Rect x={6.4} y={12.5} width={4.6} height={11} rx={2.3} fill={strandHi} />
-                <Rect x={12.5} y={12.8} width={11} height={4.6} rx={2.3} fill={strandHi} />
-                <Rect x={12.5} y={18.4} width={11} height={4.6} rx={2.3} fill={strandLo} />
+              {/* Rows of rounded slots moulded through the side. */}
+              <Pattern id={`slots${id}`} x={18} y={RIM_H + 6} width={26} height={SLOT_ROW} patternUnits="userSpaceOnUse">
+                <Rect x={3} y={3} width={20} height={14} rx={5} fill={inside} />
               </Pattern>
               <SvgLinearGradient id={`shade${id}`} x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor="#000000" stopOpacity={0.32} />
+                <Stop offset="0" stopColor="#000000" stopOpacity={0.3} />
                 <Stop offset="0.25" stopColor="#000000" stopOpacity={0} />
                 <Stop offset="0.75" stopColor="#000000" stopOpacity={0} />
-                <Stop offset="1" stopColor="#000000" stopOpacity={0.32} />
+                <Stop offset="1" stopColor="#000000" stopOpacity={0.3} />
               </SvgLinearGradient>
             </Defs>
-            <Path d={body} fill={`url(#weave${id})`} />
+            <Path d={body} fill={shell} />
+            <Rect x={18} y={RIM_H + 6} width={BASKET_W - 36} height={SLOTS_H} fill={`url(#slots${id})`} />
             <Path d={body} fill={`url(#shade${id})`} />
-            {/* The rolled rim along the top. */}
-            <Rect x={0} y={0} width={BASKET_W} height={16} rx={8} fill={rim} />
-            <Rect x={8} y={3} width={BASKET_W - 16} height={3} rx={1.5} fill={strandHi} opacity={0.55} />
+            {/* The moulded line above the foot. */}
+            <Rect x={20} y={BODY_H - FOOT_H + 4} width={BASKET_W - 40} height={2} rx={1} fill={rim} opacity={0.6} />
+            {/* The thick rim along the top. */}
+            <Rect x={0} y={0} width={BASKET_W} height={RIM_H} rx={6} fill={rim} />
+            <Rect x={8} y={3} width={BASKET_W - 16} height={3} rx={1.5} fill={shellHi} opacity={0.55} />
           </Svg>
 
-          {/* The shop label tied to the front. */}
+          {/* The shop label clipped to the front. */}
           <View style={styles.label}>
             <View style={[styles.labelRule, { borderColor: inkSub }]} pointerEvents="none" />
             {/* HeroLogo keeps 20pt under itself; the label shouldn't. */}
@@ -140,13 +134,12 @@ const styles = StyleSheet.create({
   wrap: { alignItems: "center", marginTop: 48, marginBottom: 30, paddingHorizontal: 20 },
   kicker: { fontFamily: "Manrope-Bold", fontSize: 11, lineHeight: 15, letterSpacing: 3.3 },
   basketArea: { width: BASKET_W, height: BODY_TOP + BODY_H, marginTop: 14 },
-  tissue: { position: "absolute", left: 35, top: BODY_TOP - 58 },
   bodyShadow: {
     position: "absolute", left: 0, top: BODY_TOP, width: BASKET_W, height: BODY_H,
     shadowColor: "#28060C", shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.32, shadowRadius: 16, elevation: 8,
   },
   label: {
-    position: "absolute", left: 46, right: 46, top: 24,
+    position: "absolute", left: 46, right: 46, top: 30,
     backgroundColor: LABEL_PAPER, borderRadius: 6,
     paddingTop: 14, paddingBottom: 12, paddingHorizontal: 12,
     alignItems: "center", gap: 6,
