@@ -12,9 +12,12 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
+import { LaceHero } from "./heroes/LaceHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
+import { SEALED_LOGO_SIZE, SealedEnvelope } from "./heroes/SealedHero";
+import { sealLetter, waxColour } from "./WaxSeal";
 import { SheerHero } from "./heroes/SheerHero";
 
 /** The business name under the logo; a thin script is drawn larger than
@@ -670,6 +673,58 @@ export function ProfileHeroLayout({
       );
     }
 
+    case "envelope": {
+      // Sealed: the back of an envelope closed with a wax seal of their
+      // initial, their logo on a card tucked in its corner, their area as a
+      // postmark; then an invitation line and the name in Corinthia script.
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={[layout.infoCenter, layout.textFirst]}>
+          <SealedEnvelope
+            wax={waxColour(accent)}
+            initial={sealLetter(name)}
+            logo={renderLogo(SEALED_LOGO_SIZE)}
+            postmark={location || kicker}
+          />
+          <Text style={[layout.sealedInvite, { color: heroSub }, shadow]}>YOU&apos;RE INVITED TO BOOK WITH</Text>
+          <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text
+              style={[layout.sealedName, { color: heroText }, shadow]}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.5}
+            >
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {phrase ? <Text style={[layout.sealedPhrase, { color: heroText }, shadow]}>{phrase}</Text> : null}
+          {location ? (
+            <Text style={[layout.sealedLocated, { color: heroSub }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text>
+          ) : null}
+          {details}
+        </View>
+      );
+    }
+    case "lace":
+      // Lace: a piece of lace fabric draped across the foot of the hero, the
+      // logo clean above it, the name in script (heroes/LaceHero).
+      return (
+        <LaceHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          heroText={heroText}
+          heroSub={heroSub}
+          heroIsDark={heroIsDark}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+          shadow={shadow}
+        />
+      );
+
     case "veil":
       // Sheer: their photo under a see-through black veil (heroes/SheerHero).
       return (
@@ -923,6 +978,11 @@ const layout = StyleSheet.create({
   signedDetails: { alignItems: "center", marginTop: 14 },
   // Quiet: the band is paper, so its ink is fixed.
   quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  sealedInvite: { fontFamily: "EBGaramond-SemiBold", fontSize: 12, lineHeight: 17, letterSpacing: 3, marginTop: 4, textAlign: "center" },
+  // Corinthia's loops overhang its box, so the name has room above and either side.
+  sealedName: { fontFamily: "Corinthia-Bold", fontSize: 62, lineHeight: 92, paddingHorizontal: 14, textAlign: "center", flexShrink: 1 },
+  sealedPhrase: { fontFamily: "EBGaramond-Italic", fontSize: 18, lineHeight: 24, marginTop: -6, textAlign: "center" },
+  sealedLocated: { fontFamily: "EBGaramond-SemiBold", fontSize: 12, lineHeight: 17, letterSpacing: 2.6, marginTop: 6, marginBottom: 10, textAlign: "center" },
   quietArea: { fontSize: 10, letterSpacing: 3, paddingHorizontal: 24 },
   quietBand: { backgroundColor: "#FBFCF8", marginTop: 170, paddingHorizontal: 24, paddingVertical: 22 },
   quietRow: { flexDirection: "row", alignItems: "center", gap: 16 },
