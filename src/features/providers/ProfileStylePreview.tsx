@@ -196,14 +196,12 @@ export function ProfileStylePreview({
             }
             details={
               <>
-                {/* Duet draws its stars on the card's location line instead. */}
-                {detailsSitOnCard(pageStyle) ? null : (
-                  <View style={styles.ratingRow}>
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <Ionicons key={star} name="star" size={12} color="#FFD700" />
-                    ))}
-                  </View>
-                )}
+                {/* On Duet's card they lead the line, as on the profile. */}
+                <View style={[styles.ratingRow, detailsSitOnCard(pageStyle) && styles.ratingRowInline]}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Ionicons key={star} name="star" size={12} color="#FFD700" />
+                  ))}
+                </View>
                 <View style={detailsSitOnCard(pageStyle) ? DETAILS_OWN_LINE : undefined}>
                   <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
                     <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
@@ -340,6 +338,7 @@ const styles = StyleSheet.create({
   },
   textShadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   ratingRow: { flexDirection: "row", gap: 3, marginBottom: 8 },
+  ratingRowInline: { marginBottom: 0 },
   slots: {
     flexDirection: "row",
     alignItems: "center",
