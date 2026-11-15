@@ -659,26 +659,36 @@ When a client's bank forcibly reverses a payment:
    | The payment paid one booking | That booking | Take back from that provider |
    | Equals exactly one booking, or one set of bookings | Those bookings | Take back from those providers only. The rest are paid as normal |
    | Equals every booking on the payment | The whole payment | Take back from every provider on it |
-   | Anything else, or two sets that both fit (two £50 bookings, £50 disputed) | Can't tell | **Nothing is taken back yet.** Every unpaid payout on the payment waits, support is emailed, and an admin picks the booking(s) in *Money → Disputes*. Then it goes as above |
+   | Anything else, or two sets that both fit (two £50 bookings, £50 disputed; or one booking after refunds and another before them) | Can't tell | **Nothing is taken back yet.** Every unpaid payout on the payment waits, support is emailed, and an admin picks the booking(s) in *Money → Disputes*. Then it goes as above |
+   | No booking on it was paid in the app | Nothing to take | Nothing happens |
 
 3. Taking back works as for a refund: CERVICED reverses what the provider was
    paid for that booking, and anything their Stripe balance can't cover
    becomes a debt (section 2.8). Each payout is taken back once only, even if
-   Stripe repeats the event or the admin presses twice. A late/no-show fee has
-   a payment of its own, so a dispute on one only ever concerns that provider.
+   Stripe repeats the event or the admin presses twice. An admin's pick is
+   saved before any money moves, so a second admin can't pick differently. If
+   taking back doesn't finish, the dispute stays on *Money → Disputes* marked
+   "didn't finish" until it's pressed again. A late/no-show fee has a payment
+   of its own, so a dispute on one only ever concerns that provider.
 4. **A disputed booking's payout not yet sent waits for the outcome.** If
    CERVICED wins, it's paid as normal. If CERVICED loses, it's cancelled,
    because the money went back to the client.
 5. **If CERVICED wins, the provider is paid back automatically** what was
-   reversed from their Stripe balance for the dispute. A part that became a
-   debt isn't cancelled automatically: support is emailed to cancel it and pay
-   back anything already taken from later payouts.
+   reversed from their Stripe balance for the dispute, as a separate transfer.
+   (Their original payout still shows as taken back.) Not automatic, so
+   support is emailed: a part that became a debt (cancel it and pay back
+   anything already taken from later payouts), and a late/no-show fee's
+   payout taken back for the dispute.
 6. If a dispute is won before anyone picked the booking, nothing was taken
    and nothing is owed, so every payout on the payment carries on.
 
 **Not automated:** responding to the dispute with evidence is done by hand in
 the Stripe Dashboard (runbook R6). Stripe's own dispute fee is **not** passed
 on to the provider; CERVICED absorbs it.
+
+Stripe can send a dispute's events out of order, so each step reads the
+dispute's current state from Stripe; a "closed" that arrives first records
+the dispute and applies the outcome in one go.
 
 **Who carries it (decided 17 October, unchanged):** CERVICED doesn't take a
 side. The bank decides, and the provider whose booking it is carries the
@@ -1023,7 +1033,7 @@ Keep the list short and review it monthly.
 | `after_shortfall_notify_provider`, `after_payout_sent_notify_debt_recovered`, `after_fee_payout_sent_notify_debt_recovered` | Triggers | The two debt notices |
 | `request_booking_refund`, `pass_refund_request_to_cerviced`, `close_refund_request_on_refund` | RPCs / trigger | The refund request flow |
 | `admin_retry_payout`, `admin_decline_refund_request`, `admin_money_overview`, `admin_bank_disputes`, `is_cerviced_admin` | RPCs (admins) | The admin Money screen |
-| `record_bank_dispute`, `assign_bank_dispute` | RPCs (service role) | Record a dispute with its bookings in one go; record an admin's pick |
+| `record_bank_dispute`, `assign_bank_dispute`, `close_bank_dispute` | RPCs (service role) | Record a dispute with its bookings in one go; record an admin's pick; record the bank's outcome. The last two lock the dispute before any money moves |
 | `money_needing_attention`, `process_money_daily_summary` | Functions | The daily email's data, and its trigger |
 | `refund_booking_async` | Function | A server-initiated full refund (provider cancel, expiry) |
 | `provider_cancel_own_booking` | RPC | A provider declining or cancelling; fires the full refund |
@@ -1057,7 +1067,7 @@ so Stripe retries.
 | `provider_shortfalls` | Debts: `amount_pence`, `recovered_pence`, `source` (`refund`, `cancellation`, `fee_refund`, `bank_dispute`) | Open while `recovered_pence < amount_pence`; `settled_at` is set when paid off |
 | `provider_shortfall_recoveries` | Each deduction: the debt plus exactly one of `payout_id` / `fee_charge_id` | — |
 | `payment_disputes` | One per bank dispute: amount, reason, Stripe's status, how its bookings were chosen (`attribution`: `single_booking`, `amount`, `whole_charge`, `needs_admin`, `admin`) | `outcome` `won`/`lost` once closed |
-| `payment_dispute_bookings` | The bookings a dispute covers: `role` `disputed` (money taken back) or `frozen` (waiting for an admin), and what was paid back after a win | — |
+| `payment_dispute_bookings` | The bookings a dispute covers: `role` `disputed` (money taken back) or `frozen` (waiting for an admin), `taken_back_at`, and what was paid back after a win | — |
 | `client_stripe_customers` | Client ↔ Stripe Customer (service role only) | — |
 | `admin_users` / `admin_actions` | Admins, and an append-only log of their actions (`retry_payout`, `approve_refund`, `decline_refund_request`, `create_account`, `assign_bank_dispute`) | — |
 

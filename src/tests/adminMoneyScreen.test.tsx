@@ -71,7 +71,7 @@ test('a decline needs a note, and approving the full amount sends a full refund'
 test('a bank dispute is matched to the booking the admin picks, and only that one', async () => {
   (getAdminBankDisputes as jest.Mock).mockResolvedValue([{
     dispute_id: 'd1', amount_pence: 5000, reason: 'product_not_received', stripe_status: 'needs_response',
-    opened_at: '2026-11-14T09:00:00Z', closed: false, outcome: null,
+    opened_at: '2026-11-14T09:00:00Z', closed: false, outcome: null, unfinished: false,
     bookings: [
       { booking_id: 'bk1', provider_name: 'Nail Room', client_name: 'Amy', service_name: 'Gel nails', booking_date: '2026-11-10', paid_pence: 5000, refunded_pence: 0 },
       { booking_id: 'bk2', provider_name: 'Lash Lab', client_name: 'Amy', service_name: 'Lash lift', booking_date: '2026-11-10', paid_pence: 5000, refunded_pence: 0 },
@@ -101,4 +101,23 @@ test("the other lists still load when the dispute list can't", async () => {
   await waitFor(() => expect(ui.getByText('Lash Lab')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: /DISPUTES/ }));
   expect(ui.getByText("Couldn't load the disputes.")).toBeTruthy();
+});
+
+test('an answer whose take-back never finished is pressed again with the same bookings', async () => {
+  (getAdminBankDisputes as jest.Mock).mockResolvedValue([{
+    dispute_id: 'd2', amount_pence: 5000, reason: 'fraudulent', stripe_status: 'needs_response',
+    opened_at: '2026-11-14T09:00:00Z', closed: false, outcome: null, unfinished: true,
+    bookings: [
+      { booking_id: 'bk1', provider_name: 'Nail Room', client_name: 'Amy', service_name: 'Gel nails', booking_date: '2026-11-10', paid_pence: 5000, refunded_pence: 0 },
+    ],
+  }]);
+  (assignBankDispute as jest.Mock).mockResolvedValue(undefined);
+  const ui = render(<AdminMoneyScreen navigation={{ goBack: jest.fn() }} />);
+  await waitFor(() => expect(ui.getByText('Lash Lab')).toBeTruthy());
+  fireEvent.press(ui.getByRole('tab', { name: /DISPUTES/ }));
+  expect(ui.getByText("DIDN'T FINISH · PRESS AGAIN")).toBeTruthy();
+  fireEvent.press(ui.getByText('FINISH TAKING IT BACK'));
+  const buttons = mockShowConfirm.mock.calls[0][2] as Array<{ text: string; onPress?: () => Promise<void> }>;
+  await buttons.find(b => b.text === 'Finish it')!.onPress!();
+  expect(assignBankDispute).toHaveBeenCalledWith('d2', ['bk1']);
 });

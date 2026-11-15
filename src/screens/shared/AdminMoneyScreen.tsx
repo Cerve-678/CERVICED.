@@ -104,17 +104,19 @@ export default function AdminMoneyScreen({ navigation }: any) {
   }, []);
 
   const assign = useCallback((view: BankDisputeView) => {
-    const chosen = picked[view.key] ?? [];
+    const chosen = pickedFor(view, picked);
     if (chosen.length === 0) return;
     const names = view.bookings.filter(b => chosen.includes(b.key)).map(b => b.title).join('\n');
     const others = view.bookings.length - chosen.length;
     showConfirm(
-      'Is the dispute about these?',
-      `${names}\n\nWhat these providers were paid for them is taken back now.${others > 0 ? ` The other ${others === 1 ? 'booking is' : `${others} bookings are`} paid as normal.` : ''} You can't change this afterwards.`,
+      view.unfinished ? 'Finish taking it back?' : 'Is the dispute about these?',
+      view.unfinished
+        ? `${names}\n\nTaking back what these providers were paid didn't finish last time. Nothing is taken twice.`
+        : `${names}\n\nWhat these providers were paid for them is taken back now.${others > 0 ? ` The other ${others === 1 ? 'booking is' : `${others} bookings are`} paid as normal.` : ''} You can't change this afterwards.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Yes, these',
+          text: view.unfinished ? 'Finish it' : 'Yes, these',
           onPress: async () => {
             setBusyId(view.key);
             try {
@@ -204,7 +206,7 @@ export default function AdminMoneyScreen({ navigation }: any) {
               </Text>
               {disputeViews.length === 0 && <Text style={[styles.empty, { color: P.sub }]}>No disputes need matching.</Text>}
               {disputeViews.map(view => {
-                const chosen = picked[view.key] ?? [];
+                const chosen = pickedFor(view, picked);
                 const busy = busyId === view.key;
                 return (
                   <View key={view.key} style={card}>
@@ -221,10 +223,11 @@ export default function AdminMoneyScreen({ navigation }: any) {
                         <TouchableOpacity
                           key={b.key}
                           onPress={() => togglePick(view.key, b.key)}
-                          disabled={busy}
+                          // An unfinished one is already decided: only pressing again is possible.
+                          disabled={busy || view.unfinished}
                           activeOpacity={0.7}
                           accessibilityRole="checkbox"
-                          accessibilityState={{ checked: on, disabled: busy }}
+                          accessibilityState={{ checked: on, disabled: busy || view.unfinished }}
                           style={[styles.pickRow, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.surface : 'transparent' }]}
                         >
                           <View style={[styles.tick, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.accent : 'transparent' }]}>
@@ -247,7 +250,7 @@ export default function AdminMoneyScreen({ navigation }: any) {
                     >
                       {busy
                         ? <ActivityIndicator size="small" color={P.onAccent} />
-                        : <Text style={[styles.ctaText, { color: P.onAccent }]}>{chosen.length ? `IT'S ABOUT ${chosen.length === 1 ? 'THIS ONE' : `THESE ${chosen.length}`}` : 'PICK A BOOKING'}</Text>}
+                        : <Text style={[styles.ctaText, { color: P.onAccent }]}>{view.unfinished ? 'FINISH TAKING IT BACK' : chosen.length ? `IT'S ABOUT ${chosen.length === 1 ? 'THIS ONE' : `THESE ${chosen.length}`}` : 'PICK A BOOKING'}</Text>}
                     </TouchableOpacity>
                   </View>
                 );
@@ -350,6 +353,12 @@ export default function AdminMoneyScreen({ navigation }: any) {
       <DialogHost />
     </ThemedBackground>
   );
+}
+
+/** The bookings ticked on a dispute card. An unfinished one is already
+ *  decided, so its bookings are the answer and stay ticked. */
+function pickedFor(view: BankDisputeView, picked: Record<string, string[]>): string[] {
+  return view.unfinished ? view.bookings.map(b => b.key) : picked[view.key] ?? [];
 }
 
 /** One passed-on refund request: what each side said, then approve or decline.

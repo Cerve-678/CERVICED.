@@ -25,6 +25,13 @@
 -- Only the server writes these tables. Admins read the undecided ones through
 -- admin_bank_disputes() and decide through the assign-bank-dispute function,
 -- which calls assign_bank_dispute() with the service role.
+--
+-- Ordering rule: the dispute row is the lock. An admin's answer and the
+-- bank's outcome are each recorded under FOR UPDATE on it (assign_bank_dispute,
+-- close_bank_dispute) BEFORE any money moves, so a second answer or a
+-- simultaneous outcome can never leave money taken from a provider nobody
+-- recorded. Taking back then checks the outcome again afterwards and pays
+-- straight back if the dispute was won meanwhile.
 
 BEGIN;
 
@@ -68,6 +75,10 @@ CREATE TABLE public.payment_dispute_bookings (
   dispute_id             uuid NOT NULL REFERENCES public.payment_disputes(id) ON DELETE CASCADE,
   booking_id             uuid NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
   role                   text NOT NULL CHECK (role IN ('disputed', 'frozen')),
+  -- Set once the provider's payout for it has been taken back (or there was
+  -- nothing sent to take). A 'disputed' row without it is unfinished and shows
+  -- on the admin screen to try again.
+  taken_back_at          timestamptz,
   -- What was paid back to the provider after CERVICED won (stripe-webhook).
   paid_back_pence        integer NOT NULL DEFAULT 0 CHECK (paid_back_pence >= 0),
   paid_back_transfer_id  text,
@@ -116,6 +127,47 @@ END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.record_bank_dispute(text, text, text, integer, text, text, text, jsonb) FROM PUBLIC, anon, authenticated;
 
+-- The bank's outcome, under the dispute row's lock (see the ordering rule
+-- above). A dispute won before anyone picked a booking lost no money, so its
+-- frozen bookings are let go here. Returns what the caller needs to finish
+-- (pay back, or alert), or NULL if the dispute was never recorded.
+-- newly_closed is false on a redelivered event. Server only.
+CREATE FUNCTION public.close_bank_dispute(p_stripe_dispute_id text, p_stripe_status text, p_outcome text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_dispute payment_disputes%ROWTYPE;
+  v_newly boolean;
+BEGIN
+  IF p_outcome NOT IN ('won', 'lost') THEN
+    RAISE EXCEPTION 'Unknown dispute outcome %', p_outcome;
+  END IF;
+  SELECT * INTO v_dispute FROM payment_disputes WHERE stripe_dispute_id = p_stripe_dispute_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+  v_newly := v_dispute.closed_at IS NULL;
+  IF v_newly THEN
+    UPDATE payment_disputes SET stripe_status = p_stripe_status, outcome = p_outcome, closed_at = now()
+     WHERE id = v_dispute.id;
+    IF v_dispute.attribution = 'needs_admin' AND p_outcome = 'won' THEN
+      DELETE FROM payment_dispute_bookings WHERE dispute_id = v_dispute.id AND role = 'frozen';
+    END IF;
+  END IF;
+  RETURN jsonb_build_object(
+    'id', v_dispute.id,
+    'attribution', v_dispute.attribution,
+    'outcome', COALESCE(v_dispute.outcome, p_outcome),
+    'amount_pence', v_dispute.amount_pence,
+    'reason', v_dispute.reason,
+    'newly_closed', v_newly);
+END;
+$function$;
+REVOKE EXECUTE ON FUNCTION public.close_bank_dispute(text, text, text) FROM PUBLIC, anon, authenticated;
+
 -- Disputes the amount couldn't be matched to, with the bookings on each
 -- payment, for the admin Money screen. Admin-only.
 CREATE FUNCTION public.admin_bank_disputes()
@@ -132,6 +184,7 @@ BEGIN
     SELECT jsonb_agg(row_to_json(d) ORDER BY d.opened_at) FROM (
       SELECT pd.id AS dispute_id, pd.amount_pence, pd.reason, pd.stripe_status, pd.opened_at,
              (pd.closed_at IS NOT NULL) AS closed, pd.outcome,
+             (pd.attribution <> 'needs_admin') AS unfinished,
              COALESCE((
                SELECT jsonb_agg(jsonb_build_object(
                         'booking_id', b.id,
@@ -147,8 +200,14 @@ BEGIN
                  LEFT JOIN providers p ON p.id = b.provider_id
                 WHERE l.dispute_id = pd.id), '[]'::jsonb) AS bookings
         FROM payment_disputes pd
-       -- A dispute won before anyone picked needs nothing: no money was lost.
-       WHERE pd.attribution = 'needs_admin' AND pd.outcome IS DISTINCT FROM 'won'
+       -- Undecided, or decided but the taking back never finished (an admin's
+       -- answer at once; an automatic match after an hour of webhook retries).
+       -- A won dispute needs nothing: no money was lost.
+       WHERE pd.outcome IS DISTINCT FROM 'won'
+         AND (pd.attribution = 'needs_admin'
+              OR EXISTS (SELECT 1 FROM payment_dispute_bookings u
+                          WHERE u.dispute_id = pd.id AND u.role = 'disputed' AND u.taken_back_at IS NULL
+                            AND (pd.attribution = 'admin' OR pd.opened_at < now() - interval '1 hour')))
        ORDER BY pd.opened_at
        LIMIT 50) d), '[]'::jsonb);
 END;
@@ -157,11 +216,12 @@ REVOKE EXECUTE ON FUNCTION public.admin_bank_disputes() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.admin_bank_disputes() TO authenticated;
 
 -- An admin's answer to "which bookings is this dispute about?". Called by the
--- assign-bank-dispute function (service role) after it has taken the money
--- back from the chosen providers, so a failed take-back leaves the dispute
--- waiting on the admin screen to try again. The chosen bookings become
--- 'disputed'; the rest stop being frozen and their payouts carry on.
--- Repeating the same answer is a no-op, so a retry is safe.
+-- assign-bank-dispute function (service role) BEFORE it takes any money back,
+-- under the dispute row's lock: a second, different answer is refused here,
+-- before it can move money. The chosen bookings become 'disputed' (not yet
+-- taken back); the rest stop being frozen and their payouts carry on.
+-- Repeating the same answer is a no-op, so retrying an unfinished take-back
+-- is safe.
 CREATE FUNCTION public.assign_bank_dispute(p_dispute_id uuid, p_booking_ids uuid[], p_admin_user_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -185,8 +245,9 @@ BEGIN
     RAISE EXCEPTION 'CERVICED won this dispute, so nothing needs taking back.';
   END IF;
   IF v_dispute.attribution <> 'needs_admin' THEN
-    -- Already answered: fine if it's the same answer (a retry), refused otherwise.
-    IF v_dispute.attribution = 'admin' AND v_chosen = (
+    -- Already decided: fine if it's the same answer (a retry of an unfinished
+    -- take-back), refused otherwise.
+    IF v_chosen = (
          SELECT array_agg(booking_id ORDER BY booking_id) FROM payment_dispute_bookings
           WHERE dispute_id = p_dispute_id AND role = 'disputed') THEN
       RETURN;

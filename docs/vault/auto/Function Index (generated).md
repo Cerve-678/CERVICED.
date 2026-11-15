@@ -5,7 +5,7 @@
 
 #generated
 
-**3835 functions** across **538 files**.
+**3836 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -439,7 +439,7 @@
 - `AdminCreateAccountScreen.tsx` — AdminCreateAccountScreen · back · Field · handleCreate · resetForm · shareLogin · signInAsThem · startBlankProvider
 - `AdminCreatedAccountsScreen.tsx` — AccountCard · addDetails · AdminCreatedAccountsScreen · header · load · onRefresh · openProviderSide
 - `AdminDashboardScreen.tsx` — AdminDashboardScreen · deltaColor · go · load · onRefresh · problems · Row · StatTile · statusColors · ToolRow · WeeklyChart
-- `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · assign · decline · disputeViews · failed · load · now · onRefresh · owed · RefundReview · refunds · retry · togglePick
+- `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · assign · decline · disputeViews · failed · load · now · onRefresh · owed · pickedFor · RefundReview · refunds · retry · togglePick
 - `BeccaScreen.tsx` — beat · BeccaScreen · buildWelcomeMessage · chatAnimStyle · flushMiss · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · isActiveTurn · persistResponse · refreshSessions · scheduleNextTick · sendMisses · showReveal · showSteps
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave

@@ -1,5 +1,5 @@
 import {
-  disputePayoutVerdict, MAX_BOOKINGS_TO_MATCH, planDisputeAttribution,
+  combineDisputeVerdicts, disputePayoutVerdict, MAX_BOOKINGS_TO_MATCH, planDisputeAttribution,
 } from '../../supabase/functions/_shared/disputePlan';
 
 const booking = (bookingId: string, paidPence: number, refundedPence = 0) => ({ bookingId, paidPence, refundedPence });
@@ -55,6 +55,16 @@ describe('working out which bookings a bank dispute is about', () => {
       .toEqual({ kind: 'single_booking', disputed: ['paid'] });
   });
 
+  test('a set that fits after refunds and a different one that fits before them is ambiguous', () => {
+    // a £30; b £30 with £10 refunded. £30 is a on what's left, or b on the original.
+    expect(planDisputeAttribution(3000, [booking('a', 3000), booking('b', 3000, 1000)]))
+      .toEqual({ kind: 'needs_admin', frozen: ['a', 'b'] });
+  });
+
+  test('a payment with no booking paid in the app has nothing to take back or hold', () => {
+    expect(planDisputeAttribution(500, [booking('free', 0), booking('also-free', 0)])).toEqual({ kind: 'whole_charge', disputed: [] });
+  });
+
   test("doesn't search huge baskets; an admin decides", () => {
     const many = Array.from({ length: MAX_BOOKINGS_TO_MATCH + 1 }, (_, i) => booking(`b${String(i).padStart(2, '0')}`, 1000 + i));
     const plan = planDisputeAttribution(1000, many);
@@ -78,5 +88,14 @@ describe("what happens to a booking's unpaid payout while its payment is dispute
     expect(disputePayoutVerdict({ dispute: open, role: 'disputed' })).toBe('wait');
     expect(disputePayoutVerdict({ dispute: { closed: true, outcome: 'won' }, role: 'disputed' })).toBe('pay');
     expect(disputePayoutVerdict({ dispute: { closed: true, outcome: 'lost' }, role: 'disputed' })).toBe('cancel');
+  });
+});
+
+describe('a payment carrying more than one dispute', () => {
+  test('the strictest answer wins, and no answer means wait', () => {
+    expect(combineDisputeVerdicts(['pay', 'wait'])).toBe('wait');
+    expect(combineDisputeVerdicts(['pay', 'cancel'])).toBe('cancel');
+    expect(combineDisputeVerdicts(['pay', 'pay'])).toBe('pay');
+    expect(combineDisputeVerdicts([])).toBe('wait');
   });
 });

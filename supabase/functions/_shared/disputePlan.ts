@@ -13,9 +13,12 @@
 //     after refunds, or before them)        -> those bookings
 //   - it equals every booking on the payment -> all of them (whole_charge)
 //   - anything else, or two sets that both
-//     fit (two £50 bookings, £50 disputed)  -> an admin decides; until then
+//     fit (two £50 bookings, £50 disputed,
+//     or one set after refunds and another
+//     before them)                          -> an admin decides; until then
 //                                              every booking's unpaid payout
 //                                              waits and nothing is taken back
+//   - no booking on it was paid in the app   -> nothing to take back
 
 export interface DisputeCandidate {
   bookingId: string;
@@ -37,7 +40,8 @@ export function planDisputeAttribution(disputePence: number, candidates: Dispute
     .filter(c => Math.round(c.paidPence) > 0)
     .sort((a, b) => (a.bookingId < b.bookingId ? -1 : a.bookingId > b.bookingId ? 1 : 0));
   const allIds = paid.map(c => c.bookingId);
-  if (paid.length === 0) return { kind: 'needs_admin', frozen: [] };
+  // Nothing any provider could have been paid for: nothing to take or hold.
+  if (paid.length === 0) return { kind: 'whole_charge', disputed: [] };
   if (paid.length === 1) return { kind: 'single_booking', disputed: allIds };
   if (paid.length > MAX_BOOKINGS_TO_MATCH) return { kind: 'needs_admin', frozen: allIds };
 
@@ -45,16 +49,17 @@ export function planDisputeAttribution(disputePence: number, candidates: Dispute
   const net = paid.map(c => ({ id: c.bookingId, pence: Math.max(0, Math.round(c.paidPence) - Math.round(c.refundedPence)) }));
   const gross = paid.map(c => ({ id: c.bookingId, pence: Math.round(c.paidPence) }));
 
-  // Net first: a bank normally disputes what is still on the statement. Gross
-  // only when nothing fits net, e.g. a dispute for the original amount after
-  // a part refund.
+  // A bank normally disputes what is still on the statement (after refunds),
+  // but may dispute the original amount. Every set that fits either way is a
+  // candidate; only one distinct set is a match.
+  const candidatesFound = new Map<string, string[]>();
   for (const amounts of [net, gross]) {
-    const matches = setsSummingTo(amount, amounts.filter(a => a.pence > 0));
-    const [disputed] = matches;
-    if (matches.length === 1 && disputed) {
-      return { kind: disputed.length === allIds.length ? 'whole_charge' : 'amount', disputed };
-    }
-    if (matches.length > 1) return { kind: 'needs_admin', frozen: allIds };
+    for (const set of setsSummingTo(amount, amounts.filter(a => a.pence > 0))) candidatesFound.set(set.join(), set);
+  }
+  const sets = [...candidatesFound.values()];
+  const [disputed] = sets;
+  if (sets.length === 1 && disputed) {
+    return { kind: disputed.length === allIds.length ? 'whole_charge' : 'amount', disputed };
   }
   return { kind: 'needs_admin', frozen: allIds };
 }
@@ -78,6 +83,12 @@ export interface DisputeStateForBooking {
   dispute: { closed: boolean; outcome: 'won' | 'lost' | null } | null;
   /** This booking's link to it, if any. */
   role: 'disputed' | 'frozen' | null;
+}
+
+/** A charge can (rarely) carry more than one dispute: the strictest answer wins. */
+export function combineDisputeVerdicts(verdicts: DisputePayoutVerdict[]): DisputePayoutVerdict {
+  if (verdicts.length === 0 || verdicts.includes('wait')) return 'wait';
+  return verdicts.includes('cancel') ? 'cancel' : 'pay';
 }
 
 export function disputePayoutVerdict({ dispute, role }: DisputeStateForBooking): DisputePayoutVerdict {

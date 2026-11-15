@@ -137,6 +137,9 @@ export interface BankDisputeView {
   status: string;
   /** Lost before anyone picked: the bank kept the money. */
   lost: boolean;
+  /** Decided, but the take-back didn't finish: its bookings are already
+   *  ticked and pressing again finishes it. */
+  unfinished: boolean;
   bookings: BankDisputeBookingView[];
 }
 
@@ -147,8 +150,11 @@ export function describeBankDispute(d: AdminBankDispute): BankDisputeView {
     key: d.dispute_id,
     amount: formatPence(d.amount_pence),
     reason: (d.reason && DISPUTE_REASON[d.reason]) || d.reason || 'No reason given',
-    status: lost ? 'LOST · PICK THE BOOKING' : `OPEN${opened ? ` · SINCE ${opened.toUpperCase()}` : ''}`,
+    status: d.unfinished
+      ? "DIDN'T FINISH · PRESS AGAIN"
+      : lost ? 'LOST · PICK THE BOOKING' : `OPEN${opened ? ` · SINCE ${opened.toUpperCase()}` : ''}`,
     lost,
+    unfinished: d.unfinished,
     bookings: d.bookings.map(b => {
       const left = Math.max(0, b.paid_pence - b.refunded_pence);
       return {

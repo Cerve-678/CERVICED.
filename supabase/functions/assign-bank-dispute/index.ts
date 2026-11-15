@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
-import { takeBackForBookings } from '../_shared/bankDispute.ts';
+import { takeBackForDispute } from '../_shared/bankDispute.ts';
 
 // An admin's answer to "which booking(s) is this bank dispute about?", for a
 // dispute whose amount matched no booking on the payment (_shared/disputePlan.ts).
@@ -9,9 +9,12 @@ import { takeBackForBookings } from '../_shared/bankDispute.ts';
 // providers only (unless CERVICED already won it), then records the answer,
 // which lets every other provider's payout carry on.
 //
-// Take back first, record second: if the take-back fails, the dispute stays
-// on the admin screen to try again, and the take-back is keyed per payout so a
-// second try never takes twice. Recording the same answer again is a no-op.
+// Record first, take back second: the answer is saved under the dispute's
+// lock before any money moves, so two admins, or an admin and the bank's
+// outcome, can't both act on it. If the take-back then fails, the dispute
+// stays on the admin screen as unfinished; pressing again repeats the same
+// answer (a no-op) and the take-back, which is keyed per payout so it never
+// takes twice.
 //
 // AUTH: a CERVICED admin's session (admin_users). The admin is saved with the
 // answer in admin_actions (assign_bank_dispute()).
@@ -66,37 +69,10 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Pick at least one booking.' }, 400);
     }
 
-    const { data: dispute, error: disputeErr } = await admin.from('payment_disputes')
-      .select('id, stripe_dispute_id, attribution, outcome').eq('id', disputeId).maybeSingle();
-    if (disputeErr) throw disputeErr;
-    if (!dispute) return json({ error: 'That dispute no longer exists.' }, 404);
-    if (dispute.attribution !== 'needs_admin' && dispute.attribution !== 'admin') {
-      return json({ error: 'This dispute has already been decided.' }, 409);
-    }
-
-    // Only bookings this payment paid for, checked before any money moves
-    // (assign_bank_dispute() checks again under its lock).
-    const { data: links, error: linkErr } = await admin.from('payment_dispute_bookings')
-      .select('booking_id, role').eq('dispute_id', disputeId);
-    if (linkErr) throw linkErr;
-    const onPayment = new Set((links ?? []).map(l => l.booking_id));
-    if (!bookingIds.every(id => onPayment.has(id))) {
-      return json({ error: "Those bookings weren't paid by the disputed payment." }, 409);
-    }
-    // Already answered: only the same answer again (a retry after a failure)
-    // goes on, so a second answer can never take from another provider.
-    if (dispute.attribution === 'admin') {
-      const answered = (links ?? []).filter(l => l.role === 'disputed').map(l => l.booking_id).sort();
-      if (answered.join() !== [...bookingIds].sort().join()) {
-        return json({ error: 'This dispute has already been decided.' }, 409);
-      }
-    }
-
-    // Won already: the money came back, so there's nothing to take.
-    if (dispute.outcome !== 'won') {
-      await takeBackForBookings(admin, stripe, dispute.stripe_dispute_id, bookingIds);
-    }
-
+    // Record the answer first, under the dispute's lock: a second, different
+    // answer (another admin) or the dispute already won is refused here,
+    // before any money moves. Repeating the same answer is accepted, which is
+    // how an unfinished take-back is retried.
     const { error: assignErr } = await admin.rpc('assign_bank_dispute', {
       p_dispute_id: disputeId, p_booking_ids: bookingIds, p_admin_user_id: user.id,
     });
@@ -105,10 +81,20 @@ Deno.serve(async (req: Request) => {
       if (assignErr.code === 'P0001') return json({ error: assignErr.message }, 409);
       throw assignErr;
     }
+
+    const { data: dispute, error: disputeErr } = await admin.from('payment_disputes')
+      .select('id, stripe_dispute_id, outcome').eq('id', disputeId).single();
+    if (disputeErr) throw disputeErr;
+    // Won already: the money came back, so there's nothing to take. Otherwise
+    // take back (keyed per payout); this pays straight back if the dispute is
+    // won while it runs.
+    if (dispute.outcome !== 'won') {
+      await takeBackForDispute(admin, stripe, { rowId: dispute.id, stripeId: dispute.stripe_dispute_id }, bookingIds);
+    }
     return json({ ok: true }, 200);
   } catch (err) {
     console.error(`[assign-bank-dispute] failed: ${String(err)}`);
-    return json({ error: "Couldn't save that. Nothing was taken twice; try again." }, 500);
+    return json({ error: "Couldn't finish that. Nothing is taken twice; try again." }, 500);
   }
 });
 
