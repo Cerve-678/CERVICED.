@@ -212,3 +212,12 @@ describe('Signature', () => {
       .toMatchObject({ borderRadius: 0, borderTopWidth: 3 });
   });
 });
+
+describe('Snapshot', () => {
+  it('is the bold one: condensed headings, square outlined cards and a square logo', () => {
+    const snapshot = getPageStyle('snapshot');
+    expect(snapshot).toMatchObject({ hero: 'blockName', heading: 'condensed', cards: 'block', logo: 'square', numberedServices: true });
+    expect(serviceCardSurface(snapshot, { card: '#FFFFFF', accent: '#D43F2B', sheet: SHEET_BG }))
+      .toMatchObject({ borderRadius: 0, borderWidth: 2 });
+  });
+});
