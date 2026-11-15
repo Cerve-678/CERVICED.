@@ -23,6 +23,7 @@ import {
 } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
+import { GoldClip } from "./heroes/CallingCardHero";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -235,6 +236,19 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "engravedCaps": {
+      // Calling Card: engraved serif caps, centred between hairlines.
+      const line = color ? withAlpha(color, 0.35) : sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+          <Text style={[headingStyles.engravedCaps, { color: ink }]} numberOfLines={1}>
+            {headingPair(section).join(" ").toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -351,6 +365,7 @@ export function PageSection({
 
   const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
+    : pageStyle.cards === "clipped" ? 2
     : pageStyle.cards === "flat" ? 6
     : pageStyle.cards === "gloss" ? 28
     : pageStyle.cards === "chunky" ? 26
@@ -408,10 +423,16 @@ export function PageSection({
           pageStyle.cards === "topRule" && [surfaceStyles.topRule, { borderTopColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "block" && [surfaceStyles.blockCard, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "gloss" && [surfaceStyles.gloss, { borderColor: withAlpha(palette.accent, 0.35) }],
+          pageStyle.cards === "clipped" && [surfaceStyles.paper, surfaceStyles.clippedCard],
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
+        {pageStyle.cards === "clipped" ? (
+          <View style={[surfaceStyles.clippedRule, { borderColor: withAlpha(palette.accent, 0.28) }]} pointerEvents="none" />
+        ) : null}
         {children}
+        {/* Calling Card: a gold clip holds each card at the top. */}
+        {pageStyle.cards === "clipped" ? <GoldClip width={96} style={surfaceStyles.clippedClip} /> : null}
       </View>
     </View>
   );
@@ -560,6 +581,19 @@ export function serviceCardSurface(
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 2, borderColor: outlineInk(colours.card) };
     case "topRule":
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderTopWidth: 3, borderTopColor: outlineInk(colours.card) };
+    case "clipped":
+      // Calling Card: a near-square card on a soft drop shadow.
+      return {
+        backgroundColor: colours.card,
+        borderRadius: 2,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: withAlpha(colours.accent, 0.3),
+        shadowColor: "#14040A",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.14,
+        shadowRadius: 10,
+        overflow: "visible",
+      };
     default:
       return null;
   }
@@ -611,7 +645,7 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   const layout = style?.policies;
   return (
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
-    || layout === "tiles" || layout === "divided" || layout === "stickers"
+    || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "ribbon"
   );
 }
 
@@ -705,6 +739,41 @@ export function StyledPolicyList({
             ))}
           </View>
         ))}
+      </View>
+    );
+  }
+
+  if (layout === "ribbon") {
+    // Calling Card: every policy on one card, two-up, with a ribbon in the
+    // accent across its top corner. The card brings its own colours.
+    const labelInk = isDarkColor(palette.cardBackground) ? palette.text : (isDarkColor(palette.accent) ? palette.accent : palette.text);
+    return (
+      // The shadow sits on an outer box: the inner one clips the ribbon, and a
+      // clipping view on iOS clips its own shadow too.
+      <View style={[policyStyles.ribbonShadow, { backgroundColor: palette.cardBackground }, square && policyStyles.square]}>
+      <View style={[policyStyles.ribbonCard, square && policyStyles.square]}>
+        <LinearGradient
+          colors={[palette.accent, blend(palette.accent, "#000000", 0.35)]}
+          style={policyStyles.ribbon}
+          pointerEvents="none"
+        />
+        <View style={policyStyles.ribbonGrid}>
+          {rows.map(row => (
+            <View key={row.label} style={policyStyles.ribbonCell}>
+              <Text style={[policyStyles.ribbonLabel, { color: labelInk }]}>{row.label.toUpperCase()}</Text>
+              <Text style={[policyStyles.value, { color: palette.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: palette.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? (
+                <View style={[policyStyles.tag, policyStyles.tagLeft, { backgroundColor: palette.accent }]}>
+                  <Text style={[policyStyles.tagText, { color: onAccentInk(palette.accent).text }]}>{row.tag}</Text>
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      </View>
       </View>
     );
   }
@@ -911,6 +980,8 @@ const headingStyles = StyleSheet.create({
   labelCaps: { fontFamily: "MarcellusSC-Regular", fontSize: 14, letterSpacing: 4 },
   // Quiet's own face, so it no longer reads as Apothecary (owner, 2026-11-15).
   quietCaps: { fontFamily: "JosefinSans_600SemiBold", fontSize: 14, lineHeight: 20, letterSpacing: 4, flexShrink: 1 },
+  // Calling Card's engraved caps (Forum), its own face.
+  engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
   condensedWrap: { marginBottom: 14 },
   condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 49, letterSpacing: 0.3 },
   condensedBar: { width: 36, height: 5, marginTop: 4 },
@@ -962,6 +1033,10 @@ const surfaceStyles = StyleSheet.create({
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
   headingFlex: { flexShrink: 1 },
+  // Calling Card: room at the top for the clip, and a fine rule inset from the edge.
+  clippedCard: { marginTop: 22, paddingTop: 34 },
+  clippedRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1, borderRadius: 1 },
+  clippedClip: { position: "absolute", top: -34, alignSelf: "center" },
 });
 
 const policyStyles = StyleSheet.create({
@@ -1007,4 +1082,18 @@ const policyStyles = StyleSheet.create({
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
   hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },
+  ribbonCard: { borderRadius: 2, overflow: "hidden", paddingHorizontal: 18, paddingTop: 46, paddingBottom: 20 },
+  ribbonShadow: {
+    borderRadius: 2,
+    shadowColor: "#14040A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  ribbon: { position: "absolute", top: 20, right: -54, width: 190, height: 26, transform: [{ rotate: "45deg" }] },
+  ribbonGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: 16, columnGap: 16, paddingRight: 18 },
+  ribbonCell: { flexBasis: "44%", flexGrow: 1, gap: 4 },
+  ribbonLabel: { fontFamily: "Forum-Regular", fontSize: 14, lineHeight: 19, letterSpacing: 2.2 },
+  tagLeft: { alignSelf: "flex-start" },
 });

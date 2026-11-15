@@ -97,6 +97,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  callingCard: { text: 'THE SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -218,6 +219,8 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'engravedCaps':
+        return <Text style={[mini.engravedCaps, { color: ink }]}>{heading.text}</Text>;
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -256,6 +259,8 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'clipped':
+        return <View key={key} style={[mini.card, mini.paper, mini.clippedCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -362,6 +367,21 @@ function MiniProfile({
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
           </View>
+        ) : style.hero === 'callingCard' ? (
+          // Calling Card: satin, and a cream card held by a gold clip.
+          <>
+            <LinearGradient
+              colors={[blend(accent, '#000000', 0.55), accent, blend(accent, '#000000', 0.55), blend(accent, '#FFFFFF', 0.2), blend(accent, '#000000', 0.55)]}
+              start={{ x: 0, y: 0.2 }}
+              end={{ x: 1, y: 0.8 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={mini.callingCard}>
+              <View style={mini.callingClip} />
+              {logo}
+              <Text style={[mini.callingName, { color: blend(accent, '#000000', 0.4) }]} numberOfLines={1}>Name</Text>
+            </View>
+          </>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -488,6 +508,17 @@ const mini = StyleSheet.create({
   serifTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 13, lineHeight: 17 },
   labelCaps: { fontFamily: 'MarcellusSC-Regular', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
   quietCaps: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 8, letterSpacing: 2 },
+  engravedCaps: { fontFamily: 'Forum-Regular', fontSize: 9, lineHeight: 12, letterSpacing: 2, textAlign: 'center' },
+  clippedCard: { borderRadius: 1 },
+  callingCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F4EBDD',
+    paddingHorizontal: 6, paddingTop: 8, paddingBottom: 5, borderRadius: 1, transform: [{ rotate: '-2deg' }],
+  },
+  callingClip: {
+    position: 'absolute', top: -5, alignSelf: 'center', left: '40%', width: 22, height: 7,
+    borderRadius: 2, backgroundColor: '#D9B062',
+  },
+  callingName: { fontFamily: 'MonsieurLaDoulaise-Regular', fontSize: 15, lineHeight: 24, paddingHorizontal: 4, flexShrink: 1 },
   quietName: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 11, letterSpacing: 2, color: '#2C3527' },
   hard: {
     backgroundColor: '#FFFFFF', borderColor: '#1F1A1C', overflow: 'visible',

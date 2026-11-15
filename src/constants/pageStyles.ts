@@ -18,7 +18,8 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet'
+  | 'callingCard';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -37,7 +38,8 @@ export type PageHeading =
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
-  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'engravedCaps'; // engraved serif caps, centred between hairlines (Calling Card)
 
 /** What a section sits on. */
 export type PageCards =
@@ -52,7 +54,8 @@ export type PageCards =
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
-  | 'block';   // a square card with a thick dark outline
+  | 'block'    // a square card with a thick dark outline
+  | 'clipped'; // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -67,7 +70,8 @@ export type PagePolicies =
   | 'numerals'  // rows numbered in roman numerals
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
-  | 'definition'; // a small caps label beside each value, between hairlines
+  | 'definition' // a small caps label beside each value, between hairlines
+  | 'ribbon';    // two-up on one card with a ribbon across its corner (Calling Card)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -90,7 +94,8 @@ export type PageHero =
   | 'label'      // a paper tag hanging on a string
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
+  | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
+  | 'callingCard'; // satin folds, and a cream calling card held by a gold clip with the logo and name
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -123,6 +128,8 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** Portfolio photos as cream-bordered prints, each pinned by a small gold clip (Calling Card). */
+  clippedPhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -225,6 +232,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
+  // board 23): satin and a calling card held by a gold clip.
+  {
+    key: 'callingCard', name: 'Calling Card', description: 'Your name on a cream card held by a gold clip, over satin',
+    heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', logo: 'circle',
+    hero: 'callingCard', aboutInHero: false, clippedPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
 

@@ -15,6 +15,7 @@ import { LogoCircle } from "../../components/FramedLogo";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
+import { CallingCardHero } from "./heroes/CallingCardHero";
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -669,6 +670,21 @@ export function ProfileHeroLayout({
       );
     }
 
+    case "callingCard":
+      // Calling Card: satin folds, and a cream card held by a gold clip with
+      // the logo, the name and the details on it (heroes/CallingCardHero).
+      return (
+        <CallingCardHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          logo={renderLogo(76)}
+          details={details}
+          tick={tick}
+        />
+      );
+
     default:
       return (
         <>
@@ -738,11 +754,12 @@ function SealRing({
 }
 
 /**
- * Whether this style draws the stars, years and slots pill on a white card
- * (Duet) rather than straight on the hero, so the profile inks them dark.
+ * Whether this style draws the stars, years and slots pill on a pale card
+ * (Duet's welcome card, the Calling Card) rather than straight on the hero,
+ * so the profile inks them dark.
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
-  return pageStyle.hero === "duet";
+  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard";
 }
 
 /** The ink for details on that card. */

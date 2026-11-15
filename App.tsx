@@ -205,6 +205,9 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Calling Card (round 4, 2026-11-15): a copperplate script and engraved caps.
+    'MonsieurLaDoulaise-Regular': require('./assets/fonts/MonsieurLaDoulaise-Regular.ttf'),
+    'Forum-Regular': require('./assets/fonts/Forum-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
