@@ -79,9 +79,9 @@ describe('hero layouts', () => {
     expect(screen.getByText('located in')).toBeTruthy();
   });
 
-  it('leaves the logo off Cover, and keeps it on Classic', () => {
+  it('puts a small logo above the name on Cover, as on Classic', () => {
     renderPreview('cover');
-    expect(screen.queryByText('AL')).toBeNull();
+    expect(screen.getByText('AL')).toBeTruthy();
     screen.unmount();
     renderPreview('classic');
     expect(screen.getByText('AL')).toBeTruthy();
@@ -100,10 +100,12 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('LASHES.')).toBeTruthy();
   });
 
-  it('puts Heritage\'s name round a seal, with what they do under it', () => {
+  it('puts Heritage\'s name round a seal, with what they do and their area under it', () => {
     renderPreview('heritage');
     expect(screen.getByLabelText('Amara Lashes')).toBeTruthy();
     expect(screen.getByText('Lashes')).toBeTruthy();
+    // Under the seal as text, not curved round its foot.
+    expect(screen.getByText('PECKHAM')).toBeTruthy();
   });
 
   it('welcomes on Duet\'s card and lists what they do as pills', () => {
@@ -113,6 +115,8 @@ describe('the 2026-11-14 heroes', () => {
     // Once in the name's caps, once as the pill for what they do.
     expect(screen.getAllByText('LASHES')).toHaveLength(2);
     expect(screen.queryByText('YOUR ARTIST')).toBeNull();
+    // The slots pill sits inside the card with the pills.
+    expect(screen.getByText('Stay updated')).toBeTruthy();
   });
 
   it('puts Groovy\'s name on a pill beside a rating starburst and tag stickers', () => {

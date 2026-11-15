@@ -226,9 +226,11 @@ export function ProfileHeroLayout({
 
   switch (pageStyle.hero) {
     case "cover":
-      // No logo: the name is the cover line, low over the photo.
+      // The name is the cover line, low over the photo, with a small logo
+      // sitting on top of it at the right.
       return (
         <View style={layout.coverTop}>
+          <View style={layout.coverLogo}>{renderLogo(58)}</View>
           <View style={layout.infoCenter}>
             {renderName({ scale: 1.6 })}
             {meta}
@@ -360,8 +362,8 @@ export function ProfileHeroLayout({
     }
 
     case "crest": {
-      // Heritage: their name curved round the top of a dotted seal, their area
-      // round the foot, the logo in the middle.
+      // Heritage: their name curved round the top of a dotted seal, the logo
+      // in the middle, and what they do with their area under it.
       const curveName = name.toUpperCase();
       const curveSize = Math.max(9, Math.min(17, (290 / Math.max(curveName.length, 1) - 3) / 0.72));
       const phrase = kickerPhrase(kicker);
@@ -370,17 +372,20 @@ export function ProfileHeroLayout({
           <View style={layout.seal} accessible accessibilityRole="header" accessibilityLabel={name}>
             <SealRing
               name={curveName}
-              location={location}
               font="Cinzel-Bold"
               size={curveSize}
               text={heroText}
-              sub={heroSub}
               ring={heroIsDark ? withAlpha(heroText, 0.8) : accent}
             />
             <View style={layout.sealLogo}>{renderLogo(128)}</View>
           </View>
           {tick}
           {phrase ? <Text style={[layout.sealPhrase, { color: heroText }, shadow]}>{phrase}</Text> : null}
+          {location ? (
+            <Text style={[layout.sealLocated, { color: heroSub }, shadow]} numberOfLines={2}>
+              {location.toUpperCase()}
+            </Text>
+          ) : null}
           {details}
         </View>
       );
@@ -398,6 +403,7 @@ export function ProfileHeroLayout({
           <View>
             <View style={[layout.duetCardShadow, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]} pointerEvents="none" />
             <View style={layout.duetCard}>
+              <View style={layout.duetCardRow}>
               <View style={layout.logoNoGap}>{renderLogo(92)}</View>
               <View style={layout.duetCardText} accessible accessibilityRole="header" accessibilityLabel={name}>
                 <Text style={layout.duetHey}>HEY GORGEOUS, WELCOME TO</Text>
@@ -412,18 +418,22 @@ export function ProfileHeroLayout({
                 {location ? <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
                 {tick}
               </View>
+              </View>
+              {/* What they do, the stars, their years and the slots pill with
+                  Instagram all sit inside the card (owner, 2026-11-15). The
+                  card is white, so the profile draws these in DETAILS_ON_CARD_INK. */}
+              {pills.length ? (
+                <View style={layout.duetPills}>
+                  {pills.map(label => (
+                    <View key={label} style={[layout.duetPill, { backgroundColor: accent }]}>
+                      <Text style={[layout.duetPillText, { color: pillInk }]} numberOfLines={1}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              <View style={layout.duetDetails}>{details}</View>
             </View>
           </View>
-          {pills.length ? (
-            <View style={layout.duetPills}>
-              {pills.map(label => (
-                <View key={label} style={[layout.duetPill, { backgroundColor: accent }]}>
-                  <Text style={[layout.duetPillText, { color: pillInk }]} numberOfLines={1}>{label}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-          <View style={layout.duetDetails}>{details}</View>
         </View>
       );
     }
@@ -458,12 +468,12 @@ export function ProfileHeroLayout({
           <View style={layout.groovyTags}>
             {location ? (
               <View style={[layout.groovyTag, layout.groovyTagLeft, { backgroundColor: blend(accent, "#FFFFFF", 0.6), borderColor: heroText }]}>
-                <Text style={layout.groovyTagText} numberOfLines={1}>{location.toUpperCase()}</Text>
+                <Text style={layout.groovyTagText} numberOfLines={2}>{location.toUpperCase()}</Text>
               </View>
             ) : null}
             {kicker ? (
               <View style={[layout.groovyTag, layout.groovyTagRight, { borderColor: heroText }]}>
-                <Text style={layout.groovyTagText} numberOfLines={1}>{kicker}</Text>
+                <Text style={layout.groovyTagText} numberOfLines={2}>{kicker}</Text>
               </View>
             ) : null}
           </View>
@@ -589,24 +599,33 @@ export function ProfileHeroLayout({
       );
     }
 
-    case "signed":
+    case "signed": {
       // Signature: a big logo in an accent ring, the whole name signed across
-      // its foot in a pen signature, the words round it in Gloock.
+      // its foot in a pen signature, the words round it in Gloock. Every line
+      // is in full ink: the pale accent and the faded sub colour read too faint
+      // under a fine pen script (owner, 2026-11-15).
+      const pen = heroIsDark ? "#FFFFFF" : blend(accent, "#000000", 0.5);
       return (
         <View style={[layout.infoCenter, layout.textFirst]}>
           <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
           <View style={layout.signedLogo}>{renderLogo(148)}</View>
           <View style={layout.signedNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-            <Text style={[layout.signedName, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
+            <Text
+              style={[layout.signedName, { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.45}
+            >
               {name}
             </Text>
             {tick}
           </View>
           {location ? <Text style={[layout.signedLocated, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
-          {kicker ? <Text style={[layout.signedKicker, { color: heroSub }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
+          {kicker ? <Text style={[layout.signedKicker, { color: heroText }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
           <View style={layout.signedDetails}>{details}</View>
         </View>
       );
+    }
 
     case "quietBand": {
       // Quiet: their photo left clear, then a pale band across it with the
@@ -689,29 +708,35 @@ function Starburst({ rating, fill, ink }: { rating: string; fill: string; ink: s
   );
 }
 
-/** Heritage's seal: their name round the top, their area round the foot, a dotted ring. */
+/** Heritage's seal: their name round the top, a star at the foot, a dotted ring. */
 function SealRing({
-  name, location, font, size, text, sub, ring,
-}: { name: string; location: string; font: string; size: number; text: string; sub: string; ring: string }) {
+  name, font, size, text, ring,
+}: { name: string; font: string; size: number; text: string; ring: string }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   return (
     <Svg width={250} height={250} viewBox="0 0 220 220" style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
         <Path id={`sealTop${id}`} d="M14 110A96 96 0 0 1 206 110" fill="none" />
-        <Path id={`sealFoot${id}`} d="M24 110A86 86 0 0 0 196 110" fill="none" />
       </Defs>
       <SvgText fill={text} fontSize={size} letterSpacing={3} fontFamily={font}>
         <TextPath href={`#sealTop${id}`} startOffset="50%" textAnchor="middle">{name}</TextPath>
       </SvgText>
-      {location ? (
-        <SvgText fill={sub} fontSize={9.5} letterSpacing={3} fontFamily="Cinzel-Medium" dy={10}>
-          <TextPath href={`#sealFoot${id}`} startOffset="50%" textAnchor="middle">{`✦ ${location.toUpperCase()} ✦`}</TextPath>
-        </SvgText>
-      ) : null}
+      <SvgText x={110} y={205} fill={text} fontSize={11} textAnchor="middle">✦</SvgText>
       <Circle cx={110} cy={110} r={74} fill="none" stroke={ring} strokeWidth={3.5} strokeDasharray="0.1 7" strokeLinecap="round" />
     </Svg>
   );
 }
+
+/**
+ * Whether this style draws the stars, years and slots pill on a white card
+ * (Duet) rather than straight on the hero, so the profile inks them dark.
+ */
+export function detailsSitOnCard(pageStyle: PageStyle): boolean {
+  return pageStyle.hero === "duet";
+}
+
+/** The ink for details on that card. */
+export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 
 /** Apothecary's tag paper and ink: the tag is a physical object, so its colours are fixed. */
 const TAG_PAPER = "#F6F1E4";
@@ -723,7 +748,9 @@ const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
-  coverTop: { paddingTop: 120 },
+  coverTop: { paddingTop: 64 },
+  // HeroLogo keeps 20pt under itself; pull the name back up under the logo.
+  coverLogo: { alignSelf: "flex-end", marginRight: 28, marginBottom: -14 },
   kicker: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 10, letterSpacing: 2.4, marginBottom: 8 },
   // Arch, Spa and Framed open on a line of text (Framed's beside its logo),
   // not on the logo alone, so they start lower:
@@ -767,20 +794,22 @@ const layout = StyleSheet.create({
   sealTop: { marginTop: 24 },
   seal: { width: 250, height: 250 },
   sealLogo: { position: "absolute", top: 61, left: 61 },
-  sealPhrase: { fontFamily: "LibreBaskerville-Italic", fontSize: 18, marginTop: 6, marginBottom: 10 },
+  sealPhrase: { fontFamily: "LibreBaskerville-Italic", fontSize: 18, marginTop: 6 },
+  sealLocated: { fontFamily: "Cinzel-Medium", fontSize: 11, letterSpacing: 3, marginTop: 6, marginBottom: 10, textAlign: "center" },
   // Duet
   duetWrap: { paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP + 24, marginBottom: 26 },
   duetCardShadow: { position: "absolute", top: 8, left: 7, right: -7, bottom: -8, borderRadius: 28 },
   duetCard: {
-    flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#FFFFFF", borderWidth: 1.5,
+    backgroundColor: "#FFFFFF", borderWidth: 1.5,
     borderColor: "#1F1A1C", borderRadius: 28, paddingVertical: 20, paddingHorizontal: 16,
   },
+  duetCardRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   duetCardText: { flex: 1, minWidth: 0 },
   duetHey: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60" },
   duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20 },
   duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 15, letterSpacing: 4, color: "#1F1A1C", paddingLeft: 28 },
   duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", marginTop: 8 },
-  duetPills: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 26 },
+  duetPills: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 30 },
   duetPill: { minHeight: 30, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 5, borderRadius: 100 },
   duetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1 },
   duetDetails: { alignItems: "center", marginTop: 18 },
@@ -796,10 +825,12 @@ const layout = StyleSheet.create({
   },
   groovyBadgeName: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 50, lineHeight: 64, letterSpacing: -1.5, textAlign: "center", flexShrink: 1 },
   groovyTags: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 14, marginTop: 22, marginBottom: 18 },
-  groovyTag: { borderWidth: 2, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#FFFDF6", maxWidth: 200 },
+  // As wide as the row allows, and two lines if it needs them: a 200pt cap
+  // cut "KENSINGTON AND CHELSEA" off.
+  groovyTag: { borderWidth: 2, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#FFFDF6", maxWidth: "100%" },
   groovyTagLeft: { transform: [{ rotate: "5deg" }] },
   groovyTagRight: { transform: [{ rotate: "-6deg" }] },
-  groovyTagText: { fontSize: 11, fontWeight: "800", letterSpacing: 1.4, color: "#1E2A4A" },
+  groovyTagText: { fontSize: 11, fontWeight: "800", letterSpacing: 1.4, color: "#1E2A4A", textAlign: "center" },
   starburst: { width: 96, height: 96, alignItems: "center", justifyContent: "center", transform: [{ rotate: "14deg" }] },
   starburstStar: { fontSize: 12, lineHeight: 14 },
   starburstRating: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 22, lineHeight: 29 },
@@ -843,12 +874,12 @@ const layout = StyleSheet.create({
   blockTag: { borderWidth: 2, paddingHorizontal: 10, paddingVertical: 5 },
   blockTagText: { fontSize: 10.5, fontWeight: "800", letterSpacing: 1.2 },
   // Signature
-  signedWelcome: { fontFamily: "Gloock-Regular", fontSize: 11, letterSpacing: 4, marginBottom: 14 },
+  signedWelcome: { fontFamily: "Gloock-Regular", fontSize: 13, letterSpacing: 4, marginBottom: 14 },
   signedLogo: { marginBottom: -20 },
   signedNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -50, alignSelf: "stretch", justifyContent: "center" },
-  signedName: { fontFamily: "MrsSaintDelafield-Regular", fontSize: 74, lineHeight: 108, flexShrink: 1, textAlign: "center" },
-  signedLocated: { fontFamily: "Gloock-Regular", fontSize: 12, letterSpacing: 3, marginTop: 2, textAlign: "center" },
-  signedKicker: { fontFamily: "Gloock-Regular", fontSize: 10.5, letterSpacing: 2, marginTop: 6, textAlign: "center" },
+  signedName: { fontFamily: "MrsSaintDelafield-Regular", fontSize: 82, lineHeight: 120, flexShrink: 1, textAlign: "center" },
+  signedLocated: { fontFamily: "Gloock-Regular", fontSize: 14, letterSpacing: 3, marginTop: 2, textAlign: "center" },
+  signedKicker: { fontFamily: "Gloock-Regular", fontSize: 12.5, letterSpacing: 2, marginTop: 6, textAlign: "center" },
   signedDetails: { alignItems: "center", marginTop: 14 },
   // Quiet: the band is paper, so its ink is fixed.
   quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
@@ -856,8 +887,9 @@ const layout = StyleSheet.create({
   quietBand: { backgroundColor: "#FBFCF8", marginTop: 170, paddingHorizontal: 24, paddingVertical: 22 },
   quietRow: { flexDirection: "row", alignItems: "center", gap: 16 },
   quietText: { flex: 1, minWidth: 0 },
-  quietName: { fontFamily: "MarcellusSC-Regular", fontSize: 40, lineHeight: 52, letterSpacing: 7, color: "#2C3527", flexShrink: 1 },
-  quietPhrase: { fontFamily: "Marcellus-Regular", fontSize: 16, color: "#56614F", marginTop: 4 },
+  // Josefin Sans, so Quiet no longer shares Apothecary's Marcellus.
+  quietName: { fontFamily: "JosefinSans_600SemiBold", fontSize: 36, lineHeight: 47, letterSpacing: 6, color: "#2C3527", flexShrink: 1 },
+  quietPhrase: { fontFamily: "JosefinSans_400Regular", fontSize: 16, lineHeight: 22, color: "#56614F", marginTop: 4 },
   quietRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   quietRule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: "#BFCAB6", marginTop: 16, marginBottom: 12 },
   quietKicker: { fontSize: 9.5, letterSpacing: 2.2, color: "#2C3527" },
