@@ -73,7 +73,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
-import { chosenProviderFont, resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
@@ -5167,7 +5167,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 photoUris={heroPhotoUris}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}
-                brandFont={chosenProviderFont(provider.brandFont)}
                 renderLogo={(size) => (
                   <HeroLogo
                     size={size}
