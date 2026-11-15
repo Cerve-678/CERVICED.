@@ -205,8 +205,27 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
-    // Gazette page style (2026-11-15): a blackletter masthead, condensed
-    // headlines and an old newspaper serif. Latin static instances (OFL).
+    // Sealed (round 4, 2026-11-15).
+    'Corinthia-Bold': require('./assets/fonts/Corinthia-Bold.ttf'),
+    'EBGaramond-SemiBold': require('./assets/fonts/EBGaramond-SemiBold.ttf'),
+    'EBGaramond-Italic': require('./assets/fonts/EBGaramond-Italic.ttf'),
+    // Lace (round 4, 2026-11-15).
+    'Allura-Regular': require('./assets/fonts/Allura-Regular.ttf'),
+    'GildaDisplay-Regular': require('./assets/fonts/GildaDisplay-Regular.ttf'),
+    // Sheer (page style, round 4, 2026-11-15).
+    'Bellefair-Regular': require('./assets/fonts/Bellefair-Regular.ttf'),
+    'Jost-Light': require('./assets/fonts/Jost-Light.ttf'),
+    // Embossed (round 4, 2026-11-15).
+    'LibreCaslonDisplay-Regular': require('./assets/fonts/LibreCaslonDisplay-Regular.ttf'),
+    'Italianno-Regular': require('./assets/fonts/Italianno-Regular.ttf'),
+    // Calling Card (round 4, 2026-11-15): a copperplate script and engraved caps.
+    'MonsieurLaDoulaise-Regular': require('./assets/fonts/MonsieurLaDoulaise-Regular.ttf'),
+    'Forum-Regular': require('./assets/fonts/Forum-Regular.ttf'),
+    // Boutique (round 4, 2026-11-15).
+    'DMSerifDisplay-Regular': require('./assets/fonts/DMSerifDisplay-Regular.ttf'),
+    'Manrope-Bold': require('./assets/fonts/Manrope-Bold.ttf'),
+    // Gazette (round 4, 2026-11-15): a blackletter masthead, condensed
+    // headlines and an old newspaper serif.
     'UnifrakturMaguntia-Book': require('./assets/fonts/UnifrakturMaguntia-Book.ttf'),
     'Oswald-Bold': require('./assets/fonts/Oswald-Bold.ttf'),
     'Oswald-Medium': require('./assets/fonts/Oswald-Medium.ttf'),
