@@ -5,9 +5,9 @@
 
 #generated
 
-**3813 functions** across **538 files**.
+**3822 functions** across **540 files**.
 
-### `src/components/` (66)
+### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
@@ -18,6 +18,7 @@
 - `AreasYouCoverPicker.tsx` — add · addSuggestion · AreasYouCoverPicker · remove
 - `AvailabilityCard.tsx` — animatedStyle · handlePress · handlePressIn · handlePressOut · highlightColors
 - `BookingSheet.tsx` — appointmentDuration · **BookingSheet** · cancelEmergency · confirmEmergency · depositPolicyArg · goToStep · handleBack · handleLocalApplyPromo · handleLocalRemovePromo · handleNext · handleSelectDate · handleSelectTime · handleSubmit · localPromoDiscount · nudgeNotesAboveKeyboard · onAccentColor · policyPages · stepBlocker · summaryRemaining · toggleAddOn · tokens · totalAddOnsPrice
+- `BrandingLookPicker.tsx` — BrandingLookPicker · LookCard · lookParts
 - `CartTabBadge.tsx` — **useCartBadge**
 - `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
 - `ChatComponents.tsx` — ActionCard · along · **AmbientMark** · animatedStyle · **AnswerAfter** · **AnswerBefore** · **answerListsProviders** · **answerRevealStart** · Appear · CardView · **ChatBubble** · **ChatInput** · content · handleImagePick · handlePress · handlePressIn · handlePressOut · handleSend · HeadlineView · **InspirationGallery** · **Mark** · PillChip · press · **ProviderRecommendations** · renderInlineRichText · **renderRichText** · splitEditorialCopy · **stripRichText** · **Suggestions** · **ThinkingIndicator** · toggle · WorkFold · WorkSteps
@@ -93,7 +94,8 @@
 - `FormKit.tsx` — backFrom · box · **Chip** · **ChipWrap** · **DobField** · **FieldRow** · **FormCard** · **PrimaryButton** · **QuestionCard** · **ScreenTitle** · **SectionLabel** · setDay · setMonth · setYear · **SwitchRow** · **useFieldInputStyle** · **useSuccessColors**
 - `useRevealNext.ts` — onScroll · onViewportLayout · reveal · **revealEase** · **revealOffset** · step · stopGlide · **useRevealNext**
 
-### `src/constants/` (12)
+### `src/constants/` (13)
+- `brandingLooks.ts` — **isLookUnlockedForLinkOnly** · **lookMatches** · **resolveLook**
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
 - `pageStyles.ts` — **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
@@ -403,7 +405,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
+- `BrandingScreen.tsx` — applyLook · BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · isLookLocked · pickImage · ProfilePreviewScreen · removeImage · selectedLookKey · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
