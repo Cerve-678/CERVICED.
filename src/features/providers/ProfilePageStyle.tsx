@@ -14,7 +14,6 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 import {
-  GALLERY_KICKERS,
   headingPair,
   PAGE_SECTION_TITLES,
   romanNumeral,
@@ -198,15 +197,11 @@ export function PageSectionHeading({
           <Squiggle color={accent} />
         </View>
       );
-    case "room":
-      // Gallery: a wall label over the title.
+    case "serifTitle":
       return (
-        <View {...a11y} accessible style={headingStyles.roomWrap}>
-          <Text style={[headingStyles.roomKicker, { color: color ?? sheetInk(palette.background).sub }]}>
-            {GALLERY_KICKERS[section]}
-          </Text>
-          <Text style={[headingStyles.roomTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
-        </View>
+        <Text {...a11y} style={[headingStyles.serifTitle, { color: ink }]}>
+          {headingPair(section).join(" ")}
+        </Text>
       );
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
@@ -870,9 +865,7 @@ const headingStyles = StyleSheet.create({
   layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -26, textAlign: "center" },
   groovyWrap: { marginBottom: 14 },
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 42, letterSpacing: -0.8 },
-  roomWrap: { marginBottom: 14 },
-  roomKicker: { fontFamily: "DidactGothic-Regular", fontSize: 10, letterSpacing: 2 },
-  roomTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 36, marginTop: 2 },
+  serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 36, marginBottom: 14 },
   labelCaps: { fontFamily: "CormorantGaramond-SemiBold", fontSize: 14, letterSpacing: 4 },
 });
 

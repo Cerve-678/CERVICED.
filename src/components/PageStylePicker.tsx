@@ -92,7 +92,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   heritage: { lead: 'The', text: 'SERVICES' },
   duet: { lead: 'The', text: 'SERVICES' },
   groovy: { text: 'the services' },
-  gallery: { lead: 'ON VIEW', text: 'The Services' },
+  gallery: { text: 'The Services' },
   apothecary: { text: 'THE SERVICES' },
 };
 
@@ -206,13 +206,8 @@ function MiniProfile({
         );
       case 'groovy':
         return <Text style={[mini.groovy, { color: ink }]}>{heading.text}</Text>;
-      case 'room':
-        return (
-          <View>
-            <Text style={[mini.roomKicker, { color: withAlpha(ink, 0.6) }]}>{heading.lead}</Text>
-            <Text style={[mini.roomTitle, { color: ink }]}>{heading.text}</Text>
-          </View>
-        );
+      case 'serifTitle':
+        return <Text style={[mini.serifTitle, { color: ink }]}>{heading.text}</Text>;
       case 'labelCaps':
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       default:
@@ -460,8 +455,7 @@ const mini = StyleSheet.create({
   vibes: { fontFamily: 'GreatVibes_400Regular', fontSize: 18, lineHeight: 22 },
   montserrat: { fontFamily: 'Montserrat-ExtraBold', fontSize: 9, marginTop: -8 },
   groovy: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 14 },
-  roomKicker: { fontFamily: 'DidactGothic-Regular', fontSize: 6, letterSpacing: 1 },
-  roomTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 13, lineHeight: 14 },
+  serifTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 13, lineHeight: 14 },
   labelCaps: { fontFamily: 'CormorantGaramond-SemiBold', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
   hard: {
     backgroundColor: '#FFFFFF', borderColor: '#1F1A1C', overflow: 'visible',

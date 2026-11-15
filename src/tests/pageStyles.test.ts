@@ -1,6 +1,5 @@
 import {
   DEFAULT_PAGE_STYLE,
-  GALLERY_KICKERS,
   romanNumeral,
   getPageStyle,
   headingPair,
@@ -167,15 +166,14 @@ describe('the 2026-11-14 styles', () => {
     expect(getPageStyle('heritage').numeralsLower).toBeFalsy();
   });
 
+  it('gives Gallery\'s sections a plain serif title with nothing above it', () => {
+    expect(getPageStyle('gallery').heading).toBe('serifTitle');
+  });
+
   it('only puts Editorial\'s About on a band', () => {
     expect(PAGE_STYLES.filter(s => s.aboutOnBand).map(s => s.key)).toEqual(['editorial']);
   });
 
-  it('gives every section a Gallery wall label', () => {
-    (Object.keys(PAGE_SECTION_TITLES) as PageSectionKey[]).forEach(section => {
-      expect(GALLERY_KICKERS[section]).toMatch(/^[A-Z ]+$/);
-    });
-  });
 
   it('turns what they do into a phrase', () => {
     expect(kickerPhrase('LASHES')).toBe('Lashes');
