@@ -5,7 +5,7 @@
 
 #generated
 
-**3813 functions** across **538 files**.
+**3814 functions** across **538 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -99,7 +99,7 @@
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
-- `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale**
+- `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale** · **resolveProviderNameLineHeight**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · isCardShape · **isDarkColor** · isHeroFinish · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
 - `reschedule.ts` — changes
 - `serviceTypes.ts` — **isServiceTypeKey** · **serviceTypeOptionsFor**
