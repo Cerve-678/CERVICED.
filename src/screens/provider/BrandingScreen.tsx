@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -44,6 +44,14 @@ import ProviderThemePicker, { type ThemeSelection } from '../../components/Provi
 import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import ProviderFontPicker from '../../components/ProviderFontPicker';
 import PageStylePicker from '../../components/PageStylePicker';
+import BrandingLookPicker from '../../components/BrandingLookPicker';
+import {
+  BRANDING_LOOKS,
+  isLookUnlockedForLinkOnly,
+  lookMatches,
+  resolveLook,
+  type BrandingLook,
+} from '../../constants/brandingLooks';
 import {
   DEFAULT_PAGE_STYLE,
   DEFAULT_POLICY_PICTURE_LOOK,
@@ -396,6 +404,32 @@ export default function BrandingScreen({ navigation }: any) {
     setGradient(resolvedGradient);
   }, []);
 
+  // A Look sets every part at once. The custom colours are left as they were,
+  // so a provider who goes back to Custom finds their own colours still there.
+  const applyLook = useCallback((look: BrandingLook) => {
+    const next = resolveLook(look);
+    setThemeChoice(next.themeChoice);
+    setSheetColor(next.sheetColor);
+    setAccentColor(next.accentColor);
+    setGradient(next.gradient);
+    setHeroFinish(next.finish);
+    setCardShape(next.shape);
+    setPageStyle(next.pageStyle);
+    setBrandFont(next.font);
+  }, []);
+
+  // The Look whose parts all still match the screen. Changing any part below
+  // simply leaves no Look chosen.
+  const selectedLookKey = useMemo(() => {
+    const current = { themeChoice, sheetColor, finish: heroFinish, shape: cardShape, pageStyle, font: brandFont };
+    return BRANDING_LOOKS.find(look => lookMatches(look, current))?.key ?? null;
+  }, [themeChoice, sheetColor, heroFinish, cardShape, pageStyle, brandFont]);
+
+  const isLookLocked = useCallback(
+    (look: BrandingLook) => limited && !isLookUnlockedForLinkOnly(look),
+    [limited],
+  );
+
   // The preview's words follow the backdrop's lead colour, so pale sets like
   // Oat Milk read in ink rather than shadowed white.
   const previewOnLight = !backgroundImage && !isDarkColor(gradient[0]);
@@ -500,8 +534,25 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Sections run from the choice that changes the most (the
-              page style) to the least (card corners, a photo). */}
+          {/* Sections run from the choice that changes the most (a whole
+              Look, then the page style) to the least (card corners, a photo). */}
+          {/* Looks — finished combinations that set the parts below at once */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Looks</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Start from a finished look: it sets your page style, colours, finish, card shape and font together. Change any of them below to make it your own.
+            </Text>
+            <BrandingLookPicker
+              selectedKey={selectedLookKey}
+              onChoose={applyLook}
+              isLocked={isLookLocked}
+              onLockedPress={showLocked}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+            />
+          </View>
+
           {/* Page style — the layout and decoration of the whole profile */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
