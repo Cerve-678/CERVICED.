@@ -17,7 +17,8 @@
 
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
-  | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary';
+  | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
+  | 'snapshot' | 'signature' | 'botanical' | 'quiet';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -81,7 +82,11 @@ export type PageHero =
   | 'duet'       // a white welcome card: the logo beside the name in signature script over caps
   | 'groovy'     // a sticker sheet: logo sticker, rating starburst, the name on a tilted pill
   | 'exhibition' // a gallery wall label, the name large, the logo framed and matted
-  | 'label';     // a paper tag hanging on a string
+  | 'label'      // a paper tag hanging on a string
+  | 'photoStrip' // three tilted photos, the name signed across their foot (no logo)
+  | 'signed'     // a big ringed logo with the whole name signed across its foot
+  | 'wreath'     // the logo in a leaf wreath, the name in spaced serif caps under it
+  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -194,6 +199,32 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     key: 'apothecary', name: 'Apothecary', description: 'A hanging paper tag, numbered treatments',
     heading: 'labelCaps', cards: 'label', policies: 'numerals', logo: 'circle',
     hero: 'label', aboutInHero: false, numeralsLower: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15: Duet's A and C heroes and Apothecary's A and C, each made a
+  // template of its own, from https://claude.ai/artifact/RopN63UF8acRMG1aCYK4Hh.
+  {
+    key: 'snapshot', name: 'Snapshot', description: 'Your photos up top, your name signed across them',
+    heading: 'layered', cards: 'offset', policies: 'tiles', logo: 'circle',
+    hero: 'photoStrip', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'signature', name: 'Signature', description: 'A big ringed logo with your name signed across it',
+    heading: 'layered', cards: 'paper', policies: 'divided', logo: 'accentRing',
+    hero: 'signed', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'botanical', name: 'Botanical', description: 'Your logo in a leaf wreath, soft serif caps',
+    heading: 'labelCaps', cards: 'label', policies: 'numerals', logo: 'circle',
+    hero: 'wreath', aboutInHero: false, numeralsLower: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  {
+    key: 'quiet', name: 'Quiet', description: 'Your photo left clear, your name on a calm band',
+    heading: 'labelCaps', cards: 'none', policies: 'definition', logo: 'circle',
+    hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
 ];

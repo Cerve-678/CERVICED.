@@ -94,6 +94,10 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   groovy: { text: 'the services' },
   gallery: { text: 'The Services' },
   apothecary: { text: 'THE SERVICES' },
+  snapshot: { lead: 'The', text: 'SERVICES' },
+  signature: { lead: 'The', text: 'SERVICES' },
+  botanical: { text: 'THE SERVICES' },
+  quiet: { text: 'THE SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -322,6 +326,25 @@ function MiniProfile({
           <View style={mini.tag}>
             <Text style={mini.tagName} numberOfLines={1}>NAME</Text>
           </View>
+        ) : style.hero === 'photoStrip' ? (
+          // Snapshot: three tilted photos with the name signed across them.
+          <View style={mini.stripRow}>
+            <View style={[mini.stripPhoto, { transform: [{ rotate: '-6deg' }] }]} />
+            <View style={mini.stripPhoto} />
+            <View style={[mini.stripPhoto, { transform: [{ rotate: '6deg' }] }]} />
+            <Text style={mini.stripName} numberOfLines={1}>Name</Text>
+          </View>
+        ) : style.hero === 'signed' ? (
+          <View style={mini.stack}>
+            {logo}
+            <Text style={[mini.vibes, mini.signedName]} numberOfLines={1}>Name</Text>
+          </View>
+        ) : style.hero === 'wreath' ? (
+          <View style={mini.wreath}>{logo}</View>
+        ) : style.hero === 'quietBand' ? (
+          <View style={mini.quietBand}>
+            <Text style={mini.tagName} numberOfLines={1}>NAME</Text>
+          </View>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -451,5 +474,11 @@ const mini = StyleSheet.create({
     shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0,
   },
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
+  stripRow: { flexDirection: 'row', gap: 3, alignItems: 'center' },
+  stripPhoto: { width: 22, height: 30, backgroundColor: 'rgba(255,255,255,0.75)', borderWidth: 2, borderColor: '#FFFFFF' },
+  stripName: { position: 'absolute', left: 0, right: 0, bottom: -10, textAlign: 'center', fontFamily: 'MsMadi-Regular', fontSize: 20, color: '#FFFFFF' },
+  signedName: { color: '#FFFFFF', marginTop: -10 },
+  wreath: { padding: 4, borderRadius: 24, borderWidth: 2, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.85)' },
+  quietBand: { alignSelf: 'stretch', backgroundColor: '#FBFCF8', paddingVertical: 6, paddingHorizontal: 10, marginTop: 30 },
   band: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 26, borderTopLeftRadius: 30, borderTopRightRadius: 10 },
 });

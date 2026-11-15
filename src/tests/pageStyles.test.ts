@@ -49,11 +49,17 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the twelve picked styles plus Classic, each once', () => {
+  it('has the sixteen picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
+      'snapshot', 'signature', 'botanical', 'quiet',
     ]);
+  });
+
+  it('gives every style but Classic and Glossy a hero of its own', () => {
+    const heroes = PAGE_STYLES.filter(s => s.key !== 'classic' && s.key !== 'glossy').map(s => s.hero);
+    expect(new Set(heroes).size).toBe(heroes.length);
   });
 
   it('gives each of the 2026-11-14 styles a hero and heading of its own', () => {

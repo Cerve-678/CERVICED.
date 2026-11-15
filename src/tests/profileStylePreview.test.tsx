@@ -145,3 +145,29 @@ describe('the 2026-11-14 heroes', () => {
   });
 
 });
+
+describe('the 2026-11-15 templates', () => {
+  it('signs Snapshot\'s name across its photo strip, with what they do as pills', () => {
+    renderPreview('snapshot');
+    expect(screen.getByText('Amara')).toBeTruthy();
+    expect(screen.getAllByText('LASHES')).toHaveLength(2);
+  });
+
+  it('signs the whole name across Signature\'s logo', () => {
+    renderPreview('signature');
+    expect(screen.getByText('WELCOME TO')).toBeTruthy();
+    expect(screen.getByLabelText('Amara Lashes')).toBeTruthy();
+  });
+
+  it('sets Botanical\'s name in caps under the wreath', () => {
+    renderPreview('botanical');
+    expect(screen.getByText('AMARA LASHES')).toBeTruthy();
+    expect(screen.getByText('Lashes · Peckham')).toBeTruthy();
+  });
+
+  it('puts Quiet\'s name on its band with the area above it', () => {
+    renderPreview('quiet');
+    expect(screen.getByText('AMARA LASHES')).toBeTruthy();
+    expect(screen.getByText('PECKHAM')).toBeTruthy();
+  });
+});

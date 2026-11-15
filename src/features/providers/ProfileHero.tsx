@@ -9,7 +9,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
+import Svg, { Circle, Defs, Ellipse, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
 import type { PageStyle } from "../../constants/pageStyles";
@@ -546,6 +546,127 @@ export function ProfileHeroLayout({
       );
     }
 
+    case "photoStrip": {
+      // Snapshot: three of their photos, tilted, with the first word signed
+      // across their foot and the rest in caps. No logo, like Cover.
+      const [script, caps] = splitFirst(name);
+      const pills = kicker.split("·").map(part => part.trim()).filter(Boolean);
+      const tilts = ["-5deg", "1deg", "5deg"] as const;
+      return (
+        <View style={layout.stripWrap}>
+          <View style={layout.stripRow}>
+            {tilts.map((rotate, i) => (
+              <View
+                key={rotate}
+                style={[
+                  layout.stripPhoto,
+                  { transform: [{ rotate }, { translateY: i === 1 ? -8 : 0 }], backgroundColor: blend(accent, "#FFFFFF", i === 1 ? 0.35 : 0.55) },
+                ]}
+              >
+                {photoUris?.[i] ? (
+                  <Image source={{ uri: photoUris[i] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                ) : null}
+              </View>
+            ))}
+          </View>
+          <View style={layout.stripName} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.stripScript, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+              {script}
+            </Text>
+            {caps ? (
+              <Text style={[layout.stripCaps, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {caps.toUpperCase()}
+              </Text>
+            ) : null}
+            {tick}
+          </View>
+          {location ? <Text style={[layout.stripLocated, { color: heroSub }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+          {pills.length ? (
+            <View style={layout.offsetPills}>
+              {pills.map(label => (
+                <View key={label} style={[layout.offsetPill, { shadowColor: blend(accent, "#FFFFFF", 0.5) }]}>
+                  <Text style={layout.offsetPillText} numberOfLines={1}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <View style={layout.stripDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "signed":
+      // Signature: a big logo in an accent ring, the whole name signed across its foot.
+      return (
+        <View style={[layout.infoCenter, layout.textFirst]}>
+          <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
+          <View style={layout.signedLogo}>{renderLogo(148)}</View>
+          <View style={layout.signedNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.signedName, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {location ? <Text style={[layout.signedLocated, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+          {kicker ? <Text style={[layout.signedKicker, { color: heroSub }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
+          <View style={layout.signedDetails}>{details}</View>
+        </View>
+      );
+
+    case "wreath": {
+      // Botanical: the logo in a leaf wreath, the name in spaced serif caps.
+      const line = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={[layout.infoCenter, layout.wreathTop]}>
+          <View style={layout.wreath}>
+            <Wreath color={heroIsDark ? withAlpha(heroText, 0.85) : accent} />
+            <View style={layout.wreathLogo}>{renderLogo(140)}</View>
+          </View>
+          <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.wreathName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {name.toUpperCase()}
+            </Text>
+            {tick}
+          </View>
+          {line ? <Text style={[layout.wreathLine, { color: heroSub }, shadow]} numberOfLines={2}>{line}</Text> : null}
+          {kicker ? <Text style={[layout.wreathKicker, { color: heroText }, shadow]}>{kicker.split(" · ").join(" ✦ ")}</Text> : null}
+          <View style={layout.wreathDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "quietBand": {
+      // Quiet: their photo left clear, then a pale band across it with the
+      // name and a ringed logo. The band is paper, so its ink is fixed.
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.quietWrap}>
+          {location ? <Text style={[layout.quietArea, { color: heroText }, shadow]} numberOfLines={1}>{location.toUpperCase()}</Text> : null}
+          <View style={layout.quietBand}>
+            <View style={layout.quietRow}>
+              <View style={layout.quietText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <View style={layout.tickRow}>
+                  <Text style={layout.quietName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+                  {tick}
+                </View>
+                {phrase ? <Text style={layout.quietPhrase}>{phrase}</Text> : null}
+              </View>
+              <View style={[layout.quietRing, { borderColor: accent }]}>
+                <View style={layout.logoNoGap}>{renderLogo(72)}</View>
+              </View>
+            </View>
+            {kicker ? (
+              <>
+                <View style={layout.quietRule} />
+                <Text style={layout.quietKicker}>{kicker.split(" · ").join(" ✦ ")}</Text>
+              </>
+            ) : null}
+          </View>
+          <View style={layout.quietDetails}>{details}</View>
+        </View>
+      );
+    }
+
     default:
       return (
         <>
@@ -621,6 +742,25 @@ function SealRing({
 
 /** Apothecary's tag paper and ink: the tag is a physical object, so its colours are fixed. */
 const TAG_PAPER = "#F6F1E4";
+
+/** Botanical's leaf wreath, drawn round a 140pt logo. */
+function Wreath({ color }: { color: string }) {
+  return (
+    <Svg width={230} height={230} viewBox="0 0 230 230" style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Path d="M69 194.7A92 92 0 0 1 69 35.3" fill="none" stroke={color} strokeWidth={1.4} />
+      <Path d="M161 194.7A92 92 0 0 0 161 35.3" fill="none" stroke={color} strokeWidth={1.4} />
+      {WREATH_LEAVES.map(([cx, cy, angle]) => (
+        <Ellipse key={`${cx}-${cy}`} cx={cx} cy={cy} rx={10} ry={3.8} fill={color} transform={`rotate(${angle} ${cx} ${cy})`} />
+      ))}
+    </Svg>
+  );
+}
+
+/** Where each leaf sits round the wreath (x, y, tilt), seven a side. */
+const WREATH_LEAVES: readonly [number, number, number][] = [
+  [69, 194.7, 185], [44.5, 174.1, 205], [28.5, 146.5, 225], [23, 115, 245], [28.5, 83.5, 265], [44.5, 55.9, 285], [69, 35.3, 305],
+  [161, 194.7, -5], [185.5, 174.1, -25], [201.5, 146.5, -45], [207, 115, -65], [201.5, 83.5, -85], [185.5, 55.9, -105], [161, 35.3, -125],
+];
 
 /** How much lower a hero that opens on text starts than one that opens on the logo. */
 const TEXT_FIRST_DROP = 48;
@@ -733,6 +873,53 @@ const layout = StyleSheet.create({
   tagPhrase: { fontFamily: "Marcellus-Regular", fontSize: 15, color: "#56614F", textAlign: "center" },
   tagCaption: { fontSize: 9, letterSpacing: 2.4, color: "#56614F", marginTop: 8 },
   labelDetails: { alignItems: "center", marginTop: 22 },
+  // Snapshot
+  stripWrap: { alignItems: "center", marginTop: TEXT_FIRST_DROP + 16, marginBottom: 26, paddingHorizontal: 20 },
+  stripRow: { flexDirection: "row", justifyContent: "center", gap: 10 },
+  stripPhoto: {
+    width: 104, height: 140, borderWidth: 5, borderColor: "#FFFFFF", borderRadius: 6, overflow: "hidden",
+    shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 8 },
+  },
+  stripName: { alignItems: "center", marginTop: -46, alignSelf: "stretch" },
+  stripScript: { fontFamily: "MsMadi-Regular", fontSize: 92, lineHeight: 110 },
+  stripCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 19, letterSpacing: 6, marginTop: -22, textAlign: "center" },
+  stripLocated: { fontFamily: "Montserrat-Medium", fontSize: 9.5, letterSpacing: 2.6, marginTop: 8, textAlign: "center" },
+  offsetPills: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 16 },
+  offsetPill: {
+    minHeight: 30, justifyContent: "center", paddingHorizontal: 13, paddingVertical: 5, borderRadius: 100,
+    borderWidth: 1.5, borderColor: "#1F1A1C", backgroundColor: "#FFFFFF",
+    shadowOffset: { width: 3, height: 4 }, shadowOpacity: 1, shadowRadius: 0,
+  },
+  offsetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1, color: "#1F1A1C" },
+  stripDetails: { alignItems: "center", marginTop: 16 },
+  // Signature
+  signedWelcome: { fontFamily: "Montserrat-Medium", fontSize: 10, letterSpacing: 4, marginBottom: 14 },
+  signedLogo: { marginBottom: -20 },
+  signedNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -42, alignSelf: "stretch", justifyContent: "center" },
+  signedName: { fontFamily: "MsMadi-Regular", fontSize: 68, lineHeight: 84, flexShrink: 1, textAlign: "center" },
+  signedLocated: { fontFamily: "Montserrat-ExtraBold", fontSize: 11, letterSpacing: 3, marginTop: 2, textAlign: "center" },
+  signedKicker: { fontFamily: "Montserrat-Medium", fontSize: 10, letterSpacing: 2, marginTop: 6, textAlign: "center" },
+  signedDetails: { alignItems: "center", marginTop: 14 },
+  // Botanical
+  wreathTop: { marginTop: 20 },
+  wreath: { width: 230, height: 230 },
+  wreathLogo: { position: "absolute", top: 45, left: 45 },
+  wreathName: { fontFamily: "MarcellusSC-Regular", fontSize: 36, lineHeight: 44, letterSpacing: 8, textAlign: "center", flexShrink: 1, marginTop: 6 },
+  wreathLine: { fontFamily: "Marcellus-Regular", fontSize: 16, marginTop: 2, textAlign: "center" },
+  wreathKicker: { fontSize: 9.5, letterSpacing: 2.4, marginTop: 10, textAlign: "center" },
+  wreathDetails: { alignItems: "center", marginTop: 14 },
+  // Quiet: the band is paper, so its ink is fixed.
+  quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  quietArea: { fontSize: 10, letterSpacing: 3, paddingHorizontal: 24 },
+  quietBand: { backgroundColor: "#FBFCF8", marginTop: 170, paddingHorizontal: 24, paddingVertical: 22 },
+  quietRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  quietText: { flex: 1, minWidth: 0 },
+  quietName: { fontFamily: "MarcellusSC-Regular", fontSize: 40, lineHeight: 46, letterSpacing: 7, color: "#2C3527", flexShrink: 1 },
+  quietPhrase: { fontFamily: "Marcellus-Regular", fontSize: 16, color: "#56614F", marginTop: 4 },
+  quietRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  quietRule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: "#BFCAB6", marginTop: 16, marginBottom: 12 },
+  quietKicker: { fontSize: 9.5, letterSpacing: 2.2, color: "#2C3527" },
+  quietDetails: { alignItems: "center", marginTop: 18 },
 });
 
 /** Cover's white pills under the name. */
