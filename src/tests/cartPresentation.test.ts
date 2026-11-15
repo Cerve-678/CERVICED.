@@ -53,6 +53,18 @@ describe('findCartItemIssues', () => {
     expect(issues.get('b')).toBe(CART_ISSUE.overlap);
   });
 
+  it("flags a service from the client's own business, and only that, before checkout", () => {
+    // The database refuses it at the hold ("You can't book your own provider
+    // profile."); the card should say so up front instead. It outranks the
+    // overlap it would otherwise cause — removing it is the only fix.
+    const issues = findCartItemIssues([
+      entry({ itemId: 'a', time: '2:00 PM', duration: '1h', ownProvider: true }),
+      entry({ itemId: 'b', time: '2:30 PM', duration: '1h' }),
+    ], NOW);
+    expect(issues.get('a')).toBe(CART_ISSUE.ownProvider);
+    expect(issues.has('b')).toBe(false);
+  });
+
   it('treats back-to-back as fine — that is how a grouped appointment is built', () => {
     expect(findCartItemIssues([
       entry({ itemId: 'a', time: '2:00 PM', duration: '1h' }),

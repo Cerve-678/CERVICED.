@@ -2004,7 +2004,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [cartError, clearCartError, showAlert]);
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, myProviderId, myProviderIdStatus } = useAuth();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
   // Checkout carries on after the checklist saves, by which time this render's
   // handleCheckout would still see the details as missing.
@@ -2922,9 +2922,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         date: booking.selectedDate,
         time: booking.selectedTime,
         duration: durationWithAddOns(item.duration, item.addOns),
+        // Only once the ownership lookup has actually answered; until then
+        // (or if it failed) the database guard at checkout still catches it.
+        ownProvider: myProviderIdStatus === 'resolved'
+          && !!myProviderId
+          && item.providerId === myProviderId,
       };
     })),
-    [items, getServiceBooking],
+    [items, getServiceBooking, myProviderId, myProviderIdStatus],
   );
 
   // A stored date/time the app can't parse back shouldn't be possible — the
@@ -3411,7 +3416,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // finding, not a second one, so it reuses it rather than re-deriving it
     // with wording that could drift out of step.
     if (localItemIssues.size > 0) {
-      showAlert('Schedule Required', 'Some services in your cart need attention before checkout.');
+      const hasOwnBusiness = [...localItemIssues.values()].includes(CART_ISSUE.ownProvider);
+      showAlert(
+        hasOwnBusiness ? "You can't book yourself" : 'Schedule Required',
+        hasOwnBusiness
+          ? 'Your cart has a service from your own business. Remove it to check out.'
+          : 'Some services in your cart need attention before checkout.',
+      );
       return;
     }
 
