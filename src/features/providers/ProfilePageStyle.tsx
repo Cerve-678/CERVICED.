@@ -182,7 +182,7 @@ export function PageSectionHeading({
       );
     }
     case "layered": {
-      // Duet: a big script word with heavy caps laid over its foot.
+      // Duet: a big script word with heavy caps sitting just under it.
       const [lead, rest] = headingPair(section);
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
@@ -900,8 +900,9 @@ const headingStyles = StyleSheet.create({
   heritageScript: { fontFamily: "LibreBaskerville-Italic", fontSize: 20, lineHeight: 30 },
   heritageCaps: { fontFamily: "Cinzel-Bold", fontSize: 20, letterSpacing: 4, marginTop: 2, textAlign: "center" },
   layeredScript: { fontFamily: "MsMadi-Regular", fontSize: 54, lineHeight: 79 },
-  // Overlaps the script's foot, a little less than it did (owner, 2026-11-15).
-  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -22, textAlign: "center" },
+  // Sits just under the script's letters rather than over them: the owner
+  // found any real overlap too much (2026-11-15).
+  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -12, textAlign: "center" },
   groovyWrap: { marginBottom: 14 },
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 47, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 41, marginBottom: 14 },
