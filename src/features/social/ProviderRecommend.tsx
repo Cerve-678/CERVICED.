@@ -6,8 +6,8 @@
 // then moved out of the header onto the logo, placement B):
 //
 // - The first time the profile is opened, the Recommend bar slides up from
-//   the bottom (the same bar as after rating a visit) and stays until acted on
-//   or closed (shouldOfferOnProfile decides; once per provider).
+//   the bottom (the same bar as after rating a visit) and closes after 15
+//   seconds or when acted on (shouldOfferOnProfile decides; once per provider).
 // - From then on it's a small thumbs-up badge on the provider's logo. A
 //   successful Recommend shows a brief bubble pointing at the badge.
 // - Tapping the badge recommends and drops a menu down under it with
@@ -424,6 +424,7 @@ export function ProviderRecommendLayer({
         bottomOffset={bottomOffset}
         subtitle="You've been here"
         colors={theme}
+        autoHideMs={15_000}
       />
 
       {phase === 'hint' ? (

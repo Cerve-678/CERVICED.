@@ -94,12 +94,14 @@ export function useRecommendAfterRating(userId: string | null, onRecommended?: (
  * own (on their profile) rather than the app's accent.
  */
 export function RecommendAfterRatingBar({
-  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it', colors,
+  offer, busy, onYes, onClose, P, bottomOffset, subtitle = 'Glad you enjoyed it', colors, autoHideMs,
 }: RecommendBarProps & {
   P: AppTheme;
   bottomOffset?: number | undefined;
   subtitle?: string;
   colors?: { accent: string; onAccent: string } | undefined;
+  /** Optional auto-close for the provider-profile prompt. */
+  autoHideMs?: number;
 }) {
   const fill = colors?.accent ?? P.accent;
   const ink = colors?.onAccent ?? P.onAccent;
@@ -116,6 +118,12 @@ export function RecommendAfterRatingBar({
     Animated.timing(slide, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShown(null));
     return undefined;
   }, [offer, slide]);
+
+  useEffect(() => {
+    if (!offer || !autoHideMs || busy) return undefined;
+    const timer = setTimeout(onClose, autoHideMs);
+    return () => clearTimeout(timer);
+  }, [offer, autoHideMs, busy, onClose]);
 
   if (!shown) return null;
   return (
