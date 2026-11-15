@@ -16,11 +16,10 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import TabIcon from "../../components/TabIcon";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
-import { romanNumeral } from "../../constants/pageStyles";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./reviewPresentation";
 import { HalftoneScreen } from "./heroes/GazetteHero";
-import { CALLING_CARD_PAPER, GoldClip } from "./heroes/CallingCardHero";
+import { BulldogClip, CALLING_CARD_PAPER } from "./heroes/CallingCardHero";
 import {
   PageSection,
   PageSectionHeading,
@@ -372,13 +371,13 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const stamps = !!palette.pageStyle?.stampPhotos;
   // Embossed: each photo sits in a plate mark pressed into the page, like a print.
   const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
-  // Calling Card: each photo a cream-bordered print pinned by a gold clip.
+  // Calling Card: each photo a cream-bordered print pinned by an accent clip.
   const clipped = !!palette.pageStyle?.clippedPhotos;
   // Gazette: each photo square in a fine ink frame, under a newsprint dot screen.
   const halftone = !!palette.pageStyle?.halftonePhotos;
 
-  // Novel captions its photos like a book's plates, under each one.
-  const plates = !!palette.pageStyle?.plateCaptions;
+  // Novel sets each photo on a page with its caption in italic under it.
+  const plates = !!palette.pageStyle?.pagePhotos;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -444,15 +443,15 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                 />
                 {halftone ? <HalftoneScreen /> : null}
                 {plates ? (
-                  <Text style={[styles.plateCaption, { color: palette.sub }]} numberOfLines={2}>
-                    Plate {romanNumeral(item.globalIndex)}{item.caption ? ` — ${item.caption}` : ""}
-                  </Text>
+                  item.caption ? (
+                    <Text style={[styles.plateCaption, { color: palette.sub }]} numberOfLines={2}>{item.caption}</Text>
+                  ) : null
                 ) : item.caption ? (
                   <View style={[styles.captionWrap, clipped && styles.clippedCaption]}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
                   </View>
                 ) : null}
-                {clipped ? <GoldClip width={40} style={styles.clippedClip} /> : null}
+                {clipped ? <BulldogClip width={40} colour={palette.accent} style={styles.clippedClip} /> : null}
               </TouchableOpacity>
             ))}
           </View>
