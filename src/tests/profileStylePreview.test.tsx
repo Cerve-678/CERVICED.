@@ -108,14 +108,14 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('PECKHAM')).toBeTruthy();
   });
 
-  it('welcomes on Duet\'s card and lists what they do as pills', () => {
+  it('welcomes on Duet\'s card without repeating what they do', () => {
     renderPreview('duet');
     expect(screen.getByText('HEY GORGEOUS, WELCOME TO')).toBeTruthy();
     expect(screen.getByText('Amara')).toBeTruthy();
-    // Once in the name's caps, once as the pill for what they do.
-    expect(screen.getAllByText('LASHES')).toHaveLength(2);
+    // Only in the name's caps: Additional Information lists it as Category.
+    expect(screen.getAllByText('LASHES')).toHaveLength(1);
     expect(screen.queryByText('YOUR ARTIST')).toBeNull();
-    // The slots pill sits inside the card with the pills.
+    // The slots pill sits inside the card.
     expect(screen.getByText('Stay updated')).toBeTruthy();
     // The stars sit on the location's line.
     expect(screen.getByLabelText('Rated 5.0')).toBeTruthy();

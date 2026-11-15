@@ -168,7 +168,8 @@ export default function BrandingScreen({ navigation }: any) {
           const where = cached.location ? [cached.location.toUpperCase()] : [];
           const how = cached.businessType ? [BUSINESS_TYPE_LABEL[cached.businessType].toUpperCase()] : [];
           setMetaLabels([...new Set([...types, ...where])]);
-          setPillLabels([...new Set([...types, ...where, ...how])]);
+          // Cover's pills leave out what they do, as the profile does.
+          setPillLabels([...new Set([...where, ...how])]);
           setHeroKicker([...new Set(types)].join(' · '));
           setHeroLocation(cached.location ?? '');
         }
