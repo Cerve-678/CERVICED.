@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import TabIcon from "../../components/TabIcon";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
+import { romanNumeral } from "../../constants/pageStyles";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./reviewPresentation";
 import {
@@ -364,6 +365,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   if (items.length === 0) return null;
 
+  // Novel captions its photos like a book's plates, under each one.
+  const plates = !!palette.pageStyle?.plateCaptions;
+
   const openFromModal = (index: number) => {
     setShowAll(false);
     setTimeout(() => onOpenImage(images, index), 220);
@@ -397,7 +401,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                 activeOpacity={0.88}
                 onPress={() => onOpenImage(images, item.globalIndex)}
                 disabled={!interactiveImages}
-                style={styles.portfolioTile}
+                style={plates ? [styles.plateTile, { backgroundColor: palette.cardBackground }] : styles.portfolioTile}
               >
                 <Image
                   source={{ uri: item.image_url }}
@@ -406,7 +410,11 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                   transition={0}
                   recyclingKey={item.id}
                 />
-                {item.caption ? (
+                {plates ? (
+                  <Text style={[styles.plateCaption, { color: palette.sub }]} numberOfLines={2}>
+                    Plate {romanNumeral(item.globalIndex)}{item.caption ? ` — ${item.caption}` : ""}
+                  </Text>
+                ) : item.caption ? (
                   <View style={styles.captionWrap}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
                   </View>
@@ -530,6 +538,8 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  plateTile: { borderRadius: 2, padding: 5, paddingBottom: 0 },
+  plateCaption: { fontFamily: "IMFellEnglish-Italic", fontSize: 13, lineHeight: 18, paddingVertical: 6, textAlign: "center" },
   loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
     position: "absolute", left: 0, right: 0, bottom: 0,

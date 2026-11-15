@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 import {
+  chapterHeading,
   headingPair,
   PAGE_SECTION_TITLES,
   romanNumeral,
@@ -235,6 +236,23 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "chapter": {
+      // Novel: "CHAPTER III" in small caps, the title in italic, a foil-style
+      // ornament under it (rule, diamond, rule) in the accent.
+      const [number, chapterTitle] = chapterHeading(section);
+      return (
+        <View {...a11y} accessible accessibilityLabel={chapterTitle} style={headingStyles.stack}>
+          <Text style={[headingStyles.chapterNumber, { color: color ?? sheetInk(palette.background).sub }]}>
+            {number.toUpperCase()}
+          </Text>
+          <Text style={[headingStyles.chapterTitle, { color: ink }]}>{chapterTitle}</Text>
+          <Svg width={96} height={12} viewBox="0 0 120 14" pointerEvents="none">
+            <Path d="M4 7h44M72 7h44" stroke={accent} strokeWidth={1.2} />
+            <Path d="M60 1l6 6-6 6-6-6z" fill={accent} />
+          </Svg>
+        </View>
+      );
+    }
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -357,6 +375,24 @@ export function PageSection({
     : pageStyle.cards === "offset" ? 22
     : 18;
 
+  if (pageStyle.cards === "pages") {
+    // Novel: a square card with two page edges peeking out below and to the
+    // right of it, like the closed block of a book.
+    const edge = withAlpha(sectionInk(palette).text, 0.14);
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <View>
+          <View style={[surfaceStyles.pageEdge, surfaceStyles.pageEdgeBack, { backgroundColor: palette.cardBackground, borderColor: edge }]} pointerEvents="none" />
+          <View style={[surfaceStyles.pageEdge, { backgroundColor: palette.cardBackground, borderColor: edge }]} pointerEvents="none" />
+          <View style={[surfaceStyles.solid, surfaceStyles.pageCard, { backgroundColor: palette.cardBackground, borderColor: edge }]}>
+            {children}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "offset" || pageStyle.cards === "chunky" || pageStyle.cards === "label") {
     // Duet and Groovy: an outlined card on a hard shadow (a backing block, so
     // Android draws it too). Apothecary: an outline with a fine inner rule.
@@ -420,7 +456,7 @@ export function PageSection({
 function isCentredHeading(style: PageStyle): boolean {
   return (
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
-    || style.heading === "italicCaps" || style.heading === "layered"
+    || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "chapter"
   );
 }
 
@@ -560,6 +596,18 @@ export function serviceCardSurface(
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 2, borderColor: outlineInk(colours.card) };
     case "topRule":
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderTopWidth: 3, borderTopColor: outlineInk(colours.card) };
+    case "pages":
+      // A page: square, a fine edge, a little lift off the paper under it.
+      return {
+        backgroundColor: colours.card,
+        borderRadius: 2,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: withAlpha(outlineInk(colours.card), 0.25),
+        shadowColor: "#26201E",
+        shadowOffset: { width: 2, height: 3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      };
     default:
       return null;
   }
@@ -653,6 +701,32 @@ export function StyledPolicyList({
               {row.notes?.map(note => (
                 <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
               ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "houseRules") {
+    // Novel's House Rules: numbered paragraphs, the rule's name in small caps
+    // running straight into what it says.
+    return (
+      <View style={policyStyles.rulesList}>
+        {rows.map((row, index) => (
+          <View key={row.label} style={policyStyles.ruleRow}>
+            <Text style={[policyStyles.ruleNumber, { color: palette.accent }]}>{index + 1}</Text>
+            <View style={policyStyles.numeralBody}>
+              <Text style={[policyStyles.ruleText, { color: ink.sub }]}>
+                <Text style={[policyStyles.ruleLabel, { color: ink.text }]}>{row.label}. </Text>
+                {row.value}
+              </Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? (
+                <Text style={[policyStyles.ruleTag, { color: palette.accent }]}>{row.tag}</Text>
+              ) : null}
             </View>
           </View>
         ))}
@@ -914,6 +988,9 @@ const headingStyles = StyleSheet.create({
   condensedWrap: { marginBottom: 14 },
   condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 49, letterSpacing: 0.3 },
   condensedBar: { width: 36, height: 5, marginTop: 4 },
+  // Novel: IM Fell English, an old book face no other style uses.
+  chapterNumber: { fontFamily: "IMFellEnglishSC-Regular", fontSize: 13, lineHeight: 17, letterSpacing: 3.6 },
+  chapterTitle: { fontFamily: "IMFellEnglish-Italic", fontSize: 28, lineHeight: 37, textAlign: "center", marginBottom: 2 },
   indexRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   indexNumber: { fontFamily: "Gloock-Regular", fontSize: 15 },
   indexRule: { width: 22, height: 1.5 },
@@ -962,6 +1039,9 @@ const surfaceStyles = StyleSheet.create({
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
   headingFlex: { flexShrink: 1 },
+  pageCard: { borderRadius: 2, borderWidth: StyleSheet.hairlineWidth },
+  pageEdge: { position: "absolute", top: 3, left: 3, right: -3, bottom: -3, borderRadius: 2, borderWidth: StyleSheet.hairlineWidth },
+  pageEdgeBack: { top: 6, left: 6, right: -6, bottom: -6 },
 });
 
 const policyStyles = StyleSheet.create({
@@ -1004,6 +1084,12 @@ const policyStyles = StyleSheet.create({
   sticker: { borderRadius: 22, padding: 14 },
   stickerLabel: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 16 },
   hairFirst: { borderTopWidth: 0 },
+  rulesList: { gap: 14 },
+  ruleRow: { flexDirection: "row", gap: 12 },
+  ruleNumber: { fontFamily: "IMFellEnglish-Regular", fontSize: 22, lineHeight: 29, width: 18 },
+  ruleText: { fontSize: 14, lineHeight: 21 },
+  ruleLabel: { fontFamily: "IMFellEnglishSC-Regular", fontSize: 15, letterSpacing: 0.6 },
+  ruleTag: { fontFamily: "IMFellEnglishSC-Regular", fontSize: 12, letterSpacing: 1, marginTop: 4 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
   hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },

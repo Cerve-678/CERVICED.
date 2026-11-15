@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
+import { NovelHero } from "./heroes/NovelHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
@@ -668,6 +669,20 @@ export function ProfileHeroLayout({
         </View>
       );
     }
+
+    case "hardback":
+      // Novel: a cloth-bound cover, drawn in heroes/NovelHero.
+      return (
+        <NovelHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          isVerified={isVerified}
+        />
+      );
 
     default:
       return (

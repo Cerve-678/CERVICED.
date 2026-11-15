@@ -18,7 +18,8 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet'
+  | 'novel';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -37,7 +38,8 @@ export type PageHeading =
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
-  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'chapter';   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
 
 /** What a section sits on. */
 export type PageCards =
@@ -52,7 +54,8 @@ export type PageCards =
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
-  | 'block';   // a square card with a thick dark outline
+  | 'block'    // a square card with a thick dark outline
+  | 'pages';   // a square card with two page edges showing behind it, like a closed book (Novel)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -67,7 +70,8 @@ export type PagePolicies =
   | 'numerals'  // rows numbered in roman numerals
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
-  | 'definition'; // a small caps label beside each value, between hairlines
+  | 'definition' // a small caps label beside each value, between hairlines
+  | 'houseRules'; // numbered paragraphs, the label in small caps running into its value (Novel)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -90,7 +94,8 @@ export type PageHero =
   | 'label'      // a paper tag hanging on a string
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
+  | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
+  | 'hardback';  // a cloth-bound book cover: the logo in a foil ring, the name in gold foil, a ribbon bookmark
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -123,6 +128,8 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** Portfolio photos captioned like a book's plates: "Plate I — their caption" (Novel). */
+  plateCaptions?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -226,6 +233,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // the elements of a hardback, not a literal book — the cover, chapters,
+  // house rules and plates — round the provider's own content.
+  {
+    key: 'novel', name: 'Novel', description: 'A cloth-bound cover with your name in gold foil, chapters, house rules',
+    heading: 'chapter', cards: 'pages', policies: 'houseRules', logo: 'circle',
+    hero: 'hardback', aboutInHero: false, plateCaptions: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
 ];
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {
@@ -288,6 +304,25 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   info: '09',
   specialities: '10',
 };
+
+/** Novel's chapter titles: the book's word for each section where it has one. */
+const CHAPTER_TITLES: Record<PageSectionKey, string> = {
+  about: 'The Author',
+  policies: 'House Rules',
+  services: 'The Services',
+  policyPages: 'Before You Book',
+  portfolio: 'Plates',
+  reviews: 'Praise',
+  hours: 'Opening Hours',
+  contact: 'Get in Touch',
+  info: 'Good to Know',
+  specialities: 'My Specialities',
+};
+
+/** Novel's heading for a section: ["Chapter III", "The Services"], numbered in page order. */
+export function chapterHeading(section: PageSectionKey): [string, string] {
+  return [`Chapter ${romanNumeral(Number(SECTION_NUMBERS[section]) - 1)}`, CHAPTER_TITLES[section]];
+}
 
 /** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
 export function romanNumeral(index: number, lower = false): string {

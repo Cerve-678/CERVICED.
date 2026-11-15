@@ -205,6 +205,10 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Novel (round 4, 2026-11-15): IM Fell English, OFL, static files.
+    'IMFellEnglish-Regular': require('./assets/fonts/IMFellEnglish-Regular.ttf'),
+    'IMFellEnglish-Italic': require('./assets/fonts/IMFellEnglish-Italic.ttf'),
+    'IMFellEnglishSC-Regular': require('./assets/fonts/IMFellEnglishSC-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
