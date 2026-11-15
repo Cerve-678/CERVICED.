@@ -6,8 +6,8 @@
 // then moved out of the header onto the logo, placement B):
 //
 // - The first time the profile is opened, the Recommend bar slides up from
-//   the bottom (the same bar as after rating a visit) and goes by itself
-//   after a few seconds (shouldOfferOnProfile decides; once per provider).
+//   the bottom (the same bar as after rating a visit) and stays until acted on
+//   or closed (shouldOfferOnProfile decides; once per provider).
 // - From then on it's a small thumbs-up badge on the provider's logo. A
 //   successful Recommend shows a brief bubble pointing at the badge.
 // - Tapping the badge recommends and drops a menu down under it with
@@ -191,8 +191,10 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
   const onBarYes = useCallback(async () => {
     if (saving) return;
     const ok = await setRecommended(true);
-    if (userId && ok) void updateMomentsMemory(userId, (m) => withAnswer(m, true));
-    showHint(ok ? 'Recommended. Tap the heart to change it.' : 'You can recommend from the heart any time.');
+    if (!ok) return;
+    if (userId) void updateMomentsMemory(userId, (m) => withAnswer(m, true));
+    setPhase('none');
+    showHint('Recommended. Tap the thumbs up to change it.');
   }, [saving, setRecommended, userId, showHint]);
 
   const onBarClose = useCallback(() => setPhase('none'), []);

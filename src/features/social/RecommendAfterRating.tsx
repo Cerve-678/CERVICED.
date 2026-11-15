@@ -1,8 +1,8 @@
 // src/features/social/RecommendAfterRating.tsx
 //
 // After a client rates a visit 4 or 5 stars, a slim bar slides up offering
-// Recommend (style B, chosen 2026-11-09). It goes away by itself after a few
-// seconds; × simply closes it. Not offered while Show where I go is off
+// Recommend (style B, chosen 2026-11-09). It stays until answered or closed
+// with ×. Not offered while Show where I go is off
 // (nobody would see it), or for a provider already recommended or hidden.
 //
 // Usage: const after = useRecommendAfterRating(userId); call
@@ -22,8 +22,6 @@ import { FONT_DISPLAY, hapticLight, hapticSuccess } from '../maintenance/ui';
 import { initialsFor } from './presentation';
 import { RECOMMEND_AFTER_RATING_MIN, withAnswer, withAsked } from './circleMoments';
 import { updateMomentsMemory } from './momentsMemory';
-
-const AUTO_HIDE_MS = 8000;
 
 interface Offer { providerId: string; providerName: string }
 
@@ -113,12 +111,11 @@ export function RecommendAfterRatingBar({
     if (offer) {
       setShown(offer);
       Animated.spring(slide, { toValue: 1, useNativeDriver: true, friction: 9 }).start();
-      const t = setTimeout(onClose, AUTO_HIDE_MS);
-      return () => clearTimeout(t);
+      return undefined;
     }
     Animated.timing(slide, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShown(null));
     return undefined;
-  }, [offer, slide, onClose]);
+  }, [offer, slide]);
 
   if (!shown) return null;
   return (
