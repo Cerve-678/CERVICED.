@@ -428,7 +428,22 @@ export function ProfileHeroLayout({
                     {caps.toUpperCase()}
                   </Text>
                 ) : null}
-                {location ? <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+                {/* The stars sit on the location's line (owner, 2026-11-15),
+                    so the line under the card holds only what they do and
+                    their years. The profile leaves its own stars out here. */}
+                {location || rating ? (
+                  <View style={layout.duetLocRow}>
+                    {location ? <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+                    {rating ? (
+                      <View style={layout.duetStars} accessible accessibilityLabel={`Rated ${rating}`}>
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <Ionicons key={star} name="star" size={10} color="#FFD700" />
+                        ))}
+                        <Text style={layout.duetRating}>{rating}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
                 {tick}
               </View>
               </View>
@@ -749,7 +764,7 @@ export function detailsSitOnCard(pageStyle: PageStyle): boolean {
 }
 
 /** The ink for details on that card. */
-/** On that card the slots pill takes a line of its own under the stars and years. */
+/** On that card the slots pill takes a line of its own under the pills and years. */
 export const DETAILS_OWN_LINE = { width: "100%", alignItems: "center" } as const;
 
 export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
@@ -828,7 +843,10 @@ const layout = StyleSheet.create({
   // whatever falls outside it, so the first letter looked cut by the logo.
   duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20, paddingLeft: 10 },
   duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 15, letterSpacing: 4, color: "#1F1A1C", paddingLeft: 28 },
-  duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", marginTop: 8 },
+  duetLocRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 8, rowGap: 4, marginTop: 8 },
+  duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", flexShrink: 1 },
+  duetStars: { flexDirection: "row", alignItems: "center", gap: 2 },
+  duetRating: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, color: "#1F1A1C", marginLeft: 3 },
   duetInfoRow: {
     flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center",
     columnGap: 10, rowGap: 12, marginTop: 18,

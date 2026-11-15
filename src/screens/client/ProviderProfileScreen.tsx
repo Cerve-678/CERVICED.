@@ -5337,8 +5337,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       {/* Rating inline — not for a link-only provider: their
                           bookings happen elsewhere, so there are no CERVICED
                           reviews to rate them from. */}
-                      {!isLinkOnly && (
-                      <View style={[styles.ratingRow, detailsOnCard && styles.detailsInline]}>
+                      {/* Duet draws its stars on the card's location line instead. */}
+                      {!isLinkOnly && !detailsOnCard && (
+                      <View style={styles.ratingRow}>
                         {[1, 2, 3, 4, 5].map((star) => (
                           <StarIcon key={star} size={12} color="#FFD700" />
                         ))}
@@ -6255,7 +6256,7 @@ const styles = StyleSheet.create({
     gap: 3,
     marginBottom: 8,
   },
-  // Stars and years beside the pills on Duet's card: no gap under them there.
+  // The years beside the pills on Duet's card: no gap under them there.
   detailsInline: { marginBottom: 0 },
   ratingInline: {
     fontFamily: "Jura-VariableFont_wght",
