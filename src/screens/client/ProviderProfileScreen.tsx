@@ -2083,13 +2083,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [offersPanelSlide]);
 
   // Show notification popup from right
+  const rightNotificationRun = useRef<Animated.CompositeAnimation | null>(null);
   const showRightNotification = useCallback(() => {
+    // A quick second tap (bell on, off, on) starts a new toast while the last
+    // one is still showing. Stop that one first: an interrupted animation still
+    // calls its end callback, which used to hide the toast that just appeared.
+    rightNotificationRun.current?.stop();
     setShowNotification(true);
     // Reset animation - start from right edge
     slideRightAnimation.setValue(100);
 
     // Animate notification slide in from right
-    Animated.sequence([
+    const run = Animated.sequence([
       Animated.spring(slideRightAnimation, {
         toValue: 0,
         useNativeDriver: true,
@@ -2102,8 +2107,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         duration: 300,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setShowNotification(false);
+    ]);
+    rightNotificationRun.current = run;
+    run.start(({ finished }) => {
+      // Only the toast that ran to the end hides itself; a stopped one leaves
+      // the newer toast alone.
+      if (finished && rightNotificationRun.current === run) setShowNotification(false);
     });
   }, [slideRightAnimation]);
 
