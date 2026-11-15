@@ -9,7 +9,8 @@
 // https://claude.ai/artifact/Q3iiDvPo8zuXkbPBHYtqW3 (templates 1, 2, 3, 4, 8
 // and 9), then six more on 2026-11-14 from
 // https://claude.ai/artifact/5jGhmNUFgb2cY8SZhdeQYc (templates 11–16:
-// Editorial, Heritage, Duet, Groovy, Gallery, Apothecary). Stored as the fifth `|` part of providers.profile_theme (see
+// Editorial, Heritage, Duet, Groovy, Gallery, Apothecary), and from round 4
+// on 2026-11-15. Stored as the fifth `|` part of providers.profile_theme (see
 // encodeThemeKey), so it needs no column of its own.
 //
 // Each style is a small set of switches the profile reads, not a layout of its
@@ -19,6 +20,7 @@ export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
   | 'snapshot' | 'signature' | 'quiet'
+  | 'sealed'
   | 'lace';
 
 /** How a section's title is drawn. */
@@ -39,6 +41,7 @@ export type PageHeading =
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
   | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
   | 'lacePair';  // a lowercase script word in the accent over spaced display caps (Lace)
 
 /** What a section sits on. */
@@ -55,6 +58,7 @@ export type PageCards =
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
   | 'block'    // a square card with a thick dark outline
+  | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
   | 'lace';    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
 
 /** How the policy rows are drawn. */
@@ -71,6 +75,7 @@ export type PagePolicies =
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
   | 'definition' // a small caps label beside each value, between hairlines
+  | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
   | 'rosettes';  // one card, each policy beside a small lace rosette (Lace)
 
 /**
@@ -95,6 +100,7 @@ export type PageHero =
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
+  | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
   | 'lace';      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
 
 /** The frame round the logo in the hero. */
@@ -128,6 +134,8 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** Portfolio photos as perforated postage stamps, each tilted a little (Sealed). */
+  stampPhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -230,6 +238,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // the elements of correspondence — wax seal, envelope, stamps — not a letter.
+  {
+    key: 'sealed', name: 'Sealed', description: 'Your initial in a wax seal, your logo tucked in an envelope, stamped photos',
+    heading: 'sealCaps', cards: 'stationery', policies: 'sealedNotes', logo: 'circle',
+    hero: 'envelope', aboutInHero: false, stampPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
   // lace cloth dropped across the hero, the way fabric falls, not framing the logo (owner).

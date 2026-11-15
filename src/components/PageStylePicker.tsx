@@ -11,8 +11,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
+import Svg, { Polygon } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
+import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
 
 interface Props {
   value: PageStyleKey;
@@ -97,6 +99,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  sealed: { text: 'THE SERVICES' },
   lace: { lead: 'the', text: 'SERVICES' },
 };
 
@@ -219,6 +222,13 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'sealCaps':
+        return (
+          <View style={mini.sealRow}>
+            <WaxSeal size={11} wax={waxColour(accent)} />
+            <Text style={[mini.sealCaps, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       case 'lacePair':
         return (
           <View style={mini.stack}>
@@ -264,6 +274,8 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'stationery':
+        return <View key={key} style={[mini.card, mini.paper, mini.stationeryCard, { borderColor: withAlpha(accent, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'lace':
         return (
           <View key={key} style={[mini.card, mini.laceCard, { borderColor: withAlpha(accent, 0.3) }]}>
@@ -376,6 +388,19 @@ function MiniProfile({
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
           </View>
+        ) : style.hero === 'envelope' ? (
+          // Sealed: an envelope closed with a wax seal, a card peeking from its corner.
+          <View style={mini.envelopeStage}>
+            <View style={mini.envelopeCard} />
+            <Svg width={56} height={36} viewBox="0 0 56 36" style={mini.envelope}>
+              <Polygon points="0,0 56,0 56,36 0,36" fill="#EADCC8" />
+              <Polygon points="0,36 28,16 56,36" fill="#E2D2BC" />
+              <Polygon points="0,0 56,0 28,22" fill="#F3E9DA" />
+            </Svg>
+            <View style={mini.envelopeSeal}>
+              <WaxSeal size={16} wax={waxColour(accent)} />
+            </View>
+          </View>
         ) : style.hero === 'lace' ? (
           // Lace: the logo clean, a script name, lace lying across the foot.
           <View style={mini.laceHero}>
@@ -428,6 +453,13 @@ const styles = StyleSheet.create({
 
 const mini = StyleSheet.create({
   root: { height: 180 },
+  sealRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sealCaps: { fontFamily: 'EBGaramond-SemiBold', fontSize: 8, lineHeight: 12, letterSpacing: 1.6 },
+  stationeryCard: { borderRadius: 2, borderWidth: 1 },
+  envelopeStage: { width: 70, height: 50 },
+  envelope: { position: 'absolute', left: 4, top: 4 },
+  envelopeCard: { position: 'absolute', left: 44, top: 24, width: 22, height: 24, backgroundColor: '#FBF6EE', borderRadius: 2, transform: [{ rotate: '-9deg' }] },
+  envelopeSeal: { position: 'absolute', left: 24, top: 18 },
   laceHero: { alignItems: 'center', alignSelf: 'stretch' },
   laceName: { fontFamily: 'Allura-Regular', fontSize: 20, lineHeight: 30, color: '#FFFFFF', paddingHorizontal: 6 },
   // A sheer diagonal band standing in for the lace drape.
