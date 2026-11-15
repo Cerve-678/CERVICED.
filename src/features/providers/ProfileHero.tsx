@@ -427,21 +427,11 @@ export function ProfileHeroLayout({
                     {caps.toUpperCase()}
                   </Text>
                 ) : null}
-                {/* The stars sit on the location's line (owner, 2026-11-15),
-                    so the line under the card holds only what they do and
-                    their years. The profile leaves its own stars out here. */}
-                {location || rating ? (
-                  <View style={layout.duetLocRow}>
-                    {location ? <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
-                    {rating ? (
-                      <View style={layout.duetStars} accessible accessibilityLabel={`Rated ${rating}`}>
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <Ionicons key={star} name="star" size={10} color="#FFD700" />
-                        ))}
-                        <Text style={layout.duetRating}>{rating}</Text>
-                      </View>
-                    ) : null}
-                  </View>
+                {/* The stars sit with their years in the line under the name,
+                    to the left (owner, 2026-11-15), drawn by the profile in
+                    `details` like every other style. */}
+                {location ? (
+                  <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text>
                 ) : null}
                 {tick}
               </View>
@@ -835,10 +825,7 @@ const layout = StyleSheet.create({
   // whatever falls outside it, so the first letter looked cut by the logo.
   duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20, paddingLeft: 10 },
   duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 15, letterSpacing: 4, color: "#1F1A1C", paddingLeft: 28 },
-  duetLocRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 8, rowGap: 4, marginTop: 8 },
-  duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", flexShrink: 1 },
-  duetStars: { flexDirection: "row", alignItems: "center", gap: 2 },
-  duetRating: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, color: "#1F1A1C", marginLeft: 3 },
+  duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", marginTop: 8 },
   duetInfoRow: {
     flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center",
     columnGap: 10, rowGap: 12, marginTop: 18,

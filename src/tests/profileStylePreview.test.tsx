@@ -117,8 +117,6 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.queryByText('YOUR ARTIST')).toBeNull();
     // The slots pill sits inside the card.
     expect(screen.getByText('Stay updated')).toBeTruthy();
-    // The stars sit on the location's line.
-    expect(screen.getByLabelText('Rated 5.0')).toBeTruthy();
     expect(screen.getByText('PECKHAM')).toBeTruthy();
   });
 
