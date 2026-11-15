@@ -875,7 +875,7 @@ const headingStyles = StyleSheet.create({
   plain: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   bigLower: { fontFamily: "Syne_700Bold", fontSize: 38, lineHeight: 49, letterSpacing: -1.2, marginBottom: 14 },
   pairRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: 6, marginBottom: 14 },
-  script: { fontFamily: "PinyonScript_400Regular", fontSize: 32, lineHeight: 47 },
+  script: { fontFamily: "PinyonScript_400Regular", fontSize: 32, lineHeight: 47, paddingHorizontal: 6 },
   serif: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 24, lineHeight: 32 },
   capsRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginBottom: 12 },
   centerRow: { justifyContent: "center" },
@@ -883,7 +883,7 @@ const headingStyles = StyleSheet.create({
   // (Arch), Limelight (Framed), Bebas Neue + Sacramento (Scrapbook), Tenor Sans
   // (Spa), Shrikhand (Glossy).
   caps: { fontFamily: "BebasNeue_400Regular", fontSize: 32, lineHeight: 41, letterSpacing: 0.5 },
-  capsScript: { fontFamily: "Sacramento_400Regular", fontSize: 34, lineHeight: 50 },
+  capsScript: { fontFamily: "Sacramento_400Regular", fontSize: 34, lineHeight: 50, paddingHorizontal: 6 },
   spaced: { fontFamily: "TenorSans_400Regular", fontSize: 11, letterSpacing: 4, textAlign: "center", marginBottom: 16 },
   bubbly: { fontFamily: "Shrikhand_400Regular", fontSize: 26, lineHeight: 34, textAlign: "center", marginBottom: 12 },
   legend: { fontFamily: "Limelight_400Regular", fontSize: 20, lineHeight: 28, paddingHorizontal: 12 },
@@ -899,10 +899,12 @@ const headingStyles = StyleSheet.create({
   shortRule: { width: 36, height: 1 },
   heritageScript: { fontFamily: "LibreBaskerville-Italic", fontSize: 20, lineHeight: 30 },
   heritageCaps: { fontFamily: "Cinzel-Bold", fontSize: 20, letterSpacing: 4, marginTop: 2, textAlign: "center" },
-  layeredScript: { fontFamily: "MsMadi-Regular", fontSize: 54, lineHeight: 79 },
-  // Overlaps the script's foot slightly. Tuned by the owner on 2026-11-15:
-  // -32 too much, -12 too far apart, -17 wanted the script a bit lower.
-  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -20, textAlign: "center" },
+  // Script swashes reach past the text box and get clipped at its edges, so
+  // the word has room either side.
+  layeredScript: { fontFamily: "MsMadi-Regular", fontSize: 54, lineHeight: 79, paddingHorizontal: 16 },
+  // Overlaps the script's foot. Tuned by the owner on 2026-11-15: -32 too
+  // much, -12 too far apart, -17 and -20 wanted the script a bit lower.
+  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -24, textAlign: "center" },
   groovyWrap: { marginBottom: 14 },
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 47, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 41, marginBottom: 14 },
