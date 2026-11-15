@@ -48,6 +48,7 @@ export function HeroLogo({
   onPress,
   accessibilityLabel,
   size = 148,
+  badge,
 }: {
   uri: string | null | undefined;
   framing?: LogoFraming | null;
@@ -62,6 +63,8 @@ export function HeroLogo({
   accessibilityLabel?: string;
   /** The logo's width and height; the hero layouts draw it smaller beside text. */
   size?: number;
+  /** A small round button on the logo's lower-right edge (the profile's Recommend). */
+  badge?: React.ReactNode;
 }) {
   // Everything below is drawn for 148pt; other sizes scale it.
   const box = { width: size, height: size, borderRadius: size / 2 };
@@ -132,12 +135,22 @@ export function HeroLogo({
             style={[styles.gloss, box, frame]}
             pointerEvents="none"
           />
+          {badge ? (
+            // Centred on a round logo's edge at 45°, which is 0.146 of the
+            // size in from the box's corner; half the badge's width back out.
+            <View style={[styles.badge, { right: size * 0.146 - BADGE_HALF, bottom: size * 0.146 - BADGE_HALF }]}>
+              {badge}
+            </View>
+          ) : null}
         </View>
         </View>
       </View>
     </View>
   );
 }
+
+/** Half of a HeroLogo badge's width (RecommendBadge is 30pt). */
+const BADGE_HALF = 15;
 
 // ── Hero layouts ─────────────────────────────────────────────────────────────
 
@@ -893,6 +906,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   gloss: { position: "absolute", top: 0, left: 0, width: 148, height: 148, borderRadius: 74 },
+  badge: { position: "absolute" },
   initialsWrap: { alignItems: "center", justifyContent: "center" },
   initials: { color: "#fff", fontSize: 28, fontWeight: "800" },
   arch: { borderRadius: 10, borderTopLeftRadius: 74, borderTopRightRadius: 74 },

@@ -8,7 +8,7 @@ import React, {
 import { useBookmarkStore } from "../../stores/useBookmarkStore";
 import {
   ProviderRecommendLayer,
-  RecommendHeartButton,
+  RecommendBadge,
   useProviderRecommend,
 } from "../../features/social/ProviderRecommend";
 import {
@@ -2150,7 +2150,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
   // Recommend, for a client who has had a completed appointment here: a
-  // one-time bar, then a heart in the header with a menu under it.
+  // one-time bar, then a heart badge on the logo with a menu under it.
   const recommend = useProviderRecommend({
     providerId: providerDbId,
     providerName: provider?.displayName ?? "",
@@ -2688,9 +2688,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       },
       headerRight: () => (
         <View style={styles.navHeaderActions}>
-          {recommendHeart ? (
-            <RecommendHeartButton {...recommendHeart} style={styles.headerActionButton} />
-          ) : null}
           <TouchableOpacity
             style={[
               styles.headerActionButton,
@@ -2759,7 +2756,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     handleBookmarkToggle,
     canSaveProvider,
     handleShare,
-    recommendHeart,
     OP.bg,
     OP.text,
     provider?.brandFont,
@@ -5201,6 +5197,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       setShowFullLogo(true);
                     }}
                     accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
+                    badge={recommendHeart ? <RecommendBadge {...recommendHeart} /> : null}
                   />
                 )}
                 renderName={({ scale, letterSpacing }) => (
@@ -5445,6 +5442,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               />
                             </TouchableOpacity>
                           </BlurView>
+                          {/* Cover has no logo to carry Recommend's badge, so
+                              it sits here beside the bell instead. */}
+                          {recommendHeart && pageStyle.hero === "cover" ? (
+                            <View style={styles.recommendBesideBell}>
+                              <RecommendBadge {...recommendHeart} />
+                            </View>
+                          ) : null}
                           {showInstagram ? (
                             <TouchableOpacity
                               style={styles.instagramButtonOutside}
@@ -6383,6 +6387,9 @@ const styles = StyleSheet.create({
   },
   instagramButtonOutside: {
     borderRadius: 20,
+  },
+  recommendBesideBell: {
+    alignSelf: "center",
   },
   instagramButtonSurface: {
     flex: 1,

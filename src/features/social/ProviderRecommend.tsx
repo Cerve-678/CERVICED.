@@ -2,14 +2,16 @@
 //
 // Recommend on a provider's profile, for a client who has had a completed
 // appointment there (the server decides that: get_my_provider_sharing).
-// Chosen 2026-11-15 (concepts A1 + A2 + B1–B3, with the long-press dropped):
+// Chosen 2026-11-15 (concepts A1 + A2 + B1–B3, with the long-press dropped;
+// then moved out of the header onto the logo, placement B):
 //
 // - The first time the profile is opened, the Recommend bar slides up from
 //   the bottom (the same bar as after rating a visit) and goes by itself
 //   after a few seconds (shouldOfferOnProfile decides; once per provider).
-// - From then on it's a heart in the header beside Bookmark and Share. When
-//   the bar goes, the heart glows once with a bubble pointing at it.
-// - Tapping the heart recommends and drops a menu down under it with
+// - From then on it's a small heart badge on the provider's logo (beside the
+//   bell on Cover, which has no logo). When the bar goes, the badge glows
+//   once with a bubble pointing at it.
+// - Tapping the badge recommends and drops a menu down under it with
 //   Recommend and "Don't show me on their cards". Tapping anywhere else, or
 //   starting to scroll, closes the menu (and the bubble).
 //
@@ -29,9 +31,7 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
-  type StyleProp,
   type ViewInstance,
-  type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -294,10 +294,13 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
   return useMemo(() => ({ heart, layer, dismissFloating }), [heart, layer, dismissFloating]);
 }
 
-/** The header's heart, beside Bookmark and Share. `style`: the header's own round button. */
-export function RecommendHeartButton({
-  recommended, glowing, busy, providerName, onPress, anchorRef, style,
-}: RecommendHeartProps & { style: StyleProp<ViewStyle> }) {
+/**
+ * The small round heart badge on the provider's logo (HeroLogo's `badge`), or
+ * beside the bell on Cover. 30pt, with a hit area padded to 46.
+ */
+export function RecommendBadge({
+  recommended, glowing, busy, providerName, onPress, anchorRef,
+}: RecommendHeartProps) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -326,17 +329,18 @@ export function RecommendHeartButton({
         />
       ) : null}
       <TouchableOpacity
-        style={style}
+        style={[styles.badge, recommended ? styles.badgeOn : styles.badgeOff]}
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={0.75}
+        hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel={recommended ? `You recommend ${providerName}` : `Recommend ${providerName}`}
         accessibilityHint="Opens your recommend options"
       >
         {busy ? (
-          <ActivityIndicator size="small" color="#000" />
+          <ActivityIndicator size="small" color={recommended ? '#FFFFFF' : HEART} />
         ) : (
-          <Ionicons name={recommended ? 'heart' : 'heart-outline'} size={19} color={recommended ? HEART : '#000'} />
+          <Ionicons name={recommended ? 'heart' : 'heart-outline'} size={15} color={recommended ? '#FFFFFF' : HEART} />
         )}
       </TouchableOpacity>
     </View>
@@ -481,6 +485,22 @@ export function ProviderRecommendLayer({
 }
 
 const styles = StyleSheet.create({
+  badge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: HEART,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  badgeOff: { backgroundColor: '#FFFFFF' },
+  badgeOn: { backgroundColor: HEART },
   glow: {
     position: 'absolute',
     top: 0,
