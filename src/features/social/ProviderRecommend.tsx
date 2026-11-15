@@ -372,7 +372,12 @@ export function ProviderRecommendLayer({
   // Window coordinates of the heart; the menu's Modal is the window itself.
   const heartCenter = anchor ? anchor.x + anchor.width / 2 : windowWidth - 100;
   const below = anchor ? anchor.y + anchor.height + 10 : insets.top + 56;
-  const menuRight = Math.max(EDGE, anchor ? windowWidth - (anchor.x + anchor.width) : EDGE);
+  // Lined up with the heart's right edge, but never past the screen's left
+  // edge: on a 375 pt phone the heart sits far enough left that it would.
+  const menuRight = Math.max(
+    EDGE,
+    Math.min(anchor ? windowWidth - (anchor.x + anchor.width) : EDGE, windowWidth - MENU_WIDTH - EDGE),
+  );
   const bubbleLeft = Math.min(Math.max(EDGE, heartCenter - 190), windowWidth - 240 - EDGE);
 
   const recommended = sharing.recommended;
