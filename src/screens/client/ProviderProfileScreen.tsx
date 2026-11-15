@@ -2150,7 +2150,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
   // Recommend, for a client who has had a completed appointment here: a
-  // one-time bar, then a heart badge on the logo with a menu under it.
+  // one-time bar, then a thumbs-up badge on the logo with a menu under it.
   const recommend = useProviderRecommend({
     providerId: providerDbId,
     providerName: provider?.displayName ?? "",

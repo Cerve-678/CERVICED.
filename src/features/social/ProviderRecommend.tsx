@@ -8,7 +8,7 @@
 // - The first time the profile is opened, the Recommend bar slides up from
 //   the bottom (the same bar as after rating a visit) and goes by itself
 //   after a few seconds (shouldOfferOnProfile decides; once per provider).
-// - From then on it's a small heart badge on the provider's logo (beside the
+// - From then on it's a small thumbs-up badge on the provider's logo (beside the
 //   bell on Cover, which has no logo). When the bar goes, the badge glows
 //   once with a bubble pointing at it.
 // - Tapping the badge recommends and drops a menu down under it with
@@ -295,7 +295,7 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
 }
 
 /**
- * The small round heart badge on the provider's logo (HeroLogo's `badge`), or
+ * The small round thumbs-up badge on the provider's logo (HeroLogo's `badge`), or
  * beside the bell on Cover. 30pt, with a hit area padded to 46.
  */
 export function RecommendBadge({
@@ -340,7 +340,7 @@ export function RecommendBadge({
         {busy ? (
           <ActivityIndicator size="small" color={recommended ? '#FFFFFF' : HEART} />
         ) : (
-          <Ionicons name={recommended ? 'heart' : 'heart-outline'} size={15} color={recommended ? '#FFFFFF' : HEART} />
+          <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={recommended ? '#FFFFFF' : HEART} />
         )}
       </TouchableOpacity>
     </View>
@@ -451,7 +451,7 @@ export function ProviderRecommendLayer({
             accessibilityState={{ checked: recommended, disabled: saving !== null || sharing.hidden }}
             accessibilityLabel={`Recommend ${providerName}`}
           >
-            <Ionicons name={recommended ? 'heart' : 'heart-outline'} size={19} color={recommended ? HEART : P.text} />
+            <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={19} color={recommended ? HEART : P.text} />
             <Text style={[styles.rowText, { color: P.text }]}>{recommended ? 'Recommended' : 'Recommend'}</Text>
             {saving === 'recommend' ? (
               <ActivityIndicator size="small" color={P.sub} />
