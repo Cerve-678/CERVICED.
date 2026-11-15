@@ -432,19 +432,19 @@ export function ProfileHeroLayout({
                 {tick}
               </View>
               </View>
-              {/* What they do, the stars, their years and the slots pill with
-                  Instagram all sit inside the card (owner, 2026-11-15). The
-                  card is white, so the profile draws these in DETAILS_ON_CARD_INK. */}
-              {pills.length ? (
-                <View style={layout.duetPills}>
-                  {pills.map(label => (
-                    <View key={label} style={[layout.duetPill, { backgroundColor: accent }]}>
-                      <Text style={[layout.duetPillText, { color: pillInk }]} numberOfLines={1}>{label}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-              <View style={layout.duetDetails}>{details}</View>
+              {/* What they do, the stars and their years share one line in
+                  the card, the slots pill with Instagram under it (owner,
+                  2026-11-15: the card was too long with each on a line of its
+                  own). The profile puts the slots pill on a line of its own
+                  and draws these in DETAILS_ON_CARD_INK, as the card is white. */}
+              <View style={layout.duetInfoRow}>
+                {pills.map(label => (
+                  <View key={label} style={[layout.duetPill, { backgroundColor: accent }]}>
+                    <Text style={[layout.duetPillText, { color: pillInk }]} numberOfLines={1}>{label}</Text>
+                  </View>
+                ))}
+                {details}
+              </View>
             </View>
           </View>
         </View>
@@ -749,6 +749,9 @@ export function detailsSitOnCard(pageStyle: PageStyle): boolean {
 }
 
 /** The ink for details on that card. */
+/** On that card the slots pill takes a line of its own under the stars and years. */
+export const DETAILS_OWN_LINE = { width: "100%", alignItems: "center" } as const;
+
 export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 
 /** Apothecary's tag paper and ink: the tag is a physical object, so its colours are fixed. */
@@ -816,16 +819,22 @@ const layout = StyleSheet.create({
     backgroundColor: "#FFFFFF", borderWidth: 1.5,
     borderColor: "#1F1A1C", borderRadius: 28, paddingVertical: 20, paddingHorizontal: 16,
   },
-  duetCardRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  // A wider gap than the other rows: the accent ring stands out round the
+  // logo, and the script's first letter swings left into that space.
+  duetCardRow: { flexDirection: "row", alignItems: "center", gap: 20 },
   duetCardText: { flex: 1, minWidth: 0 },
   duetHey: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60" },
-  duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20 },
+  // paddingLeft: Ms Madi's capitals start left of the text box, and RN clips
+  // whatever falls outside it, so the first letter looked cut by the logo.
+  duetScript: { fontFamily: "MsMadi-Regular", fontSize: 60, lineHeight: 87, marginBottom: -20, paddingLeft: 10 },
   duetCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 15, letterSpacing: 4, color: "#1F1A1C", paddingLeft: 28 },
   duetLocated: { fontFamily: "Montserrat-Medium", fontSize: 8.5, letterSpacing: 2, color: "#6A5A60", marginTop: 8 },
-  duetPills: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 30 },
+  duetInfoRow: {
+    flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center",
+    columnGap: 10, rowGap: 12, marginTop: 18,
+  },
   duetPill: { minHeight: 30, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 5, borderRadius: 100 },
   duetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1 },
-  duetDetails: { alignItems: "center", marginTop: 18 },
   // Groovy
   groovyWrap: { paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP, marginBottom: 6 },
   groovyTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingHorizontal: 12 },
