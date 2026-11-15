@@ -52,13 +52,16 @@ export function BoutiqueHero({
           <Polygon points="82,60 100,14 122,44 146,4 168,60" fill={tissueLight} />
         </Svg>
         <View style={styles.bagShadow}>
-          <LinearGradient
-            colors={[bagLo, bag, bagHi, bag, bagLo]}
-            locations={[0, 0.14, 0.5, 0.86, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.bag}
-          >
+          <View style={styles.bag}>
+            {/* The bag's sheen sits behind what's printed on it. */}
+            <LinearGradient
+              colors={[bagLo, bag, bagHi, bag, bagLo]}
+              locations={[0, 0.14, 0.5, 0.86, 1]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
             <View style={[styles.fold, { backgroundColor: withAlpha(bagLo, 0.55) }]} />
             <View style={[styles.rivet, styles.rivetLeft, { backgroundColor: rope }]} />
             <View style={[styles.rivet, styles.rivetRight, { backgroundColor: rope }]} />
@@ -80,7 +83,7 @@ export function BoutiqueHero({
                 </Text>
               ) : null}
             </View>
-          </LinearGradient>
+          </View>
         </View>
       </View>
       <View style={styles.details}>{details}</View>
