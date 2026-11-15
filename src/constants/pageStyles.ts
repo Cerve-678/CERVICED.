@@ -18,7 +18,7 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'botanical' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -34,7 +34,8 @@ export type PageHeading =
   | 'layered'    // a big handwritten word in the accent, heavy caps laid over its foot
   | 'groovy'     // a soft, chunky italic in lowercase with a squiggle under it
   | 'serifTitle' // a large serif title, nothing above it (Gallery)
-  | 'labelCaps'; // spaced serif caps between hairlines, like a printed label
+  | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
+  | 'indexed';   // a section number in the accent, a short rule, then the title (Signature)
 
 /** What a section sits on. */
 export type PageCards =
@@ -47,7 +48,8 @@ export type PageCards =
   | 'open'    // straight on the page with no rule (the heading carries its own lines)
   | 'offset'  // a white card, a dark outline and a hard shadow in a soft accent
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
-  | 'label';  // a square card with a fine outline and an inner accent rule
+  | 'label'    // a square card with a fine outline and an inner accent rule
+  | 'topRule'; // a square card with a heavy rule along its top edge
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -85,7 +87,6 @@ export type PageHero =
   | 'label'      // a paper tag hanging on a string
   | 'photoStrip' // three tilted photos, the name signed across their foot (no logo)
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'wreath'     // the logo in a leaf wreath, the name in spaced serif caps under it
   | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
 
 /** The frame round the logo in the hero. */
@@ -201,8 +202,8 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'label', aboutInHero: false, numeralsLower: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
-  // 2026-11-15: Duet's A and C heroes and Apothecary's A and C, each made a
-  // template of its own, from https://claude.ai/artifact/RopN63UF8acRMG1aCYK4Hh.
+  // 2026-11-15: Duet's A and C heroes and Apothecary's C, each made a
+  // template of its own (Signature restyled so it isn't another Duet), from https://claude.ai/artifact/RopN63UF8acRMG1aCYK4Hh.
   {
     key: 'snapshot', name: 'Snapshot', description: 'Your photos up top, your name signed across them',
     heading: 'layered', cards: 'offset', policies: 'tiles', logo: 'circle',
@@ -210,16 +211,10 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'signature', name: 'Signature', description: 'A big ringed logo with your name signed across it',
-    heading: 'layered', cards: 'paper', policies: 'divided', logo: 'accentRing',
+    key: 'signature', name: 'Signature', description: 'Your name signed in pen across a ringed logo, numbered sections',
+    heading: 'indexed', cards: 'topRule', policies: 'boxes', logo: 'accentRing',
     hero: 'signed', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-  },
-  {
-    key: 'botanical', name: 'Botanical', description: 'Your logo in a leaf wreath, soft serif caps',
-    heading: 'labelCaps', cards: 'label', policies: 'numerals', logo: 'circle',
-    hero: 'wreath', aboutInHero: false, numeralsLower: true,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
     key: 'quiet', name: 'Quiet', description: 'Your photo left clear, your name on a calm band',
@@ -275,6 +270,20 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
 export function headingPair(section: PageSectionKey): [string, string] {
   return HEADING_PAIRS[section];
 }
+
+/** Signature's section numbers, in the order the profile shows its sections. */
+export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
+  about: '01',
+  policies: '02',
+  services: '03',
+  policyPages: '04',
+  portfolio: '05',
+  reviews: '06',
+  hours: '07',
+  contact: '08',
+  info: '09',
+  specialities: '10',
+};
 
 /** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
 export function romanNumeral(index: number, lower = false): string {

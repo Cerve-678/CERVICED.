@@ -192,6 +192,8 @@ export default Sentry.wrap(function App() {
     'Cinzel-Bold': require('./assets/fonts/Cinzel-Bold.ttf'),
     'LibreBaskerville-Italic': require('./assets/fonts/LibreBaskerville-Italic.ttf'),
     'MsMadi-Regular': require('./assets/fonts/MsMadi-Regular.ttf'),
+    'Gloock-Regular': require('./assets/fonts/Gloock-Regular.ttf'),
+    'MrsSaintDelafield-Regular': require('./assets/fonts/MrsSaintDelafield-Regular.ttf'),
     'Montserrat-Medium': require('./assets/fonts/Montserrat-Medium.ttf'),
     'Montserrat-ExtraBold': require('./assets/fonts/Montserrat-ExtraBold.ttf'),
     'Fraunces-SoftBlackItalic': require('./assets/fonts/Fraunces-SoftBlackItalic.ttf'),

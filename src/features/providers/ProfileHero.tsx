@@ -9,7 +9,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import Svg, { Circle, Defs, Ellipse, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
+import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
 import type { PageStyle } from "../../constants/pageStyles";
@@ -596,7 +596,8 @@ export function ProfileHeroLayout({
     }
 
     case "signed":
-      // Signature: a big logo in an accent ring, the whole name signed across its foot.
+      // Signature: a big logo in an accent ring, the whole name signed across
+      // its foot in a pen signature, the words round it in Gloock.
       return (
         <View style={[layout.infoCenter, layout.textFirst]}>
           <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
@@ -612,28 +613,6 @@ export function ProfileHeroLayout({
           <View style={layout.signedDetails}>{details}</View>
         </View>
       );
-
-    case "wreath": {
-      // Botanical: the logo in a leaf wreath, the name in spaced serif caps.
-      const line = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
-      return (
-        <View style={[layout.infoCenter, layout.wreathTop]}>
-          <View style={layout.wreath}>
-            <Wreath color={heroIsDark ? withAlpha(heroText, 0.85) : accent} />
-            <View style={layout.wreathLogo}>{renderLogo(140)}</View>
-          </View>
-          <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-            <Text style={[layout.wreathName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
-              {name.toUpperCase()}
-            </Text>
-            {tick}
-          </View>
-          {line ? <Text style={[layout.wreathLine, { color: heroSub }, shadow]} numberOfLines={2}>{line}</Text> : null}
-          {kicker ? <Text style={[layout.wreathKicker, { color: heroText }, shadow]}>{kicker.split(" · ").join(" ✦ ")}</Text> : null}
-          <View style={layout.wreathDetails}>{details}</View>
-        </View>
-      );
-    }
 
     case "quietBand": {
       // Quiet: their photo left clear, then a pale band across it with the
@@ -742,25 +721,6 @@ function SealRing({
 
 /** Apothecary's tag paper and ink: the tag is a physical object, so its colours are fixed. */
 const TAG_PAPER = "#F6F1E4";
-
-/** Botanical's leaf wreath, drawn round a 140pt logo. */
-function Wreath({ color }: { color: string }) {
-  return (
-    <Svg width={230} height={230} viewBox="0 0 230 230" style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Path d="M69 194.7A92 92 0 0 1 69 35.3" fill="none" stroke={color} strokeWidth={1.4} />
-      <Path d="M161 194.7A92 92 0 0 0 161 35.3" fill="none" stroke={color} strokeWidth={1.4} />
-      {WREATH_LEAVES.map(([cx, cy, angle]) => (
-        <Ellipse key={`${cx}-${cy}`} cx={cx} cy={cy} rx={10} ry={3.8} fill={color} transform={`rotate(${angle} ${cx} ${cy})`} />
-      ))}
-    </Svg>
-  );
-}
-
-/** Where each leaf sits round the wreath (x, y, tilt), seven a side. */
-const WREATH_LEAVES: readonly [number, number, number][] = [
-  [69, 194.7, 185], [44.5, 174.1, 205], [28.5, 146.5, 225], [23, 115, 245], [28.5, 83.5, 265], [44.5, 55.9, 285], [69, 35.3, 305],
-  [161, 194.7, -5], [185.5, 174.1, -25], [201.5, 146.5, -45], [207, 115, -65], [201.5, 83.5, -85], [185.5, 55.9, -105], [161, 35.3, -125],
-];
 
 /** How much lower a hero that opens on text starts than one that opens on the logo. */
 const TEXT_FIRST_DROP = 48;
@@ -893,21 +853,13 @@ const layout = StyleSheet.create({
   offsetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1, color: "#1F1A1C" },
   stripDetails: { alignItems: "center", marginTop: 16 },
   // Signature
-  signedWelcome: { fontFamily: "Montserrat-Medium", fontSize: 10, letterSpacing: 4, marginBottom: 14 },
+  signedWelcome: { fontFamily: "Gloock-Regular", fontSize: 11, letterSpacing: 4, marginBottom: 14 },
   signedLogo: { marginBottom: -20 },
   signedNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -42, alignSelf: "stretch", justifyContent: "center" },
-  signedName: { fontFamily: "MsMadi-Regular", fontSize: 68, lineHeight: 84, flexShrink: 1, textAlign: "center" },
-  signedLocated: { fontFamily: "Montserrat-ExtraBold", fontSize: 11, letterSpacing: 3, marginTop: 2, textAlign: "center" },
-  signedKicker: { fontFamily: "Montserrat-Medium", fontSize: 10, letterSpacing: 2, marginTop: 6, textAlign: "center" },
+  signedName: { fontFamily: "MrsSaintDelafield-Regular", fontSize: 74, lineHeight: 92, flexShrink: 1, textAlign: "center" },
+  signedLocated: { fontFamily: "Gloock-Regular", fontSize: 12, letterSpacing: 3, marginTop: 2, textAlign: "center" },
+  signedKicker: { fontFamily: "Gloock-Regular", fontSize: 10.5, letterSpacing: 2, marginTop: 6, textAlign: "center" },
   signedDetails: { alignItems: "center", marginTop: 14 },
-  // Botanical
-  wreathTop: { marginTop: 20 },
-  wreath: { width: 230, height: 230 },
-  wreathLogo: { position: "absolute", top: 45, left: 45 },
-  wreathName: { fontFamily: "MarcellusSC-Regular", fontSize: 36, lineHeight: 44, letterSpacing: 8, textAlign: "center", flexShrink: 1, marginTop: 6 },
-  wreathLine: { fontFamily: "Marcellus-Regular", fontSize: 16, marginTop: 2, textAlign: "center" },
-  wreathKicker: { fontSize: 9.5, letterSpacing: 2.4, marginTop: 10, textAlign: "center" },
-  wreathDetails: { alignItems: "center", marginTop: 14 },
   // Quiet: the band is paper, so its ink is fixed.
   quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
   quietArea: { fontSize: 10, letterSpacing: 3, paddingHorizontal: 24 },

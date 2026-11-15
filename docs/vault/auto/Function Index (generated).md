@@ -279,7 +279,7 @@
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · go · InlinePage · label · **PolicyPagesInline** · **PolicyStoryRings** · **PolicyStoryViewer** · StoryBody · top · **usePolicyEdgeColours**
-- `ProfileHero.tsx` — CurvedCaption · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst · Wreath
+- `ProfileHero.tsx` — CurvedCaption · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
 - `ProfilePageStyle.tsx` — **AccentBandSection** · **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · outlineInk · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**

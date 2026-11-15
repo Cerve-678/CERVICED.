@@ -157,12 +157,8 @@ describe('the 2026-11-15 templates', () => {
     renderPreview('signature');
     expect(screen.getByText('WELCOME TO')).toBeTruthy();
     expect(screen.getByLabelText('Amara Lashes')).toBeTruthy();
-  });
-
-  it('sets Botanical\'s name in caps under the wreath', () => {
-    renderPreview('botanical');
-    expect(screen.getByText('AMARA LASHES')).toBeTruthy();
-    expect(screen.getByText('Lashes · Peckham')).toBeTruthy();
+    expect(screen.getByText('The Services')).toBeTruthy();
+    expect(screen.getByText('03')).toBeTruthy();
   });
 
   it('puts Quiet\'s name on its band with the area above it', () => {
