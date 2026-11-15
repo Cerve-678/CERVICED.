@@ -861,17 +861,17 @@ export function StyledPolicyList({
 
 const headingStyles = StyleSheet.create({
   plain: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
-  bigLower: { fontFamily: "Syne_700Bold", fontSize: 38, lineHeight: 42, letterSpacing: -1.2, marginBottom: 14 },
+  bigLower: { fontFamily: "Syne_700Bold", fontSize: 38, lineHeight: 49, letterSpacing: -1.2, marginBottom: 14 },
   pairRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: 6, marginBottom: 14 },
-  script: { fontFamily: "PinyonScript_400Regular", fontSize: 32, lineHeight: 46 },
+  script: { fontFamily: "PinyonScript_400Regular", fontSize: 32, lineHeight: 47 },
   serif: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 24, lineHeight: 32 },
   capsRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginBottom: 12 },
   centerRow: { justifyContent: "center" },
   // Each style has a heading face of its own: Syne (Cover), Pinyon + Playfair
   // (Arch), Limelight (Framed), Bebas Neue + Sacramento (Scrapbook), Tenor Sans
   // (Spa), Shrikhand (Glossy).
-  caps: { fontFamily: "BebasNeue_400Regular", fontSize: 32, lineHeight: 36, letterSpacing: 0.5 },
-  capsScript: { fontFamily: "Sacramento_400Regular", fontSize: 34, lineHeight: 40 },
+  caps: { fontFamily: "BebasNeue_400Regular", fontSize: 32, lineHeight: 41, letterSpacing: 0.5 },
+  capsScript: { fontFamily: "Sacramento_400Regular", fontSize: 34, lineHeight: 50 },
   spaced: { fontFamily: "TenorSans_400Regular", fontSize: 11, letterSpacing: 4, textAlign: "center", marginBottom: 16 },
   bubbly: { fontFamily: "Shrikhand_400Regular", fontSize: 26, lineHeight: 34, textAlign: "center", marginBottom: 12 },
   legend: { fontFamily: "Limelight_400Regular", fontSize: 20, lineHeight: 28, paddingHorizontal: 12 },
@@ -880,26 +880,26 @@ const headingStyles = StyleSheet.create({
   // Instrument Serif (Gallery), Marcellus (Apothecary): no two styles share a face.
   ruledRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   rule: { flex: 1, height: StyleSheet.hairlineWidth * 2, minWidth: 12 },
-  dotLight: { fontFamily: "LeagueSpartan-Light", fontSize: 26, lineHeight: 32, flexShrink: 1 },
+  dotLight: { fontFamily: "LeagueSpartan-Light", fontSize: 26, lineHeight: 34, flexShrink: 1 },
   dotBold: { fontFamily: "LeagueSpartan-ExtraBold" },
   stack: { alignItems: "center", marginBottom: 14 },
   shortRuleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   shortRule: { width: 36, height: 1 },
   heritageScript: { fontFamily: "LibreBaskerville-Italic", fontSize: 20, lineHeight: 30 },
   heritageCaps: { fontFamily: "Cinzel-Bold", fontSize: 20, letterSpacing: 4, marginTop: 2, textAlign: "center" },
-  layeredScript: { fontFamily: "MsMadi-Regular", fontSize: 54, lineHeight: 66 },
-  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -26, textAlign: "center" },
+  layeredScript: { fontFamily: "MsMadi-Regular", fontSize: 54, lineHeight: 79 },
+  layeredCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 21, letterSpacing: 1, marginTop: -32, textAlign: "center" },
   groovyWrap: { marginBottom: 14 },
-  groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 42, letterSpacing: -0.8 },
-  serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 36, marginBottom: 14 },
+  groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 47, letterSpacing: -0.8 },
+  serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 41, marginBottom: 14 },
   labelCaps: { fontFamily: "MarcellusSC-Regular", fontSize: 14, letterSpacing: 4 },
   condensedWrap: { marginBottom: 14 },
-  condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 44, letterSpacing: 0.3 },
+  condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 49, letterSpacing: 0.3 },
   condensedBar: { width: 36, height: 5, marginTop: 4 },
   indexRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   indexNumber: { fontFamily: "Gloock-Regular", fontSize: 15 },
   indexRule: { width: 22, height: 1.5 },
-  indexTitle: { fontFamily: "Gloock-Regular", fontSize: 28, lineHeight: 34, flexShrink: 1 },
+  indexTitle: { fontFamily: "Gloock-Regular", fontSize: 28, lineHeight: 36, flexShrink: 1 },
 });
 
 const surfaceStyles = StyleSheet.create({
