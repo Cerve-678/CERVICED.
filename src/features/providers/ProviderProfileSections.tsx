@@ -16,14 +16,18 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import TabIcon from "../../components/TabIcon";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
 import type { WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
+import { romanNumeral } from "../../constants/pageStyles";
 import type { DbPortfolioItem } from "../../types/database";
 import type { ProviderReviewItem } from "./reviewPresentation";
+import { HalftoneScreen } from "./heroes/GazetteHero";
+import { CALLING_CARD_PAPER, GoldClip } from "./heroes/CallingCardHero";
 import {
   PageSection,
   PageSectionHeading,
   sectionInk,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import { plateMarkEdges } from "./heroes/EmbossedHero";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -366,6 +370,15 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   // Sealed: each photo a perforated postage stamp.
   const stamps = !!palette.pageStyle?.stampPhotos;
+  // Embossed: each photo sits in a plate mark pressed into the page, like a print.
+  const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
+  // Calling Card: each photo a cream-bordered print pinned by a gold clip.
+  const clipped = !!palette.pageStyle?.clippedPhotos;
+  // Gazette: each photo square in a fine ink frame, under a newsprint dot screen.
+  const halftone = !!palette.pageStyle?.halftonePhotos;
+
+  // Novel captions its photos like a book's plates, under each one.
+  const plates = !!palette.pageStyle?.plateCaptions;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -391,10 +404,10 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
           </TouchableOpacity>
         ) : null}
       </View>
-      <View style={styles.columns}>
+      <View style={[styles.columns, clipped && styles.clippedColumns]}>
         {columns.map((column, columnIndex) => (
-          <View key={columnIndex} style={styles.column}>
-            {column.map(item => (
+          <View key={columnIndex} style={[styles.column, clipped && styles.clippedColumn]}>
+            {column.map((item, rowIndex) => (
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.88}
@@ -407,7 +420,19 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                         // The dotted border in the page's own colour reads as the perforations.
                         { borderColor: palette.background, transform: [{ rotate: item.globalIndex % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
                       ]
-                    : styles.portfolioTile
+                    : plate
+                      ? [styles.plateTile, plate]
+                      : halftone
+                        ? [styles.halftoneTile, { borderColor: palette.text }]
+                      : plates
+                        ? [styles.bookPlateTile, { backgroundColor: palette.cardBackground }]
+                      : clipped
+                        ? [
+                            styles.clippedPrint,
+                            // A slight, alternating tilt, as if pinned by hand.
+                            { transform: [{ rotate: (columnIndex + rowIndex) % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
+                          ]
+                        : styles.portfolioTile
                 }
               >
                 <Image
@@ -417,11 +442,17 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                   transition={0}
                   recyclingKey={item.id}
                 />
-                {item.caption ? (
-                  <View style={styles.captionWrap}>
+                {halftone ? <HalftoneScreen /> : null}
+                {plates ? (
+                  <Text style={[styles.plateCaption, { color: palette.sub }]} numberOfLines={2}>
+                    Plate {romanNumeral(item.globalIndex)}{item.caption ? ` — ${item.caption}` : ""}
+                  </Text>
+                ) : item.caption ? (
+                  <View style={[styles.captionWrap, clipped && styles.clippedCaption]}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
                   </View>
                 ) : null}
+                {clipped ? <GoldClip width={40} style={styles.clippedClip} /> : null}
               </TouchableOpacity>
             ))}
           </View>
@@ -541,10 +572,30 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  halftoneTile: { borderRadius: 0, borderWidth: 1, padding: 3, overflow: "hidden" },
+  bookPlateTile: { borderRadius: 2, padding: 5, paddingBottom: 0 },
+  plateCaption: { fontFamily: "IMFellEnglish-Italic", fontSize: 13, lineHeight: 18, paddingVertical: 6, textAlign: "center" },
+  // Calling Card: room above each row for the clips, and the print's cream border.
+  clippedColumns: { paddingTop: 14 },
+  clippedColumn: { gap: COLUMN_GAP + 18 },
+  clippedPrint: {
+    backgroundColor: CALLING_CARD_PAPER,
+    padding: 6,
+    paddingBottom: 18,
+    borderRadius: 1,
+    shadowColor: "#14040A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  clippedCaption: { left: 6, right: 6, bottom: 18 },
+  clippedClip: { position: "absolute", top: -14, alignSelf: "center" },
   stampTile: {
     padding: 6, borderWidth: 4, borderStyle: "dotted", backgroundColor: "#FBF6EE",
     shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 6, elevation: 2,
   },
+  plateTile: { padding: 7, borderWidth: 1.5, borderRadius: 1, overflow: "hidden" },
   loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
     position: "absolute", left: 0, right: 0, bottom: 0,

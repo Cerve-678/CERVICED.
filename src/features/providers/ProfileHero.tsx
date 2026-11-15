@@ -12,11 +12,18 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
+import { LaceHero } from "./heroes/LaceHero";
+import { PressedHero } from "./heroes/EmbossedHero";
+import { BoutiqueHero } from "./heroes/BoutiqueHero";
+import { GazetteHero } from "./heroes/GazetteHero";
+import { NovelHero } from "./heroes/NovelHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import { SEALED_LOGO_SIZE, SealedEnvelope } from "./heroes/SealedHero";
 import { sealLetter, waxColour } from "./WaxSeal";
+import { SheerHero } from "./heroes/SheerHero";
+import { CallingCardHero } from "./heroes/CallingCardHero";
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -704,6 +711,114 @@ export function ProfileHeroLayout({
         </View>
       );
     }
+    case "lace":
+      // Lace: a piece of lace fabric draped across the foot of the hero, the
+      // logo clean above it, the name in script (heroes/LaceHero).
+      return (
+        <LaceHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          heroText={heroText}
+          heroSub={heroSub}
+          heroIsDark={heroIsDark}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+          shadow={shadow}
+        />
+      );
+
+    case "veil":
+      // Sheer: their photo under a see-through black veil (heroes/SheerHero).
+      return (
+        <SheerHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "pressed":
+      // Embossed: a sheet of pressed paper over their photo (heroes/EmbossedHero).
+      return (
+        <PressedHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          logo={renderLogo(84)}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "callingCard":
+      // Calling Card: satin folds, and a cream card held by a gold clip with
+      // the logo, the name and the details on it (heroes/CallingCardHero).
+      return (
+        <CallingCardHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          logo={renderLogo(76)}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "shoppingBag":
+      // Boutique: a shopping bag with their logo and name printed on it.
+      return (
+        <BoutiqueHero
+          name={name}
+          location={location}
+          accent={accent}
+          heroSub={heroSub}
+          shadow={shadow}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "gazette":
+      // Gazette: a newsprint front page over their photo, the logo in the
+      // masthead's left ear; the stars, years and slots pill under the sheet.
+      return (
+        <>
+          <View style={layout.textFirst}>
+            <GazetteHero
+              name={name}
+              kicker={kicker}
+              location={location}
+              rating={rating}
+              logo={<View style={layout.logoNoGap}>{renderLogo(44)}</View>}
+              // The sheet is always pale newsprint, so the tick is always blue.
+              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color="#007AFF" accessibilityLabel="Verified" /> : null}
+            />
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+
+    case "hardback":
+      // Novel: a cloth-bound cover, drawn in heroes/NovelHero.
+      return (
+        <NovelHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          isVerified={isVerified}
+        />
+      );
 
     default:
       return (
@@ -774,11 +889,20 @@ function SealRing({
 }
 
 /**
- * Whether this style draws the stars, years and slots pill on a white card
- * (Duet) rather than straight on the hero, so the profile inks them dark.
+ * Whether this style draws the stars, years and slots pill on a pale card
+ * (Duet's welcome card, the Calling Card) rather than straight on the hero,
+ * so the profile inks them dark.
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
-  return pageStyle.hero === "duet";
+  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard";
+}
+
+/**
+ * Whether this style lays its own dark layer over the hero (Sheer's veil), so
+ * the profile and the preview ink the hero white whatever is behind it.
+ */
+export function heroIsDarkForStyle(pageStyle: PageStyle): boolean {
+  return pageStyle.hero === "veil";
 }
 
 /** The ink for details on that card. */

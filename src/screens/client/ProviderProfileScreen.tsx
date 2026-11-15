@@ -50,6 +50,7 @@ import {
   HeroPills,
   ProfileHeroLayout,
   detailsSitOnCard,
+  heroIsDarkForStyle,
 } from "../../features/providers/ProfileHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1969,6 +1970,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     ? provider?.gradient[0]
     : OP.hero;
   const heroIsDark =
+    heroIsDarkForStyle(pageStyle) ||
     !!provider?.backgroundImage ||
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
@@ -4177,7 +4179,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               ? "Not taking bookings"
                               : fullyBooked
                               ? "Fully Booked"
-                              : "Book"}
+                              // Boutique says "Add to bag"; it still opens the booking sheet.
+                              : pageStyle.bookLabel ?? "Book"}
                         </Text>
                       </TouchableOpacity>
                     );
