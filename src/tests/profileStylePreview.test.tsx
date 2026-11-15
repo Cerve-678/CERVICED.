@@ -118,9 +118,11 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByLabelText('Rated 5.0')).toBeTruthy();
   });
 
-  it('hangs a placard under Gallery\'s framed logo', () => {
+  it('leaves Gallery without a placard or wall labels', () => {
     renderPreview('gallery');
-    expect(screen.getByText('NO. 01 · THE ARTIST')).toBeTruthy();
+    expect(screen.queryByText('NO. 01 · THE ARTIST')).toBeNull();
+    expect(screen.queryByText('ON VIEW')).toBeNull();
+    expect(screen.queryByText('VISITOR BOOK')).toBeNull();
     expect(screen.getByText('Lashes.')).toBeTruthy();
   });
 
