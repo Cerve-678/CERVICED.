@@ -3,12 +3,17 @@
 // The Sheer page style's hero (round 4, 2026-11-15): their cover photo or
 // colours seen through a see-through black veil, an oval monogram round the
 // logo and the name in thin, widely spaced Bellefair caps. (The "How to book"
-// box was removed at the owner's request, 2026-11-15.) The veil is always dark, so everything here
-// is drawn in white whatever is behind it; the profile and the preview treat a
-// veil hero as dark for the same reason (heroIsDarkForStyle).
+// box was removed at the owner's request, 2026-11-15.) The veil itself isn't
+// drawn here: it runs down the whole page (VeilBackdrop, drawn by the profile
+// and the preview behind everything), and the content sits on see-through
+// dark glass over it (veilPageTheme). The veil is always dark, so everything
+// here is drawn in white whatever is behind it; the profile and the preview
+// treat a veil hero as dark for the same reason (heroIsDarkForStyle).
 
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+
+import { blend, buildThemeTokens, isDarkColor, type ProviderThemeTokens } from "../../../constants/providerThemes";
 
 /** White ink on the veil, and the lines and panels drawn on it. */
 export const VEIL_INK = {
@@ -20,6 +25,33 @@ export const VEIL_INK = {
 
 /** How dark the veil is: the photo still shows through, but white type reads on any of them. */
 const VEIL = "rgba(8,6,6,0.6)";
+
+/** The glass the content sits on: a near-black, drawn see-through over the veil. */
+const VEIL_SHEET = "#120E0E";
+const VEIL_CARD = "#1E1817";
+/** How much of the glass shows: enough to read on, light enough to see the photo through. */
+const VEIL_SHEET_ALPHA = 0.42;
+
+/** The veil, behind the whole page. Fills its parent, under the content. */
+export function VeilBackdrop({ style }: { style?: StyleProp<ViewStyle> }) {
+  return <View style={[StyleSheet.absoluteFill, { backgroundColor: VEIL }, style]} pointerEvents="none" />;
+}
+
+/**
+ * The page's colours on a veil page: the theme's own hero and accent, but a
+ * dark sheet and card so every section, sheet and modal inks itself white.
+ * `sheetFill` is what the content sheet is actually painted with (see-through);
+ * `bg` stays solid because it's what the ink and edges are worked out from.
+ */
+export function veilPageTheme(base: ProviderThemeTokens): ProviderThemeTokens & { sheetFill: string } {
+  const tokens = buildThemeTokens(base.hero, VEIL_CARD, base.accent, VEIL_SHEET, base.gradient);
+  return { ...tokens, sheetFill: `rgba(18,14,14,${VEIL_SHEET_ALPHA})` };
+}
+
+/** A dark accent lifted so it still reads on the dark glass; a light one is kept. */
+export function veilAccent(accent: string): string {
+  return isDarkColor(accent) ? blend(accent, "#FFFFFF", 0.5) : accent;
+}
 
 export function SheerHero({
   name,
@@ -41,10 +73,6 @@ export function SheerHero({
 }) {
   return (
     <View style={styles.wrap}>
-      {/* Runs up past the top of the hero and down under the sheet's rounded
-          edge, so no strip of bare photo shows at either end. */}
-      <View style={styles.veil} pointerEvents="none" />
-
       <View style={styles.center}>
         <View style={styles.oval}>
           <View style={styles.ovalInner} pointerEvents="none" />
@@ -68,7 +96,6 @@ export function SheerHero({
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingBottom: 40 },
-  veil: { position: "absolute", top: -700, bottom: -60, left: 0, right: 0, backgroundColor: VEIL },
   center: { alignItems: "center" },
   // A tall capsule with a second hairline inside it, round a small logo.
   oval: {
