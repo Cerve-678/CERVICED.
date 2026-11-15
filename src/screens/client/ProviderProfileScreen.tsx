@@ -42,6 +42,7 @@ import type { ScrollViewInstance } from 'react-native';
 import { Image } from "expo-image";
 import {
   DETAILS_ON_CARD_INK,
+  DETAILS_OWN_LINE,
   HERO_NAME_LINE_HEIGHT,
   HERO_NAME_SIZE,
   HeroLogo,
@@ -5329,7 +5330,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           bookings happen elsewhere, so there are no CERVICED
                           reviews to rate them from. */}
                       {!isLinkOnly && (
-                      <View style={styles.ratingRow}>
+                      <View style={[styles.ratingRow, detailsOnCard && styles.detailsInline]}>
                         {[1, 2, 3, 4, 5].map((star) => (
                           <StarIcon key={star} size={12} color="#FFD700" />
                         ))}
@@ -5352,16 +5353,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             styles.yearsExp,
                             { color: detailsSub },
                             detailsShadow && styles.heroTextShadow,
+                            detailsOnCard && styles.detailsInline,
                           ]}
                         >
-                          {provider.yearsExperience} years experience
+                          {provider.yearsExperience} {detailsOnCard ? "yrs" : "years"} experience
                         </Text>
                       ) : null}
 
                       {/* Slots + bell. The pill says when this provider's diary
                           opens — "New slots drop on the 5th" — or, without a
                           release day, "Stay updated" beside the bell that delivers
-                          their updates. See slotsPillText. */}
+                          their updates. See slotsPillText. On Duet's card it
+                          takes a line of its own under the stars and years. */}
+                      <View style={detailsOnCard ? DETAILS_OWN_LINE : undefined}>
                       {(() => {
                         if (isLinkOnly) {
                           // In place of the availability pill: Book (their own
@@ -5521,6 +5525,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         </View>
                         );
                       })()}
+                      </View>
                   </>
                 }
                 about={
@@ -6245,6 +6250,8 @@ const styles = StyleSheet.create({
     gap: 3,
     marginBottom: 8,
   },
+  // Stars and years beside the pills on Duet's card: no gap under them there.
+  detailsInline: { marginBottom: 0 },
   ratingInline: {
     fontFamily: "Jura-VariableFont_wght",
     fontWeight: "800",
