@@ -1884,6 +1884,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // What they do (Nails, Lashes…). Cover and Duet leave it out of the top
+    // of the page, so it's said here instead (owner, 2026-11-15).
+    if (pageStyle.hero === "cover" || pageStyle.hero === "duet") {
+      const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
+      const chips = [...new Set(types.map((type) => {
+        const label = type === "OTHER" ? provider.customServiceType || "Service" : type;
+        return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+      }))];
+      if (chips.length > 0) groups.push({ label: "Category", chips });
+    }
     // Salon, studio, home-based or mobile. Classic already shows it as the
     // icon in the line under the name; most page styles' heroes have no such
     // line, so there it is said here in words (owner, 2026-11-15).
@@ -1930,7 +1940,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       groups.push({ label: "Payment methods", chips: paymentLabels });
     }
     return groups;
-  }, [provider, pageStyle.key]);
+  }, [provider, pageStyle.key, pageStyle.hero]);
 
   // One natural-language paragraph rather than a label/value dump — these are
   // unrelated one-liners, and as rows they read like a spec sheet for
@@ -1977,14 +1987,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     return [...new Set(types.map((type) => (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase()))].join(" · ");
   }, [provider]);
 
-  // Cover's pills under the name: every service type they offer, their area
-  // and how they work — the same facts as the small-caps line other styles show.
+  // Cover's pills under the name: their area and how they work. What they do
+  // isn't repeated here: Additional Information lists it as Category
+  // (owner, 2026-11-15).
   const heroPillLabels = useMemo(() => {
     if (!provider || !pageStyle.heroPills) return [];
-    const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
-    const labels = types.map((type) =>
-      (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase(),
-    );
+    const labels: string[] = [];
     if (provider.location) labels.push(provider.location.toUpperCase());
     if (provider.businessType) labels.push(BUSINESS_TYPE_LABEL[provider.businessType].toUpperCase());
     return [...new Set(labels)];

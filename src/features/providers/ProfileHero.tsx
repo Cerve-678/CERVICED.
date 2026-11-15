@@ -364,9 +364,9 @@ export function ProfileHeroLayout({
             </View>
           </View>
           <View style={[layout.edRule, { borderTopColor: heroText }]}>
-            <Text style={[layout.edKicker, { color: heroText }, shadow]} numberOfLines={1}>{kicker}</Text>
+            <Text style={[layout.edKicker, { color: heroText }, shadow]} numberOfLines={2}>{kicker}</Text>
             {location ? (
-              <Text style={[layout.edLocation, { color: heroSub }, shadow]} numberOfLines={1}>{location}</Text>
+              <Text style={[layout.edLocation, { color: heroSub }, shadow]} numberOfLines={2}>{location}</Text>
             ) : null}
           </View>
           <View style={layout.leftDetails}>{details}</View>
@@ -406,11 +406,10 @@ export function ProfileHeroLayout({
 
     case "duet": {
       // Duet: a white welcome card on a soft accent shadow, the logo beside
-      // the name, then what they do as filled pills.
+      // the name. What they do isn't repeated here: Additional Information
+      // lists it as Category (owner, 2026-11-15).
       const [script, caps] = splitFirst(name);
       const cardAccent = isDarkColor(accent) ? accent : blend(accent, "#000000", 0.35);
-      const pillInk = isDarkColor(accent) ? "#FFFFFF" : "#1F1A1C";
-      const pills = kicker.split("·").map(part => part.trim()).filter(Boolean);
       return (
         <View style={layout.duetWrap}>
           <View>
@@ -447,17 +446,10 @@ export function ProfileHeroLayout({
                 {tick}
               </View>
               </View>
-              {/* What they do, the stars and their years share one line in
-                  the card, the slots pill with Instagram under it (owner,
-                  2026-11-15: the card was too long with each on a line of its
-                  own). The profile puts the slots pill on a line of its own
-                  and draws these in DETAILS_ON_CARD_INK, as the card is white. */}
+              {/* Their years in the card, the slots pill with Instagram under
+                  it. The profile puts the slots pill on a line of its own and
+                  draws these in DETAILS_ON_CARD_INK, as the card is white. */}
               <View style={layout.duetInfoRow}>
-                {pills.map(label => (
-                  <View key={label} style={[layout.duetPill, { backgroundColor: accent }]}>
-                    <Text style={[layout.duetPillText, { color: pillInk }]} numberOfLines={1}>{label}</Text>
-                  </View>
-                ))}
                 {details}
               </View>
             </View>
@@ -576,7 +568,7 @@ export function ProfileHeroLayout({
               </View>
               <View style={[layout.tagRule, { backgroundColor: accent }]} />
               {phrase ? <Text style={layout.tagPhrase}>{phrase}</Text> : null}
-              {location ? <Text style={layout.tagCaption} numberOfLines={1}>{location.toUpperCase()}</Text> : null}
+              {location ? <Text style={layout.tagCaption} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
             </View>
           </View>
           <View style={layout.labelDetails}>{details}</View>
@@ -611,7 +603,7 @@ export function ProfileHeroLayout({
             <View style={layout.logoNoGap}>{renderLogo(72)}</View>
           </View>
           <View style={layout.blockInfo}>
-            {location ? <Text style={[layout.blockArea, { color: heroText }, shadow]} numberOfLines={1}>{location.toUpperCase()}</Text> : null}
+            {location ? <Text style={[layout.blockArea, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
             {tags.length ? (
               <View style={layout.blockTags}>
                 {tags.map(label => (
@@ -661,7 +653,7 @@ export function ProfileHeroLayout({
       const phrase = kickerPhrase(kicker);
       return (
         <View style={layout.quietWrap}>
-          {location ? <Text style={[layout.quietArea, { color: heroText }, shadow]} numberOfLines={1}>{location.toUpperCase()}</Text> : null}
+          {location ? <Text style={[layout.quietArea, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
           <View style={layout.quietBand}>
             <View style={layout.quietRow}>
               <View style={layout.quietText} accessible accessibilityRole="header" accessibilityLabel={name}>
@@ -851,8 +843,6 @@ const layout = StyleSheet.create({
     flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center",
     columnGap: 10, rowGap: 12, marginTop: 18,
   },
-  duetPill: { minHeight: 30, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 5, borderRadius: 100 },
-  duetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1 },
   // Groovy
   groovyWrap: { paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP, marginBottom: 6 },
   groovyTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingHorizontal: 12 },
