@@ -10,6 +10,7 @@ import {
   type PageSectionKey,
 } from '../constants/pageStyles';
 import { encodeThemeKey, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
+import { sealLetter, waxColour } from '../features/providers/WaxSeal';
 import {
   policiesBringOwnSurface,
   sectionsSitOnPage,
@@ -50,12 +51,32 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the fifteen picked styles plus Classic, each once', () => {
+  it('has the twenty-three picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
-      'snapshot', 'signature', 'quiet',
+      'snapshot', 'signature', 'quiet', 'sealed', 'lace', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
     ]);
+  });
+
+  it('seals Sealed\'s envelope and policy notes with a first letter', () => {
+    expect(sealLetter('Amara Okafor')).toBe('A');
+    expect(sealLetter('  1st Class Lashes')).toBe('S');
+    expect(sealLetter('Late arrival')).toBe('L');
+    expect(sealLetter('123')).toBe('');
+  });
+
+  it('presses a pale accent darker so the wax reads as wax', () => {
+    expect(waxColour('#3F1E36')).toBe('#3F1E36');
+    expect(waxColour('#F4D6DC')).not.toBe('#F4D6DC');
+  });
+
+  it('presses Embossed into the page: raised cards, a recessed policy panel, photos in plate marks', () => {
+    const embossed = getPageStyle('embossed');
+    expect(embossed).toMatchObject({ heading: 'embossCaps', cards: 'raised', policies: 'recessed', hero: 'pressed', plateMarkPhotos: true });
+    expect(policiesBringOwnSurface(embossed)).toBe(true);
+    expect(sectionsSitOnPage(embossed)).toBe(false);
+    expect(serviceCardSurface(embossed, { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG })).toMatchObject({ borderRadius: 3, borderWidth: 1 });
   });
 
   it('gives every style but Classic and Glossy a hero of its own', () => {
@@ -219,5 +240,26 @@ describe('Snapshot', () => {
     expect(snapshot).toMatchObject({ hero: 'blockName', heading: 'condensed', cards: 'block', logo: 'square', numberedServices: true });
     expect(serviceCardSurface(snapshot, { card: '#FFFFFF', accent: '#D43F2B', sheet: SHEET_BG }))
       .toMatchObject({ borderRadius: 0, borderWidth: 2 });
+  });
+});
+
+describe('Calling Card', () => {
+  const callingCard = getPageStyle('callingCard');
+
+  it('is satin and a clipped card: its own hero, engraved headings, clipped cards, ribbon policies', () => {
+    expect(callingCard).toMatchObject({
+      hero: 'callingCard', heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', clippedPhotos: true,
+    });
+  });
+
+  it('draws its service cards near-square on a soft shadow, and its policies on a card of their own', () => {
+    expect(serviceCardSurface(callingCard, { card: '#FFFFFF', accent: '#6E1220', sheet: SHEET_BG }))
+      .toMatchObject({ borderRadius: 2, overflow: 'visible' });
+    expect(policiesBringOwnSurface(callingCard)).toBe(true);
+    expect(sectionsSitOnPage(callingCard)).toBe(false);
+  });
+
+  it('is the only style with clipped photos', () => {
+    expect(PAGE_STYLES.filter(s => s.clippedPhotos).map(s => s.key)).toEqual(['callingCard']);
   });
 });
