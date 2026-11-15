@@ -8,9 +8,8 @@
 // - The first time the profile is opened, the Recommend bar slides up from
 //   the bottom (the same bar as after rating a visit) and goes by itself
 //   after a few seconds (shouldOfferOnProfile decides; once per provider).
-// - From then on it's a small thumbs-up badge on the provider's logo (beside the
-//   bell on Cover, which has no logo). When the bar goes, the badge glows
-//   once with a bubble pointing at it.
+// - From then on it's a small thumbs-up badge on the provider's logo. When
+//   the bar goes, the badge glows once with a bubble pointing at it.
 // - Tapping the badge recommends and drops a menu down under it with
 //   Recommend and "Don't show me on their cards". Tapping anywhere else, or
 //   starting to scroll, closes the menu (and the bubble).
@@ -306,8 +305,8 @@ export interface RecommendBadgeTheme {
 }
 
 /**
- * The small round thumbs-up badge on the provider's logo (HeroLogo's `badge`), or
- * beside the bell on Cover. 30pt, with a hit area padded to 46. Drawn in the
+ * The small round thumbs-up badge on the provider's logo (HeroLogo's `badge`).
+ * 30pt, with a hit area padded to 46. Drawn in the
  * provider's page colours: their card before, their accent once recommended.
  */
 export function RecommendBadge({
@@ -371,7 +370,8 @@ const EDGE = 12;
 export function ProviderRecommendLayer({
   providerId, providerName, sharing, showWhereIGo, phase, hintText, menuOpen, anchor, saving,
   onBarYes, onBarClose, onDismissHint, onCloseMenu, onToggleRecommend, onToggleHidden, bottomOffset,
-}: ProviderRecommendLayerProps & { bottomOffset: number }) {
+  theme,
+}: ProviderRecommendLayerProps & { bottomOffset: number; theme: RecommendBadgeTheme }) {
   const { palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -427,20 +427,21 @@ export function ProviderRecommendLayer({
         P={P}
         bottomOffset={bottomOffset}
         subtitle="You've been here"
+        colors={theme}
       />
 
       {phase === 'hint' ? (
         <Animated.View
           style={[styles.bubbleWrap, { top: below - originY, left: bubbleLeft, opacity: fade }]}
         >
-          <View style={[styles.bubbleArrow, { left: heartCenter - bubbleLeft - 7, backgroundColor: P.accent }]} />
+          <View style={[styles.bubbleArrow, { left: heartCenter - bubbleLeft - 7, backgroundColor: theme.accent }]} />
           <Pressable
-            style={[styles.bubble, { backgroundColor: P.accent }]}
+            style={[styles.bubble, { backgroundColor: theme.accent }]}
             onPress={onDismissHint}
             accessibilityRole="button"
             accessibilityLabel={`${hintText} Dismiss`}
           >
-            <Text style={[styles.bubbleText, { color: P.onAccent }]}>{hintText}</Text>
+            <Text style={[styles.bubbleText, { color: theme.onAccent }]}>{hintText}</Text>
           </Pressable>
         </Animated.View>
       ) : null}
