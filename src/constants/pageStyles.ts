@@ -9,7 +9,8 @@
 // https://claude.ai/artifact/Q3iiDvPo8zuXkbPBHYtqW3 (templates 1, 2, 3, 4, 8
 // and 9), then six more on 2026-11-14 from
 // https://claude.ai/artifact/5jGhmNUFgb2cY8SZhdeQYc (templates 11–16:
-// Editorial, Heritage, Duet, Groovy, Gallery, Apothecary). Stored as the fifth `|` part of providers.profile_theme (see
+// Editorial, Heritage, Duet, Groovy, Gallery, Apothecary), and from round 4
+// on 2026-11-15. Stored as the fifth `|` part of providers.profile_theme (see
 // encodeThemeKey), so it needs no column of its own.
 //
 // Each style is a small set of switches the profile reads, not a layout of its
@@ -19,6 +20,11 @@ export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
   | 'snapshot' | 'signature' | 'quiet'
+  | 'sealed'
+  | 'lace'
+  | 'sheer'
+  | 'embossed'
+  | 'callingCard'
   | 'boutique';
 
 /** How a section's title is drawn. */
@@ -39,6 +45,11 @@ export type PageHeading =
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
   | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
+  | 'lacePair'  // a lowercase script word in the accent over spaced display caps (Lace)
+  | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
+  | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
+  | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
   | 'shopSerif'; // a big serif title on the left, like a shop's department heading (Boutique)
 
 /** What a section sits on. */
@@ -55,6 +66,11 @@ export type PageCards =
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
   | 'block'    // a square card with a thick dark outline
+  | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
+  | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
+  | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
+  | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
+  | 'clipped' // a near-square card with an inner rule, held at the top by a gold clip (Calling Card)
   | 'product'; // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
 
 /** How the policy rows are drawn. */
@@ -71,6 +87,11 @@ export type PagePolicies =
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
   | 'definition' // a small caps label beside each value, between hairlines
+  | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
+  | 'rosettes'  // one card, each policy beside a small lace rosette (Lace)
+  | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
+  | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
+  | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
   | 'accordion';  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
 
 /**
@@ -95,6 +116,12 @@ export type PageHero =
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
+  | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
+  | 'lace'      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
+  | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps, outlined How to book boxes
+  | 'quietBand' // their photo left clear, the name and logo on a pale band across it
+  | 'pressed'  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
+  | 'callingCard' // satin folds, and a cream calling card held by a gold clip with the logo and name
   | 'shoppingBag'; // a shopping bag with rope handles, the logo and name printed on its front (Boutique)
 
 /** The frame round the logo in the hero. */
@@ -103,7 +130,8 @@ export type PageLogoFrame =
   | 'tilted'     // a rounded square card, tilted (Editorial)
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
   | 'mat'        // square, in a white mat and a thin dark frame (Gallery)
-  | 'square';    // a square with barely rounded corners (Snapshot)
+  | 'square'     // a square with barely rounded corners (Snapshot)
+  | 'stamped';   // a ring pressed into the paper round it (Embossed)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -128,6 +156,12 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** Portfolio photos as perforated postage stamps, each tilted a little (Sealed). */
+  stampPhotos?: boolean;
+  /** Portfolio photos sit in a plate mark pressed into the page, like prints (Embossed). */
+  plateMarkPhotos?: boolean;
+  /** Portfolio photos as cream-bordered prints, each pinned by a small gold clip (Calling Card). */
+  clippedPhotos?: boolean;
   /** The word on each service's book button, when the style has its own (Boutique: "Add to bag").
    *  Only the word changes: the button still opens the booking sheet. */
   bookLabel?: string;
@@ -233,6 +267,47 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // the elements of correspondence — wax seal, envelope, stamps — not a letter.
+  {
+    key: 'sealed', name: 'Sealed', description: 'Your initial in a wax seal, your logo tucked in an envelope, stamped photos',
+    heading: 'sealCaps', cards: 'stationery', policies: 'sealedNotes', logo: 'circle',
+    hero: 'envelope', aboutInHero: false, stampPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // lace cloth dropped across the hero, the way fabric falls, not framing the logo (owner).
+  {
+    key: 'lace', name: 'Lace', description: 'Lace cloth draped over your photo, a script name, a lace-trimmed price list',
+    heading: 'lacePair', cards: 'lace', policies: 'rosettes', logo: 'doubleRing',
+    hero: 'lace', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // a see-through black veil over their photo, like the owner's sheer-black reference.
+  {
+    key: 'sheer', name: 'Sheer', description: 'Your photo under a see-through black veil, fine outlined boxes',
+    heading: 'sheerCaps', cards: 'sheer', policies: 'outlined', logo: 'circle',
+    hero: 'veil', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // blind emboss, everything tone on tone, after the owner's embossed
+  // "BOOKING for September" reference.
+  {
+    key: 'embossed', name: 'Embossed', description: 'Pressed paper: your name raised in the page, your photos in plate marks',
+    heading: 'embossCaps', cards: 'raised', policies: 'recessed', logo: 'stamped',
+    hero: 'pressed', aboutInHero: false, plateMarkPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
+  // board 23): satin and a calling card held by a gold clip.
+  {
+    key: 'callingCard', name: 'Calling Card', description: 'Your name on a cream card held by a gold clip, over satin',
+    heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', logo: 'circle',
+    hero: 'callingCard', aboutInHero: false, clippedPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
   // board 24): "shopping cart vibes", the logo printed on the bag.

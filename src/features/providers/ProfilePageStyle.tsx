@@ -22,7 +22,11 @@ import {
   type PageStyle,
 } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
+import { LaceRosette, LaceTrim } from "./heroes/LaceHero";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
+import { GoldClip } from "./heroes/CallingCardHero";
+import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
+import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -64,7 +68,16 @@ export function onAccentInk(accent: string): { text: string; sub: string } {
 
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
-  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open";
+  return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer";
+}
+
+/** Sheer's see-through box on the content area: a hairline and a faint wash, never a solid card. */
+function sheerBox(sheet: string): { borderColor: string; backgroundColor: string } {
+  const ink = sheetInk(sheet);
+  return {
+    borderColor: withAlpha(ink.text, 0.42),
+    backgroundColor: isDarkColor(sheet) ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.38)",
+  };
 }
 
 /** Dark ink for an outline on a card of this colour (Duet, Groovy, Apothecary). */
@@ -235,6 +248,48 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "sealCaps": {
+      // Sealed: a small wax seal, spaced serif caps, a hairline running out.
+      const line = sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <WaxSeal size={26} wax={waxColour(accent)} />
+          <Text style={[headingStyles.sealCaps, { color: ink }]} numberOfLines={1}>
+            {headingPair(section).join(" ").toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
+    case "sheerCaps":
+      // Sheer: thin Bellefair caps, widely spaced, centred.
+      return (
+        <Text {...a11y} style={[headingStyles.sheerCaps, { color: ink }]}>
+          {headingPair(section).join(" ").toUpperCase()}
+        </Text>
+      );
+    case "embossCaps":
+      // Embossed: the title pressed up out of the page, in the page's own colour.
+      return (
+        <View {...a11y} accessible style={headingStyles.embossWrap}>
+          <EmbossedText paper={palette.background} style={headingStyles.embossCaps} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {headingPair(section).join(" ").toUpperCase()}
+          </EmbossedText>
+        </View>
+      );
+    case "engravedCaps": {
+      // Calling Card: engraved serif caps, centred between hairlines.
+      const line = color ? withAlpha(color, 0.35) : sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+          <Text style={[headingStyles.engravedCaps, { color: ink }]} numberOfLines={1}>
+            {headingPair(section).join(" ").toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -244,6 +299,16 @@ export function PageSectionHeading({
             {headingPair(section).join(" ").toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
+    case "lacePair": {
+      // Lace: a lowercase script word in the accent, spaced display caps tucked under it.
+      const [lead, rest] = headingPair(section);
+      return (
+        <View {...a11y} accessible style={headingStyles.stack}>
+          <Text style={[headingStyles.laceScript, { color: accent }]}>{lead.toLowerCase()}</Text>
+          <Text style={[headingStyles.laceCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
     }
@@ -340,6 +405,18 @@ export function PageSection({
     </HeadingLine>
   );
 
+  if (pageStyle.cards === "sheer") {
+    // Sheer: the heading on the page, the content in a see-through hairline box.
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        {bare ? children : (
+          <View style={[surfaceStyles.sheer, sheerBox(palette.background)]}>{children}</View>
+        )}
+      </View>
+    );
+  }
+
   if (bare || pageStyle.cards === "none" || pageStyle.cards === "open") {
     return (
       <View
@@ -358,6 +435,9 @@ export function PageSection({
 
   const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
+    : pageStyle.cards === "clipped" ? 2
+    : pageStyle.cards === "stationery" ? 3
+    : pageStyle.cards === "raised" ? 3
     : pageStyle.cards === "flat" || pageStyle.cards === "product" ? 6
     : pageStyle.cards === "gloss" ? 28
     : pageStyle.cards === "chunky" ? 26
@@ -404,6 +484,21 @@ export function PageSection({
     );
   }
 
+  if (pageStyle.cards === "lace") {
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <LaceTrimmedCard
+          background={palette.cardBackground}
+          border={withAlpha(palette.accent, 0.3)}
+          radius={square ? 0 : 4}
+        >
+          {children}
+        </LaceTrimmedCard>
+      </View>
+    );
+  }
+
   return (
     <View style={[surfaceStyles.block, style]}>
       {heading}
@@ -415,11 +510,22 @@ export function PageSection({
           pageStyle.cards === "topRule" && [surfaceStyles.topRule, { borderTopColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "block" && [surfaceStyles.blockCard, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "gloss" && [surfaceStyles.gloss, { borderColor: withAlpha(palette.accent, 0.35) }],
+          pageStyle.cards === "stationery" && [surfaceStyles.paper, surfaceStyles.stationery, { borderColor: withAlpha(palette.accent, 0.28) }],
+          pageStyle.cards === "raised" && [surfaceStyles.raised, raisedEdges(palette.cardBackground)],
+          pageStyle.cards === "clipped" && [surfaceStyles.paper, surfaceStyles.clippedCard],
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
+        {pageStyle.cards === "stationery" ? (
+          <View style={[surfaceStyles.innerRule, { borderColor: withAlpha(palette.accent, 0.22) }]} pointerEvents="none" />
+        ) : null}
+        {pageStyle.cards === "clipped" ? (
+          <View style={[surfaceStyles.clippedRule, { borderColor: withAlpha(palette.accent, 0.28) }]} pointerEvents="none" />
+        ) : null}
         {children}
+        {/* Calling Card: a gold clip holds each card at the top. */}
+        {pageStyle.cards === "clipped" ? <GoldClip width={96} style={surfaceStyles.clippedClip} /> : null}
       </View>
     </View>
   );
@@ -428,8 +534,47 @@ export function PageSection({
 function isCentredHeading(style: PageStyle): boolean {
   return (
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
-    || style.heading === "italicCaps" || style.heading === "layered"
+    || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "lacePair"
+    || style.heading === "sheerCaps" || style.heading === "embossCaps"
   );
+}
+
+/** Lace: a fine-lined card with a scalloped trim of its own colour hanging
+ *  from its foot. The trim is drawn to the card's measured width. */
+function LaceTrimmedCard({
+  background,
+  border,
+  radius,
+  children,
+}: {
+  background: string;
+  border: string;
+  radius: number;
+  children: React.ReactNode;
+}) {
+  const [width, setWidth] = useState(0);
+  return (
+    <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+      <View
+        style={[
+          surfaceStyles.solid,
+          surfaceStyles.laceCard,
+          { backgroundColor: background, borderColor: border, borderRadius: radius, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+        ]}
+      >
+        {children}
+      </View>
+      <View style={surfaceStyles.laceTrim} pointerEvents="none">
+        <LaceTrim width={width} color={background} />
+      </View>
+    </View>
+  );
+}
+
+/** Embossed's raised card: a lit top and left edge, a shaded bottom and right. */
+function raisedEdges(card: string): ViewStyle {
+  const { high, shade } = pressEdges(card);
+  return { borderTopColor: high, borderLeftColor: high, borderBottomColor: shade, borderRightColor: shade };
 }
 
 /** Groovy's wavy underline. */
@@ -568,6 +713,49 @@ export function serviceCardSurface(
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 2, borderColor: outlineInk(colours.card) };
     case "topRule":
       return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderTopWidth: 3, borderTopColor: outlineInk(colours.card) };
+    case "stationery":
+      // Sealed: writing paper with a soft shadow; the fine edge is a border here
+      // (a service card has no room for Sealed's inset rule).
+      return {
+        backgroundColor: colours.card,
+        borderWidth: 1,
+        borderColor: withAlpha(colours.accent, 0.28),
+        borderRadius: 3,
+        shadowColor: "#26201E",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      };
+    case "lace":
+      return { ...flat, backgroundColor: colours.card, borderRadius: 4, borderWidth: 1, borderColor: withAlpha(colours.accent, 0.3) };
+    case "sheer":
+      return { ...flat, ...sheerBox(colours.sheet), borderWidth: 1, borderRadius: 0 };
+    case "raised":
+      return {
+        backgroundColor: colours.card,
+        borderRadius: 3,
+        borderWidth: 1,
+        ...raisedEdges(colours.card),
+        shadowColor: "#463428",
+        shadowOffset: { width: 1, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        // The card clips by default, which would cut the shadow off.
+        overflow: "visible",
+      };
+    case "clipped":
+      // Calling Card: a near-square card on a soft drop shadow.
+      return {
+        backgroundColor: colours.card,
+        borderRadius: 2,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: withAlpha(colours.accent, 0.3),
+        shadowColor: "#14040A",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.14,
+        shadowRadius: 10,
+        overflow: "visible",
+      };
     case "product":
       // Boutique: a clean product tile, a fine outline and small corners.
       return {
@@ -628,7 +816,8 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   const layout = style?.policies;
   return (
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
-    || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "accordion"
+    || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
+    || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion"
   );
 }
 
@@ -677,6 +866,40 @@ export function StyledPolicyList({
     );
   }
 
+  if (layout === "recessed") {
+    // Embossed: a panel pressed down into the page, shaded along its top and
+    // left inner edge and lit along the bottom and right, with the policies
+    // as label-and-value rows inside it.
+    const { high, shade } = pressEdges(palette.background);
+    return (
+      <View
+        style={[
+          policyStyles.recessed,
+          {
+            backgroundColor: blend(palette.background, "#000000", 0.035),
+            borderTopColor: shade, borderLeftColor: shade, borderBottomColor: high, borderRightColor: high,
+          },
+          square && policyStyles.square,
+        ]}
+      >
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[policyStyles.defRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
+          >
+            <Text style={[policyStyles.recessedLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+            <View style={policyStyles.hairValueCol}>
+              <Text style={[policyStyles.defValue, { color: ink.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
   if (layout === "definition") {
     // Gallery's visitor information: a small caps label beside each value.
     return (
@@ -693,6 +916,38 @@ export function StyledPolicyList({
                 <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
               ))}
             </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "sealedNotes") {
+    // Sealed: folded notes, the fold a shade darker, each closed with a wax
+    // seal of its first letter. The notes are the card colour, so the card ink.
+    const wax = waxColour(palette.accent);
+    const fold = blend(palette.cardBackground, isDarkColor(palette.cardBackground) ? "#FFFFFF" : "#000000", 0.05);
+    return (
+      <View style={policyStyles.grid}>
+        {rows.map(row => (
+          <View
+            key={row.label}
+            style={[policyStyles.cell, policyStyles.note2, { backgroundColor: palette.cardBackground }, square && policyStyles.square]}
+          >
+            <View style={[policyStyles.noteFold, { backgroundColor: fold, borderBottomColor: withAlpha(palette.accent, 0.18) }]} />
+            <View style={policyStyles.noteSeal}>
+              <WaxSeal size={44} wax={wax} letter={sealLetter(row.label)} />
+            </View>
+            <Text style={[policyStyles.noteLabel, { color: palette.text }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.smallValue, policyStyles.centreText, { color: palette.sub }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, policyStyles.centreText, { color: palette.sub }]}>{note}</Text>
+            ))}
+            {row.tag ? (
+              <View style={[policyStyles.tag, { backgroundColor: palette.accent }]}>
+                <Text style={[policyStyles.tagText, { color: onAccentInk(palette.accent).text }]}>{row.tag}</Text>
+              </View>
+            ) : null}
           </View>
         ))}
       </View>
@@ -722,6 +977,64 @@ export function StyledPolicyList({
             ))}
           </View>
         ))}
+      </View>
+    );
+  }
+
+  if (layout === "rosettes") {
+    // Lace: each policy beside a small lace rosette, between hairlines, on the lace card.
+    return (
+      <View>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[policyStyles.rosetteRow, { borderTopColor: palette.separator }, index === 0 && policyStyles.hairFirst]}
+          >
+            <LaceRosette size={30} color={palette.accent} hole={palette.cardBackground} />
+            <View style={policyStyles.numeralBody}>
+              <Text style={[policyStyles.rosetteLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+              <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "ribbon") {
+    // Calling Card: every policy on one card, two-up, with a ribbon in the
+    // accent across its top corner. The card brings its own colours.
+    const labelInk = isDarkColor(palette.cardBackground) ? palette.text : (isDarkColor(palette.accent) ? palette.accent : palette.text);
+    return (
+      // The shadow sits on an outer box: the inner one clips the ribbon, and a
+      // clipping view on iOS clips its own shadow too.
+      <View style={[policyStyles.ribbonShadow, { backgroundColor: palette.cardBackground }, square && policyStyles.square]}>
+      <View style={[policyStyles.ribbonCard, square && policyStyles.square]}>
+        <LinearGradient
+          colors={[palette.accent, blend(palette.accent, "#000000", 0.35)]}
+          style={policyStyles.ribbon}
+          pointerEvents="none"
+        />
+        <View style={policyStyles.ribbonGrid}>
+          {rows.map(row => (
+            <View key={row.label} style={policyStyles.ribbonCell}>
+              <Text style={[policyStyles.ribbonLabel, { color: labelInk }]}>{row.label.toUpperCase()}</Text>
+              <Text style={[policyStyles.value, { color: palette.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: palette.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? (
+                <View style={[policyStyles.tag, policyStyles.tagLeft, { backgroundColor: palette.accent }]}>
+                  <Text style={[policyStyles.tagText, { color: onAccentInk(palette.accent).text }]}>{row.tag}</Text>
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      </View>
       </View>
     );
   }
@@ -775,6 +1088,21 @@ export function StyledPolicyList({
               </View>
               <Text style={[policyStyles.value, { color: ink.text }]}>{row.value}</Text>
               {notes}
+            </View>
+          );
+        }
+
+        if (layout === "outlined") {
+          // Sheer: square hairline boxes, a fine icon over thin serif caps.
+          return (
+            <View key={row.label} style={[policyStyles.cell, policyStyles.outlined, sheerBox(palette.background)]}>
+              <Ionicons name={row.icon} size={22} color={ink.text} />
+              <Text style={[policyStyles.outlinedLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+              <Text style={[policyStyles.smallValue, policyStyles.centreText, { color: ink.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, policyStyles.centreText, { color: ink.sub }]}>{note}</Text>
+              ))}
+              {tag}
             </View>
           );
         }
@@ -976,16 +1304,28 @@ const headingStyles = StyleSheet.create({
   groovy: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 36, lineHeight: 47, letterSpacing: -0.8 },
   serifTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 32, lineHeight: 41, marginBottom: 14 },
   labelCaps: { fontFamily: "MarcellusSC-Regular", fontSize: 14, letterSpacing: 4 },
+  // Sealed's own face (EB Garamond), a seal beside it.
+  sealCaps: { fontFamily: "EBGaramond-SemiBold", fontSize: 15, lineHeight: 21, letterSpacing: 3.5, flexShrink: 1 },
   // Quiet's own face, so it no longer reads as Apothecary (owner, 2026-11-15).
   quietCaps: { fontFamily: "JosefinSans_600SemiBold", fontSize: 14, lineHeight: 20, letterSpacing: 4, flexShrink: 1 },
+  // Calling Card's engraved caps (Forum), its own face.
+  engravedCaps: { fontFamily: "Forum-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 4, flexShrink: 1 },
+  shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
   condensedWrap: { marginBottom: 14 },
   condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 49, letterSpacing: 0.3 },
   condensedBar: { width: 36, height: 5, marginTop: 4 },
+  embossWrap: { alignSelf: "stretch", marginBottom: 14 },
+  // Libre Caslon Display's caps are tall: 1.28x keeps their tops whole.
+  embossCaps: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 30, lineHeight: 39, letterSpacing: 2, textAlign: "center" },
   indexRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   indexNumber: { fontFamily: "Gloock-Regular", fontSize: 15 },
   indexRule: { width: 22, height: 1.5 },
   indexTitle: { fontFamily: "Gloock-Regular", fontSize: 28, lineHeight: 36, flexShrink: 1 },
-  shopSerif: { fontFamily: "DMSerifDisplay-Regular", fontSize: 28, lineHeight: 37, marginBottom: 12 },
+  // Lace: Allura over Gilda Display. The script's swashes need the padding.
+  laceScript: { fontFamily: "Allura-Regular", fontSize: 40, lineHeight: 60, paddingHorizontal: 12 },
+  laceCaps: { fontFamily: "GildaDisplay-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 5, marginTop: -14, textAlign: "center" },
+  // Sheer (round 4): Bellefair, thin and widely spaced.
+  sheerCaps: { fontFamily: "Bellefair-Regular", fontSize: 26, lineHeight: 34, letterSpacing: 3.2, textAlign: "center", marginBottom: 16 },
 });
 
 const surfaceStyles = StyleSheet.create({
@@ -1030,7 +1370,25 @@ const surfaceStyles = StyleSheet.create({
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
+  stationery: { borderWidth: 1, padding: 22 },
   headingFlex: { flexShrink: 1 },
+  // Calling Card: room at the top for the clip, and a fine rule inset from the edge.
+  clippedCard: { marginTop: 22, paddingTop: 34 },
+  clippedRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1, borderRadius: 1 },
+  clippedClip: { position: "absolute", top: -34, alignSelf: "center" },
+  laceCard: { borderWidth: 1 },
+  // Overlaps the card's foot by a hair so no seam shows between card and trim.
+  laceTrim: { marginTop: -1 },
+  sheer: { borderWidth: 1, padding: 18 },
+  raised: {
+    borderWidth: 1,
+    shadowColor: "#463428",
+    shadowOffset: { width: 1, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: "visible",
+  },
 });
 
 const policyStyles = StyleSheet.create({
@@ -1072,13 +1430,40 @@ const policyStyles = StyleSheet.create({
   tileLabel: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 13, letterSpacing: 1 },
   sticker: { borderRadius: 22, padding: 14 },
   stickerLabel: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 16 },
+  outlined: { borderWidth: 1, paddingVertical: 16, paddingHorizontal: 10, alignItems: "center", gap: 6 },
+  outlinedLabel: { fontFamily: "Bellefair-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 2, textAlign: "center" },
   hairFirst: { borderTopWidth: 0 },
+  note2: {
+    borderRadius: 3, paddingHorizontal: 12, paddingTop: 70, paddingBottom: 16, alignItems: "center",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 2,
+  },
+  noteFold: { position: "absolute", top: 0, left: 0, right: 0, height: 50, borderBottomWidth: 1, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+  noteSeal: { position: "absolute", top: 28, alignSelf: "center" },
+  noteLabel: { fontFamily: "EBGaramond-SemiBold", fontSize: 13, lineHeight: 18, letterSpacing: 2, textAlign: "center" },
+  rosetteRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  rosetteLabel: { fontFamily: "GildaDisplay-Regular", fontSize: 13, lineHeight: 18, letterSpacing: 2.6 },
+  recessed: { borderWidth: 1.5, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 6 },
+  recessedLabel: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 11, lineHeight: 15, letterSpacing: 1.8, width: 104, paddingTop: 2 },
+  hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
+  hairValueCol: { flex: 1 },
+  hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },
+  ribbonCard: { borderRadius: 2, overflow: "hidden", paddingHorizontal: 18, paddingTop: 46, paddingBottom: 20 },
+  ribbonShadow: {
+    borderRadius: 2,
+    shadowColor: "#14040A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  ribbon: { position: "absolute", top: 20, right: -54, width: 190, height: 26, transform: [{ rotate: "45deg" }] },
+  ribbonGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: 16, columnGap: 16, paddingRight: 18 },
+  ribbonCell: { flexBasis: "44%", flexGrow: 1, gap: 4 },
+  ribbonLabel: { fontFamily: "Forum-Regular", fontSize: 14, lineHeight: 19, letterSpacing: 2.2 },
+  tagLeft: { alignSelf: "flex-start" },
   accordion: { borderBottomWidth: StyleSheet.hairlineWidth },
   accordionRow: { borderTopWidth: StyleSheet.hairlineWidth },
   accordionHead: { minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   accordionLabel: { fontFamily: "Manrope-Bold", fontSize: 13, letterSpacing: 0.8, flexShrink: 1 },
   accordionBody: { paddingBottom: 14 },
-  hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
-  hairValueCol: { flex: 1 },
-  hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },
 });
