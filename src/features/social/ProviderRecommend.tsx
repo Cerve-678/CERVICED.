@@ -49,7 +49,6 @@ import { shouldOfferOnProfile, withAnswer, withAsked } from './circleMoments';
 import { readMomentsMemory, updateMomentsMemory } from './momentsMemory';
 import type { ProviderSharing } from './types';
 
-const HEART = '#FF2D78';
 /** Lets the page settle before the bar slides up. */
 const BAR_DELAY_MS = 1200;
 /** How long the bubble by the heart stays if nobody touches the page. */
@@ -294,13 +293,27 @@ export function useProviderRecommend({ providerId, providerName, enabled, onErro
   return useMemo(() => ({ heart, layer, dismissFloating }), [heart, layer, dismissFloating]);
 }
 
+/** The provider page's own colours, so the badge belongs to their theme. */
+export interface RecommendBadgeTheme {
+  /** Their card colour: the badge before it's tapped. */
+  card: string;
+  /** Their text colour: the outline thumb on that card. */
+  text: string;
+  /** Their accent: the badge once recommended, and the glow. */
+  accent: string;
+  /** Readable ink on the accent. */
+  onAccent: string;
+}
+
 /**
  * The small round thumbs-up badge on the provider's logo (HeroLogo's `badge`), or
- * beside the bell on Cover. 30pt, with a hit area padded to 46.
+ * beside the bell on Cover. 30pt, with a hit area padded to 46. Drawn in the
+ * provider's page colours: their card before, their accent once recommended.
  */
 export function RecommendBadge({
-  recommended, glowing, busy, providerName, onPress, anchorRef,
-}: RecommendHeartProps) {
+  recommended, glowing, busy, providerName, onPress, anchorRef, theme,
+}: RecommendHeartProps & { theme: RecommendBadgeTheme }) {
+  const ink = recommended ? theme.onAccent : theme.text;
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -322,6 +335,7 @@ export function RecommendBadge({
           style={[
             styles.glow,
             {
+              borderColor: theme.accent,
               opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
               transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] }) }],
             },
@@ -329,7 +343,10 @@ export function RecommendBadge({
         />
       ) : null}
       <TouchableOpacity
-        style={[styles.badge, recommended ? styles.badgeOn : styles.badgeOff]}
+        style={[
+          styles.badge,
+          { backgroundColor: recommended ? theme.accent : theme.card, borderColor: theme.card },
+        ]}
         onPress={onPress}
         activeOpacity={0.75}
         hitSlop={8}
@@ -338,9 +355,9 @@ export function RecommendBadge({
         accessibilityHint="Opens your recommend options"
       >
         {busy ? (
-          <ActivityIndicator size="small" color={recommended ? '#FFFFFF' : HEART} />
+          <ActivityIndicator size="small" color={ink} />
         ) : (
-          <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={recommended ? '#FFFFFF' : HEART} />
+          <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={ink} />
         )}
       </TouchableOpacity>
     </View>
@@ -451,7 +468,7 @@ export function ProviderRecommendLayer({
             accessibilityState={{ checked: recommended, disabled: saving !== null || sharing.hidden }}
             accessibilityLabel={`Recommend ${providerName}`}
           >
-            <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={19} color={recommended ? HEART : P.text} />
+            <Ionicons name={recommended ? 'thumbs-up' : 'thumbs-up-outline'} size={19} color={P.text} />
             <Text style={[styles.rowText, { color: P.text }]}>{recommended ? 'Recommended' : 'Recommend'}</Text>
             {saving === 'recommend' ? (
               <ActivityIndicator size="small" color={P.sub} />
@@ -490,7 +507,6 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     borderWidth: 2,
-    borderColor: HEART,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -499,8 +515,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  badgeOff: { backgroundColor: '#FFFFFF' },
-  badgeOn: { backgroundColor: HEART },
   glow: {
     position: 'absolute',
     top: 0,
@@ -509,7 +523,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: 100,
     borderWidth: 2,
-    borderColor: HEART,
   },
   bubbleWrap: { position: 'absolute', width: 240 },
   bubbleArrow: { position: 'absolute', top: -6, width: 14, height: 14, borderRadius: 3, transform: [{ rotate: '45deg' }] },

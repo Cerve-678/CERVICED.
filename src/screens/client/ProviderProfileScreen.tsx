@@ -9,6 +9,7 @@ import { useBookmarkStore } from "../../stores/useBookmarkStore";
 import {
   ProviderRecommendLayer,
   RecommendBadge,
+  type RecommendBadgeTheme,
   useProviderRecommend,
 } from "../../features/social/ProviderRecommend";
 import {
@@ -1747,6 +1748,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // an accent from the gradient's first colour through a table of old
   // placeholder presets, falling back to purple for anything else.
   const adaptiveAccentColor = provider?.accentColor ?? OP.accent;
+  // Recommend's badge on the logo wears this page's colours.
+  const recommendBadgeTheme = useMemo<RecommendBadgeTheme>(() => ({
+    card: OP.card,
+    text: OP.text,
+    accent: adaptiveAccentColor,
+    onAccent: onAccentInk(adaptiveAccentColor).text,
+  }), [OP.card, OP.text, adaptiveAccentColor]);
 
   // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat
   // opaque fill — derived from the provider theme's card colour so every preset matches.
@@ -5227,7 +5235,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       setShowFullLogo(true);
                     }}
                     accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
-                    badge={recommendHeart ? <RecommendBadge {...recommendHeart} /> : null}
+                    badge={recommendHeart ? <RecommendBadge {...recommendHeart} theme={recommendBadgeTheme} /> : null}
                   />
                 )}
                 renderName={({ scale, letterSpacing }) => (
@@ -5479,7 +5487,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               it sits here beside the bell instead. */}
                           {recommendHeart && pageStyle.hero === "cover" ? (
                             <View style={styles.recommendBesideBell}>
-                              <RecommendBadge {...recommendHeart} />
+                              <RecommendBadge {...recommendHeart} theme={recommendBadgeTheme} />
                             </View>
                           ) : null}
                           {showInstagram ? (
