@@ -546,6 +546,106 @@ export function ProfileHeroLayout({
       );
     }
 
+    case "photoStrip": {
+      // Snapshot: three of their photos, tilted, with the first word signed
+      // across their foot and the rest in caps. No logo, like Cover.
+      const [script, caps] = splitFirst(name);
+      const pills = kicker.split("·").map(part => part.trim()).filter(Boolean);
+      const tilts = ["-5deg", "1deg", "5deg"] as const;
+      return (
+        <View style={layout.stripWrap}>
+          <View style={layout.stripRow}>
+            {tilts.map((rotate, i) => (
+              <View
+                key={rotate}
+                style={[
+                  layout.stripPhoto,
+                  { transform: [{ rotate }, { translateY: i === 1 ? -8 : 0 }], backgroundColor: blend(accent, "#FFFFFF", i === 1 ? 0.35 : 0.55) },
+                ]}
+              >
+                {photoUris?.[i] ? (
+                  <Image source={{ uri: photoUris[i] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+                ) : null}
+              </View>
+            ))}
+          </View>
+          <View style={layout.stripName} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.stripScript, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+              {script}
+            </Text>
+            {caps ? (
+              <Text style={[layout.stripCaps, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {caps.toUpperCase()}
+              </Text>
+            ) : null}
+            {tick}
+          </View>
+          {location ? <Text style={[layout.stripLocated, { color: heroSub }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+          {pills.length ? (
+            <View style={layout.offsetPills}>
+              {pills.map(label => (
+                <View key={label} style={[layout.offsetPill, { shadowColor: blend(accent, "#FFFFFF", 0.5) }]}>
+                  <Text style={layout.offsetPillText} numberOfLines={1}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <View style={layout.stripDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "signed":
+      // Signature: a big logo in an accent ring, the whole name signed across
+      // its foot in a pen signature, the words round it in Gloock.
+      return (
+        <View style={[layout.infoCenter, layout.textFirst]}>
+          <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
+          <View style={layout.signedLogo}>{renderLogo(148)}</View>
+          <View style={layout.signedNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.signedName, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {location ? <Text style={[layout.signedLocated, { color: heroText }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
+          {kicker ? <Text style={[layout.signedKicker, { color: heroSub }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
+          <View style={layout.signedDetails}>{details}</View>
+        </View>
+      );
+
+    case "quietBand": {
+      // Quiet: their photo left clear, then a pale band across it with the
+      // name and a ringed logo. The band is paper, so its ink is fixed.
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={layout.quietWrap}>
+          {location ? <Text style={[layout.quietArea, { color: heroText }, shadow]} numberOfLines={1}>{location.toUpperCase()}</Text> : null}
+          <View style={layout.quietBand}>
+            <View style={layout.quietRow}>
+              <View style={layout.quietText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <View style={layout.tickRow}>
+                  <Text style={layout.quietName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name.toUpperCase()}</Text>
+                  {tick}
+                </View>
+                {phrase ? <Text style={layout.quietPhrase}>{phrase}</Text> : null}
+              </View>
+              <View style={[layout.quietRing, { borderColor: accent }]}>
+                <View style={layout.logoNoGap}>{renderLogo(72)}</View>
+              </View>
+            </View>
+            {kicker ? (
+              <>
+                <View style={layout.quietRule} />
+                <Text style={layout.quietKicker}>{kicker.split(" · ").join(" ✦ ")}</Text>
+              </>
+            ) : null}
+          </View>
+          <View style={layout.quietDetails}>{details}</View>
+        </View>
+      );
+    }
+
     default:
       return (
         <>
@@ -733,6 +833,45 @@ const layout = StyleSheet.create({
   tagPhrase: { fontFamily: "Marcellus-Regular", fontSize: 15, color: "#56614F", textAlign: "center" },
   tagCaption: { fontSize: 9, letterSpacing: 2.4, color: "#56614F", marginTop: 8 },
   labelDetails: { alignItems: "center", marginTop: 22 },
+  // Snapshot
+  stripWrap: { alignItems: "center", marginTop: TEXT_FIRST_DROP + 16, marginBottom: 26, paddingHorizontal: 20 },
+  stripRow: { flexDirection: "row", justifyContent: "center", gap: 10 },
+  stripPhoto: {
+    width: 104, height: 140, borderWidth: 5, borderColor: "#FFFFFF", borderRadius: 6, overflow: "hidden",
+    shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 8 },
+  },
+  stripName: { alignItems: "center", marginTop: -46, alignSelf: "stretch" },
+  stripScript: { fontFamily: "MsMadi-Regular", fontSize: 92, lineHeight: 110 },
+  stripCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 19, letterSpacing: 6, marginTop: -22, textAlign: "center" },
+  stripLocated: { fontFamily: "Montserrat-Medium", fontSize: 9.5, letterSpacing: 2.6, marginTop: 8, textAlign: "center" },
+  offsetPills: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 16 },
+  offsetPill: {
+    minHeight: 30, justifyContent: "center", paddingHorizontal: 13, paddingVertical: 5, borderRadius: 100,
+    borderWidth: 1.5, borderColor: "#1F1A1C", backgroundColor: "#FFFFFF",
+    shadowOffset: { width: 3, height: 4 }, shadowOpacity: 1, shadowRadius: 0,
+  },
+  offsetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1, color: "#1F1A1C" },
+  stripDetails: { alignItems: "center", marginTop: 16 },
+  // Signature
+  signedWelcome: { fontFamily: "Gloock-Regular", fontSize: 11, letterSpacing: 4, marginBottom: 14 },
+  signedLogo: { marginBottom: -20 },
+  signedNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -42, alignSelf: "stretch", justifyContent: "center" },
+  signedName: { fontFamily: "MrsSaintDelafield-Regular", fontSize: 74, lineHeight: 92, flexShrink: 1, textAlign: "center" },
+  signedLocated: { fontFamily: "Gloock-Regular", fontSize: 12, letterSpacing: 3, marginTop: 2, textAlign: "center" },
+  signedKicker: { fontFamily: "Gloock-Regular", fontSize: 10.5, letterSpacing: 2, marginTop: 6, textAlign: "center" },
+  signedDetails: { alignItems: "center", marginTop: 14 },
+  // Quiet: the band is paper, so its ink is fixed.
+  quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  quietArea: { fontSize: 10, letterSpacing: 3, paddingHorizontal: 24 },
+  quietBand: { backgroundColor: "#FBFCF8", marginTop: 170, paddingHorizontal: 24, paddingVertical: 22 },
+  quietRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  quietText: { flex: 1, minWidth: 0 },
+  quietName: { fontFamily: "MarcellusSC-Regular", fontSize: 40, lineHeight: 46, letterSpacing: 7, color: "#2C3527", flexShrink: 1 },
+  quietPhrase: { fontFamily: "Marcellus-Regular", fontSize: 16, color: "#56614F", marginTop: 4 },
+  quietRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  quietRule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: "#BFCAB6", marginTop: 16, marginBottom: 12 },
+  quietKicker: { fontSize: 9.5, letterSpacing: 2.2, color: "#2C3527" },
+  quietDetails: { alignItems: "center", marginTop: 18 },
 });
 
 /** Cover's white pills under the name. */

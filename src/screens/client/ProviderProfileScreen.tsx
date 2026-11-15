@@ -1799,10 +1799,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
-  // Two of their portfolio photos for the heroes that show them (Editorial's
-  // tilted card, Duet's film strip).
+  // Up to three of their portfolio photos for the heroes that show them
+  // (Editorial's tilted card, Snapshot's photo strip).
   const heroPhotoUris = useMemo(
-    () => workPortfolio.slice(0, 2).map((item) => item.image_url).filter(Boolean),
+    () => workPortfolio.slice(0, 3).map((item) => item.image_url).filter(Boolean),
     [workPortfolio],
   );
   // A salon/studio on "Always visible" shows its full address in Contact
