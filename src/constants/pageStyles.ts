@@ -18,7 +18,8 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet'
+  | 'gazette';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -37,7 +38,8 @@ export type PageHeading =
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
-  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'quietCaps' // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'newsRule';  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
 
 /** What a section sits on. */
 export type PageCards =
@@ -52,7 +54,8 @@ export type PageCards =
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
-  | 'block';   // a square card with a thick dark outline
+  | 'block'    // a square card with a thick dark outline
+  | 'ruled';   // straight on the page, each item over a printed rule (Gazette)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -67,7 +70,8 @@ export type PagePolicies =
   | 'numerals'  // rows numbered in roman numerals
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
-  | 'definition'; // a small caps label beside each value, between hairlines
+  | 'definition' // a small caps label beside each value, between hairlines
+  | 'columns';   // two-up newspaper columns boxed by ink rules (Gazette)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -90,7 +94,8 @@ export type PageHero =
   | 'label'      // a paper tag hanging on a string
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
+  | 'quietBand' // their photo left clear, the name and logo on a pale band across it
+  | 'gazette';  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -123,6 +128,8 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** Portfolio photos square, in a fine ink frame with a halftone dot screen (Gazette). */
+  halftonePhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -224,6 +231,13 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     key: 'quiet', name: 'Quiet', description: 'Your photo left clear, your name on a calm band',
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS, board 25).
+  {
+    key: 'gazette', name: 'Gazette', description: 'A newspaper front page: blackletter masthead, headlines, printed rules',
+    heading: 'newsRule', cards: 'ruled', policies: 'columns', logo: 'square',
+    hero: 'gazette', aboutInHero: false, halftonePhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
 ];

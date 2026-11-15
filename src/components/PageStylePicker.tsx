@@ -97,6 +97,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  gazette: { text: 'THE SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -218,6 +219,12 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'newsRule':
+        return (
+          <View style={[mini.newsRule, { borderColor: ink }]}>
+            <Text style={[mini.newsTitle, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -235,6 +242,7 @@ function MiniProfile({
       case 'paper':
         return <View key={key} style={[mini.card, mini.paper]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'open':
+      case 'ruled':
         return <View key={key} style={[mini.card, mini.cardNone, { borderBottomColor: line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'offset':
       case 'chunky':
@@ -362,6 +370,14 @@ function MiniProfile({
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
           </View>
+        ) : style.hero === 'gazette' ? (
+          // Gazette: a newsprint front page with a blackletter masthead.
+          <View style={mini.newsPaper}>
+            <View style={mini.paperRule} />
+            <Text style={mini.blackletter} numberOfLines={1}>The Gazette</Text>
+            <View style={mini.paperRule} />
+            <Text style={mini.headline} numberOfLines={1}>LASHES</Text>
+          </View>
         ) : style.hero === 'poster' ? (
           <>
             {logo}
@@ -407,6 +423,13 @@ const styles = StyleSheet.create({
 
 const mini = StyleSheet.create({
   root: { height: 180 },
+  // Gazette's front page and headings.
+  newsPaper: { backgroundColor: '#EEEBE4', paddingHorizontal: 6, paddingVertical: 4, alignItems: 'center', width: '82%' },
+  paperRule: { alignSelf: 'stretch', borderTopWidth: 2, borderBottomWidth: 0.5, borderColor: '#1F1D1A', height: 3 },
+  blackletter: { fontFamily: 'UnifrakturMaguntia-Book', fontSize: 12, lineHeight: 17, color: '#1F1D1A' },
+  headline: { fontFamily: 'Oswald-Bold', fontSize: 16, lineHeight: 21, color: '#1F1D1A' },
+  newsRule: { borderTopWidth: 2, borderBottomWidth: 0.5, paddingVertical: 1 },
+  newsTitle: { fontFamily: 'Oswald-Bold', fontSize: 11, lineHeight: 15 },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
   logo: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)' },

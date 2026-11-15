@@ -15,6 +15,7 @@ import { LogoCircle } from "../../components/FramedLogo";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
+import { GazetteHero } from "./heroes/GazetteHero";
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -668,6 +669,26 @@ export function ProfileHeroLayout({
         </View>
       );
     }
+
+    case "gazette":
+      // Gazette: a newsprint front page over their photo, the logo in the
+      // masthead's left ear; the stars, years and slots pill under the sheet.
+      return (
+        <>
+          <View style={layout.textFirst}>
+            <GazetteHero
+              name={name}
+              kicker={kicker}
+              location={location}
+              rating={rating}
+              logo={<View style={layout.logoNoGap}>{renderLogo(44)}</View>}
+              // The sheet is always pale newsprint, so the tick is always blue.
+              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color="#007AFF" accessibilityLabel="Verified" /> : null}
+            />
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
 
     default:
       return (

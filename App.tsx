@@ -205,6 +205,13 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Gazette page style (2026-11-15): a blackletter masthead, condensed
+    // headlines and an old newspaper serif. Latin static instances (OFL).
+    'UnifrakturMaguntia-Book': require('./assets/fonts/UnifrakturMaguntia-Book.ttf'),
+    'Oswald-Bold': require('./assets/fonts/Oswald-Bold.ttf'),
+    'Oswald-Medium': require('./assets/fonts/Oswald-Medium.ttf'),
+    'OldStandardTT-Regular': require('./assets/fonts/OldStandardTT-Regular.ttf'),
+    'OldStandardTT-Italic': require('./assets/fonts/OldStandardTT-Italic.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
