@@ -19,7 +19,7 @@ import type { LogoFraming } from "../../types/database";
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
 export const HERO_NAME_SIZE = 30;
-export const HERO_NAME_LINE_HEIGHT = 40;
+export const HERO_NAME_LINE_HEIGHT = 42;
 
 /** Up to two initials, for a provider with no logo. */
 export function logoInitials(name: string): string {

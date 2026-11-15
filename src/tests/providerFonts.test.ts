@@ -9,6 +9,7 @@ import {
   PROVIDER_FONTS,
   resolveProviderFontFamily,
   resolveProviderFontScale,
+  resolveProviderNameLineHeight,
 } from '../constants/providerFonts';
 
 const appSource = fs.readFileSync(path.join(__dirname, '..', '..', 'App.tsx'), 'utf8');
@@ -45,5 +46,15 @@ describe('provider fonts', () => {
     expect(resolveProviderFontScale('great-vibes')).toBeGreaterThan(1);
     expect(resolveProviderFontScale('playfair-display')).toBe(1);
     expect(resolveProviderFontScale(null)).toBe(1);
+  });
+});
+
+describe('the business name line height', () => {
+  it('leaves room above tall letters, more for the looping scripts', () => {
+    expect(resolveProviderNameLineHeight('default', 30)).toBe(42);
+    expect(resolveProviderNameLineHeight(null, 30)).toBe(42);
+    expect(resolveProviderNameLineHeight('great-vibes', 36)).toBeGreaterThanOrEqual(36 * 1.7);
+    expect(resolveProviderNameLineHeight('sacramento', 39)).toBeGreaterThanOrEqual(39 * 1.7);
+    expect(resolveProviderNameLineHeight('lobster', 30)).toBeGreaterThanOrEqual(30 * 1.55);
   });
 });
