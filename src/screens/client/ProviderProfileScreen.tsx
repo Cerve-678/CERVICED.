@@ -4179,7 +4179,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               ? "Not taking bookings"
                               : fullyBooked
                               ? "Fully Booked"
-                              // Boutique says "Add to bag"; it still opens the booking sheet.
+                              // Boutique says "Add to basket"; it still opens the booking sheet.
                               : pageStyle.bookLabel ?? "Book"}
                         </Text>
                       </TouchableOpacity>
@@ -5228,6 +5228,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroSub={heroSub}
                 heroIsDark={heroIsDark}
                 accent={adaptiveAccentColor}
+                heroColour={heroBgColor ?? OP.hero}
                 photoUris={heroPhotoUris}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}

@@ -2,14 +2,13 @@
 //
 // The Sheer page style's hero (round 4, 2026-11-15): their cover photo or
 // colours seen through a see-through black veil, an oval monogram round the
-// logo, the name in thin, widely spaced Bellefair caps, and a "How to book"
-// box of hairline-outlined steps. The veil is always dark, so everything here
+// logo and the name in thin, widely spaced Bellefair caps. (The "How to book"
+// box was removed at the owner's request, 2026-11-15.) The veil is always dark, so everything here
 // is drawn in white whatever is behind it; the profile and the preview treat a
 // veil hero as dark for the same reason (heroIsDarkForStyle).
 
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 /** White ink on the veil, and the lines and panels drawn on it. */
 export const VEIL_INK = {
@@ -63,19 +62,6 @@ export function SheerHero({
         <View style={styles.details}>{details}</View>
       </View>
 
-      <View style={styles.howTo}>
-        <Text style={styles.howToTitle} accessibilityRole="header">HOW TO BOOK?</Text>
-        <View style={styles.steps}>
-          <View style={styles.step}>
-            <Ionicons name="information-circle-outline" size={26} color={VEIL_INK.text} />
-            <Text style={styles.stepText}>READ MY POLICIES BEFORE BOOKING</Text>
-          </View>
-          <View style={styles.step}>
-            <Ionicons name="checkmark" size={26} color={VEIL_INK.text} />
-            <Text style={styles.stepText}>CHOOSE YOUR TREATMENT & TIME</Text>
-          </View>
-        </View>
-      </View>
     </View>
   );
 }
@@ -107,18 +93,4 @@ const styles = StyleSheet.create({
     color: VEIL_INK.sub, marginTop: 8, marginBottom: 16, textAlign: "center",
   },
   details: { alignItems: "center", alignSelf: "stretch" },
-  howTo: {
-    borderWidth: 1, borderColor: VEIL_INK.line, backgroundColor: VEIL_INK.panel,
-    paddingVertical: 22, paddingHorizontal: 16, alignItems: "center", gap: 16, marginTop: 8,
-  },
-  howToTitle: { fontFamily: "Bellefair-Regular", fontSize: 24, lineHeight: 32, letterSpacing: 2.6, color: VEIL_INK.text },
-  steps: { flexDirection: "row", gap: 10, alignSelf: "stretch" },
-  step: {
-    flex: 1, borderWidth: 1, borderColor: VEIL_INK.text, paddingVertical: 16, paddingHorizontal: 8,
-    alignItems: "center", gap: 10,
-  },
-  stepText: {
-    fontFamily: "Jost-Light", fontSize: 11, lineHeight: 16, letterSpacing: 1.2,
-    color: VEIL_INK.text, textAlign: "center",
-  },
 });
