@@ -1736,6 +1736,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
     );
   }, []);
+  // Boutique's Book now, on the photo in its hero.
+  const jumpToServices = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    scrollToSection(servicesSectionRef.current);
+  }, [scrollToSection]);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -5243,6 +5248,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 photoUris={heroPhotoUris}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}
+                // Link-only providers have no Services section to jump to.
+                onBookNow={isLinkOnly ? undefined : jumpToServices}
                 renderLogo={(size) => (
                   <HeroLogo
                     size={size}
