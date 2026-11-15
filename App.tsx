@@ -193,6 +193,7 @@ export default Sentry.wrap(function App() {
     'LibreBaskerville-Italic': require('./assets/fonts/LibreBaskerville-Italic.ttf'),
     'MsMadi-Regular': require('./assets/fonts/MsMadi-Regular.ttf'),
     'Gloock-Regular': require('./assets/fonts/Gloock-Regular.ttf'),
+    'Anton-Regular': require('./assets/fonts/Anton-Regular.ttf'),
     'MrsSaintDelafield-Regular': require('./assets/fonts/MrsSaintDelafield-Regular.ttf'),
     'Montserrat-Medium': require('./assets/fonts/Montserrat-Medium.ttf'),
     'Montserrat-ExtraBold': require('./assets/fonts/Montserrat-ExtraBold.ttf'),

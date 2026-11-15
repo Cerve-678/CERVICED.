@@ -35,7 +35,8 @@ export type PageHeading =
   | 'groovy'     // a soft, chunky italic in lowercase with a squiggle under it
   | 'serifTitle' // a large serif title, nothing above it (Gallery)
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
-  | 'indexed';   // a section number in the accent, a short rule, then the title (Signature)
+  | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
+  | 'condensed'; // huge condensed caps over a short accent bar (Snapshot)
 
 /** What a section sits on. */
 export type PageCards =
@@ -49,7 +50,8 @@ export type PageCards =
   | 'offset'  // a white card, a dark outline and a hard shadow in a soft accent
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
-  | 'topRule'; // a square card with a heavy rule along its top edge
+  | 'topRule'  // a square card with a heavy rule along its top edge
+  | 'block';   // a square card with a thick dark outline
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -85,7 +87,7 @@ export type PageHero =
   | 'groovy'     // a sticker sheet: logo sticker, rating starburst, the name on a tilted pill
   | 'exhibition' // a gallery wall label, the name large, the logo framed and matted
   | 'label'      // a paper tag hanging on a string
-  | 'photoStrip' // three tilted photos, the name signed across their foot (no logo)
+  | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
   | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
 
@@ -94,7 +96,8 @@ export type PageLogoFrame =
   | 'circle' | 'arch' | 'polaroid' | 'doubleRing' | 'glossRing'
   | 'tilted'     // a rounded square card, tilted (Editorial)
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
-  | 'mat';       // square, in a white mat and a thin dark frame (Gallery)
+  | 'mat'        // square, in a white mat and a thin dark frame (Gallery)
+  | 'square';    // a square with barely rounded corners (Snapshot)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -205,10 +208,10 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-15: Duet's A and C heroes and Apothecary's C, each made a
   // template of its own (Signature restyled so it isn't another Duet), from https://claude.ai/artifact/RopN63UF8acRMG1aCYK4Hh.
   {
-    key: 'snapshot', name: 'Snapshot', description: 'Your photos up top, your name signed across them',
-    heading: 'layered', cards: 'offset', policies: 'tiles', logo: 'circle',
-    hero: 'photoStrip', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    key: 'snapshot', name: 'Snapshot', description: 'Bold: your photos edge to edge, your name huge on a colour block',
+    heading: 'condensed', cards: 'block', policies: 'boxes', logo: 'square',
+    hero: 'blockName', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
     key: 'signature', name: 'Signature', description: 'Your name signed in pen across a ringed logo, numbered sections',

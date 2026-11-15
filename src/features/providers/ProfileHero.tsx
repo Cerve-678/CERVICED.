@@ -546,51 +546,45 @@ export function ProfileHeroLayout({
       );
     }
 
-    case "photoStrip": {
-      // Snapshot: three of their photos, tilted, with the first word signed
-      // across their foot and the rest in caps. No logo, like Cover.
-      const [script, caps] = splitFirst(name);
-      const pills = kicker.split("·").map(part => part.trim()).filter(Boolean);
-      const tilts = ["-5deg", "1deg", "5deg"] as const;
+    case "blockName": {
+      // Snapshot: three of their photos edge to edge, then the name huge in
+      // condensed caps on a block of the accent, the logo beside it, then the
+      // area and what they do as square tags.
+      const blockInk = isDarkColor(accent) ? "#FFFFFF" : "#111111";
+      const tags = kicker.split("·").map(part => part.trim()).filter(Boolean);
       return (
-        <View style={layout.stripWrap}>
-          <View style={layout.stripRow}>
-            {tilts.map((rotate, i) => (
-              <View
-                key={rotate}
-                style={[
-                  layout.stripPhoto,
-                  { transform: [{ rotate }, { translateY: i === 1 ? -8 : 0 }], backgroundColor: blend(accent, "#FFFFFF", i === 1 ? 0.35 : 0.55) },
-                ]}
-              >
+        <View style={layout.blockWrap}>
+          <View style={layout.blockPhotos}>
+            {(["left", "middle", "right"] as const).map((slot, i) => (
+              <View key={slot} style={[layout.blockPhoto, { backgroundColor: blend(accent, "#FFFFFF", i === 1 ? 0.4 : 0.6) }]}>
                 {photoUris?.[i] ? (
                   <Image source={{ uri: photoUris[i] }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
                 ) : null}
               </View>
             ))}
           </View>
-          <View style={layout.stripName} accessible accessibilityRole="header" accessibilityLabel={name}>
-            <Text style={[layout.stripScript, { color: heroAccent }, shadow]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-              {script}
-            </Text>
-            {caps ? (
-              <Text style={[layout.stripCaps, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {caps.toUpperCase()}
+          <View style={[layout.blockBox, { backgroundColor: accent }]}>
+            <View style={layout.blockNameCol} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.blockName, { color: blockInk }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>
+                {name.toUpperCase()}
               </Text>
-            ) : null}
-            {tick}
-          </View>
-          {location ? <Text style={[layout.stripLocated, { color: heroSub }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
-          {pills.length ? (
-            <View style={layout.offsetPills}>
-              {pills.map(label => (
-                <View key={label} style={[layout.offsetPill, { shadowColor: blend(accent, "#FFFFFF", 0.5) }]}>
-                  <Text style={layout.offsetPillText} numberOfLines={1}>{label}</Text>
-                </View>
-              ))}
+              {tick}
             </View>
-          ) : null}
-          <View style={layout.stripDetails}>{details}</View>
+            <View style={layout.logoNoGap}>{renderLogo(72)}</View>
+          </View>
+          <View style={layout.blockInfo}>
+            {location ? <Text style={[layout.blockArea, { color: heroText }, shadow]} numberOfLines={1}>{location.toUpperCase()}</Text> : null}
+            {tags.length ? (
+              <View style={layout.blockTags}>
+                {tags.map(label => (
+                  <View key={label} style={[layout.blockTag, { borderColor: heroText }]}>
+                    <Text style={[layout.blockTagText, { color: heroText }]} numberOfLines={1}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <View style={layout.leftDetails}>{details}</View>
+          </View>
         </View>
       );
     }
@@ -834,24 +828,20 @@ const layout = StyleSheet.create({
   tagCaption: { fontSize: 9, letterSpacing: 2.4, color: "#56614F", marginTop: 8 },
   labelDetails: { alignItems: "center", marginTop: 22 },
   // Snapshot
-  stripWrap: { alignItems: "center", marginTop: TEXT_FIRST_DROP + 16, marginBottom: 26, paddingHorizontal: 20 },
-  stripRow: { flexDirection: "row", justifyContent: "center", gap: 10 },
-  stripPhoto: {
-    width: 104, height: 140, borderWidth: 5, borderColor: "#FFFFFF", borderRadius: 6, overflow: "hidden",
-    shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 8 },
+  blockWrap: { marginBottom: 26 },
+  blockPhotos: { flexDirection: "row" },
+  blockPhoto: { flex: 1, height: 220, overflow: "hidden" },
+  blockBox: {
+    flexDirection: "row", alignItems: "center", gap: 12, marginTop: -58, marginRight: 40,
+    paddingLeft: 20, paddingRight: 14, paddingVertical: 16,
   },
-  stripName: { alignItems: "center", marginTop: -46, alignSelf: "stretch" },
-  stripScript: { fontFamily: "MsMadi-Regular", fontSize: 92, lineHeight: 110 },
-  stripCaps: { fontFamily: "Montserrat-ExtraBold", fontSize: 19, letterSpacing: 6, marginTop: -22, textAlign: "center" },
-  stripLocated: { fontFamily: "Montserrat-Medium", fontSize: 9.5, letterSpacing: 2.6, marginTop: 8, textAlign: "center" },
-  offsetPills: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 16 },
-  offsetPill: {
-    minHeight: 30, justifyContent: "center", paddingHorizontal: 13, paddingVertical: 5, borderRadius: 100,
-    borderWidth: 1.5, borderColor: "#1F1A1C", backgroundColor: "#FFFFFF",
-    shadowOffset: { width: 3, height: 4 }, shadowOpacity: 1, shadowRadius: 0,
-  },
-  offsetPillText: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1, color: "#1F1A1C" },
-  stripDetails: { alignItems: "center", marginTop: 16 },
+  blockNameCol: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 },
+  blockName: { fontFamily: "Anton-Regular", fontSize: 54, lineHeight: 56, letterSpacing: 0.5, flexShrink: 1 },
+  blockInfo: { paddingHorizontal: 20, marginTop: 16 },
+  blockArea: { fontSize: 11, fontWeight: "800", letterSpacing: 1.6 },
+  blockTags: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  blockTag: { borderWidth: 2, paddingHorizontal: 10, paddingVertical: 5 },
+  blockTagText: { fontSize: 10.5, fontWeight: "800", letterSpacing: 1.2 },
   // Signature
   signedWelcome: { fontFamily: "Gloock-Regular", fontSize: 11, letterSpacing: 4, marginBottom: 14 },
   signedLogo: { marginBottom: -20 },
@@ -909,6 +899,7 @@ const styles = StyleSheet.create({
   polaroidPhoto: { borderRadius: 0, borderWidth: 0, shadowOpacity: 0, elevation: 0 },
   thinRim: { borderWidth: 2 },
   tilted: { borderWidth: 3, borderColor: "#FFFFFF" },
+  squareLogo: { borderRadius: 4, borderWidth: 3, shadowOpacity: 0, elevation: 0 },
   matFrame: {
     backgroundColor: "#1F1F1F", padding: 4,
     shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 8,
