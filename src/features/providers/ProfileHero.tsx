@@ -522,7 +522,7 @@ export function ProfileHeroLayout({
 
     case "exhibition": {
       // Gallery: a wall label over a rule, the name large, then the logo
-      // framed and matted with a placard beside it.
+      // framed and matted.
       const phrase = kickerPhrase(kicker);
       return (
         <View style={layout.galleryWrap}>
@@ -541,11 +541,6 @@ export function ProfileHeroLayout({
           </View>
           {phrase ? <Text style={[layout.galleryPhrase, { color: heroSub }, shadow]}>{phrase}.</Text> : null}
           <View style={layout.galleryArt}>{renderLogo(176)}</View>
-          <View style={layout.placard}>
-            <Text style={layout.placardKicker}>NO. 01 · THE ARTIST</Text>
-            <Text style={layout.placardTitle} numberOfLines={2}>{name}</Text>
-            {location ? <Text style={layout.placardSub} numberOfLines={1}>{location}</Text> : null}
-          </View>
           <View style={layout.leftDetails}>{details}</View>
         </View>
       );
@@ -744,13 +739,6 @@ const layout = StyleSheet.create({
   galleryName: { fontFamily: "InstrumentSerif-Regular", fontSize: 60, lineHeight: 60, letterSpacing: -1.5, marginTop: 22, flexShrink: 1 },
   galleryPhrase: { fontFamily: "InstrumentSerif-Italic", fontSize: 21, marginTop: 6 },
   galleryArt: { alignItems: "center", marginTop: 26 },
-  placard: {
-    alignSelf: "flex-end", width: 178, backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 10, marginTop: -6,
-    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2,
-  },
-  placardKicker: { fontFamily: "DidactGothic-Regular", fontSize: 9.5, letterSpacing: 1.2, color: "#666666" },
-  placardTitle: { fontFamily: "InstrumentSerif-Regular", fontSize: 17, lineHeight: 19, color: "#161616", marginTop: 2 },
-  placardSub: { fontFamily: "DidactGothic-Regular", fontSize: 10.5, color: "#666666", marginTop: 3 },
   // Apothecary: the label is a cream object, so its ink is fixed.
   labelWrap: { paddingHorizontal: 24, marginTop: 90, marginBottom: 26 },
   labelOval: {

@@ -32,7 +32,7 @@ export type PageHeading =
   | 'scriptCaps' // a handwritten word between short rules, spaced serif caps under it
   | 'layered'    // a big handwritten word in the accent, heavy caps laid over its foot
   | 'groovy'     // a soft, chunky italic in lowercase with a squiggle under it
-  | 'room'       // a tiny caps label like a gallery wall, a serif title under it
+  | 'serifTitle' // a large serif title, nothing above it (Gallery)
   | 'labelCaps'; // spaced serif caps between hairlines, like a printed label
 
 /** What a section sits on. */
@@ -80,7 +80,7 @@ export type PageHero =
   | 'crest'      // a ringed monogram, a spaced caps line, a serif name with its last word in script, double rules
   | 'duet'       // "Hey gorgeous! Welcome to", the name as script over caps, a film strip of their photos
   | 'groovy'     // a scalloped logo, the name huge in a soft italic, a starburst with their rating
-  | 'exhibition' // a gallery wall label, the name large, the logo framed and matted with a placard
+  | 'exhibition' // a gallery wall label, the name large, the logo framed and matted
   | 'label';     // an oval label like a bottle's, over their photo
 
 /** The frame round the logo in the hero. */
@@ -187,7 +187,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   },
   {
     key: 'gallery', name: 'Gallery', description: 'Your work like an exhibition: wall labels, framed logo',
-    heading: 'room', cards: 'none', policies: 'definition', logo: 'mat',
+    heading: 'serifTitle', cards: 'none', policies: 'definition', logo: 'mat',
     hero: 'exhibition', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
@@ -245,20 +245,6 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
 export function headingPair(section: PageSectionKey): [string, string] {
   return HEADING_PAIRS[section];
 }
-
-/** Gallery's small wall-label line over each section's title. */
-export const GALLERY_KICKERS: Record<PageSectionKey, string> = {
-  about: 'INTRODUCTION',
-  policies: 'VISITOR INFORMATION',
-  services: 'ON VIEW',
-  reviews: 'VISITOR BOOK',
-  hours: 'OPENING TIMES',
-  contact: 'ENQUIRIES',
-  info: 'NOTES',
-  portfolio: 'SELECTED WORKS',
-  specialities: 'IN FOCUS',
-  policyPages: 'IN FULL',
-};
 
 /** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
 export function romanNumeral(index: number, lower = false): string {
