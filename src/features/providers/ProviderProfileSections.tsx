@@ -24,6 +24,7 @@ import {
   sectionInk,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import { plateMarkEdges } from "./heroes/EmbossedHero";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -366,6 +367,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   // Sealed: each photo a perforated postage stamp.
   const stamps = !!palette.pageStyle?.stampPhotos;
+  // Embossed: each photo sits in a plate mark pressed into the page, like a print.
+  const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -407,7 +410,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                         // The dotted border in the page's own colour reads as the perforations.
                         { borderColor: palette.background, transform: [{ rotate: item.globalIndex % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
                       ]
-                    : styles.portfolioTile
+                    : plate
+                      ? [styles.plateTile, plate]
+                      : styles.portfolioTile
                 }
               >
                 <Image
@@ -545,6 +550,7 @@ const styles = StyleSheet.create({
     padding: 6, borderWidth: 4, borderStyle: "dotted", backgroundColor: "#FBF6EE",
     shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 6, elevation: 2,
   },
+  plateTile: { padding: 7, borderWidth: 1.5, borderRadius: 1, overflow: "hidden" },
   loadingPortfolioTile: { flex: 1, height: 170, borderRadius: 18 },
   captionWrap: {
     position: "absolute", left: 0, right: 0, bottom: 0,

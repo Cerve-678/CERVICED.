@@ -13,6 +13,7 @@ import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "rea
 
 import { LogoCircle } from "../../components/FramedLogo";
 import { LaceHero } from "./heroes/LaceHero";
+import { PressedHero } from "./heroes/EmbossedHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
@@ -733,6 +734,19 @@ export function ProfileHeroLayout({
           kicker={kicker}
           location={location}
           renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "pressed":
+      // Embossed: a sheet of pressed paper over their photo (heroes/EmbossedHero).
+      return (
+        <PressedHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          logo={renderLogo(84)}
           details={details}
           tick={tick}
         />

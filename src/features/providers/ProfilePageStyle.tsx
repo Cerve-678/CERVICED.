@@ -25,6 +25,7 @@ import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import { LaceRosette, LaceTrim } from "./heroes/LaceHero";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
+import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -266,6 +267,15 @@ export function PageSectionHeading({
           {headingPair(section).join(" ").toUpperCase()}
         </Text>
       );
+    case "embossCaps":
+      // Embossed: the title pressed up out of the page, in the page's own colour.
+      return (
+        <View {...a11y} accessible style={headingStyles.embossWrap}>
+          <EmbossedText paper={palette.background} style={headingStyles.embossCaps} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {headingPair(section).join(" ").toUpperCase()}
+          </EmbossedText>
+        </View>
+      );
     case "labelCaps": {
       const line = sheetInk(palette.background).border;
       return (
@@ -405,6 +415,7 @@ export function PageSection({
   const radius = square || pageStyle.cards === "label" || pageStyle.cards === "topRule" || pageStyle.cards === "block"
     ? 0
     : pageStyle.cards === "stationery" ? 3
+    : pageStyle.cards === "raised" ? 3
     : pageStyle.cards === "flat" ? 6
     : pageStyle.cards === "gloss" ? 28
     : pageStyle.cards === "chunky" ? 26
@@ -478,6 +489,7 @@ export function PageSection({
           pageStyle.cards === "block" && [surfaceStyles.blockCard, { borderColor: outlineInk(palette.cardBackground) }],
           pageStyle.cards === "gloss" && [surfaceStyles.gloss, { borderColor: withAlpha(palette.accent, 0.35) }],
           pageStyle.cards === "stationery" && [surfaceStyles.paper, surfaceStyles.stationery, { borderColor: withAlpha(palette.accent, 0.28) }],
+          pageStyle.cards === "raised" && [surfaceStyles.raised, raisedEdges(palette.cardBackground)],
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -494,7 +506,7 @@ function isCentredHeading(style: PageStyle): boolean {
   return (
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
     || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "lacePair"
-    || style.heading === "sheerCaps"
+    || style.heading === "sheerCaps" || style.heading === "embossCaps"
   );
 }
 
@@ -528,6 +540,12 @@ function LaceTrimmedCard({
       </View>
     </View>
   );
+}
+
+/** Embossed's raised card: a lit top and left edge, a shaded bottom and right. */
+function raisedEdges(card: string): ViewStyle {
+  const { high, shade } = pressEdges(card);
+  return { borderTopColor: high, borderLeftColor: high, borderBottomColor: shade, borderRightColor: shade };
 }
 
 /** Groovy's wavy underline. */
@@ -683,6 +701,19 @@ export function serviceCardSurface(
       return { ...flat, backgroundColor: colours.card, borderRadius: 4, borderWidth: 1, borderColor: withAlpha(colours.accent, 0.3) };
     case "sheer":
       return { ...flat, ...sheerBox(colours.sheet), borderWidth: 1, borderRadius: 0 };
+    case "raised":
+      return {
+        backgroundColor: colours.card,
+        borderRadius: 3,
+        borderWidth: 1,
+        ...raisedEdges(colours.card),
+        shadowColor: "#463428",
+        shadowOffset: { width: 1, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        // The card clips by default, which would cut the shadow off.
+        overflow: "visible",
+      };
     default:
       return null;
   }
@@ -735,7 +766,7 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   return (
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
     || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
-    || layout === "outlined"
+    || layout === "outlined" || layout === "recessed"
   );
 }
 
@@ -774,6 +805,40 @@ export function StyledPolicyList({
             <View style={policyStyles.numeralBody}>
               <Text style={[policyStyles.numeralLabel, { color: ink.text }]}>{row.label}</Text>
               <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "recessed") {
+    // Embossed: a panel pressed down into the page, shaded along its top and
+    // left inner edge and lit along the bottom and right, with the policies
+    // as label-and-value rows inside it.
+    const { high, shade } = pressEdges(palette.background);
+    return (
+      <View
+        style={[
+          policyStyles.recessed,
+          {
+            backgroundColor: blend(palette.background, "#000000", 0.035),
+            borderTopColor: shade, borderLeftColor: shade, borderBottomColor: high, borderRightColor: high,
+          },
+          square && policyStyles.square,
+        ]}
+      >
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[policyStyles.defRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
+          >
+            <Text style={[policyStyles.recessedLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+            <View style={policyStyles.hairValueCol}>
+              <Text style={[policyStyles.defValue, { color: ink.sub }]}>{row.value}</Text>
               {row.notes?.map(note => (
                 <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
               ))}
@@ -1110,6 +1175,9 @@ const headingStyles = StyleSheet.create({
   condensedWrap: { marginBottom: 14 },
   condensed: { fontFamily: "Anton-Regular", fontSize: 38, lineHeight: 49, letterSpacing: 0.3 },
   condensedBar: { width: 36, height: 5, marginTop: 4 },
+  embossWrap: { alignSelf: "stretch", marginBottom: 14 },
+  // Libre Caslon Display's caps are tall: 1.28x keeps their tops whole.
+  embossCaps: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 30, lineHeight: 39, letterSpacing: 2, textAlign: "center" },
   indexRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   indexNumber: { fontFamily: "Gloock-Regular", fontSize: 15 },
   indexRule: { width: 22, height: 1.5 },
@@ -1168,6 +1236,15 @@ const surfaceStyles = StyleSheet.create({
   // Overlaps the card's foot by a hair so no seam shows between card and trim.
   laceTrim: { marginTop: -1 },
   sheer: { borderWidth: 1, padding: 18 },
+  raised: {
+    borderWidth: 1,
+    shadowColor: "#463428",
+    shadowOffset: { width: 1, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: "visible",
+  },
 });
 
 const policyStyles = StyleSheet.create({
@@ -1221,6 +1298,8 @@ const policyStyles = StyleSheet.create({
   noteLabel: { fontFamily: "EBGaramond-SemiBold", fontSize: 13, lineHeight: 18, letterSpacing: 2, textAlign: "center" },
   rosetteRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   rosetteLabel: { fontFamily: "GildaDisplay-Regular", fontSize: 13, lineHeight: 18, letterSpacing: 2.6 },
+  recessed: { borderWidth: 1.5, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 6 },
+  recessedLabel: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 11, lineHeight: 15, letterSpacing: 1.8, width: 104, paddingTop: 2 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
   hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },

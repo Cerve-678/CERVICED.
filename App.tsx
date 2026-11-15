@@ -215,6 +215,9 @@ export default Sentry.wrap(function App() {
     // Sheer (page style, round 4, 2026-11-15).
     'Bellefair-Regular': require('./assets/fonts/Bellefair-Regular.ttf'),
     'Jost-Light': require('./assets/fonts/Jost-Light.ttf'),
+    // Embossed (round 4, 2026-11-15).
+    'LibreCaslonDisplay-Regular': require('./assets/fonts/LibreCaslonDisplay-Regular.ttf'),
+    'Italianno-Regular': require('./assets/fonts/Italianno-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,

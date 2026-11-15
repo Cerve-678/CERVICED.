@@ -22,7 +22,8 @@ export type PageStyleKey =
   | 'snapshot' | 'signature' | 'quiet'
   | 'sealed'
   | 'lace'
-  | 'sheer';
+  | 'sheer'
+  | 'embossed';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -44,7 +45,8 @@ export type PageHeading =
   | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
   | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
   | 'lacePair'  // a lowercase script word in the accent over spaced display caps (Lace)
-  | 'sheerCaps'; // thin, widely spaced serif caps, centred (Sheer)
+  | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
+  | 'embossCaps'; // display caps pressed up out of the page, in the page's own colour (Embossed)
 
 /** What a section sits on. */
 export type PageCards =
@@ -62,7 +64,8 @@ export type PageCards =
   | 'block'    // a square card with a thick dark outline
   | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
   | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
-  | 'sheer';   // a square hairline outline over a faint wash, see-through (Sheer)
+  | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
+  | 'raised';  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -80,7 +83,8 @@ export type PagePolicies =
   | 'definition' // a small caps label beside each value, between hairlines
   | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
   | 'rosettes'  // one card, each policy beside a small lace rosette (Lace)
-  | 'outlined';   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
+  | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
+  | 'recessed';  // label-and-value rows inside a panel pressed down into the page (Embossed)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -106,7 +110,9 @@ export type PageHero =
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
   | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
   | 'lace'      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
-  | 'veil';      // their photo under a see-through black veil: an oval monogram, spaced caps, outlined How to book boxes
+  | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps, outlined How to book boxes
+  | 'quietBand' // their photo left clear, the name and logo on a pale band across it
+  | 'pressed';  // a sheet of paper over their photo: the logo in a blind-stamped ring, the name pressed up out of it
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -114,7 +120,8 @@ export type PageLogoFrame =
   | 'tilted'     // a rounded square card, tilted (Editorial)
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
   | 'mat'        // square, in a white mat and a thin dark frame (Gallery)
-  | 'square';    // a square with barely rounded corners (Snapshot)
+  | 'square'     // a square with barely rounded corners (Snapshot)
+  | 'stamped';   // a ring pressed into the paper round it (Embossed)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -141,6 +148,8 @@ export interface PageStyle {
   numeralsLower?: boolean;
   /** Portfolio photos as perforated postage stamps, each tilted a little (Sealed). */
   stampPhotos?: boolean;
+  /** Portfolio photos sit in a plate mark pressed into the page, like prints (Embossed). */
+  plateMarkPhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -267,6 +276,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'sheerCaps', cards: 'sheer', policies: 'outlined', logo: 'circle',
     hero: 'veil', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // blind emboss, everything tone on tone, after the owner's embossed
+  // "BOOKING for September" reference.
+  {
+    key: 'embossed', name: 'Embossed', description: 'Pressed paper: your name raised in the page, your photos in plate marks',
+    heading: 'embossCaps', cards: 'raised', policies: 'recessed', logo: 'stamped',
+    hero: 'pressed', aboutInHero: false, plateMarkPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
 ];
 
