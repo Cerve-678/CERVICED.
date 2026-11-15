@@ -205,6 +205,9 @@ export default Sentry.wrap(function App() {
     'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
     'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
     'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Sheer (page style, round 4, 2026-11-15).
+    'Bellefair-Regular': require('./assets/fonts/Bellefair-Regular.ttf'),
+    'Jost-Light': require('./assets/fonts/Jost-Light.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,

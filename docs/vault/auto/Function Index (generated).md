@@ -5,7 +5,7 @@
 
 #generated
 
-**3828 functions** across **538 files**.
+**3831 functions** across **539 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -279,9 +279,9 @@
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · go · InlinePage · label · **PolicyPagesInline** · **PolicyStoryRings** · **PolicyStoryViewer** · StoryBody · top · **usePolicyEdgeColours**
-- `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
+- `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
-- `ProfilePageStyle.tsx` — **AccentBandSection** · **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · outlineInk · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
+- `ProfilePageStyle.tsx` — **AccentBandSection** · **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · outlineInk · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProfileStylePreview.tsx` — lines · **ProfileStylePreview**
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
@@ -304,6 +304,9 @@
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
+
+### `src/features/providers/heroes/` (1)
+- `SheerHero.tsx` — **SheerHero**
 
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**

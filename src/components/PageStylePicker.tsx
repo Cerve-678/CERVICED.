@@ -97,6 +97,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   snapshot: { text: 'THE SERVICES' },
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
+  sheer: { text: 'THE SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -218,6 +219,8 @@ function MiniProfile({
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
         return <Text style={[mini.quietCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'sheerCaps':
+        return <Text style={[mini.sheerCaps, { color: ink }]}>{heading.text}</Text>;
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -256,6 +259,8 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.topRuleCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'label':
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'sheer':
+        return <View key={key} style={[mini.card, mini.sheerCard, { borderColor: withAlpha(ink, 0.42) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -361,6 +366,14 @@ function MiniProfile({
         ) : style.hero === 'quietBand' ? (
           <View style={mini.quietBand}>
             <Text style={mini.quietName} numberOfLines={1}>NAME</Text>
+          </View>
+        ) : style.hero === 'veil' ? (
+          // Sheer: a see-through black veil over the hero, an oval round the logo, spaced caps.
+          <View style={mini.veil}>
+            <View style={mini.veilOval}>
+              <View style={[mini.veilLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
+            </View>
+            <Text style={mini.veilName} numberOfLines={1}>N A M E</Text>
           </View>
         ) : style.hero === 'poster' ? (
           <>
@@ -489,6 +502,12 @@ const mini = StyleSheet.create({
   labelCaps: { fontFamily: 'MarcellusSC-Regular', fontSize: 8, letterSpacing: 2, textAlign: 'center' },
   quietCaps: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 8, letterSpacing: 2 },
   quietName: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 11, letterSpacing: 2, color: '#2C3527' },
+  sheerCaps: { fontFamily: 'Bellefair-Regular', fontSize: 9, lineHeight: 12, letterSpacing: 2, textAlign: 'center' },
+  sheerCard: { borderRadius: 0, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.38)' },
+  veil: { alignSelf: 'stretch', flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(8,6,6,0.6)', gap: 3 },
+  veilOval: { width: 24, height: 32, borderRadius: 12, borderWidth: 1, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  veilLogo: { width: 16, height: 16, borderRadius: 8 },
+  veilName: { fontFamily: 'Bellefair-Regular', fontSize: 10, lineHeight: 13, letterSpacing: 1.5, color: '#FFFFFF' },
   hard: {
     backgroundColor: '#FFFFFF', borderColor: '#1F1A1C', overflow: 'visible',
     shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0,

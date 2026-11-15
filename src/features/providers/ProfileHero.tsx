@@ -15,6 +15,7 @@ import { LogoCircle } from "../../components/FramedLogo";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
+import { SheerHero } from "./heroes/SheerHero";
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -669,6 +670,19 @@ export function ProfileHeroLayout({
       );
     }
 
+    case "veil":
+      // Sheer: their photo under a see-through black veil (heroes/SheerHero).
+      return (
+        <SheerHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
     default:
       return (
         <>
@@ -743,6 +757,14 @@ function SealRing({
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
   return pageStyle.hero === "duet";
+}
+
+/**
+ * Whether this style lays its own dark layer over the hero (Sheer's veil), so
+ * the profile and the preview ink the hero white whatever is behind it.
+ */
+export function heroIsDarkForStyle(pageStyle: PageStyle): boolean {
+  return pageStyle.hero === "veil";
 }
 
 /** The ink for details on that card. */
