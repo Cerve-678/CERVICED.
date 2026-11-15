@@ -24,8 +24,13 @@ export function payButtonLabel(plan: HoldPlan | null, totalAmount: number): stri
 export function holdPlanNote(plan: HoldPlan | null): string | null {
   if (!hasHolds(plan)) return null;
   const one = plan.requestCount === 1;
+  // The card is saved whenever a hold is placed after the sheet's own
+  // payment (create-payment-intent): more than one request, or a request
+  // alongside instant bookings.
+  const savesCard = plan.requestCount > 1 || plan.chargeNowPence > 0;
   return `${money(plan.heldPence)} for ${one ? 'your request' : `your ${plan.requestCount} requests`} is held on your card, not taken. ` +
-    `${one ? "It's" : 'Each is'} only charged if the provider accepts. If not, the hold is released.`;
+    `${one ? "It's" : 'Each is'} only charged if the provider accepts. If not, the hold is released.` +
+    (savesCard ? ` Your card is saved to your account so each request can be held on it separately.` : '');
 }
 
 /** The success screen's message once the checkout has gone through. */

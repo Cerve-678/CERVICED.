@@ -84,6 +84,9 @@ describe('a checkout with requests held, not charged', () => {
   it('explains the hold before paying, only when there is one', () => {
     expect(holdPlanNote(oneRequest)).toContain('£52.50 for your request is held on your card, not taken');
     expect(holdPlanNote(mixed)).toContain('your 2 requests');
+    // Saved only when a hold is placed after the sheet's own payment.
+    expect(holdPlanNote(mixed)).toContain('Your card is saved to your account');
+    expect(holdPlanNote(oneRequest)).not.toContain('saved');
     expect(holdPlanNote(noRequests)).toBeNull();
   });
 
