@@ -31,6 +31,7 @@ import {
   decodeCustomTheme,
   encodeThemeKey,
   parseThemeKey,
+  resolveProviderTheme,
   DEFAULT_HERO_FINISH,
   HERO_FINISHES,
   LINK_ONLY_HERO_FINISHES,
@@ -590,6 +591,7 @@ export default function BrandingScreen({ navigation }: any) {
               gradient={gradient}
               accent={accentColor}
               sheet={sheetColor}
+              cardColour={resolveProviderTheme(liveThemeKey).card}
               textColor={P.text}
               subColor={P.sub}
               borderColor={P.border}

@@ -5239,6 +5239,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroIsDark={heroIsDark}
                 accent={adaptiveAccentColor}
                 heroColour={heroBgColor ?? OP.hero}
+                cardColour={OP.card}
                 photoUris={heroPhotoUris}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}

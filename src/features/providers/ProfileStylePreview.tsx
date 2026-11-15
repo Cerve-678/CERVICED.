@@ -163,6 +163,7 @@ export function ProfileStylePreview({
             heroIsDark={heroIsDark}
             accent={accent}
             heroColour={gradient[0] ?? OP.hero}
+            cardColour={OP.card}
             rating="5.0"
             renderLogo={size => (
               <HeroLogo
