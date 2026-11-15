@@ -42,7 +42,7 @@ import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { useCircleStore } from '../../stores/useCircleStore';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { logger } from '../../utils/logger';
-import { FONT_BODY, hapticLight, hapticSelection, hapticSuccess } from '../maintenance/ui';
+import { FONT_DISPLAY, hapticLight, hapticSelection, hapticSuccess } from '../maintenance/ui';
 import { recommendProvider } from './recommend';
 import { RecommendAfterRatingBar } from './RecommendAfterRating';
 import { shouldOfferOnProfile, withAnswer, withAsked } from './circleMoments';
@@ -401,7 +401,6 @@ export function ProviderRecommendLayer({
         P={P}
         bottomOffset={bottomOffset}
         subtitle="You've been here"
-        countdown
       />
 
       {phase === 'hint' ? (
@@ -499,7 +498,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-  bubbleText: { fontFamily: FONT_BODY, fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  bubbleText: { fontFamily: FONT_DISPLAY, fontSize: 13, lineHeight: 18 },
   menu: {
     position: 'absolute',
     width: MENU_WIDTH,
@@ -512,8 +511,8 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14 },
-  rowText: { flex: 1, fontFamily: FONT_BODY, fontSize: 14, fontWeight: '600' },
+  rowText: { flex: 1, fontFamily: FONT_DISPLAY, fontSize: 14 },
   sep: { height: StyleSheet.hairlineWidth },
-  note: { fontFamily: FONT_BODY, fontSize: 12, lineHeight: 17, paddingHorizontal: 14, paddingBottom: 13, paddingTop: 2 },
+  note: { fontFamily: FONT_DISPLAY, fontSize: 12, lineHeight: 17, paddingHorizontal: 14, paddingBottom: 13, paddingTop: 2 },
   disabled: { opacity: 0.5 },
 });
