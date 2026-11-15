@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { getPageStyle, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
-import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { chosenProviderFont, resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
@@ -156,6 +156,7 @@ export function ProfileStylePreview({
             heroIsDark={heroIsDark}
             accent={accent}
             rating="5.0"
+            brandFont={chosenProviderFont(brandFont)}
             renderLogo={size => (
               <HeroLogo
                 size={size}
