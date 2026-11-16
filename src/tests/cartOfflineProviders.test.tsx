@@ -57,7 +57,13 @@ describe("restoring a saved cart", () => {
     (getProviderIdByDisplayName as jest.Mock).mockResolvedValue(null);
   });
 
-  it("drops items from a provider who went offline, in one batched check", async () => {
+  type AlertButton = { text: string; onPress?: () => void };
+  const pressAlertButton = (label: string) => {
+    const buttons = alertSpy.mock.calls[0][2] as AlertButton[];
+    act(() => buttons.find((b) => b.text === label)?.onPress?.());
+  };
+
+  it("asks before removing an offline provider's items, checked in one batch", async () => {
     (storage.getItem as jest.Mock).mockResolvedValue([
       item("a", "Lola", "p-lola"),
       item("b", "Gone", "p-gone"),
@@ -67,16 +73,47 @@ describe("restoring a saved cart", () => {
 
     const { result } = renderHook(() => useCart(), { wrapper });
 
-    await waitFor(() => expect(result.current.items.map((i) => i.id)).toEqual(["a"]), SLOW);
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled(), SLOW);
     expect(getLiveProviderIds).toHaveBeenCalledTimes(1);
     expect(getLiveProviderIds).toHaveBeenCalledWith(["p-lola", "p-gone"]);
-    expect(alertSpy).toHaveBeenCalledWith(
-      "Some items removed",
-      "Gone is no longer available, so we removed them from your cart.",
+    expect(alertSpy.mock.calls[0][0]).toBe("Not accepting bookings");
+    expect(alertSpy.mock.calls[0][1]).toBe(
+      "Gone is currently not accepting bookings. Would you like to remove this from your cart?",
+    );
+    // Nothing removed until the client chooses.
+    expect(result.current.items.map((i) => i.id)).toEqual(["a", "b", "c"]);
+
+    pressAlertButton("Remove");
+    expect(result.current.items.map((i) => i.id)).toEqual(["a"]);
+  });
+
+  it("keeps the items when the client chooses Keep", async () => {
+    (storage.getItem as jest.Mock).mockResolvedValue([item("b", "Gone", "p-gone")]);
+    (getLiveProviderIds as jest.Mock).mockResolvedValue(new Set());
+
+    const { result } = renderHook(() => useCart(), { wrapper });
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled(), SLOW);
+    pressAlertButton("Keep");
+    expect(result.current.items.map((i) => i.id)).toEqual(["b"]);
+  });
+
+  it("names every unavailable provider in one message", async () => {
+    (storage.getItem as jest.Mock).mockResolvedValue([
+      item("a", "Lola", "p-lola"),
+      item("b", "Mia", "p-mia"),
+    ]);
+    (getLiveProviderIds as jest.Mock).mockResolvedValue(new Set());
+
+    renderHook(() => useCart(), { wrapper });
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1), SLOW);
+    expect(alertSpy.mock.calls[0][1]).toBe(
+      "Lola, Mia are currently not accepting bookings. Would you like to remove their services from your cart?",
     );
   });
 
-  it("keeps everything when the live check itself fails", async () => {
+  it("says nothing and keeps everything when the live check itself fails", async () => {
     (storage.getItem as jest.Mock).mockResolvedValue([item("a", "Lola", "p-lola")]);
     (getLiveProviderIds as jest.Mock).mockRejectedValue(new Error("network"));
 
@@ -95,9 +132,9 @@ describe("restoring a saved cart", () => {
     (getProviderBySlug as jest.Mock).mockResolvedValue({ id: "p-lola" });
     (getLiveProviderIds as jest.Mock).mockResolvedValue(new Set());
 
-    const { result } = renderHook(() => useCart(), { wrapper });
+    renderHook(() => useCart(), { wrapper });
 
-    await waitFor(() => expect(result.current.items).toHaveLength(0), SLOW);
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled(), SLOW);
     expect(getLiveProviderIds).toHaveBeenCalledWith(["p-lola"]);
   });
 });

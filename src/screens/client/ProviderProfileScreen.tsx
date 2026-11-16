@@ -6,7 +6,12 @@ import React, {
   useEffect,
 } from "react";
 import { useBookmarkStore } from "../../stores/useBookmarkStore";
-import { ProviderSharingRow } from "../../features/social/ProviderSharingRow";
+import {
+  ProviderRecommendLayer,
+  RecommendBadge,
+  type RecommendBadgeTheme,
+  useProviderRecommend,
+} from "../../features/social/ProviderRecommend";
 import {
   View,
   Text,
@@ -36,7 +41,18 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
-import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "../../features/providers/ProfileHero";
+import {
+  DETAILS_ON_CARD_INK,
+  DETAILS_OWN_LINE,
+  HERO_NAME_LINE_HEIGHT,
+  HERO_NAME_SIZE,
+  HeroLogo,
+  HeroPills,
+  ProfileHeroLayout,
+  detailsSitOnCard,
+  heroIsDarkForStyle,
+} from "../../features/providers/ProfileHero";
+import { VeilBackdrop, veilAccent, veilPageTheme } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -73,7 +89,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
-import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
@@ -125,7 +141,7 @@ import {
   onAccentInk,
   PageSection,
   PageSectionHeading,
-  PolicyBandSection,
+  AccentBandSection,
   policiesBringOwnSurface,
   sectionInk,
   sectionsSitOnPage,
@@ -1495,17 +1511,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
-  const OP = resolveProviderTheme(provider?.profileTheme);
+  // Branding → Page Style (constants/pageStyles): headings, card treatment,
+  // the policy layout and the logo frame, on top of the colours. Classic is
+  // the profile exactly as it was.
+  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
+  // A veil page (Sheer) keeps the theme's hero and accent but puts the
+  // content on see-through dark glass, so every section inks itself white.
+  const baseTheme = resolveProviderTheme(provider?.profileTheme);
+  const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
+  const OP = veilTheme ?? baseTheme;
   // Branding → Card Shape: square corners on the profile's cards (the service
   // cards and category pills, About/Policies, the sharing card, Reviews,
   // Contact, Opening hours, Additional info), or the rounded look it has
   // always had. The availability pill and Instagram button beside it stay
   // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
-  // Branding → Page Style (constants/pageStyles): headings, card treatment,
-  // the policy layout and the logo frame, on top of the colours. Classic is
-  // the profile exactly as it was.
-  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1717,6 +1737,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
     );
   }, []);
+  // Boutique's Book now, on the photo in its hero.
+  const jumpToServices = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    scrollToSection(servicesSectionRef.current);
+  }, [scrollToSection]);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -1734,7 +1759,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // brown for the default theme). There used to be a middle step that guessed
   // an accent from the gradient's first colour through a table of old
   // placeholder presets, falling back to purple for anything else.
-  const adaptiveAccentColor = provider?.accentColor ?? OP.accent;
+  const rawAccentColor = provider?.accentColor ?? OP.accent;
+  // On a veil page's dark glass a dark accent is lifted so it still reads.
+  const adaptiveAccentColor = veilTheme ? veilAccent(rawAccentColor) : rawAccentColor;
+  // Recommend's badge on the logo wears this page's colours.
+  const recommendBadgeTheme = useMemo<RecommendBadgeTheme>(() => ({
+    card: OP.card,
+    text: OP.text,
+    accent: adaptiveAccentColor,
+    onAccent: onAccentInk(adaptiveAccentColor).text,
+  }), [OP.card, OP.text, adaptiveAccentColor]);
 
   // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat
   // opaque fill — derived from the provider theme's card colour so every preset matches.
@@ -1800,6 +1834,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
+  // Up to three of their portfolio photos for the heroes that show them
+  // (Editorial's tilted card, Snapshot's photo strip).
+  const heroPhotoUris = useMemo(
+    () => workPortfolio.slice(0, 3).map((item) => item.image_url).filter(Boolean),
+    [workPortfolio],
+  );
   // A salon/studio on "Always visible" shows its full address in Contact
   // instead of the area. The server decides who qualifies and returns null for
   // everyone else, so the area stays the default and a failed fetch just
@@ -1858,6 +1898,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // What they do (Nails, Lashes…). Cover and Duet leave it out of the top
+    // of the page, so it's said here instead (owner, 2026-11-15).
+    if (pageStyle.hero === "cover" || pageStyle.hero === "duet") {
+      const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
+      const chips = [...new Set(types.map((type) => {
+        const label = type === "OTHER" ? provider.customServiceType || "Service" : type;
+        return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+      }))];
+      if (chips.length > 0) groups.push({ label: "Category", chips });
+    }
+    // Salon, studio, home-based or mobile. Classic already shows it as the
+    // icon in the line under the name; most page styles' heroes have no such
+    // line, so there it is said here in words (owner, 2026-11-15).
+    if (provider.businessType && pageStyle.key !== "classic") {
+      groups.push({ label: "Business type", chips: [BUSINESS_TYPE_LABEL[provider.businessType]] });
+    }
     // Who they work with (clients, skin tones, hair types) from About You's
     // "I Work With" — here, not in the About/Policy card, which is the bio.
     groups.push(...workWithGroups(provider));
@@ -1898,7 +1954,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       groups.push({ label: "Payment methods", chips: paymentLabels });
     }
     return groups;
-  }, [provider]);
+  }, [provider, pageStyle.key, pageStyle.hero]);
 
   // One natural-language paragraph rather than a label/value dump — these are
   // unrelated one-liners, and as rows they read like a spec sheet for
@@ -1927,10 +1983,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     ? provider?.gradient[0]
     : OP.hero;
   const heroIsDark =
+    heroIsDarkForStyle(pageStyle) ||
     !!provider?.backgroundImage ||
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
+  // Duet draws the stars, years and link-only caption on its white card, so
+  // they take dark ink there whatever is behind the hero.
+  const detailsOnCard = detailsSitOnCard(pageStyle);
+  const detailsText = detailsOnCard ? DETAILS_ON_CARD_INK.text : heroText;
+  const detailsSub = detailsOnCard ? DETAILS_ON_CARD_INK.sub : heroSub;
+  const detailsShadow = heroIsDark && !detailsOnCard;
 
   // What they do, for Arch's curved caption, Spa's top line and the like.
   const heroKicker = useMemo(() => {
@@ -1939,14 +2002,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     return [...new Set(types.map((type) => (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase()))].join(" · ");
   }, [provider]);
 
-  // Cover's pills under the name: every service type they offer, their area
-  // and how they work — the same facts as the small-caps line other styles show.
+  // Cover's pills under the name: their area and how they work. What they do
+  // isn't repeated here: Additional Information lists it as Category
+  // (owner, 2026-11-15).
   const heroPillLabels = useMemo(() => {
     if (!provider || !pageStyle.heroPills) return [];
-    const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
-    const labels = types.map((type) =>
-      (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase(),
-    );
+    const labels: string[] = [];
     if (provider.location) labels.push(provider.location.toUpperCase());
     if (provider.businessType) labels.push(BUSINESS_TYPE_LABEL[provider.businessType].toUpperCase());
     return [...new Set(labels)];
@@ -2063,13 +2124,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [offersPanelSlide]);
 
   // Show notification popup from right
+  const rightNotificationRun = useRef<Animated.CompositeAnimation | null>(null);
   const showRightNotification = useCallback(() => {
+    // A quick second tap (bell on, off, on) starts a new toast while the last
+    // one is still showing. Stop that one first: an interrupted animation still
+    // calls its end callback, which used to hide the toast that just appeared.
+    rightNotificationRun.current?.stop();
     setShowNotification(true);
     // Reset animation - start from right edge
     slideRightAnimation.setValue(100);
 
     // Animate notification slide in from right
-    Animated.sequence([
+    const run = Animated.sequence([
       Animated.spring(slideRightAnimation, {
         toValue: 0,
         useNativeDriver: true,
@@ -2082,8 +2148,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         duration: 300,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setShowNotification(false);
+    ]);
+    rightNotificationRun.current = run;
+    run.start(({ finished }) => {
+      // Only the toast that ran to the end hides itself; a stopped one leaves
+      // the newer toast alone.
+      if (finished && rightNotificationRun.current === run) setShowNotification(false);
     });
   }, [slideRightAnimation]);
 
@@ -2149,6 +2219,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
+  // Recommend, for a client who has had a completed appointment here: a
+  // one-time bar, then a thumbs-up badge on the logo with a menu under it.
+  const recommend = useProviderRecommend({
+    providerId: providerDbId,
+    providerName: provider?.displayName ?? "",
+    enabled: canSaveProvider && hatState.active === "client",
+    onError: showAlert,
+  });
+  const recommendHeart = recommend.heart;
 
   const refuseBookingAsProvider = useCallback((): boolean => {
     if (!viewingOtherAsProvider) return false;
@@ -4122,7 +4201,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               ? "Not taking bookings"
                               : fullyBooked
                               ? "Fully Booked"
-                              : "Book"}
+                              // Boutique says "Add to basket"; it still opens the booking sheet.
+                              : pageStyle.bookLabel ?? "Book"}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -4275,11 +4355,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </>
         ) : (
           <ProfileHeroBackdrop
-            colors={provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]}
+            colors={provider.hasCustomGradient ? provider.gradient : [baseTheme.hero, baseTheme.bg]}
             finish={parseThemeKey(provider.profileTheme).finish}
             style={styles.heroImage}
           />
         )}
+        {/* Sheer: the black veil over the whole backdrop, behind the hero and
+            the see-through content sheet alike. */}
+        {veilTheme ? <VeilBackdrop style={styles.heroImage} /> : null}
 
         {/* Driven by this provider's hero, not theme.statusBar: their profile
             theme never follows the viewer's dark mode, so reading the viewer's
@@ -5135,6 +5218,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             contentContainerStyle={styles.scrollContent}
             scrollEventThrottle={16}
             onScroll={handleScroll}
+            // Touching the page closes Recommend's menu and bubble.
+            onTouchStart={recommend.dismissFloating}
             nestedScrollEnabled={true}
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
@@ -5150,6 +5235,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroText={heroText}
                 heroSub={heroSub}
                 heroIsDark={heroIsDark}
+                accent={adaptiveAccentColor}
+                heroColour={heroBgColor ?? OP.hero}
+                cardColour={OP.card}
+                photoUris={heroPhotoUris}
+                rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
+                isVerified={provider.isVerified}
+                // Link-only providers have no Services section to jump to.
+                onBookNow={isLinkOnly ? undefined : jumpToServices}
                 renderLogo={(size) => (
                   <HeroLogo
                     size={size}
@@ -5165,6 +5258,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       setShowFullLogo(true);
                     }}
                     accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
+                    badge={recommendHeart ? <RecommendBadge {...recommendHeart} theme={recommendBadgeTheme} /> : null}
                   />
                 )}
                 renderName={({ scale, letterSpacing }) => (
@@ -5180,7 +5274,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               // Thin scripts are drawn larger so they read at the same size.
                               // Each hero layout sets its own size (Cover's is 1.6×).
                               fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
-                              lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont) * scale,
+                              // Scripts loop high (f, k), so their line is taller.
+                              lineHeight: resolveProviderNameLineHeight(
+                                provider.brandFont,
+                                NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
+                              ),
                               ...(letterSpacing ? { letterSpacing } : null),
                             },
                             heroIsDark && styles.heroTextShadow,
@@ -5262,16 +5360,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       {/* Rating inline — not for a link-only provider: their
                           bookings happen elsewhere, so there are no CERVICED
                           reviews to rate them from. */}
+                      {/* On Duet's card they lead the line, left of the years. */}
                       {!isLinkOnly && (
-                      <View style={styles.ratingRow}>
+                      <View style={[styles.ratingRow, detailsOnCard && styles.detailsInline]}>
                         {[1, 2, 3, 4, 5].map((star) => (
                           <StarIcon key={star} size={12} color="#FFD700" />
                         ))}
                         <Text
                           style={[
                             styles.ratingInline,
-                            { color: heroText },
-                            heroIsDark && styles.heroTextShadow,
+                            { color: detailsText },
+                            detailsShadow && styles.heroTextShadow,
                           ]}
                         >
                           {provider.rating}
@@ -5284,18 +5383,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <Text
                           style={[
                             styles.yearsExp,
-                            { color: heroSub },
-                            heroIsDark && styles.heroTextShadow,
+                            { color: detailsSub },
+                            detailsShadow && styles.heroTextShadow,
+                            detailsOnCard && styles.detailsInline,
                           ]}
                         >
-                          {provider.yearsExperience} years experience
+                          {provider.yearsExperience} {detailsOnCard ? "yrs" : "years"} experience
                         </Text>
                       ) : null}
 
                       {/* Slots + bell. The pill says when this provider's diary
                           opens — "New slots drop on the 5th" — or, without a
                           release day, "Stay updated" beside the bell that delivers
-                          their updates. See slotsPillText. */}
+                          their updates. See slotsPillText. On Duet's card it
+                          takes a line of its own under the stars and years. */}
+                      <View style={detailsOnCard ? DETAILS_OWN_LINE : undefined}>
                       {(() => {
                         if (isLinkOnly) {
                           // In place of the availability pill: Book (their own
@@ -5350,7 +5452,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
                               </View>
                               <Text
-                                style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
+                                style={[styles.linkOnlyCaption, { color: detailsSub }, detailsShadow && styles.heroTextShadow]}
                               >
                                 Books on their own page — opens inside CERVICED
                               </Text>
@@ -5448,6 +5550,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         </View>
                         );
                       })()}
+                      </View>
                   </>
                 }
                 about={
@@ -5475,26 +5578,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <View
               style={[
                 styles.contentSheet,
-                { minHeight: screenHeight, backgroundColor: OP.bg },
+                { minHeight: screenHeight, backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg },
                 // With a background image, inset the sheet so the photo shows
                 // along its sides — the content reads as a card floating over
-                // the image rather than covering it edge to edge.
-                provider.backgroundImage ? styles.contentSheetFloating : null,
+                // the image rather than covering it edge to edge. A veil page
+                // always floats: its sheet is a see-through glass card.
+                provider.backgroundImage || veilTheme ? styles.contentSheetFloating : null,
+                veilTheme ? styles.contentSheetGlass : null,
               ]}
             >
-              {/* Recommend + "Don't show me" — only for a client who has had
-                  a completed appointment here; renders nothing otherwise. */}
-              <ProviderSharingRow
-                providerId={providerDbId}
-                providerName={provider.displayName}
-                enabled={canSaveProvider && hatState.active === "client"}
-                tokens={OP}
-                accent={adaptiveAccentColor}
-                cardBg={cardBg}
-                square={squareCards}
-                onError={showAlert}
-              />
-
               {/* Cover: a bar of links to the main sections. */}
               {pageStyle.jumpBar ? (
                 <View
@@ -5748,7 +5840,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <>
                   {/* Every style but Classic gives About and Policies a
                       section each, in the style's own headings and layout. */}
-                  {!pageStyle.aboutInHero ? (
+                  {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
+                    // Editorial: their About on a full-width band of the accent.
+                    <View ref={aboutCardRef} collapsable={false}>
+                      <AccentBandSection section="about" palette={sectionPalette} waves={false}>
+                        <ExpandableAboutText
+                          text={provider.aboutText}
+                          translate
+                          textStyle={[styles.aboutText, { color: onAccentInk(adaptiveAccentColor).sub }]}
+                          linkStyle={styles.moreButton}
+                          linkTextStyle={[styles.moreButtonText, { color: onAccentInk(adaptiveAccentColor).text }]}
+                          onCollapse={handleAboutCollapse}
+                        />
+                      </AccentBandSection>
+                    </View>
+                  ) : !pageStyle.aboutInHero ? (
                     <View ref={aboutCardRef} collapsable={false}>
                       <PageSection section="about" palette={sectionPalette}>
                         <ExpandableAboutText
@@ -5779,10 +5885,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         if (pageStyle.policies === "band") {
                           const ink = onAccentInk(adaptiveAccentColor);
                           return (
-                            <PolicyBandSection palette={sectionPalette}>
+                            <AccentBandSection section="policies" palette={sectionPalette}>
                               <StyledPolicyList rows={rows} palette={sectionPalette} ink={ink} />
                               {footer(ink)}
-                            </PolicyBandSection>
+                            </AccentBandSection>
                           );
                         }
                         const bare = policiesBringOwnSurface(pageStyle);
@@ -5902,6 +6008,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             </View>
           </ScrollView>
         </SafeAreaView>
+
+        {/* Last, so the bar, bubble and menu sit over the page. */}
+        <ProviderRecommendLayer
+          {...recommend.layer}
+          bottomOffset={FLOATING_TAB_BAR_CLEARANCE}
+          theme={recommendBadgeTheme}
+        />
       </ThemedBackground>
     </WindowControlsInsetProvider>
     </SafeAreaProvider>
@@ -6016,6 +6129,14 @@ const styles = StyleSheet.create({
   // from both edges so the photo stays visible down its sides.
   contentSheetFloating: {
     marginHorizontal: 10,
+  },
+  // Sheer: the sheet is see-through glass over the veil, edged in a hairline.
+  contentSheetGlass: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.22)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   skeletonShell: {
     flex: 1,
@@ -6168,6 +6289,8 @@ const styles = StyleSheet.create({
     gap: 3,
     marginBottom: 8,
   },
+  // The years beside the pills on Duet's card: no gap under them there.
+  detailsInline: { marginBottom: 0 },
   ratingInline: {
     fontFamily: "Jura-VariableFont_wght",
     fontWeight: "800",

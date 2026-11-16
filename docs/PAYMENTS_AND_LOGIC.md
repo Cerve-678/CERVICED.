@@ -236,6 +236,42 @@ that, putting it right means taking money back from Jo (section 2.8).
    price per add-on, the same on every service). An add-on's extra time
    lengthens the booking's end time but never changes its price. **Not live
    until migration `20261105223541_universal_add_ons` is applied.**
+   **The policy is frozen here too.** Each booking stores the provider's
+   live booking policy (`bookings.policy_snapshot`, read by the server, never
+   copied from the app) and the moment the client ticked the Confirm & Pay
+   box (`policy_accepted_at`). Cancellation refunds use that frozen copy. If
+   the app's copy of the policy, the one the cart showed, differs from the
+   live one on any money term (cancel window, penalty or fee, deposit
+   settings, late/no-show fee) or on the provider's written terms, checkout
+   is refused and names the provider and service, so nobody is charged under
+   terms they never saw. An older build or a Quick Book item sends no copy,
+   so nothing is compared; the live policy is still what gets frozen. The
+   cancel window is frozen from `providers.cancellation_notice_hours` when
+   set, which the app's copy doesn't carry, so a change to that column alone
+   isn't caught (Part 6). *Live since 13 November (`20261113090000`); the app part needs a new
+   build. Until then no card-paid booking had either (0 of 94 on 13 November), so their
+   refunds use the provider's current policy; they are not backfilled.*
+   **Promo codes are priced here too.** A provider's promo code applied in
+   the cart is sent with each item and re-checked by the server (the
+   provider's own code, active, in date in UK time). The discount is a
+   percentage of the service and its add-ons, or a fixed amount, capped at
+   the service price, and nothing for a service or category outside the
+   code's scope. **The provider pays for it:** the booking's price
+   (`base_price`) is stored after the discount (`promo_discount` and
+   `promotion_id` record which code and how much), so the fee is worked out
+   on the discounted price and the payout, deposit, late/no-show caps and
+   refunds all follow what was actually charged. With a fixed deposit the
+   discount comes off the balance paid at the appointment, not the card
+   charge. An ended or invalid code is refused by name; the cart drops ended
+   codes before Confirm & Pay. A checkout that comes to £0 after a code is
+   refused (Stripe can't take £0); the provider can add that booking
+   themselves. Promotions can't be saved below 0% or above 100%, or with a
+   negative amount. Receipts don't show the discount as its own line yet
+   (`bookings.promo_discount` holds it). *Live since 13 November. Until
+   migration
+   `20261113100000_promo_code_charged_at_checkout` the code never reached the
+   server, so the card was charged full price while the cart showed the
+   discount. The app needs a new build to send the code.*
 2. **Add the fee** from section 1.3.
 3. **Check the provider can be paid.** If any provider in the basket hasn't
    finished setting up their Stripe account, checkout is refused.
@@ -575,8 +611,13 @@ their grace period) and **no-show**. Each is capped at **50% of the service
 price**.
 
 On the Policies screen, the late fee and grace period sit in the Late section.
-The no-show fee appears when the provider picks **Custom** as the no-show
-action, and picking any other action clears it. The one grace period still
+The no-show charge comes from the no-show action **Half the price** (since
+13 November; it replaced Custom, a typed £ fee, and saved Custom fees became
+Half). On a deposit-only booking it's half of (service price + add-ons)
+minus the deposit, frozen on the booking at checkout, like the late
+cancellation fee in 2.5.1; the deposit itself is kept because a no-show gets
+no refund. A client who paid in full has nothing more to pay. Bookings made
+before then keep the £ fee they were booked with The one grace period still
 stops a no-show being marked until it has passed.
 
 | Rule | Detail |
@@ -1103,8 +1144,9 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
-| 12 | **Waitlist checkout has never run end to end.** No waitlist offer has ever been sent in production, and the new pay-at-confirm path hasn't been tried in Stripe test mode | A broken step would only show as nobody being offered a slot | Rehearse it in test mode after the migration (hold, pay, decline, time running out, Auto-fill on and off) |
+| 12 | **The cancel window can disagree with the written policy.** `cancel_notice_hours()` uses `providers.cancellation_notice_hours` first and the policy's `cancelNotice` only when the column is empty. On 13 November four live providers had them disagree (Nails Studio and Uniquely Aesthetics 24h vs 48h written, Daminkfinesse 48h vs 24h, CuratedByCilva 24h vs 12h) | A client can be judged by a window different from the one they were shown | Find which editor writes only one of them, then make one the source |
 | 13 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
+| 14 | **Waitlist checkout has never run end to end.** No waitlist offer has ever been sent in production, and the new pay-at-confirm path hasn't been tried in Stripe test mode | A broken step would only show as nobody being offered a slot | Rehearse it in test mode after the migration (hold, pay, decline, time running out, Auto-fill on and off) |
 
 ---
 
@@ -1123,6 +1165,8 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 18 Oct | A payout is held while a refund request is open | A refund can then come out of money CERVICED still has |
 | 18 Oct | A provider who can't cover a reversal owes it from future payouts | Keeps the books whole without charging the provider directly |
 | 19 Oct | Fee agreement records are kept six years, including after account deletion | Evidence for disputes and claims |
+| 13 Nov | Promo codes are funded by the provider and the fee is charged on the discounted price | It is the provider's promotion; the cart already showed the fee on the discounted total |
+| 13 Nov | Card checkouts freeze the provider's live policy and refuse when it differs from what the cart showed | Refunds were using the provider's current policy for every card booking; binding a client to terms changed after they added the service would be unfair |
 | 19 Oct | A fee the card can't pay becomes a 7-day payment request, with up to 3 automatic retries on declines | A fair chance to pay before it lapses |
 | 19 Oct | A saved card can't be removed until 24 hours after its appointment | It may be needed for a fee |
 | 21 Oct | Failed payouts are retried after about 1, 2 and 4 days, then wait for a person | Most failures are temporary |
@@ -1134,6 +1178,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 31 Oct | A provider has 3 days to answer a refund request, with a reminder after 2; then it goes to CERVICED, which aims to decide within 5 working days | The client isn't left waiting and the payout isn't held indefinitely |
 | 5 Nov | Add-ons belong to the provider, not one service: one price everywhere, optional extra time, can be paused. Bookings keep the name and price paid | Providers retyped the same add-on per service, and a price change meant editing every copy |
 | 1 Nov | A provider can never keep the full price on a late cancellation: the whole deposit if the client paid a deposit, half the service price if they paid in full. "Full charge" became "Half the price", and existing bookings follow it too | The user's rule: based on what was paid in the app, in line with the 50% cap on late and no-show fees |
+| 13 Nov | The no-show action Custom (a typed £ fee) is replaced by **Half the price**: on a deposit-only booking the provider keeps the deposit and may charge the rest up to half the price after marking the no-show. Paid in full: nothing more. Saved Custom fees became Half (one live provider, £25). Live since 16 November (`20261113200000_no_show_half`); the app part needs a new build; no edge function changes | The user's call: the same rule as a late cancellation, no typed amounts. **Not lawyer-reviewed** |
 | 13 Nov | Custom on a late cancellation is replaced by one **Half the price** option. A client who paid only a deposit and cancels late under it keeps losing the deposit, and the provider may also charge their saved card the rest up to half the price, from the booking, within 24 hours of the appointment's end. Agreed in its own tick box at checkout. Clients can also be held to moving a booking within the same calendar month. Not live until migration `20261113160000_late_cancel_half_top_up` is applied, `booking-fee`, `apply-cancellation-refund`, `create-payment-intent` and `client-saved-cards` are deployed, and a new app build ships | The user's call: providers wanted half of the price, not just a small deposit, when a deposit-only client cancels late. **Not lawyer-reviewed** |
 | 2 Nov | "Half the price" on a late cancellation becomes Custom: the provider sets a £ amount, and the server caps what they keep at half the service price, and at the deposit if that's all that was paid. Providers who saved "half" keep it until they enter an amount. Not live until `apply-cancellation-refund` is deployed from main, which must happen before an app build carrying this ships. The no-show fee is now set by a Custom no-show action, and the grace period sits in a new Late section | Providers choose their own charge, and a client still never loses more than half |
 | 1 Nov | Receipts end with just Paid (what left the card, fee included) and Due at Appointment. No combined receipt for a multi-booking checkout | Simple, and Paid matches the bank statement |

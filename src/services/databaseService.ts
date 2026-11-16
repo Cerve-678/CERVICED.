@@ -102,7 +102,7 @@ import {
   type PublicReviewRow,
 } from "../features/providers/reviewPresentation";
 export type { BookingReviewState } from "../features/bookings/reviewState";
-import { isReleaseTime, toReleaseDay, toReleaseTime, type BookingHorizonSettings } from "../utils/bookingHorizon";
+import { isReleaseTime, toReleaseDay, toReleaseTime, ukTodayYMD, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -2889,6 +2889,22 @@ export type CheckoutIntentItem = {
   // supabase/migrations/20260929061000_prepare_checkout_captures_mobile_client_address.sql.
   client_address?: string | null;
   client_area?: string | null;
+  // The Confirm & Pay checkbox (CERVICED's Terms + the provider's
+  // cancellation policy). prepare_checkout refuses the item without it and
+  // stamps bookings.policy_accepted_at from the database clock.
+  policy_accepted?: boolean;
+  // The provider's policy as the cart showed it (CartItem.policySnapshot).
+  // Never stored as-is: prepare_checkout freezes the provider's LIVE policy,
+  // and refuses when a money term here differs from it, so nobody is charged
+  // under terms they never saw. Its providerTerms is how the server knows the
+  // client agreed to the provider's written terms. See
+  // supabase/migrations/20261113090000_card_checkout_saves_policy_and_consent.sql.
+  policy_snapshot?: Record<string, unknown> | null;
+  // The provider's promo code the cart applied. prepare_checkout re-validates
+  // it (active, in date in UK time, this provider's) and prices the discount
+  // itself; an ended code is refused by name. See
+  // supabase/migrations/20261113100000_promo_code_charged_at_checkout.sql.
+  promo_code?: string;
 };
 
 export type PreparedCheckout = {
@@ -7410,7 +7426,9 @@ export async function validatePromoCode(
     .maybeSingle();
   if (!provider) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  // UK date, as prepare_checkout uses: the UTC date would call a code that
+  // ended at midnight valid until 1am in summer, and the server would refuse it.
+  const today = ukTodayYMD();
   const { data } = await supabase
     .from("promotions")
     .select("*")
@@ -7419,6 +7437,9 @@ export async function validatePromoCode(
     .eq("is_active", true)
     .lte("valid_from", today)
     .gte("valid_until", today)
+    // Newest first, the same row prepare_checkout picks if a provider ever
+    // has two live promotions with one code.
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 

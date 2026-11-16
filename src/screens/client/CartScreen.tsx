@@ -2022,7 +2022,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [cartError, clearCartError, showAlert]);
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, myProviderId, myProviderIdStatus } = useAuth();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
   // Checkout carries on after the checklist saves, by which time this render's
   // handleCheckout would still see the details as missing.
@@ -2955,6 +2955,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         date: booking.selectedDate,
         time: booking.selectedTime,
         duration: durationWithAddOns(item.duration, item.addOns),
+        // Only once the ownership lookup has actually answered; until then
+        // (or if it failed) the database guard at checkout still catches it.
+        ownProvider: myProviderIdStatus === 'resolved'
+          && !!myProviderId
+          && item.providerId === myProviderId,
       };
     }));
     items.forEach(item => {
@@ -2963,7 +2968,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       }
     });
     return issues;
-  }, [items, getServiceBooking, holdClock]);
+  }, [items, getServiceBooking, holdClock, myProviderId, myProviderIdStatus]);
 
   // A stored date/time the app can't parse back shouldn't be possible — the
   // sheet only ever writes formats it understands. The client is shown the
@@ -3449,7 +3454,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // finding, not a second one, so it reuses it rather than re-deriving it
     // with wording that could drift out of step.
     if (localItemIssues.size > 0) {
-      showAlert('Schedule Required', 'Some services in your cart need attention before checkout.');
+      const hasOwnBusiness = [...localItemIssues.values()].includes(CART_ISSUE.ownProvider);
+      showAlert(
+        hasOwnBusiness ? "You can't book yourself" : 'Schedule Required',
+        hasOwnBusiness
+          ? 'Your cart has a service from your own business. Remove it to check out.'
+          : 'Some services in your cart need attention before checkout.',
+      );
       return;
     }
 
@@ -3561,7 +3572,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         ...(existing ?? { selectedDate: '', selectedTime: '', isDepositOnly: false }),
         notes: [existing?.notes, promoNote].filter(Boolean).join('\n'),
       } as ServiceBooking;
-      return { ...item, price: Math.max(0, (Number(item.price) || 0) - discount) };
+      return {
+        ...item,
+        price: Math.max(0, (Number(item.price) || 0) - discount),
+        // Card checkouts are priced by the server, which only discounts what
+        // it is told about — without this the client saw the discount and
+        // was charged full price.
+        ...(promo?.promo_code ? { appliedPromoCode: promo.promo_code } : {}),
+      };
     });
     const snapshot = {
       items: snapshotItems,
@@ -3931,12 +3949,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
-      const slug = providerItems[0]?.providerSlug;
-      if (!slug) {
+      // The database id first: it's what checkout books against, the restore
+      // re-links any item missing it, and the profile loads by id as well as
+      // by slug. The saved slug is only a fallback for an item with no id.
+      const first = providerItems[0];
+      const key = first?.providerId ?? first?.providerSlug;
+      if (!key) {
         showAlert('Something went wrong', "We couldn't open that provider's profile.");
         return;
       }
-      navigation.navigate('ProviderProfile', { providerId: slug, source: 'cart' });
+      navigation.navigate('ProviderProfile', { providerId: key, source: 'cart' });
     },
     [navigation, showAlert]
   );
@@ -4471,6 +4493,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               // service actually needs this and rejects
                               // if missing, regardless of this value.
                               safety_ack: agreedToPolicy,
+                              // The same checkbox, as consent to the Terms and
+                              // the provider's policy. The snapshot is the copy
+                              // this cart showed; the server freezes its own live
+                              // copy and refuses if the money terms differ.
+                              policy_accepted: agreedToPolicy,
+                              policy_snapshot: item.policySnapshot ?? null,
+                              // The code whose discount the review screen
+                              // showed. prepare_checkout re-validates it and
+                              // works the discount out itself.
+                              ...(item.appliedPromoCode ? { promo_code: item.appliedPromoCode } : {}),
                               // Set when the client accepted the out-of-hours
                               // confirmation in the booking sheet. The ack
                               // travels with it because prepare_checkout

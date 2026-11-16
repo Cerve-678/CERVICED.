@@ -62,6 +62,10 @@ export interface CartItem {
   /** Promo code to auto-apply in the cart — set when the item was added via
    *  a promotion's "Book Now" button, so the offer isn't silently dropped. */
   initialPromoCode?: string;
+  /** The promo code whose discount is baked into this item's price. Set only
+   *  on CartScreen's frozen checkout snapshot, and sent to prepare_checkout,
+   *  which re-validates and prices it server-side. */
+  appliedPromoCode?: string;
   providerImage: any;
   providerService: string;
   serviceName: string;
@@ -550,7 +554,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // launch until the user next changed the cart.
           hydratedRef.current = true;
 
-          const removed: CartItem[] = [];
+          const unavailable: CartItem[] = [];
 
           // Repair or drop any stored item that lost its provider link while the
           // cart sat in storage (provider renamed, or the item predates
@@ -580,7 +584,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               providerIdByItem.set(it.id, resolvedId);
               dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
             } else {
-              removed.push(it);
+              // No live provider matches this item at all — same outcome for
+              // the client as one that went offline.
+              unavailable.push(it);
             }
           }
 
@@ -596,15 +602,26 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return null;
           });
           if (liveIds) {
-            removed.push(...offlineProviderItems(stored, providerIdByItem, liveIds));
+            unavailable.push(...offlineProviderItems(stored, providerIdByItem, liveIds));
           }
 
-          if (removed.length > 0) {
-            removed.forEach(it => dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } }));
-            const names = [...new Set(removed.map(it => it.providerDisplayName ?? it.providerName))];
+          // Tell the client and let them decide — a provider can be back
+          // tomorrow, so nothing is taken out of the cart without asking.
+          if (unavailable.length > 0) {
+            const names = [...new Set(unavailable.map(it => it.providerDisplayName ?? it.providerName))];
+            const many = names.length > 1;
             Alert.alert(
-              'Some items removed',
-              `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removed.length > 1 ? 'them' : 'it'} from your cart.`
+              'Not accepting bookings',
+              `${names.join(', ')} ${many ? 'are' : 'is'} currently not accepting bookings. Would you like to remove ${many ? 'their services' : 'this'} from your cart?`,
+              [
+                { text: 'Keep', style: 'cancel' },
+                {
+                  text: 'Remove',
+                  style: 'destructive',
+                  onPress: () => unavailable.forEach(it =>
+                    dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } })),
+                },
+              ],
             );
           }
         }
