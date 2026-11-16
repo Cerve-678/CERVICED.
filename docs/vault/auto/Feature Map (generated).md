@@ -109,10 +109,10 @@ Curated: [[Payments]] · **167 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **375 files**
-- `src/services/databaseService.ts` _(1142)_
+- `src/services/databaseService.ts` _(1146)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/contexts/BookingContext.tsx` _(701)_
-- `src/screens/client/CartScreen.tsx` _(684)_
+- `src/screens/client/CartScreen.tsx` _(686)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(598)_
 - `src/services/becca/capabilities/client.ts` _(598)_
 - `src/screens/client/BookingDetailScreen.tsx` _(519)_
@@ -347,11 +347,11 @@ Curated: [[Services]] · **56 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **88 files**
-- `src/screens/client/CartScreen.tsx` _(445)_
-- `src/services/databaseService.ts` _(114)_
+- `src/screens/client/CartScreen.tsx` _(447)_
+- `src/services/databaseService.ts` _(119)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(63)_
-- `src/contexts/CartContext.tsx` _(36)_
+- `src/contexts/CartContext.tsx` _(38)_
 - `src/components/BookingSheet.tsx` _(35)_
 - `src/services/AvailabilityService.ts` _(31)_
 - `src/services/becca/capabilities/client.ts` _(26)_
