@@ -96,7 +96,8 @@ export function BoutiqueHero({
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignSelf: "stretch", marginBottom: 24 },
+  // A little further down from the header buttons (owner, 2026-11-16).
+  wrap: { alignSelf: "stretch", marginTop: 20, marginBottom: 24 },
   // Rounded at the top as the panel is at the foot (owner, 2026-11-16).
   top: {
     alignItems: "center", justifyContent: "center",
