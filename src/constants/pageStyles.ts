@@ -130,7 +130,7 @@ export type PageHero =
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
   | 'pressed'  // pressed straight into the theme backdrop, no card: the logo in a blind-stamped ring, the name raised out of it
   | 'callingCard' // satin in the theme colour, and a cream calling card held by an accent clip with the logo and name
-  | 'basket'    // a handheld shop basket in the accent, a cream shop label on its front with a big logo and the name (Boutique)
+  | 'shop'      // the top of an online boutique: a running strip, the name as a wordmark, what they do as the menu, their photo with Book now (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
@@ -330,9 +330,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
   // board 24): "shopping cart vibes", the logo printed on the bag.
   {
-    key: 'boutique', name: 'Boutique', description: 'A shop basket with your logo on its label, services like a shop',
+    key: 'boutique', name: 'Boutique', description: 'Your page as an online boutique: your name as the brand, your work in the window',
     heading: 'shopSerif', cards: 'product', policies: 'accordion', logo: 'circle',
-    hero: 'basket', aboutInHero: false,
+    hero: 'shop', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     bookLabel: 'Add to basket',
   },
