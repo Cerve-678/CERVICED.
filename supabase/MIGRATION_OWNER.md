@@ -56,6 +56,13 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-16 (reschedule taken-time message, request card hold)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261116090000 | `reschedule_taken_time_message` | **APPLIED 2026-11-16** on the user's go-ahead ("apply #508 and #473 to the live database and deploy"), via `supabase db query --linked -f` from the main folder. Renumbered from `20261113230000`, which `20261115090000` had left below the frontier. Right before: live max `20261115090000`, lock `(none)` on main and every open branch, md5 guard matched, forced-rollback dry run passed. Verified live: version recorded; new definition md5 `76ab64f81c3c403eca0e8231fe933960` (as in the dry run); still SECURITY DEFINER, executable by `service_role` only. Written on `fix/reschedule-taken-time-message` (#508). |
+| 20261116100000 | `request_card_hold` | **APPLIED 2026-11-16** straight after `20261116090000`, same go-ahead and method. Renumbered from `20261113220000` for the same reason. Right before: all four md5 guards (`finalize_checkout`, `create_held_payout_on_finalize`, `notify_client_payment_received`, `handle_booking_status_change`) and `bookings_payment_status_check` matched live; full scenario forced-rollback dry run re-passed on that day's live data (mixed basket sheet 3150; capture 5250 on accept, same on retry; payout 5250/250 only after capture; lapsed bank check released; decline releases as `not_charged`; grants). Verified live: version recorded (live max); `request_card_holds` exists with RLS on and 0 rows; `authenticated` can't read it or run `plan_checkout_holds`; cron `settle-request-card-holds` scheduled and its first run succeeded. Deployed straight after from `wt-request-card-hold` (includes main with the bank-dispute webhook): `settle-held-payment`, `request-card-hold`, `create-payment-intent`, `finalize-payment-intent`, `stripe-webhook`, `reconcile-checkouts`, `refund-payment`, `apply-cancellation-refund`. Not yet rehearsed in Stripe test mode or on a device; needs an app build for the bank-check screen. Written on `feat/request-card-hold` (#473). |
+
 ### Applied 2026-11-16 (bank disputes per booking)
 
 | Authored version | Name | Status |
