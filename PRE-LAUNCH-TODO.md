@@ -1447,3 +1447,72 @@ Decide whether access should end when a booking is cancelled or declined, and
 whether it should lapse after a set time (for example, some months after the
 appointment). Parked by the user on 2026-11-08: "leave for now but put in to
 do review future". Raised by the security review of #342.
+
+## 33. Weekly audit findings - Live SQL sweep (2026-11-16)
+
+Area picked: ISO week 47, 47 mod 8 = 7, so the live SQL sweep. This run
+compared `get_providers_availability` (Search's "available today / tomorrow /
+this week" dots) against its sibling `get_services_open_within` and
+`provider_last_bookable_date`. Read-only checks against the live project; no
+personal data used. 31g (the AND/OR slip) is already listed above and not
+repeated here.
+
+### 33a. Search shows "available" for days a monthly-release provider hasn't opened yet
+
+**What's wrong:** Search's availability dots only know the "days ahead" window.
+They don't know about the monthly release date (providers who open next
+month's diary on, say, the 5th). The real booking rule does.
+
+**Where:** live `get_providers_availability`: it uses
+`coalesce(booking_window_days, 60)` and never calls
+`provider_last_bookable_date()`. `get_services_open_within` does call it.
+
+**Scenario:** A provider's diary is open to 30 Nov and next month releases on
+the 5th. On 28 Nov Search looks at 28 Nov to 4 Dec. Any free 1-4 Dec slot
+makes the card say "Available this week", but the booking trigger refuses
+those dates. If the provider is fully booked to 30 Nov, the card still shows
+"limited/available" while the client can book nothing. 7 of 16 live providers
+use monthly release, so this will hit them at every month end.
+
+**Who:** clients (misleading Search); no wrong bookings are possible.
+Confidence: high (live function text read; no app-side compensation found in
+`getProvidersAvailability`).
+
+**Fix:** drop days after `provider_last_bookable_date(p.id)` from `days`
+or `candidates`, as `get_services_open_within` does.
+
+### 33b. Search ignores a provider who has closed their schedule
+
+**What's wrong:** "Close my schedule" is respected when booking and in
+`get_services_open_within`, but `get_providers_availability` never calls
+`provider_schedule_is_closed()`.
+
+**Scenario:** A provider closes their diary until 1 Dec. Their card in Search
+still says "Available today / this week" from their weekly hours. The client
+opens the profile and can't book. Right now 0 of 16 live providers are
+closed, so nobody sees it yet.
+
+**Who:** clients. Confidence: high (live function text).
+
+**Fix:** add `AND NOT public.provider_schedule_is_closed(p.id)` to `listed`.
+
+### 33c. The "today" in Search is the UTC date, not the UK date; expired holds still block slots
+
+**What's wrong:** two small slips in the same function. (1) `days` starts at
+`current_date`, and the database clock is UTC (checked: `TimeZone = UTC`).
+The other availability functions use `(now() AT TIME ZONE 'Europe/London')::date`.
+(2) The busy check counts every `on_hold` booking, without
+`get_services_open_within`'s "hold not yet expired" test.
+
+**Scenario:** (1) At 00:30 UK time in summer, the function thinks it is
+still yesterday, so "available today" describes the wrong day and the
+last day of "this week" is missing. (2) An abandoned checkout hold that has
+passed its expiry but not yet been swept still blocks a slot, so a card can
+read "none" or "limited" when the client could book. Today 0 expired holds
+are lingering, so (2) is only a short window until the cron clears them.
+
+**Who:** clients. Confidence: high for (1) from code and the DB timezone,
+medium for (2) because the sweep usually clears holds quickly.
+
+**Fix:** use the UK date from the `clock` CTE and copy the hold-expiry line
+from `get_services_open_within`.
