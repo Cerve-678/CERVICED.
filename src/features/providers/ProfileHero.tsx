@@ -197,7 +197,7 @@ export interface ProfileHeroLayoutProps {
   heroColour: string;
   /** The theme's card colour, used by Gazette's hero sheet. */
   cardColour: string;
-  /** Jumps to Services: Boutique's Book now button. Left out when there are
+  /** Jumps to Services: Boutique's Add to basket bar. Left out when there are
    *  no services on the page (a link-only provider), and then there's no button. */
   onBookNow?: (() => void) | undefined;
 }
@@ -786,19 +786,15 @@ export function ProfileHeroLayout({
         />
       );
 
-    case "shop":
-      // Boutique: the top of an online boutique, their photo in the window (heroes/BoutiqueHero).
+    case "productPage":
+      // Boutique: a product page, their photos to swipe, the name as the title (heroes/BoutiqueHero).
       return (
         <BoutiqueHero
           name={name}
           location={location}
           kicker={kicker}
-          caption={kickerPhrase(kicker)}
           accent={accent}
-          heroText={heroText}
-          heroSub={heroSub}
-          shadow={shadow}
-          photoUri={photoUris?.[0]}
+          photoUris={photoUris ?? []}
           renderLogo={renderLogo}
           details={details}
           tick={tick}
@@ -935,7 +931,7 @@ function SealRing({
  * so the profile inks them dark.
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
-  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard";
+  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage";
 }
 
 /**
