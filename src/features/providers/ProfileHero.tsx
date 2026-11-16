@@ -827,12 +827,12 @@ export function ProfileHeroLayout({
       );
 
     case "studio":
-      // Studio: a studio website's top, their name pressed into a deep bar and
-      // what they do in huge caps across their photo (heroes/StudioHero).
+      // Studio: a studio website's top, what they do pressed into a deep bar
+      // and their name in huge caps across their photo (heroes/StudioHero).
       return (
         <StudioHero
           name={name}
-          kicker={kicker}
+          phrase={kickerPhrase(kicker)}
           location={location}
           accent={accent}
           photoUri={photoUris?.[0]}
