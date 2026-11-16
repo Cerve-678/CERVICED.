@@ -16,6 +16,7 @@ import { LaceHero } from "./heroes/LaceHero";
 import { PressedHero } from "./heroes/EmbossedHero";
 import { BoutiqueHero } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
+import { StudioHero } from "./heroes/StudioHero";
 import { NovelHero } from "./heroes/NovelHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
@@ -823,6 +824,24 @@ export function ProfileHeroLayout({
           </View>
           <View style={layout.infoCenter}>{details}</View>
         </>
+      );
+
+    case "studio":
+      // Studio: a studio website's top, their name pressed into a deep bar and
+      // what they do in huge caps across their photo (heroes/StudioHero).
+      return (
+        <StudioHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          photoUri={photoUris?.[0]}
+          renderLogo={renderLogo}
+          details={details}
+          // The bar is always a deep shade of the accent, so the tick is white.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" accessibilityLabel="Verified" /> : null}
+          onBookNow={onBookNow}
+        />
       );
 
     case "titlePage":

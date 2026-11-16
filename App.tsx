@@ -235,6 +235,11 @@ export default Sentry.wrap(function App() {
     'IMFellEnglish-Regular': require('./assets/fonts/IMFellEnglish-Regular.ttf'),
     'IMFellEnglish-Italic': require('./assets/fonts/IMFellEnglish-Italic.ttf'),
     'IMFellEnglishSC-Regular': require('./assets/fonts/IMFellEnglishSC-Regular.ttf'),
+    // Studio (2026-11-16): chunky caps, a light script for the joining words,
+    // and a soft serif for the pressed wordmark. OFL, static files.
+    'LilitaOne-Regular': require('./assets/fonts/LilitaOne-Regular.ttf'),
+    'Ephesis-Regular': require('./assets/fonts/Ephesis-Regular.ttf'),
+    'YoungSerif-Regular': require('./assets/fonts/YoungSerif-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
