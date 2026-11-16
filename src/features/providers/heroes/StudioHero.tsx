@@ -2,23 +2,21 @@
 //
 // The Studio page style's hero (pageStyles hero 'studio'): the top of a
 // boutique studio's website, inset from the screen's edges. A bar in a deep
-// shade of the accent carries what they do as a lowercase serif wordmark with
-// a full stop ("lashes & brows."), pressed tone-on-tone into the bar like an
-// embossed card. Under it, their best photo with their logo in the middle and
-// their name written across its foot in huge chunky caps ("AMARA BEAUTY."),
-// the joining words in a light script. Their area sits small in the photo's
-// top corner and a Book now pill jumps to Services.
+// shade of the accent carries what they do in chunky caps ("LASHES & BROWS."),
+// the joining words in a light script. Under it, a panel of the accent with
+// their logo in the middle and their name across its foot as a lowercase
+// serif wordmark with a full stop ("amara beauty."), pressed tone-on-tone into
+// the panel like an embossed card. Their area sits small in the panel's top
+// corner and a Book now pill jumps to Services. No portfolio photo.
 //
 // From the owner's 2026-11-16 references: a burgundy-and-blush studio site
 // ("TURN UP the HEAT.") and an embossed lowercase wordmark ("imani."). Owner
-// feedback the same day: inset the hero, no logo on the bar (it stays in the
-// middle of the photo, a little bigger), and swap the name and what they do,
-// each keeping its font.
+// feedback the same day: inset the hero; no logo on the bar (it stays in the
+// middle, a little bigger); swap the name and what they do, each keeping its
+// own font, so the name keeps the pressed serif; and no portfolio photo.
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 
 import { blend, isDarkColor } from "../../../constants/providerThemes";
 import { EmbossedText } from "./EmbossedHero";
@@ -26,24 +24,26 @@ import { EmbossedText } from "./EmbossedHero";
 /** Words drawn in the script rather than the caps, wherever they fall. */
 const JOINING_WORDS = new Set(["&", "and", "the", "by", "of", "with", "at", "for", "in", "x"]);
 
-/** One run of the headline: caps, or a joining word in script. */
+/** One run of the bar's line: caps, or a joining word in script. */
 export interface StudioHeadlinePart {
   text: string;
   script: boolean;
 }
 
 /**
- * Their name as the headline: "Hair by Amara" → HAIR, by, AMARA — the caps
+ * What they do for the bar: "Lashes & brows" → LASHES, &, BROWS — the caps
  * runs and the joining words (in script) separately, ready to draw inline.
+ * Nothing to say yet reads WELCOME.
  */
-export function studioHeadline(name: string): StudioHeadlinePart[] {
+export function studioHeadline(phrase: string): StudioHeadlinePart[] {
   const parts: StudioHeadlinePart[] = [];
   const push = (text: string, script: boolean) => {
     const last = parts[parts.length - 1];
     if (last && last.script === script) last.text = `${last.text} ${text}`;
     else parts.push({ text, script });
   };
-  for (const word of name.trim().split(/\s+/).filter(Boolean)) {
+  const words = phrase.trim().split(/\s+/).filter(Boolean);
+  for (const word of words.length > 0 ? words : ["Welcome"]) {
     const bare = word.toLowerCase().replace(/[^a-z&]/g, "");
     if (JOINING_WORDS.has(bare)) push(word.toLowerCase(), true);
     else push(word.toUpperCase(), false);
@@ -51,11 +51,10 @@ export function studioHeadline(name: string): StudioHeadlinePart[] {
   return parts;
 }
 
-/** What they do as a lowercase wordmark with a full stop: "Lashes & brows" →
- *  "lashes & brows.". Nothing to say yet reads "welcome.". */
-export function studioWordmark(phrase: string): string {
-  const trimmed = phrase.trim().toLowerCase();
-  if (!trimmed) return "welcome.";
+/** Their name as a lowercase wordmark with a full stop: "Amara Beauty" → "amara beauty.". */
+export function studioWordmark(name: string): string {
+  const trimmed = name.trim().toLowerCase();
+  if (!trimmed) return "";
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
@@ -64,19 +63,16 @@ export function StudioHero({
   phrase,
   location,
   accent,
-  photoUri,
   renderLogo,
   details,
   tick,
   onBookNow,
 }: {
   name: string;
-  /** What they do as a phrase, "Lashes & brows": the wordmark on the bar. */
+  /** What they do as a phrase, "Lashes & brows": the line on the bar. */
   phrase: string;
   location: string;
   accent: string;
-  /** Their first portfolio photo, or undefined when they have none yet. */
-  photoUri?: string | undefined;
   renderLogo: (size: number) => React.ReactNode;
   details: React.ReactNode;
   tick: React.ReactNode;
@@ -84,46 +80,38 @@ export function StudioHero({
    *  elsewhere), and then there's no button. */
   onBookNow?: (() => void) | undefined;
 }) {
-  // The bar is always a deep shade of the accent, so the pressed wordmark and
-  // the pale headline have something dark to sit against.
+  // The bar is always a deep shade of the accent, so the pale caps read on it.
   const bar = isDarkColor(accent) ? blend(accent, "#000000", 0.25) : blend(accent, "#000000", 0.5);
   const blush = blend(accent, "#FFFFFF", 0.72);
-  const headline = studioHeadline(name);
+  // The panel is the accent itself; the name is pressed into it.
+  const panel = accent;
+  const panelDark = isDarkColor(panel);
+  const areaInk = panelDark ? "rgba(255,255,255,0.86)" : "rgba(31,26,24,0.72)";
+  const headline = studioHeadline(phrase);
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.bar, { backgroundColor: bar }]} accessible accessibilityLabel={phrase || "Welcome"}>
-        <EmbossedText
-          paper={bar}
-          face={blend(bar, "#000000", 0.18)}
-          edges={{ high: "rgba(255,255,255,0.22)", shade: "rgba(0,0,0,0.55)", drop: "rgba(0,0,0,0.3)" }}
-          style={styles.wordmark}
-          numberOfLines={1}
+      <View style={[styles.bar, { backgroundColor: bar }]}>
+        <Text
+          style={[styles.headline, { color: blush }]}
+          numberOfLines={2}
           adjustsFontSizeToFit
           minimumFontScale={0.5}
+          accessibilityLabel={phrase || "Welcome"}
         >
-          {studioWordmark(phrase)}
-        </EmbossedText>
+          {headline.map((part, index) => (
+            <Text key={`${index}-${part.text}`} style={part.script ? styles.script : null}>
+              {index > 0 ? " " : ""}{part.text}
+            </Text>
+          ))}
+          <Text>.</Text>
+        </Text>
       </View>
 
-      <View style={[styles.photo, { backgroundColor: blend(accent, "#FFFFFF", 0.3) }]}>
-        {photoUri ? (
-          <>
-            <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
-            <LinearGradient
-              colors={["rgba(0,0,0,0.28)", "rgba(0,0,0,0)", "rgba(0,0,0,0)", "rgba(0,0,0,0.45)"]}
-              locations={[0, 0.25, 0.55, 1]}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
-          </>
-        ) : null}
-        {/* Their logo in the middle of the photo, photo or not. */}
-        <View style={styles.photoLogo} pointerEvents="box-none">{renderLogo(112)}</View>
-
-        <View style={styles.photoTop}>
+      <View style={[styles.panel, { backgroundColor: panel }]}>
+        <View style={styles.panelTop}>
           {location ? (
-            <Text style={styles.area} numberOfLines={2}>{location.toUpperCase()}</Text>
+            <Text style={[styles.area, { color: areaInk }]} numberOfLines={2}>{location.toUpperCase()}</Text>
           ) : <View />}
           {onBookNow ? (
             <TouchableOpacity
@@ -138,20 +126,25 @@ export function StudioHero({
           ) : null}
         </View>
 
-        <View style={styles.headlineRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-          <Text
-            style={[styles.headline, { color: blush }]}
-            numberOfLines={3}
+        {/* HeroLogo keeps 20pt under itself; the panel spaces it already. */}
+        <View style={styles.logo}>{renderLogo(112)}</View>
+
+        <View style={styles.nameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+          <EmbossedText
+            paper={panel}
+            face={blend(panel, "#000000", panelDark ? 0.18 : 0.08)}
+            edges={
+              panelDark
+                ? { high: "rgba(255,255,255,0.22)", shade: "rgba(0,0,0,0.55)", drop: "rgba(0,0,0,0.3)" }
+                : { high: "rgba(255,255,255,0.9)", shade: "rgba(60,40,36,0.42)", drop: "rgba(60,40,36,0.16)" }
+            }
+            style={styles.wordmark}
+            numberOfLines={2}
             adjustsFontSizeToFit
-            minimumFontScale={0.45}
+            minimumFontScale={0.5}
           >
-            {headline.map((part, index) => (
-              <Text key={`${index}-${part.text}`} style={part.script ? styles.script : null}>
-                {index > 0 ? " " : ""}{part.text}
-              </Text>
-            ))}
-            <Text>.</Text>
-          </Text>
+            {studioWordmark(name)}
+          </EmbossedText>
           {tick ? <View style={styles.tick}>{tick}</View> : null}
         </View>
       </View>
@@ -162,34 +155,24 @@ export function StudioHero({
 }
 
 const styles = StyleSheet.create({
-  // Opens on the bar, so it starts lower than a logo-first hero (as
-  // TEXT_FIRST_DROP in ProfileHero) and clears the header buttons.
-  // Inset from the screen's edges, the bar and the photo as one block.
+  // Inset from the screen's edges, the bar and the panel as one block. Opens
+  // on the bar, so it starts lower than a logo-first hero (as TEXT_FIRST_DROP
+  // in ProfileHero) and clears the header buttons.
   wrap: { alignSelf: "stretch", alignItems: "center", marginTop: 48, marginBottom: 30, paddingHorizontal: 20 },
-  bar: {
-    alignSelf: "stretch", alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 18, paddingVertical: 12,
-  },
-  // Young Serif's ascenders need the line at 1.3× or the tops crop.
-  wordmark: { fontFamily: "YoungSerif-Regular", fontSize: 30, lineHeight: 40, textAlign: "center" },
-  photo: { alignSelf: "stretch", aspectRatio: 0.9, overflow: "hidden", justifyContent: "flex-end" },
-  // Sits a little above the middle so the name across the foot stays clear.
-  photoLogo: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center", paddingBottom: 60 },
-  photoTop: {
-    position: "absolute", top: 16, left: 18, right: 18,
-    flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
-  },
-  area: {
-    fontFamily: "Manrope-Bold", fontSize: 10, lineHeight: 14, letterSpacing: 2, color: "#FFFFFF", flexShrink: 1,
-    textShadowColor: "rgba(0,0,0,0.35)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
-  },
+  bar: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", paddingHorizontal: 16, paddingVertical: 8 },
+  // Lilita One caps with Ephesis for the joining words. The line is set for
+  // the script (≥1.45× its size) so its loops aren't cropped.
+  headline: { fontFamily: "LilitaOne-Regular", fontSize: 28, lineHeight: 44, letterSpacing: 0.5, textAlign: "center" },
+  script: { fontFamily: "Ephesis-Regular", fontSize: 28, letterSpacing: 0 },
+  panel: { alignSelf: "stretch", paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18 },
+  panelTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, minHeight: 34 },
+  area: { fontFamily: "Manrope-Bold", fontSize: 10, lineHeight: 14, letterSpacing: 2, flexShrink: 1 },
   bookNow: { borderRadius: 100, paddingVertical: 9, paddingHorizontal: 16 },
   bookNowText: { fontFamily: "Manrope-Bold", fontSize: 10, lineHeight: 14, letterSpacing: 2 },
-  // Lilita One caps, with Ephesis for the joining words. The line is set for
-  // the script (≥1.45× its size) so its loops aren't cropped.
-  headlineRow: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 14, marginBottom: 2 },
-  headline: { fontFamily: "LilitaOne-Regular", fontSize: 52, lineHeight: 68, letterSpacing: 0.5, flexShrink: 1 },
-  tick: { marginLeft: 6, marginBottom: 20 },
-  script: { fontFamily: "Ephesis-Regular", fontSize: 50, letterSpacing: 0 },
+  logo: { alignItems: "center", marginTop: 18, marginBottom: 4 },
+  nameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  // Young Serif's ascenders need the line at 1.3× or the tops crop.
+  wordmark: { fontFamily: "YoungSerif-Regular", fontSize: 40, lineHeight: 52, textAlign: "center", flexShrink: 1 },
+  tick: { marginTop: 4 },
   details: { alignItems: "center", marginTop: 16, paddingHorizontal: 20 },
 });

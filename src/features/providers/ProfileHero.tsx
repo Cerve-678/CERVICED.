@@ -822,19 +822,18 @@ export function ProfileHeroLayout({
       );
 
     case "studio":
-      // Studio: a studio website's top, what they do pressed into a deep bar
-      // and their name in huge caps across their photo (heroes/StudioHero).
+      // Studio: a studio website's top, what they do in chunky caps on a deep
+      // bar and their name pressed into a panel of the accent (heroes/StudioHero).
       return (
         <StudioHero
           name={name}
           phrase={kickerPhrase(kicker)}
           location={location}
           accent={accent}
-          photoUri={photoUris?.[0]}
           renderLogo={renderLogo}
           details={details}
-          // The bar is always a deep shade of the accent, so the tick is white.
-          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" accessibilityLabel="Verified" /> : null}
+          // The tick sits beside the name on the accent panel.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(accent) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
           onBookNow={onBookNow}
         />
       );
