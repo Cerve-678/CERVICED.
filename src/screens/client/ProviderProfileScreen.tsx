@@ -1737,7 +1737,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
     );
   }, []);
-  // Boutique's Book now, on the photo in its hero.
+  // Boutique's Add to basket, under the title in its hero.
   const jumpToServices = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     scrollToSection(servicesSectionRef.current);
