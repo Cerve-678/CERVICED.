@@ -327,6 +327,63 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={[st.scroll, { paddingBottom: 48 }]} showsVerticalScrollIndicator={false}>
         {toast && <Toast msg={toast.msg} ok={toast.ok} C={C} />}
 
+        {/* ── YOUR BUSINESS RULES ─────────────────────────────────────── */}
+        <SectionHeader
+          icon="settings-outline"
+          label="YOUR BUSINESS RULES"
+          sub="These settings control how bookings flow through your calendar and what clients experience when they book with you."
+          C={C}
+        />
+
+        <AutoCard
+          title="Auto-confirm bookings"
+          description="New booking requests are confirmed instantly without manual approval. Best for providers with a fixed open schedule."
+          value={d.autoConfirmBookings}
+          onToggle={v => set('autoConfirmBookings', v)}
+          C={C}
+        />
+
+        {/* "Require deposit from new clients" moved to PaymentsScreen,
+            alongside the payment-type preferences it belongs with. */}
+
+        <SectionHeader
+          icon="calendar-outline"
+          label="WHEN YOU'RE FULLY BOOKED"
+          sub="Choose how new spaces are handled. Turning on waitlist or automatic closure turns the other off."
+          C={C}
+        />
+
+        <AutoCard
+          title="Enable waitlist"
+          description="Clients can join when your slots are full. If a matching space opens, the next person in line gets it held for 15 minutes to confirm and pay."
+          value={d.waitlistEnabled}
+          onToggle={v => set('waitlistEnabled', v)}
+          C={C}
+        />
+
+        {d.waitlistEnabled && (
+          <AutoCard
+            title="Offer it to the next person automatically"
+            description="If a client doesn't pay within their 15 minutes, or passes, the slot is held for the next person in line. With this off, it opens to everyone and you can offer it to someone on your waitlist from Bookings."
+            value={d.autoAcceptWaitlist}
+            onToggle={v => set('autoAcceptWaitlist', v)}
+            C={C}
+          />
+        )}
+
+        <AutoCard
+          title="Close my schedule when fully booked"
+          description="When every open slot fills, stop new bookings until you reopen your schedule or your next release day. Turning this on switches off waitlist; a cancelled slot stays unavailable while closed."
+          value={d.autoCloseWhenFull}
+          onToggle={v => set('autoCloseWhenFull', v)}
+          C={C}
+        />
+        {!d.waitlistEnabled && !d.autoCloseWhenFull && (
+          <Text style={[st.sectionSub, { color: C.sub, marginBottom: 8 }]}>
+            With both options off, a freed slot becomes bookable for anyone.
+          </Text>
+        )}
+
         {/* ── WHAT CERVICED SENDS FOR YOU ─────────────────────────────── */}
         <SectionHeader
           icon="sparkles-outline"
@@ -418,63 +475,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           onToggle={v => set('newBookingRecap', v)}
           C={C}
         />
-
-        {/* ── YOUR BUSINESS RULES ─────────────────────────────────────── */}
-        <SectionHeader
-          icon="settings-outline"
-          label="YOUR BUSINESS RULES"
-          sub="These settings control how bookings flow through your calendar and what clients experience when they book with you."
-          C={C}
-        />
-
-        <AutoCard
-          title="Auto-confirm bookings"
-          description="New booking requests are confirmed instantly without manual approval. Best for providers with a fixed open schedule."
-          value={d.autoConfirmBookings}
-          onToggle={v => set('autoConfirmBookings', v)}
-          C={C}
-        />
-
-        {/* "Require deposit from new clients" moved to PaymentsScreen,
-            alongside the payment-type preferences it belongs with. */}
-
-        <SectionHeader
-          icon="calendar-outline"
-          label="WHEN YOU'RE FULLY BOOKED"
-          sub="Choose how new spaces are handled. Turning on waitlist or automatic closure turns the other off."
-          C={C}
-        />
-
-        <AutoCard
-          title="Enable waitlist"
-          description="Clients can join when your slots are full. If a matching space opens, the next person in line gets it held for 15 minutes to confirm and pay."
-          value={d.waitlistEnabled}
-          onToggle={v => set('waitlistEnabled', v)}
-          C={C}
-        />
-
-        {d.waitlistEnabled && (
-          <AutoCard
-            title="Offer it to the next person automatically"
-            description="If a client doesn't pay within their 15 minutes, or passes, the slot is held for the next person in line. With this off, it opens to everyone and you can offer it to someone on your waitlist from Bookings."
-            value={d.autoAcceptWaitlist}
-            onToggle={v => set('autoAcceptWaitlist', v)}
-            C={C}
-          />
-        )}
-
-        <AutoCard
-          title="Close my schedule when fully booked"
-          description="When every open slot fills, stop new bookings until you reopen your schedule or your next release day. Turning this on switches off waitlist; a cancelled slot stays unavailable while closed."
-          value={d.autoCloseWhenFull}
-          onToggle={v => set('autoCloseWhenFull', v)}
-          C={C}
-        />
-        {!d.waitlistEnabled && !d.autoCloseWhenFull && (
-          <Text style={[st.sectionSub, { color: C.sub, marginBottom: 8 }]}>
-            With both options off, a freed slot becomes bookable for anyone.
-          </Text>
-        )}
 
         {/* Buffer time, max bookings per day, booking window, minimum notice
             and start-time intervals all moved to SchedulingScreen — they're

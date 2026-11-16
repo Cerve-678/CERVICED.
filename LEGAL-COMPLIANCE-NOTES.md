@@ -1073,10 +1073,12 @@ returning amounts taken from later payouts), CERVICED paying Stripe's
 dispute fee, and a support route for a provider who disagrees.
 
 To raise (not lawyer-reviewed):
-- **Notice.** Provider Terms §12 promises 15 days' notice of a change. Most
-  of this favours providers, but holding *every* payout on a payment while
-  CERVICED decides, and the new duty to give information, are new. Only the
-  page's "Last updated" date moved; no notice was sent.
+- **Notice (owner chose none, 2026-11-16: "we are still building up").**
+  Provider Terms §12 promises 15 days' notice of a change. The owner's view is
+  that no notice is needed while the provider base is still being built.
+  Holding *every* payout on a payment, and the duty to give information, are
+  new; only the page's "Last updated" date moved. Worth confirming with a
+  lawyer whether §12 already binds the providers who are live today.
 - **Holding innocent providers' money.** The hold has no fixed time limit
   ("as soon as reasonably practicable"). Whether an open-ended hold of a
   provider whose booking wasn't disputed is fair, and how it sits with
@@ -1087,7 +1089,8 @@ To raise (not lawyer-reviewed):
 - **Corrections are manual.** A wrong pick can only be put right by hand
   (the system refuses a second, different answer). The Terms promise to
   return the money, so support must actually do it.
-- **What the provider sees.** The payout list keeps saying "Taken back after
-  a bank dispute" after a won dispute; the payback arrives as a separate
-  Stripe transfer the app does not show. The Terms promise is kept, but the
-  app does not show it being kept.
+- **What the provider sees (fixed 2026-11-16, `fix/dispute-payback-shown`).**
+  The payout list now says "Paid back · dispute won" after a win, and "On
+  hold · bank dispute" while one is open, instead of "Returned" throughout.
+  Needs an app build. A fee won back says "being paid back" because support
+  does it by hand.

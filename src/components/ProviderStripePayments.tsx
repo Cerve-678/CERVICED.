@@ -17,6 +17,7 @@ import {
   type PayoutScheduleChoice, type PayoutWeekday,
 } from '../constants/payoutSchedule';
 import { groupTipsByBooking } from '../features/payments/tipsByBooking';
+import { bookingDisputeLabel, feeDisputeLabel } from '../features/payments/bankDisputeStatus';
 import { providerCancelGroupBooking, providerCancelOwnBooking } from '../services/databaseService';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../constants/featureFlags';
 
@@ -26,7 +27,9 @@ const payoutLabels: Record<ProviderPayout['status'], string> = {
 };
 // A held payout with a refund request open waits for that request to close.
 const onRefundHold = (row: ProviderPayout) => row.status === 'held' && row.refundRequestOpen;
-const payoutLabel = (row: ProviderPayout) => (onRefundHold(row) ? 'On hold · refund request' : payoutLabels[row.status]);
+const payoutLabel = (row: ProviderPayout) =>
+  bookingDisputeLabel(row.bankDispute ?? undefined, row.status)
+  ?? (onRefundHold(row) ? 'On hold · refund request' : payoutLabels[row.status]);
 
 /** One-line summaries of the provider's own payment settings, shown as the
  *  "Your setup" tiles on Overview. PaymentsScreen owns those settings, so it
@@ -444,6 +447,8 @@ function ScheduleOption({ label, selected, disabled, onPress, colors }: {
 
 function feeStatusLabel(fee: ProviderFeeEarning): string {
   if (fee.status === 'refunded') return 'Refunded to client';
+  const bankDispute = feeDisputeLabel(fee.bankDispute ?? undefined, fee.payoutStatus);
+  if (bankDispute) return bankDispute;
   if (fee.openDispute) return 'Disputed — waiting on your answer';
   switch (fee.payoutStatus) {
     case 'held': return fee.releaseAfter ? `Released from ${date(new Date(fee.releaseAfter).getTime())}` : 'Held';

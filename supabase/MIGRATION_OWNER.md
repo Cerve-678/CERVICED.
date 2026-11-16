@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-16 (provider sees bank dispute state)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261116120000 | `provider_bank_dispute_states` | **APPLIED 2026-11-16** on the user's go-ahead ("apply it fine"), via `supabase db query --linked -f` from the main folder, after `20261116100000_request_card_hold`. Right before: live max `20261116100000`, lock `(none)` on main, forced-rollback dry run re-run on that day's live data passed (the booking's own provider sees its row; a stranger sees none). Verified live: version recorded (live max); SECURITY DEFINER; authenticated executes, anon doesn't. New read-only `provider_bank_dispute_states(uuid[])` (own bookings via `providers.user_id = auth.uid()`, 100 ids max, 500 rows max). No table or existing function changed. Written on `fix/dispute-payback-shown`. |
+
 ### Applied 2026-11-16 (reschedule taken-time message, request card hold)
 
 | Authored version | Name | Status |
