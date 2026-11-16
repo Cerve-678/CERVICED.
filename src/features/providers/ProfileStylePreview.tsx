@@ -167,7 +167,7 @@ export function ProfileStylePreview({
             heroColour={gradient[0] ?? OP.hero}
             cardColour={OP.card}
             rating="5.0"
-            // The preview has no Services to jump to, but Boutique's Add to basket
+            // The preview has no Services to jump to, but Studio's Book now
             // still shows, so the provider sees the hero as clients will.
             onBookNow={noop}
             renderLogo={size => (
