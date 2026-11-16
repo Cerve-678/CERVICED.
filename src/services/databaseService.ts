@@ -2884,6 +2884,17 @@ export type CheckoutIntentItem = {
   // supabase/migrations/20260929061000_prepare_checkout_captures_mobile_client_address.sql.
   client_address?: string | null;
   client_area?: string | null;
+  // The Confirm & Pay checkbox (CERVICED's Terms + the provider's
+  // cancellation policy). prepare_checkout refuses the item without it and
+  // stamps bookings.policy_accepted_at from the database clock.
+  policy_accepted?: boolean;
+  // The provider's policy as the cart showed it (CartItem.policySnapshot).
+  // Never stored as-is: prepare_checkout freezes the provider's LIVE policy,
+  // and refuses when a money term here differs from it, so nobody is charged
+  // under terms they never saw. Its providerTerms is how the server knows the
+  // client agreed to the provider's written terms. See
+  // supabase/migrations/20261113090000_card_checkout_saves_policy_and_consent.sql.
+  policy_snapshot?: Record<string, unknown> | null;
 };
 
 export type PreparedCheckout = {
