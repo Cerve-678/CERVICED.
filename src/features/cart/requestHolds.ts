@@ -1,5 +1,5 @@
 // What the client is told about requests whose payment is held on their card
-// rather than taken (supabase/migrations/20261113220000_request_card_hold.sql).
+// rather than taken (supabase/migrations/20261116100000_request_card_hold.sql).
 // Each request in a checkout has its own hold, taken only if its provider
 // accepts; instant bookings are charged at checkout as before. Pure, so jest
 // covers the wording.

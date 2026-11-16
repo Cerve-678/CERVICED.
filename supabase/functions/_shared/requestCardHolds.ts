@@ -4,7 +4,7 @@ import { escapeHtml } from './escapeHtml.ts';
 import { sendSupportAlert } from './supportAlert.ts';
 
 // One card hold per request in a checkout, charged only when its provider
-// accepts. See supabase/migrations/20261113220000_request_card_hold.sql for
+// accepts. See supabase/migrations/20261116100000_request_card_hold.sql for
 // the states and who decides what; this file only makes the Stripe calls.
 //
 //   placeRequestHolds  — right after a checkout is finalised, put a hold on

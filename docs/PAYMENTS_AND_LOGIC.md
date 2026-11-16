@@ -347,7 +347,7 @@ and CERVICED never records, collects or confirms it** (section 2.9).
 ### 2.1.1 Requests: the card is held, not charged
 
 *Built on `feat/request-card-hold` (owner's decision, 14 November). Not live
-until migration `20261113220000` is applied, `settle-held-payment` and
+until migration `20261116100000` is applied, `settle-held-payment` and
 `request-card-hold` are deployed (new), `create-payment-intent`,
 `finalize-payment-intent`, `stripe-webhook`, `reconcile-checkouts`,
 `refund-payment` and `apply-cancellation-refund` are redeployed, and an app

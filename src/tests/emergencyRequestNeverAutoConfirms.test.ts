@@ -49,7 +49,7 @@ describe('an emergency request never auto-confirms, on either checkout path', ()
   });
 
   it('finalize_checkout() forces auto-accept off for one', () => {
-    // Since 20261113220000 finalize_checkout books each booking through
+    // Since 20261116100000 finalize_checkout books each booking through
     // book_checkout_booking(), shared with a request whose card hold is
     // approved after checkout; the rule lives there.
     const finalize = latestDefinitionOf('finalize_checkout').body;

@@ -112,7 +112,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Each request in the checkout is held on the card on its own and charged
-    // only if accepted (20261113220000_request_card_hold). The plan is fixed
+    // only if accepted (20261116100000_request_card_hold). The plan is fixed
     // once, here, before the sheet's payment exists: the sheet then charges
     // the instant bookings, or holds the first request when there are no
     // instant ones. A payment created before this existed keeps amount_due.

@@ -39,7 +39,10 @@
 -- all-request checkout, taken once every request was answered), which was
 -- never applied anywhere.
 --
--- Live functions are redefined or patched with md5 guards (read 2026-11-14).
+-- Live functions are redefined or patched with md5 guards (read 2026-11-14,
+-- re-checked unchanged 2026-11-16). Renumbered 2026-11-16 from 20261113220000
+-- to sit above the live frontier (20261115090000); #474 and the dispute change,
+-- now live, redefine none of the functions guarded here.
 
 BEGIN;
 
@@ -136,7 +139,7 @@ CREATE TABLE public.request_card_holds (
 );
 
 COMMENT ON TABLE public.request_card_holds IS
-  'One card hold per request in a checkout (20261113220000). Server-only: the app reads its own through get_my_request_card_holds.';
+  'One card hold per request in a checkout (20261116100000). Server-only: the app reads its own through get_my_request_card_holds.';
 
 CREATE INDEX request_card_holds_batch_idx ON public.request_card_holds (checkout_batch_id);
 CREATE INDEX request_card_holds_open_idx ON public.request_card_holds (state)
@@ -875,7 +878,7 @@ GRANT EXECUTE ON FUNCTION public.get_checkout_hold_plan(uuid) TO authenticated, 
 GRANT EXECUTE ON FUNCTION public.get_my_request_card_holds(uuid) TO authenticated, service_role;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261113220000', 'request_card_hold')
+VALUES ('20261116100000', 'request_card_hold')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
