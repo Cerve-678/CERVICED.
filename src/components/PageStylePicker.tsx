@@ -426,16 +426,13 @@ function MiniProfile({
             <Text style={mini.galleryName} numberOfLines={2}>Name</Text>
             <View style={mini.smallLogo}>{logo}</View>
           </View>
-        ) : style.hero === 'prescription' ? (
-          // Apothecary: a prescription pad, ℞ beside the name, a stamp for the logo.
-          <View style={[mini.rxPad, { backgroundColor: cardColour }]}>
-            <View style={[mini.rxBand, { backgroundColor: accent }]} />
-            <View style={mini.rxHead}>
-              <Text style={[mini.rxMark, { color: accent }]}>℞</Text>
-              <Text style={[mini.tagName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>NAME</Text>
-            </View>
-            <View style={[mini.rxStamp, { borderColor: accent }]} />
-          </View>
+        ) : style.hero === 'ruled' ? (
+          // Apothecary: the logo, the name, a short rule in the accent.
+          <>
+            {logo}
+            <Text style={[mini.tagName, mini.ruledName]} numberOfLines={1}>NAME</Text>
+            <View style={[mini.ruledRule, { backgroundColor: blend(accent, '#FFFFFF', 0.4) }]} />
+          </>
         ) : style.hero === 'blockName' ? (
           // Snapshot: photos edge to edge, the name on an accent block.
           <View style={mini.blockHero}>
@@ -693,11 +690,8 @@ const mini = StyleSheet.create({
     borderRadius: 100, borderWidth: 1.5, borderColor: '#1E2A4A', paddingHorizontal: 12, paddingVertical: 3,
     transform: [{ rotate: '-4deg' }],
   },
-  rxPad: { width: '82%', paddingBottom: 6, marginTop: 6 },
-  rxBand: { height: 3 },
-  rxHead: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingTop: 3 },
-  rxMark: { fontSize: 16, lineHeight: 21 },
-  rxStamp: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', marginLeft: 6, marginTop: 2 },
+  ruledName: { color: '#FFFFFF', marginTop: 4 },
+  ruledRule: { width: 18, height: 1, marginTop: 3 },
   tagName: { fontFamily: 'MarcellusSC-Regular', fontSize: 11, lineHeight: 15, letterSpacing: 2 },
   galleryName: { fontFamily: 'InstrumentSerif-Regular', fontSize: 20, lineHeight: 26, color: '#FFFFFF', flex: 1 },
   dotLight: { fontFamily: 'LeagueSpartan-Light', fontSize: 12 },
