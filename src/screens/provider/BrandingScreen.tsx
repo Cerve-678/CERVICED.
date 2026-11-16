@@ -73,6 +73,15 @@ const DARK = {
   border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
 };
 
+// Branding is split into three parts, so a provider sees one group of related
+// settings at a time instead of every section in one long page.
+type BrandingPart = 'layout' | 'colours' | 'name';
+const BRANDING_PARTS: { key: BrandingPart; label: string }[] = [
+  { key: 'layout', label: 'Layout' },
+  { key: 'colours', label: 'Colours' },
+  { key: 'name', label: 'Name' },
+];
+
 // Background gradients are derived from the Colour Theme's backdrop colour
 // (saved as [backdrop, sheetColor]) — there is no separate gradient picker.
 // All colour-set options and swatches live in components/ProviderThemePicker.
@@ -144,6 +153,7 @@ export default function BrandingScreen({ navigation }: any) {
   // The colour square and hue bar take a vertical drag, so the page stops
   // scrolling while a finger is on them.
   const [colourDragging, setColourDragging]   = useState(false);
+  const [part, setPart]                       = useState<BrandingPart>('layout');
 
   useEffect(() => {
     let active = true;
@@ -513,246 +523,278 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Page style — the layout and decoration of the whole profile */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              The layout of your whole profile. Your colours and font stay as you set them.
-            </Text>
-            <PageStylePicker
-              value={pageStyle}
-              onChange={setPageStyle}
-              isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
-              onLockedPress={showLocked}
-              gradient={gradient}
-              accent={accentColor}
-              sheet={sheetColor}
-              cardColour={resolveProviderTheme(liveThemeKey).card}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-            />
+          {/* Layout / Colours / Name: one group of related settings at a time. */}
+          <View style={[styles.partSwitch, { backgroundColor: P.surface }]}>
+            {BRANDING_PARTS.map(p => {
+              const selected = part === p.key;
+              return (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[styles.partOption, selected && { backgroundColor: P.card }]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setPart(p.key);
+                  }}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.partLabel, { color: selected ? P.text : P.sub }]}>{p.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
-          {/* Policy pictures — how their uploaded policy pages sit in the
-              profile. Templates only: Classic keeps them behind the button. */}
-          {pageStyle !== DEFAULT_PAGE_STYLE && (
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              How the policy pictures you added in Policies show on your profile.
-            </Text>
-            <View style={styles.policyLookGrid}>
-              {POLICY_PICTURE_LOOKS.map(look => {
-                const selected = policyLook === look.key;
-                const pageColour = accentColor;
-                return (
-                  <TouchableOpacity
-                    key={look.key}
-                    style={styles.policyLookOption}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setPolicyLook(look.key);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`${look.name}: ${look.description}`}
-                  >
-                    <View style={[styles.policyLookPreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
-                      {look.key !== 'melt' && look.key !== 'bleed' ? (
-                        <PolicyLookSmallPreview look={look.key} pageColour={pageColour} sheet={sheetColor} />
-                      ) : (
-                      <>
-                      {look.key === 'melt' ? (
-                        <LinearGradient colors={[sheetColor, pageColour]} style={styles.policyLookFade} />
-                      ) : (
-                        <View style={[styles.policyLookWave, { backgroundColor: pageColour }]} />
-                      )}
-                      <View style={[styles.policyLookPage, { backgroundColor: pageColour }]}>
-                        <View style={styles.policyLookLine} />
-                        <View style={[styles.policyLookLine, styles.policyLookLineShort]} />
-                        <View style={styles.policyLookLine} />
-                      </View>
-                      {look.key === 'melt' ? (
-                        <LinearGradient colors={[pageColour, sheetColor]} style={styles.policyLookFade} />
-                      ) : (
-                        <View style={[styles.policyLookWave, styles.policyLookWaveBottom, { backgroundColor: pageColour }]} />
-                      )}
-                      </>
-                      )}
-                    </View>
-                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{look.name}</Text>
-                    <Text style={[styles.policyLookDescription, { color: P.sub }]}>{look.description}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+          {part === 'layout' && (
+            <>
+              {/* Page style — the layout and decoration of the whole profile */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  The layout of your whole profile. Your colours and font stay as you set them.
+                </Text>
+                <PageStylePicker
+                  value={pageStyle}
+                  onChange={setPageStyle}
+                  isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
+                  onLockedPress={showLocked}
+                  gradient={gradient}
+                  accent={accentColor}
+                  sheet={sheetColor}
+                  cardColour={resolveProviderTheme(liveThemeKey).card}
+                  textColor={P.text}
+                  subColor={P.sub}
+                  borderColor={P.border}
+                />
+              </View>
+
+              {/* Policy pictures — how their uploaded policy pages sit in the
+                  profile. Templates only: Classic keeps them behind the button. */}
+              {pageStyle !== DEFAULT_PAGE_STYLE && (
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  How the policy pictures you added in Policies show on your profile.
+                </Text>
+                <View style={styles.policyLookGrid}>
+                  {POLICY_PICTURE_LOOKS.map(look => {
+                    const selected = policyLook === look.key;
+                    const pageColour = accentColor;
+                    return (
+                      <TouchableOpacity
+                        key={look.key}
+                        style={styles.policyLookOption}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setPolicyLook(look.key);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${look.name}: ${look.description}`}
+                      >
+                        <View style={[styles.policyLookPreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                          {look.key !== 'melt' && look.key !== 'bleed' ? (
+                            <PolicyLookSmallPreview look={look.key} pageColour={pageColour} sheet={sheetColor} />
+                          ) : (
+                          <>
+                          {look.key === 'melt' ? (
+                            <LinearGradient colors={[sheetColor, pageColour]} style={styles.policyLookFade} />
+                          ) : (
+                            <View style={[styles.policyLookWave, { backgroundColor: pageColour }]} />
+                          )}
+                          <View style={[styles.policyLookPage, { backgroundColor: pageColour }]}>
+                            <View style={styles.policyLookLine} />
+                            <View style={[styles.policyLookLine, styles.policyLookLineShort]} />
+                            <View style={styles.policyLookLine} />
+                          </View>
+                          {look.key === 'melt' ? (
+                            <LinearGradient colors={[pageColour, sheetColor]} style={styles.policyLookFade} />
+                          ) : (
+                            <View style={[styles.policyLookWave, styles.policyLookWaveBottom, { backgroundColor: pageColour }]} />
+                          )}
+                          </>
+                          )}
+                        </View>
+                        <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{look.name}</Text>
+                        <Text style={[styles.policyLookDescription, { color: P.sub }]}>{look.description}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              )}
+
+              {/* Card shape — corners of the service cards and category pills */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Card Shape</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  The corners of your service cards and category pills.
+                </Text>
+                <View style={styles.finishRow}>
+                  {CARD_SHAPES.map(shape => {
+                    const selected = cardShape === shape.key;
+                    const square = shape.key === 'square';
+                    return (
+                      <TouchableOpacity
+                        key={shape.key}
+                        style={styles.finishOption}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setCardShape(shape.key);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${shape.name}: ${shape.description}`}
+                      >
+                        <View style={[styles.shapePreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                          <View style={styles.shapePillRow}>
+                            <View style={[styles.shapePill, { backgroundColor: accentColor }, square && styles.shapeSquare]} />
+                            <View style={[styles.shapePill, styles.shapePillIdle, square && styles.shapeSquare]} />
+                          </View>
+                          <View style={[styles.shapeCard, square && styles.shapeSquare]}>
+                            <View style={[styles.shapeThumb, { backgroundColor: accentColor }]} />
+                            <View style={styles.shapeLines}>
+                              <View style={styles.shapeLineLong} />
+                              <View style={styles.shapeLineShort} />
+                            </View>
+                          </View>
+                        </View>
+                        <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{shape.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
           )}
 
-          {/* Card shape — corners of the service cards and category pills */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Card Shape</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              The corners of your service cards and category pills.
-            </Text>
-            <View style={styles.finishRow}>
-              {CARD_SHAPES.map(shape => {
-                const selected = cardShape === shape.key;
-                const square = shape.key === 'square';
-                return (
-                  <TouchableOpacity
-                    key={shape.key}
-                    style={styles.finishOption}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setCardShape(shape.key);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`${shape.name}: ${shape.description}`}
-                  >
-                    <View style={[styles.shapePreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
-                      <View style={styles.shapePillRow}>
-                        <View style={[styles.shapePill, { backgroundColor: accentColor }, square && styles.shapeSquare]} />
-                        <View style={[styles.shapePill, styles.shapePillIdle, square && styles.shapeSquare]} />
-                      </View>
-                      <View style={[styles.shapeCard, square && styles.shapeSquare]}>
-                        <View style={[styles.shapeThumb, { backgroundColor: accentColor }]} />
-                        <View style={styles.shapeLines}>
-                          <View style={styles.shapeLineLong} />
-                          <View style={styles.shapeLineShort} />
-                        </View>
-                      </View>
-                    </View>
-                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{shape.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Profile theme — accent + card colour + backdrop sets */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Two backdrop colours and an accent. Swipe a collection, or make your own.
-            </Text>
-            <ProviderThemePicker
-              value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
-              onChange={handleThemeChange}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-              sepColor={P.sep}
-              unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
-              onLockedPress={showLocked}
-              photoColours={photoColours}
-              photoColoursLoading={photoColoursLoading}
-              onChoosePhoto={chooseColourPhoto}
-              onColourDraggingChange={setColourDragging}
-            />
-          </View>
-
-          {/* Hero finish — how the two backdrop colours are drawn */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              {backgroundImage
-                ? 'Your background photo is showing instead. Remove it to use a finish.'
-                : 'How your two colours blend behind the top of your profile.'}
-            </Text>
-            {/* Dimmed while a photo is showing: the photo covers the finish. */}
-            <View style={[styles.finishRow, backgroundImage ? styles.finishRowCovered : null]}>
-              {HERO_FINISHES.map(f => {
-                const selected = heroFinish === f.key;
-                const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
-                return (
-                  <TouchableOpacity
-                    key={f.key}
-                    style={[styles.finishOption, locked && styles.finishLocked]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      if (locked) showLocked();
-                      else setHeroFinish(f.key);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
-                  >
-                    <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
-                      <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
-                      {locked && (
-                        <View style={styles.finishLock}>
-                          <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Background image */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              A photo shows behind your profile instead of your colours.
-            </Text>
-            <View style={styles.imageRow}>
-              {backgroundImage ? (
-                <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" fadeDuration={0} />
-              ) : (
-                <View style={[styles.imagePlaceholder, { backgroundColor: P.surface, borderColor: P.border }]}>
-                  <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>No image set</Text>
-                </View>
-              )}
-              <View style={styles.imageActions}>
-                <TouchableOpacity
-                  style={[styles.imageBtn, { backgroundColor: accentColor }]}
-                  onPress={pickImage}
-                  activeOpacity={0.8}
-                  disabled={uploadingImage}
-                >
-                  {uploadingImage ? (
-                    <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} size="small" />
-                  ) : (
-                    <Text style={[styles.imageBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
-                  )}
-                </TouchableOpacity>
-                {backgroundImage && (
-                  <TouchableOpacity
-                    style={[styles.imageBtn, styles.imageBtnRemove, { borderColor: P.border }]}
-                    onPress={removeImage}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.imageBtnText, { color: P.sub }]}>Remove</Text>
-                  </TouchableOpacity>
-                )}
+          {part === 'colours' && (
+            <>
+              {/* Profile theme — accent + card colour + backdrop sets */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  Two backdrop colours and an accent. Swipe a collection, or make your own.
+                </Text>
+                <ProviderThemePicker
+                  value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
+                  onChange={handleThemeChange}
+                  textColor={P.text}
+                  subColor={P.sub}
+                  borderColor={P.border}
+                  sepColor={P.sep}
+                  unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
+                  onLockedPress={showLocked}
+                  photoColours={photoColours}
+                  photoColoursLoading={photoColoursLoading}
+                  onChoosePhoto={chooseColourPhoto}
+                  onColourDraggingChange={setColourDragging}
+                />
               </View>
-            </View>
-          </View>
 
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>How your business name appears on your profile.</Text>
-            <ProviderFontPicker
-              value={brandFont}
-              onChange={setBrandFont}
-              accentColor={accentColor}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-              cardColor={P.surface}
-              unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
-              onLockedPress={showLocked}
-            />
-          </View>
+              {/* Hero finish — how the two backdrop colours are drawn */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {backgroundImage
+                    ? 'Your background photo is showing instead. Remove it to use a finish.'
+                    : 'How your two colours blend behind the top of your profile.'}
+                </Text>
+                {/* Dimmed while a photo is showing: the photo covers the finish. */}
+                <View style={[styles.finishRow, backgroundImage ? styles.finishRowCovered : null]}>
+                  {HERO_FINISHES.map(f => {
+                    const selected = heroFinish === f.key;
+                    const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
+                    return (
+                      <TouchableOpacity
+                        key={f.key}
+                        style={[styles.finishOption, locked && styles.finishLocked]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          if (locked) showLocked();
+                          else setHeroFinish(f.key);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
+                      >
+                        <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                          <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
+                          {locked && (
+                            <View style={styles.finishLock}>
+                              <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Background image */}
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  A photo shows behind your profile instead of your colours.
+                </Text>
+                <View style={styles.imageRow}>
+                  {backgroundImage ? (
+                    <Image source={{ uri: backgroundImage }} style={styles.imageThumb} resizeMode="cover" fadeDuration={0} />
+                  ) : (
+                    <View style={[styles.imagePlaceholder, { backgroundColor: P.surface, borderColor: P.border }]}>
+                      <Text style={[styles.imagePlaceholderText, { color: P.sub }]}>No image set</Text>
+                    </View>
+                  )}
+                  <View style={styles.imageActions}>
+                    <TouchableOpacity
+                      style={[styles.imageBtn, { backgroundColor: accentColor }]}
+                      onPress={pickImage}
+                      activeOpacity={0.8}
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? (
+                        <ActivityIndicator color={isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740'} size="small" />
+                      ) : (
+                        <Text style={[styles.imageBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>{backgroundImage ? 'Change' : 'Choose Image'}</Text>
+                      )}
+                    </TouchableOpacity>
+                    {backgroundImage && (
+                      <TouchableOpacity
+                        style={[styles.imageBtn, styles.imageBtnRemove, { borderColor: P.border }]}
+                        onPress={removeImage}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.imageBtnText, { color: P.sub }]}>Remove</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+
+          {part === 'name' && (
+            <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+              <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
+              <Text style={[styles.sectionSub, { color: P.sub }]}>How your business name appears on your profile.</Text>
+              <ProviderFontPicker
+                value={brandFont}
+                onChange={setBrandFont}
+                accentColor={accentColor}
+                textColor={P.text}
+                subColor={P.sub}
+                borderColor={P.border}
+                cardColor={P.surface}
+                unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
+                onLockedPress={showLocked}
+              />
+            </View>
+          )}
 
         </ScrollView>
         {/* Save stays on screen, so there is no scrolling to the end to find it. */}
@@ -860,7 +902,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 18,
     overflow: 'hidden',
-    marginBottom: 28,
+    marginBottom: 16,
     justifyContent: 'flex-end',
   },
   previewBg: {
@@ -917,6 +959,22 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     marginTop: 2,
   },
+
+  partSwitch: {
+    flexDirection: 'row',
+    padding: 4,
+    gap: 4,
+    borderRadius: 14,
+    marginBottom: 20,
+  },
+  partOption: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
 
   section: {
     borderRadius: 18,
