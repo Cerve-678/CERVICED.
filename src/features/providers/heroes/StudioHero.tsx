@@ -165,8 +165,10 @@ const styles = StyleSheet.create({
   headline: { fontFamily: "LilitaOne-Regular", fontSize: 28, lineHeight: 44, letterSpacing: 0.5, textAlign: "center" },
   script: { fontFamily: "Ephesis-Regular", fontSize: 28, letterSpacing: 0 },
   panel: { alignSelf: "stretch", paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18 },
-  panelTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, minHeight: 34 },
-  area: { fontFamily: "Manrope-Bold", fontSize: 10, lineHeight: 14, letterSpacing: 2, flexShrink: 1 },
+  // Book now sits on the right, centred on the line of the area at the left
+  // (owner, 2026-11-16: it sat higher than the text).
+  panelTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, minHeight: 34 },
+  area: { fontFamily: "Manrope-Bold", fontSize: 10, lineHeight: 14, letterSpacing: 2, flexShrink: 1, textAlign: "left" },
   bookNow: { borderRadius: 100, paddingVertical: 9, paddingHorizontal: 16 },
   bookNowText: { fontFamily: "Manrope-Bold", fontSize: 10, lineHeight: 14, letterSpacing: 2 },
   logo: { alignItems: "center", marginTop: 18, marginBottom: 4 },

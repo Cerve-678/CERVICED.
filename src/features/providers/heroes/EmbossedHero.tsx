@@ -192,15 +192,17 @@ const PRESS_TOP = 56;
 const pressStyles = StyleSheet.create({
   stack: { alignSelf: "stretch" },
   wrap: { paddingHorizontal: 20, marginTop: PRESS_TOP, marginBottom: 24, alignItems: "center" },
-  stamp: { width: 104, height: 104, alignItems: "center", justifyContent: "center", marginBottom: 8 },
-  ring: { position: "absolute", top: 0, left: 0, width: 102, height: 102, borderRadius: 51, borderWidth: 1.5 },
+  // The ring is drawn round the logo's centre; the logo is 104 (owner 2026-11-16: bigger, and centred).
+  stamp: { width: 128, height: 128, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  ring: { position: "absolute", top: 0, left: 0, width: 126, height: 126, borderRadius: 63, borderWidth: 1.5 },
   ringLit: { top: 1.5, left: 1.5 },
   nameBlock: { alignSelf: "stretch", alignItems: "center" },
   // Libre Caslon Display has tall caps; 1.28x keeps their tops from being cropped.
-  name: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 64, lineHeight: 82, letterSpacing: 1.5, textAlign: "center" },
-  scriptWrap: { alignSelf: "stretch", marginTop: -30 },
+  // Smaller than it was (owner 2026-11-16: the hero text was too big).
+  name: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 48, lineHeight: 62, letterSpacing: 1.2, textAlign: "center" },
+  scriptWrap: { alignSelf: "stretch", marginTop: -22 },
   // A looping script: 1.5x line height and room either side for its swashes.
-  script: { fontFamily: "Italianno-Regular", fontSize: 52, lineHeight: 78, paddingHorizontal: 16, textAlign: "center" },
+  script: { fontFamily: "Italianno-Regular", fontSize: 40, lineHeight: 60, paddingHorizontal: 14, textAlign: "center" },
   located: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 12, lineHeight: 17, letterSpacing: 3, marginTop: 2, textAlign: "center" },
   details: { alignItems: "center", alignSelf: "stretch", marginTop: 16 },
 });
