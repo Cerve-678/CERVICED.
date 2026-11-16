@@ -4,6 +4,8 @@ import {
   SECTION_NUMBERS,
   getPageStyle,
   headingPair,
+  heroUsesFan,
+  HUSH_TITLES,
   menuNumber,
   PAGE_SECTION_TITLES,
   PAGE_STYLES,
@@ -53,12 +55,12 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the twenty-four picked styles plus Classic, each once', () => {
+  it('has the twenty-nine picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'lace', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
-      'studio',
+      'studio', 'lounge', 'softFocus', 'hush', 'pearl', 'bow',
     ]);
   });
 
@@ -284,5 +286,51 @@ describe('Calling Card', () => {
 
   it('is the only style with clipped photos', () => {
     expect(PAGE_STYLES.filter(s => s.clippedPhotos).map(s => s.key)).toEqual(['callingCard']);
+  });
+});
+
+describe('the demure set (Lounge, Soft Focus, Hush, Pearl, Bow)', () => {
+  const keys = ['lounge', 'softFocus', 'hush', 'pearl', 'bow'] as const;
+  const styles = keys.map(getPageStyle);
+  const colours = { card: '#FFFFFF', accent: '#A58CCB', sheet: SHEET_BG };
+
+  it('gives each a hero and a heading of its own', () => {
+    expect(styles.map(s => s.key)).toEqual(keys);
+    expect(new Set(styles.map(s => s.hero)).size).toBe(5);
+    expect(new Set(styles.map(s => s.heading)).size).toBe(5);
+  });
+
+  it('opens only Hush and Pearl on the fan of picked photos', () => {
+    expect(PAGE_STYLES.filter(heroUsesFan).map(s => s.key)).toEqual(['hush', 'pearl']);
+  });
+
+  it('outlines Lounge\'s cards in ink with big round corners, and puts its policies on the page', () => {
+    expect(serviceCardSurface(getPageStyle('lounge'), colours)).toMatchObject({ borderWidth: 1, borderColor: '#1F1A1C', borderRadius: 24 });
+    expect(policiesBringOwnSurface(getPageStyle('lounge'))).toBe(true);
+    expect(getPageStyle('lounge').jumpBar).toBe(true);
+  });
+
+  it('keeps Soft Focus and Pearl policies inside their section card, and Bow\'s on its ribbon card', () => {
+    expect(policiesBringOwnSurface(getPageStyle('softFocus'))).toBe(false);
+    expect(policiesBringOwnSurface(getPageStyle('pearl'))).toBe(false);
+    expect(policiesBringOwnSurface(getPageStyle('bow'))).toBe(true);
+  });
+
+  it('draws Hush straight on the page and the rest on cards', () => {
+    expect(sectionsSitOnPage(getPageStyle('hush'))).toBe(true);
+    expect(styles.filter(s => s.key !== 'hush').every(s => !sectionsSitOnPage(s))).toBe(true);
+  });
+
+  it('gives Hush a quiet word for every section', () => {
+    (Object.keys(PAGE_SECTION_TITLES) as PageSectionKey[]).forEach(section => {
+      expect(HUSH_TITLES[section].length).toBeGreaterThan(0);
+      expect(HUSH_TITLES[section]).toBe(HUSH_TITLES[section].toLowerCase().replace('i love', 'I love'));
+    });
+  });
+
+  it('round-trips each in the stored theme key', () => {
+    keys.forEach(key => {
+      expect(parseThemeKey(encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', key)).pageStyle).toBe(key);
+    });
   });
 });

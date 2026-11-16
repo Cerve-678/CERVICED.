@@ -65,6 +65,10 @@ export interface ProfileStylePreviewProps {
   /** What they do ("LASHES · BROWS"), for the layouts that print it on its own. */
   kicker: string;
   location: string;
+  /** Their newest portfolio photos, for the heroes that show one (Lounge, Bow, Editorial…). */
+  photoUris?: readonly string[];
+  /** Hush and Pearl's fan, as Branding → Your fan has it right now. */
+  fanPhotoUris?: readonly string[];
 }
 
 export function ProfileStylePreview({
@@ -80,6 +84,8 @@ export function ProfileStylePreview({
   pillLabels,
   kicker,
   location,
+  photoUris,
+  fanPhotoUris,
 }: ProfileStylePreviewProps) {
   const { finish, shape, pageStyle: styleKey } = parseThemeKey(themeKey);
   const pageStyle = getPageStyle(styleKey);
@@ -166,6 +172,9 @@ export function ProfileStylePreview({
             accent={accent}
             heroColour={gradient[0] ?? OP.hero}
             cardColour={OP.card}
+            sheetColour={veilTheme ? veilTheme.sheetFill : OP.bg}
+            photoUris={photoUris ?? []}
+            fanPhotoUris={fanPhotoUris ?? []}
             rating="5.0"
             // The preview has no Services to jump to, but Studio's Book now
             // still shows, so the provider sees the hero as clients will.

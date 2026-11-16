@@ -138,7 +138,8 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
+import { getPageStyle, heroUsesFan, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
+import { fanPhotos } from "../../features/providers/fanPhotos";
 import {
   GlossShine,
   onAccentInk,
@@ -1848,6 +1849,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     () => workPortfolio.slice(0, 3).map((item) => item.image_url).filter(Boolean),
     [workPortfolio],
   );
+  // Hush and Pearl open on a fan of the photos picked in Branding → Your fan
+  // (their newest when none are picked).
+  const usesFan = heroUsesFan(pageStyle);
+  const fanPhotoUris = useMemo(
+    () => (usesFan ? fanPhotos(workPortfolio).map((item) => item.image_url).filter(Boolean) : []),
+    [usesFan, workPortfolio],
+  );
   // A salon/studio on "Always visible" shows its full address in Contact
   // instead of the area. The server decides who qualifies and returns null for
   // everyone else, so the area stays the default and a failed fetch just
@@ -2001,7 +2009,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const detailsOnCard = detailsSitOnCard(pageStyle);
   // Boutique's panel and Duet's welcome card are their card colour, so their
   // ink follows that colour; Calling Card's cream card is always inked dark.
-  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" ? cardInk(OP.card) : DETAILS_ON_CARD_INK;
+  // Lounge's sit on a strip of the page colour under the photo, Pearl's on its card.
+  const sheetColour = veilTheme ? veilTheme.sheetFill : OP.bg;
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" || pageStyle.hero === "pearlFan"
+    ? cardInk(OP.card)
+    : pageStyle.hero === "lounge"
+      ? cardInk(sheetColour)
+      : DETAILS_ON_CARD_INK;
   const detailsText = detailsOnCard ? cardDetailsInk.text : heroText;
   const detailsSub = detailsOnCard ? cardDetailsInk.sub : heroSub;
   const detailsShadow = heroIsDark && !detailsOnCard;
@@ -2352,6 +2366,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       key: prev.key + 1,
     }));
   }, []);
+  const openFanPhoto = useCallback(
+    (index: number) => openImageViewer(fanPhotoUris.map((uri) => ({ uri })), index),
+    [fanPhotoUris, openImageViewer],
+  );
   const closeImageViewer = useCallback(() => {
     setServiceImageModal((prev) => ({
       visible: false,
@@ -5250,6 +5268,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroColour={heroBgColor ?? OP.hero}
                 cardColour={OP.card}
                 photoUris={heroPhotoUris}
+                sheetColour={sheetColour}
+                fanPhotoUris={fanPhotoUris}
+                onOpenFanPhoto={openFanPhoto}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}
                 // Link-only providers have no Services section to jump to.

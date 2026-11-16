@@ -15,6 +15,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
+import { BowGlyph, ribbonColours } from '../features/providers/heroes/demureOrnaments';
 
 interface Props {
   value: PageStyleKey;
@@ -111,7 +112,30 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   gazette: { text: 'THE SERVICES' },
   novel: { lead: 'CHAPTER III', text: 'The Services' },
   studio: { lead: 'the', text: 'SERVICES' },
+  lounge: { text: 'THE SERVICES' },
+  softFocus: { text: 'THE SERVICES' },
+  hush: { text: 'SERVICES' },
+  pearl: { text: 'The Services' },
+  bow: { text: 'The Services' },
 };
+
+/** Three photo cards fanned from a point below them (Hush and Pearl). */
+function MiniFan({ colour, border, round }: { colour: string; border: string; round: boolean }) {
+  return (
+    <View style={mini.fanStage}>
+      {[-14, 0, 14].map(deg => (
+        <View
+          key={deg}
+          style={[
+            mini.fanCard,
+            { backgroundColor: colour, borderColor: border, borderRadius: round ? 5 : 0 },
+            { transform: [{ translateY: 22 }, { rotate: `${deg}deg` }, { translateY: -22 }] },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
 
 /** A tiny drawing of the profile top and one section in this style. */
 function MiniProfile({
@@ -275,6 +299,36 @@ function MiniProfile({
             {heading.text}
           </Text>
         );
+      case 'loungeCaps':
+        return <Text style={[mini.loungeCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'softCaps':
+        return <Text style={[mini.softCaps, { color: ink }]}>{heading.text}</Text>;
+      case 'hushRule':
+        return (
+          <View style={mini.hushRow}>
+            <View style={[mini.hushLine, { backgroundColor: line }]} />
+            <Text style={[mini.hushCaps, { color: withAlpha(ink, 0.7) }]}>{heading.text}</Text>
+            <View style={[mini.hushLine, { backgroundColor: line }]} />
+          </View>
+        );
+      case 'pearlStrand':
+        return (
+          <View style={mini.stack}>
+            <View style={mini.strand}>
+              {[3, 4, 5, 4, 3].map((size, index) => (
+                <View key={index} style={[mini.pearlDot, { width: size, height: size, borderRadius: size / 2 }]} />
+              ))}
+            </View>
+            <Text style={[mini.pearlTitle, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
+      case 'bowSerif':
+        return (
+          <View style={mini.stack}>
+            <BowGlyph width={14} accent={accent} />
+            <Text style={[mini.bowTitle, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       case 'chapter':
         return (
           <View style={mini.stack}>
@@ -346,6 +400,12 @@ function MiniProfile({
         );
       case 'pages':
         return <View key={key} style={[mini.card, mini.pagesCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'outlineRound':
+        return <View key={key} style={[mini.card, mini.roundCard, { backgroundColor: cardColour, borderWidth: 1, borderColor: isDarkColor(cardColour) ? '#F2EDEA' : '#1F1A1C' }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'soft':
+      case 'pearl':
+      case 'bow':
+        return <View key={key} style={[mini.card, mini.roundCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
         return (
           <View key={key} style={[mini.card, { backgroundColor: blend(accent, '#FFFFFF', 0.82), borderRadius: 10, borderWidth: 1, borderColor: withAlpha(accent, 0.35) }]}>
@@ -531,6 +591,39 @@ function MiniProfile({
               <Text style={[mini.studioWordmark, { color: blend(accent, '#000000', isDarkColor(accent) ? 0.3 : 0.18) }]} numberOfLines={1}>amara.</Text>
             </View>
           </View>
+        ) : style.hero === 'lounge' ? (
+          // Lounge: a rounded-top photo, the name in tall caps cut out of the page across its foot.
+          <View style={[mini.loungePhoto, { backgroundColor: blend(accent, '#000000', 0.15) }]}>
+            <Text style={[mini.loungeName, { color: sheet }]} numberOfLines={1}>NAME</Text>
+          </View>
+        ) : style.hero === 'softCard' ? (
+          // Soft Focus: a tinted card with a wave, the round logo beside heavy caps.
+          <View style={[mini.softCard, { backgroundColor: blend(accent, '#FFFFFF', 0.72) }]}>
+            <View style={[mini.softWave, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
+            <View style={[mini.logo, mini.softLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
+            <Text style={mini.softName} numberOfLines={2}>NAME</Text>
+          </View>
+        ) : style.hero === 'hushFan' ? (
+          // Hush: the name in light italic over a fan of prints.
+          <View style={mini.stack}>
+            <Text style={mini.hushName} numberOfLines={1}>name</Text>
+            <MiniFan colour={blend(accent, '#FFFFFF', 0.45)} border={sheet} round={false} />
+          </View>
+        ) : style.hero === 'pearlFan' ? (
+          // Pearl: a card with a fan of photos and the name in spaced serif caps.
+          <View style={[mini.pearlCard, { backgroundColor: cardColour }]}>
+            <MiniFan colour={blend(accent, '#FFFFFF', 0.45)} border="#FFFDF8" round />
+            <Text style={[mini.pearlName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>NAME</Text>
+          </View>
+        ) : style.hero === 'bow' ? (
+          // Bow: their photo with a ribbon down it and a bow on top.
+          <View style={mini.bowWrap}>
+            <View style={[mini.bowPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.6) }]}>
+              <View style={[mini.bowRibbon, { backgroundColor: ribbonColours(accent).satin }]} />
+            </View>
+            <View style={mini.bowKnot}><BowGlyph width={22} accent={accent} /></View>
+            <Text style={mini.bowName} numberOfLines={1}>Name</Text>
+          </View>
         ) : style.hero === 'titlePage' ? (
           // Novel: a title page, the logo ringed, the name in old type over an ornament.
           <>
@@ -582,6 +675,33 @@ const styles = StyleSheet.create({
 });
 
 const mini = StyleSheet.create({
+  // The demure set (2026-11-16).
+  roundCard: { borderRadius: 10 },
+  loungeCaps: { fontFamily: 'LeagueGothic-Regular', fontSize: 15, lineHeight: 20, letterSpacing: 0.4, textAlign: 'center' },
+  softCaps: { fontFamily: 'Archivo-ExtraBold', fontSize: 9, lineHeight: 12 },
+  hushRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  hushLine: { flex: 1, height: StyleSheet.hairlineWidth * 2 },
+  hushCaps: { fontFamily: 'HankenGrotesk-Medium', fontSize: 6, lineHeight: 9, letterSpacing: 1.6 },
+  strand: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  pearlDot: { backgroundColor: '#FFFDF8', borderWidth: 0.5, borderColor: 'rgba(120,104,88,0.5)' },
+  pearlTitle: { fontFamily: 'Castoro-Italic', fontSize: 11, lineHeight: 15 },
+  bowTitle: { fontFamily: 'SortsMillGoudy-Italic', fontSize: 12, lineHeight: 17 },
+  loungePhoto: { alignSelf: 'stretch', marginHorizontal: 6, marginTop: 10, flex: 1, borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end' },
+  loungeName: { fontFamily: 'LeagueGothic-Regular', fontSize: 30, lineHeight: 38, textAlign: 'center', marginBottom: -16 },
+  softCard: { flexDirection: 'row', alignItems: 'center', gap: 5, width: '86%', borderRadius: 10, padding: 6, overflow: 'hidden' },
+  softWave: { position: 'absolute', right: -14, bottom: -14, width: 46, height: 30, borderTopLeftRadius: 30 },
+  softLogo: { width: 26, height: 26, borderRadius: 13 },
+  softName: { fontFamily: 'Archivo-ExtraBold', fontSize: 11, lineHeight: 14, color: '#16131A', flexShrink: 1 },
+  hushName: { fontFamily: 'Newsreader-LightItalic', fontSize: 14, lineHeight: 20, color: '#FFFFFF' },
+  fanStage: { width: 60, height: 40, alignItems: 'center' },
+  fanCard: { position: 'absolute', top: 4, width: 18, height: 26, borderWidth: 1.5 },
+  pearlCard: { width: '80%', borderRadius: 10, alignItems: 'center', paddingTop: 2, paddingBottom: 3 },
+  pearlName: { fontFamily: 'Castoro-Regular', fontSize: 9, lineHeight: 12, letterSpacing: 2 },
+  bowWrap: { alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: 14, paddingTop: 8 },
+  bowPhoto: { alignSelf: 'stretch', height: 38, borderRadius: 8, overflow: 'hidden' },
+  bowRibbon: { position: 'absolute', top: 0, bottom: 0, left: '30%', width: 4 },
+  bowKnot: { position: 'absolute', top: 0, left: '30%', marginLeft: 3 },
+  bowName: { fontFamily: 'SortsMillGoudy-Italic', fontSize: 13, lineHeight: 18, color: '#FFFFFF' },
   pagesCard: {
     backgroundColor: '#FFFFFF', borderRadius: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(38,32,30,0.3)',
     shadowColor: '#26201E', shadowOpacity: 0.25, shadowRadius: 0, shadowOffset: { width: 2, height: 2 }, overflow: 'visible',
