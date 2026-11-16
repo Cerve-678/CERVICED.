@@ -102,7 +102,7 @@ import {
   type PublicReviewRow,
 } from "../features/providers/reviewPresentation";
 export type { BookingReviewState } from "../features/bookings/reviewState";
-import { isReleaseTime, toReleaseDay, toReleaseTime, type BookingHorizonSettings } from "../utils/bookingHorizon";
+import { isReleaseTime, toReleaseDay, toReleaseTime, ukTodayYMD, type BookingHorizonSettings } from "../utils/bookingHorizon";
 
 export interface AuthSessionSummary {
   userId: string;
@@ -2872,6 +2872,11 @@ export type CheckoutIntentItem = {
   // supabase/migrations/20260821143821_emergency_booking_requests.sql.
   emergency?: boolean;
   emergency_ack?: boolean;
+  // A waitlist slot held for this client (bookings.id of the on_hold row).
+  // prepare_checkout reuses that row instead of inserting one, keeps its own
+  // 15 minutes, and refuses it if the hold has ended or isn't theirs. One per
+  // checkout. See 20261113210000_waitlist_pays_at_confirm.sql.
+  waitlist_hold_id?: string;
   // Where a MOBILE provider should travel to. prepare_checkout() reads the
   // provider's business_type server-side and rejects a mobile item with no
   // client_address, then writes it onto the held row so the
@@ -2884,6 +2889,22 @@ export type CheckoutIntentItem = {
   // supabase/migrations/20260929061000_prepare_checkout_captures_mobile_client_address.sql.
   client_address?: string | null;
   client_area?: string | null;
+  // The Confirm & Pay checkbox (CERVICED's Terms + the provider's
+  // cancellation policy). prepare_checkout refuses the item without it and
+  // stamps bookings.policy_accepted_at from the database clock.
+  policy_accepted?: boolean;
+  // The provider's policy as the cart showed it (CartItem.policySnapshot).
+  // Never stored as-is: prepare_checkout freezes the provider's LIVE policy,
+  // and refuses when a money term here differs from it, so nobody is charged
+  // under terms they never saw. Its providerTerms is how the server knows the
+  // client agreed to the provider's written terms. See
+  // supabase/migrations/20261113090000_card_checkout_saves_policy_and_consent.sql.
+  policy_snapshot?: Record<string, unknown> | null;
+  // The provider's promo code the cart applied. prepare_checkout re-validates
+  // it (active, in date in UK time, this provider's) and prices the discount
+  // itself; an ended code is refused by name. See
+  // supabase/migrations/20261113100000_promo_code_charged_at_checkout.sql.
+  promo_code?: string;
 };
 
 export type PreparedCheckout = {
@@ -4588,6 +4609,8 @@ export async function getProviderRecentBookings(
 // WAITLIST
 // ─────────────────────────────────────────────────────────
 
+export type WaitlistStatus = "waiting" | "notified" | "booked" | "expired" | "cancelled";
+
 export interface WaitlistEntry {
   id: string;
   provider_id: string;
@@ -4599,11 +4622,61 @@ export interface WaitlistEntry {
   // [0] = range start, [1] = range end (absent = open-ended). NULL = any date.
   preferred_dates: string[] | null;
   notes: string | null;
-  status: "waiting" | "notified" | "booked" | "expired" | "cancelled";
+  status: WaitlistStatus;
   position: number;
   created_at: string;
   notified_at: string | null;
-  expires_at: string;
+  /** The slot last offered to this client (a 15-minute hold), and when that
+   *  hold ends or ended. offer_expires_at is the hold's real end, not an
+   *  estimate. See 20261113210000_waitlist_pays_at_confirm.sql. */
+  offered_booking_id: string | null;
+  offered_date: string | null;
+  offered_time: string | null;
+  offer_expires_at: string | null;
+  offer_ended_at: string | null;
+}
+
+/** One of the signed-in client's waitlist places, from get_my_waitlist().
+ *  placeInLine is counted, not the raw position (which isn't renumbered when
+ *  someone ahead leaves). holdBookingId is set only while a slot is held for
+ *  them. An 'expired' place is one whose hold ended in the last 30 days:
+ *  they've come off the waitlist and can rejoin. */
+export interface MyWaitlistPlace {
+  id: string;
+  providerId: string;
+  serviceId: string | null;
+  serviceName: string;
+  providerName: string;
+  preferredDates: string[] | null;
+  notes: string | null;
+  status: WaitlistStatus;
+  placeInLine: number | null;
+  createdAt: string;
+  holdBookingId: string | null;
+  offeredBookingId: string | null;
+  offeredDate: string | null;
+  offeredTime: string | null;
+  offerExpiresAt: string | null;
+  offerEndedAt: string | null;
+}
+
+interface MyWaitlistRow {
+  id: string;
+  provider_id: string;
+  service_id: string | null;
+  service_name_snapshot: string;
+  provider_name_snapshot: string;
+  preferred_dates: string[] | null;
+  notes: string | null;
+  status: WaitlistStatus;
+  place_in_line: number | null;
+  created_at: string;
+  hold_booking_id: string | null;
+  offered_booking_id: string | null;
+  offered_date: string | null;
+  offered_time: string | null;
+  offer_expires_at: string | null;
+  offer_ended_at: string | null;
 }
 
 export interface JoinWaitlistParams {
@@ -4617,8 +4690,8 @@ export interface JoinWaitlistParams {
   notes?: string;
 }
 
-/** Join a provider's waitlist. Removes any stale row for the same
- *  provider+service first so re-joining always works. */
+/** Join a provider's waitlist, at the back of the line. Removes any old row
+ *  for the same provider+service first (a lapsed one, after "Rejoin"). */
 export async function joinWaitlist(
   params: JoinWaitlistParams,
 ): Promise<WaitlistEntry> {
@@ -4627,11 +4700,10 @@ export async function joinWaitlist(
     .delete()
     .eq("provider_id", params.providerId)
     .eq("user_id", params.userId);
-  if (params.serviceId) {
-    await staleQuery.eq("service_id", params.serviceId);
-  } else {
-    await staleQuery.is("service_id", null);
-  }
+  const { error: staleError } = params.serviceId
+    ? await staleQuery.eq("service_id", params.serviceId)
+    : await staleQuery.is("service_id", null);
+  if (staleError) throw staleError;
 
   const { data, error } = await supabase
     .from("provider_waitlist")
@@ -4651,6 +4723,8 @@ export async function joinWaitlist(
   return data as WaitlistEntry;
 }
 
+/** The client leaves a waitlist (or dismisses one they've come off). Not
+ *  while a slot is held for them: they pass on it first. */
 export async function leaveWaitlist(entryId: string): Promise<void> {
   const { error } = await supabase
     .from("provider_waitlist")
@@ -4659,18 +4733,41 @@ export async function leaveWaitlist(entryId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function getUserWaitlistEntries(
-  userId: string,
-): Promise<WaitlistEntry[]> {
-  const { data, error } = await supabase
-    .from("provider_waitlist")
-    .select("*")
-    .eq("user_id", userId)
-    .not("status", "in", '("cancelled","booked")')
-    .order("created_at", { ascending: false })
-    .limit(200);
+/** The signed-in client's waitlist places with their real place in line. */
+export async function getMyWaitlist(): Promise<MyWaitlistPlace[]> {
+  const { data, error } = await supabase.rpc("get_my_waitlist");
   if (error) throw error;
-  return (data ?? []) as WaitlistEntry[];
+  return ((data ?? []) as MyWaitlistRow[]).map((row) => ({
+    id: row.id,
+    providerId: row.provider_id,
+    serviceId: row.service_id,
+    serviceName: row.service_name_snapshot,
+    providerName: row.provider_name_snapshot,
+    preferredDates: row.preferred_dates,
+    notes: row.notes,
+    status: row.status,
+    placeInLine: row.place_in_line,
+    createdAt: row.created_at,
+    holdBookingId: row.hold_booking_id,
+    offeredBookingId: row.offered_booking_id,
+    offeredDate: row.offered_date,
+    offeredTime: row.offered_time,
+    offerExpiresAt: row.offer_expires_at,
+    offerEndedAt: row.offer_ended_at,
+  }));
+}
+
+/** Change a waiting place's dates without going to the back of the line.
+ *  null = any date. */
+export async function updateMyWaitlistDates(
+  entryId: string,
+  preferredDates: string[] | null,
+): Promise<void> {
+  const { error } = await supabase.rpc("update_my_waitlist_dates", {
+    p_entry_id: entryId,
+    p_preferred_dates: preferredDates,
+  });
+  if (error) throw error;
 }
 
 export async function getProviderWaitlist(
@@ -4688,43 +4785,101 @@ export async function getProviderWaitlist(
   return (data ?? []) as WaitlistEntry[];
 }
 
-/** Provider's manual "Schedule & Invite" — the caller already inserted a
- *  real booking for this entry (see ProviderBookingHistoryScreen's
- *  handleConfirmInvite), so this just reflects that in the waitlist row and
- *  tells the client. Distinct from the automatic waitlist_holds.sql flow
- *  (invite_next_waitlist_entry/claim_waitlist_hold), which reserves a slot
- *  rather than booking it outright — a provider hand-picking someone here
- *  isn't racing the general public the way an automatic cancellation-
- *  triggered invite is, so there's nothing to hold. */
-export async function inviteFromWaitlist(entry: WaitlistEntry): Promise<void> {
-  const { error } = await supabase
-    .from("provider_waitlist")
-    .update({ status: "booked", notified_at: new Date().toISOString() })
-    .eq("id", entry.id);
-  if (error) throw error;
-
-  await sendProviderClientNotifications({
-    recipientUserIds: [entry.user_id],
-    type: "waitlist_slot_available",
-    title: "A slot opened up!",
-    message: `${entry.service_name_snapshot} with ${entry.provider_name_snapshot} — booked for you, check your bookings.`,
-    priority: "high",
-    isActionable: true,
-  });
+/** A slot that came back to the provider (Auto-fill off) when a client's
+ *  hold ended unpaid. It's open to everyone; the provider can still offer it
+ *  to someone on their waitlist. Only future, still-free ones are returned. */
+export interface ReleasedWaitlistSlot {
+  id: string;
+  serviceId: string | null;
+  serviceName: string;
+  bookingDate: string;
+  bookingTime: string;
+  endTime: string | null;
+  releasedByName: string | null;
+  reason: "missed" | "passed";
+  createdAt: string;
 }
 
-/** Confirm a time-boxed waitlist hold (see waitlist_holds.sql) — turns the
- *  'on_hold' booking into a real pending/confirmed one. Throws if the hold
- *  already expired or isn't this user's. */
-export async function claimWaitlistHold(bookingId: string): Promise<void> {
-  const { error } = await supabase.rpc("claim_waitlist_hold", {
-    p_booking_id: bookingId,
+interface ReleasedWaitlistSlotRow {
+  id: string;
+  service_id: string | null;
+  service_name_snapshot: string;
+  booking_date: string;
+  booking_time: string;
+  end_time: string | null;
+  released_by_name: string | null;
+  reason: "missed" | "passed";
+  created_at: string;
+}
+
+export async function getProviderReleasedWaitlistSlots(
+  providerId: string,
+): Promise<ReleasedWaitlistSlot[]> {
+  const { data, error } = await supabase.rpc("get_provider_released_waitlist_slots", {
+    p_provider_id: providerId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as ReleasedWaitlistSlotRow[]).map((row) => ({
+    id: row.id,
+    serviceId: row.service_id,
+    serviceName: row.service_name_snapshot,
+    bookingDate: row.booking_date,
+    bookingTime: row.booking_time,
+    endTime: row.end_time,
+    releasedByName: row.released_by_name,
+    reason: row.reason,
+    createdAt: row.created_at,
+  }));
+}
+
+/** The provider offers a waiting client a time they pick: a 15-minute hold
+ *  the client confirms and pays for, never an unpaid booking. Throws the
+ *  database's reason (taken, outside hours, notice) if it can't be held. */
+export async function providerOfferWaitlistSlot(
+  entryId: string,
+  bookingDate: string,
+  bookingTime: string,
+): Promise<string> {
+  const { data, error } = await supabase.rpc("provider_offer_waitlist_slot", {
+    p_entry_id: entryId,
+    p_booking_date: bookingDate,
+    p_booking_time: bookingTime,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Offer a released slot to the next person in line (no entryId) or to one
+ *  chosen client. */
+export async function providerOfferReleasedWaitlistSlot(
+  slotId: string,
+  entryId?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc("provider_offer_released_waitlist_slot", {
+    p_slot_id: slotId,
+    p_entry_id: entryId ?? null,
   });
   if (error) throw error;
 }
 
-/** Explicitly give up a waitlist hold — cascades to the next matching
- *  candidate immediately rather than making them wait out the full window. */
+/** "Leave it open": the time already is; this clears the card. */
+export async function dismissReleasedWaitlistSlot(slotId: string): Promise<void> {
+  const { error } = await supabase.rpc("dismiss_released_waitlist_slot", {
+    p_slot_id: slotId,
+  });
+  if (error) throw error;
+}
+
+/** The provider takes a client off their waitlist; the client is told. */
+export async function providerRemoveWaitlistEntry(entryId: string): Promise<void> {
+  const { error } = await supabase.rpc("provider_remove_waitlist_entry", {
+    p_entry_id: entryId,
+  });
+  if (error) throw error;
+}
+
+/** "Pass it on": give up a held waitlist slot now. The client comes off that
+ *  waitlist; the slot goes to the next person or back to the provider. */
 export async function declineWaitlistHold(bookingId: string): Promise<void> {
   const { error } = await supabase.rpc("decline_waitlist_hold", {
     p_booking_id: bookingId,
@@ -7144,6 +7299,9 @@ export async function getMyActivity(): Promise<ClientActivityRemote> {
       .select("id, service_name_snapshot, provider_name_snapshot, booking_date, booking_time, hold_expires_at")
       .eq("user_id", user.id)
       .eq("status", "on_hold")
+      // Waitlist holds only: a cart checkout's own 5-minute hold is also
+      // on_hold, and isn't "a slot opened up for you".
+      .not("waitlist_entry_id", "is", null)
       .gt("hold_expires_at", new Date().toISOString())
       .limit(ACTIVITY_QUERY_LIMIT),
     supabase
@@ -7268,7 +7426,9 @@ export async function validatePromoCode(
     .maybeSingle();
   if (!provider) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
+  // UK date, as prepare_checkout uses: the UTC date would call a code that
+  // ended at midnight valid until 1am in summer, and the server would refuse it.
+  const today = ukTodayYMD();
   const { data } = await supabase
     .from("promotions")
     .select("*")
@@ -7277,6 +7437,9 @@ export async function validatePromoCode(
     .eq("is_active", true)
     .lte("valid_from", today)
     .gte("valid_until", today)
+    // Newest first, the same row prepare_checkout picks if a provider ever
+    // has two live promotions with one code.
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -10663,38 +10826,6 @@ export async function getBookingUserId(
   return (data as any)?.user_id ?? null;
 }
 
-/** Insert a booking directly without overlap/availability validation.
- *  Used for provider-initiated waitlist invites where the provider has explicitly chosen a slot.
- *
- *  `end_time` is required, not optional. This function used to omit it
- *  entirely, so every waitlist-invite booking landed with a NULL end — which
- *  left the row with no length the DB overlap constraint could measure, no
- *  duration in the app, and an unresolvable block on the provider's day. */
-export async function insertDirectBooking(data: {
-  user_id: string;
-  provider_id: string;
-  service_id: string | null;
-  status: string;
-  booking_date: string;
-  booking_time: string;
-  end_time: string;
-  payment_type: string;
-  base_price: number;
-  add_ons_total: number;
-  service_charge: number;
-  deposit_amount: number;
-  amount_paid: number;
-  remaining_balance: number;
-  payment_status: string;
-  is_group_booking: boolean;
-  group_booking_count: number;
-  provider_name_snapshot?: string;
-  service_name_snapshot?: string;
-}): Promise<void> {
-  const { error } = await supabase.from("bookings").insert(data);
-  if (error) throw error;
-}
-
 // ─────────────────────────────────────────────────────────
 // SERVICES — additional queries
 // ─────────────────────────────────────────────────────────
@@ -10870,32 +11001,6 @@ export async function getServiceSafetyFlags(
     });
   }
   return map;
-}
-
-/** Fetch the price for a single service by ID */
-/** Price AND length of a service, together — the two things anyone creating
- *  a booking from a service id needs. Read as one row rather than a price
- *  lookup on its own: a booking written without a duration has no `end_time`,
- *  and a booking with no `end_time` can't be overlap-checked by the DB
- *  constraint, doesn't render a length in the app, and shows up as an
- *  unresolvable block on the provider's day. */
-export async function getServiceBookingDefaults(
-  serviceId: string,
-): Promise<{ price: number; durationMinutes: number }> {
-  const { data, error } = await supabase
-    .from("services")
-    .select("price, duration_minutes")
-    .eq("id", serviceId)
-    .maybeSingle();
-  if (error) throw error;
-  const row = data as {
-    price?: number | null;
-    duration_minutes?: number | null;
-  } | null;
-  return {
-    price: Number(row?.price ?? 0),
-    durationMinutes: Number(row?.duration_minutes ?? 0),
-  };
 }
 
 /** Length in minutes for a set of services, in one query. Used to recover the

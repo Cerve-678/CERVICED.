@@ -89,7 +89,9 @@ type MaxReschedules   = '' | '1' | '2' | 'unlimited';
 type RescheduleWithin = '' | 'any' | 'same_month';
 // 'charge_full' was offered once and enforced by nothing; it's read back as
 // 'charge_deposit' and the real charge is now the no-show fee below.
-type NoShowAction     = '' | 'none' | 'warn' | 'charge_deposit' | 'custom';
+// 'custom' (a typed £ no-show fee) became 'half' on 2026-11-13
+// (20261113200000); saved 'custom' policies are read back as 'half'.
+type NoShowAction     = '' | 'none' | 'warn' | 'charge_deposit' | 'half';
 
 interface PolicyState {
   cancelNotice:     CancelNotice;
@@ -102,10 +104,9 @@ interface PolicyState {
   noShowAction:     NoShowAction;
   noShowGraceMinutes: string;
   noShowNote:       string;
-  // £ amounts as typed; '' = no fee. The server freezes them onto each booking
-  // at checkout, capped at half that booking's price.
+  // £ as typed; '' = no fee. The server freezes it onto each booking at
+  // checkout, capped at half that booking's price.
   lateFee:          string;
-  noShowFee:        string;
   refundPolicyNote: string;
   bookingInstructions: string;
   /** Pages of the detailed policy, in order (see features/providers/policyImages). */
@@ -123,12 +124,11 @@ interface PolicyState {
 // happen on their own site, so none of it can apply to them: it's hidden
 // from their editor, cleared when they save, and left out of their profile
 // (buildPolicyDisplayRows' linkOnly option).
-const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'noShowAction' | 'noShowGraceMinutes' | 'lateFee' | 'noShowFee'> = {
+const LINK_ONLY_CLEARED: Pick<PolicyState, 'cancelPenalty' | 'noShowAction' | 'noShowGraceMinutes' | 'lateFee'> = {
   cancelPenalty: '',
   noShowAction: '',
   noShowGraceMinutes: '',
   lateFee: '',
-  noShowFee: '',
 };
 
 const DEFAULT_POLICIES: PolicyState = {
@@ -143,7 +143,6 @@ const DEFAULT_POLICIES: PolicyState = {
   noShowGraceMinutes: '',
   noShowNote:       '',
   lateFee:          '',
-  noShowFee:        '',
   refundPolicyNote: '',
   bookingInstructions: '',
   policyImageUrls:  [],
@@ -265,9 +264,15 @@ export default function PoliciesScreen({ navigation }: any) {
           merged.cancelPenalty = 'half';
         }
         if ((merged.noShowAction as string) === 'charge_full') merged.noShowAction = 'charge_deposit';
-        // Saved before the fee became the 'custom' action. It's cleared on save
-        // under any other action, so this keeps a fee from vanishing unasked.
-        if (isCustomAmount(merged.noShowFee)) merged.noShowAction = 'custom';
+        // A typed £ no-show fee, or the 'custom' action that held one, is
+        // 'Half the price' now (2026-11-13).
+        if ((merged.noShowAction as string) === 'custom' || isCustomAmount(String(saved['noShowFee'] ?? ''))) {
+          merged.noShowAction = 'half';
+        }
+        // Retired with Custom. merged spreads the whole saved blob, so drop
+        // them here or the next save writes them straight back.
+        delete (merged as Record<string, unknown>)['cancelCustomFee'];
+        delete (merged as Record<string, unknown>)['noShowFee'];
         // Start on the window actually applied, which Automations can also
         // set. A link-only provider's notice is only their own text.
         if (profile.booking_mode !== 'external') {
@@ -275,9 +280,9 @@ export default function PoliciesScreen({ navigation }: any) {
         }
         setLoadedNotice(merged.cancelNotice);
         setPolicies(merged);
-        // cancelCustomFee is retired with Custom: dropped on the next save.
+        // cancelCustomFee and noShowFee are retired with Custom: dropped on the next save.
         const carried = Object.fromEntries(
-          Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES) && k !== 'cancelCustomFee'),
+          Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES) && k !== 'cancelCustomFee' && k !== 'noShowFee'),
         );
         setCarriedPolicies(carried);
       } catch {
@@ -356,12 +361,8 @@ export default function PoliciesScreen({ navigation }: any) {
     // See loadFailed above: writing without a successful read would replace
     // the stored blob with defaults.
     if (loadFailed) { flash('Your policies could not be loaded — reopen this screen before saving', 'error'); return; }
-    if (![policies.lateFee, policies.noShowFee].every(isFeeAmount)) {
+    if (!isFeeAmount(policies.lateFee)) {
       flash('Enter fees as pounds, like 10 or 12.50', 'error');
-      return;
-    }
-    if (policies.noShowAction === 'custom' && !isCustomAmount(policies.noShowFee)) {
-      flash('Enter your no-show fee, like 10 or 12.50', 'error');
       return;
     }
 
@@ -375,7 +376,6 @@ export default function PoliciesScreen({ navigation }: any) {
         ...policies,
         ...policyImageFields(policies.policyImageUrls),
         policyImageEdges: prunePolicyImageEdges(imageEdges, policies.policyImageUrls),
-        noShowFee: policies.noShowAction === 'custom' ? policies.noShowFee : '',
         ...(isLinkOnly ? LINK_ONLY_CLEARED : {}),
       } as unknown as Record<string, unknown>);
       // The window cancellations are actually judged by. After the text, so a
@@ -533,24 +533,18 @@ export default function PoliciesScreen({ navigation }: any) {
                     { v: 'none', l: 'No action' },
                     { v: 'warn', l: 'Warn client' },
                     { v: 'charge_deposit', l: 'Keep deposit' },
-                    { v: 'custom', l: 'Custom' },
+                    { v: 'half', l: 'Half the price' },
                   ]}
                   value={policies.noShowAction}
                   onChange={v => setPolicy('noShowAction', v)}
                 />
-                {policies.noShowAction === 'custom' && (
-                  <View style={{ marginTop: 10 }}>
-                    <Field
-                      label="No-show fee (£)"
-                      value={policies.noShowFee}
-                      onChange={v => setPolicy('noShowFee', v.replace(/[^0-9.]/g, ''))}
-                      placeholder="e.g. 20"
-                      keyboardType="decimal-pad"
-                      note="For not turning up. You mark the booking as a no-show first."
-                    />
-                    <HalfPriceCap />
+                {policies.noShowAction === 'half' && (
+                  <>
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Paid a deposit: you keep the deposit. If it's less than half the price and they agreed at checkout, you can also charge their saved card the difference, from the booking, after you mark the no-show.</Text>
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid in full: nothing more is charged.</Text>
+                    <Text style={[capSt.note, { color: C.text }]}>The app works out the amount for each booking. You don't type anything.</Text>
                     <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 12 }]}>{FEE_CHARGE_NOTE}</Text>
-                  </View>
+                  </>
                 )}
                 <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
               </Card>
