@@ -411,8 +411,8 @@ function MiniProfile({
           // Heritage: a dotted seal round the logo.
           <View style={mini.seal}>{logo}</View>
         ) : style.hero === 'duet' ? (
-          // Duet: a white welcome card.
-          <View style={mini.welcome}>
+          // Duet: a welcome card in their card colour.
+          <View style={[mini.welcome, { backgroundColor: cardColour }]}>
             <View style={[mini.welcomeLogo, { borderColor: accent }]} />
             <Text style={[mini.duetScript, { color: accent }]} numberOfLines={1}>Name</Text>
           </View>
@@ -743,7 +743,7 @@ const mini = StyleSheet.create({
   chunkyCaps: { fontFamily: 'LilitaOne-Regular', fontSize: 13, lineHeight: 21, textAlign: 'center' },
   chunkyScript: { fontFamily: 'Ephesis-Regular', fontSize: 14 },
   productWrap: { alignSelf: 'stretch', flex: 1 },
-  productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
+  productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: 'hidden' },
   productPanel: { paddingHorizontal: 8, paddingVertical: 5, gap: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
   productTitle: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 12, lineHeight: 15 },
   blockHero: { alignSelf: 'stretch', flex: 1 },

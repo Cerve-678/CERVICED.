@@ -97,7 +97,11 @@ export function BoutiqueHero({
 
 const styles = StyleSheet.create({
   wrap: { alignSelf: "stretch", marginTop: -BLEED_UP, marginBottom: 24 },
-  top: { alignItems: "center", justifyContent: "center", paddingTop: BLEED_UP / 2 },
+  // Rounded at the top as the panel is at the foot (owner, 2026-11-16).
+  top: {
+    alignItems: "center", justifyContent: "center", paddingTop: BLEED_UP / 2,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden",
+  },
   panel: {
     paddingHorizontal: 22, paddingTop: 18, paddingBottom: 22, gap: 10,
     borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
