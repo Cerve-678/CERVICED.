@@ -17,6 +17,7 @@ import { PressedHero } from "./heroes/EmbossedHero";
 import { BoutiqueHero, cardInk } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
 import { StudioHero } from "./heroes/StudioHero";
+import { PrescriptionHero } from "./heroes/ApothecaryHero";
 import { NovelHero } from "./heroes/NovelHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
@@ -552,48 +553,21 @@ export function ProfileHeroLayout({
       );
     }
 
-    case "label": {
-      // Apothecary: a paper tag hanging on a string over their photo.
-      const phrase = kickerPhrase(kicker).toLowerCase();
+    case "prescription":
+      // Apothecary: a chemist's prescription pad in their card colour (heroes/ApothecaryHero).
       return (
-        <View style={layout.tagWrap}>
-          <Svg width={240} height={64} viewBox="0 0 240 64" pointerEvents="none">
-            <Path
-              d="M60 0C80 28 108 46 116 64M180 0C160 28 132 46 124 64"
-              fill="none"
-              stroke={heroIsDark ? "#D9CBA6" : "#8C7A55"}
-              strokeWidth={1.5}
-            />
-          </Svg>
-          <View style={layout.tag}>
-            <Svg width={240} height={30} viewBox="0 0 240 30" pointerEvents="none">
-              <Polygon points="48,0 192,0 240,30 0,30" fill={TAG_PAPER} />
-              <Circle cx={120} cy={16} r={6} fill="none" stroke="#B9A57A" strokeWidth={2} />
-            </Svg>
-            <View style={layout.tagBody}>
-              <View style={layout.logoNoGap}>{renderLogo(64)}</View>
-              <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-                <Text
-                  style={[
-                    layout.tagName,
-                  ]}
-                  numberOfLines={2}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.6}
-                >
-                  {name.toUpperCase()}
-                </Text>
-                {tick}
-              </View>
-              <View style={[layout.tagRule, { backgroundColor: accent }]} />
-              {phrase ? <Text style={layout.tagPhrase}>{phrase}</Text> : null}
-              {location ? <Text style={layout.tagCaption} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
-            </View>
-          </View>
-          <View style={layout.labelDetails}>{details}</View>
-        </View>
+        <PrescriptionHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          cardColour={cardColour}
+          renderLogo={renderLogo}
+          details={details}
+          isVerified={!!isVerified}
+          verifiedTick={<Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />}
+        />
       );
-    }
 
     case "blockName": {
       // Snapshot: three of their photos edge to edge, then the name huge in
@@ -956,8 +930,6 @@ export const DETAILS_OWN_LINE = { width: "100%", alignItems: "center" } as const
 
 export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 
-/** Apothecary's tag paper and ink: the tag is a physical object, so its colours are fixed. */
-const TAG_PAPER = "#F6F1E4";
 
 /** How much lower a hero that opens on text starts than one that opens on the logo. */
 const TEXT_FIRST_DROP = 48;
@@ -1066,21 +1038,6 @@ const layout = StyleSheet.create({
   galleryName: { fontFamily: "InstrumentSerif-Regular", fontSize: 60, lineHeight: 77, letterSpacing: -1.5, marginTop: 22, flexShrink: 1 },
   galleryPhrase: { fontFamily: "InstrumentSerif-Italic", fontSize: 21, marginTop: 6 },
   galleryArt: { alignItems: "center", marginTop: 26 },
-  // Apothecary: the tag is a physical object, so its ink is fixed.
-  tagWrap: { alignItems: "center", marginTop: 20, marginBottom: 26 },
-  tag: {
-    width: 240, marginTop: -2, transform: [{ rotate: "-4deg" }], transformOrigin: "top",
-    shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 10 },
-  },
-  tagBody: { backgroundColor: TAG_PAPER, alignItems: "center", paddingHorizontal: 20, paddingTop: 6, paddingBottom: 24, marginTop: -1 },
-  tagName: {
-    fontFamily: "MarcellusSC-Regular", fontSize: 32, lineHeight: 41, letterSpacing: 6, color: "#2C3527",
-    textAlign: "center", flexShrink: 1, marginTop: 10,
-  },
-  tagRule: { height: 1, alignSelf: "stretch", marginHorizontal: 30, marginVertical: 8 },
-  tagPhrase: { fontFamily: "Marcellus-Regular", fontSize: 15, color: "#56614F", textAlign: "center" },
-  tagCaption: { fontSize: 9, letterSpacing: 2.4, color: "#56614F", marginTop: 8 },
-  labelDetails: { alignItems: "center", marginTop: 22 },
   // Snapshot
   blockWrap: { marginBottom: 26 },
   blockPhotos: { flexDirection: "row" },

@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 
 import { PAGE_STYLES } from '../constants/pageStyles';
@@ -135,18 +136,23 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('Lashes.')).toBeTruthy();
   });
 
-  it('prints the name in capitals on Apothecary\'s tag', () => {
+  it('writes Apothecary\'s prescription pad from their own profile', () => {
     renderPreview('apothecary');
-    expect(screen.getByText('AMARA LASHES')).toBeTruthy();
-    expect(screen.getByText('lashes')).toBeTruthy();
-    expect(screen.getByText('PECKHAM')).toBeTruthy();
+    expect(screen.getByText('℞')).toBeTruthy();
+    expect(screen.getByText('Amara Lashes')).toBeTruthy();
+    expect(screen.getByText('PRESCRIPTION')).toBeTruthy();
+    expect(screen.getByText('Lashes')).toBeTruthy();
+    expect(screen.getByText('Peckham')).toBeTruthy();
+    expect(screen.getByText('Amara')).toBeTruthy();
+    expect(screen.getByText('PRACTITIONER')).toBeTruthy();
   });
 
   it('sets the name in the style\'s own font even when the provider chose a Branding font', () => {
     renderPreview('groovy', 'great-vibes');
     expect(screen.getByText('amara lashes')).toBeTruthy();
     renderPreview('apothecary', 'great-vibes');
-    expect(screen.getAllByText('AMARA LASHES').length).toBeGreaterThan(0);
+    const padName = screen.getAllByText('Amara Lashes')[0]!;
+    expect(StyleSheet.flatten(padName.props.style).fontFamily).toBe('MarcellusSC-Regular');
   });
 
 });

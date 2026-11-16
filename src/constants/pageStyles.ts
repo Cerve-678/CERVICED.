@@ -124,7 +124,7 @@ export type PageHero =
   | 'duet'       // a white welcome card: the logo beside the name in signature script over caps
   | 'groovy'     // a sticker sheet: logo sticker, rating starburst, the name on a tilted pill
   | 'exhibition' // a gallery wall label, the name large, the logo framed and matted
-  | 'label'      // a paper tag hanging on a string
+  | 'prescription' // a chemist's prescription pad: ℞ beside the name, dotted lines filled in from their profile, the logo as a stamp
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
@@ -266,9 +266,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
-    key: 'apothecary', name: 'Apothecary', description: 'A hanging paper tag, numbered treatments',
+    key: 'apothecary', name: 'Apothecary', description: 'A chemist\'s prescription pad, numbered treatments',
     heading: 'labelCaps', cards: 'label', policies: 'numerals', logo: 'circle',
-    hero: 'label', aboutInHero: false, numeralsLower: true,
+    hero: 'prescription', aboutInHero: false, numeralsLower: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   // 2026-11-15: Duet's A and C heroes and Apothecary's C, each made a
