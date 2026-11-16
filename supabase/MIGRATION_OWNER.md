@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  fix/dispute-payback-shown (Claude, worktree ~/Desktop/CERVICEDD/wt-dispute-per-booking; 20261116120000_provider_bank_dispute_states, applying on the user's go-ahead, 2026-11-16)
 ```
+
+### Written 2026-11-16 (provider sees bank dispute state)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261116120000 | `provider_bank_dispute_states` | **NOT applied yet.** New read-only `provider_bank_dispute_states(uuid[])` (SECURITY DEFINER, own bookings via `providers.user_id = auth.uid()`, 100 ids max, 500 rows max; authenticated only). No table or existing function changed. Frontier at authoring: live max `20261115090000`; #473 (220000) and #508 (230000) are already below it and must renumber above this one too. Written on `fix/dispute-payback-shown`. |
 
 ### Applied 2026-11-16 (bank disputes per booking)
 

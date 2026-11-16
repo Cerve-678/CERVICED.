@@ -755,6 +755,14 @@ disputed.
 to providers (added 16 November; not lawyer-reviewed, see
 `LEGAL-COMPLIANCE-NOTES.md` §28).
 
+**What the provider sees** (Payments → booking payments and fees, through
+`provider_bank_dispute_states()`, their own bookings only, no dispute amount
+or reason): "On hold · bank dispute" while it is open, "On hold · bank
+dispute on this payment" while CERVICED matches it, "Taken back · bank
+dispute lost" or "Not paid · bank dispute lost" after a loss, and "Paid back
+· dispute won" after a win that returned money. A late/no-show fee won back
+says "Dispute won · being paid back", because support pays that by hand.
+
 *Not live until migration `20261115090000_bank_dispute_per_booking` is
 applied and `stripe-webhook`, `release-payouts` and `assign-bank-dispute` are
 deployed. The Disputes tab needs a new app build; until then an admin can't

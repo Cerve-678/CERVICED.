@@ -92,6 +92,7 @@ import {
   type ExploreCollection,
 } from "../types/collections";
 import { PAYOUT_INTERVALS, type PayoutSchedule, type PayoutScheduleChoice } from "../constants/payoutSchedule";
+import { bankDisputeStates, type BankDisputeState, type BankDisputeStateRow } from "../features/payments/bankDisputeStatus";
 import { overridesFromDate } from "../utils/dateUtils";
 import type { ProviderBookingTip } from "../features/provider-bookings/tipPresentation";
 import { mergeBookingReviewStates, type BookingReviewState } from "../features/bookings/reviewState";
@@ -12570,6 +12571,8 @@ export interface ProviderPayout {
   /** The client has a refund request open on this booking, so a held payout
    *  waits for it (release-payouts skips it until the request closes). */
   refundRequestOpen: boolean;
+  /** Where a bank dispute on this booking's payment stands; null if none. */
+  bankDispute: BankDisputeState | null;
 }
 
 async function connectAction(action: 'status' | 'onboard' | 'dashboard') {
@@ -12607,7 +12610,7 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   if (error) throw error;
   if (!data?.length) return [];
   const bookingIds = data.map(row => row.booking_id);
-  const [{ data: bookings, error: bookingsError }, { data: openRequests, error: requestsError }] = await Promise.all([
+  const [{ data: bookings, error: bookingsError }, { data: openRequests, error: requestsError }, disputes] = await Promise.all([
     supabase.from('bookings')
       .select('id, service_name_snapshot, customer_name, booking_date, status, group_booking_id')
       .eq('provider_id', provider.id).in('id', bookingIds),
@@ -12617,6 +12620,7 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
       .eq('provider_id', provider.id).in('booking_id', bookingIds)
       .in('status', ['with_provider', 'under_review'])
       .limit(50),
+    getOwnBankDisputeStates(bookingIds),
   ]);
   if (bookingsError) throw bookingsError;
   if (requestsError) throw requestsError;
@@ -12625,7 +12629,29 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
     ...row,
     booking: bookings?.find(booking => booking.id === row.booking_id),
     refundRequestOpen: open.has(row.booking_id),
+    bankDispute: disputes.byBooking.get(row.booking_id) ?? null,
   }));
+}
+
+interface BankDisputeStateDbRow {
+  booking_id: string; fee_charge_id: string | null; role: BankDisputeStateRow['role'];
+  closed: boolean; outcome: BankDisputeStateRow['outcome']; paid_back_pence: number;
+}
+
+/** Bank-dispute state of the caller's own bookings and their late/no-show fees
+ *  (provider reading their own record: the RPC filters to their bookings). */
+async function getOwnBankDisputeStates(bookingIds: string[]): Promise<ReturnType<typeof bankDisputeStates>> {
+  if (bookingIds.length === 0) return bankDisputeStates([]);
+  const { data, error } = await supabase.rpc('provider_bank_dispute_states', { p_booking_ids: bookingIds });
+  if (error) throw error;
+  return bankDisputeStates(((data ?? []) as BankDisputeStateDbRow[]).map(row => ({
+    bookingId: row.booking_id,
+    feeChargeId: row.fee_charge_id,
+    role: row.role,
+    closed: row.closed,
+    outcome: row.outcome,
+    paidBackPence: Number(row.paid_back_pence),
+  })));
 }
 
 /**
@@ -12686,6 +12712,8 @@ export interface ProviderFeeEarning {
   releaseAfter: string | null;
   chargedAt: string | null;
   openDispute: boolean;
+  /** Where a bank dispute on this fee's payment stands; null if none. */
+  bankDispute: BankDisputeState | null;
   serviceName: string | null;
   customerName: string | null;
 }
@@ -12777,9 +12805,13 @@ export async function getProviderFeeEarnings(): Promise<ProviderFeeEarning[]> {
   if (error) throw error;
   const rows = (data ?? []) as ProviderFeeEarningRow[];
   if (rows.length === 0) return [];
-  const { data: bookings, error: bookingsError } = await supabase.from('bookings')
-    .select('id, service_name_snapshot, customer_name')
-    .in('id', rows.map(row => row.booking_id));
+  const bookingIds = [...new Set(rows.map(row => row.booking_id))];
+  const [{ data: bookings, error: bookingsError }, disputes] = await Promise.all([
+    supabase.from('bookings')
+      .select('id, service_name_snapshot, customer_name')
+      .in('id', bookingIds),
+    getOwnBankDisputeStates(bookingIds),
+  ]);
   if (bookingsError) throw bookingsError;
   return rows.map(row => {
     const booking = bookings?.find(b => b.id === row.booking_id);
@@ -12794,6 +12826,7 @@ export async function getProviderFeeEarnings(): Promise<ProviderFeeEarning[]> {
       releaseAfter: row.release_after,
       chargedAt: row.charged_at,
       openDispute: !!row.disputed_at && !row.dispute_resolved_at,
+      bankDispute: disputes.byFee.get(row.id) ?? null,
       serviceName: booking?.service_name_snapshot ?? null,
       customerName: booking?.customer_name ?? null,
     };
