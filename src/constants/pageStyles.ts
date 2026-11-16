@@ -136,7 +136,7 @@ export type PageHero =
   | 'callingCard' // satin in the theme colour, and a cream calling card held by an accent clip with the logo and name
   | 'productPage' // a product page: their photos edge to edge to swipe, then the name as the product title on a white panel with Add to basket (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
-  | 'studio'    // a studio website's top: a deep bar with the name pressed in as a lowercase wordmark, their photo with what they do in huge caps
+  | 'studio'    // a studio website's top: what they do pressed into a deep bar as a lowercase wordmark, their photo with the logo in the middle and the name in huge caps
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -361,7 +361,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-16: from the owner's references, a burgundy-and-blush studio
   // website ("TURN UP the HEAT.") and an embossed lowercase wordmark ("imani.").
   {
-    key: 'studio', name: 'Studio', description: 'A studio website: your name pressed into a bar, what you do in huge caps across your photo',
+    key: 'studio', name: 'Studio', description: 'A studio website: what you do pressed into a bar, your name in huge caps across your photo',
     heading: 'chunkyCaps', cards: 'tabbed', policies: 'membership', logo: 'circle',
     hero: 'studio', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
