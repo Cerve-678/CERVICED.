@@ -17,7 +17,6 @@ import { PressedHero } from "./heroes/EmbossedHero";
 import { BoutiqueHero, cardInk } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
 import { StudioHero } from "./heroes/StudioHero";
-import { PrescriptionHero } from "./heroes/ApothecaryHero";
 import { NovelHero } from "./heroes/NovelHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
@@ -553,20 +552,24 @@ export function ProfileHeroLayout({
       );
     }
 
-    case "prescription":
-      // Apothecary: a chemist's prescription pad in their card colour (heroes/ApothecaryHero).
+    case "ruled":
+      // Apothecary, kept simple (owner, 2026-11-16): the logo, the name in
+      // Marcellus SC, a short rule in the accent, then what they do.
       return (
-        <PrescriptionHero
-          name={name}
-          kicker={kicker}
-          location={location}
-          accent={accent}
-          cardColour={cardColour}
-          renderLogo={renderLogo}
-          details={details}
-          isVerified={!!isVerified}
-          verifiedTick={<Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />}
-        />
+        <>
+          {renderLogo(132)}
+          <View style={layout.infoCenter}>
+            <View style={layout.ruledNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <Text style={[layout.ruledName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                {name}
+              </Text>
+              {tick}
+            </View>
+            <View style={[layout.ruledRule, { backgroundColor: heroAccent }]} />
+            {meta}
+            {details}
+          </View>
+        </>
       );
 
     case "blockName": {
@@ -938,6 +941,10 @@ const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
+  ruledNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  // Marcellus SC: its caps need 1.28× or their tops crop.
+  ruledName: { fontFamily: "MarcellusSC-Regular", fontSize: 30, lineHeight: 40, letterSpacing: 2.5, textAlign: "center", flexShrink: 1 },
+  ruledRule: { width: 44, height: 1.5, marginTop: 10, marginBottom: 10 },
   coverTop: { paddingTop: 64 },
   // HeroLogo keeps 20pt under itself; pull the name back up under the logo.
   coverLogo: { alignSelf: "flex-end", marginRight: 28, marginBottom: -14 },
