@@ -1015,6 +1015,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     {clientRequestNote(
                       booking.providerName,
                       requestAnswerDeadline(new Date(booking.createdAt), createBookingDateTime(booking.bookingDate, booking.bookingTime)),
+                      undefined,
+                      booking.paymentStatus === PaymentStatus.AUTHORISED,
                     )}
                   </Text>
                 </View>
@@ -1241,7 +1243,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </View>
                   )}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.depositPaid > 0 ? 'Paid (incl. fee)' : payment.paidLabel}</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.depositPaid > 0 && !payment.isHeld ? 'Paid (incl. fee)' : payment.paidLabel}</Text>
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>

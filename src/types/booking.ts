@@ -208,6 +208,11 @@ export enum PaymentStatus {
   /** Part of the payment came back (policy kept a deposit, or a partial refund). */
   PARTIALLY_REFUNDED = 'partially_refunded',
   FAILED = 'failed',
+  /** A request's payment, approved and held on the card but not taken: it is
+   *  charged only if the provider accepts (20261112100000_request_card_hold). */
+  AUTHORISED = 'authorised',
+  /** The hold was released without anything being taken. */
+  NOT_CHARGED = 'not_charged',
 }
 
 /**

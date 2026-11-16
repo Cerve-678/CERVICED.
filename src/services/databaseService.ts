@@ -83,7 +83,7 @@ import type {
 } from "../features/social/types";
 import { cancellationNoticeHours } from "../utils/policyDisplay";
 import type { RefundRequest, RefundRequestStatus } from "../types/booking";
-import type { AdminMoneyOverview } from "../types/adminMoney";
+import type { AdminBankDispute, AdminMoneyOverview } from "../types/adminMoney";
 import type { AdminDashboardOverview, AdminDashboardPeriod } from "../types/adminDashboard";
 import type { ProviderAchievements } from "../types/achievements";
 import {
@@ -12186,6 +12186,73 @@ export async function getCheckoutOutcome(
   return data ? { status: String(data.status), outcome: data.outcome ?? null } : null;
 }
 
+/** What a checkout's payment sheet charges now, and what it only holds on
+ *  the card for requests (each charged only if its provider accepts). */
+export interface CheckoutHoldPlan {
+  chargeNowPence: number;
+  heldPence: number;
+  /** Requests with a card hold (a free request has none). */
+  requestCount: number;
+  bookingCount: number;
+}
+
+export async function getCheckoutHoldPlan(checkoutBatchId: string): Promise<CheckoutHoldPlan> {
+  const { data, error } = await supabase.rpc('get_checkout_hold_plan', { p_checkout_batch_id: checkoutBatchId });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as
+    { charge_now_pence: number; held_pence: number; request_count: number; booking_count: number } | undefined;
+  if (!row) throw new Error('Checkout not found');
+  return {
+    chargeNowPence: Number(row.charge_now_pence),
+    heldPence: Number(row.held_pence),
+    requestCount: Number(row.request_count),
+    bookingCount: Number(row.booking_count),
+  };
+}
+
+/** One request's card hold, as the client sees it after checkout:
+ *  'authorised' held (or since settled), 'needs_action' waiting on their
+ *  bank's check, 'planned' not placed yet, 'dropped' not sent. */
+export interface RequestCardHold {
+  holdId: string;
+  bookingId: string | null;
+  serviceName: string;
+  providerName: string | null;
+  amountPence: number;
+  state: 'planned' | 'needs_action' | 'authorised' | 'dropped';
+  actionDeadline: string | null;
+}
+
+export async function getMyRequestCardHolds(checkoutBatchId: string): Promise<RequestCardHold[]> {
+  const { data, error } = await supabase.rpc('get_my_request_card_holds', { p_checkout_batch_id: checkoutBatchId });
+  if (error) throw error;
+  return ((data ?? []) as {
+    hold_id: string; booking_id: string | null; service_name: string; provider_name: string | null;
+    amount_pence: number; state: RequestCardHold['state']; action_deadline: string | null;
+  }[]).map(row => ({
+    holdId: row.hold_id,
+    bookingId: row.booking_id,
+    serviceName: row.service_name,
+    providerName: row.provider_name,
+    amountPence: Number(row.amount_pence),
+    state: row.state,
+    actionDeadline: row.action_deadline,
+  }));
+}
+
+/** A request hold's bank check. 'start' returns the payment's client secret
+ *  for the Stripe SDK to show the check; 'check' records the result. */
+export async function requestCardHoldStep(
+  holdId: string,
+  step: 'start' | 'check',
+): Promise<{ state: 'authorised' | 'needs_action' | 'dropped'; clientSecret?: string }> {
+  const { data, error } = await supabase.functions.invoke('request-card-hold', { body: { holdId, step } });
+  if (error || data?.error || !['authorised', 'needs_action', 'dropped'].includes(data?.state)) {
+    throw new Error('We couldn\'t reach your bank\'s check. Please try again.');
+  }
+  return { state: data.state, clientSecret: typeof data.clientSecret === 'string' ? data.clientSecret : undefined };
+}
+
 export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke("becca-ai", { body });
   if (error) throw error;
@@ -13039,6 +13106,32 @@ export async function adminRetryPayout(payoutId: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Bank disputes an admin has to match to a booking. Throws for a non-admin. */
+export async function getAdminBankDisputes(): Promise<AdminBankDispute[]> {
+  const { data, error } = await supabase.rpc('admin_bank_disputes');
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error('The dispute list came back in an unexpected shape.');
+  return data as AdminBankDispute[];
+}
+
+/** An admin's answer to which booking(s) a bank dispute is about. Takes the
+ *  money back from those providers only (assign-bank-dispute). Throws with a
+ *  message written for the admin when the server refuses. */
+export async function assignBankDispute(disputeId: string, bookingIds: string[]): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('assign-bank-dispute', { body: { disputeId, bookingIds } });
+  if (error) {
+    // assign-bank-dispute's 4xx bodies are written for the admin, so lift
+    // them out. A 5xx body is not shown.
+    const res = (error as { context?: Response }).context;
+    if (res && res.status >= 400 && res.status < 500) {
+      const body = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof body?.error === 'string' && body.error) throw new Error(body.error);
+    }
+    throw new Error("Couldn't save that. Nothing was taken twice; try again.");
+  }
+  if (!data?.ok) throw new Error("Couldn't save that. Nothing was taken twice; try again.");
+}
+
 /** Cerviced's "no" to a passed-on refund request. The note is what the client is told. */
 export async function adminDeclineRefundRequest(requestId: string, note: string): Promise<void> {
   const { error } = await supabase.rpc('admin_decline_refund_request', { p_request_id: requestId, p_note: note });
@@ -13244,9 +13337,10 @@ export async function getRefundRequestsForBooking(bookingId: string): Promise<Re
  *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
 export async function applyCancellationRefund(
   bookingId: string,
-): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible'> {
+): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible' | 'not_charged'> {
   const { data, error } = await supabase.functions.invoke('apply-cancellation-refund', { body: { bookingId } });
-  if (error || data?.error || !['settled', 'already_settled', 'no_payment', 'not_eligible'].includes(data?.status)) {
+  // 'not_charged': a request whose card was only held — nothing to refund.
+  if (error || data?.error || !['settled', 'already_settled', 'no_payment', 'not_eligible', 'not_charged'].includes(data?.status)) {
     throw new Error('The cancellation refund could not be confirmed.');
   }
   return data.status;

@@ -33,6 +33,7 @@ import {
   recoveryCodeEmail,
   refundRequestedProviderEmail,
   payoutFailedSupportEmail,
+  bankDisputeSupportEmail,
   moneySummaryEmail,
   signupCodeEmail,
   supportRequestEmail,
@@ -112,6 +113,10 @@ const every = () => [
     payoutFailedSupportEmail({
       kind: 'transfer', provider: HOSTILE, amount: HOSTILE, booking: HOSTILE, why: HOSTILE, tries: HOSTILE, nextStep: HOSTILE,
     }),
+  ],
+  [
+    'bankDisputeSupportEmail',
+    bankDisputeSupportEmail({ title: HOSTILE, amount: HOSTILE, reason: HOSTILE, bookings: [HOSTILE], nextStep: HOSTILE }),
   ],
   [
     'moneySummaryEmail',
