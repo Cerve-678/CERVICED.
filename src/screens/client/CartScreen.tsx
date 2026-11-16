@@ -48,6 +48,7 @@ import {
 } from '../../features/payments/savedCards';
 import {
   FEE_CONSENT_LINE,
+  LATE_CANCEL_CONSENT_LINE,
   FEE_TERMS_BODY,
   FEE_TERMS_HEADING,
   FEE_TERMS_SHA256,
@@ -728,18 +729,21 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       Appearance.setColorScheme(isDarkMode ? 'dark' : 'light');
       return () => Appearance.setColorScheme('unspecified');
     }, [isVisible, isDarkMode]);
-    // Late/no-show fees the client must agree to before their card is saved
-    // for them. null = still loading; [] = this checkout has none.
+    // Late/no-show and late cancellation fees the client must agree to before
+    // their card is saved for them. null = still loading; [] = this checkout
+    // has none. Each kind has its own tick box (user choice 2026-11-13).
     const [fees, setFees] = useState<CheckoutFee[] | null>(null);
     const [feesError, setFeesError] = useState(false);
     const [agreedToFees, setAgreedToFees] = useState(false);
+    const [agreedToLateCancel, setAgreedToLateCancel] = useState(false);
     const [feesAttempt, setFeesAttempt] = useState(0);
     const [showFeeTerms, setShowFeeTerms] = useState(false);
+    const [showLateCancelTerms, setShowLateCancelTerms] = useState(false);
 
     useEffect(() => {
       if (!isVisible || !checkoutBatchId) return;
       let cancelled = false;
-      setFees(null); setFeesError(false); setAgreedToFees(false);
+      setFees(null); setFeesError(false); setAgreedToFees(false); setAgreedToLateCancel(false);
       getCheckoutFees(checkoutBatchId)
         .then(rows => { if (!cancelled) setFees(rows); })
         .catch(err => {
@@ -750,8 +754,15 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     }, [isVisible, checkoutBatchId, feesAttempt]);
 
     const hasFees = (fees?.length ?? 0) > 0;
-    const canPay = fees !== null && (!hasFees || agreedToFees);
-    // Same rules as create-payment-intent: a late/no-show fee is charged later
+    const visitFees = useMemo(
+      () => (fees ?? []).filter(fee => fee.lateFeePence != null || fee.noShowFeePence != null),
+      [fees],
+    );
+    const lateCancelFees = useMemo(() => (fees ?? []).filter(fee => fee.lateCancelFeePence != null), [fees]);
+    const canPay = fees !== null
+      && (visitFees.length === 0 || agreedToFees)
+      && (lateCancelFees.length === 0 || agreedToLateCancel);
+    // Same rules as create-payment-intent: a late/no-show or late cancellation fee is charged later
     // to a saved card, so those checkouts are card-only, and so is a total
     // over PAYPAL_MAX_CHECKOUT_TOTAL. Hidden in Expo Go, which can't return
     // from PayPal's page.
@@ -979,10 +990,10 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                     </Text>
                   </TouchableOpacity>
                 )}
-                {hasFees && (
+                {visitFees.length > 0 && (
                   <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                     <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Late & no-show fees</Text>
-                    {fees!.map(fee => (
+                    {visitFees.map(fee => (
                       <View key={fee.providerId} style={styles.orderItem}>
                         <Text style={[styles.orderItemName, { color: theme.text }]}>
                           {fee.providerName}
@@ -1014,6 +1025,42 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                         {FEE_CONSENT_LINE}
                       </Text>
                     </TouchableOpacity>
+                  </View>
+                )}
+                {lateCancelFees.length > 0 && (
+                  <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Late cancellation</Text>
+                    {lateCancelFees.map(fee => (
+                      <View key={fee.providerId} style={styles.orderItem}>
+                        <Text style={[styles.orderItemName, { color: theme.text }]}>
+                          {fee.providerName}
+                          {`\nCancelling within ${fee.cancelNoticeHours} hours means you lose your £${((fee.lateCancelDepositPence ?? 0) / 100).toFixed(2)} deposit and may be charged up to £${((fee.lateCancelFeePence ?? 0) / 100).toFixed(2)} more.`}
+                        </Text>
+                      </View>
+                    ))}
+                    <TouchableOpacity
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: agreedToLateCancel }}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setAgreedToLateCancel(v => !v);
+                      }}
+                      activeOpacity={0.7}
+                      style={[styles.orderItem, { alignItems: 'flex-start', marginTop: 8 }]}
+                    >
+                      <Ionicons name={agreedToLateCancel ? 'checkbox' : 'square-outline'} size={20} color={P.accent} />
+                      <Text style={[styles.paymentMethodName, { color: theme.text, marginLeft: 8 }]}>
+                        {LATE_CANCEL_CONSENT_LINE}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button" onPress={() => setShowLateCancelTerms(v => !v)} activeOpacity={0.7}>
+                      <Text style={[styles.paymentMethodName, { color: P.accent, marginTop: 6 }]}>
+                        {showLateCancelTerms ? 'Hide the terms' : 'Read the terms'}
+                      </Text>
+                    </TouchableOpacity>
+                    {showLateCancelTerms && (
+                      <Text style={[styles.paymentMethodName, { color: P.sub, marginTop: 6 }]}>{FEE_TERMS_BODY}</Text>
+                    )}
                   </View>
                 )}
 
@@ -1957,7 +2004,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [cartError, clearCartError, showAlert]);
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, myProviderId, myProviderIdStatus } = useAuth();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
   // Checkout carries on after the checklist saves, by which time this render's
   // handleCheckout would still see the details as missing.
@@ -2875,9 +2922,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         date: booking.selectedDate,
         time: booking.selectedTime,
         duration: durationWithAddOns(item.duration, item.addOns),
+        // Only once the ownership lookup has actually answered; until then
+        // (or if it failed) the database guard at checkout still catches it.
+        ownProvider: myProviderIdStatus === 'resolved'
+          && !!myProviderId
+          && item.providerId === myProviderId,
       };
     })),
-    [items, getServiceBooking],
+    [items, getServiceBooking, myProviderId, myProviderIdStatus],
   );
 
   // A stored date/time the app can't parse back shouldn't be possible — the
@@ -3364,7 +3416,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // finding, not a second one, so it reuses it rather than re-deriving it
     // with wording that could drift out of step.
     if (localItemIssues.size > 0) {
-      showAlert('Schedule Required', 'Some services in your cart need attention before checkout.');
+      const hasOwnBusiness = [...localItemIssues.values()].includes(CART_ISSUE.ownProvider);
+      showAlert(
+        hasOwnBusiness ? "You can't book yourself" : 'Schedule Required',
+        hasOwnBusiness
+          ? 'Your cart has a service from your own business. Remove it to check out.'
+          : 'Some services in your cart need attention before checkout.',
+      );
       return;
     }
 
@@ -3846,12 +3904,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
-      const slug = providerItems[0]?.providerSlug;
-      if (!slug) {
+      // The database id first: it's what checkout books against, the restore
+      // re-links any item missing it, and the profile loads by id as well as
+      // by slug. The saved slug is only a fallback for an item with no id.
+      const first = providerItems[0];
+      const key = first?.providerId ?? first?.providerSlug;
+      if (!key) {
         showAlert('Something went wrong', "We couldn't open that provider's profile.");
         return;
       }
-      navigation.navigate('ProviderProfile', { providerId: slug, source: 'cart' });
+      navigation.navigate('ProviderProfile', { providerId: key, source: 'cart' });
     },
     [navigation, showAlert]
   );

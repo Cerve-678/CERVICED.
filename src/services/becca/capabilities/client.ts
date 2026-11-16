@@ -296,7 +296,7 @@ const bookingDetails: Capability = {
           reschedulePolicy.rescheduleNoticeHours > 0
             ? ` with ${reschedulePolicy.rescheduleNoticeHours}h notice`
             : ", including on the day"
-        }`
+        }${reschedulePolicy.sameMonthOnly ? ", to another day in the same month" : ""}`
       : "Open the booking to check the latest rescheduling terms";
 
     const ticket = bookingTicket(booking);

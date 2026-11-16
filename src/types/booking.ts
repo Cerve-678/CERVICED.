@@ -386,6 +386,9 @@ export interface ConfirmedBooking {
   /** Booked after that rule went live, so a late reschedule request would
    *  mark it. Older bookings are never covered. */
   lateRescheduleRuleApplies?: boolean | undefined;
+  /** Booked after the five-day refund-request limit went live, so requests
+   *  close five days after the appointment. Older bookings have no limit. */
+  refundRequestWindowApplies?: boolean | undefined;
   /** Who cancelled — stamped by the DB when the booking became cancelled. */
   cancelledBy?: 'client' | 'provider' | 'system' | undefined;
   /** Set when this was a request the provider declined, or that expired

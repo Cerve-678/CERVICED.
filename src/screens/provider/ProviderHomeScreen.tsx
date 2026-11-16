@@ -58,6 +58,7 @@ import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../util
 import { assignOverlapColumns, resolveTimelineRange } from '../../utils/dayTimelineRange';
 import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
 import { logger } from '../../utils/logger';
+import { useAutoCalendarSync } from '../../features/providers/calendarBusySync';
 import { withTimeout } from '../../utils/withTimeout';
 import type {
   DbProviderAvailability,
@@ -1454,6 +1455,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       .catch(err => logger.error('[ProviderHome] service duration lookup failed:', err));
     return () => { cancelled = true; };
   }, [bookings]);
+  // Calendar sync: busy times in the calendars they chose on Scheduling &
+  // Availability stop clients booking those times. Does nothing until they
+  // connect one.
+  useAutoCalendarSync();
+
   // Keep the header bell's unread badge in sync (provider-role notifications only)
   useFocusEffect(useCallback(() => {
     getUnreadNotificationCount('provider').then(setUnreadCount).catch((err) => logger.error('[ProviderHome] unread count load failed:', err));

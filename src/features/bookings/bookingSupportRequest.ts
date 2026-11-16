@@ -2,6 +2,8 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { invokeSendSupportRequest, passRefundRequestToCerviced, requestBookingRefund } from '../../services/databaseService';
 import { formatBookingRef } from './presentation';
+import { addDaysYmd, ukTodayYmd } from '../providers/calendarBusyBlocks';
+import { formatLongDateNoYear } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 import { PaymentStatus, type ConfirmedBooking, type RefundRequest } from '../../types/booking';
 
@@ -56,6 +58,42 @@ export function isSupportRequestReady(reason: string | null, message: string): b
 }
 
 /**
+ * How long a client has to ask: until the end of the fifth UK day after the
+ * day of the appointment (an appointment on the 10th can be asked about until
+ * 23:59 on the 15th). request_booking_refund() refuses after that with the
+ * same date, so change both together. Only bookings made after the rule went
+ * live (refundRequestWindowApplies); older ones keep no limit.
+ */
+export const REFUND_REQUEST_DAYS = 5;
+
+/** The last UK day a refund can be asked for, 'YYYY-MM-DD'. */
+export function refundRequestLastDay(bookingDate: string): string {
+  return addDaysYmd(bookingDate.slice(0, 10), REFUND_REQUEST_DAYS);
+}
+
+function hasReadableDate(bookingDate: string | null | undefined): bookingDate is string {
+  return !!bookingDate && /^\d{4}-\d{2}-\d{2}/.test(bookingDate);
+}
+
+/** True when the five days apply to this booking: it was made after the rule
+ *  went live and its date can be read. Otherwise the server decides. */
+export function hasRefundRequestDeadline(
+  booking: Pick<ConfirmedBooking, 'bookingDate' | 'refundRequestWindowApplies'>,
+): boolean {
+  return booking.refundRequestWindowApplies === true && hasReadableDate(booking.bookingDate);
+}
+
+/** True until the end of the last day, and always for a booking the five
+ *  days don't apply to. */
+export function isRefundRequestWindowOpen(
+  booking: Pick<ConfirmedBooking, 'bookingDate' | 'refundRequestWindowApplies'>,
+  now: Date = new Date(),
+): boolean {
+  if (!hasRefundRequestDeadline(booking)) return true;
+  return ukTodayYmd(now) <= refundRequestLastDay(booking.bookingDate);
+}
+
+/**
  * What a refund request can cover. Cerviced only gets involved with money
  * that moved through the app's own payment processor:
  *
@@ -65,16 +103,22 @@ export function isSupportRequestReady(reason: string | null, message: string): b
  *   bank transfer). There's nothing Cerviced can refund, and the app
  *   deliberately never tracks off-app payments, so the client is told it's
  *   between them and the provider rather than offered a ticket.
+ * - `closed`  — paid in the app, but more than REFUND_REQUEST_DAYS have gone
+ *   by since the appointment. Complaints stay in the ⋯ menu as usual; the
+ *   sheet doesn't push them (owner's call).
  * - `settled` — already refunded or a refund is on its way; nothing to ask.
  */
-export type RefundRequestScope = 'in_app' | 'off_app' | 'settled';
+export type RefundRequestScope = 'in_app' | 'off_app' | 'closed' | 'settled';
 
-export function getRefundRequestScope(booking: Pick<ConfirmedBooking, 'paymentStatus'>): RefundRequestScope {
+export function getRefundRequestScope(
+  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'bookingDate' | 'refundRequestWindowApplies'>,
+  now: Date = new Date(),
+): RefundRequestScope {
   switch (booking.paymentStatus) {
     case PaymentStatus.DEPOSIT_PAID:
     case PaymentStatus.PAID_IN_FULL:
     case PaymentStatus.PARTIALLY_REFUNDED:
-      return 'in_app';
+      return isRefundRequestWindowOpen(booking, now) ? 'in_app' : 'closed';
     case PaymentStatus.REFUNDED:
     case PaymentStatus.REFUND_PENDING:
       return 'settled';
@@ -93,18 +137,34 @@ export function getRefundRequestScope(booking: Pick<ConfirmedBooking, 'paymentSt
  *   when the client says they didn't.
  */
 export function describeRefundScope(
-  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'paymentType' | 'amountPaid' | 'remainingBalance' | 'providerName'>,
+  booking: Pick<ConfirmedBooking, 'paymentStatus' | 'paymentType' | 'amountPaid' | 'remainingBalance' | 'providerName' | 'bookingDate' | 'refundRequestWindowApplies'>,
+  now: Date = new Date(),
 ): { title: string; lines: string[] } {
   const provider = booking.providerName?.trim() || 'your provider';
   const Provider = provider.charAt(0).toUpperCase() + provider.slice(1);
   const money = (n: number) => `£${n.toFixed(2)}`;
 
-  if (getRefundRequestScope(booking) === 'off_app') {
+  const scope = getRefundRequestScope(booking, now);
+  if (scope === 'off_app') {
     return {
       title: 'Not paid through Cerviced',
       lines: [
         "Nothing for this booking was paid through the Cerviced app, so there's nothing here Cerviced can refund.",
         `Payments made in person, like cash, card on the day or a bank transfer, are between you and ${provider}. Please speak to them directly.`,
+      ],
+    };
+  }
+
+  // Only a booking the five days apply to has a last day ('closed' included).
+  const lastDay = hasRefundRequestDeadline(booking)
+    ? formatLongDateNoYear(refundRequestLastDay(booking.bookingDate))
+    : null;
+  if (scope === 'closed' && lastDay) {
+    return {
+      title: 'Refund requests have closed',
+      lines: [
+        `You can ask for a refund up to ${REFUND_REQUEST_DAYS} days after the day of your appointment. For this booking, the last day was ${lastDay}.`,
+        'This does not affect your statutory rights.',
       ],
     };
   }
@@ -121,6 +181,7 @@ export function describeRefundScope(
   } else {
     lines.push(`${Provider} can keep some or all of what you paid under their policy if you cancelled late, didn't turn up, or rescheduled late. If that's what happened, Cerviced won't overturn it. If it isn't, tell us below and we'll review it.`);
   }
+  if (lastDay) lines.push(`You can ask until the end of ${lastDay}, ${REFUND_REQUEST_DAYS} days after the day of your appointment.`);
   return { title: 'What Cerviced can review', lines };
 }
 

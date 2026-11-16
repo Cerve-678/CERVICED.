@@ -6,6 +6,8 @@ import {
   RESCHEDULE_LOOKBACK_DAYS,
   rescheduleRequestToken,
   parseRescheduleRequestToken,
+  isSameMonth,
+  sameMonthLastDay,
 } from '../utils/rescheduleWindow';
 import { formatTime12Safe } from '../utils/dateUtils';
 
@@ -134,5 +136,18 @@ describe('parseRescheduleRequestToken', () => {
 
   it('returns an empty time for a date-only token', () => {
     expect(parseRescheduleRequestToken('2026-09-01')).toEqual(['2026-09-01', '']);
+  });
+});
+
+describe('same month only', () => {
+  it('ends on the last day of the booking month', () => {
+    expect(sameMonthLastDay('2026-11-14')?.getDate()).toBe(30);
+    expect(sameMonthLastDay('2026-02-03')?.getDate()).toBe(28);
+    expect(sameMonthLastDay('2026-12-31')?.getMonth()).toBe(11);
+  });
+  it('keeps only dates in the same calendar month', () => {
+    expect(isSameMonth('2026-11-30', '2026-11-14')).toBe(true);
+    expect(isSameMonth('2026-12-01', '2026-11-14')).toBe(false);
+    expect(isSameMonth('2027-11-14', '2026-11-14')).toBe(false);
   });
 });
