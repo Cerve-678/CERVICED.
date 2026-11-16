@@ -137,6 +137,15 @@ function todosFrom<B extends ScheduleBooking>(slots: ScheduleSlot<B>[]): Schedul
   return todos;
 }
 
+/** Whether the "Coming up" booking cards sit at the top of the Dashboard
+ *  instead of the today summary: from 2pm while clients are left, and on a
+ *  day with nothing booked at all while there's something coming up, since
+ *  "FREE TODAY" is no reason to push the next booking down the page. */
+export function bookingCardsLead<B extends ScheduleBooking>(schedule: TodaySchedule<B>): boolean {
+  if (schedule.phase === 'cardsLead') return true;
+  return schedule.today.length === 0 && schedule.upcoming.length > 0;
+}
+
 export function buildTodaySchedule<B extends ScheduleBooking>(input: {
   now: Date;
   todayYmd: string;

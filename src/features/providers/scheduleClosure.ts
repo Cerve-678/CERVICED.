@@ -4,7 +4,7 @@
 export const CLOSURE_REASONS = [
   { value: 'holiday', label: 'Holiday', clientLabel: 'On holiday' },
   { value: 'time_off', label: 'Time off', clientLabel: 'Taking some time off' },
-  { value: 'training', label: 'Training', clientLabel: 'Away training' },
+  { value: 'training', label: 'Training', clientLabel: 'Away on training' },
   { value: 'fully_booked', label: 'Fully booked', clientLabel: 'Fully booked' },
 ] as const;
 
