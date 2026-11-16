@@ -1,21 +1,18 @@
 // src/features/social/RecommendBookingButton.tsx
 //
-// On a completed booking: "Recommend <provider>" / "Recommended", tap again
-// to undo. Renders nothing unless the server says this client can recommend
-// them (get_my_provider_sharing) and hasn't hidden them.
+// On a completed booking: a quiet Recommend / Recommended chip, tap again to
+// undo. Renders nothing unless the server says this client can recommend them
+// (get_my_provider_sharing) and hasn't hidden them.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getMyProviderSharing } from '../../services/databaseService';
 import { recommendProvider } from './recommend';
-import { useSocialSettingsStore } from '../../stores/useSocialSettingsStore';
 import { logger } from '../../utils/logger';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { hapticSelection, hapticSuccess } from '../maintenance/ui';
 import type { ProviderSharing } from './types';
-
-const HEART = '#FF2D78';
 
 interface Props {
   userId: string | null;
@@ -24,24 +21,18 @@ interface Props {
   /** Change it to re-read (e.g. after the rating bar recommended them). */
   refreshKey?: number | undefined;
   textColour: string;
-  subColour: string;
+  borderColour: string;
   onError: (title: string, message: string) => void;
 }
 
-export function RecommendBookingButton({ userId, providerId, providerName, refreshKey, textColour, subColour, onError }: Props) {
+export function RecommendBookingButton({ userId, providerId, providerName, refreshKey, textColour, borderColour, onError }: Props) {
   const [sharing, setSharing] = useState<ProviderSharing | null>(null);
   const [saving, setSaving] = useState(false);
-  const showWhereIGo = useSocialSettingsStore((s) =>
-    s.ownerId === userId && s.settings ? s.settings.showWhereIGo : null,
-  );
   const seq = useRef(0);
 
   useEffect(() => {
     const mine = ++seq.current;
     if (!userId || !providerId) { setSharing(null); return; }
-    useSocialSettingsStore.getState().load(userId).catch((err: unknown) => {
-      logger.warn('[recommend-booking] could not load sharing settings', err);
-    });
     getMyProviderSharing(providerId)
       .then((next) => { if (mine === seq.current) setSharing(next); })
       .catch((err: unknown) => {
@@ -74,7 +65,7 @@ export function RecommendBookingButton({ userId, providerId, providerName, refre
   return (
     <View style={styles.wrap}>
       <TouchableOpacity
-        style={[styles.btn, { borderColor: HEART, backgroundColor: on ? HEART : 'rgba(255,45,120,0.10)' }]}
+        style={[styles.btn, { borderColor: borderColour, backgroundColor: on ? 'rgba(127,127,127,0.10)' : 'transparent' }]}
         onPress={() => void toggle()}
         disabled={saving}
         activeOpacity={0.7}
@@ -82,34 +73,32 @@ export function RecommendBookingButton({ userId, providerId, providerName, refre
         accessibilityState={{ selected: on }}
         accessibilityLabel={on ? `Recommended ${providerName}. Tap to undo` : `Recommend ${providerName}`}
       >
-        {saving ? <ActivityIndicator size="small" color={on ? '#FFFFFF' : HEART} /> : (
+        {saving ? <ActivityIndicator size="small" color={textColour} /> : (
           <>
-            <Ionicons name={on ? 'heart' : 'heart-outline'} size={16} color={on ? '#FFFFFF' : HEART} />
-            <Text style={[styles.text, { color: on ? '#FFFFFF' : textColour }]} numberOfLines={1}>
-              {on ? 'Recommended' : `Recommend ${providerName}`}
+            <Ionicons name={on ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={textColour} />
+            <Text style={[styles.text, { color: textColour }]} numberOfLines={1}>
+              {on ? 'Recommended' : 'Recommend'}
             </Text>
           </>
         )}
       </TouchableOpacity>
-      {showWhereIGo === false ? (
-        <Text style={[styles.hint, { color: subColour }]}>Only you can see this while sharing is off.</Text>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 8, gap: 6 },
+  wrap: { width: '100%', alignItems: 'center', marginTop: 8, gap: 4 },
   btn: {
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1.5,
+    width: '72%',
+    maxWidth: 280,
+    minHeight: 44,
+    borderRadius: 22,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
+    gap: 6,
+    paddingHorizontal: 14,
   },
-  text: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
-  hint: { fontSize: 12, textAlign: 'center' },
+  text: { fontSize: 13, fontWeight: '600' },
 });

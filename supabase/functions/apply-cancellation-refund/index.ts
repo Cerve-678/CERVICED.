@@ -5,6 +5,7 @@ import { londonWallTimeToUtcMs } from '../_shared/londonTime.ts';
 import { findPayoutTransfer } from '../_shared/payoutTransfer.ts';
 import {
   computeCancellationSettlement,
+  isLateClientCancel,
   readCancelCustomFeePence,
   readCancelPenalty,
 } from '../_shared/cancellationSettlement.ts';
@@ -27,12 +28,16 @@ import Stripe from 'npm:stripe@17.4.0';
 // computed SERVER-SIDE from the booking's frozen policy + its stored payment
 // figures, so the client cannot influence the amounts.
 //
-// Model (refund-only — never charges the client more than they paid):
+// Model (this function only refunds — it never charges the client more than they paid):
 //   • early cancel, or penalty 'none'  → full refund incl. fee; provider keeps nothing.
 //   • late + 'deposit'                 → provider keeps the deposit, CERVICED keeps the fee, client refunded the rest.
-//   • late + 'custom'                  → provider keeps the amount they set, at most half; CERVICED keeps the fee, client refunded the rest.
 //   • late + 'half'                    → provider keeps half their share, CERVICED keeps the fee, client refunded the other half.
+//   • late + 'custom'                  → provider keeps the amount they set, at most half; CERVICED keeps the fee, client refunded the rest.
+//                                        (Frozen on older bookings only; no longer offered.)
 //   • paid only a deposit              → under 'deposit' or 'half' the provider keeps that whole deposit; under 'custom', the set amount up to the deposit.
+//                                        Under 'half', the rest up to half the price is a separate charge the
+//                                        provider may make to the saved card (booking-fee, kind 'late_cancel');
+//                                        the notices below tell both sides it's available.
 // "Late" also covers a booking the client asked to move once its window had
 // already started (bookings.late_reschedule_from), whenever it's cancelled.
 //
@@ -102,7 +107,7 @@ Deno.serve(async (req: Request) => {
     // the frozen policy snapshot and the stored money figures.
     const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, base_price, booking_date, booking_time, late_reschedule_from, cancel_notice_hours, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
+      .select('id, user_id, provider_id, status, cancelled_at, cancelled_by, payment_intent_id, amount_paid, deposit_amount, service_charge, payment_status, stripe_refund_id, base_price, booking_date, booking_time, end_time, late_cancel_fee_pence, late_reschedule_from, cancel_notice_hours, policy_snapshot, provider_name_snapshot, service_name_snapshot, customer_name')
       .eq('id', body.bookingId)
       .maybeSingle();
     if (bookingError) throw bookingError;
@@ -156,12 +161,12 @@ Deno.serve(async (req: Request) => {
     // this call arrives — otherwise waiting until after the appointment would
     // turn a late cancel into a full refund.
     const cancelledMs = Date.parse(booking.cancelled_at);
-    const hoursUntil = Number.isFinite(apptMs) && Number.isFinite(cancelledMs) ? (apptMs - cancelledMs) / 3_600_000 : 0;
     // A client who asked to move this booking while already inside the window
     // stays inside it (decided 2026-10-25): stamped by
     // confirm_reschedule_own_booking; only a later provider-proposed move clears it.
     const movedLate = hours > 0 && !!booking.late_reschedule_from;
-    const isLateCancel = movedLate || (hours > 0 && hoursUntil >= 0 && hoursUntil < hours);
+    // The same test booking-fee uses before a late-cancel charge.
+    const isLateCancel = isLateClientCancel({ noticeHours: hours, appointmentMs: apptMs, cancelledMs, movedLate });
 
     // The provider's payout row for this booking (its stored share, in pence).
     const { data: payout, error: payoutErr } = await admin
@@ -296,7 +301,14 @@ Deno.serve(async (req: Request) => {
     }
     const keptAs = settlement.depositRuleOnly ? 'deposit'
       : penalty === 'custom' ? 'amount' : penalty === 'half' && booking.payment_status !== 'deposit_paid' ? 'half' : 'deposit';
-    await notifySettlement(booking, provider, keptAs, hours, settlement, movedLate, settlement.depositRuleOnly);
+    // What the provider may still charge on top (late cancel under 'half',
+    // deposit only), and until when: 24 hours after the appointment ends.
+    const topUpPence = isLateCancel && penalty === 'half' && booking.payment_status === 'deposit_paid'
+      ? Number(booking.late_cancel_fee_pence ?? 0) : 0;
+    const endMs = londonWallTimeToUtcMs(String(booking.booking_date), String(booking.end_time ?? booking.booking_time));
+    const topUp = topUpPence > 0 && Number.isFinite(endMs)
+      ? { pence: topUpPence, untilLabel: ukLabel(endMs + 24 * 3_600_000) } : null;
+    await notifySettlement(booking, provider, keptAs, hours, settlement, movedLate, settlement.depositRuleOnly, topUp);
     return json({ status: 'settled', clientRefundPence: settlement.clientRefundPence, providerKeepPence: settlement.providerKeepPence }, 200);
   } catch (err) {
     console.error(`[apply-cancellation-refund] fatal: ${String(err)}`);
@@ -318,6 +330,8 @@ async function notifySettlement(
   movedLate: boolean,
   // Kept under the non-refundable deposit alone: "cancelled late" would be untrue.
   depositRuleOnly: boolean,
+  // The late-cancel charge the provider can still make, if any.
+  topUp: { pence: number; untilLabel: string } | null,
 ) {
   if (settlement.providerKeepPence <= 0) return;
   // A retried settlement (e.g. a 'full' penalty, which leaves no refund to
@@ -337,27 +351,32 @@ async function notifySettlement(
   const refunded = `£${(settlement.clientRefundPence / 100).toFixed(2)}`;
   const providerWhy = movedLate ? ' They had moved it after that window started.' : '';
   const clientWhy = movedLate ? ' You moved this booking after that window had started, so it still applied.' : '';
+  const more = topUp ? `£${(topUp.pence / 100).toFixed(2)}` : '';
+  const providerTopUp = topUp
+    ? ` Under your Half policy you can charge ${more} more to their saved card from the booking, until ${topUp.untilLabel}.` : '';
+  const clientTopUp = topUp
+    ? ` ${providerName} can also charge up to ${more} more to your saved card, as you agreed when booking, until ${topUp.untilLabel}. You'll be told if they do.` : '';
 
   const rows = [
     ...(provider?.user_id ? [{
       user_id: provider.user_id,
       type: 'cancellation_settled',
       title: `${clientName.split(' ')[0]} cancelled${depositRuleOnly ? '' : ' late'}`,
-      message: `You kept ${what} under your ${window}.${providerWhy}`,
+      message: `You kept ${what} under your ${window}.${providerWhy}${providerTopUp}`,
       priority: 'medium',
-      is_actionable: false,
+      is_actionable: !!topUp,
       booking_id: booking.id,
       provider_id: booking.provider_id,
       recipient_role: 'provider',
-      metadata: { provider_kept_pence: settlement.providerKeepPence, moved_late: movedLate },
+      metadata: { provider_kept_pence: settlement.providerKeepPence, moved_late: movedLate, late_cancel_fee_pence: topUp?.pence ?? null },
     }] : []),
     {
       user_id: booking.user_id,
       type: 'cancellation_settled',
       title: settlement.clientRefundPence > 0 ? `${refunded} refunded` : 'Cancellation charge applied',
       message: settlement.clientRefundPence > 0
-        ? `${providerName} kept ${what} under their ${window}.${clientWhy} ${refunded} is on its way back to you.`
-        : `${providerName} kept ${what} under their ${window}, so nothing is refunded.${clientWhy}`,
+        ? `${providerName} kept ${what} under their ${window}.${clientWhy} ${refunded} is on its way back to you.${clientTopUp}`
+        : `${providerName} kept ${what} under their ${window}, so nothing is refunded.${clientWhy}${clientTopUp}`,
       priority: 'medium',
       is_actionable: false,
       booking_id: booking.id,
@@ -368,6 +387,13 @@ async function notifySettlement(
   ];
   const { error } = await admin.from('notifications').insert(rows);
   if (error) console.error(`[apply-cancellation-refund] settled but notification failed: ${String(error.message ?? error)}`);
+}
+
+/** "Sat 15 Nov, 11:00" in UK time. */
+function ukLabel(ms: number): string {
+  return new Date(ms).toLocaleString('en-GB', {
+    timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
 }
 
 async function latestChargeId(paymentIntentId: string): Promise<string | null> {
