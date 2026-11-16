@@ -5,7 +5,7 @@
 
 #generated
 
-**3804 functions** across **538 files**.
+**3871 functions** across **547 files**.
 
 ### `src/components/` (66)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -95,11 +95,11 @@
 
 ### `src/constants/` (12)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
-- `pageStyles.ts` — **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber**
+- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
-- `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale**
+- `providerFonts.ts` — **resolveProviderFontFamily** · **resolveProviderFontScale** · **resolveProviderNameLineHeight**
 - `providerThemes.ts` — **blend** · **buildMonochromeTheme** · **buildThemeTokens** · channelLuminance · contrastRatio · **decodeCustomTheme** · **encodeCustomTheme** · **encodeThemeKey** · hexChannels · isCardShape · **isDarkColor** · isHeroFinish · **parseThemeKey** · relativeLuminance · **resolveProviderTheme** · **themeBrandingColours** · valid · **withAlpha**
 - `reschedule.ts` — changes
 - `serviceTypes.ts` — **isServiceTypeKey** · **serviceTypeOptionsFor**
@@ -254,7 +254,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (49)
+### `src/features/providers/` (50)
 - `aboutPreview.ts` — **aboutPreview**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
@@ -279,11 +279,11 @@
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · go · InlinePage · label · **PolicyPagesInline** · **PolicyStoryRings** · **PolicyStoryViewer** · StoryBody · top · **usePolicyEdgeColours**
-- `ProfileHero.tsx` — CurvedCaption · **HeroLogo** · **HeroPills** · **logoInitials** · **ProfileHeroLayout** · ringOut
+- `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
-- `ProfilePageStyle.tsx` — **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · **PolicyBandSection** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · **sheetInk** · **StyledPolicyList** · **WaveEdge**
+- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **GlossShine** · HeadingLine · isCentredHeading · LaceTrimmedCard · **onAccentInk** · outlineInk · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
-- `ProfileStylePreview.tsx` — lines · **ProfileStylePreview**
+- `ProfileStylePreview.tsx` — lines · noop · **ProfileStylePreview**
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
 - `ProviderProfileSections.tsx` — columns · images · openFromModal · **ProviderAdditionalInfoSection** · **ProviderContactSection** · **ProviderOpeningHoursSection** · **ProviderPortfolioSection** · **ProviderReviewPreviewSection** · **ProviderSpecialitiesSection** · tileHeight · venueImages
 - `recentBookingActivity.ts` — bookedAgo · **describeRecentBooking**
@@ -303,20 +303,31 @@
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
+- `WaxSeal.tsx` — **sealLetter** · **waxColour** · **WaxSeal**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
+### `src/features/providers/heroes/` (8)
+- `BoutiqueHero.tsx` — **BoutiqueHero** · onLayout · ShopStrip
+- `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
+- `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
+- `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
+- `LaceHero.tsx` — LaceDrape · **LaceHero** · **LaceRosette** · **LaceTrim** · scallopXs
+- `NovelHero.tsx` — **NovelHero** · subtitle
+- `SealedHero.tsx` — Postmark · **SealedEnvelope**
+- `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
+
 ### `src/features/social/` (12)
-- `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
+- `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
 - `contacts.ts` — **buildInviteList** · **cachedContacts** · **collectContactNumbers** · **findContactsOnCerviced** · **getContactsAccess** · **hashNormalisedNumber** · **inviteContact** · **isContactsLimitError** · **rememberContacts** · **requestContactsAccess**
 - `momentsMemory.ts` — **readMomentsMemory** · **updateMomentsMemory**
 - `people.ts` — **personAction** · **withMyStatus** · **withoutPerson** · **withPersonFirst**
 - `presentation.ts` — **circleLine** · **compareCirclePeople** · **firstName** · **groupCircleRows** · **initialsFor** · **stackAccessibilityLabel** · **stackLayout**
-- `ProviderSharingRow.tsx` — **ProviderSharingRow** · toggleHidden · toggleRecommend
+- `ProviderRecommend.tsx` — barOffer · dismissFloating · measureHeart · onBarClose · onBarYes · onBarYesSync · onDismissHint · onHeartPress · onToggleHidden · onToggleHiddenSync · onToggleRecommend · **ProviderRecommendLayer** · **RecommendBadge** · setRecommended · showHint · **useProviderRecommend**
 - `recommend.ts` — **recommendProvider**
 - `RecommendAfterRating.tsx` — offer · offerSync · onClose · onYes · onYesSync · **RecommendAfterRatingBar** · **useRecommendAfterRating**
 - `RecommendBookingButton.tsx` — **RecommendBookingButton** · toggle
 - `RecommendHomeCard.tsx` — **RecommendHomeCard**
-- `useCircleMoment.ts` — clear · finishIntro · notNow · recommend · **useCircleMoment**
+- `useCircleMoment.ts` — clear · finishIntro · recommend · **useCircleMoment**
 - `WhereIGoIntroSheet.tsx` — **WhereIGoIntroSheet**
 
 ### `src/i18n/` (3)
@@ -394,7 +405,7 @@
 - `PointsScreen.tsx` — load · PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · leave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · measureKeyboardArea · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
-- `ProviderProfileScreen.tsx` — additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · footer · formatDate · goodToKnowText · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroKicker · heroPillLabels · hideSuccessMessage · jumpTargets · notificationColors · notificationMessage · openBookingSheet · openImageViewer · openLinkOnlyBooking · openOffersPanel · openSheets · policyPages · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · ServiceDescription · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
+- `ProviderProfileScreen.tsx` — additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · footer · formatDate · goodToKnowText · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroKicker · heroPhotoUris · heroPillLabels · hideSuccessMessage · jumpTargets · jumpToServices · notificationColors · notificationMessage · openBookingSheet · openImageViewer · openLinkOnlyBooking · openOffersPanel · openSheets · policyPages · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · ServiceDescription · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · maxPickerDate · minPickerDate · monthLabel · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen · shownDateOptions
 - `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
 - `SubscriptionScreen.tsx` — SubscriptionScreen
@@ -510,7 +521,7 @@
 - `analyticsPeriod.ts` — **addDays** · calendarBuckets · **chartBuckets** · **currentWindow** · **inWindow** · monthRangeStart · parseYMD · **previousPeriodLabel** · **previousWindow** · shiftMonthStart
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `beautyProfileTodo.ts` — **beautyProfileTodo** · isBlank
-- `bookingHorizon.ts` — **bookableDayCount** · fromUkWall · **isBeyondHorizon** · **isMonthlyRelease** · **isReleaseTime** · **lastBookableDate** · lastSundayUtc · **nextReleaseMoment** · **parseBookingWindowDays** · releaseMinutes · releaseMomentFor · **releaseMomentInMonth** · **releaseSettingsPatch** · **releaseTimeLabel** · **rollingWindowExplainer** · **toReleaseDay** · **toReleaseTime** · **ukOffsetMinutes** · ukWall · **whenDateOpens**
+- `bookingHorizon.ts` — **bookableDayCount** · fromUkWall · **isBeyondHorizon** · **isMonthlyRelease** · **isReleaseTime** · **lastBookableDate** · lastSundayUtc · **nextReleaseMoment** · **parseBookingWindowDays** · releaseMinutes · releaseMomentFor · **releaseMomentInMonth** · **releaseSettingsPatch** · **releaseTimeLabel** · **rollingWindowExplainer** · **toReleaseDay** · **toReleaseTime** · **ukOffsetMinutes** · **ukTodayYMD** · ukWall · **whenDateOpens**
 - `bottomSafeGap.ts` — **useSystemBottomInset**
 - `bufferClash.ts` — **findBufferClash** · **minutesFromDay** · minutesToHHMMSS · timeToMinutes
 - `clientArea.ts` — **serviceLocationsFromArea** · **townOfArea**
@@ -560,7 +571,7 @@
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · endsWithPlace · fixCompassTypo · nearestPlace · **parseSearchQuery** · takePrice
 - `serviceFilterMatch.ts` — **candidateServices** · **hasServiceCriteria** · **priceRangeAcrossServices** · **serviceMatchesCriteria** · **serviceRange**
 - `serviceImageDraft.ts` — **normalizeServiceImages**
-- `shuffle.ts` — **shuffle**
+- `shuffle.ts` — **shuffle** · **shuffleWithDifferentFirst**
 - `slotsRowText.ts` — **slotsPillText**
 - `spreadApart.ts` — **spreadApart**
 - `stripeConnectReturn.ts` — **parseStripeConnectReturn**

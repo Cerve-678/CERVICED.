@@ -236,6 +236,42 @@ that, putting it right means taking money back from Jo (section 2.8).
    price per add-on, the same on every service). An add-on's extra time
    lengthens the booking's end time but never changes its price. **Not live
    until migration `20261105223541_universal_add_ons` is applied.**
+   **The policy is frozen here too.** Each booking stores the provider's
+   live booking policy (`bookings.policy_snapshot`, read by the server, never
+   copied from the app) and the moment the client ticked the Confirm & Pay
+   box (`policy_accepted_at`). Cancellation refunds use that frozen copy. If
+   the app's copy of the policy, the one the cart showed, differs from the
+   live one on any money term (cancel window, penalty or fee, deposit
+   settings, late/no-show fee) or on the provider's written terms, checkout
+   is refused and names the provider and service, so nobody is charged under
+   terms they never saw. An older build or a Quick Book item sends no copy,
+   so nothing is compared; the live policy is still what gets frozen. The
+   cancel window is frozen from `providers.cancellation_notice_hours` when
+   set, which the app's copy doesn't carry, so a change to that column alone
+   isn't caught (Part 6). *Live since 13 November (`20261113090000`); the app part needs a new
+   build. Until then no card-paid booking had either (0 of 94 on 13 November), so their
+   refunds use the provider's current policy; they are not backfilled.*
+   **Promo codes are priced here too.** A provider's promo code applied in
+   the cart is sent with each item and re-checked by the server (the
+   provider's own code, active, in date in UK time). The discount is a
+   percentage of the service and its add-ons, or a fixed amount, capped at
+   the service price, and nothing for a service or category outside the
+   code's scope. **The provider pays for it:** the booking's price
+   (`base_price`) is stored after the discount (`promo_discount` and
+   `promotion_id` record which code and how much), so the fee is worked out
+   on the discounted price and the payout, deposit, late/no-show caps and
+   refunds all follow what was actually charged. With a fixed deposit the
+   discount comes off the balance paid at the appointment, not the card
+   charge. An ended or invalid code is refused by name; the cart drops ended
+   codes before Confirm & Pay. A checkout that comes to £0 after a code is
+   refused (Stripe can't take £0); the provider can add that booking
+   themselves. Promotions can't be saved below 0% or above 100%, or with a
+   negative amount. Receipts don't show the discount as its own line yet
+   (`bookings.promo_discount` holds it). *Live since 13 November. Until
+   migration
+   `20261113100000_promo_code_charged_at_checkout` the code never reached the
+   server, so the card was charged full price while the cart showed the
+   discount. The app needs a new build to send the code.*
 2. **Add the fee** from section 1.3.
 3. **Check the provider can be paid.** If any provider in the basket hasn't
    finished setting up their Stripe account, checkout is refused.
@@ -1091,7 +1127,8 @@ Ranked, most important first.
 | 9 | `users.stripe_customer_id` and its two guard triggers are unused | Dead schema | Drop them in a migration |
 | 10 | Fee agreement records are kept six years, but nothing deletes them afterwards | Data retention | Add a purge job before 2032 |
 | 11 | Edge functions aren't type-checked with Deno in CI | Type errors in money code can reach review | Add `deno check` to CI |
-| 12 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
+| 12 | **The cancel window can disagree with the written policy.** `cancel_notice_hours()` uses `providers.cancellation_notice_hours` first and the policy's `cancelNotice` only when the column is empty. On 13 November four live providers had them disagree (Nails Studio and Uniquely Aesthetics 24h vs 48h written, Daminkfinesse 48h vs 24h, CuratedByCilva 24h vs 12h) | A client can be judged by a window different from the one they were shown | Find which editor writes only one of them, then make one the source |
+| 13 | **Full membership promises free months nobody is billed after.** Link-only pros who become full members see "2 months free" (`src/constants/fullMembership.ts`); the £25.99 monthly price was taken off every screen on 6 November while pricing is finalised, and no billing exists. `providers.full_member_since` records the switch and `full_member_free_from` the day they went live again, which is when the free months start (decided 2 November) | Providers will expect the free months honoured from that date | Build billing from those columns, with the Terms change (LEGAL-COMPLIANCE-NOTES §16 item 4) |
 
 ---
 
@@ -1110,6 +1147,8 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 18 Oct | A payout is held while a refund request is open | A refund can then come out of money CERVICED still has |
 | 18 Oct | A provider who can't cover a reversal owes it from future payouts | Keeps the books whole without charging the provider directly |
 | 19 Oct | Fee agreement records are kept six years, including after account deletion | Evidence for disputes and claims |
+| 13 Nov | Promo codes are funded by the provider and the fee is charged on the discounted price | It is the provider's promotion; the cart already showed the fee on the discounted total |
+| 13 Nov | Card checkouts freeze the provider's live policy and refuse when it differs from what the cart showed | Refunds were using the provider's current policy for every card booking; binding a client to terms changed after they added the service would be unfair |
 | 19 Oct | A fee the card can't pay becomes a 7-day payment request, with up to 3 automatic retries on declines | A fair chance to pay before it lapses |
 | 19 Oct | A saved card can't be removed until 24 hours after its appointment | It may be needed for a fee |
 | 21 Oct | Failed payouts are retried after about 1, 2 and 4 days, then wait for a person | Most failures are temporary |
