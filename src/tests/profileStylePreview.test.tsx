@@ -136,15 +136,12 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('Lashes.')).toBeTruthy();
   });
 
-  it('writes Apothecary\'s prescription pad from their own profile', () => {
+  it('keeps Apothecary\'s hero simple: the name, no prescription pad', () => {
     renderPreview('apothecary');
-    expect(screen.getByText('℞')).toBeTruthy();
     expect(screen.getByText('Amara Lashes')).toBeTruthy();
-    expect(screen.getByText('PRESCRIPTION')).toBeTruthy();
-    expect(screen.getByText('Lashes')).toBeTruthy();
-    expect(screen.getByText('Peckham')).toBeTruthy();
-    expect(screen.getByText('Amara')).toBeTruthy();
-    expect(screen.getByText('PRACTITIONER')).toBeTruthy();
+    expect(screen.queryByText('℞')).toBeNull();
+    expect(screen.queryByText('PRESCRIPTION')).toBeNull();
+    expect(screen.queryByText('PRACTITIONER')).toBeNull();
   });
 
   it('sets the name in the style\'s own font even when the provider chose a Branding font', () => {
