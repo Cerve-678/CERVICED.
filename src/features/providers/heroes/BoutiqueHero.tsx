@@ -2,7 +2,7 @@
 //
 // The Boutique page style's hero (pageStyles hero 'productPage'): the top of
 // the profile reads like a product page in an online boutique. Their logo,
-// big, on their colour fills the top edge to edge; under it, on a panel in
+// big, on their colour in a block with rounded top corners; under it, on a panel in
 // their Branding card colour with rounded bottom corners, the brand line (name
 // and area), the name as the product title, their stars, years and slots,
 // and what they do as chips.
@@ -24,11 +24,11 @@ export function cardInk(cardColour: string): { text: string; sub: string; rule: 
   return { text, sub: blend(text, cardColour, 0.35), rule: blend(text, cardColour, 0.8) };
 }
 
-/** The colour block sits this far up, under the header buttons, to reach the
- *  top edge (the hero is laid out below ProviderProfileScreen's heroInfoWrap padding). */
-const BLEED_UP = 100;
-/** Height of the colour block as a share of the screen's width. */
-const TOP_RATIO = 0.8;
+/** Height of the colour block as a share of the screen's width. It starts
+ *  under the header buttons (ProviderProfileScreen's heroInfoWrap padding)
+ *  rather than reaching up to the top edge, so its rounded top corners show,
+ *  like the panel's at the foot (owner, 2026-11-16). */
+const TOP_RATIO = 0.66;
 /** At most this many of what they do show as chips. */
 const MAX_CHIPS = 4;
 
@@ -66,7 +66,7 @@ export function BoutiqueHero({
 
   return (
     <View style={styles.wrap}>
-      {/* Their logo, big, on their colour, below the header buttons. */}
+      {/* Their logo, big, on their colour, below the header buttons, rounded at the top. */}
       <View style={[styles.top, { height: topHeight, backgroundColor: accent }]}>
         {renderLogo(120)}
       </View>
@@ -96,10 +96,10 @@ export function BoutiqueHero({
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignSelf: "stretch", marginTop: -BLEED_UP, marginBottom: 24 },
+  wrap: { alignSelf: "stretch", marginBottom: 24 },
   // Rounded at the top as the panel is at the foot (owner, 2026-11-16).
   top: {
-    alignItems: "center", justifyContent: "center", paddingTop: BLEED_UP / 2,
+    alignItems: "center", justifyContent: "center",
     borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden",
   },
   panel: {
