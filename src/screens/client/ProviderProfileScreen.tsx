@@ -6,7 +6,12 @@ import React, {
   useEffect,
 } from "react";
 import { useBookmarkStore } from "../../stores/useBookmarkStore";
-import { ProviderSharingRow } from "../../features/social/ProviderSharingRow";
+import {
+  ProviderRecommendLayer,
+  RecommendBadge,
+  type RecommendBadgeTheme,
+  useProviderRecommend,
+} from "../../features/social/ProviderRecommend";
 import {
   View,
   Text,
@@ -36,7 +41,19 @@ import type { ScrollViewInstance } from 'react-native';
 // transition replace resizeMode/fadeDuration; transition={0} keeps the same
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
-import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "../../features/providers/ProfileHero";
+import {
+  DETAILS_ON_CARD_INK,
+  DETAILS_OWN_LINE,
+  HERO_NAME_LINE_HEIGHT,
+  HERO_NAME_SIZE,
+  HeroLogo,
+  HeroPills,
+  ProfileHeroLayout,
+  detailsSitOnCard,
+  heroIsDarkForStyle,
+} from "../../features/providers/ProfileHero";
+import { cardInk } from "../../features/providers/heroes/BoutiqueHero";
+import { VeilBackdrop, veilAccent, veilPageTheme } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -48,13 +65,15 @@ import { FullImageViewer } from "../../components/FullImageViewer";
 import { LogoZoomViewer } from "../../components/LogoZoomViewer";
 import { policyImageEdges, policyImageUrls } from "../../features/providers/policyImages";
 import {
+  PolicyPagesCompact,
   PolicyPagesInline,
+  PolicyPagesShowcase,
   PolicyStoryRings,
   PolicyStoryViewer,
   usePolicyEdgeColours,
 } from "../../features/providers/PolicyPages";
 import { StackScreenProps } from "@react-navigation/stack";
-import { usePreventRemove } from "@react-navigation/native";
+import { useFocusEffect, usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
 
 // Correct icon imports - using your IconLibrary.tsx
@@ -73,7 +92,7 @@ import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
-import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
@@ -81,10 +100,10 @@ import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
 import CategoryTabItem from "../../components/CategoryTabPill";
 import {
   getProviderDepositPoliciesByDisplayNames,
-  getUserWaitlistEntries,
+  getMyWaitlist,
   joinWaitlist,
   leaveWaitlist,
-  type WaitlistEntry,
+  type MyWaitlistPlace,
   setProviderFollowNotify,
   recordProviderStat,
   addMyExternalBooking,
@@ -111,20 +130,21 @@ import {
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
-import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { dateToYMD, formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { placeInLineLabel } from "../../features/bookings/waitlist";
 import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
+import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
 import {
   GlossShine,
   onAccentInk,
   PageSection,
   PageSectionHeading,
-  PolicyBandSection,
+  AccentBandSection,
   policiesBringOwnSurface,
   sectionInk,
   sectionsSitOnPage,
@@ -1494,17 +1514,26 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
-  const OP = resolveProviderTheme(provider?.profileTheme);
+  // Branding → Page Style (constants/pageStyles): headings, card treatment,
+  // the policy layout and the logo frame, on top of the colours. Classic is
+  // the profile exactly as it was.
+  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
+  // A veil page (Sheer) keeps the theme's hero and accent but puts the
+  // content on see-through dark glass, so every section inks itself white.
+  const baseTheme = resolveProviderTheme(provider?.profileTheme);
+  const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
+  const OP = veilTheme ?? baseTheme;
   // Branding → Card Shape: square corners on the profile's cards (the service
   // cards and category pills, About/Policies, the sharing card, Reviews,
   // Contact, Opening hours, Additional info), or the rounded look it has
   // always had. The availability pill and Instagram button beside it stay
   // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
-  // Branding → Page Style (constants/pageStyles): headings, card treatment,
-  // the policy layout and the logo frame, on top of the colours. Classic is
-  // the profile exactly as it was.
-  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
+  // Branding → Policy Pictures: story circles near the top, or one of the
+  // designs (full size, framed, swipe, fanned, peek, thumbnails, a button)
+  // after the services.
+  const policyLook = parseThemeKey(provider?.profileTheme).policyLook;
+  const policyPlacement = policyPicturePlacement(policyLook);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1604,7 +1633,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // non-cacheable viewer request. viewerChecked remains a separate gate so
   // deep-linked booking UI never auto-opens before that check settles.
   const [userWaitlistMap, setUserWaitlistMap] = useState<
-    Record<string, WaitlistEntry>
+    Record<string, MyWaitlistPlace>
   >({});
   // service.dbId -> "has a bookable slot in the next 14 days". The Waitlist
   // button only makes sense once we've confirmed there's genuinely nothing
@@ -1627,7 +1656,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistJoining, setWaitlistJoining] = useState(false);
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [leaveConfirmEntry, setLeaveConfirmEntry] =
-    useState<WaitlistEntry | null>(null);
+    useState<MyWaitlistPlace | null>(null);
   const [waitlistDateMode, setWaitlistDateMode] = useState<"anytime" | "range">(
     "anytime",
   );
@@ -1716,6 +1745,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
     );
   }, []);
+  // Studio's Book now, in its hero.
+  const jumpToServices = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    scrollToSection(servicesSectionRef.current);
+  }, [scrollToSection]);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -1733,7 +1767,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // brown for the default theme). There used to be a middle step that guessed
   // an accent from the gradient's first colour through a table of old
   // placeholder presets, falling back to purple for anything else.
-  const adaptiveAccentColor = provider?.accentColor ?? OP.accent;
+  const rawAccentColor = provider?.accentColor ?? OP.accent;
+  // On a veil page's dark glass a dark accent is lifted so it still reads.
+  const adaptiveAccentColor = veilTheme ? veilAccent(rawAccentColor) : rawAccentColor;
+  // Recommend's badge on the logo wears this page's colours.
+  const recommendBadgeTheme = useMemo<RecommendBadgeTheme>(() => ({
+    card: OP.card,
+    text: OP.text,
+    accent: adaptiveAccentColor,
+    onAccent: onAccentInk(adaptiveAccentColor).text,
+  }), [OP.card, OP.text, adaptiveAccentColor]);
 
   // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat
   // opaque fill — derived from the provider theme's card colour so every preset matches.
@@ -1799,6 +1842,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
+  // Up to three of their portfolio photos for the heroes that show them
+  // (Editorial's tilted card, Snapshot's photo strip).
+  const heroPhotoUris = useMemo(
+    () => workPortfolio.slice(0, 3).map((item) => item.image_url).filter(Boolean),
+    [workPortfolio],
+  );
   // A salon/studio on "Always visible" shows its full address in Contact
   // instead of the area. The server decides who qualifies and returns null for
   // everyone else, so the area stays the default and a failed fetch just
@@ -1857,6 +1906,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     if (provider.specialties.length > 0 && !provider.isLinkOnly) {
       groups.push({ label: "Specialities", chips: [...provider.specialties] });
     }
+    // What they do (Nails, Lashes…). Cover and Duet leave it out of the top
+    // of the page, so it's said here instead (owner, 2026-11-15).
+    if (pageStyle.hero === "cover" || pageStyle.hero === "duet") {
+      const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
+      const chips = [...new Set(types.map((type) => {
+        const label = type === "OTHER" ? provider.customServiceType || "Service" : type;
+        return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+      }))];
+      if (chips.length > 0) groups.push({ label: "Category", chips });
+    }
+    // Salon, studio, home-based or mobile. Classic already shows it as the
+    // icon in the line under the name; most page styles' heroes have no such
+    // line, so there it is said here in words (owner, 2026-11-15).
+    if (provider.businessType && pageStyle.key !== "classic") {
+      groups.push({ label: "Business type", chips: [BUSINESS_TYPE_LABEL[provider.businessType]] });
+    }
     // Who they work with (clients, skin tones, hair types) from About You's
     // "I Work With" — here, not in the About/Policy card, which is the bio.
     groups.push(...workWithGroups(provider));
@@ -1897,7 +1962,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       groups.push({ label: "Payment methods", chips: paymentLabels });
     }
     return groups;
-  }, [provider]);
+  }, [provider, pageStyle.key, pageStyle.hero]);
 
   // One natural-language paragraph rather than a label/value dump — these are
   // unrelated one-liners, and as rows they read like a spec sheet for
@@ -1926,10 +1991,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     ? provider?.gradient[0]
     : OP.hero;
   const heroIsDark =
+    heroIsDarkForStyle(pageStyle) ||
     !!provider?.backgroundImage ||
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
+  // Duet and Calling Card draw the stars, years and link-only caption on a
+  // card, so they take that card's ink whatever is behind the hero.
+  const detailsOnCard = detailsSitOnCard(pageStyle);
+  // Boutique's panel and Duet's welcome card are their card colour, so their
+  // ink follows that colour; Calling Card's cream card is always inked dark.
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" ? cardInk(OP.card) : DETAILS_ON_CARD_INK;
+  const detailsText = detailsOnCard ? cardDetailsInk.text : heroText;
+  const detailsSub = detailsOnCard ? cardDetailsInk.sub : heroSub;
+  const detailsShadow = heroIsDark && !detailsOnCard;
 
   // What they do, for Arch's curved caption, Spa's top line and the like.
   const heroKicker = useMemo(() => {
@@ -1938,14 +2013,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     return [...new Set(types.map((type) => (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase()))].join(" · ");
   }, [provider]);
 
-  // Cover's pills under the name: every service type they offer, their area
-  // and how they work — the same facts as the small-caps line other styles show.
+  // Cover's pills under the name: their area and how they work. What they do
+  // isn't repeated here: Additional Information lists it as Category
+  // (owner, 2026-11-15).
   const heroPillLabels = useMemo(() => {
     if (!provider || !pageStyle.heroPills) return [];
-    const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
-    const labels = types.map((type) =>
-      (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase(),
-    );
+    const labels: string[] = [];
     if (provider.location) labels.push(provider.location.toUpperCase());
     if (provider.businessType) labels.push(BUSINESS_TYPE_LABEL[provider.businessType].toUpperCase());
     return [...new Set(labels)];
@@ -1966,20 +2039,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
   }, [promotions.length, offersTabSlide]);
 
-  useEffect(() => {
+  // The client's live places on this provider's waitlists, with their real
+  // place in line. A place whose hold ended (status 'expired') isn't one:
+  // the service offers Waitlist again so they can rejoin.
+  const loadWaitlistMap = useCallback(async () => {
     if (!currentUserId || !providerDbId) return;
-    getUserWaitlistEntries(currentUserId)
-      .then((entries) => {
-        const map: Record<string, WaitlistEntry> = {};
-        entries
-          .filter((e) => e.provider_id === providerDbId)
-          .forEach((e) => {
-            map[e.service_id ?? "__any__"] = e;
-          });
-        setUserWaitlistMap(map);
-      })
-      .catch(() => {});
+    try {
+      const places = await getMyWaitlist();
+      const map: Record<string, MyWaitlistPlace> = {};
+      places
+        .filter((place) => place.providerId === providerDbId && (place.status === "waiting" || place.status === "notified"))
+        .forEach((place) => {
+          map[place.serviceId ?? "__any__"] = place;
+        });
+      setUserWaitlistMap(map);
+    } catch (error) {
+      logger.warn("[ProviderProfile] waitlist places failed to load", error);
+    }
   }, [currentUserId, providerDbId]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadWaitlistMap();
+    }, [loadWaitlistMap]),
+  );
 
   // Check near-term availability per service so the Waitlist button (or,
   // when waitlists are off, the plain "no openings" note) only shows once a
@@ -2053,13 +2135,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [offersPanelSlide]);
 
   // Show notification popup from right
+  const rightNotificationRun = useRef<Animated.CompositeAnimation | null>(null);
   const showRightNotification = useCallback(() => {
+    // A quick second tap (bell on, off, on) starts a new toast while the last
+    // one is still showing. Stop that one first: an interrupted animation still
+    // calls its end callback, which used to hide the toast that just appeared.
+    rightNotificationRun.current?.stop();
     setShowNotification(true);
     // Reset animation - start from right edge
     slideRightAnimation.setValue(100);
 
     // Animate notification slide in from right
-    Animated.sequence([
+    const run = Animated.sequence([
       Animated.spring(slideRightAnimation, {
         toValue: 0,
         useNativeDriver: true,
@@ -2072,8 +2159,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         duration: 300,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setShowNotification(false);
+    ]);
+    rightNotificationRun.current = run;
+    run.start(({ finished }) => {
+      // Only the toast that ran to the end hides itself; a stopped one leaves
+      // the newer toast alone.
+      if (finished && rightNotificationRun.current === run) setShowNotification(false);
     });
   }, [slideRightAnimation]);
 
@@ -2139,6 +2230,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const { holdForDetails, beforeYouBookSheet } = useBeforeYouBook();
+  // Recommend, for a client who has had a completed appointment here: a
+  // one-time bar, then a thumbs-up badge on the logo with a menu under it.
+  const recommend = useProviderRecommend({
+    providerId: providerDbId,
+    providerName: provider?.displayName ?? "",
+    enabled: canSaveProvider && hatState.active === "client",
+    onError: showAlert,
+  });
+  const recommendHeart = recommend.heart;
 
   const refuseBookingAsProvider = useCallback((): boolean => {
     if (!viewingOtherAsProvider) return false;
@@ -2441,12 +2541,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     try {
       let preferredDates: string[] | undefined;
       if (waitlistDateMode === "range" && waitlistDateFrom) {
-        const fromStr = waitlistDateFrom.toISOString().split("T")[0]!;
+        // Local calendar dates: toISOString() went through UTC and could
+        // slip a day back during British Summer Time.
+        const fromStr = dateToYMD(waitlistDateFrom);
         preferredDates = waitlistDateTo
-          ? [fromStr, waitlistDateTo.toISOString().split("T")[0]!]
+          ? [fromStr, dateToYMD(waitlistDateTo)]
           : [fromStr];
       }
-      const entry = await joinWaitlist({
+      await joinWaitlist({
         providerId: providerDbId,
         userId: currentUserId,
         serviceId: waitlistModal.service.dbId,
@@ -2456,11 +2558,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         ...(preferredDates ? { preferredDates } : {}),
         ...(waitlistNotes.trim() ? { notes: waitlistNotes.trim() } : {}),
       });
-      setUserWaitlistMap((prev) => ({
-        ...prev,
-        [entry.service_id ?? "__any__"]: entry,
-      }));
       closeWaitlistModal();
+      await loadWaitlistMap();
     } catch {
       setWaitlistError("Couldn't save — check your connection and try again.");
     }
@@ -2476,14 +2575,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     waitlistDateFrom,
     waitlistDateTo,
     closeWaitlistModal,
+    loadWaitlistMap,
   ]);
 
-  const handleLeaveWaitlist = useCallback(async (entry: WaitlistEntry) => {
+  const handleLeaveWaitlist = useCallback(async (entry: MyWaitlistPlace) => {
     try {
       await leaveWaitlist(entry.id);
       setUserWaitlistMap((prev) => {
         const next = { ...prev };
-        delete next[entry.service_id ?? "__any__"];
+        delete next[entry.serviceId ?? "__any__"];
         return next;
       });
     } catch {
@@ -3643,7 +3743,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           <Text style={{ color: OP.sub, fontFamily: "Jura-VariableFont_wght" }}>
             {loadFailed
               ? "Could not load provider. Please try again."
-              : "This provider is currently not accepting bookings."}
+              : "Provider not found"}
           </Text>
         </View>
       );
@@ -4112,7 +4212,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               ? "Not taking bookings"
                               : fullyBooked
                               ? "Fully Booked"
-                              : "Book"}
+                              // Boutique says "Add to basket"; it still opens the booking sheet.
+                              : pageStyle.bookLabel ?? "Book"}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -4120,63 +4221,46 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                   {(() => {
                     const wEntry = userWaitlistMap[service.dbId];
+                    // Held: the slot is theirs for 15 minutes; it's paid for
+                    // from Bookings, so the chip goes there. No ✕ while held:
+                    // they pass on it from Bookings instead.
+                    if (wEntry?.status === "notified") {
+                      return (
+                        <TouchableOpacity
+                          style={[styles.waitlistChip, { borderColor: adaptiveAccentColor, backgroundColor: adaptiveAccentColor }]}
+                          onPress={() => {
+                            runAction(() => navigation.navigate("Bookings" as never));
+                          }}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="A slot is held for you. Open Bookings to confirm and pay."
+                        >
+                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
+                          <Ionicons name="chevron-forward" size={11} color="#fff" />
+                        </TouchableOpacity>
+                      );
+                    }
                     if (wEntry) {
                       return (
                         <View
                           style={[
                             styles.waitlistChip,
-                            {
-                              borderColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "70"
-                                  : "#FF9500" + "70",
-                              backgroundColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "0D"
-                                  : "#FF950010",
-                            },
+                            { borderColor: adaptiveAccentColor + "70", backgroundColor: adaptiveAccentColor + "0D" },
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.waitlistChipText,
-                              {
-                                color:
-                                  wEntry.status === "notified"
-                                    ? adaptiveAccentColor
-                                    : "#FF9500",
-                              },
-                            ]}
-                          >
-                            {wEntry.status === "notified"
-                              ? "Slot Held — Confirm!"
-                              : `Waiting · #${wEntry.position}`}
+                          <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
+                            {placeInLineLabel(wEntry.placeInLine)}
                           </Text>
                           <TouchableOpacity
                             onPress={() => {
                               runAction(() => setLeaveConfirmEntry(wEntry));
                             }}
                             activeOpacity={0.6}
-                            hitSlop={{
-                              top: 6,
-                              bottom: 6,
-                              left: 6,
-                              right: 6,
-                            }}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Leave the ${service.name} waitlist`}
                           >
-                            <Text
-                              style={[
-                                styles.waitlistChipX,
-                                {
-                                  color:
-                                    wEntry.status === "notified"
-                                      ? adaptiveAccentColor
-                                      : "#FF9500",
-                                },
-                              ]}
-                            >
-                              ✕
-                            </Text>
+                            <Text style={[styles.waitlistChipX, { color: adaptiveAccentColor }]}>✕</Text>
                           </TouchableOpacity>
                         </View>
                       );
@@ -4282,11 +4366,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </>
         ) : (
           <ProfileHeroBackdrop
-            colors={provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]}
+            colors={provider.hasCustomGradient ? provider.gradient : [baseTheme.hero, baseTheme.bg]}
             finish={parseThemeKey(provider.profileTheme).finish}
             style={styles.heroImage}
           />
         )}
+        {/* Sheer: the black veil over the whole backdrop, behind the hero and
+            the see-through content sheet alike. */}
+        {veilTheme ? <VeilBackdrop style={styles.heroImage} /> : null}
 
         {/* Driven by this provider's hero, not theme.statusBar: their profile
             theme never follows the viewer's dark mode, so reading the viewer's
@@ -4697,7 +4784,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
 
               <Text style={[styles.waitlistPopupSub, { color: OP.sub }]}>
-                We'll notify you when a slot opens up.
+                If a slot that suits you opens, it's held for you for 15 minutes to confirm and pay, deposit and fee included. If you don't pay in time, you come off the waitlist and can rejoin.
               </Text>
 
               {/* Availability toggle */}
@@ -5019,7 +5106,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   ]}
                   numberOfLines={1}
                 >
-                  {leaveConfirmEntry.service_name_snapshot}
+                  {leaveConfirmEntry.serviceName}
                 </Text>
               )}
               <Text style={[styles.leavePopupBody, { color: OP.sub }]}>
@@ -5142,6 +5229,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             contentContainerStyle={styles.scrollContent}
             scrollEventThrottle={16}
             onScroll={handleScroll}
+            // Touching the page closes Recommend's menu and bubble.
+            onTouchStart={recommend.dismissFloating}
             nestedScrollEnabled={true}
           >
             {/* Logo + profile info — floats directly over the hero photo/gradient */}
@@ -5157,6 +5246,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroText={heroText}
                 heroSub={heroSub}
                 heroIsDark={heroIsDark}
+                accent={adaptiveAccentColor}
+                heroColour={heroBgColor ?? OP.hero}
+                cardColour={OP.card}
+                photoUris={heroPhotoUris}
+                rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
+                isVerified={provider.isVerified}
+                // Link-only providers have no Services section to jump to.
+                onBookNow={isLinkOnly ? undefined : jumpToServices}
                 renderLogo={(size) => (
                   <HeroLogo
                     size={size}
@@ -5172,6 +5269,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       setShowFullLogo(true);
                     }}
                     accessibilityLabel={`${provider.displayName} logo. Tap to zoom in`}
+                    badge={recommendHeart ? <RecommendBadge {...recommendHeart} theme={recommendBadgeTheme} /> : null}
                   />
                 )}
                 renderName={({ scale, letterSpacing }) => (
@@ -5187,7 +5285,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               // Thin scripts are drawn larger so they read at the same size.
                               // Each hero layout sets its own size (Cover's is 1.6×).
                               fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
-                              lineHeight: NAME_LINE_HEIGHT * resolveProviderFontScale(provider.brandFont) * scale,
+                              // Scripts loop high (f, k), so their line is taller.
+                              lineHeight: resolveProviderNameLineHeight(
+                                provider.brandFont,
+                                NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
+                              ),
                               ...(letterSpacing ? { letterSpacing } : null),
                             },
                             heroIsDark && styles.heroTextShadow,
@@ -5269,16 +5371,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       {/* Rating inline — not for a link-only provider: their
                           bookings happen elsewhere, so there are no CERVICED
                           reviews to rate them from. */}
+                      {/* On Duet's card they lead the line, left of the years. */}
                       {!isLinkOnly && (
-                      <View style={styles.ratingRow}>
+                      <View style={[styles.ratingRow, detailsOnCard && styles.detailsInline]}>
                         {[1, 2, 3, 4, 5].map((star) => (
                           <StarIcon key={star} size={12} color="#FFD700" />
                         ))}
                         <Text
                           style={[
                             styles.ratingInline,
-                            { color: heroText },
-                            heroIsDark && styles.heroTextShadow,
+                            { color: detailsText },
+                            detailsShadow && styles.heroTextShadow,
                           ]}
                         >
                           {provider.rating}
@@ -5291,18 +5394,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <Text
                           style={[
                             styles.yearsExp,
-                            { color: heroSub },
-                            heroIsDark && styles.heroTextShadow,
+                            { color: detailsSub },
+                            detailsShadow && styles.heroTextShadow,
+                            detailsOnCard && styles.detailsInline,
                           ]}
                         >
-                          {provider.yearsExperience} years experience
+                          {provider.yearsExperience} {detailsOnCard ? "yrs" : "years"} experience
                         </Text>
                       ) : null}
 
                       {/* Slots + bell. The pill says when this provider's diary
                           opens — "New slots drop on the 5th" — or, without a
                           release day, "Stay updated" beside the bell that delivers
-                          their updates. See slotsPillText. */}
+                          their updates. See slotsPillText. On Duet's card it
+                          takes a line of its own under the stars and years. */}
+                      <View style={detailsOnCard ? DETAILS_OWN_LINE : undefined}>
                       {(() => {
                         if (isLinkOnly) {
                           // In place of the availability pill: Book (their own
@@ -5357,7 +5463,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 {socialButton("message", "chatbubble-outline", `Message ${provider.displayName}`, handleGetInTouch)}
                               </View>
                               <Text
-                                style={[styles.linkOnlyCaption, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
+                                style={[styles.linkOnlyCaption, { color: detailsSub }, detailsShadow && styles.heroTextShadow]}
                               >
                                 Books on their own page — opens inside CERVICED
                               </Text>
@@ -5455,6 +5561,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         </View>
                         );
                       })()}
+                      </View>
                   </>
                 }
                 about={
@@ -5482,26 +5589,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <View
               style={[
                 styles.contentSheet,
-                { minHeight: screenHeight, backgroundColor: OP.bg },
+                { minHeight: screenHeight, backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg },
                 // With a background image, inset the sheet so the photo shows
                 // along its sides — the content reads as a card floating over
-                // the image rather than covering it edge to edge.
-                provider.backgroundImage ? styles.contentSheetFloating : null,
+                // the image rather than covering it edge to edge. A veil page
+                // always floats: its sheet is a see-through glass card.
+                provider.backgroundImage || veilTheme ? styles.contentSheetFloating : null,
+                veilTheme ? styles.contentSheetGlass : null,
               ]}
             >
-              {/* Recommend + "Don't show me" — only for a client who has had
-                  a completed appointment here; renders nothing otherwise. */}
-              <ProviderSharingRow
-                providerId={providerDbId}
-                providerName={provider.displayName}
-                enabled={canSaveProvider && hatState.active === "client"}
-                tokens={OP}
-                accent={adaptiveAccentColor}
-                cardBg={cardBg}
-                square={squareCards}
-                onError={showAlert}
-              />
-
               {/* Cover: a bar of links to the main sections. */}
               {pageStyle.jumpBar ? (
                 <View
@@ -5539,16 +5635,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </View>
               ) : null}
 
-              {/* Templates only: their policy pictures as story circles; a
-                  tap opens them full screen, one page at a time. Classic keeps
-                  the round button on the About card. */}
-              {pageStyle.key !== "classic" ? (
-                <PolicyStoryRings
-                  urls={policyPages}
-                  accent={adaptiveAccentColor}
-                  sheet={OP.bg}
-                  onOpen={setPolicyStoryIndex}
-                />
+              {/* Templates only, when Branding → Policy Pictures is Story:
+                  their policy pictures as story circles; a tap opens them full
+                  screen, one page at a time. Classic keeps the round button on
+                  the About card. */}
+              {pageStyle.key !== "classic" && policyPlacement === "top" && policyPages.length > 0 ? (
+                <View ref={policyPagesRef} collapsable={false}>
+                  <PolicyStoryRings
+                    urls={policyPages}
+                    accent={adaptiveAccentColor}
+                    sheet={OP.bg}
+                    onOpen={setPolicyStoryIndex}
+                  />
+                </View>
               ) : null}
 
               {!pageStyle.separateAboutAndPolicies ? (
@@ -5755,7 +5854,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <>
                   {/* Every style but Classic gives About and Policies a
                       section each, in the style's own headings and layout. */}
-                  {!pageStyle.aboutInHero ? (
+                  {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
+                    // Editorial: their About on a full-width band of the accent.
+                    <View ref={aboutCardRef} collapsable={false}>
+                      <AccentBandSection section="about" palette={sectionPalette} waves={false}>
+                        <ExpandableAboutText
+                          text={provider.aboutText}
+                          translate
+                          textStyle={[styles.aboutText, { color: onAccentInk(adaptiveAccentColor).sub }]}
+                          linkStyle={styles.moreButton}
+                          linkTextStyle={[styles.moreButtonText, { color: onAccentInk(adaptiveAccentColor).text }]}
+                          onCollapse={handleAboutCollapse}
+                        />
+                      </AccentBandSection>
+                    </View>
+                  ) : !pageStyle.aboutInHero ? (
                     <View ref={aboutCardRef} collapsable={false}>
                       <PageSection section="about" palette={sectionPalette}>
                         <ExpandableAboutText
@@ -5786,10 +5899,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         if (pageStyle.policies === "band") {
                           const ink = onAccentInk(adaptiveAccentColor);
                           return (
-                            <PolicyBandSection palette={sectionPalette}>
+                            <AccentBandSection section="policies" palette={sectionPalette}>
                               <StyledPolicyList rows={rows} palette={sectionPalette} ink={ink} />
                               {footer(ink)}
-                            </PolicyBandSection>
+                            </AccentBandSection>
                           );
                         }
                         const bare = policiesBringOwnSurface(pageStyle);
@@ -5850,18 +5963,38 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
               )}
 
-              {/* Templates only: their policy pictures in the page itself,
-                  after the price list (Branding → Policy Pictures picks Melt
-                  in or Bleed). Classic keeps them behind the round button. */}
-              {pageStyle.key !== "classic" && policyPages.length > 0 ? (
+              {/* Templates only: their policy pictures after the price list,
+                  in the design Branding → Policy Pictures picks. Story puts
+                  them at the top instead. Classic keeps them behind the round
+                  button. */}
+              {pageStyle.key !== "classic" && policyPages.length > 0 && policyPlacement === "afterServices" ? (
                 <View ref={policyPagesRef} collapsable={false}>
-                  <PolicyPagesInline
-                    urls={policyPages}
-                    edges={policyEdges}
-                    look={parseThemeKey(provider.profileTheme).policyLook}
-                    palette={sectionPalette}
-                    onOpen={() => setShowPolicyImage(true)}
-                  />
+                  {policyLook === "framed" || policyLook === "swipe" || policyLook === "fan" || policyLook === "peek" ? (
+                    <PolicyPagesShowcase
+                      urls={policyPages}
+                      edges={policyEdges}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpenPage={setPolicyStoryIndex}
+                      onOpenAll={() => setShowPolicyImage(true)}
+                    />
+                  ) : policyLook === "thumbs" || policyLook === "button" ? (
+                    <PolicyPagesCompact
+                      urls={policyPages}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpenPage={setPolicyStoryIndex}
+                      onOpenAll={() => setShowPolicyImage(true)}
+                    />
+                  ) : (
+                    <PolicyPagesInline
+                      urls={policyPages}
+                      edges={policyEdges}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpen={() => setShowPolicyImage(true)}
+                    />
+                  )}
                 </View>
               ) : null}
 
@@ -5909,6 +6042,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             </View>
           </ScrollView>
         </SafeAreaView>
+
+        {/* Last, so the bar, bubble and menu sit over the page. */}
+        <ProviderRecommendLayer
+          {...recommend.layer}
+          bottomOffset={FLOATING_TAB_BAR_CLEARANCE}
+          theme={recommendBadgeTheme}
+        />
       </ThemedBackground>
     </WindowControlsInsetProvider>
     </SafeAreaProvider>
@@ -6023,6 +6163,14 @@ const styles = StyleSheet.create({
   // from both edges so the photo stays visible down its sides.
   contentSheetFloating: {
     marginHorizontal: 10,
+  },
+  // Sheer: the sheet is see-through glass over the veil, edged in a hairline.
+  contentSheetGlass: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.22)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   skeletonShell: {
     flex: 1,
@@ -6175,6 +6323,8 @@ const styles = StyleSheet.create({
     gap: 3,
     marginBottom: 8,
   },
+  // The years beside the pills on Duet's card: no gap under them there.
+  detailsInline: { marginBottom: 0 },
   ratingInline: {
     fontFamily: "Jura-VariableFont_wght",
     fontWeight: "800",

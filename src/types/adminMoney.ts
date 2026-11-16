@@ -55,3 +55,30 @@ export interface AdminMoneyOverview {
   refunds_count: number;
   refunds: AdminRefundRequest[];
 }
+
+/** One booking on a disputed payment (admin_bank_disputes()). */
+export interface AdminDisputeBooking {
+  booking_id: string;
+  provider_name: string | null;
+  client_name: string | null;
+  service_name: string | null;
+  booking_date: string | null;
+  paid_pence: number;
+  refunded_pence: number;
+}
+
+/** A bank dispute whose amount matched no booking on the payment, so an admin
+ *  picks which booking(s) it's about; or one already decided whose take-back
+ *  didn't finish. Migration 20261115090000. */
+export interface AdminBankDispute {
+  dispute_id: string;
+  amount_pence: number;
+  reason: string | null;
+  stripe_status: string;
+  opened_at: string;
+  closed: boolean;
+  outcome: 'won' | 'lost' | null;
+  /** Already decided, but taking the money back didn't finish: press again. */
+  unfinished: boolean;
+  bookings: AdminDisputeBooking[];
+}

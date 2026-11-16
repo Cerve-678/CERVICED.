@@ -4,7 +4,7 @@ import { recordFeePaid } from '../_shared/feePayRequest.ts';
 import { recordTipPaid } from '../_shared/recordTipPaid.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.100.0';
 import Stripe from 'npm:stripe@17.4.0';
-import { takeBackFromProvider } from '../_shared/takeBack.ts';
+import { closeBankDispute, openBankDispute, updateBankDispute } from '../_shared/bankDispute.ts';
 import { sendSupportAlert } from '../_shared/supportAlert.ts';
 import { payoutFailedSupportEmail } from '../_shared/emailTemplates.ts';
 
@@ -106,14 +106,18 @@ Deno.serve(async (req: Request) => {
       case 'charge.dispute.updated':
       case 'charge.dispute.closed': {
         // CERVICED doesn't take a side (user decision 2026-10-17): the bank
-        // decides, and the provider carries the cost — a payout not yet sent
-        // waits (release-payouts skips disputed charges), one already sent is
-        // reversed when the dispute opens.
+        // decides, and the provider whose booking it is carries the cost. One
+        // payment can pay several providers, so only the booking(s) the
+        // dispute is about are touched (_shared/bankDispute.ts): their payout
+        // is taken back when it opens and paid back if CERVICED wins; a
+        // payout not yet sent waits for the outcome (release-payouts).
         const dispute = event.data.object as Stripe.Dispute;
-        if (event.type === 'charge.dispute.created') await passDisputeToProvider(dispute);
+        if (event.type === 'charge.dispute.created') await openBankDispute(admin, stripe, dispute);
+        else if (event.type === 'charge.dispute.updated') await updateBankDispute(admin, dispute);
+        else await closeBankDispute(admin, stripe, dispute);
         console.warn(
           `[stripe-webhook] ${event.type} dispute=${dispute.id} charge=${String(dispute.charge)} ` +
-          `amount=${dispute.amount} status=${dispute.status} reason=${dispute.reason} — needs manual review`,
+          `amount=${dispute.amount} status=${dispute.status} reason=${dispute.reason} — answer it in the Stripe Dashboard`,
         );
         break;
       }
@@ -295,49 +299,4 @@ async function handleTransferReversed(transfer: Stripe.Transfer): Promise<void> 
     return;
   }
   console.log(`[stripe-webhook] payout row(s) ${rows.map((r) => r.id).join(',')} marked reversed (transfer=${transfer.id})`);
-}
-
-// Take back what the provider was already paid from a charge the client has
-// disputed with their bank. Booking payouts and late/no-show fee payouts both;
-// one reversal per payout, keyed so a redelivered event can't reverse twice.
-async function passDisputeToProvider(dispute: Stripe.Dispute): Promise<void> {
-  const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
-  const charge = await stripe.charges.retrieve(chargeId);
-  const intentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
-  if (!intentId) return;
-
-  const { data: fees, error: feeError } = await admin.from('booking_fee_charges')
-    .select('id, booking_id, provider_id, stripe_transfer_id, payout_pence, deducted_pence').eq('payment_intent_id', intentId).eq('payout_status', 'transferred');
-  if (feeError) throw feeError;
-  for (const fee of fees ?? []) {
-    if (!fee.stripe_transfer_id && !(fee.deducted_pence > 0)) continue;
-    await takeBackFromProvider(admin, stripe, {
-      providerId: fee.provider_id, bookingId: fee.booking_id, source: 'bank_dispute',
-      transferId: fee.stripe_transfer_id, key: `dispute_reversal_fee_${fee.id}`,
-      // Part of this fee paid off an earlier debt instead of being sent, so
-      // the whole payout comes back, not just what the transfer carried.
-      wantPence: fee.deducted_pence > 0 ? fee.payout_pence : undefined,
-      metadata: { dispute_id: dispute.id },
-    });
-    const { error } = await admin.from('booking_fee_charges')
-      .update({ payout_status: 'reversed', payout_failure_reason: `bank dispute ${dispute.id}` }).eq('id', fee.id);
-    if (error) throw error;
-  }
-
-  const { data: bookings, error: bookingError } = await admin.from('bookings')
-    .select('id').eq('payment_intent_id', intentId).limit(50);
-  if (bookingError) throw bookingError;
-  const ids = (bookings ?? []).map(b => b.id);
-  if (ids.length === 0) return;
-  const { data: payouts, error: payoutError } = await admin.from('provider_payouts')
-    .select('id, booking_id, provider_id, stripe_transfer_id').in('booking_id', ids).eq('status', 'transferred');
-  if (payoutError) throw payoutError;
-  for (const payout of payouts ?? []) {
-    await takeBackFromProvider(admin, stripe, {
-      providerId: payout.provider_id, bookingId: payout.booking_id, source: 'bank_dispute',
-      transferId: payout.stripe_transfer_id, key: `dispute_reversal_payout_${payout.id}`,
-      metadata: { dispute_id: dispute.id },
-    });
-    // transfer.reversed then marks the row reversed (handleTransferReversed).
-  }
 }

@@ -45,6 +45,7 @@ import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { policyImageUrls } from '../features/providers/policyImages';
 import { FullImageViewer } from './FullImageViewer';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { logger } from '../utils/logger';
 import { useSystemBottomInset } from '../utils/bottomSafeGap';
 import { durationWithAddOns, formatAddOnExtraTime, type ChosenAddOn } from '../features/bookings/addOnTime';
@@ -281,6 +282,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   //   confirm — the full booking read back, and the terms gate
   // "addons" stays first and stays conditional, exactly as before.
   const [step, setStep] = useState<BookingStep>('when');
+  const [serviceDetailsExpanded, setServiceDetailsExpanded] = useState(false);
 
   const resolvedOnce = useRef(false);
   const depositFetched = useRef(false);
@@ -391,6 +393,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setConsultationDate('');
     setConsultationTime('');
     setStep((service?.addOns?.length ?? 0) > 0 ? 'addons' : 'when');
+    setServiceDetailsExpanded(false);
     resolvedOnce.current = false;
     depositFetched.current = false;
     termsFetched.current = false;
@@ -762,9 +765,24 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 ? 'Choose Add-ons'
                 : mode === 'add' ? 'Book Service' : 'Edit Booking'}
             </Text>
-            <Text style={[styles.headerSubtitle, { color: tokens.sub }]}>
-              {service.name} • £{service.price}
-            </Text>
+            <TouchableOpacity
+              style={styles.serviceDisclosure}
+              onPress={() => setServiceDetailsExpanded(expanded => !expanded)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${service.name}, £${service.price}. Service description`}
+              accessibilityHint={serviceDetailsExpanded ? 'Hide the service description' : 'Show the full service description'}
+              accessibilityState={{ expanded: serviceDetailsExpanded }}
+            >
+              <Text style={[styles.headerSubtitle, { color: tokens.sub }]} numberOfLines={2}>
+                {service.name} · £{service.price}
+              </Text>
+              <Ionicons
+                name={serviceDetailsExpanded ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={adaptiveAccentColor}
+              />
+            </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[styles.closeButton, { backgroundColor: adaptiveAccentColor }]}
@@ -774,6 +792,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             <Text style={[styles.closeButtonText, { color: onAccentColor }]}>✕</Text>
           </TouchableOpacity>
         </View>
+
+        {serviceDetailsExpanded && (
+          <View style={[styles.serviceDescriptionPanel, { borderBottomColor: tokens.border }]}>
+            <Text style={[styles.serviceDescriptionLabel, { color: adaptiveAccentColor }]}>ABOUT THIS SERVICE</Text>
+            <ScrollView style={styles.serviceDescriptionScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+              <Text style={[styles.serviceDescriptionText, { color: tokens.text }]}>
+                {service.description?.trim() || 'No description has been added for this service yet.'}
+              </Text>
+            </ScrollView>
+          </View>
+        )}
 
         <StepProgress
           current={step}
@@ -1430,7 +1459,12 @@ const styles = StyleSheet.create({
   backButton: { width: 28, alignItems: 'flex-start', justifyContent: 'center', marginRight: 4 },
   backButtonText: { fontSize: 28, fontWeight: '300', lineHeight: 28 },
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
-  headerSubtitle: { fontSize: 13, marginTop: 4 },
+  headerSubtitle: { fontSize: 13, flexShrink: 1 },
+  serviceDisclosure: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 4, paddingVertical: 4, paddingRight: 8 },
+  serviceDescriptionPanel: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  serviceDescriptionLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 7 },
+  serviceDescriptionScroll: { maxHeight: 180 },
+  serviceDescriptionText: { fontSize: 13, lineHeight: 20 },
   closeButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   closeButtonText: { fontSize: 15, fontWeight: '700' },
   body: { flex: 1 },

@@ -59,7 +59,7 @@ import {
   getProviderReviews,
   getRebookableService,
   getMyLatestCompletedBooking,
-  getUserWaitlistEntries,
+  getMyWaitlist,
 } from "../../databaseService";
 import { mapDbBookingToConfirmed } from "../../bookingService";
 import { logger } from "../../../utils/logger";
@@ -2344,7 +2344,9 @@ const waitlist: Capability = {
   ],
   async run({ userId }): Promise<CapabilityResult> {
     if (!userId) return { text: "I couldn't check your waitlists — try signing in again." };
-    const entries = await getUserWaitlistEntries(userId);
+    // A place whose hold ended ('expired') isn't a waitlist they're on.
+    const entries = (await getMyWaitlist()).filter(place => place.status === "waiting" || place.status === "notified");
+    const held = entries.filter(place => place.status === "notified").length;
     if (entries.length === 0) {
       return {
         text: "You're not on any waitlists right now.",
@@ -2355,7 +2357,9 @@ const waitlist: Capability = {
       };
     }
     return {
-      text: `You're on **${entries.length} waitlist${entries.length !== 1 ? "s" : ""}**. I'll let you know if a slot frees up.`,
+      text: held > 0
+        ? `A slot is **held for you** right now. Confirm and pay for it in Bookings before its 15 minutes run out.`
+        : `You're on **${entries.length} waitlist${entries.length !== 1 ? "s" : ""}**. If a slot that suits you opens, it's held for you for 15 minutes.`,
       suggestions: [
         navChip("bookings", "Open Bookings", "Bookings"),
         askChip("free", "Anyone free sooner?", "Who's free this week?"),
@@ -3672,7 +3676,7 @@ const joinWaitlistAction: Capability = {
     return {
       text:
         `Join **${provider.displayName}**'s waitlist for ${serviceLabel}? ` +
-        `I'll let you know the moment something frees up.`,
+        `If a time that suits you frees up, it's held for you for 15 minutes to confirm and pay.`,
       pendingAction: {
         id: `waitlist-${dbId}`,
         describe: `Join ${provider.displayName}'s waitlist`,
@@ -3688,7 +3692,7 @@ const joinWaitlistAction: Capability = {
             serviceNameSnapshot: serviceLabel,
             providerNameSnapshot: provider.displayName,
           });
-          return `You're on ${provider.displayName}'s waitlist. I'll tell you the second a slot opens.`;
+          return `You're on ${provider.displayName}'s waitlist. When a slot opens it's held for you for 15 minutes, and I'll tell you straight away.`;
         },
       },
     };

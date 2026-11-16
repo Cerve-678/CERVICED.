@@ -10,3 +10,13 @@ export function shuffle<T>(items: T[]): T[] {
   }
   return result;
 }
+
+/** Shuffle a rail while showing a different lead card on the next visit. */
+export function shuffleWithDifferentFirst<T extends { id: string }>(items: T[]): T[] {
+  const result = shuffle(items);
+  if (result.length > 1 && result[0]?.id === items[0]?.id) {
+    const swapIndex = 1 + Math.floor(Math.random() * (result.length - 1));
+    [result[0], result[swapIndex]] = [result[swapIndex] as T, result[0] as T];
+  }
+  return result;
+}

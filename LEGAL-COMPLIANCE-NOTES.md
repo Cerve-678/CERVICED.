@@ -1015,4 +1015,79 @@ To raise (not lawyer-reviewed):
 - **Late/no-show fees** have their own 7-day dispute route (Client Terms §16),
   decided by the provider; the page does not say which route applies to a fee
   after day 5.
+- **No-show Half (2026-11-13, live since 2026-11-16):** the no-show
+  Custom £ fee is replaced by "Half the price": deposit kept, plus the rest up
+  to half the price charged to the saved card on a deposit-only booking. One
+  live provider's £25 fee was converted without them choosing it. Raise the
+  same CRA proportionality question as the late cancellation charge.
 
+## 27. A waitlist slot is paid for within 15 minutes (2026-11-12)
+
+Before this, confirming a held waitlist slot booked it with £0 paid: no
+deposit, no fee, no saved card for late or no-show fees, and no recorded
+agreement to the provider's policies. Now it goes through the normal checkout
+(consent recorded server-side at the hold, §11). Decided by the user on
+2026-11-10: the client has 15 minutes from the offer, the clock keeps running
+while they pay, and missing it or passing takes them off that waitlist.
+
+What the copy now says (Terms §17 Waitlists, the join pop-up, the held card in
+Bookings, the "slot has gone" notice):
+- the 15-minute deadline, that deposit and fee apply, and that missing it
+  loses their place;
+- the booking is made when payment goes through;
+- a payment caught by the clock is cancelled or refunded in full (done by
+  `reconcile-checkouts`, which sends its own `payment_not_completed` notice).
+
+Still for a lawyer:
+- Whether a 15-minute window, running during payment (including 3D Secure),
+  is a fair term under the Consumer Rights Act 2015.
+- Cooling-off (Consumer Contracts Regulations 2013) for a waitlist booking,
+  often near-term and made under time pressure. Same open question as §6,
+  more likely to come up here.
+- Providers weren't asked to re-agree to the changed waitlist behaviour
+  (their own offer is now a hold, not an unpaid booking). Same as §10.
+- The Terms page goes live when merged to main, ahead of the app build that
+  follows it. Older builds can't confirm a held slot at all once the
+  migration drops `claim_waitlist_hold` (they show an error), so they never
+  book against the old rule; nobody has ever been offered a waitlist slot.
+
+## 28. A bank dispute is charged only to the booking it is about (2026-11-16)
+
+One checkout can pay several providers. Before this, a chargeback on that
+payment took money back from every provider in it and froze all their unpaid
+payouts for good, even if CERVICED won. Now CERVICED matches the disputed
+amount to the booking(s) it concerns (an admin picks when it can't tell),
+only those providers are affected, and a won dispute is paid back
+(`fix/dispute-per-booking`, migration `20261115090000`). How the money
+moves is in `docs/PAYMENTS_AND_LOGIC.md` §2.7.
+
+Owner's choices (2026-11-16): Provider Terms promise the payback on a win,
+"within a reasonable time" (1A + 1B), and say how CERVICED decides which
+booking a dispute concerns, that other payouts on the payment may wait while
+it does, and how to challenge it (2A). The owner asked for no gaps, so
+Provider Terms §9 now has a "Bank disputes" part covering: who decides the
+outcome (the bank), the provider's duty to give information for the
+response, how the booking is chosen, holding every payout on the payment
+until then, open / lost / won outcomes (including cancelling a debt and
+returning amounts taken from later payouts), CERVICED paying Stripe's
+dispute fee, and a support route for a provider who disagrees.
+
+To raise (not lawyer-reviewed):
+- **Notice.** Provider Terms §12 promises 15 days' notice of a change. Most
+  of this favours providers, but holding *every* payout on a payment while
+  CERVICED decides, and the new duty to give information, are new. Only the
+  page's "Last updated" date moved; no notice was sent.
+- **Holding innocent providers' money.** The hold has no fixed time limit
+  ("as soon as reasonably practicable"). Whether an open-ended hold of a
+  provider whose booking wasn't disputed is fair, and how it sits with
+  CERVICED being a commercial agent collecting on their behalf.
+- **CERVICED choosing the booking.** CERVICED makes a decision that moves
+  money between providers, with only an internal review by support. Whether
+  that needs a stated timescale, or an outside route.
+- **Corrections are manual.** A wrong pick can only be put right by hand
+  (the system refuses a second, different answer). The Terms promise to
+  return the money, so support must actually do it.
+- **What the provider sees.** The payout list keeps saying "Taken back after
+  a bank dispute" after a won dispute; the payback arrives as a separate
+  Stripe transfer the app does not show. The Terms promise is kept, but the
+  app does not show it being kept.
