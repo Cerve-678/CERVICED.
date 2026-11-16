@@ -779,74 +779,133 @@ disputed tip still on hold is skipped rather than marked reversed.
 
 ### 2.7 Chargebacks (bank disputes)
 
-When a client's bank forcibly reverses a payment:
+A chargeback is a client asking their bank to force a payment back.
 
-1. Stripe takes the disputed amount from CERVICED's balance and tells
-   CERVICED.
-2. **CERVICED works out which booking(s) the dispute is about.** One checkout
-   is one card payment that can pay several providers, and the bank says only
-   which payment and how much, never which booking. So the amount is matched
-   to the bookings on that payment, using what each booking cost the client
-   (its price or deposit plus its share of the fee), first after any refunds
-   and then before them:
+**Live since 16 November 2026.** Migrations `20261115090000` (disputes per
+booking) and `20261116120000` (what the provider sees) are applied, and
+`stripe-webhook`, `release-payouts` and `assign-bank-dispute` are deployed.
+Still to do: the app build that adds the admin *Money → Disputes* tab and the
+provider's dispute lines, and a test-mode dispute to confirm Stripe still
+pays the other providers while a dispute is open on their payment.
+
+#### Why the bank deals with CERVICED, not the provider
+
+The bank only deals with the business that charged the card, and in the app
+that is CERVICED:
+
+- The client pays once at checkout. That one card payment goes into
+  **CERVICED's** Stripe account, and CERVICED then sends each provider their
+  share as a separate transfer (Stripe "separate charges and transfers").
+  This is what lets one basket cover several providers.
+- So the client's statement shows CERVICED, the bank opens the dispute
+  against CERVICED, and Stripe takes the money from **CERVICED's** balance.
+  The bank never sees the provider.
+- Providers have Stripe **Express** accounts, attached to CERVICED's. Stripe
+  holds CERVICED responsible if a provider's balance can't cover money taken
+  back.
+
+CERVICED therefore can't step out of a dispute, but it stays a pass-through:
+the bank decides who wins, and the provider whose booking it was carries the
+cost (decided 17 October, unchanged).
+
+**Considered and not chosen (16 November):** charging the card on each
+provider's own Stripe account instead ("direct charges"), so the bank deals
+with the provider. It would turn one basket into one card charge per
+provider (and possibly one bank check each), need saved cards copied to each
+provider, need full Standard Stripe accounts for providers (Express would
+still leave CERVICED liable), and mean rebuilding checkout, refunds, fees,
+tips and payouts. The owner kept the current set-up.
+
+#### What happens, step by step
+
+1. **The dispute arrives.** Stripe takes the disputed amount from CERVICED's
+   balance and tells CERVICED.
+2. **CERVICED works out which booking(s) it is about.** CERVICED knows
+   exactly how the payment was split between providers, but the bank says
+   only *which payment* and *how much*, never which booking. So the disputed
+   amount is matched against that split, using what each booking cost the
+   client (its price or deposit plus its share of the service fee), first
+   after any refunds and then before them:
 
    | The disputed amount | Means | What happens |
    |---|---|---|
    | The payment paid one booking | That booking | Take back from that provider |
    | Equals exactly one booking, or one set of bookings | Those bookings | Take back from those providers only. The rest are paid as normal |
    | Equals every booking on the payment | The whole payment | Take back from every provider on it |
-   | Anything else, or two sets that both fit (two £50 bookings, £50 disputed; or one booking after refunds and another before them) | Can't tell | **Nothing is taken back yet.** Every unpaid payout on the payment waits, support is emailed, and an admin picks the booking(s) in *Money → Disputes*. Then it goes as above |
+   | Anything else, or two sets that both fit (two £50 bookings and £50 disputed; or a part of a booking, such as £30 of a £50 one) | Can't tell | **Nothing is taken back yet.** Every unpaid payout on the payment waits, support is emailed, and an admin picks the booking(s) in *Money → Disputes*. Then it goes as above |
    | No booking on it was paid in the app | Nothing to take | Nothing happens |
 
-3. Taking back works as for a refund: CERVICED reverses what the provider was
-   paid for that booking, and anything their Stripe balance can't cover
-   becomes a debt (section 2.8). Each payout is taken back once only, even if
-   Stripe repeats the event or the admin presses twice. An admin's pick is
-   saved before any money moves, so a second admin can't pick differently. If
-   taking back doesn't finish, the dispute stays on *Money → Disputes* marked
-   "didn't finish" until it's pressed again. A late/no-show fee has a payment
-   of its own, so a dispute on one only ever concerns that provider.
-4. **A disputed booking's payout not yet sent waits for the outcome.** If
-   CERVICED wins, it's paid as normal. If CERVICED loses, it's cancelled,
-   because the money went back to the client.
-5. **If CERVICED wins, the provider is paid back automatically** what was
-   reversed from their Stripe balance for the dispute, as a separate transfer.
-   (Their original payout still shows as taken back.) Not automatic, so
-   support is emailed: a part that became a debt (cancel it and pay back
-   anything already taken from later payouts), and a late/no-show fee's
-   payout taken back for the dispute.
-6. If a dispute is won before anyone picked the booking, nothing was taken
-   and nothing is owed, so every payout on the payment carries on.
+   **Considered and not chosen (16 November):** splitting an unclear dispute
+   automatically between the providers by their share, instead of an admin
+   picking. The owner kept the admin pick.
+3. **Taking back.** It works as for a refund: CERVICED reverses what the
+   provider was paid for that booking, and anything their Stripe balance
+   can't cover becomes a debt (section 2.8). Each payout is taken back once
+   only, even if Stripe repeats the event or an admin presses twice. An
+   admin's pick is saved before any money moves, so a second admin can't pick
+   differently. If taking back doesn't finish, the dispute stays on
+   *Money → Disputes* marked "didn't finish" until it's pressed again.
+4. **A payout not yet sent waits for the outcome.** If CERVICED wins, it is
+   paid as normal. If CERVICED loses, it is cancelled, because the money went
+   back to the client.
+5. **If CERVICED wins, the provider is paid back automatically**: what was
+   reversed from their Stripe balance for that dispute comes back as a
+   separate transfer, tagged with the dispute. Two things are not automatic,
+   so support is emailed to do them by hand: cancelling a part that became a
+   debt (and paying back anything already taken from later payouts), and
+   paying back a late/no-show fee's payout taken back for the dispute.
+6. **Won before anyone picked the booking:** nothing was taken and nothing is
+   owed, so every payout on the payment carries on.
+7. **If CERVICED loses:** the money stays with the client. Nothing is paid
+   back.
 
-**Not automated:** responding to the dispute with evidence is done by hand in
+A late/no-show fee has a payment of its own, so a dispute on one only ever
+concerns that provider. Stripe can send a dispute's events out of order, so
+each step reads the dispute's current state from Stripe; a "closed" that
+arrives first records the dispute and applies the outcome in one go.
+
+**Not automated:** responding to the bank with evidence is done by hand in
 the Stripe Dashboard (runbook R6). Stripe's own dispute fee is **not** passed
-on to the provider; CERVICED absorbs it.
+on to the provider; CERVICED pays it.
 
-Stripe can send a dispute's events out of order, so each step reads the
-dispute's current state from Stripe; a "closed" that arrives first records
-the dispute and applies the outcome in one go.
+#### What the provider sees
 
-**Who carries it (decided 17 October, unchanged):** CERVICED doesn't take a
-side. The bank decides, and the provider whose booking it is carries the
-cost. Until 15 November every provider on the payment did, whatever was
-disputed.
+On Payments → booking payments and fees, read through
+`provider_bank_dispute_states()`. It returns only the provider's own bookings,
+and never the dispute's amount, reason or Stripe ids.
 
-**Terms:** Provider Terms §9, "Bank disputes", describes all of the above
-to providers (added 16 November; not lawyer-reviewed, see
-`LEGAL-COMPLIANCE-NOTES.md` §28).
+| Situation | Line shown |
+|---|---|
+| Dispute open, payout not sent yet | On hold · bank dispute |
+| Dispute open, payout already taken back | Taken back · bank dispute open |
+| Payment disputed, CERVICED still matching it to a booking | On hold · bank dispute on this payment |
+| CERVICED won and money was returned | Paid back · dispute won |
+| CERVICED won and nothing had been taken | The normal line (Awaiting release / Released to Stripe) |
+| The client's bank won | Taken back · bank dispute lost, or Not paid · bank dispute lost |
+| A late/no-show fee won back (support pays it by hand) | Dispute won · being paid back |
 
-**What the provider sees** (Payments → booking payments and fees, through
-`provider_bank_dispute_states()`, their own bookings only, no dispute amount
-or reason): "On hold · bank dispute" while it is open, "On hold · bank
-dispute on this payment" while CERVICED matches it, "Taken back · bank
-dispute lost" or "Not paid · bank dispute lost" after a loss, and "Paid back
-· dispute won" after a win that returned money. A late/no-show fee won back
-says "Dispute won · being paid back", because support pays that by hand.
+#### What the Terms say, and the owner's choices
 
-*Not live until migration `20261115090000_bank_dispute_per_booking` is
-applied and `stripe-webhook`, `release-payouts` and `assign-bank-dispute` are
-deployed. The Disputes tab needs a new app build; until then an admin can't
-pick, so a dispute that can't be matched keeps those payouts waiting.*
+Provider Terms §9, "Bank disputes", describes all of the above to providers:
+the bank decides, CERVICED works out which booking a dispute concerns and may
+hold every payout on that payment until it has, a lost dispute is not paid,
+a won one is paid and anything taken back is returned "within a reasonable
+time", CERVICED pays the dispute fee, and a provider who disagrees can ask
+support to review. Owner's choices on 16 November: promise the payback, with
+"within a reasonable time" (1A + 1B); explain how the booking is chosen and
+that other payouts may wait (2A); no 15-day notice of the change while the
+provider base is still being built. Not lawyer-reviewed: see
+`LEGAL-COMPLIANCE-NOTES.md` §28.
+
+#### Known gaps
+
+- A payout being sent at the exact moment a dispute arrives can still go out
+  without being taken back (this was already possible before).
+- The admin list shows at most 50 open disputes.
+- A wrong admin pick can only be corrected by hand; the system refuses a
+  second, different answer.
+- Debt cancellation and fee paybacks after a win are done by hand from a
+  support email.
 
 ### 2.8 When a provider owes money (debts)
 
@@ -927,7 +986,7 @@ one broken, it's a top-severity bug: stop and escalate.
 | 1 | The app never decides an amount. Every price, fee, refund and payout is recalculated on the server | Server functions; the app sends only ids |
 | 2 | A provider's payout is never more than what the client paid minus CERVICED's fee | Database check |
 | 3 | Each booking has at most one payout, and each payout is sent at most once, even if a job runs twice | Unique keys + Stripe idempotency keys |
-| 4 | Nothing is paid out for a cancelled, fully refunded or disputed booking | Re-checked at release |
+| 4 | Nothing is paid out for a cancelled or fully refunded booking, or while a bank dispute about it is open or unmatched (section 2.7) | Re-checked at release |
 | 5 | Nothing is paid out while a refund request is open | Re-checked at release |
 | 6 | Every payout is held at least 24 hours after the appointment ends | Database check + allowed values |
 | 7 | Money taken back from a provider is never lost or taken twice. What Stripe won't reverse becomes a recorded debt, and a deduction is given back if its payout fails | Debt ledger + idempotent take-back |
@@ -1186,6 +1245,7 @@ Keep the list short and review it monthly.
 | `after_shortfall_notify_provider`, `after_payout_sent_notify_debt_recovered`, `after_fee_payout_sent_notify_debt_recovered` | Triggers | The two debt notices |
 | `request_booking_refund`, `pass_refund_request_to_cerviced`, `close_refund_request_on_refund` | RPCs / trigger | The refund request flow |
 | `admin_retry_payout`, `admin_decline_refund_request`, `admin_money_overview`, `admin_bank_disputes`, `is_cerviced_admin` | RPCs (admins) | The admin Money screen |
+| `provider_bank_dispute_states` | RPC (providers, own bookings only) | Where a bank dispute on each of the provider's bookings and fees stands, for their payout list (section 2.7). No amount, reason or Stripe ids |
 | `record_bank_dispute`, `assign_bank_dispute`, `close_bank_dispute` | RPCs (service role) | Record a dispute with its bookings in one go; record an admin's pick; record the bank's outcome. The last two lock the dispute before any money moves |
 | `money_needing_attention`, `process_money_daily_summary` | Functions | The daily email's data, and its trigger |
 | `refund_booking_async` | Function | A server-initiated full refund (provider cancel, expiry) |
@@ -1350,6 +1410,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 13 Nov | A provider's written cancellation notice always says the window actually applied; the database rewrites the text from the window, never the reverse. Daminkfinesse (24h → 48h), Nails Studio (48h → 24h) and CuratedByCilva (12h → 24h) were corrected; no window applied changed. Live since 13 November (migration `20261113180000`) | Clients saw one notice on the profile and another on their booking page |
 | 13 Nov | Refund requests close at the end of the fifth UK day after the appointment day, for bookings made from then on, for every reason; complaints stay open | Gives clients time to notice a problem while letting a booking's money settle; older bookings keep the terms they were booked under; the owner's rule |
 | 15 Nov | A bank dispute takes money back only from the provider(s) whose booking it's about, matched by amount; when the amount fits no booking, or more than one way, an admin picks and nothing is taken back until then. A won dispute pays the provider back automatically | One payment can pay several providers, and taking from all of them punished providers the client had no complaint about. An admin picking was chosen over splitting the cost across everyone on the payment, which would still charge providers the client had no complaint about |
+| 16 Nov | Bank disputes live. CERVICED stays in the middle because it charges the card (one payment per basket); paying each provider directly was considered and not chosen. An unclear dispute stays an admin pick, not an automatic split by share. Providers see "Paid back · dispute won" and the other dispute lines. Provider Terms §9 explains it all; no 15-day notice while the provider base is being built | Keeps the one-checkout basket; the bank decides and the provider whose booking it was carries the cost |
 
 ---
 
