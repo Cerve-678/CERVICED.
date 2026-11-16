@@ -6,6 +6,7 @@ import {
   classifyTransferFailure, describeTransferFailure, nextPayoutRetryAt, PAYOUT_MAX_ATTEMPTS,
 } from '../_shared/payoutRetry.ts';
 import { findPayoutTransfer } from '../_shared/payoutTransfer.ts';
+import { disputeVerdictForBooking } from '../_shared/bankDispute.ts';
 import { sendSupportAlert } from '../_shared/supportAlert.ts';
 import { payoutFailedSupportEmail } from '../_shared/emailTemplates.ts';
 
@@ -151,7 +152,22 @@ Deno.serve(async (req: Request) => {
         continue;
       }
       const chargeId = charge.id;
-      if (charge.disputed) { skipped++; continue; }
+      if (charge.disputed) {
+        // One payment can pay several providers; only the booking(s) the
+        // bank dispute is about wait, and are dropped if CERVICED loses it
+        // (_shared/bankDispute.ts). Can't tell -> wait.
+        const verdict = await disputeVerdictForBooking(admin, charge.id, row.booking_id)
+          .catch((err) => { console.error(`[release-payouts] dispute check failed for ${row.id}: ${String(err)}`); return 'wait' as const; });
+        if (verdict === 'wait') { skipped++; continue; }
+        if (verdict === 'cancel') {
+          const { error: cancelErr } = await admin.from('provider_payouts')
+            .update({ status: 'cancelled', failure_reason: 'the client\'s bank upheld their dispute' })
+            .eq('id', row.id).eq('status', 'held');
+          if (cancelErr) console.error(`[release-payouts] cancel write failed for ${row.id}: ${String(cancelErr)}`);
+          else cancelled++;
+          continue;
+        }
+      }
       // A refund on the charge is fine only if every penny of it is one the
       // booking_refunds ledger recorded AND already took off its payout. (A
       // batch charge covers several bookings, so sum across all of them.)
