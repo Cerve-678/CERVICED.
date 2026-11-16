@@ -740,7 +740,7 @@ const mini = StyleSheet.create({
   studioHeadline: { fontFamily: 'LilitaOne-Regular', fontSize: 11, lineHeight: 17 },
   studioScript: { fontFamily: 'Ephesis-Regular', fontSize: 11 },
   studioTab: { width: 22, height: 5, marginLeft: 6 },
-  chunkyCaps: { fontFamily: 'LilitaOne-Regular', fontSize: 13, lineHeight: 21, textAlign: 'center' },
+  chunkyCaps: { fontFamily: 'YoungSerif-Regular', fontSize: 12, lineHeight: 21, textAlign: 'center' },
   chunkyScript: { fontFamily: 'Ephesis-Regular', fontSize: 14 },
   productWrap: { alignSelf: 'stretch', flex: 1 },
   productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: 'hidden' },
