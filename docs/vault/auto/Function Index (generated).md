@@ -5,7 +5,7 @@
 
 #generated
 
-**3907 functions** across **551 files**.
+**3911 functions** across **552 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -309,7 +309,7 @@
 - `WaxSeal.tsx` — **sealLetter** · **waxColour** · **WaxSeal**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (8)
+### `src/features/providers/heroes/` (9)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · onLayout · ShopStrip
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
@@ -318,6 +318,7 @@
 - `NovelHero.tsx` — **NovelHero** · subtitle
 - `SealedHero.tsx` — Postmark · **SealedEnvelope**
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
+- `StudioHero.tsx` — push · **studioHeadline** · **StudioHero** · **studioWordmark**
 
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
