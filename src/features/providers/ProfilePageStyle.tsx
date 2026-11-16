@@ -82,7 +82,7 @@ function sheerBox(sheet: string): { borderColor: string; backgroundColor: string
 }
 
 /** Dark ink for an outline on a card of this colour (Duet, Groovy, Apothecary). */
-function outlineInk(card: string): string {
+export function outlineInk(card: string): string {
   return isDarkColor(card) ? "#F2EDEA" : "#1F1A1C";
 }
 

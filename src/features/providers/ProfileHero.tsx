@@ -18,6 +18,7 @@ import { BoutiqueHero, cardInk } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
 import { StudioHero } from "./heroes/StudioHero";
 import { NovelHero } from "./heroes/NovelHero";
+import { outlineInk } from "./ProfilePageStyle";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
@@ -552,25 +553,35 @@ export function ProfileHeroLayout({
       );
     }
 
-    case "ruled":
-      // Apothecary, kept simple (owner, 2026-11-16): the logo, the name in
-      // Marcellus SC, a short rule in the accent, then what they do.
+    case "labelCard": {
+      // Apothecary (owner, 2026-11-16: simple, but in the theme): the logo,
+      // then the name on the same label as the page's cards (their card
+      // colour, a fine outline and an accent rule inside it), then what they
+      // do and the details.
+      const labelInk = cardInk(cardColour);
       return (
         <>
-          {renderLogo(132)}
-          <View style={layout.infoCenter}>
-            <View style={layout.ruledNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-              <Text style={[layout.ruledName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {name}
-              </Text>
-              {tick}
+          {renderLogo(124)}
+          <View style={layout.labelWrap}>
+            <View style={[layout.labelCard, { backgroundColor: cardColour, borderColor: outlineInk(cardColour) }]}>
+              <View style={[layout.labelInner, { borderColor: withAlpha(accent, 0.7) }]} pointerEvents="none" />
+              <View style={layout.labelNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text style={[layout.labelName, { color: labelInk.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
+                </Text>
+                {isVerified ? (
+                  <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                ) : null}
+              </View>
             </View>
-            <View style={[layout.ruledRule, { backgroundColor: heroAccent }]} />
+          </View>
+          <View style={layout.infoCenter}>
             {meta}
             {details}
           </View>
         </>
       );
+    }
 
     case "blockName": {
       // Snapshot: three of their photos edge to edge, then the name huge in
@@ -941,10 +952,13 @@ const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
-  ruledNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  labelWrap: { alignSelf: "stretch", paddingHorizontal: 28, marginBottom: 14 },
+  labelCard: { borderWidth: 1, paddingHorizontal: 22, paddingVertical: 20 },
+  // As the page's label cards (ProfilePageStyle innerRule).
+  labelInner: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
+  labelNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   // Marcellus SC: its caps need 1.28× or their tops crop.
-  ruledName: { fontFamily: "MarcellusSC-Regular", fontSize: 30, lineHeight: 40, letterSpacing: 2.5, textAlign: "center", flexShrink: 1 },
-  ruledRule: { width: 44, height: 1.5, marginTop: 10, marginBottom: 10 },
+  labelName: { fontFamily: "MarcellusSC-Regular", fontSize: 28, lineHeight: 38, letterSpacing: 2.5, textAlign: "center", flexShrink: 1 },
   coverTop: { paddingTop: 64 },
   // HeroLogo keeps 20pt under itself; pull the name back up under the logo.
   coverLogo: { alignSelf: "flex-end", marginRight: 28, marginBottom: -14 },
