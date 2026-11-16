@@ -74,11 +74,11 @@ Curated: [[Availability & Slots]] · **212 files**
 - … +182 more
 
 ## Payments
-Curated: [[Payments]] · **171 files**
+Curated: [[Payments]] · **172 files**
 - `src/screens/client/CartScreen.tsx` _(534)_
-- `src/services/databaseService.ts` _(250)_
+- `src/services/databaseService.ts` _(253)_
 - `src/screens/provider/PaymentsScreen.tsx` _(173)_
-- `src/components/ProviderStripePayments.tsx` _(119)_
+- `src/components/ProviderStripePayments.tsx` _(120)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/screens/client/BookingDetailScreen.tsx` _(109)_
@@ -105,11 +105,11 @@ Curated: [[Payments]] · **171 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `supabase/phase1_schema.sql` _(28)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(27)_
-- … +141 more
+- … +142 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **379 files**
-- `src/services/databaseService.ts` _(1174)_
+Curated: [[Booking Flow]] · **380 files**
+- `src/services/databaseService.ts` _(1188)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/screens/client/CartScreen.tsx` _(726)_
 - `src/contexts/BookingContext.tsx` _(701)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **379 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/features/bookings/activityCentre.ts` _(96)_
-- … +349 more
+- … +350 more
 
 ## Notifications
 Curated: [[Notifications]] · **192 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **74 files**
 - … +44 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **218 files**
+Curated: [[Booking Flow]] · **219 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/services/databaseService.ts` _(328)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **218 files**
 - `src/types/database.ts` _(39)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
-- … +188 more
+- … +189 more
 
 ## Auth
 Curated: [[Contexts]] · **224 files**
