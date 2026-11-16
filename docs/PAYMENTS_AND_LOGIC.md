@@ -751,6 +751,10 @@ side. The bank decides, and the provider whose booking it is carries the
 cost. Until 15 November every provider on the payment did, whatever was
 disputed.
 
+**Terms:** Provider Terms §9, "Bank disputes", describes all of the above
+to providers (added 16 November; not lawyer-reviewed, see
+`LEGAL-COMPLIANCE-NOTES.md` §28).
+
 *Not live until migration `20261115090000_bank_dispute_per_booking` is
 applied and `stripe-webhook`, `release-payouts` and `assign-bank-dispute` are
 deployed. The Disputes tab needs a new app build; until then an admin can't
