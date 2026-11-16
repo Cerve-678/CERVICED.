@@ -483,22 +483,14 @@ function MiniProfile({
               <Text style={[mini.callingName, { color: blend(accent, '#000000', 0.4) }]} numberOfLines={1}>Name</Text>
             </View>
           </>
-        ) : style.hero === 'basket' ? (
-          // Boutique: a handheld shop basket, slots in its side, a label carrying the logo.
-          <View style={mini.basketWrap}>
-            <View style={mini.basketHandles}>
-              <View style={[mini.basketHandle, mini.basketHandleLeft, { borderColor: blend(accent, '#000000', 0.26) }]} />
-              <View style={[mini.basketHandle, mini.basketHandleRight, { borderColor: blend(accent, '#000000', 0.4) }]} />
-            </View>
-            <View style={[mini.basket, { backgroundColor: accent, borderTopColor: blend(accent, '#000000', 0.26) }]}>
-              <View style={mini.basketSlots}>
-                {Array.from({ length: 10 }, (_, i) => (
-                  <View key={i} style={[mini.basketSlot, { backgroundColor: blend(accent, '#000000', 0.5) }]} />
-                ))}
-              </View>
-              <View style={mini.basketLabel}>
-                <View style={[mini.basketLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.45) }]} />
-              </View>
+        ) : style.hero === 'shop' ? (
+          // Boutique: an online shop's top, a strip, the name as a wordmark, a photo in the window.
+          <View style={mini.shopWrap}>
+            <View style={[mini.shopStrip, { backgroundColor: blend(accent, '#000000', 0.4) }]} />
+            <Text style={mini.shopWordmark} numberOfLines={1}>NAME</Text>
+            <View style={mini.shopMenu} />
+            <View style={[mini.shopWindow, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]}>
+              <View style={mini.shopButton} />
             </View>
           </View>
         ) : style.hero === 'gazette' ? (
@@ -713,22 +705,12 @@ const mini = StyleSheet.create({
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
   productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
-  basketWrap: { alignItems: 'center' },
-  basketHandles: { width: 50, height: 16, marginBottom: -2 },
-  basketHandle: { position: 'absolute', top: 0, width: 30, height: 16, borderWidth: 2.5, borderBottomWidth: 0 },
-  basketHandleLeft: { left: 1, borderTopLeftRadius: 14, borderTopRightRadius: 4, zIndex: 1 },
-  basketHandleRight: { right: 1, borderTopLeftRadius: 4, borderTopRightRadius: 14 },
-  basket: {
-    width: 50, height: 36, borderTopWidth: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8,
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-  },
-  basketSlots: {
-    position: 'absolute', top: 4, left: 4, right: 4, bottom: 6,
-    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignContent: 'space-between',
-  },
-  basketSlot: { width: 7, height: 5, borderRadius: 2 },
-  basketLabel: { backgroundColor: '#FBF6EE', borderRadius: 2, padding: 3 },
-  basketLogo: { width: 16, height: 16, borderRadius: 8 },
+  shopWrap: { alignSelf: 'stretch', alignItems: 'center' },
+  shopStrip: { alignSelf: 'stretch', height: 5 },
+  shopWordmark: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 17, letterSpacing: 1.5, color: '#FFFFFF', marginTop: 4 },
+  shopMenu: { alignSelf: 'stretch', marginHorizontal: 10, height: 5, borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: 'rgba(255,255,255,0.55)', marginTop: 3 },
+  shopWindow: { alignSelf: 'stretch', marginHorizontal: 10, marginTop: 5, height: 30, borderRadius: 2, alignItems: 'flex-end', justifyContent: 'flex-end', padding: 3 },
+  shopButton: { width: 16, height: 6, borderRadius: 1, backgroundColor: '#FBF6EE' },
   blockHero: { alignSelf: 'stretch', flex: 1 },
   blockPhotos: { flexDirection: 'row', height: 48 },
   blockPhoto: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)' },
