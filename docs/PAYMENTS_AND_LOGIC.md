@@ -300,9 +300,9 @@ passes, the hold row is deleted (never a cancelled booking), they come off that
 waitlist, and the slot goes to the next person (provider's "offer automatically"
 setting on) or opens to everyone and back to the provider to offer (off). A
 provider offering a time by hand also creates a 15-minute hold, never an unpaid
-booking. *Not live until migration `20261113210000` is applied and a new app
-build ships. Until then the old path booked waitlist slots with £0 paid, though
-none ever was.*
+booking. *Live since 16 November (`20261113210000`); the app part needs a new
+build. Before that the old path booked waitlist slots with £0 paid, though none
+ever was.*
 
 **Deposits:** if a service takes a deposit, the client pays the deposit plus
 the fee in the app. **The remaining balance is paid to the provider off-app,
