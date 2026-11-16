@@ -12187,6 +12187,73 @@ export async function getCheckoutOutcome(
   return data ? { status: String(data.status), outcome: data.outcome ?? null } : null;
 }
 
+/** What a checkout's payment sheet charges now, and what it only holds on
+ *  the card for requests (each charged only if its provider accepts). */
+export interface CheckoutHoldPlan {
+  chargeNowPence: number;
+  heldPence: number;
+  /** Requests with a card hold (a free request has none). */
+  requestCount: number;
+  bookingCount: number;
+}
+
+export async function getCheckoutHoldPlan(checkoutBatchId: string): Promise<CheckoutHoldPlan> {
+  const { data, error } = await supabase.rpc('get_checkout_hold_plan', { p_checkout_batch_id: checkoutBatchId });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as
+    { charge_now_pence: number; held_pence: number; request_count: number; booking_count: number } | undefined;
+  if (!row) throw new Error('Checkout not found');
+  return {
+    chargeNowPence: Number(row.charge_now_pence),
+    heldPence: Number(row.held_pence),
+    requestCount: Number(row.request_count),
+    bookingCount: Number(row.booking_count),
+  };
+}
+
+/** One request's card hold, as the client sees it after checkout:
+ *  'authorised' held (or since settled), 'needs_action' waiting on their
+ *  bank's check, 'planned' not placed yet, 'dropped' not sent. */
+export interface RequestCardHold {
+  holdId: string;
+  bookingId: string | null;
+  serviceName: string;
+  providerName: string | null;
+  amountPence: number;
+  state: 'planned' | 'needs_action' | 'authorised' | 'dropped';
+  actionDeadline: string | null;
+}
+
+export async function getMyRequestCardHolds(checkoutBatchId: string): Promise<RequestCardHold[]> {
+  const { data, error } = await supabase.rpc('get_my_request_card_holds', { p_checkout_batch_id: checkoutBatchId });
+  if (error) throw error;
+  return ((data ?? []) as {
+    hold_id: string; booking_id: string | null; service_name: string; provider_name: string | null;
+    amount_pence: number; state: RequestCardHold['state']; action_deadline: string | null;
+  }[]).map(row => ({
+    holdId: row.hold_id,
+    bookingId: row.booking_id,
+    serviceName: row.service_name,
+    providerName: row.provider_name,
+    amountPence: Number(row.amount_pence),
+    state: row.state,
+    actionDeadline: row.action_deadline,
+  }));
+}
+
+/** A request hold's bank check. 'start' returns the payment's client secret
+ *  for the Stripe SDK to show the check; 'check' records the result. */
+export async function requestCardHoldStep(
+  holdId: string,
+  step: 'start' | 'check',
+): Promise<{ state: 'authorised' | 'needs_action' | 'dropped'; clientSecret?: string }> {
+  const { data, error } = await supabase.functions.invoke('request-card-hold', { body: { holdId, step } });
+  if (error || data?.error || !['authorised', 'needs_action', 'dropped'].includes(data?.state)) {
+    throw new Error('We couldn\'t reach your bank\'s check. Please try again.');
+  }
+  return { state: data.state, clientSecret: typeof data.clientSecret === 'string' ? data.clientSecret : undefined };
+}
+
 export async function invokeBeccaAi(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke("becca-ai", { body });
   if (error) throw error;
@@ -13303,9 +13370,10 @@ export async function getRefundRequestsForBooking(bookingId: string): Promise<Re
  *  succeeded regardless. Inert until USE_STRIPE_PAYMENTS is enabled. */
 export async function applyCancellationRefund(
   bookingId: string,
-): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible'> {
+): Promise<'settled' | 'already_settled' | 'no_payment' | 'not_eligible' | 'not_charged'> {
   const { data, error } = await supabase.functions.invoke('apply-cancellation-refund', { body: { bookingId } });
-  if (error || data?.error || !['settled', 'already_settled', 'no_payment', 'not_eligible'].includes(data?.status)) {
+  // 'not_charged': a request whose card was only held — nothing to refund.
+  if (error || data?.error || !['settled', 'already_settled', 'no_payment', 'not_eligible', 'not_charged'].includes(data?.status)) {
     throw new Error('The cancellation refund could not be confirmed.');
   }
   return data.status;

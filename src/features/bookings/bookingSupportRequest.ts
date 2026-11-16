@@ -121,6 +121,9 @@ export function getRefundRequestScope(
       return isRefundRequestWindowOpen(booking, now) ? 'in_app' : 'closed';
     case PaymentStatus.REFUNDED:
     case PaymentStatus.REFUND_PENDING:
+    // Held on the card and released, or still only held: nothing was taken.
+    case PaymentStatus.NOT_CHARGED:
+    case PaymentStatus.AUTHORISED:
       return 'settled';
     default:
       return 'off_app';

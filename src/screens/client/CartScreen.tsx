@@ -42,7 +42,10 @@ import {
   validatePromoCode,
   getServiceSafetyFlags,
   prepareCheckout, cancelCheckout, getMyLastClientAddress,
-  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards, getCachedSavedCards, getCheckoutOutcome } from '../../services/databaseService';
+  getCheckoutFees, acceptCheckoutFees, type CheckoutFee, listSavedCards, getCachedSavedCards, getCheckoutOutcome,
+  getCheckoutHoldPlan, type CheckoutHoldPlan } from '../../services/databaseService';
+import { checkoutSuccessMessage, holdPlanNote, payButtonLabel } from '../../features/cart/requestHolds';
+import { RequestHoldChecks } from '../../features/cart/RequestHoldChecks';
 import {
   savedCardBrandName, savedCardExpiryLabel, savedCardExpiryState, type SavedCard,
 } from '../../features/payments/savedCards';
@@ -325,6 +328,9 @@ interface PaymentModalProps {
   /** The card was approved but the checkout didn't simply book: refunded or
    *  not charged (the time had gone), or still unsettled after waiting. */
   onPaymentPending?: (outcome: Exclude<CheckoutWaitResult, 'succeeded'>) => void;
+  /** The checkout went through: which one, and how much of it is only held
+   *  on the card for requests (null if that couldn't be read). */
+  onCheckoutPaid?: (checkoutBatchId: string, plan: CheckoutHoldPlan | null) => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
   // so closing the payment sheet on failure would dismiss the alert with it.
@@ -647,6 +653,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentSuccess,
     onPaymentComplete,
     onPaymentPending,
+    onCheckoutPaid,
     onBookingFailed,
   }) => {
     const { theme, palette: P, isDarkMode } = useTheme();
@@ -755,6 +762,22 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       return () => { cancelled = true; };
     }, [isVisible, checkoutBatchId, feesAttempt]);
 
+    // How much is charged now and how much only held for requests (each
+    // charged only if accepted). null while loading or if it couldn't be
+    // read: the sheet then shows the plain total, and the server still
+    // holds the requests.
+    const [holdPlan, setHoldPlan] = useState<CheckoutHoldPlan | null>(null);
+    useEffect(() => {
+      if (!isVisible || !checkoutBatchId) return;
+      let cancelled = false;
+      setHoldPlan(null);
+      getCheckoutHoldPlan(checkoutBatchId)
+        .then(plan => { if (!cancelled) setHoldPlan(plan); })
+        .catch(err => logger.error('[checkout] could not load the request hold plan', err));
+      return () => { cancelled = true; };
+    }, [isVisible, checkoutBatchId]);
+    const heldNote = holdPlanNote(holdPlan);
+
     const hasFees = (fees?.length ?? 0) > 0;
     const visitFees = useMemo(
       () => (fees ?? []).filter(fee => fee.lateFeePence != null || fee.noShowFeePence != null),
@@ -766,9 +789,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
       && (lateCancelFees.length === 0 || agreedToLateCancel);
     // Same rules as create-payment-intent: a late/no-show or late cancellation fee is charged later
     // to a saved card, so those checkouts are card-only, and so is a total
-    // over PAYPAL_MAX_CHECKOUT_TOTAL. Hidden in Expo Go, which can't return
+    // over PAYPAL_MAX_CHECKOUT_TOTAL, and so is a checkout with a request
+    // (its hold is placed on a card). Hidden in Expo Go, which can't return
     // from PayPal's page.
-    const paypalShown = fees !== null && !hasFees && totalAmount <= PAYPAL_MAX_CHECKOUT_TOTAL && !env.isExpoGo;
+    const paypalShown = fees !== null && !hasFees && holdPlan !== null && holdPlan.requestCount === 0
+      && totalAmount <= PAYPAL_MAX_CHECKOUT_TOTAL && !env.isExpoGo;
 
     const handlePayment = useCallback(async (method: 'card' | 'wallet' | 'paypal') => {
       const timestamp = () => new Date().toISOString().split('T')[1];
@@ -891,6 +916,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
           onPaymentPending?.(outcome);
           return;
         }
+        onCheckoutPaid?.(checkoutBatchId, holdPlan);
         await onPaymentSuccess(method === 'paypal' ? 'paypal' : 'card', paymentIntentId);
 
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -914,7 +940,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         setConfirming(false);
         processingRef.current = false;
       }
-    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
+    }, [checkoutBatchId, hasFees, totalAmount, confirmPayment, confirmPlatformPayPayment, retrievePaymentIntent, onPaymentSuccess, onPaymentComplete, onPaymentPending, onCheckoutPaid, holdPlan, onClose, onBookingFailed, payingWithSavedCard, selectedCard]);
 
     // Closing after a declined attempt leaves an unconfirmed intent open —
     // cancel it so CartScreen's hold release (wired into onClose) isn't
@@ -1176,6 +1202,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   {payError && (
                     <Text accessibilityRole="alert" style={[styles.paymentMethodName, styles.payErrorText]}>{payError}</Text>
                   )}
+                  {heldNote && (
+                    <Text style={[styles.paySecureText, { color: P.sub, marginTop: 10 }]}>{heldNote}</Text>
+                  )}
                   <View style={styles.paySecureRow}>
                     <Ionicons name="lock-closed" size={12} color={P.sub} />
                     <Text style={[styles.paySecureText, { color: P.sub }]}>Card details go straight to Stripe</Text>
@@ -1199,7 +1228,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                 ) : isProcessing ? (
                   <ActivityIndicator color={P.onAccent} size="small" />
                 ) : (
-                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>Pay £{totalAmount.toFixed(2)}</Text>
+                  <Text style={[styles.payButtonText, { color: P.onAccent }]}>{payButtonLabel(holdPlan, totalAmount)}</Text>
                 )}
               </TouchableOpacity>
             </KeyboardAvoidingView>
@@ -2061,6 +2090,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
+  // The checkout that just went through, for the success screen: how much
+  // was only held for requests, and any hold the client's bank wants checked.
+  const [paidCheckout, setPaidCheckout] = useState<{ checkoutBatchId: string; plan: CheckoutHoldPlan | null } | null>(null);
 
   // Mirrors of the two outstanding-checkout ids, for the abandon path below:
   // it runs from a navigation listener and on unmount, neither of which can
@@ -3600,6 +3632,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // frozenCheckoutTotals.total computes next render, rather than two
     // independent formulas that could drift apart under a future edit.
     setPaymentTotal(checkoutTotalsFrom(pricedCheckoutItems(snapshot.items, snapshot.bookings)).total);
+    setPaidCheckout(null);
 
     // Show review modal pre-filled with user data
     setReviewName(user?.name || '');
@@ -4772,6 +4805,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 totalAmount={paymentTotal}
                 checkoutBatchId={serverCheckoutBatchId}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
+                onCheckoutPaid={(checkoutBatchId, plan) => setPaidCheckout({ checkoutBatchId, plan })}
                 onPaymentPending={outcome => {
                   setShowPaymentModal(false);
                   setServerCheckoutBatchId(null);
@@ -4828,10 +4862,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>Success!</Text>
 
                     <Text style={[styles.liquidGlassSuccessMessage, { color: P.sub }]}>
-                      Payment of £{paymentTotal.toFixed(2)} has been processed successfully.
-                      Appointments have been booked and will show up in Bookings when confirmed by
-                      providers.
+                      {checkoutSuccessMessage(paidCheckout?.plan ?? null, paymentTotal)}
                     </Text>
+
+                    {paidCheckout && <RequestHoldChecks checkoutBatchId={paidCheckout.checkoutBatchId} />}
 
                     <View style={styles.successButtonsContainer}>
                       {/* Primary — filled accent, the action we want most clients to take */}
