@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  feat/no-show-half (Claude, worktree ~/cerviced-worktrees/no-show-half; 20261113200000_no_show_half, awaiting the user's go-ahead to apply, 2026-11-14)
+OWNER:  (none)
 ```
 
 ### Applied 2026-11-13 (cancel notice one value)
@@ -74,11 +74,11 @@ OWNER:  feat/no-show-half (Claude, worktree ~/cerviced-worktrees/no-show-half; 2
 |---|---|---|
 | 20261113190000 | `refund_request_five_days` | **APPLIED 2026-11-13** (23:05 UTC, the rule's start) on the user's go-ahead ("u do it"), via `supabase db query --linked -f` (absolute path) from the main folder, after 170000 and 180000; all guards matched. Verified live: version recorded (live max); `refund_request_window_starts_at()` = `2026-11-13 23:05:34.744856+00`, EXECUTE PUBLIC/authenticated/service_role; `request_booking_refund` carries the check; `client_bookings` still `security_invoker=true` with all 28 grants; 0 bookings covered yet. Merged before applying as #503. Authoring notes: Frontier at authoring: live max `20261113150000` (now `20261113160000`, late-cancel-half-top-up, applied since; touches neither object, md5 guards still match 23:00 UTC); unapplied on open branches `20261113170000` (#490), `20261113180000` (#491), none touching these objects. New `refund_request_window_starts_at()` (stamped with the apply time via plain CREATE, so a re-run fails rather than moving it; EXECUTE to authenticated, service_role — client_bookings is security_invoker). Redefines from live with md5 guards `request_booking_refund` (`72a54e1b…`: refuses when `created_at >= start` and UK date > `booking_date + 5`, after the paid-in-app check) and `client_bookings` (`a70088d5…`, all columns kept, appends `refund_request_window_applies`, `security_invoker=true`). Forced-rollback dry run 2026-11-13 as real clients: a 7 Nov booking made before the rule accepted (view false); a 6 Nov booking made after it refused with the P0001 message (view true); an 8 Nov one made after it accepted on its last day; view options and all 28 grants unchanged; live unchanged after. Written on `feat/refund-request-five-days` (#503). |
 
-### Pending (no-show Half the price)
+### Applied 2026-11-16 (no-show Half the price)
 
 | Authored version | Name | Status |
 |---|---|---|
-| 20261113200000 | `no_show_half` | **NOT APPLIED.** Frontier at authoring: live max `20261113180000`; unapplied above it on an open PR: `20261113190000_refund_request_five_days` (fix/cart-drops-offline-providers), which doesn't touch these objects. New `booking_half_price_balance_pence()` (IMMUTABLE, authenticated + service_role); redefines `snapshot_booking_fees` from live with md5 guard (`edf40424…`) so `noShowAction` 'half' freezes `no_show_fee_pence`; turns saved `custom` no-show policies and typed `noShowFee`s into `half` (1 live provider, £25). Forced-rollback dry run 2026-11-14 passed: £100/£20 → 3000, £60+£10/£20 → 1500, deposit ≥ half / paid in full → NULL; 0 custom left, 0 £ fees left; live unchanged. No edge function changes. Written on `feat/no-show-half`. |
+| 20261113200000 | `no_show_half` | **APPLIED 2026-11-16** on the user's go-ahead ("#505 then #474"), via `supabase db query --linked -f` from the main folder. Right before: live max `20261113190000`, `snapshot_booking_fees` md5 `edf40424…` matched, lock taken over from the ended f7 session with the user's go-ahead. Forced-rollback dry run passed (£100/£20 → 3000, deposit already half → NULL, full → NULL, 0 custom left, SECURITY DEFINER kept). Verified live: version recorded (live max), `snapshot_booking_fees` md5 now `1978c4ab…`, still SECURITY DEFINER, 0 custom no-show policies, anon can't execute `booking_half_price_balance_pence`. Authoring notes: Frontier at authoring: live max `20261113180000`; unapplied above it on an open PR: `20261113190000_refund_request_five_days` (fix/cart-drops-offline-providers), which doesn't touch these objects. New `booking_half_price_balance_pence()` (IMMUTABLE, authenticated + service_role); redefines `snapshot_booking_fees` from live with md5 guard (`edf40424…`) so `noShowAction` 'half' freezes `no_show_fee_pence`; turns saved `custom` no-show policies and typed `noShowFee`s into `half` (1 live provider, £25). Forced-rollback dry run 2026-11-14 passed: £100/£20 → 3000, £60+£10/£20 → 1500, deposit ≥ half / paid in full → NULL; 0 custom left, 0 £ fees left; live unchanged. No edge function changes. Written on `feat/no-show-half`. |
 
 ### Applied 2026-11-13 (late cancellation Half + top-up, same-month reschedules)
 

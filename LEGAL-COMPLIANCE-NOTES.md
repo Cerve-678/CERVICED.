@@ -1015,7 +1015,7 @@ To raise (not lawyer-reviewed):
 - **Late/no-show fees** have their own 7-day dispute route (Client Terms §16),
   decided by the provider; the page does not say which route applies to a fee
   after day 5.
-- **No-show Half (2026-11-13, branch `feat/no-show-half`):** the no-show
+- **No-show Half (2026-11-13, live since 2026-11-16):** the no-show
   Custom £ fee is replaced by "Half the price": deposit kept, plus the rest up
   to half the price charged to the saved card on a deposit-only booking. One
   live provider's £25 fee was converted without them choosing it. Raise the
