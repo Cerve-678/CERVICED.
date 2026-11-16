@@ -330,7 +330,7 @@ export function PageSectionHeading({
       );
     case "chunkyCaps": {
       // Studio: a lowercase script word in the accent, then the title in
-      // huge chunky caps, on one centred line where it fits.
+      // big Young Serif caps, on one centred line where it fits.
       const [lead, rest] = headingPair(section);
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
@@ -1516,9 +1516,10 @@ const headingStyles = StyleSheet.create({
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
-  // Studio: Lilita One caps with an Ephesis lead word. The line is set for the
-  // script (≥1.45× its size) so its loops aren't cropped.
-  chunkyCaps: { fontFamily: "LilitaOne-Regular", fontSize: 32, lineHeight: 52, letterSpacing: 0.4, textAlign: "center", paddingHorizontal: 8 },
+  // Studio: the title in Young Serif caps, the face of the business name in
+  // the hero (owner, 2026-11-16), with an Ephesis lead word. The line is set
+  // for the script (≥1.45× its size) so its loops aren't cropped.
+  chunkyCaps: { fontFamily: "YoungSerif-Regular", fontSize: 28, lineHeight: 50, letterSpacing: 0.6, textAlign: "center", paddingHorizontal: 8 },
   chunkyScript: { fontFamily: "Ephesis-Regular", fontSize: 34, letterSpacing: 0 },
   // Novel: IM Fell English, an old book face no other style uses.
   chapterNumber: { fontFamily: "IMFellEnglishSC-Regular", fontSize: 13, lineHeight: 17, letterSpacing: 3.6 },

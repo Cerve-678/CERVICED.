@@ -1996,11 +1996,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
-  // Duet draws the stars, years and link-only caption on its white card, so
-  // they take dark ink there whatever is behind the hero.
+  // Duet and Calling Card draw the stars, years and link-only caption on a
+  // card, so they take that card's ink whatever is behind the hero.
   const detailsOnCard = detailsSitOnCard(pageStyle);
-  // Boutique's panel is their card colour, so its ink follows that colour.
-  const cardDetailsInk = pageStyle.hero === "productPage" ? cardInk(OP.card) : DETAILS_ON_CARD_INK;
+  // Boutique's panel and Duet's welcome card are their card colour, so their
+  // ink follows that colour; Calling Card's cream card is always inked dark.
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" ? cardInk(OP.card) : DETAILS_ON_CARD_INK;
   const detailsText = detailsOnCard ? cardDetailsInk.text : heroText;
   const detailsSub = detailsOnCard ? cardDetailsInk.sub : heroSub;
   const detailsShadow = heroIsDark && !detailsOnCard;

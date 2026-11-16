@@ -14,7 +14,7 @@ import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "rea
 import { LogoCircle } from "../../components/FramedLogo";
 import { LaceHero } from "./heroes/LaceHero";
 import { PressedHero } from "./heroes/EmbossedHero";
-import { BoutiqueHero } from "./heroes/BoutiqueHero";
+import { BoutiqueHero, cardInk } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
 import { StudioHero } from "./heroes/StudioHero";
 import { NovelHero } from "./heroes/NovelHero";
@@ -426,25 +426,31 @@ export function ProfileHeroLayout({
     }
 
     case "duet": {
-      // Duet: a white welcome card on a soft accent shadow, the logo beside
-      // the name. What they do isn't repeated here: Additional Information
-      // lists it as Category (owner, 2026-11-15).
+      // Duet: a welcome card in the theme's card colour on a soft accent
+      // shadow, the logo beside the name (owner, 2026-11-16: the card should
+      // match the theme, not always be white). What they do isn't repeated
+      // here: Additional Information lists it as Category (owner, 2026-11-15).
       const [script, caps] = splitFirst(name);
-      const cardAccent = isDarkColor(accent) ? accent : blend(accent, "#000000", 0.35);
+      const duetInk = cardInk(cardColour);
+      const cardIsDark = isDarkColor(cardColour);
+      // The script is the accent, deepened on a pale card and lifted on a dark one.
+      const cardAccent = cardIsDark
+        ? (isDarkColor(accent) ? blend(accent, "#FFFFFF", 0.55) : accent)
+        : (isDarkColor(accent) ? accent : blend(accent, "#000000", 0.35));
       return (
         <View style={layout.duetWrap}>
           <View>
-            <View style={[layout.duetCardShadow, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]} pointerEvents="none" />
-            <View style={layout.duetCard}>
+            <View style={[layout.duetCardShadow, { backgroundColor: blend(accent, cardIsDark ? "#000000" : "#FFFFFF", 0.45) }]} pointerEvents="none" />
+            <View style={[layout.duetCard, { backgroundColor: cardColour, borderColor: duetInk.text }]}>
               <View style={layout.duetCardRow}>
               <View style={layout.logoNoGap}>{renderLogo(92)}</View>
               <View style={layout.duetCardText} accessible accessibilityRole="header" accessibilityLabel={name}>
-                <Text style={layout.duetHey}>HEY GORGEOUS, WELCOME TO</Text>
+                <Text style={[layout.duetHey, { color: duetInk.sub }]}>HEY GORGEOUS, WELCOME TO</Text>
                 <Text style={[layout.duetScript, { color: cardAccent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                   {script}
                 </Text>
                 {caps ? (
-                  <Text style={layout.duetCaps} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  <Text style={[layout.duetCaps, { color: duetInk.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
                     {caps.toUpperCase()}
                   </Text>
                 ) : null}
@@ -452,14 +458,16 @@ export function ProfileHeroLayout({
                     to the left (owner, 2026-11-15), drawn by the profile in
                     `details` like every other style. */}
                 {location ? (
-                  <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text>
+                  <Text style={[layout.duetLocated, { color: duetInk.sub }]} numberOfLines={2}>{location.toUpperCase()}</Text>
                 ) : null}
-                {tick}
+                {isVerified ? (
+                  <Ionicons name="checkmark-circle" size={18} color={cardIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                ) : null}
               </View>
               </View>
               {/* Their years in the card, the slots pill with Instagram under
                   it. The profile puts the slots pill on a line of its own and
-                  draws these in DETAILS_ON_CARD_INK, as the card is white. */}
+                  inks these with cardInk(card colour), as this card is. */}
               <View style={layout.duetInfoRow}>
                 {details}
               </View>
@@ -764,7 +772,9 @@ export function ProfileHeroLayout({
           location={location}
           backdrop={heroColour}
           heroSub={heroSub}
-          logo={renderLogo(84)}
+          // HeroLogo keeps 20pt under itself, which pushed the logo up out of
+          // the middle of its stamped ring (owner, 2026-11-16).
+          logo={<View style={layout.logoNoGap}>{renderLogo(104)}</View>}
           details={details}
           tick={tick}
         />

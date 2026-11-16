@@ -56,7 +56,7 @@ export type PageHeading =
   | 'shopSerif' // a big serif title on the left, like a shop's department heading (Boutique)
   | 'newsRule'  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
   | 'chapter'   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
-  | 'chunkyCaps'; // a lowercase script word, then the title in huge chunky caps, centred (Studio)
+  | 'chunkyCaps'; // a lowercase script word, then the title in big serif caps, centred (Studio)
 
 /** What a section sits on. */
 export type PageCards =
