@@ -110,6 +110,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   boutique: { text: 'The Services' },
   gazette: { text: 'THE SERVICES' },
   novel: { lead: 'CHAPTER III', text: 'The Services' },
+  studio: { lead: 'the', text: 'SERVICES' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -267,6 +268,13 @@ function MiniProfile({
             <Text style={[mini.newsTitle, { color: ink }]}>{heading.text}</Text>
           </View>
         );
+      case 'chunkyCaps':
+        return (
+          <Text style={[mini.chunkyCaps, { color: ink }]}>
+            <Text style={[mini.chunkyScript, { color: accent }]}>{heading.lead} </Text>
+            {heading.text}
+          </Text>
+        );
       case 'chapter':
         return (
           <View style={mini.stack}>
@@ -329,6 +337,13 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.paper, mini.clippedCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'product':
         return <View key={key} style={[mini.card, mini.productCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'tabbed':
+        return (
+          <View key={key}>
+            <View style={[mini.studioTab, { backgroundColor: cardColour }]} />
+            <View style={[mini.card, { backgroundColor: cardColour, borderRadius: 0 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>
+          </View>
+        );
       case 'pages':
         return <View key={key} style={[mini.card, mini.pagesCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
@@ -483,14 +498,12 @@ function MiniProfile({
               <Text style={[mini.callingName, { color: blend(accent, '#000000', 0.4) }]} numberOfLines={1}>Name</Text>
             </View>
           </>
-        ) : style.hero === 'shop' ? (
-          // Boutique: an online shop's top, a strip, the name as a wordmark, a photo in the window.
-          <View style={mini.shopWrap}>
-            <View style={[mini.shopStrip, { backgroundColor: blend(accent, '#000000', 0.4) }]} />
-            <Text style={mini.shopWordmark} numberOfLines={1}>NAME</Text>
-            <View style={mini.shopMenu} />
-            <View style={[mini.shopWindow, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]}>
-              <View style={mini.shopButton} />
+        ) : style.hero === 'productPage' ? (
+          // Boutique: a product page, the logo on their colour, their card colour under it with the name.
+          <View style={mini.productWrap}>
+            <View style={[mini.productPhoto, { backgroundColor: accent }]}>{logo}</View>
+            <View style={[mini.productPanel, { backgroundColor: cardColour }]}>
+              <Text style={[mini.productTitle, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
             </View>
           </View>
         ) : style.hero === 'gazette' ? (
@@ -500,6 +513,19 @@ function MiniProfile({
             <Text style={[mini.blackletter, { color: gazetteInk }]} numberOfLines={1}>The Gazette</Text>
             <View style={[mini.paperRule, { borderColor: gazetteInk }]} />
             <Text style={[mini.headline, { color: gazetteInk }]} numberOfLines={1}>AMARA</Text>
+          </View>
+        ) : style.hero === 'studio' ? (
+          // Studio: a deep bar with the pressed wordmark, then a photo with huge caps across it.
+          <View style={mini.studioWrap}>
+            <View style={[mini.studioBar, { backgroundColor: blend(accent, '#000000', isDarkColor(accent) ? 0.25 : 0.5) }]}>
+              <Text style={[mini.studioHeadline, { color: blend(accent, '#FFFFFF', 0.72) }]} numberOfLines={1}>
+                LASHES<Text style={mini.studioScript}> & </Text>BROWS.
+              </Text>
+            </View>
+            <View style={[mini.studioPhoto, { backgroundColor: accent }]}>
+              <View style={mini.studioLogo}>{logo}</View>
+              <Text style={[mini.studioWordmark, { color: blend(accent, '#000000', isDarkColor(accent) ? 0.3 : 0.18) }]} numberOfLines={1}>amara.</Text>
+            </View>
           </View>
         ) : style.hero === 'titlePage' ? (
           // Novel: a title page, the logo ringed, the name in old type over an ornament.
@@ -705,12 +731,21 @@ const mini = StyleSheet.create({
   labelCard: { backgroundColor: '#FFFFFF', borderRadius: 0, borderWidth: 1, borderColor: '#2C3527' },
   productCard: { backgroundColor: '#FFFFFF', borderRadius: 3, borderWidth: 1, borderColor: 'rgba(42,10,16,0.14)' },
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
-  shopWrap: { alignSelf: 'stretch', alignItems: 'center' },
-  shopStrip: { alignSelf: 'stretch', height: 5 },
-  shopWordmark: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 17, letterSpacing: 1.5, color: '#FFFFFF', marginTop: 4 },
-  shopMenu: { alignSelf: 'stretch', marginHorizontal: 10, height: 5, borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: 'rgba(255,255,255,0.55)', marginTop: 3 },
-  shopWindow: { alignSelf: 'stretch', marginHorizontal: 10, marginTop: 5, height: 30, borderRadius: 2, alignItems: 'flex-end', justifyContent: 'flex-end', padding: 3 },
-  shopButton: { width: 16, height: 6, borderRadius: 1, backgroundColor: '#FBF6EE' },
+  // Studio's bar, photo and headings.
+  studioWrap: { alignSelf: 'stretch', flex: 1, marginHorizontal: 8 },
+  studioBar: { height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  studioLogo: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 18, alignItems: 'center', justifyContent: 'center' },
+  studioWordmark: { fontFamily: 'YoungSerif-Regular', fontSize: 11, lineHeight: 15 },
+  studioPhoto: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 6 },
+  studioHeadline: { fontFamily: 'LilitaOne-Regular', fontSize: 11, lineHeight: 17 },
+  studioScript: { fontFamily: 'Ephesis-Regular', fontSize: 11 },
+  studioTab: { width: 22, height: 5, marginLeft: 6 },
+  chunkyCaps: { fontFamily: 'LilitaOne-Regular', fontSize: 13, lineHeight: 21, textAlign: 'center' },
+  chunkyScript: { fontFamily: 'Ephesis-Regular', fontSize: 14 },
+  productWrap: { alignSelf: 'stretch', flex: 1 },
+  productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
+  productPanel: { paddingHorizontal: 8, paddingVertical: 5, gap: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
+  productTitle: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 12, lineHeight: 15 },
   blockHero: { alignSelf: 'stretch', flex: 1 },
   blockPhotos: { flexDirection: 'row', height: 48 },
   blockPhoto: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)' },

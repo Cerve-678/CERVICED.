@@ -5,7 +5,7 @@
 
 #generated
 
-**3917 functions** across **551 files**.
+**3928 functions** across **552 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -96,7 +96,7 @@
 
 ### `src/constants/` (11)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
-- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **romanNumeral**
+- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
@@ -281,7 +281,7 @@
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
-- `PolicyPages.tsx` — bottom · go · InlinePage · label · **PolicyPagesInline** · **PolicyStoryRings** · **PolicyStoryViewer** · StoryBody · top · **usePolicyEdgeColours**
+- `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
 - `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **GlossShine** · HeadingLine · isCentredHeading · LaceTrimmedCard · **onAccentInk** · outlineInk · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
@@ -309,8 +309,8 @@
 - `WaxSeal.tsx` — **sealLetter** · **waxColour** · **WaxSeal**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (8)
-- `BoutiqueHero.tsx` — **BoutiqueHero** · onLayout · ShopStrip
+### `src/features/providers/heroes/` (9)
+- `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
@@ -318,6 +318,7 @@
 - `NovelHero.tsx` — **NovelHero** · subtitle
 - `SealedHero.tsx` — Postmark · **SealedEnvelope**
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
+- `StudioHero.tsx` — push · **studioHeadline** · **StudioHero** · **studioWordmark**
 
 ### `src/features/social/` (12)
 - `circleMoments.ts` — **canAskOnHome** · **daysSinceVisit** · dayStart · **nextCircleStep** · **parseMomentsMemory** · **recommendCandidates** · **shouldOfferOnProfile** · **shouldShowWhereIGoNotice** · startOfDay · **visitWhenLabel** · **withAnswer** · **withAsked** · **withIntroShown**
@@ -417,7 +418,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · PolicyLookSmallPreview · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen

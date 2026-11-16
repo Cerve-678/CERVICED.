@@ -27,7 +27,8 @@ export type PageStyleKey =
   | 'callingCard'
   | 'boutique'
   | 'gazette'
-  | 'novel';
+  | 'novel'
+  | 'studio';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -54,7 +55,8 @@ export type PageHeading =
   | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
   | 'shopSerif' // a big serif title on the left, like a shop's department heading (Boutique)
   | 'newsRule'  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
-  | 'chapter';   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
+  | 'chapter'   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
+  | 'chunkyCaps'; // a lowercase script word, then the title in huge chunky caps, centred (Studio)
 
 /** What a section sits on. */
 export type PageCards =
@@ -77,7 +79,8 @@ export type PageCards =
   | 'clipped' // a near-square card with an inner rule, held at the top by a clip in the accent (Calling Card)
   | 'product' // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
   | 'ruled'   // straight on the page, each item over a printed rule (Gazette)
-  | 'pages';   // a square card with two page edges showing behind it, like a closed book (Novel)
+  | 'pages'   // a square card with two page edges showing behind it, like a closed book (Novel)
+  | 'tabbed';  // a square solid card with a little tab on its top edge naming the section (Studio)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -100,7 +103,8 @@ export type PagePolicies =
   | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
   | 'accordion'  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
   | 'columns'   // two-up newspaper columns boxed by ink rules (Gazette)
-  | 'numberedRules'; // numbered paragraphs, the label in small caps running into its value (Novel)
+  | 'numberedRules' // numbered paragraphs, the label in small caps running into its value (Novel)
+  | 'membership';  // two-up square tiles in blush, the card colour and a deep accent, like a studio's price plans (Studio)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -130,8 +134,9 @@ export type PageHero =
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
   | 'pressed'  // pressed straight into the theme backdrop, no card: the logo in a blind-stamped ring, the name raised out of it
   | 'callingCard' // satin in the theme colour, and a cream calling card held by an accent clip with the logo and name
-  | 'shop'      // the top of an online boutique: a running strip, the name as a wordmark, what they do as the menu, their photo with Book now (Boutique)
+  | 'productPage' // a product page: their logo big on their colour, then the name as the product title on a white panel with Add to basket (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
+  | 'studio'    // a studio website's top: what they do in chunky caps on a deep bar, then the logo and the name pressed into a panel of the accent as a lowercase wordmark
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -330,9 +335,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
   // board 24): "shopping cart vibes", the logo printed on the bag.
   {
-    key: 'boutique', name: 'Boutique', description: 'Your page as an online boutique: your name as the brand, your work in the window',
+    key: 'boutique', name: 'Boutique', description: 'Your page as a product page: your logo up top, Add to basket',
     heading: 'shopSerif', cards: 'product', policies: 'accordion', logo: 'circle',
-    hero: 'shop', aboutInHero: false,
+    hero: 'productPage', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     bookLabel: 'Add to basket',
   },
@@ -351,6 +356,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     key: 'novel', name: 'Novel', description: 'A book\'s title page with your name set in old type, sections as chapters',
     heading: 'chapter', cards: 'pages', policies: 'numberedRules', logo: 'circle',
     hero: 'titlePage', aboutInHero: false, pagePhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-16: from the owner's references, a burgundy-and-blush studio
+  // website ("TURN UP the HEAT.") and an embossed lowercase wordmark ("imani.").
+  {
+    key: 'studio', name: 'Studio', description: 'A studio website: what you do in chunky caps, your name pressed in below your logo',
+    heading: 'chunkyCaps', cards: 'tabbed', policies: 'membership', logo: 'circle',
+    hero: 'studio', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
@@ -449,18 +462,38 @@ export function menuNumber(index: number): string {
 
 // ── Policy pictures ──────────────────────────────────────────────────────────
 // Branding → Policy Pictures: how a provider's uploaded policy pages sit in
-// their profile (owner's picks A and B on the 2026-11-13 canvas). Both run the
-// page edge to edge in the page's own edge colours; they differ in how it
-// meets the page around it. Stored as the sixth `|` part of profile_theme.
+// their profile. Melt in and Bleed (owner's picks A and B on the 2026-11-13
+// canvas) run the pages full size after the services, in their own edge
+// colours. The owner asked on 2026-11-16 for the story circles (pick D) to be
+// a choice of their own rather than always on, and for subtler choices for
+// providers who don't want their pages full size in the page: a row of small
+// thumbnails, or just a button. Then for more designs of the pages in the page:
+// framed prints, a swipe-through, a fanned stack and a peek at the top page.
+// Stored as the sixth `|` part of profile_theme.
 
-export type PolicyPictureLook = 'melt' | 'bleed';
+export type PolicyPictureLook =
+  | 'melt' | 'bleed' | 'framed' | 'swipe' | 'fan' | 'peek'
+  | 'story' | 'thumbs' | 'button';
 
 export const DEFAULT_POLICY_PICTURE_LOOK: PolicyPictureLook = 'melt';
 
 export const POLICY_PICTURE_LOOKS: readonly { key: PolicyPictureLook; name: string; description: string }[] = [
-  { key: 'melt', name: 'Melt in', description: 'Your pages fade into the page around them' },
-  { key: 'bleed', name: 'Bleed', description: 'Your pages run edge to edge on a wavy band of their own colour' },
+  { key: 'melt', name: 'Melt in', description: 'Full size, fading into your page' },
+  { key: 'bleed', name: 'Bleed', description: 'Full size, on a wavy band of their own colour' },
+  { key: 'framed', name: 'Framed', description: 'Each page as a framed print on your page' },
+  { key: 'swipe', name: 'Swipe', description: 'Full width, one page at a time, swipe through' },
+  { key: 'fan', name: 'Fanned', description: 'Your pages fanned out like cards, tap to read' },
+  { key: 'peek', name: 'Peek', description: 'The top of your policy, then Read the full policy' },
+  { key: 'story', name: 'Story', description: 'Circles near the top that open full screen' },
+  { key: 'thumbs', name: 'Thumbnails', description: 'A small row of pages after your services' },
+  { key: 'button', name: 'Button', description: 'Just a "Read my policy" button' },
 ];
+
+/** Where a look puts the pages: story circles near the top of the profile,
+ *  or (every other look) their own section after the services. */
+export function policyPicturePlacement(look: PolicyPictureLook): 'top' | 'afterServices' {
+  return look === 'story' ? 'top' : 'afterServices';
+}
 
 export function isPolicyPictureLook(value: string | null | undefined): value is PolicyPictureLook {
   return POLICY_PICTURE_LOOKS.some(look => look.key === value);

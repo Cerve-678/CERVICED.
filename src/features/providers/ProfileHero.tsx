@@ -16,6 +16,7 @@ import { LaceHero } from "./heroes/LaceHero";
 import { PressedHero } from "./heroes/EmbossedHero";
 import { BoutiqueHero } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
+import { StudioHero } from "./heroes/StudioHero";
 import { NovelHero } from "./heroes/NovelHero";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
@@ -194,9 +195,9 @@ export interface ProfileHeroLayoutProps {
   /** The theme's backdrop colour (the gradient's first stop): Calling Card's
    *  satin, Embossed's pressed letters and Novel's title page are drawn in it. */
   heroColour: string;
-  /** The theme's card colour, used by Gazette's hero sheet. */
+  /** The theme's card colour: Gazette's hero sheet, Boutique's product panel. */
   cardColour: string;
-  /** Jumps to Services: Boutique's Book now button. Left out when there are
+  /** Jumps to Services: Studio's Book now. Left out when there are
    *  no services on the page (a link-only provider), and then there's no button. */
   onBookNow?: (() => void) | undefined;
 }
@@ -785,23 +786,18 @@ export function ProfileHeroLayout({
         />
       );
 
-    case "shop":
-      // Boutique: the top of an online boutique, their photo in the window (heroes/BoutiqueHero).
+    case "productPage":
+      // Boutique: a product page, their logo on their colour, the name as the title (heroes/BoutiqueHero).
       return (
         <BoutiqueHero
           name={name}
           location={location}
           kicker={kicker}
-          caption={kickerPhrase(kicker)}
           accent={accent}
-          heroText={heroText}
-          heroSub={heroSub}
-          shadow={shadow}
-          photoUri={photoUris?.[0]}
+          cardColour={cardColour}
           renderLogo={renderLogo}
           details={details}
           tick={tick}
-          onBookNow={onBookNow}
         />
       );
 
@@ -823,6 +819,23 @@ export function ProfileHeroLayout({
           </View>
           <View style={layout.infoCenter}>{details}</View>
         </>
+      );
+
+    case "studio":
+      // Studio: a studio website's top, what they do in chunky caps on a deep
+      // bar and their name pressed into a panel of the accent (heroes/StudioHero).
+      return (
+        <StudioHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          // The tick sits beside the name on the accent panel.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(accent) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+          onBookNow={onBookNow}
+        />
       );
 
     case "titlePage":
@@ -916,7 +929,7 @@ function SealRing({
  * so the profile inks them dark.
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
-  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard";
+  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage";
 }
 
 /**
