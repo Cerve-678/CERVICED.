@@ -91,9 +91,9 @@ Curated: [[Payments]] · **167 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(58)_
 - `src/features/providers/goLiveStatus.ts` _(47)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
+- `src/screens/provider/PoliciesScreen.tsx` _(47)_
 - `src/services/becca/capabilities/client.ts` _(46)_
-- `src/screens/provider/PoliciesScreen.tsx` _(45)_
-- `src/utils/policyDisplay.ts` _(41)_
+- `src/utils/policyDisplay.ts` _(42)_
 - `src/features/bookings/bookingSupportRequest.ts` _(40)_
 - `src/screens/client/PaymentMethodsScreen.tsx` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
@@ -255,7 +255,7 @@ Curated: [[Booking Flow]] · **215 files**
 - `src/screens/client/CartScreen.tsx` _(154)_
 - `src/services/becca/capabilities/client.ts` _(149)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
-- `src/screens/provider/PoliciesScreen.tsx` _(79)_
+- `src/screens/provider/PoliciesScreen.tsx` _(80)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `src/utils/policyDisplay.ts` _(71)_
 - `supabase/booking_rules_server_enforcement.sql` _(71)_
@@ -366,9 +366,9 @@ Curated: [[Payments]] · **88 files**
 - `src/features/cart/platformFee.ts` _(8)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/navigation/types.ts` _(7)_
+- `src/screens/provider/PoliciesScreen.tsx` _(7)_
 - `src/types/booking.ts` _(7)_
 - `src/features/bookings/rebook.ts` _(6)_
-- `src/screens/provider/PoliciesScreen.tsx` _(6)_
 - `src/types/database.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/constants/feeTerms.ts` _(5)_

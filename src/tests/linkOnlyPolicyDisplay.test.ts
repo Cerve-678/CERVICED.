@@ -48,7 +48,9 @@ test('every profile surface passes the link-only flag', () => {
 test('a link-only save clears what CERVICED would apply or charge', () => {
   const screen = fs.readFileSync(path.join(__dirname, '..', 'screens', 'provider', 'PoliciesScreen.tsx'), 'utf8');
   expect(screen).toContain('...(isLinkOnly ? LINK_ONLY_CLEARED : {})');
-  for (const key of ['cancelPenalty', 'noShowAction', 'lateFee', 'noShowFee']) {
+  for (const key of ['cancelPenalty', 'noShowAction', 'lateFee']) {
     expect(screen).toMatch(new RegExp(`LINK_ONLY_CLEARED[\\s\\S]*${key}: ''`));
   }
+  // The £ no-show fee is retired for everyone (20261113200000): dropped on load.
+  expect(screen).toContain("delete (merged as Record<string, unknown>)['noShowFee'];");
 });
