@@ -426,12 +426,14 @@ function MiniProfile({
             <Text style={mini.galleryName} numberOfLines={2}>Name</Text>
             <View style={mini.smallLogo}>{logo}</View>
           </View>
-        ) : style.hero === 'ruled' ? (
-          // Apothecary: the logo, the name, a short rule in the accent.
+        ) : style.hero === 'labelCard' ? (
+          // Apothecary: the logo, then the name on a double-ruled label.
           <>
             {logo}
-            <Text style={[mini.tagName, mini.ruledName]} numberOfLines={1}>NAME</Text>
-            <View style={[mini.ruledRule, { backgroundColor: blend(accent, '#FFFFFF', 0.4) }]} />
+            <View style={[mini.labelHero, { backgroundColor: cardColour, borderColor: isDarkColor(cardColour) ? '#F2EDEA' : '#1F1A1C' }]}>
+              <View style={[mini.labelHeroInner, { borderColor: withAlpha(accent, 0.7) }]} />
+              <Text style={[mini.tagName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>NAME</Text>
+            </View>
           </>
         ) : style.hero === 'blockName' ? (
           // Snapshot: photos edge to edge, the name on an accent block.
@@ -690,8 +692,8 @@ const mini = StyleSheet.create({
     borderRadius: 100, borderWidth: 1.5, borderColor: '#1E2A4A', paddingHorizontal: 12, paddingVertical: 3,
     transform: [{ rotate: '-4deg' }],
   },
-  ruledName: { color: '#FFFFFF', marginTop: 4 },
-  ruledRule: { width: 18, height: 1, marginTop: 3 },
+  labelHero: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, marginTop: 4 },
+  labelHeroInner: { position: 'absolute', top: 2, left: 2, right: 2, bottom: 2, borderWidth: 0.5 },
   tagName: { fontFamily: 'MarcellusSC-Regular', fontSize: 11, lineHeight: 15, letterSpacing: 2 },
   galleryName: { fontFamily: 'InstrumentSerif-Regular', fontSize: 20, lineHeight: 26, color: '#FFFFFF', flex: 1 },
   dotLight: { fontFamily: 'LeagueSpartan-Light', fontSize: 12 },
