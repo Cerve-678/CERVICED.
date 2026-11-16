@@ -97,6 +97,7 @@ import AvailabilityCard from '../../components/AvailabilityCard';
 import ProviderPayoutSummaryCard from '../../components/ProviderPayoutSummaryCard';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { useTodaySchedule } from '../../features/providers/useTodaySchedule';
+import { bookingCardsLead } from '../../features/providers/todaySchedule';
 import {
   TodayBookingCards,
   TodaySummaryCard,
@@ -1628,6 +1629,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       onOpenBooking={handleOpenBooking}
     />
   ) : null;
+  const cardsOnTop = todaySchedule ? bookingCardsLead(todaySchedule) : false;
 
   const statusSection = (
     <>
@@ -1986,9 +1988,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   {/* ── Today ──────────────────────────────────────────────────
                       Two cards around the rest of the dashboard: the summary
                       leads until 2pm and again once the last client is done,
-                      the booking cards lead in between. Whichever isn't on
-                      top sits under Your work. */}
-                  {todaySchedule?.phase === 'cardsLead' ? todayBookingCards : todaySummaryCard}
+                      the booking cards lead in between, and on a free day
+                      with bookings coming up. Whichever isn't on top sits
+                      under Your work. */}
+                  {cardsOnTop ? todayBookingCards : todaySummaryCard}
 
                   {/* ── What clients say ───────────────────────────────────── */}
                   <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
@@ -2257,7 +2260,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   </View>
 
                   {/* ── Today, the other card ──────────────────────────────── */}
-                  {todaySchedule?.phase === 'cardsLead' ? todaySummaryCard : todayBookingCards}
+                  {cardsOnTop ? todaySummaryCard : todayBookingCards}
 
                   {/* ── Recent activity ────────────────────────────────────── */}
                   {recentBookings.length > 0 ? (
