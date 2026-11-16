@@ -195,9 +195,9 @@ export interface ProfileHeroLayoutProps {
   /** The theme's backdrop colour (the gradient's first stop): Calling Card's
    *  satin, Embossed's pressed letters and Novel's title page are drawn in it. */
   heroColour: string;
-  /** The theme's card colour, used by Gazette's hero sheet. */
+  /** The theme's card colour: Gazette's hero sheet, Boutique's product panel. */
   cardColour: string;
-  /** Jumps to Services: Boutique's Add to basket bar. Left out when there are
+  /** Jumps to Services: Studio's Book now. Left out when there are
    *  no services on the page (a link-only provider), and then there's no button. */
   onBookNow?: (() => void) | undefined;
 }
@@ -787,18 +787,17 @@ export function ProfileHeroLayout({
       );
 
     case "productPage":
-      // Boutique: a product page, their photos to swipe, the name as the title (heroes/BoutiqueHero).
+      // Boutique: a product page, their logo on their colour, the name as the title (heroes/BoutiqueHero).
       return (
         <BoutiqueHero
           name={name}
           location={location}
           kicker={kicker}
           accent={accent}
-          photoUris={photoUris ?? []}
+          cardColour={cardColour}
           renderLogo={renderLogo}
           details={details}
           tick={tick}
-          onBookNow={onBookNow}
         />
       );
 

@@ -499,11 +499,9 @@ function MiniProfile({
             </View>
           </>
         ) : style.hero === 'productPage' ? (
-          // Boutique: a product page, a photo edge to edge, a white panel with the title and Add to basket.
+          // Boutique: a product page, the logo on their colour, a white panel with the title and Add to basket.
           <View style={mini.productWrap}>
-            <View style={[mini.productPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]}>
-              <View style={mini.productDots} />
-            </View>
+            <View style={[mini.productPhoto, { backgroundColor: accent }]}>{logo}</View>
             <View style={mini.productPanel}>
               <Text style={mini.productTitle} numberOfLines={1}>Name</Text>
               <View style={[mini.productBar, { backgroundColor: blend(accent, '#1F1A1C', 0.55) }]} />
@@ -746,9 +744,8 @@ const mini = StyleSheet.create({
   chunkyCaps: { fontFamily: 'LilitaOne-Regular', fontSize: 13, lineHeight: 21, textAlign: 'center' },
   chunkyScript: { fontFamily: 'Ephesis-Regular', fontSize: 14 },
   productWrap: { alignSelf: 'stretch', flex: 1 },
-  productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 3 },
-  productDots: { width: 14, height: 3, borderRadius: 2, backgroundColor: '#FFFFFF' },
-  productPanel: { backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 5, gap: 4 },
+  productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
+  productPanel: { backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 5, gap: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
   productTitle: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 12, lineHeight: 15, color: '#1F1A1C' },
   productBar: { height: 7 },
   blockHero: { alignSelf: 'stretch', flex: 1 },
