@@ -18,6 +18,12 @@ verify_jwt = true
 [functions.admin-create-account]
 verify_jwt = true
 
+# Admins only (checked inside against admin_users): says which booking(s) a
+# bank dispute is about when its amount matched none, and takes the money back
+# from those providers only.
+[functions.assign-bank-dispute]
+verify_jwt = true
+
 # Called by the database (queue_booking_confirmation_email) with the
 # service_role key, never by a user session — the function checks for that key
 # explicitly on top of this.

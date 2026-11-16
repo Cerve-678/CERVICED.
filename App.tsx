@@ -31,6 +31,8 @@ import { PinyonScript_400Regular } from '@expo-google-fonts/pinyon-script/400Reg
 import { Sacramento_400Regular } from '@expo-google-fonts/sacramento/400Regular';
 import { Syne_700Bold } from '@expo-google-fonts/syne/700Bold';
 import { JosefinSans_600SemiBold } from '@expo-google-fonts/josefin-sans/600SemiBold';
+// Quiet's lighter line under the name (ProfileHero quietPhrase).
+import { JosefinSans_400Regular } from '@expo-google-fonts/josefin-sans/400Regular';
 import { TenorSans_400Regular } from '@expo-google-fonts/tenor-sans/400Regular';
 import { PoiretOne_400Regular } from '@expo-google-fonts/poiret-one/400Regular';
 import { Limelight_400Regular } from '@expo-google-fonts/limelight/400Regular';
@@ -183,6 +185,61 @@ export default Sentry.wrap(function App() {
     'BakbakOne-Regular': require('./assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('./assets/fonts/Jura-VariableFont_wght.ttf'),
     'Prata-Regular': require('./assets/fonts/Prata-Regular.ttf'),
+    // Page styles 11–16 (Branding → Page Style, 2026-11-14). Static instances
+    // from Google Fonts (OFL), one weight each, bundled as files rather than
+    // packages so no dependency changes.
+    'LeagueSpartan-Light': require('./assets/fonts/LeagueSpartan-Light.ttf'),
+    'LeagueSpartan-ExtraBold': require('./assets/fonts/LeagueSpartan-ExtraBold.ttf'),
+    'Cinzel-Medium': require('./assets/fonts/Cinzel-Medium.ttf'),
+    'Cinzel-Bold': require('./assets/fonts/Cinzel-Bold.ttf'),
+    'LibreBaskerville-Italic': require('./assets/fonts/LibreBaskerville-Italic.ttf'),
+    'MsMadi-Regular': require('./assets/fonts/MsMadi-Regular.ttf'),
+    'Gloock-Regular': require('./assets/fonts/Gloock-Regular.ttf'),
+    'Anton-Regular': require('./assets/fonts/Anton-Regular.ttf'),
+    'MrsSaintDelafield-Regular': require('./assets/fonts/MrsSaintDelafield-Regular.ttf'),
+    'Montserrat-Medium': require('./assets/fonts/Montserrat-Medium.ttf'),
+    'Montserrat-ExtraBold': require('./assets/fonts/Montserrat-ExtraBold.ttf'),
+    'Fraunces-SoftBlackItalic': require('./assets/fonts/Fraunces-SoftBlackItalic.ttf'),
+    'InstrumentSerif-Regular': require('./assets/fonts/InstrumentSerif-Regular.ttf'),
+    'InstrumentSerif-Italic': require('./assets/fonts/InstrumentSerif-Italic.ttf'),
+    'DidactGothic-Regular': require('./assets/fonts/DidactGothic-Regular.ttf'),
+    'Marcellus-Regular': require('./assets/fonts/Marcellus-Regular.ttf'),
+    'MarcellusSC-Regular': require('./assets/fonts/MarcellusSC-Regular.ttf'),
+    // Sealed (round 4, 2026-11-15).
+    'Corinthia-Bold': require('./assets/fonts/Corinthia-Bold.ttf'),
+    'EBGaramond-SemiBold': require('./assets/fonts/EBGaramond-SemiBold.ttf'),
+    'EBGaramond-Italic': require('./assets/fonts/EBGaramond-Italic.ttf'),
+    // Lace (round 4, 2026-11-15).
+    'Allura-Regular': require('./assets/fonts/Allura-Regular.ttf'),
+    'GildaDisplay-Regular': require('./assets/fonts/GildaDisplay-Regular.ttf'),
+    // Sheer (page style, round 4, 2026-11-15).
+    'Bellefair-Regular': require('./assets/fonts/Bellefair-Regular.ttf'),
+    'Jost-Light': require('./assets/fonts/Jost-Light.ttf'),
+    // Embossed (round 4, 2026-11-15).
+    'LibreCaslonDisplay-Regular': require('./assets/fonts/LibreCaslonDisplay-Regular.ttf'),
+    'Italianno-Regular': require('./assets/fonts/Italianno-Regular.ttf'),
+    // Calling Card (round 4, 2026-11-15): a copperplate script and engraved caps.
+    'MonsieurLaDoulaise-Regular': require('./assets/fonts/MonsieurLaDoulaise-Regular.ttf'),
+    'Forum-Regular': require('./assets/fonts/Forum-Regular.ttf'),
+    // Boutique (round 4, 2026-11-15).
+    'DMSerifDisplay-Regular': require('./assets/fonts/DMSerifDisplay-Regular.ttf'),
+    'Manrope-Bold': require('./assets/fonts/Manrope-Bold.ttf'),
+    // Gazette (round 4, 2026-11-15): a blackletter masthead, condensed
+    // headlines and an old newspaper serif.
+    'UnifrakturMaguntia-Book': require('./assets/fonts/UnifrakturMaguntia-Book.ttf'),
+    'Oswald-Bold': require('./assets/fonts/Oswald-Bold.ttf'),
+    'Oswald-Medium': require('./assets/fonts/Oswald-Medium.ttf'),
+    'OldStandardTT-Regular': require('./assets/fonts/OldStandardTT-Regular.ttf'),
+    'OldStandardTT-Italic': require('./assets/fonts/OldStandardTT-Italic.ttf'),
+    // Novel (round 4, 2026-11-15): IM Fell English, OFL, static files.
+    'IMFellEnglish-Regular': require('./assets/fonts/IMFellEnglish-Regular.ttf'),
+    'IMFellEnglish-Italic': require('./assets/fonts/IMFellEnglish-Italic.ttf'),
+    'IMFellEnglishSC-Regular': require('./assets/fonts/IMFellEnglishSC-Regular.ttf'),
+    // Studio (2026-11-16): chunky caps, a light script for the joining words,
+    // and a soft serif for the pressed wordmark. OFL, static files.
+    'LilitaOne-Regular': require('./assets/fonts/LilitaOne-Regular.ttf'),
+    'Ephesis-Regular': require('./assets/fonts/Ephesis-Regular.ttf'),
+    'YoungSerif-Regular': require('./assets/fonts/YoungSerif-Regular.ttf'),
     Lobster_400Regular,
     DancingScript_700Bold,
     Bungee_400Regular,
@@ -197,6 +254,7 @@ export default Sentry.wrap(function App() {
     Sacramento_400Regular,
     Syne_700Bold,
     JosefinSans_600SemiBold,
+    JosefinSans_400Regular,
     TenorSans_400Regular,
     PoiretOne_400Regular,
     Limelight_400Regular,

@@ -33,3 +33,9 @@ test('a custom cancellation charge shows its amount and its cap', () => {
   expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'custom', cancelCustomFee: '' })).toBe('24h notice');
   expect(cancellation({ cancelNotice: '24h', cancelPenalty: 'half' })).toBe('24h notice · half the price charged');
 });
+
+test('a Half no-show policy reads as half the price charged, with no £ fee row', () => {
+  const rows = buildPolicyDisplayRows({ noShowAction: 'half' });
+  expect(row(rows, 'No-show')).toBe('Half the price charged');
+  expect(row(rows, 'No-show fee')).toBeUndefined();
+});

@@ -17,24 +17,28 @@ import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeroBackdrop from "../../components/ProfileHeroBackdrop";
 import { getPageStyle, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
-import { resolveProviderFontFamily, resolveProviderFontScale } from "../../constants/providerFonts";
+import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
-import { HERO_NAME_LINE_HEIGHT, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout } from "./ProfileHero";
+import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
+import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle } from "./ProfileHero";
 import {
   GlossShine,
   onAccentInk,
   PageSection,
   PageSectionHeading,
-  PolicyBandSection,
+  AccentBandSection,
   policiesBringOwnSurface,
   sectionInk,
+  sectionsSitOnPage,
   serviceCardSurface,
   sheetInk,
   StyledPolicyList,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+
+const noop = () => {};
 
 /** The policy headings an empty profile shows: the titles, no values. */
 const PREVIEW_POLICY_ROWS: PolicyDisplayRow[] = [
@@ -66,7 +70,7 @@ export interface ProfileStylePreviewProps {
 export function ProfileStylePreview({
   themeKey,
   gradient,
-  accent,
+  accent: rawAccent,
   backgroundImage,
   brandFont,
   name,
@@ -79,11 +83,15 @@ export function ProfileStylePreview({
 }: ProfileStylePreviewProps) {
   const { finish, shape, pageStyle: styleKey } = parseThemeKey(themeKey);
   const pageStyle = getPageStyle(styleKey);
-  const OP = resolveProviderTheme(themeKey);
+  const baseTheme = resolveProviderTheme(themeKey);
+  // As on the profile: a veil page (Sheer) puts the content on dark glass.
+  const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
+  const OP = veilTheme ?? baseTheme;
+  const accent = veilTheme ? veilAccent(rawAccent) : rawAccent;
   const squareCards = shape === "square";
 
   // As ProviderProfileScreen works them out.
-  const heroIsDark = !!backgroundImage || isDarkColor(gradient[0] ?? OP.hero);
+  const heroIsDark = heroIsDarkForStyle(pageStyle) || !!backgroundImage || isDarkColor(gradient[0] ?? OP.hero);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
   const cardBg = withAlpha(OP.card, OP.isDark ? 0.5 : 0.9);
@@ -111,7 +119,7 @@ export function ProfileStylePreview({
   const page = sheetInk(OP.bg);
   const cardInk = sectionInk(palette);
   const surface = serviceCardSurface(pageStyle, { card: OP.card, accent, sheet: OP.bg });
-  const serviceInk = surface && (pageStyle.cards === "none" || pageStyle.cards === "outline") ? page : { text: OP.text, sub: OP.sub };
+  const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
   const lines = (colour: string, widths: number[] = [100, 92, 64]) => (
@@ -128,8 +136,9 @@ export function ProfileStylePreview({
     <ScrollView style={{ backgroundColor: OP.bg }} showsVerticalScrollIndicator={false}>
       <View>
         {/* The hero: the backdrop runs behind the logo and name, and the
-            content sheet rises over its foot, as on the profile. */}
-        <View style={styles.backdrop}>
+            content sheet rises over its foot, as on the profile. On a veil
+            page it runs behind the whole page, under the veil. */}
+        <View style={[styles.backdrop, veilTheme && styles.backdropFull]}>
           {backgroundImage ? (
             <>
               <Image source={{ uri: backgroundImage }} style={StyleSheet.absoluteFill} resizeMode="cover" fadeDuration={0} />
@@ -142,6 +151,7 @@ export function ProfileStylePreview({
           ) : (
             <ProfileHeroBackdrop colors={gradient} finish={finish} style={StyleSheet.absoluteFill} />
           )}
+          {veilTheme ? <VeilBackdrop /> : null}
         </View>
 
         <View style={styles.heroInfo}>
@@ -153,6 +163,13 @@ export function ProfileStylePreview({
             heroText={heroText}
             heroSub={heroSub}
             heroIsDark={heroIsDark}
+            accent={accent}
+            heroColour={gradient[0] ?? OP.hero}
+            cardColour={OP.card}
+            rating="5.0"
+            // The preview has no Services to jump to, but Studio's Book now
+            // still shows, so the provider sees the hero as clients will.
+            onBookNow={noop}
             renderLogo={size => (
               <HeroLogo
                 size={size}
@@ -173,7 +190,7 @@ export function ProfileStylePreview({
                     color: heroText,
                     fontFamily: resolveProviderFontFamily(brandFont),
                     fontSize: HERO_NAME_SIZE * fontScale * scale,
-                    lineHeight: HERO_NAME_LINE_HEIGHT * fontScale * scale,
+                    lineHeight: resolveProviderNameLineHeight(brandFont, HERO_NAME_SIZE * fontScale * scale),
                     ...(letterSpacing ? { letterSpacing } : null),
                   },
                   heroIsDark && styles.textShadow,
@@ -193,22 +210,25 @@ export function ProfileStylePreview({
             }
             details={
               <>
-                <View style={styles.ratingRow}>
+                {/* On Duet's card they lead the line, as on the profile. */}
+                <View style={[styles.ratingRow, detailsSitOnCard(pageStyle) && styles.ratingRowInline]}>
                   {[1, 2, 3, 4, 5].map(star => (
                     <Ionicons key={star} name="star" size={12} color="#FFD700" />
                   ))}
                 </View>
-                <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
-                  <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
-                  <Ionicons name="notifications-outline" size={16} color={OP.sub} />
-                </BlurView>
+                <View style={detailsSitOnCard(pageStyle) ? DETAILS_OWN_LINE : undefined}>
+                  <BlurView intensity={blurIntensity} tint={blurTint} style={[styles.slots, { backgroundColor: cardBg, borderColor: OP.border }]}>
+                    <Text style={[styles.slotsText, { color: OP.sub }]}>Stay updated</Text>
+                    <Ionicons name="notifications-outline" size={16} color={OP.sub} />
+                  </BlurView>
+                </View>
               </>
             }
             about={pageStyle.aboutInHero ? lines(withAlpha(heroText, 0.45), [100, 94, 70]) : null}
           />
         </View>
 
-        <View style={[styles.sheet, { backgroundColor: OP.bg }]}>
+        <View style={[styles.sheet, { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg }, veilTheme && styles.sheetGlass]}>
           {pageStyle.jumpBar ? (
             <View style={[styles.jumpBar, { backgroundColor: accent }, squareCards && styles.square]}>
               {jumpKeys.map(key => (
@@ -241,15 +261,19 @@ export function ProfileStylePreview({
             </BlurView>
           ) : (
             <>
-              {!pageStyle.aboutInHero ? (
+              {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
+                <AccentBandSection section="about" palette={palette} waves={false}>
+                  {lines(withAlpha(onAccentInk(accent).text, 0.35))}
+                </AccentBandSection>
+              ) : !pageStyle.aboutInHero ? (
                 <PageSection section="about" palette={palette}>
                   {lines(cardInk.separator)}
                 </PageSection>
               ) : null}
               {pageStyle.policies === "band" ? (
-                <PolicyBandSection palette={palette}>
+                <AccentBandSection section="policies" palette={palette}>
                   <StyledPolicyList rows={PREVIEW_POLICY_ROWS} palette={palette} ink={onAccentInk(accent)} />
-                </PolicyBandSection>
+                </AccentBandSection>
               ) : (
                 <PageSection section="policies" palette={palette} bare={policiesBringOwnSurface(pageStyle)}>
                   <StyledPolicyList
@@ -315,6 +339,7 @@ export function ProfileStylePreview({
 
 const styles = StyleSheet.create({
   backdrop: { position: "absolute", top: 0, left: 0, right: 0, height: 640 },
+  backdropFull: { height: undefined, bottom: 0 },
   heroInfo: { paddingTop: 100 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   name: { textAlign: "center", marginBottom: 4 },
@@ -328,6 +353,7 @@ const styles = StyleSheet.create({
   },
   textShadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   ratingRow: { flexDirection: "row", gap: 3, marginBottom: 8 },
+  ratingRowInline: { marginBottom: 0 },
   slots: {
     flexDirection: "row",
     alignItems: "center",
@@ -348,6 +374,13 @@ const styles = StyleSheet.create({
     minHeight: 900,
   },
   square: { borderRadius: 0 },
+  // Sheer: see-through glass over the veil, inset so the photo shows down its sides.
+  sheetGlass: {
+    marginHorizontal: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
   jumpBar: { flexDirection: "row", borderRadius: 100, marginBottom: 22, paddingHorizontal: 6 },
   jumpItem: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center" },
   jumpText: { fontFamily: "BakbakOne-Regular", fontSize: 10, letterSpacing: 1.6 },

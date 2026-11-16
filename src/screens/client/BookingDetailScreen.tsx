@@ -1594,7 +1594,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 providerName={booking.providerName}
                 refreshKey={recommendRefresh}
                 textColour={C.text}
-                subColour={C.sub}
+                borderColour={C.border}
                 onError={showRecommendError}
               />
             )}

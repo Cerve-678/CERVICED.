@@ -31,6 +31,7 @@ import {
   decodeCustomTheme,
   encodeThemeKey,
   parseThemeKey,
+  resolveProviderTheme,
   DEFAULT_HERO_FINISH,
   HERO_FINISHES,
   LINK_ONLY_HERO_FINISHES,
@@ -47,6 +48,7 @@ import PageStylePicker from '../../components/PageStylePicker';
 import {
   DEFAULT_PAGE_STYLE,
   DEFAULT_POLICY_PICTURE_LOOK,
+  PAGE_STYLES,
   POLICY_PICTURE_LOOKS,
   type PageStyleKey,
   type PolicyPictureLook,
@@ -167,7 +169,8 @@ export default function BrandingScreen({ navigation }: any) {
           const where = cached.location ? [cached.location.toUpperCase()] : [];
           const how = cached.businessType ? [BUSINESS_TYPE_LABEL[cached.businessType].toUpperCase()] : [];
           setMetaLabels([...new Set([...types, ...where])]);
-          setPillLabels([...new Set([...types, ...where, ...how])]);
+          // Cover's pills leave out what they do, as the profile does.
+          setPillLabels([...new Set([...where, ...how])]);
           setHeroKicker([...new Set(types)].join(' · '));
           setHeroLocation(cached.location ?? '');
         }
@@ -428,7 +431,17 @@ export default function BrandingScreen({ navigation }: any) {
       >
         {/* A Modal is its own native surface, so it needs its own safe-area provider. */}
         <SafeAreaProvider>
-          <ProfilePreviewScreen onClose={() => setPreviewOpen(false)}>
+          <ProfilePreviewScreen
+            onClose={() => setPreviewOpen(false)}
+            pageStyle={pageStyle}
+            onPickStyle={setPageStyle}
+            isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
+            onLockedPress={() => {
+              setPreviewOpen(false);
+              showLocked();
+            }}
+            accent={accentColor}
+          >
             <ProfileStylePreview
               themeKey={liveThemeKey}
               gradient={gradient}
@@ -578,6 +591,7 @@ export default function BrandingScreen({ navigation }: any) {
               gradient={gradient}
               accent={accentColor}
               sheet={sheetColor}
+              cardColour={resolveProviderTheme(liveThemeKey).card}
               textColor={P.text}
               subColor={P.sub}
               borderColor={P.border}
@@ -590,9 +604,9 @@ export default function BrandingScreen({ navigation }: any) {
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              If you've added policy pictures in Policies, they show in your profile after your services, in their own colours.
+              How the policy pictures you've added in Policies show on your profile: full size, as story circles at the top, or small.
             </Text>
-            <View style={styles.finishRow}>
+            <View style={styles.policyLookGrid}>
               {POLICY_PICTURE_LOOKS.map(look => {
                 const selected = policyLook === look.key;
                 const pageColour = accentColor;
@@ -610,6 +624,10 @@ export default function BrandingScreen({ navigation }: any) {
                     accessibilityLabel={`${look.name}: ${look.description}`}
                   >
                     <View style={[styles.policyLookPreview, { backgroundColor: sheetColor, borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                      {look.key !== 'melt' && look.key !== 'bleed' ? (
+                        <PolicyLookSmallPreview look={look.key} pageColour={pageColour} sheet={sheetColor} />
+                      ) : (
+                      <>
                       {look.key === 'melt' ? (
                         <LinearGradient colors={[sheetColor, pageColour]} style={styles.policyLookFade} />
                       ) : (
@@ -624,6 +642,8 @@ export default function BrandingScreen({ navigation }: any) {
                         <LinearGradient colors={[pageColour, sheetColor]} style={styles.policyLookFade} />
                       ) : (
                         <View style={[styles.policyLookWave, styles.policyLookWaveBottom, { backgroundColor: pageColour }]} />
+                      )}
+                      </>
                       )}
                     </View>
                     <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{look.name}</Text>
@@ -762,6 +782,69 @@ export default function BrandingScreen({ navigation }: any) {
   );
 }
 
+/** Branding's drawing of a Policy Pictures choice other than Melt in and
+ *  Bleed: the profile as grey lines, with the pages drawn in that design. */
+function PolicyLookSmallPreview({ look, pageColour, sheet }: { look: Exclude<PolicyPictureLook, 'melt' | 'bleed'>; pageColour: string; sheet: string }) {
+  const line = isDarkColor(sheet) ? 'rgba(255,255,255,0.28)' : 'rgba(38,32,30,0.16)';
+  const lines = (
+    <>
+      <View style={[styles.smallLine, { backgroundColor: line }]} />
+      <View style={[styles.smallLine, styles.smallLineShort, { backgroundColor: line }]} />
+      <View style={[styles.smallLine, { backgroundColor: line }]} />
+    </>
+  );
+  return (
+    <View style={styles.smallPreview}>
+      {look === 'story' ? (
+        <View style={styles.smallRings}>
+          {[0, 1, 2].map(i => <View key={i} style={[styles.smallRing, { borderColor: pageColour }]} />)}
+        </View>
+      ) : null}
+      {lines}
+      {look === 'thumbs' ? (
+        <View style={styles.smallThumbs}>
+          {[0, 1, 2].map(i => <View key={i} style={[styles.smallThumb, { backgroundColor: pageColour }]} />)}
+        </View>
+      ) : null}
+      {look === 'button' ? (
+        <View style={[styles.smallButton, { borderColor: line }]}>
+          <View style={[styles.smallButtonDoc, { backgroundColor: pageColour }]} />
+          <View style={[styles.smallLine, styles.smallLineShort, { backgroundColor: line, height: 3 }]} />
+        </View>
+      ) : null}
+      {look === 'framed' ? (
+        <View style={styles.smallFrame}>
+          <View style={[styles.smallFramePage, { backgroundColor: pageColour }]} />
+        </View>
+      ) : null}
+      {look === 'swipe' ? (
+        <>
+          <View style={styles.smallSwipeRow}>
+            <View style={[styles.smallSwipePage, { backgroundColor: pageColour }]} />
+            <View style={[styles.smallSwipePage, styles.smallSwipeNext, { backgroundColor: pageColour }]} />
+          </View>
+          <View style={styles.smallDots}>
+            {[1, 0.3, 0.3].map((opacity, i) => <View key={i} style={[styles.smallDot, { backgroundColor: pageColour, opacity }]} />)}
+          </View>
+        </>
+      ) : null}
+      {look === 'fan' ? (
+        <View style={styles.smallFan}>
+          {[-10, 10, 0].map(tilt => (
+            <View key={tilt} style={[styles.smallFanCard, { backgroundColor: pageColour, opacity: tilt === 0 ? 1 : 0.6, transform: [{ translateX: tilt * 0.7 }, { rotate: `${tilt}deg` }] }]} />
+          ))}
+        </View>
+      ) : null}
+      {look === 'peek' ? (
+        <View style={styles.smallPeek}>
+          <LinearGradient colors={[pageColour, sheet]} style={StyleSheet.absoluteFill} />
+        </View>
+      ) : null}
+      {look === 'story' ? lines : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   bg:      { flex: 1 },
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -870,7 +953,28 @@ const styles = StyleSheet.create({
   finishSwatchOn: { borderWidth: 2.5 },
   finishLocked: { opacity: 0.55 },
   finishLock: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
-  policyLookOption: { flex: 1 },
+  policyLookGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  policyLookOption: { width: '31%', flexGrow: 1 },
+  // The small choices: the profile as grey lines, with circles, thumbnails or a button.
+  smallPreview: { flex: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 6 },
+  smallLine: { height: 4, borderRadius: 2, width: '85%' },
+  smallLineShort: { width: '55%' },
+  smallRings: { flexDirection: 'row', gap: 5, marginBottom: 4 },
+  smallRing: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
+  smallThumbs: { flexDirection: 'row', gap: 5, marginTop: 4 },
+  smallThumb: { width: 16, height: 22, borderRadius: 2 },
+  smallButton: { height: 14, borderRadius: 4, borderWidth: 1, marginTop: 4, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, gap: 3 },
+  smallButtonDoc: { width: 5, height: 7, borderRadius: 1 },
+  smallFrame: { alignSelf: 'center', padding: 3, marginTop: 2, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOpacity: 0.15, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+  smallFramePage: { width: 34, height: 40 },
+  smallSwipeRow: { flexDirection: 'row', gap: 4, marginTop: 2, overflow: 'hidden' },
+  smallSwipePage: { width: '78%', height: 40, borderRadius: 2 },
+  smallSwipeNext: { opacity: 0.5 },
+  smallDots: { flexDirection: 'row', gap: 3, alignSelf: 'center' },
+  smallDot: { width: 4, height: 4, borderRadius: 2 },
+  smallFan: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  smallFanCard: { position: 'absolute', width: 26, height: 36, borderRadius: 2 },
+  smallPeek: { height: 40, borderRadius: 2, overflow: 'hidden', marginTop: 2 },
   policyLookPreview: { height: 116, borderRadius: 14, borderWidth: 1.5, overflow: 'hidden', justifyContent: 'center' },
   policyLookFade: { height: 18 },
   policyLookWave: { height: 12, marginTop: 6, borderTopLeftRadius: 60, borderTopRightRadius: 14 },
@@ -952,11 +1056,22 @@ const styles = StyleSheet.create({
 function ProfilePreviewScreen({
   children,
   onClose,
+  pageStyle,
+  onPickStyle,
+  isLocked,
+  onLockedPress,
+  accent,
 }: {
   children: React.ReactNode;
   onClose: () => void;
+  pageStyle: PageStyleKey;
+  onPickStyle: (key: PageStyleKey) => void;
+  isLocked: (key: PageStyleKey) => boolean;
+  onLockedPress: () => void;
+  accent: string;
 }) {
   const insets = useSafeAreaInsets();
+  const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
   return (
     <View style={previewStyles.root}>
       {children}
@@ -971,6 +1086,35 @@ function ProfilePreviewScreen({
       </TouchableOpacity>
       <View style={[previewStyles.badge, { top: insets.top + 14 }]} pointerEvents="none">
         <Text style={previewStyles.badgeText}>PREVIEW</Text>
+      </View>
+      {/* The page styles along the bottom: a tap swaps the style in place.
+          Picking one here is the same as picking it in Page Style; nothing
+          saves until Save. */}
+      <View style={[previewStyles.bar, { paddingBottom: insets.bottom + 12 }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={previewStyles.chips}>
+          {PAGE_STYLES.map(style => {
+            const selected = style.key === pageStyle;
+            const locked = isLocked(style.key);
+            return (
+              <TouchableOpacity
+                key={style.key}
+                style={[previewStyles.chip, selected && { backgroundColor: accent, borderColor: accent }]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  if (locked) onLockedPress();
+                  else onPickStyle(style.key);
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${style.name}${locked ? ', locked' : ''}`}
+              >
+                {locked ? <Ionicons name="lock-closed" size={11} color="#FFFFFF" /> : null}
+                <Text style={[previewStyles.chipText, selected && { color: onAccent }]}>{style.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
     </View>
   );
@@ -997,4 +1141,24 @@ const previewStyles = StyleSheet.create({
     backgroundColor: 'rgba(20,16,14,0.6)',
   },
   badgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1.2, color: '#FFFFFF' },
+  bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 12,
+    backgroundColor: 'rgba(20,16,14,0.78)',
+  },
+  chips: { gap: 8, paddingHorizontal: 16 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+  },
+  chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: '#FFFFFF' },
 });

@@ -33,6 +33,9 @@ export interface ProviderFontOption {
   /** Thin scripts read much smaller than a serif at the same point size, so
    *  they're drawn this much larger wherever the name is shown big. */
   sizeScale?: number;
+  /** Line height as a multiple of the font size for the business name. Scripts
+   *  loop high above the line (f, k, l), and a tighter line crops those tops. */
+  nameLineRatio?: number;
 }
 
 export const DEFAULT_PROVIDER_FONT = 'default';
@@ -40,22 +43,22 @@ export const DEFAULT_PROVIDER_FONT = 'default';
 export const PROVIDER_FONTS: ProviderFontOption[] = [
   { key: 'playfair-display', name: 'Playfair Display', fontFamily: 'PlayfairDisplay_700Bold', collection: 'editorial' },
   { key: 'italiana',         name: 'Italiana',         fontFamily: 'Italiana_400Regular',     collection: 'editorial' },
-  { key: 'great-vibes',      name: 'Great Vibes',      fontFamily: 'GreatVibes_400Regular',   collection: 'signature', sizeScale: 1.2 },
-  { key: 'pinyon-script',    name: 'Pinyon Script',    fontFamily: 'PinyonScript_400Regular', collection: 'signature', sizeScale: 1.2 },
-  { key: 'sacramento',       name: 'Sacramento',       fontFamily: 'Sacramento_400Regular',   collection: 'signature', sizeScale: 1.3 },
+  { key: 'great-vibes',      name: 'Great Vibes',      fontFamily: 'GreatVibes_400Regular',   collection: 'signature', sizeScale: 1.2, nameLineRatio: 1.7 },
+  { key: 'pinyon-script',    name: 'Pinyon Script',    fontFamily: 'PinyonScript_400Regular', collection: 'signature', sizeScale: 1.2, nameLineRatio: 1.7 },
+  { key: 'sacramento',       name: 'Sacramento',       fontFamily: 'Sacramento_400Regular',   collection: 'signature', sizeScale: 1.3, nameLineRatio: 1.7 },
   { key: 'syne',             name: 'Syne',             fontFamily: 'Syne_700Bold',            collection: 'modern' },
   { key: 'josefin-sans',     name: 'Josefin Sans',     fontFamily: 'JosefinSans_600SemiBold', collection: 'modern' },
   { key: 'tenor-sans',       name: 'Tenor Sans',       fontFamily: 'TenorSans_400Regular',    collection: 'modern' },
   { key: 'poiret-one',       name: 'Poiret One',       fontFamily: 'PoiretOne_400Regular',    collection: 'statement' },
   { key: 'limelight',        name: 'Limelight',        fontFamily: 'Limelight_400Regular',    collection: 'statement' },
-  { key: 'shrikhand',        name: 'Shrikhand',        fontFamily: 'Shrikhand_400Regular',    collection: 'statement' },
+  { key: 'shrikhand',        name: 'Shrikhand',        fontFamily: 'Shrikhand_400Regular',    collection: 'statement', nameLineRatio: 1.5 },
   { key: 'bebas-neue',       name: 'Bebas Neue',       fontFamily: 'BebasNeue_400Regular',    collection: 'statement' },
   { key: 'fredoka',          name: 'Fredoka',          fontFamily: 'Fredoka_600SemiBold',     collection: 'soft' },
   { key: 'comfortaa',        name: 'Comfortaa',        fontFamily: 'Comfortaa_700Bold',       collection: 'soft' },
-  { key: 'pacifico',         name: 'Pacifico',         fontFamily: 'Pacifico_400Regular',     collection: 'soft' },
+  { key: 'pacifico',         name: 'Pacifico',         fontFamily: 'Pacifico_400Regular',     collection: 'soft', nameLineRatio: 1.6 },
   { key: 'default', name: 'Classic', fontFamily: 'Prata-Regular', collection: 'classics' },
-  { key: 'lobster', name: 'Rounded Script', fontFamily: 'Lobster_400Regular', collection: 'classics' },
-  { key: 'dancing-script', name: 'Elegant Script', fontFamily: 'DancingScript_700Bold', collection: 'classics' },
+  { key: 'lobster', name: 'Rounded Script', fontFamily: 'Lobster_400Regular', collection: 'classics', nameLineRatio: 1.55 },
+  { key: 'dancing-script', name: 'Elegant Script', fontFamily: 'DancingScript_700Bold', collection: 'classics', nameLineRatio: 1.55 },
   { key: 'bungee', name: 'Bold Display', fontFamily: 'Bungee_400Regular', collection: 'classics' },
   { key: 'righteous', name: 'Confident', fontFamily: 'Righteous_400Regular', collection: 'classics' },
   { key: 'sniglet', name: 'Bubbly', fontFamily: 'Sniglet_800ExtraBold', collection: 'classics' },
@@ -72,6 +75,13 @@ export function resolveProviderFontFamily(key: string | null | undefined): strin
 
 /** How much larger than the usual size to draw the name in this font: 1 for
  *  everything but the thin scripts. */
+/** The business name's line height for this font at this size. Never tighter
+ *  than 1.4×, and higher for the looping scripts, so tall letters keep their tops. */
+export function resolveProviderNameLineHeight(key: string | null | undefined, fontSize: number): number {
+  const ratio = PROVIDER_FONTS.find(font => font.key === key)?.nameLineRatio ?? 1.4;
+  return Math.ceil(fontSize * ratio);
+}
+
 export function resolveProviderFontScale(key: string | null | undefined): number {
   return PROVIDER_FONTS.find(font => font.key === key)?.sizeScale ?? 1;
 }

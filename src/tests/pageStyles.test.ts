@@ -1,19 +1,25 @@
 import {
   DEFAULT_PAGE_STYLE,
+  romanNumeral,
+  SECTION_NUMBERS,
   getPageStyle,
   headingPair,
   menuNumber,
   PAGE_SECTION_TITLES,
   PAGE_STYLES,
+  POLICY_PICTURE_LOOKS,
+  policyPicturePlacement,
   type PageSectionKey,
 } from '../constants/pageStyles';
 import { encodeThemeKey, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
+import { sealLetter, waxColour } from '../features/providers/WaxSeal';
 import {
   policiesBringOwnSurface,
   sectionsSitOnPage,
   serviceCardSurface,
   sheetInk,
 } from '../features/providers/ProfilePageStyle';
+import { kickerPhrase } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
   it('reads keys saved before page styles existed as Classic', () => {
@@ -47,8 +53,44 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the six picked styles plus Classic, each once', () => {
-    expect(PAGE_STYLES.map(s => s.key)).toEqual(['classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy']);
+  it('has the twenty-four picked styles plus Classic, each once', () => {
+    expect(PAGE_STYLES.map(s => s.key)).toEqual([
+      'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
+      'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
+      'snapshot', 'signature', 'quiet', 'sealed', 'lace', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
+      'studio',
+    ]);
+  });
+
+  it('seals Sealed\'s envelope and policy notes with a first letter', () => {
+    expect(sealLetter('Amara Okafor')).toBe('A');
+    expect(sealLetter('  1st Class Lashes')).toBe('S');
+    expect(sealLetter('Late arrival')).toBe('L');
+    expect(sealLetter('123')).toBe('');
+  });
+
+  it('presses a pale accent darker so the wax reads as wax', () => {
+    expect(waxColour('#3F1E36')).toBe('#3F1E36');
+    expect(waxColour('#F4D6DC')).not.toBe('#F4D6DC');
+  });
+
+  it('presses Embossed into the page: raised cards, a recessed policy panel, photos in plate marks', () => {
+    const embossed = getPageStyle('embossed');
+    expect(embossed).toMatchObject({ heading: 'embossCaps', cards: 'raised', policies: 'recessed', hero: 'pressed', plateMarkPhotos: true });
+    expect(policiesBringOwnSurface(embossed)).toBe(true);
+    expect(sectionsSitOnPage(embossed)).toBe(false);
+    expect(serviceCardSurface(embossed, { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG })).toMatchObject({ borderRadius: 3, borderWidth: 1 });
+  });
+
+  it('gives every style but Classic and Glossy a hero of its own', () => {
+    const heroes = PAGE_STYLES.filter(s => s.key !== 'classic' && s.key !== 'glossy').map(s => s.hero);
+    expect(new Set(heroes).size).toBe(heroes.length);
+  });
+
+  it('gives each of the 2026-11-14 styles a hero and heading of its own', () => {
+    const added = ['editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary'].map(getPageStyle);
+    expect(new Set(added.map(s => s.hero)).size).toBe(6);
+    expect(new Set(added.map(s => s.heading)).size).toBe(6);
   });
 
   it('keeps Classic exactly as the profile always was', () => {
@@ -105,6 +147,26 @@ describe('policy picture look in the stored theme key', () => {
     expect(key).toBe(`app|${SHEET_BG}|blend|rounded|classic|bleed`);
     expect(parseThemeKey(key)).toMatchObject({ pageStyle: 'classic', policyLook: 'bleed' });
   });
+
+  it('offers story circles and two subtle choices alongside the full-size ones', () => {
+    expect(POLICY_PICTURE_LOOKS.map(look => look.key)).toEqual([
+      'melt', 'bleed', 'framed', 'swipe', 'fan', 'peek', 'story', 'thumbs', 'button',
+    ]);
+  });
+
+  it('round-trips the subtle choices', () => {
+    for (const look of ['framed', 'swipe', 'fan', 'peek', 'story', 'thumbs', 'button'] as const) {
+      const key = encodeThemeKey('app', undefined, undefined, undefined, 'studio', look);
+      expect(parseThemeKey(key)).toMatchObject({ pageStyle: 'studio', policyLook: look });
+    }
+  });
+
+  it('puts Story at the top and every other choice after the services', () => {
+    expect(policyPicturePlacement('story')).toBe('top');
+    for (const look of POLICY_PICTURE_LOOKS.filter(l => l.key !== 'story')) {
+      expect(policyPicturePlacement(look.key)).toBe('afterServices');
+    }
+  });
 });
 
 describe('two-part headings say what the section is', () => {
@@ -117,5 +179,110 @@ describe('two-part headings say what the section is', () => {
 describe('the services heading', () => {
   it('says "The Services", not "The Menu"', () => {
     expect(headingPair('services')).toEqual(['The', 'Services']);
+  });
+});
+
+describe('the 2026-11-14 styles', () => {
+  const colours = { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG };
+
+  it('draws Editorial and Heritage straight on the page, the rest on their own cards', () => {
+    expect(sectionsSitOnPage(getPageStyle('editorial'))).toBe(true);
+    expect(sectionsSitOnPage(getPageStyle('heritage'))).toBe(true);
+    expect(sectionsSitOnPage(getPageStyle('duet'))).toBe(false);
+    expect(sectionsSitOnPage(getPageStyle('apothecary'))).toBe(false);
+  });
+
+  it('lets Duet and Groovy service cards show their hard shadow', () => {
+    for (const key of ['duet', 'groovy']) {
+      const surface = serviceCardSurface(getPageStyle(key), colours);
+      expect(surface).toMatchObject({ shadowRadius: 0, shadowOpacity: 1, overflow: 'visible' });
+    }
+    expect(serviceCardSurface(getPageStyle('apothecary'), colours)).toMatchObject({ borderRadius: 0, borderWidth: 1 });
+  });
+
+  it('drops the policy card for the tiled layouts only', () => {
+    expect(policiesBringOwnSurface(getPageStyle('editorial'))).toBe(true);
+    expect(policiesBringOwnSurface(getPageStyle('duet'))).toBe(true);
+    expect(policiesBringOwnSurface(getPageStyle('groovy'))).toBe(true);
+    expect(policiesBringOwnSurface(getPageStyle('heritage'))).toBe(false);
+    expect(policiesBringOwnSurface(getPageStyle('gallery'))).toBe(false);
+    expect(policiesBringOwnSurface(getPageStyle('apothecary'))).toBe(false);
+  });
+
+  it('numbers Heritage\'s rules in capitals and Apothecary\'s in lower case', () => {
+    expect(romanNumeral(0)).toBe('I');
+    expect(romanNumeral(3)).toBe('IV');
+    expect(romanNumeral(1, true)).toBe('ii.');
+    expect(getPageStyle('apothecary').numeralsLower).toBe(true);
+    expect(getPageStyle('heritage').numeralsLower).toBeFalsy();
+  });
+
+  it('gives Gallery\'s sections a plain serif title with nothing above it', () => {
+    expect(getPageStyle('gallery').heading).toBe('serifTitle');
+  });
+
+  it('only puts Editorial\'s About on a band', () => {
+    expect(PAGE_STYLES.filter(s => s.aboutOnBand).map(s => s.key)).toEqual(['editorial']);
+  });
+
+
+  it('turns what they do into a phrase', () => {
+    expect(kickerPhrase('LASHES')).toBe('Lashes');
+    expect(kickerPhrase('BRAIDS · LOCS')).toBe('Braids & locs');
+    expect(kickerPhrase('FACIALS · MASSAGE · BROWS')).toBe('Facials, massage & brows');
+    expect(kickerPhrase('')).toBe('');
+  });
+});
+
+describe('the 2026-11-15 heroes', () => {
+  it('gives Heritage, Groovy and Apothecary a plain round logo, and keeps Duet\'s About as its own section', () => {
+    expect(getPageStyle('heritage').logo).toBe('circle');
+    expect(getPageStyle('groovy').logo).toBe('circle');
+    expect(getPageStyle('apothecary').logo).toBe('circle');
+    expect(getPageStyle('duet').aboutInHero).toBe(false);
+  });
+});
+
+describe('Signature', () => {
+  it('numbers its sections in the order the profile shows them', () => {
+    expect(getPageStyle('signature').heading).toBe('indexed');
+    expect(SECTION_NUMBERS.about).toBe('01');
+    expect(SECTION_NUMBERS.services).toBe('03');
+    expect(new Set(Object.values(SECTION_NUMBERS)).size).toBe(Object.keys(SECTION_NUMBERS).length);
+  });
+
+  it('puts a heavy rule along the top of its square service cards', () => {
+    expect(serviceCardSurface(getPageStyle('signature'), { card: '#FFFFFF', accent: '#8A6438', sheet: SHEET_BG }))
+      .toMatchObject({ borderRadius: 0, borderTopWidth: 3 });
+  });
+});
+
+describe('Snapshot', () => {
+  it('is the bold one: condensed headings, square outlined cards and a square logo', () => {
+    const snapshot = getPageStyle('snapshot');
+    expect(snapshot).toMatchObject({ hero: 'blockName', heading: 'condensed', cards: 'block', logo: 'square', numberedServices: true });
+    expect(serviceCardSurface(snapshot, { card: '#FFFFFF', accent: '#D43F2B', sheet: SHEET_BG }))
+      .toMatchObject({ borderRadius: 0, borderWidth: 2 });
+  });
+});
+
+describe('Calling Card', () => {
+  const callingCard = getPageStyle('callingCard');
+
+  it('is satin and a clipped card: its own hero, engraved headings, clipped cards, ribbon policies', () => {
+    expect(callingCard).toMatchObject({
+      hero: 'callingCard', heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', clippedPhotos: true,
+    });
+  });
+
+  it('draws its service cards near-square on a soft shadow, and its policies on a card of their own', () => {
+    expect(serviceCardSurface(callingCard, { card: '#FFFFFF', accent: '#6E1220', sheet: SHEET_BG }))
+      .toMatchObject({ borderRadius: 2, overflow: 'visible' });
+    expect(policiesBringOwnSurface(callingCard)).toBe(true);
+    expect(sectionsSitOnPage(callingCard)).toBe(false);
+  });
+
+  it('is the only style with clipped photos', () => {
+    expect(PAGE_STYLES.filter(s => s.clippedPhotos).map(s => s.key)).toEqual(['callingCard']);
   });
 });

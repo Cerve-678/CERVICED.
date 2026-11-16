@@ -447,7 +447,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         <AutoCard
           title="Enable waitlist"
-          description="Clients can join when your slots are full. If a matching space opens, the next person gets first access."
+          description="Clients can join when your slots are full. If a matching space opens, the next person in line gets it held for 15 minutes to confirm and pay."
           value={d.waitlistEnabled}
           onToggle={v => set('waitlistEnabled', v)}
           C={C}
@@ -455,8 +455,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         {d.waitlistEnabled && (
           <AutoCard
-            title="Auto-fill from waitlist"
-            description="When a matching slot opens, create a pending booking for the next waitlist client. With this off, they get a 15-minute hold to confirm it themselves."
+            title="Offer it to the next person automatically"
+            description="If a client doesn't pay within their 15 minutes, or passes, the slot is held for the next person in line. With this off, it opens to everyone and you can offer it to someone on your waitlist from Bookings."
             value={d.autoAcceptWaitlist}
             onToggle={v => set('autoAcceptWaitlist', v)}
             C={C}

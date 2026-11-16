@@ -7,13 +7,13 @@ tags: [screen, client]
 **Registered route(s):** `Bookings`
 
 ## → Navigates to
+- `Cart` _(navigator / dynamic)_
 - [[ActivityCentreScreen\|ActivityCentre]]
 - [[ProviderChatScreen\|ProviderChat]]
 - [[BookingDetailScreen\|BookingDetail]]
 - [[RescheduleScreen\|Reschedule]]
-- [[ProviderProfileScreen\|ProviderProfile]]
 - [[ExternalBookingDetailScreen\|ExternalBookingDetail]]
-- `Cart` _(navigator / dynamic)_
+- [[ProviderProfileScreen\|ProviderProfile]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

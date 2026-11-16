@@ -6,6 +6,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LogoCircle } from '../../components/FramedLogo';
 import type { AppTheme } from '../../constants/theme';
 import { FONT_BODY, FONT_DISPLAY, GhostButton, PrimaryButton, hapticLight } from '../maintenance/ui';
 import { initialsFor } from './presentation';
@@ -15,26 +16,31 @@ const HEART = '#FF2D78';
 
 interface Props {
   providerName: string;
+  providerLogoUri: string | null;
   bookingDate: string;
   busy: boolean;
   error: string | null;
   onRecommend: () => void;
   onBookAgain: () => void;
-  onNotNow: () => void;
+  onClose: () => void;
   P: AppTheme;
   errorColour: string;
 }
 
 export function RecommendHomeCard({
-  providerName, bookingDate, busy, error, onRecommend, onBookAgain, onNotNow, P, errorColour,
+  providerName, providerLogoUri, bookingDate, busy, error, onRecommend, onBookAgain, onClose, P, errorColour,
 }: Props) {
   return (
     <View style={[styles.card, { backgroundColor: P.card, borderColor: P.accent }]}>
       <View style={styles.top}>
         <View style={styles.logoWrap}>
-          <View style={[styles.logo, { backgroundColor: P.secondary }]}>
-            <Text style={[styles.logoText, { color: P.secondaryText }]}>{initialsFor(providerName)}</Text>
-          </View>
+          {providerLogoUri ? (
+            <LogoCircle uri={providerLogoUri} style={[styles.logo, { backgroundColor: P.secondary }]} />
+          ) : (
+            <View style={[styles.logo, { backgroundColor: P.secondary }]}>
+              <Text style={[styles.logoText, { color: P.secondaryText }]}>{initialsFor(providerName)}</Text>
+            </View>
+          )}
           <View style={[styles.heart, { borderColor: P.card }]}>
             <Ionicons name="heart" size={9} color="#FFFFFF" />
           </View>
@@ -47,11 +53,11 @@ export function RecommendHomeCard({
           <Text style={[styles.body, { color: P.sub }]}>Recommend them to the people who follow you.</Text>
         </View>
         <TouchableOpacity
-          onPress={() => { hapticLight(); onNotNow(); }}
+          onPress={() => { hapticLight(); onClose(); }}
           style={styles.close}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
-          accessibilityLabel="Not now"
+          accessibilityLabel="Close recommendation"
           activeOpacity={0.6}
         >
           <Ionicons name="close" size={18} color={P.sub} />
