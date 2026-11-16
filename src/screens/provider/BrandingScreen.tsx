@@ -513,75 +513,11 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Profile theme — accent + card colour + backdrop sets */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Each set pairs two backdrop colours with an accent that suits them.
-              Swipe through the collections, or tap Custom to build your own.
-            </Text>
-            <ProviderThemePicker
-              value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
-              onChange={handleThemeChange}
-              textColor={P.text}
-              subColor={P.sub}
-              borderColor={P.border}
-              sepColor={P.sep}
-              unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
-              onLockedPress={showLocked}
-              photoColours={photoColours}
-              photoColoursLoading={photoColoursLoading}
-              onChoosePhoto={chooseColourPhoto}
-              onColourDraggingChange={setColourDragging}
-            />
-          </View>
-
-          {/* Hero finish — how the two backdrop colours are drawn */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              {backgroundImage
-                ? 'Your background photo is showing instead. Remove it to use a finish.'
-                : 'How your two backdrop colours sit behind the top of your profile.'}
-            </Text>
-            <View style={styles.finishRow}>
-              {HERO_FINISHES.map(f => {
-                const selected = heroFinish === f.key;
-                const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
-                return (
-                  <TouchableOpacity
-                    key={f.key}
-                    style={[styles.finishOption, locked && styles.finishLocked]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      if (locked) showLocked();
-                      else setHeroFinish(f.key);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
-                  >
-                    <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
-                      <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
-                      {locked && (
-                        <View style={styles.finishLock}>
-                          <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
           {/* Page style — the layout and decoration of the whole profile */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Page Style</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              How your whole profile is laid out: the headings, the cards, how your policies show and the frame round your logo. Your colours and font stay as you set them.
+              The layout of your whole profile. Your colours and font stay as you set them.
             </Text>
             <PageStylePicker
               value={pageStyle}
@@ -604,7 +540,7 @@ export default function BrandingScreen({ navigation }: any) {
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Policy Pictures</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              How the policy pictures you've added in Policies show on your profile: full size, as story circles at the top, or small.
+              How the policy pictures you added in Policies show on your profile.
             </Text>
             <View style={styles.policyLookGrid}>
               {POLICY_PICTURE_LOOKS.map(look => {
@@ -659,7 +595,7 @@ export default function BrandingScreen({ navigation }: any) {
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Card Shape</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              The corners of your service cards and category pills, where your service info sits.
+              The corners of your service cards and category pills.
             </Text>
             <View style={styles.finishRow}>
               {CARD_SHAPES.map(shape => {
@@ -698,27 +634,75 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
+          {/* Profile theme — accent + card colour + backdrop sets */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>Choose how your business name appears on your public profile.</Text>
-            <ProviderFontPicker
-              value={brandFont}
-              onChange={setBrandFont}
-              accentColor={accentColor}
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Two backdrop colours and an accent. Swipe a collection, or make your own.
+            </Text>
+            <ProviderThemePicker
+              value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
+              onChange={handleThemeChange}
               textColor={P.text}
               subColor={P.sub}
               borderColor={P.border}
-              cardColor={P.surface}
-              unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
+              sepColor={P.sep}
+              unlockedThemes={limited ? LINK_ONLY_THEMES : undefined}
               onLockedPress={showLocked}
+              photoColours={photoColours}
+              photoColoursLoading={photoColoursLoading}
+              onChoosePhoto={chooseColourPhoto}
+              onColourDraggingChange={setColourDragging}
             />
+          </View>
+
+          {/* Hero finish — how the two backdrop colours are drawn */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Hero Finish</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              {backgroundImage
+                ? 'Your background photo is showing instead. Remove it to use a finish.'
+                : 'How your two colours blend behind the top of your profile.'}
+            </Text>
+            {/* Dimmed while a photo is showing: the photo covers the finish. */}
+            <View style={[styles.finishRow, backgroundImage ? styles.finishRowCovered : null]}>
+              {HERO_FINISHES.map(f => {
+                const selected = heroFinish === f.key;
+                const locked = limited && !LINK_ONLY_HERO_FINISHES.includes(f.key);
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[styles.finishOption, locked && styles.finishLocked]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      if (locked) showLocked();
+                      else setHeroFinish(f.key);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${f.name}: ${f.description}${locked ? ', locked' : ''}`}
+                  >
+                    <View style={[styles.finishSwatch, { borderColor: selected ? P.text : P.border }, selected && styles.finishSwatchOn]}>
+                      <ProfileHeroBackdrop colors={gradient} finish={f.key} style={StyleSheet.absoluteFill} />
+                      {locked && (
+                        <View style={styles.finishLock}>
+                          <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.finishName, { color: selected ? P.text : P.sub }]}>{f.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           {/* Background image */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              A photo background overrides the gradient. Clients see it behind your profile.
+              A photo shows behind your profile instead of your colours.
             </Text>
             <View style={styles.imageRow}>
               {backgroundImage ? (
@@ -754,7 +738,25 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Save */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>How your business name appears on your profile.</Text>
+            <ProviderFontPicker
+              value={brandFont}
+              onChange={setBrandFont}
+              accentColor={accentColor}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+              cardColor={P.surface}
+              unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
+              onLockedPress={showLocked}
+            />
+          </View>
+
+        </ScrollView>
+        {/* Save stays on screen, so there is no scrolling to the end to find it. */}
+        <View style={[styles.saveBar, { backgroundColor: P.bg, borderTopColor: P.border }]}>
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: accentColor, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave}
@@ -767,8 +769,7 @@ export default function BrandingScreen({ navigation }: any) {
               <Text style={[styles.saveBtnText, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>Save Changes</Text>
             )}
           </TouchableOpacity>
-
-        </ScrollView>
+        </View>
       </SafeAreaView>
 
       <FullCervicedLockedSheet
@@ -848,7 +849,7 @@ function PolicyLookSmallPreview({ look, pageColour, sheet }: { look: Exclude<Pol
 const styles = StyleSheet.create({
   bg:      { flex: 1 },
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll:  { paddingHorizontal: 20, paddingBottom: 48 },
+  scroll:  { paddingHorizontal: 20, paddingBottom: 24 },
 
   backBtn:   { marginTop: 12, marginBottom: 24 },
   backArrow: { fontSize: 22, fontWeight: '900' },
@@ -942,6 +943,7 @@ const styles = StyleSheet.create({
   },
 
   finishRow: { flexDirection: 'row', gap: 10 },
+  finishRowCovered: { opacity: 0.45 },
   finishOption: { flex: 1, alignItems: 'center', gap: 6 },
   finishSwatch: {
     width: '100%',
@@ -1036,13 +1038,17 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
+  saveBar: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   saveBtn: {
     minHeight: 52,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 12,
   },
   saveBtnText: {
     fontFamily: 'BakbakOne-Regular',
