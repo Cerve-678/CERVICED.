@@ -5,7 +5,7 @@
 
 #generated
 
-**3907 functions** across **551 files**.
+**3917 functions** across **551 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -34,7 +34,7 @@
 - `HairTypeSelector.tsx` — **HairTypeSelector**
 - `HowItWorksSheet.tsx` — at · hide · **HowItWorksSheet** · jumpTo · pause · play · show · showOnArrival · stepAt · **useHowItWorks**
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
-- `ImageCropModal.tsx` — handleBox · handleMark · handleUsePhoto · **ImageCropModal** · make · photo · responders
+- `ImageCropModal.tsx` — begin · bounds · handleBox · handleMark · handleUsePhoto · **ImageCropModal** · make · photo · pinch · pinchOf · responders · twoFingers
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · rememberActivePhoto · runPendingNavigation · selectImageIndex · trackCarouselOffset
 - `IslandPillTabBar.tsx` — goToTab · IslandPillTabBar · **tabBarSpotlightRect**
 - `IssueRefundSheet.tsx` — close · formatPence · formatRefundDate · IssueRefundSheet · loadState · preview · re · requestSteps · submit · toggleCancelAfterRefund
@@ -530,7 +530,7 @@
 - `clientArea.ts` — **serviceLocationsFromArea** · **townOfArea**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **hexToHsv** · **hsvToHex** · **paletteFromPixels** · **parseHexInput** · **toArgbHex**
-- `cropRect.ts` — clamp · **fitContain** · **moveCrop** · **moveHandle** · **toImageCrop**
+- `cropRect.ts` — axis · clamp · **clampView** · **fitContain** · **fitCropInside** · **moveCrop** · **moveHandle** · **pinchView** · **toImageCrop** · **visiblePhoto**
 - `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDayOrdinalShortMonth** · **formatDayRangeShortMonth** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `dayTimelineRange.ts` — **assignOverlapColumns** · closeGroup · **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**

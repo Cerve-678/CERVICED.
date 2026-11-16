@@ -1,6 +1,7 @@
 // Free-shape crop for a photo that's already been picked. iOS's built-in editor
 // (allowsEditing) only crops to a square, which can't keep a full-length photo.
 // The crop starts as the whole photo, so leaving it alone uploads the original.
+// Two fingers pinch to zoom the photo under the crop and move it about.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,7 +12,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type GestureResponderEvent,
   type PanResponderInstance,
+  type ViewInstance,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -19,11 +22,15 @@ import { ImageManipulator, SaveFormat, type ImageRef } from 'expo-image-manipula
 import {
   CROP_HANDLES,
   fitContain,
+  fitCropInside,
+  pinchView,
+  visiblePhoto,
   moveCrop,
   moveHandle,
   toImageCrop,
   type CropHandle,
   type CropRect,
+  type Point,
   type Size,
 } from '../utils/cropRect';
 import { logger } from '../utils/logger';
@@ -44,6 +51,16 @@ interface ImageCropModalProps {
   cancelLabel?: string;
   /** e.g. "2 of 3" when cropping several photos in a row. */
   progressLabel?: string | null;
+}
+
+/** Where two fingers are, and how far apart, in the crop area's points. */
+function pinchOf(event: GestureResponderEvent, origin: Point): { focal: Point; distance: number } | null {
+  const [a, b] = event.nativeEvent.touches;
+  if (!a || !b) return null;
+  return {
+    focal: { x: (a.pageX + b.pageX) / 2 - origin.x, y: (a.pageY + b.pageY) / 2 - origin.y },
+    distance: Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY),
+  };
 }
 
 /** The handle's hit area, centred on its corner or edge of the crop. */
@@ -77,6 +94,10 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancel
   const [imageSize, setImageSize] = useState<Size | null>(null);
   const [area, setArea] = useState<Size | null>(null);
   const [crop, setCrop] = useState<CropRect | null>(null);
+  // The photo on screen: its fitted rect until a pinch zooms it.
+  const [view, setView] = useState<CropRect | null>(null);
+  const areaRef = useRef<ViewInstance | null>(null);
+  const areaOrigin = useRef<Point>({ x: 0, y: 0 });
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -87,6 +108,7 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancel
     setSource(null);
     setImageSize(null);
     setCrop(null);
+    setView(null);
     setFailed(false);
     setSaving(false);
     if (!uri) return;
@@ -113,12 +135,45 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancel
 
   useEffect(() => {
     setCrop(photo);
+    setView(photo);
   }, [photo]);
 
+  // The crop can only cover what's on screen of the (maybe zoomed) photo.
+  const bounds = useMemo(() => (view && area ? visiblePhoto(view, area) : null), [view, area]);
+
   // The responders are built once, so they read the latest values from here.
-  const latest = useRef({ crop, photo });
-  latest.current = { crop, photo };
+  const latest = useRef({ crop, photo, view, area, bounds });
+  latest.current = { crop, photo, view, area, bounds };
   const dragStart = useRef<CropRect | null>(null);
+  const pinchStart = useRef<{ view: CropRect; focal: Point; distance: number } | null>(null);
+
+  // Two fingers anywhere on the photo zoom and move it, even when one landed
+  // on the crop or a handle first: the area takes the touch over.
+  const pinch = useMemo(() => {
+    const twoFingers = (event: GestureResponderEvent) => event.nativeEvent.touches.length >= 2;
+    const begin = (event: GestureResponderEvent) => {
+      const { view: current } = latest.current;
+      const at = pinchOf(event, areaOrigin.current);
+      pinchStart.current = current && at ? { view: current, ...at } : null;
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponderCapture: twoFingers,
+      onMoveShouldSetPanResponderCapture: twoFingers,
+      onPanResponderGrant: begin,
+      onPanResponderMove: event => {
+        const { photo: fit, area: room, crop: current } = latest.current;
+        const at = pinchOf(event, areaOrigin.current);
+        if (!at) { pinchStart.current = null; return; }
+        if (!pinchStart.current) { begin(event); return; }
+        if (!fit || !room) return;
+        const next = pinchView(pinchStart.current.view, fit, room, pinchStart.current, at);
+        setView(next);
+        if (current) setCrop(fitCropInside(current, visiblePhoto(next, room)));
+      },
+      onPanResponderRelease: () => { pinchStart.current = null; },
+      onPanResponderTerminate: () => { pinchStart.current = null; },
+    });
+  }, []);
 
   const responders = useMemo(() => {
     const make = (next: (start: CropRect, dx: number, dy: number, bounds: CropRect) => CropRect): PanResponderInstance =>
@@ -127,8 +182,10 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancel
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => { dragStart.current = latest.current.crop; },
         onPanResponderMove: (_, gesture) => {
-          const { photo: bounds } = latest.current;
-          if (dragStart.current && bounds) setCrop(next(dragStart.current, gesture.dx, gesture.dy, bounds));
+          // A second finger hands the touch to the pinch instead.
+          if (gesture.numberActiveTouches > 1) return;
+          const { bounds: inside } = latest.current;
+          if (dragStart.current && inside) setCrop(next(dragStart.current, gesture.dx, gesture.dy, inside));
         },
       });
     const handles = {} as Record<CropHandle, PanResponderInstance>;
@@ -139,9 +196,9 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancel
   }, []);
 
   const handleUsePhoto = async () => {
-    if (!uri || !crop || !photo || !imageSize || !source) return;
+    if (!uri || !crop || !view || !imageSize || !source) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const pixels = toImageCrop(crop, photo, imageSize);
+    const pixels = toImageCrop(crop, view, imageSize);
     if (!pixels) {
       onDone(uri);
       return;
@@ -183,49 +240,61 @@ export function ImageCropModal({ uri, accent, onAccent, onCancel, onDone, cancel
         </View>
 
         <View
+          ref={areaRef}
           testID="crop-area"
           style={st.area}
-          onLayout={e => setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+          onLayout={e => {
+            setArea({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height });
+            areaRef.current?.measureInWindow?.((x, y) => { areaOrigin.current = { x, y }; });
+          }}
         >
-          {uri && photo ? (
-            <Image
-              source={{ uri }}
-              style={{ position: 'absolute', left: photo.x, top: photo.y, width: photo.width, height: photo.height }}
-              fadeDuration={0}
-            />
-          ) : (
-            <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#FFFFFF" />
-          )}
+          {/* Two fingers anywhere in here pinch; it holds everything so it can
+              take a touch over from the crop or a handle. */}
+          <View style={StyleSheet.absoluteFill} {...pinch.panHandlers}>
+            {uri && view ? (
+              // Only the photo is clipped to the area, so the handles at its
+              // edges stay whole and easy to grab.
+              <View pointerEvents="none" style={st.clip}>
+                <Image
+                  source={{ uri }}
+                  style={{ position: 'absolute', left: view.x, top: view.y, width: view.width, height: view.height }}
+                  fadeDuration={0}
+                />
+              </View>
+            ) : (
+              <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#FFFFFF" />
+            )}
 
-          {photo && crop && (
-            <>
-              {/* Dims everything outside the crop. */}
-              <View pointerEvents="none" style={[st.dim, { left: photo.x, top: photo.y, width: photo.width, height: crop.y - photo.y }]} />
-              <View pointerEvents="none" style={[st.dim, { left: photo.x, top: crop.y + crop.height, width: photo.width, height: photo.y + photo.height - crop.y - crop.height }]} />
-              <View pointerEvents="none" style={[st.dim, { left: photo.x, top: crop.y, width: crop.x - photo.x, height: crop.height }]} />
-              <View pointerEvents="none" style={[st.dim, { left: crop.x + crop.width, top: crop.y, width: photo.x + photo.width - crop.x - crop.width, height: crop.height }]} />
+            {bounds && crop && (
+              <>
+                {/* Dims everything on screen outside the crop. */}
+                <View pointerEvents="none" style={[st.dim, { left: bounds.x, top: bounds.y, width: bounds.width, height: crop.y - bounds.y }]} />
+                <View pointerEvents="none" style={[st.dim, { left: bounds.x, top: crop.y + crop.height, width: bounds.width, height: bounds.y + bounds.height - crop.y - crop.height }]} />
+                <View pointerEvents="none" style={[st.dim, { left: bounds.x, top: crop.y, width: crop.x - bounds.x, height: crop.height }]} />
+                <View pointerEvents="none" style={[st.dim, { left: crop.x + crop.width, top: crop.y, width: bounds.x + bounds.width - crop.x - crop.width, height: crop.height }]} />
 
-              <View
-                {...responders.body.panHandlers}
-                style={[st.frame, { left: crop.x, top: crop.y, width: crop.width, height: crop.height }]}
-              />
-              {CROP_HANDLES.map(handle => (
                 <View
-                  key={handle}
-                  {...responders.handles[handle].panHandlers}
-                  style={[st.handle, handleBox(handle, crop)]}
-                >
-                  <View pointerEvents="none" style={handleMark(handle)} />
-                </View>
-              ))}
-            </>
-          )}
+                  {...responders.body.panHandlers}
+                  style={[st.frame, { left: crop.x, top: crop.y, width: crop.width, height: crop.height }]}
+                />
+                {CROP_HANDLES.map(handle => (
+                  <View
+                    key={handle}
+                    {...responders.handles[handle].panHandlers}
+                    style={[st.handle, handleBox(handle, crop)]}
+                  >
+                    <View pointerEvents="none" style={handleMark(handle)} />
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
         </View>
 
         <Text style={st.hint}>
           {failed
             ? "Couldn't crop that photo. Try again, or drag back out to use the whole photo."
-            : 'Drag the corners or edges to crop. Leave it as it is to use the whole photo.'}
+            : 'Pinch to zoom in. Drag the corners or edges to crop. Leave it as it is to use the whole photo.'}
         </Text>
       </View>
     </Modal>
@@ -240,6 +309,7 @@ const st = StyleSheet.create({
   use:     { minWidth: 104, height: 38, borderRadius: 19, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   useText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
   area:    { flex: 1, marginHorizontal: 24, marginVertical: 12 },
+  clip:    { ...StyleSheet.absoluteFill, overflow: 'hidden' },
   dim:     { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.6)' },
   frame:   { position: 'absolute', borderWidth: StyleSheet.hairlineWidth, borderColor: '#FFFFFF' },
   handle:  { position: 'absolute', width: HANDLE_HIT, height: HANDLE_HIT, alignItems: 'center', justifyContent: 'center' },
