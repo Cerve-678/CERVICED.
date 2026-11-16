@@ -65,7 +65,9 @@ import { FullImageViewer } from "../../components/FullImageViewer";
 import { LogoZoomViewer } from "../../components/LogoZoomViewer";
 import { policyImageEdges, policyImageUrls } from "../../features/providers/policyImages";
 import {
+  PolicyPagesCompact,
   PolicyPagesInline,
+  PolicyPagesShowcase,
   PolicyStoryRings,
   PolicyStoryViewer,
   usePolicyEdgeColours,
@@ -136,7 +138,7 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
+import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
 import {
   GlossShine,
   onAccentInk,
@@ -1527,6 +1529,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // always had. The availability pill and Instagram button beside it stay
   // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
+  // Branding → Policy Pictures: story circles near the top, or one of the
+  // designs (full size, framed, swipe, fanned, peek, thumbnails, a button)
+  // after the services.
+  const policyLook = parseThemeKey(provider?.profileTheme).policyLook;
+  const policyPlacement = policyPicturePlacement(policyLook);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -5627,16 +5634,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </View>
               ) : null}
 
-              {/* Templates only: their policy pictures as story circles; a
-                  tap opens them full screen, one page at a time. Classic keeps
-                  the round button on the About card. */}
-              {pageStyle.key !== "classic" ? (
-                <PolicyStoryRings
-                  urls={policyPages}
-                  accent={adaptiveAccentColor}
-                  sheet={OP.bg}
-                  onOpen={setPolicyStoryIndex}
-                />
+              {/* Templates only, when Branding → Policy Pictures is Story:
+                  their policy pictures as story circles; a tap opens them full
+                  screen, one page at a time. Classic keeps the round button on
+                  the About card. */}
+              {pageStyle.key !== "classic" && policyPlacement === "top" && policyPages.length > 0 ? (
+                <View ref={policyPagesRef} collapsable={false}>
+                  <PolicyStoryRings
+                    urls={policyPages}
+                    accent={adaptiveAccentColor}
+                    sheet={OP.bg}
+                    onOpen={setPolicyStoryIndex}
+                  />
+                </View>
               ) : null}
 
               {!pageStyle.separateAboutAndPolicies ? (
@@ -5952,18 +5962,38 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
               )}
 
-              {/* Templates only: their policy pictures in the page itself,
-                  after the price list (Branding → Policy Pictures picks Melt
-                  in or Bleed). Classic keeps them behind the round button. */}
-              {pageStyle.key !== "classic" && policyPages.length > 0 ? (
+              {/* Templates only: their policy pictures after the price list,
+                  in the design Branding → Policy Pictures picks. Story puts
+                  them at the top instead. Classic keeps them behind the round
+                  button. */}
+              {pageStyle.key !== "classic" && policyPages.length > 0 && policyPlacement === "afterServices" ? (
                 <View ref={policyPagesRef} collapsable={false}>
-                  <PolicyPagesInline
-                    urls={policyPages}
-                    edges={policyEdges}
-                    look={parseThemeKey(provider.profileTheme).policyLook}
-                    palette={sectionPalette}
-                    onOpen={() => setShowPolicyImage(true)}
-                  />
+                  {policyLook === "framed" || policyLook === "swipe" || policyLook === "fan" || policyLook === "peek" ? (
+                    <PolicyPagesShowcase
+                      urls={policyPages}
+                      edges={policyEdges}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpenPage={setPolicyStoryIndex}
+                      onOpenAll={() => setShowPolicyImage(true)}
+                    />
+                  ) : policyLook === "thumbs" || policyLook === "button" ? (
+                    <PolicyPagesCompact
+                      urls={policyPages}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpenPage={setPolicyStoryIndex}
+                      onOpenAll={() => setShowPolicyImage(true)}
+                    />
+                  ) : (
+                    <PolicyPagesInline
+                      urls={policyPages}
+                      edges={policyEdges}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpen={() => setShowPolicyImage(true)}
+                    />
+                  )}
                 </View>
               ) : null}
 
