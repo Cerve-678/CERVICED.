@@ -89,7 +89,7 @@ Curated: [[Payments]] · **172 files**
 - `src/features/bookings/paymentPresentation.ts` _(85)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(71)_
 - `src/types/database.ts` _(59)_
-- `src/features/providers/goLiveStatus.ts` _(47)_
+- `src/features/providers/goLiveStatus.ts` _(54)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
 - `src/screens/provider/PoliciesScreen.tsx` _(47)_
 - `src/services/becca/capabilities/client.ts` _(46)_
@@ -178,8 +178,8 @@ Curated: [[Notifications]] · **192 files**
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **88 files**
 - `src/services/databaseService.ts` _(96)_
-- `src/features/providers/goLiveStatus.ts` _(60)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
+- `src/features/providers/goLiveStatus.ts` _(59)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(36)_
