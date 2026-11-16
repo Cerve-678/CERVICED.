@@ -52,6 +52,7 @@ import {
   detailsSitOnCard,
   heroIsDarkForStyle,
 } from "../../features/providers/ProfileHero";
+import { cardInk } from "../../features/providers/heroes/BoutiqueHero";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1744,7 +1745,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
     );
   }, []);
-  // Boutique's Book now, on the photo in its hero.
+  // Studio's Book now, in its hero.
   const jumpToServices = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
     scrollToSection(servicesSectionRef.current);
@@ -1998,8 +1999,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Duet draws the stars, years and link-only caption on its white card, so
   // they take dark ink there whatever is behind the hero.
   const detailsOnCard = detailsSitOnCard(pageStyle);
-  const detailsText = detailsOnCard ? DETAILS_ON_CARD_INK.text : heroText;
-  const detailsSub = detailsOnCard ? DETAILS_ON_CARD_INK.sub : heroSub;
+  // Boutique's panel is their card colour, so its ink follows that colour.
+  const cardDetailsInk = pageStyle.hero === "productPage" ? cardInk(OP.card) : DETAILS_ON_CARD_INK;
+  const detailsText = detailsOnCard ? cardDetailsInk.text : heroText;
+  const detailsSub = detailsOnCard ? cardDetailsInk.sub : heroSub;
   const detailsShadow = heroIsDark && !detailsOnCard;
 
   // What they do, for Arch's curved caption, Spa's top line and the like.
