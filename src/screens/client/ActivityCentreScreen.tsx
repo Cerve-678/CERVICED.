@@ -94,7 +94,7 @@ export default function ActivityCentreScreen({ navigation }: Props) {
         if (direct?.status === 'on_hold') {
           navigation.navigate('Bookings', { openBookingId: target.bookingId }, { pop: true });
         } else {
-          showAlert('This slot has gone', "The hold ran out before it was confirmed, so it's been offered to someone else.");
+          showAlert('This slot has gone', "Its 15 minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from Bookings.");
           void refresh();
         }
       })

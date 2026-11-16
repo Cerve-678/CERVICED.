@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-16 (waitlist slot paid at checkout)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261113210000 | `waitlist_pays_at_confirm` | **APPLIED 2026-11-16** on the user's go-ahead ("#505 then #474"), via `supabase db query --linked -f` from the main folder, straight after `20261113200000_no_show_half`. Right before: live max `20261113200000`, lock `(none)`, all md5 guards matched (`prepare_checkout` `c9a895da…`). Forced-rollback dry run passed first. Verified live: version recorded (live max); `claim_waitlist_hold` dropped; `prepare_checkout` still SECURITY DEFINER, authenticated executes, anon doesn't; `provider_waitlist` has the 3 new policies (read, client join, client leave) in place of the FOR ALL one; `waitlist_released_slots` has RLS on. Needs an app build (old builds call the dropped `claim_waitlist_hold`). `feat/request-card-hold` (#473, `20261113220000`) must re-check its guards against this live `prepare_checkout`. Written on `feat/waitlist-pay-at-confirm`. |
+
 ### Applied 2026-11-13 (cancel notice one value)
 
 | Authored version | Name | Status |
