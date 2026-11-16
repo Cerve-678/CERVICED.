@@ -152,7 +152,7 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('amara lashes')).toBeTruthy();
     renderPreview('apothecary', 'great-vibes');
     const padName = screen.getAllByText('Amara Lashes')[0]!;
-    expect(StyleSheet.flatten(padName.props.style).fontFamily).toBe('MarcellusSC-Regular');
+    expect(StyleSheet.flatten(padName.props['style']).fontFamily).toBe('MarcellusSC-Regular');
   });
 
 });
