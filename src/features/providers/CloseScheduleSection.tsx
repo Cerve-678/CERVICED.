@@ -103,7 +103,8 @@ export default function CloseScheduleSection({
   const [closure, setClosure] = useState<MyScheduleClosure | null>(lastClosure.get(providerId) ?? null);
   const [loaded, setLoaded] = useState(lastClosure.has(providerId));
   const [reason, setReason] = useState<ClosureReason | null>(null);
-  const [tellClients, setTellClients] = useState(false);
+  // On by default: a provider who picks a reason usually wants it seen.
+  const [tellClients, setTellClients] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -169,7 +170,7 @@ export default function CloseScheduleSection({
     setKeptIds(new Set());
     setReopenDate(null);
     setReason(null);
-    setTellClients(false);
+    setTellClients(true);
     setSheetVisible(true);
     loadUpcoming();
   }, [loadUpcoming]);
@@ -177,7 +178,7 @@ export default function CloseScheduleSection({
   const handleClose = useCallback(async () => {
     setBusy(true);
     try {
-      await closeMySchedule(reopenDate ? dateToYMD(reopenDate) : null, reason, tellClients);
+      await closeMySchedule(reopenDate ? dateToYMD(reopenDate) : null, reason, reason !== null && tellClients);
       const row = await getMyScheduleClosure();
       lastClosure.set(providerId, row);
       setClosure(row);
@@ -300,7 +301,8 @@ export default function CloseScheduleSection({
                       style={[st.reasonChip, { backgroundColor: P.card, borderColor: selected ? P.accent : P.border }]}
                       onPress={() => {
                         setReason(selected ? null : r.value);
-                        if (selected) setTellClients(false);
+                        // Each newly picked reason starts shown to clients.
+                        if (!selected) setTellClients(true);
                       }}
                       activeOpacity={0.8}
                       accessibilityRole="radio"

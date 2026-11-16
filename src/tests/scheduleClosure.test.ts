@@ -4,6 +4,7 @@ import { canAutoCloseWhenFull, chooseFullyBookedResponse, closureReasonForClient
 
 it('tells a client the reason in plain words, and nothing for an unknown one', () => {
   expect(closureReasonForClient('holiday')).toBe('On holiday');
+  expect(closureReasonForClient('training')).toBe('Away on training');
   expect(closureReasonForClient('something_new')).toBeNull();
   expect(closureReasonForClient(null)).toBeNull();
 });
