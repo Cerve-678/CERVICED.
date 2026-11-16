@@ -5,7 +5,7 @@
 
 #generated
 
-**3910 functions** across **552 files**.
+**3928 functions** across **552 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -34,7 +34,7 @@
 - `HairTypeSelector.tsx` — **HairTypeSelector**
 - `HowItWorksSheet.tsx` — at · hide · **HowItWorksSheet** · jumpTo · pause · play · show · showOnArrival · stepAt · **useHowItWorks**
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
-- `ImageCropModal.tsx` — handleBox · handleMark · handleUsePhoto · **ImageCropModal** · make · photo · responders
+- `ImageCropModal.tsx` — begin · bounds · handleBox · handleMark · handleUsePhoto · **ImageCropModal** · make · photo · pinch · pinchOf · responders · twoFingers
 - `ImageDetailModal.tsx` — cancelPendingCarouselFrame · carouselPanResponder · closeThen · handleBookmark · handleBookNow · handleImageAspectRatio · handleSheetScroll · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · rememberActivePhoto · runPendingNavigation · selectImageIndex · trackCarouselOffset
 - `IslandPillTabBar.tsx` — goToTab · IslandPillTabBar · **tabBarSpotlightRect**
 - `IssueRefundSheet.tsx` — close · formatPence · formatRefundDate · IssueRefundSheet · loadState · preview · re · requestSteps · submit · toggleCancelAfterRefund
@@ -96,7 +96,7 @@
 
 ### `src/constants/` (11)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
-- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **romanNumeral**
+- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
@@ -281,7 +281,7 @@
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
-- `PolicyPages.tsx` — bottom · go · InlinePage · label · **PolicyPagesInline** · **PolicyStoryRings** · **PolicyStoryViewer** · StoryBody · top · **usePolicyEdgeColours**
+- `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
 - `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **GlossShine** · HeadingLine · isCentredHeading · LaceTrimmedCard · **onAccentInk** · outlineInk · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
@@ -418,7 +418,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · PolicyLookSmallPreview · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
@@ -531,7 +531,7 @@
 - `clientArea.ts` — **serviceLocationsFromArea** · **townOfArea**
 - `coachMarkTours.ts` — **resolveTour** · **seenVersionFor**
 - `color.ts` — **hexToHsv** · **hsvToHex** · **paletteFromPixels** · **parseHexInput** · **toArgbHex**
-- `cropRect.ts` — clamp · **fitContain** · **moveCrop** · **moveHandle** · **toImageCrop**
+- `cropRect.ts` — axis · clamp · **clampView** · **fitContain** · **fitCropInside** · **moveCrop** · **moveHandle** · **pinchView** · **toImageCrop** · **visiblePhoto**
 - `dateUtils.ts` — **dateOrderForRegion** · **dateToYMD** · **dobToParts** · **formatDayOrdinalShortMonth** · **formatDayRangeShortMonth** · **formatDurationMinutes** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatShortDayDate** · **formatTime12** · **formatTime12Safe** · **ordinalSuffix** · **overridesFromDate** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · **toLocalDate**
 - `dayTimelineRange.ts` — **assignOverlapColumns** · closeGroup · **resolveTimelineRange**
 - `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**

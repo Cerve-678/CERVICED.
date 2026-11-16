@@ -136,7 +136,7 @@ export type PageHero =
   | 'callingCard' // satin in the theme colour, and a cream calling card held by an accent clip with the logo and name
   | 'productPage' // a product page: their logo big on their colour, then the name as the product title on a white panel with Add to basket (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
-  | 'studio'    // a studio website's top: what they do pressed into a deep bar as a lowercase wordmark, their photo with the logo in the middle and the name in huge caps
+  | 'studio'    // a studio website's top: what they do in chunky caps on a deep bar, then the logo and the name pressed into a panel of the accent as a lowercase wordmark
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -361,7 +361,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-16: from the owner's references, a burgundy-and-blush studio
   // website ("TURN UP the HEAT.") and an embossed lowercase wordmark ("imani.").
   {
-    key: 'studio', name: 'Studio', description: 'A studio website: what you do pressed into a bar, your name in huge caps across your photo',
+    key: 'studio', name: 'Studio', description: 'A studio website: what you do in chunky caps, your name pressed in below your logo',
     heading: 'chunkyCaps', cards: 'tabbed', policies: 'membership', logo: 'circle',
     hero: 'studio', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
@@ -462,18 +462,38 @@ export function menuNumber(index: number): string {
 
 // ── Policy pictures ──────────────────────────────────────────────────────────
 // Branding → Policy Pictures: how a provider's uploaded policy pages sit in
-// their profile (owner's picks A and B on the 2026-11-13 canvas). Both run the
-// page edge to edge in the page's own edge colours; they differ in how it
-// meets the page around it. Stored as the sixth `|` part of profile_theme.
+// their profile. Melt in and Bleed (owner's picks A and B on the 2026-11-13
+// canvas) run the pages full size after the services, in their own edge
+// colours. The owner asked on 2026-11-16 for the story circles (pick D) to be
+// a choice of their own rather than always on, and for subtler choices for
+// providers who don't want their pages full size in the page: a row of small
+// thumbnails, or just a button. Then for more designs of the pages in the page:
+// framed prints, a swipe-through, a fanned stack and a peek at the top page.
+// Stored as the sixth `|` part of profile_theme.
 
-export type PolicyPictureLook = 'melt' | 'bleed';
+export type PolicyPictureLook =
+  | 'melt' | 'bleed' | 'framed' | 'swipe' | 'fan' | 'peek'
+  | 'story' | 'thumbs' | 'button';
 
 export const DEFAULT_POLICY_PICTURE_LOOK: PolicyPictureLook = 'melt';
 
 export const POLICY_PICTURE_LOOKS: readonly { key: PolicyPictureLook; name: string; description: string }[] = [
-  { key: 'melt', name: 'Melt in', description: 'Your pages fade into the page around them' },
-  { key: 'bleed', name: 'Bleed', description: 'Your pages run edge to edge on a wavy band of their own colour' },
+  { key: 'melt', name: 'Melt in', description: 'Full size, fading into your page' },
+  { key: 'bleed', name: 'Bleed', description: 'Full size, on a wavy band of their own colour' },
+  { key: 'framed', name: 'Framed', description: 'Each page as a framed print on your page' },
+  { key: 'swipe', name: 'Swipe', description: 'Full width, one page at a time, swipe through' },
+  { key: 'fan', name: 'Fanned', description: 'Your pages fanned out like cards, tap to read' },
+  { key: 'peek', name: 'Peek', description: 'The top of your policy, then Read the full policy' },
+  { key: 'story', name: 'Story', description: 'Circles near the top that open full screen' },
+  { key: 'thumbs', name: 'Thumbnails', description: 'A small row of pages after your services' },
+  { key: 'button', name: 'Button', description: 'Just a "Read my policy" button' },
 ];
+
+/** Where a look puts the pages: story circles near the top of the profile,
+ *  or (every other look) their own section after the services. */
+export function policyPicturePlacement(look: PolicyPictureLook): 'top' | 'afterServices' {
+  return look === 'story' ? 'top' : 'afterServices';
+}
 
 export function isPolicyPictureLook(value: string | null | undefined): value is PolicyPictureLook {
   return POLICY_PICTURE_LOOKS.some(look => look.key === value);

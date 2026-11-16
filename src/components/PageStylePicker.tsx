@@ -518,13 +518,13 @@ function MiniProfile({
           // Studio: a deep bar with the pressed wordmark, then a photo with huge caps across it.
           <View style={mini.studioWrap}>
             <View style={[mini.studioBar, { backgroundColor: blend(accent, '#000000', isDarkColor(accent) ? 0.25 : 0.5) }]}>
-              <Text style={[mini.studioWordmark, { color: blend(accent, '#000000', isDarkColor(accent) ? 0.4 : 0.62) }]} numberOfLines={1}>lashes.</Text>
-            </View>
-            <View style={[mini.studioPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.3) }]}>
-              <View style={mini.studioLogo}>{logo}</View>
               <Text style={[mini.studioHeadline, { color: blend(accent, '#FFFFFF', 0.72) }]} numberOfLines={1}>
-                HAIR<Text style={mini.studioScript}> by </Text>AMARA.
+                LASHES<Text style={mini.studioScript}> & </Text>BROWS.
               </Text>
+            </View>
+            <View style={[mini.studioPhoto, { backgroundColor: accent }]}>
+              <View style={mini.studioLogo}>{logo}</View>
+              <Text style={[mini.studioWordmark, { color: blend(accent, '#000000', isDarkColor(accent) ? 0.3 : 0.18) }]} numberOfLines={1}>amara.</Text>
             </View>
           </View>
         ) : style.hero === 'titlePage' ? (
@@ -733,12 +733,12 @@ const mini = StyleSheet.create({
   shopSerif: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 13, lineHeight: 18 },
   // Studio's bar, photo and headings.
   studioWrap: { alignSelf: 'stretch', flex: 1, marginHorizontal: 8 },
-  studioBar: { height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  studioBar: { height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   studioLogo: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 18, alignItems: 'center', justifyContent: 'center' },
   studioWordmark: { fontFamily: 'YoungSerif-Regular', fontSize: 11, lineHeight: 15 },
-  studioPhoto: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 6 },
-  studioHeadline: { fontFamily: 'LilitaOne-Regular', fontSize: 16, lineHeight: 24 },
-  studioScript: { fontFamily: 'Ephesis-Regular', fontSize: 15 },
+  studioPhoto: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 6 },
+  studioHeadline: { fontFamily: 'LilitaOne-Regular', fontSize: 11, lineHeight: 17 },
+  studioScript: { fontFamily: 'Ephesis-Regular', fontSize: 11 },
   studioTab: { width: 22, height: 5, marginLeft: 6 },
   chunkyCaps: { fontFamily: 'LilitaOne-Regular', fontSize: 13, lineHeight: 21, textAlign: 'center' },
   chunkyScript: { fontFamily: 'Ephesis-Regular', fontSize: 14 },

@@ -7,6 +7,8 @@ import {
   menuNumber,
   PAGE_SECTION_TITLES,
   PAGE_STYLES,
+  POLICY_PICTURE_LOOKS,
+  policyPicturePlacement,
   type PageSectionKey,
 } from '../constants/pageStyles';
 import { encodeThemeKey, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
@@ -144,6 +146,26 @@ describe('policy picture look in the stored theme key', () => {
     const key = encodeThemeKey('app', undefined, undefined, undefined, undefined, 'bleed');
     expect(key).toBe(`app|${SHEET_BG}|blend|rounded|classic|bleed`);
     expect(parseThemeKey(key)).toMatchObject({ pageStyle: 'classic', policyLook: 'bleed' });
+  });
+
+  it('offers story circles and two subtle choices alongside the full-size ones', () => {
+    expect(POLICY_PICTURE_LOOKS.map(look => look.key)).toEqual([
+      'melt', 'bleed', 'framed', 'swipe', 'fan', 'peek', 'story', 'thumbs', 'button',
+    ]);
+  });
+
+  it('round-trips the subtle choices', () => {
+    for (const look of ['framed', 'swipe', 'fan', 'peek', 'story', 'thumbs', 'button'] as const) {
+      const key = encodeThemeKey('app', undefined, undefined, undefined, 'studio', look);
+      expect(parseThemeKey(key)).toMatchObject({ pageStyle: 'studio', policyLook: look });
+    }
+  });
+
+  it('puts Story at the top and every other choice after the services', () => {
+    expect(policyPicturePlacement('story')).toBe('top');
+    for (const look of POLICY_PICTURE_LOOKS.filter(l => l.key !== 'story')) {
+      expect(policyPicturePlacement(look.key)).toBe('afterServices');
+    }
   });
 });
 
