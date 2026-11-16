@@ -9,7 +9,8 @@
 // https://claude.ai/artifact/Q3iiDvPo8zuXkbPBHYtqW3 (templates 1, 2, 3, 4, 8
 // and 9), then six more on 2026-11-14 from
 // https://claude.ai/artifact/5jGhmNUFgb2cY8SZhdeQYc (templates 11–16:
-// Editorial, Heritage, Duet, Groovy, Gallery, Apothecary). Stored as the fifth `|` part of providers.profile_theme (see
+// Editorial, Heritage, Duet, Groovy, Gallery, Apothecary), and from round 4
+// on 2026-11-15. Stored as the fifth `|` part of providers.profile_theme (see
 // encodeThemeKey), so it needs no column of its own.
 //
 // Each style is a small set of switches the profile reads, not a layout of its
@@ -18,7 +19,16 @@
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
-  | 'snapshot' | 'signature' | 'quiet';
+  | 'snapshot' | 'signature' | 'quiet'
+  | 'sealed'
+  | 'lace'
+  | 'sheer'
+  | 'embossed'
+  | 'callingCard'
+  | 'boutique'
+  | 'gazette'
+  | 'novel'
+  | 'studio';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -37,7 +47,16 @@ export type PageHeading =
   | 'labelCaps'  // spaced serif caps between hairlines, like a printed label
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
-  | 'quietCaps'; // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
+  | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
+  | 'lacePair'  // a lowercase script word in the accent over spaced display caps (Lace)
+  | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
+  | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
+  | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
+  | 'shopSerif' // a big serif title on the left, like a shop's department heading (Boutique)
+  | 'newsRule'  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
+  | 'chapter'   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
+  | 'chunkyCaps'; // a lowercase script word, then the title in big serif caps, centred (Studio)
 
 /** What a section sits on. */
 export type PageCards =
@@ -52,7 +71,16 @@ export type PageCards =
   | 'chunky'  // a rounder card, a thick outline and a hard accent shadow
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
-  | 'block';   // a square card with a thick dark outline
+  | 'block'    // a square card with a thick dark outline
+  | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
+  | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
+  | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
+  | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
+  | 'clipped' // a near-square card with an inner rule, held at the top by a clip in the accent (Calling Card)
+  | 'product' // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
+  | 'ruled'   // straight on the page, each item over a printed rule (Gazette)
+  | 'pages'   // a square card with two page edges showing behind it, like a closed book (Novel)
+  | 'tabbed';  // a square solid card with a little tab on its top edge naming the section (Studio)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -67,7 +95,16 @@ export type PagePolicies =
   | 'numerals'  // rows numbered in roman numerals
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
-  | 'definition'; // a small caps label beside each value, between hairlines
+  | 'definition' // a small caps label beside each value, between hairlines
+  | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
+  | 'rosettes'  // one card, each policy beside a small lace rosette (Lace)
+  | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
+  | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
+  | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
+  | 'accordion'  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
+  | 'columns'   // two-up newspaper columns boxed by ink rules (Gazette)
+  | 'numberedRules' // numbered paragraphs, the label in small caps running into its value (Novel)
+  | 'membership';  // two-up square tiles in blush, the card colour and a deep accent, like a studio's price plans (Studio)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -87,10 +124,20 @@ export type PageHero =
   | 'duet'       // a white welcome card: the logo beside the name in signature script over caps
   | 'groovy'     // a sticker sheet: logo sticker, rating starburst, the name on a tilted pill
   | 'exhibition' // a gallery wall label, the name large, the logo framed and matted
-  | 'label'      // a paper tag hanging on a string
+  | 'labelCard'  // the logo, then the name on a double-ruled label like the page's cards (Apothecary)
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
-  | 'quietBand'; // their photo left clear, the name and logo on a pale band across it
+  | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
+  | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
+  | 'lace'      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
+  | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps
+  | 'quietBand' // their photo left clear, the name and logo on a pale band across it
+  | 'pressed'  // pressed straight into the theme backdrop, no card: the logo in a blind-stamped ring, the name raised out of it
+  | 'callingCard' // satin in the theme colour, and a cream calling card held by an accent clip with the logo and name
+  | 'productPage' // a product page: their logo big on their colour, then the name as the product title on a white panel with Add to basket (Boutique)
+  | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
+  | 'studio'    // a studio website's top: what they do in chunky caps on a deep bar, then the logo and the name pressed into a panel of the accent as a lowercase wordmark
+  | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -98,7 +145,8 @@ export type PageLogoFrame =
   | 'tilted'     // a rounded square card, tilted (Editorial)
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
   | 'mat'        // square, in a white mat and a thin dark frame (Gallery)
-  | 'square';    // a square with barely rounded corners (Snapshot)
+  | 'square'     // a square with barely rounded corners (Snapshot)
+  | 'stamped';   // a ring pressed into the paper round it (Embossed)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -123,6 +171,23 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
+  /** Portfolio photos as perforated postage stamps, each tilted a little (Sealed). */
+  stampPhotos?: boolean;
+  /** Portfolio photos sit in a plate mark pressed into the page, like prints (Embossed). */
+  plateMarkPhotos?: boolean;
+  /** Portfolio photos as cream-bordered prints, each pinned by a small accent clip (Calling Card). */
+  clippedPhotos?: boolean;
+  /** The word on each service's book button, when the style has its own (Boutique: "Add to basket").
+   *  Only the word changes: the button still opens the booking sheet. */
+  bookLabel?: string;
+  /** Portfolio photos square, in a fine ink frame with a halftone dot screen (Gazette). */
+  halftonePhotos?: boolean;
+  /** Portfolio photos set on a page, their caption in italic under each (Novel). */
+  pagePhotos?: boolean;
+  /** The page itself is the veil: the photo and the black veil stay behind the
+   *  whole profile, and the content sits on a see-through dark glass sheet in
+   *  white ink (Sheer, owner 2026-11-15). */
+  veilPage?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -201,9 +266,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
-    key: 'apothecary', name: 'Apothecary', description: 'A hanging paper tag, numbered treatments',
+    key: 'apothecary', name: 'Apothecary', description: 'Your name on a ruled label, numbered treatments',
     heading: 'labelCaps', cards: 'label', policies: 'numerals', logo: 'circle',
-    hero: 'label', aboutInHero: false, numeralsLower: true,
+    hero: 'labelCard', aboutInHero: false, numeralsLower: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   // 2026-11-15: Duet's A and C heroes and Apothecary's C, each made a
@@ -225,6 +290,81 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // the elements of correspondence — wax seal, envelope, stamps — not a letter.
+  {
+    key: 'sealed', name: 'Sealed', description: 'Your initial in a wax seal, your logo tucked in an envelope, stamped photos',
+    heading: 'sealCaps', cards: 'stationery', policies: 'sealedNotes', logo: 'circle',
+    hero: 'envelope', aboutInHero: false, stampPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // lace cloth dropped across the hero, the way fabric falls, not framing the logo (owner).
+  {
+    key: 'lace', name: 'Lace', description: 'Lace cloth draped over your photo, a script name, a lace-trimmed price list',
+    heading: 'lacePair', cards: 'lace', policies: 'rosettes', logo: 'doubleRing',
+    hero: 'lace', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // a see-through black veil over their photo, like the owner's sheer-black reference.
+  {
+    key: 'sheer', name: 'Sheer', description: 'Your photo under a black veil down the whole page, content on see-through glass',
+    heading: 'sheerCaps', cards: 'sheer', policies: 'outlined', logo: 'circle',
+    hero: 'veil', aboutInHero: false, veilPage: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // blind emboss, everything tone on tone, after the owner's embossed
+  // "BOOKING for September" reference.
+  {
+    key: 'embossed', name: 'Embossed', description: 'Pressed paper: your name raised in the page, your photos in plate marks',
+    heading: 'embossCaps', cards: 'raised', policies: 'recessed', logo: 'stamped',
+    hero: 'pressed', aboutInHero: false, plateMarkPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
+  // board 23): satin and a calling card held by a clip, both in the theme colours.
+  {
+    key: 'callingCard', name: 'Calling Card', description: 'Your name on a cream card held by a clip, over satin in your colours',
+    heading: 'engravedCaps', cards: 'clipped', policies: 'ribbon', logo: 'circle',
+    hero: 'callingCard', aboutInHero: false, clippedPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS,
+  // board 24): "shopping cart vibes", the logo printed on the bag.
+  {
+    key: 'boutique', name: 'Boutique', description: 'Your page as a product page: your logo up top, Add to basket',
+    heading: 'shopSerif', cards: 'product', policies: 'accordion', logo: 'circle',
+    hero: 'productPage', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    bookLabel: 'Add to basket',
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS, board 25).
+  {
+    key: 'gazette', name: 'Gazette', description: 'A newspaper front page: blackletter masthead, headlines, printed rules',
+    heading: 'newsRule', cards: 'ruled', policies: 'columns', logo: 'square',
+    hero: 'gazette', aboutInHero: false, halftonePhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
+  // a book's type and chapters round the provider's own content. The
+  // cloth-bound cover hero and the bookish section names (The Author, House
+  // Rules, Praise, Plates) were dropped at the owner's request on 2026-11-15.
+  {
+    key: 'novel', name: 'Novel', description: 'A book\'s title page with your name set in old type, sections as chapters',
+    heading: 'chapter', cards: 'pages', policies: 'numberedRules', logo: 'circle',
+    hero: 'titlePage', aboutInHero: false, pagePhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-16: from the owner's references, a burgundy-and-blush studio
+  // website ("TURN UP the HEAT.") and an embossed lowercase wordmark ("imani.").
+  {
+    key: 'studio', name: 'Studio', description: 'A studio website: what you do in chunky caps, your name pressed in below your logo',
+    heading: 'chunkyCaps', cards: 'tabbed', policies: 'membership', logo: 'circle',
+    hero: 'studio', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];
 
@@ -289,6 +429,25 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   specialities: '10',
 };
 
+/** Novel's chapter titles: plain section names under each "Chapter" line. */
+const CHAPTER_TITLES: Record<PageSectionKey, string> = {
+  about: 'About Me',
+  policies: 'Booking Policies',
+  services: 'The Services',
+  policyPages: 'Before You Book',
+  portfolio: 'My Portfolio',
+  reviews: 'Client Reviews',
+  hours: 'Opening Hours',
+  contact: 'Get in Touch',
+  info: 'Good to Know',
+  specialities: 'My Specialities',
+};
+
+/** Novel's heading for a section: ["Chapter III", "The Services"], numbered in page order. */
+export function chapterHeading(section: PageSectionKey): [string, string] {
+  return [`Chapter ${romanNumeral(Number(SECTION_NUMBERS[section]) - 1)}`, CHAPTER_TITLES[section]];
+}
+
 /** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
 export function romanNumeral(index: number, lower = false): string {
   const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
@@ -303,18 +462,38 @@ export function menuNumber(index: number): string {
 
 // ── Policy pictures ──────────────────────────────────────────────────────────
 // Branding → Policy Pictures: how a provider's uploaded policy pages sit in
-// their profile (owner's picks A and B on the 2026-11-13 canvas). Both run the
-// page edge to edge in the page's own edge colours; they differ in how it
-// meets the page around it. Stored as the sixth `|` part of profile_theme.
+// their profile. Melt in and Bleed (owner's picks A and B on the 2026-11-13
+// canvas) run the pages full size after the services, in their own edge
+// colours. The owner asked on 2026-11-16 for the story circles (pick D) to be
+// a choice of their own rather than always on, and for subtler choices for
+// providers who don't want their pages full size in the page: a row of small
+// thumbnails, or just a button. Then for more designs of the pages in the page:
+// framed prints, a swipe-through, a fanned stack and a peek at the top page.
+// Stored as the sixth `|` part of profile_theme.
 
-export type PolicyPictureLook = 'melt' | 'bleed';
+export type PolicyPictureLook =
+  | 'melt' | 'bleed' | 'framed' | 'swipe' | 'fan' | 'peek'
+  | 'story' | 'thumbs' | 'button';
 
 export const DEFAULT_POLICY_PICTURE_LOOK: PolicyPictureLook = 'melt';
 
 export const POLICY_PICTURE_LOOKS: readonly { key: PolicyPictureLook; name: string; description: string }[] = [
-  { key: 'melt', name: 'Melt in', description: 'Your pages fade into the page around them' },
-  { key: 'bleed', name: 'Bleed', description: 'Your pages run edge to edge on a wavy band of their own colour' },
+  { key: 'melt', name: 'Melt in', description: 'Full size, fading into your page' },
+  { key: 'bleed', name: 'Bleed', description: 'Full size, on a wavy band of their own colour' },
+  { key: 'framed', name: 'Framed', description: 'Each page as a framed print on your page' },
+  { key: 'swipe', name: 'Swipe', description: 'Full width, one page at a time, swipe through' },
+  { key: 'fan', name: 'Fanned', description: 'Your pages fanned out like cards, tap to read' },
+  { key: 'peek', name: 'Peek', description: 'The top of your policy, then Read the full policy' },
+  { key: 'story', name: 'Story', description: 'Circles near the top that open full screen' },
+  { key: 'thumbs', name: 'Thumbnails', description: 'A small row of pages after your services' },
+  { key: 'button', name: 'Button', description: 'Just a "Read my policy" button' },
 ];
+
+/** Where a look puts the pages: story circles near the top of the profile,
+ *  or (every other look) their own section after the services. */
+export function policyPicturePlacement(look: PolicyPictureLook): 'top' | 'afterServices' {
+  return look === 'story' ? 'top' : 'afterServices';
+}
 
 export function isPolicyPictureLook(value: string | null | undefined): value is PolicyPictureLook {
   return POLICY_PICTURE_LOOKS.some(look => look.key === value);

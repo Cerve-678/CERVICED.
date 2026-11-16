@@ -12,9 +12,20 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
+import { LaceHero } from "./heroes/LaceHero";
+import { PressedHero } from "./heroes/EmbossedHero";
+import { BoutiqueHero, cardInk } from "./heroes/BoutiqueHero";
+import { GazetteHero } from "./heroes/GazetteHero";
+import { StudioHero } from "./heroes/StudioHero";
+import { NovelHero } from "./heroes/NovelHero";
+import { outlineInk } from "./ProfilePageStyle";
 import type { PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
+import { SEALED_LOGO_SIZE, SealedEnvelope } from "./heroes/SealedHero";
+import { sealLetter, waxColour } from "./WaxSeal";
+import { SheerHero } from "./heroes/SheerHero";
+import { CallingCardHero } from "./heroes/CallingCardHero";
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -182,6 +193,14 @@ export interface ProfileHeroLayoutProps {
   rating?: string | null;
   /** The verified tick beside the name, for the layouts that draw the name themselves. */
   isVerified?: boolean;
+  /** The theme's backdrop colour (the gradient's first stop): Calling Card's
+   *  satin, Embossed's pressed letters and Novel's title page are drawn in it. */
+  heroColour: string;
+  /** The theme's card colour: Gazette's hero sheet, Boutique's product panel. */
+  cardColour: string;
+  /** Jumps to Services: Studio's Book now. Left out when there are
+   *  no services on the page (a link-only provider), and then there's no button. */
+  onBookNow?: (() => void) | undefined;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -228,6 +247,9 @@ export function ProfileHeroLayout({
   photoUris,
   rating,
   isVerified,
+  heroColour,
+  cardColour,
+  onBookNow,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
@@ -405,25 +427,31 @@ export function ProfileHeroLayout({
     }
 
     case "duet": {
-      // Duet: a white welcome card on a soft accent shadow, the logo beside
-      // the name. What they do isn't repeated here: Additional Information
-      // lists it as Category (owner, 2026-11-15).
+      // Duet: a welcome card in the theme's card colour on a soft accent
+      // shadow, the logo beside the name (owner, 2026-11-16: the card should
+      // match the theme, not always be white). What they do isn't repeated
+      // here: Additional Information lists it as Category (owner, 2026-11-15).
       const [script, caps] = splitFirst(name);
-      const cardAccent = isDarkColor(accent) ? accent : blend(accent, "#000000", 0.35);
+      const duetInk = cardInk(cardColour);
+      const cardIsDark = isDarkColor(cardColour);
+      // The script is the accent, deepened on a pale card and lifted on a dark one.
+      const cardAccent = cardIsDark
+        ? (isDarkColor(accent) ? blend(accent, "#FFFFFF", 0.55) : accent)
+        : (isDarkColor(accent) ? accent : blend(accent, "#000000", 0.35));
       return (
         <View style={layout.duetWrap}>
           <View>
-            <View style={[layout.duetCardShadow, { backgroundColor: blend(accent, "#FFFFFF", 0.45) }]} pointerEvents="none" />
-            <View style={layout.duetCard}>
+            <View style={[layout.duetCardShadow, { backgroundColor: blend(accent, cardIsDark ? "#000000" : "#FFFFFF", 0.45) }]} pointerEvents="none" />
+            <View style={[layout.duetCard, { backgroundColor: cardColour, borderColor: duetInk.text }]}>
               <View style={layout.duetCardRow}>
               <View style={layout.logoNoGap}>{renderLogo(92)}</View>
               <View style={layout.duetCardText} accessible accessibilityRole="header" accessibilityLabel={name}>
-                <Text style={layout.duetHey}>HEY GORGEOUS, WELCOME TO</Text>
+                <Text style={[layout.duetHey, { color: duetInk.sub }]}>HEY GORGEOUS, WELCOME TO</Text>
                 <Text style={[layout.duetScript, { color: cardAccent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                   {script}
                 </Text>
                 {caps ? (
-                  <Text style={layout.duetCaps} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  <Text style={[layout.duetCaps, { color: duetInk.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
                     {caps.toUpperCase()}
                   </Text>
                 ) : null}
@@ -431,14 +459,16 @@ export function ProfileHeroLayout({
                     to the left (owner, 2026-11-15), drawn by the profile in
                     `details` like every other style. */}
                 {location ? (
-                  <Text style={layout.duetLocated} numberOfLines={2}>{location.toUpperCase()}</Text>
+                  <Text style={[layout.duetLocated, { color: duetInk.sub }]} numberOfLines={2}>{location.toUpperCase()}</Text>
                 ) : null}
-                {tick}
+                {isVerified ? (
+                  <Ionicons name="checkmark-circle" size={18} color={cardIsDark ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                ) : null}
               </View>
               </View>
               {/* Their years in the card, the slots pill with Instagram under
                   it. The profile puts the slots pill on a line of its own and
-                  draws these in DETAILS_ON_CARD_INK, as the card is white. */}
+                  inks these with cardInk(card colour), as this card is. */}
               <View style={layout.duetInfoRow}>
                 {details}
               </View>
@@ -523,46 +553,33 @@ export function ProfileHeroLayout({
       );
     }
 
-    case "label": {
-      // Apothecary: a paper tag hanging on a string over their photo.
-      const phrase = kickerPhrase(kicker).toLowerCase();
+    case "labelCard": {
+      // Apothecary (owner, 2026-11-16: simple, but in the theme): the logo,
+      // then the name on the same label as the page's cards (their card
+      // colour, a fine outline and an accent rule inside it), then what they
+      // do and the details.
+      const labelInk = cardInk(cardColour);
       return (
-        <View style={layout.tagWrap}>
-          <Svg width={240} height={64} viewBox="0 0 240 64" pointerEvents="none">
-            <Path
-              d="M60 0C80 28 108 46 116 64M180 0C160 28 132 46 124 64"
-              fill="none"
-              stroke={heroIsDark ? "#D9CBA6" : "#8C7A55"}
-              strokeWidth={1.5}
-            />
-          </Svg>
-          <View style={layout.tag}>
-            <Svg width={240} height={30} viewBox="0 0 240 30" pointerEvents="none">
-              <Polygon points="48,0 192,0 240,30 0,30" fill={TAG_PAPER} />
-              <Circle cx={120} cy={16} r={6} fill="none" stroke="#B9A57A" strokeWidth={2} />
-            </Svg>
-            <View style={layout.tagBody}>
-              <View style={layout.logoNoGap}>{renderLogo(64)}</View>
-              <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-                <Text
-                  style={[
-                    layout.tagName,
-                  ]}
-                  numberOfLines={2}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.6}
-                >
-                  {name.toUpperCase()}
+        <>
+          {renderLogo(124)}
+          <View style={layout.labelWrap}>
+            <View style={[layout.labelCard, { backgroundColor: cardColour, borderColor: outlineInk(cardColour) }]}>
+              <View style={[layout.labelInner, { borderColor: withAlpha(accent, 0.7) }]} pointerEvents="none" />
+              <View style={layout.labelNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text style={[layout.labelName, { color: labelInk.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
                 </Text>
-                {tick}
+                {isVerified ? (
+                  <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" />
+                ) : null}
               </View>
-              <View style={[layout.tagRule, { backgroundColor: accent }]} />
-              {phrase ? <Text style={layout.tagPhrase}>{phrase}</Text> : null}
-              {location ? <Text style={layout.tagCaption} numberOfLines={2}>{location.toUpperCase()}</Text> : null}
             </View>
           </View>
-          <View style={layout.labelDetails}>{details}</View>
-        </View>
+          <View style={layout.infoCenter}>
+            {meta}
+            {details}
+          </View>
+        </>
       );
     }
 
@@ -619,7 +636,7 @@ export function ProfileHeroLayout({
         <View style={[layout.infoCenter, layout.textFirst]}>
           <Text style={[layout.signedWelcome, { color: heroText }, shadow]}>WELCOME TO</Text>
           <View style={layout.signedLogo}>{renderLogo(148)}</View>
-          <View style={layout.signedNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+          <View style={layout.signedNameRow} pointerEvents="none" accessible accessibilityRole="header" accessibilityLabel={name}>
             <Text
               style={[layout.signedName, { color: pen }, heroIsDark ? shadow : { textShadowColor: pen, textShadowRadius: 1 }]}
               numberOfLines={1}
@@ -668,6 +685,173 @@ export function ProfileHeroLayout({
         </View>
       );
     }
+
+    case "envelope": {
+      // Sealed: the back of an envelope closed with a wax seal of their
+      // initial, their logo on a card tucked in its corner, their area as a
+      // postmark; then an invitation line and the name in Corinthia script.
+      const phrase = kickerPhrase(kicker);
+      return (
+        <View style={[layout.infoCenter, layout.textFirst]}>
+          <SealedEnvelope
+            wax={waxColour(accent)}
+            initial={sealLetter(name)}
+            logo={renderLogo(SEALED_LOGO_SIZE)}
+            postmark={location || kicker}
+          />
+          <Text style={[layout.sealedInvite, { color: heroSub }, shadow]}>YOU&apos;RE INVITED TO BOOK WITH</Text>
+          <View style={layout.tickRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text
+              style={[layout.sealedName, { color: heroText }, shadow]}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.5}
+            >
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {phrase ? <Text style={[layout.sealedPhrase, { color: heroText }, shadow]}>{phrase}</Text> : null}
+          {location ? (
+            <Text style={[layout.sealedLocated, { color: heroSub }, shadow]} numberOfLines={2}>{location.toUpperCase()}</Text>
+          ) : null}
+          {details}
+        </View>
+      );
+    }
+    case "lace":
+      // Lace: a piece of lace fabric draped across the foot of the hero, the
+      // logo clean above it, the name in script (heroes/LaceHero).
+      return (
+        <LaceHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          heroText={heroText}
+          heroSub={heroSub}
+          heroIsDark={heroIsDark}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+          shadow={shadow}
+        />
+      );
+
+    case "veil":
+      // Sheer: their photo under a see-through black veil (heroes/SheerHero).
+      return (
+        <SheerHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "pressed":
+      // Embossed: the name pressed straight into the theme backdrop (heroes/EmbossedHero).
+      return (
+        <PressedHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          backdrop={heroColour}
+          heroSub={heroSub}
+          // HeroLogo keeps 20pt under itself, which pushed the logo up out of
+          // the middle of its stamped ring (owner, 2026-11-16).
+          logo={<View style={layout.logoNoGap}>{renderLogo(104)}</View>}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "callingCard":
+      // Calling Card: satin folds in the theme colour, and a cream card held by an accent clip with
+      // the logo, the name and the details on it (heroes/CallingCardHero).
+      return (
+        <CallingCardHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          accent={accent}
+          heroColour={heroColour}
+          logo={renderLogo(76)}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "productPage":
+      // Boutique: a product page, their logo on their colour, the name as the title (heroes/BoutiqueHero).
+      return (
+        <BoutiqueHero
+          name={name}
+          location={location}
+          kicker={kicker}
+          accent={accent}
+          cardColour={cardColour}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "gazette":
+      // Gazette: a newsprint front page over their photo, the logo in the
+      // masthead's left ear; the stars, years and slots pill under the sheet.
+      return (
+        <>
+          <View style={layout.textFirst}>
+            <GazetteHero
+              name={name}
+              kicker={kicker}
+              location={location}
+              rating={rating}
+              cardColour={cardColour}
+              logo={<View style={layout.logoNoGap}>{renderLogo(64)}</View>}
+              tick={isVerified ? <Ionicons name="checkmark-circle" size={16} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+            />
+          </View>
+          <View style={layout.infoCenter}>{details}</View>
+        </>
+      );
+
+    case "studio":
+      // Studio: a studio website's top, what they do in chunky caps on a deep
+      // bar and their name pressed into a panel of the accent (heroes/StudioHero).
+      return (
+        <StudioHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          // The tick sits beside the name on the accent panel.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(accent) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+          onBookNow={onBookNow}
+        />
+      );
+
+    case "titlePage":
+      // Novel: a book's title page set straight on the backdrop (heroes/NovelHero).
+      return (
+        <NovelHero
+          name={name}
+          kicker={kicker}
+          location={location}
+          heroText={heroText}
+          heroSub={heroSub}
+          heroAccent={heroAccent}
+          shadow={shadow}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
 
     default:
       return (
@@ -738,11 +922,20 @@ function SealRing({
 }
 
 /**
- * Whether this style draws the stars, years and slots pill on a white card
- * (Duet) rather than straight on the hero, so the profile inks them dark.
+ * Whether this style draws the stars, years and slots pill on a pale card
+ * (Duet's welcome card, the Calling Card) rather than straight on the hero,
+ * so the profile inks them dark.
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
-  return pageStyle.hero === "duet";
+  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage";
+}
+
+/**
+ * Whether this style lays its own dark layer over the hero (Sheer's veil), so
+ * the profile and the preview ink the hero white whatever is behind it.
+ */
+export function heroIsDarkForStyle(pageStyle: PageStyle): boolean {
+  return pageStyle.hero === "veil";
 }
 
 /** The ink for details on that card. */
@@ -751,8 +944,6 @@ export const DETAILS_OWN_LINE = { width: "100%", alignItems: "center" } as const
 
 export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 
-/** Apothecary's tag paper and ink: the tag is a physical object, so its colours are fixed. */
-const TAG_PAPER = "#F6F1E4";
 
 /** How much lower a hero that opens on text starts than one that opens on the logo. */
 const TEXT_FIRST_DROP = 48;
@@ -761,6 +952,13 @@ const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
+  labelWrap: { alignSelf: "stretch", paddingHorizontal: 28, marginBottom: 14 },
+  labelCard: { borderWidth: 1, paddingHorizontal: 22, paddingVertical: 20 },
+  // As the page's label cards (ProfilePageStyle innerRule).
+  labelInner: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
+  labelNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  // Marcellus SC: its caps need 1.28× or their tops crop.
+  labelName: { fontFamily: "MarcellusSC-Regular", fontSize: 28, lineHeight: 38, letterSpacing: 2.5, textAlign: "center", flexShrink: 1 },
   coverTop: { paddingTop: 64 },
   // HeroLogo keeps 20pt under itself; pull the name back up under the logo.
   coverLogo: { alignSelf: "flex-end", marginRight: 28, marginBottom: -14 },
@@ -861,21 +1059,6 @@ const layout = StyleSheet.create({
   galleryName: { fontFamily: "InstrumentSerif-Regular", fontSize: 60, lineHeight: 77, letterSpacing: -1.5, marginTop: 22, flexShrink: 1 },
   galleryPhrase: { fontFamily: "InstrumentSerif-Italic", fontSize: 21, marginTop: 6 },
   galleryArt: { alignItems: "center", marginTop: 26 },
-  // Apothecary: the tag is a physical object, so its ink is fixed.
-  tagWrap: { alignItems: "center", marginTop: 20, marginBottom: 26 },
-  tag: {
-    width: 240, marginTop: -2, transform: [{ rotate: "-4deg" }], transformOrigin: "top",
-    shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 10 },
-  },
-  tagBody: { backgroundColor: TAG_PAPER, alignItems: "center", paddingHorizontal: 20, paddingTop: 6, paddingBottom: 24, marginTop: -1 },
-  tagName: {
-    fontFamily: "MarcellusSC-Regular", fontSize: 32, lineHeight: 41, letterSpacing: 6, color: "#2C3527",
-    textAlign: "center", flexShrink: 1, marginTop: 10,
-  },
-  tagRule: { height: 1, alignSelf: "stretch", marginHorizontal: 30, marginVertical: 8 },
-  tagPhrase: { fontFamily: "Marcellus-Regular", fontSize: 15, color: "#56614F", textAlign: "center" },
-  tagCaption: { fontSize: 9, letterSpacing: 2.4, color: "#56614F", marginTop: 8 },
-  labelDetails: { alignItems: "center", marginTop: 22 },
   // Snapshot
   blockWrap: { marginBottom: 26 },
   blockPhotos: { flexDirection: "row" },
@@ -901,6 +1084,11 @@ const layout = StyleSheet.create({
   signedDetails: { alignItems: "center", marginTop: 14 },
   // Quiet: the band is paper, so its ink is fixed.
   quietWrap: { marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  sealedInvite: { fontFamily: "EBGaramond-SemiBold", fontSize: 12, lineHeight: 17, letterSpacing: 3, marginTop: 4, textAlign: "center" },
+  // Corinthia's loops overhang its box, so the name has room above and either side.
+  sealedName: { fontFamily: "Corinthia-Bold", fontSize: 62, lineHeight: 92, paddingHorizontal: 14, textAlign: "center", flexShrink: 1 },
+  sealedPhrase: { fontFamily: "EBGaramond-Italic", fontSize: 18, lineHeight: 24, marginTop: -6, textAlign: "center" },
+  sealedLocated: { fontFamily: "EBGaramond-SemiBold", fontSize: 12, lineHeight: 17, letterSpacing: 2.6, marginTop: 6, marginBottom: 10, textAlign: "center" },
   quietArea: { fontSize: 10, letterSpacing: 3, paddingHorizontal: 24 },
   quietBand: { backgroundColor: "#FBFCF8", marginTop: 170, paddingHorizontal: 24, paddingVertical: 22 },
   quietRow: { flexDirection: "row", alignItems: "center", gap: 16 },

@@ -60,6 +60,10 @@ export interface CartIssueEntry {
   date: string | undefined;
   time: string | undefined;
   duration: string | undefined;
+  /** The service belongs to the signed-in account's own provider profile.
+   *  The database refuses these at checkout; flagging them here means the
+   *  card says so the moment the item is in the cart. */
+  ownProvider?: boolean;
 }
 
 /** Every reason a cart card can be flagged with, in one place.
@@ -72,6 +76,11 @@ export interface CartIssueEntry {
  *  CartScreen maps the service's phrasings onto these via toCartIssue(). */
 export const CART_ISSUE = {
   noSchedule: 'Pick a date and time for this service',
+  // Every way in to the cart that a provider could take with their own
+  // business — a rebook, Becca, a cart saved before they claimed the listing —
+  // ends at the same database refusal. Saying it on the card is the useful
+  // version: nothing else about the item can be fixed, so it outranks the rest.
+  ownProvider: "This is your own business — you can't book yourself. Remove it to check out.",
   overlap: 'This time slot conflicts with another service in your cart',
   // The card says only THAT it clashes; the dialog names the service and
   // provider it clashes with. A card is a label, not a sentence — and the
@@ -98,6 +107,9 @@ export const CART_ISSUE = {
   depositNoLongerOffered: 'This provider now requires payment in full — deposit is no longer available',
   depositNowRequired: 'This provider now requires a deposit — pay in full is no longer available',
   takenWhilePaying: 'This time was taken while you were paying — pick a new time',
+  // A waitlist slot's 15 minutes ran out. Its time can't be changed, and the
+  // client has come off that waitlist, so removing it is the only fix.
+  waitlistHoldEnded: 'This slot was held for 15 minutes and that time is up. Remove it to continue',
   bookingFailed: "This service couldn't be booked — try again",
 } as const;
 
@@ -145,7 +157,9 @@ export function describeReserveFailure(err: unknown): { title: string; message: 
  *  itemId → reason. Runs on every render, so a cart that cannot possibly check
  *  out says so before the client taps anything.
  *
- *  Ordered by what the client should fix first: a line with no time at all
+ *  Ordered by what the client should fix first: a service from the client's
+ *  own business can't be fixed at all, only removed, so it reports that and
+ *  nothing else. Then a line with no time at all
  *  can't also be judged for overlapping something, so it reports that and
  *  nothing else. A time that has already passed is the same shape of finding
  *  — it's reported on its own, and the item drops out of the overlap pass.
@@ -173,6 +187,10 @@ export function findCartItemIssues(
   const spans: { itemId: string; date: string; start: number; end: number }[] = [];
 
   for (const entry of entries) {
+    if (entry.ownProvider) {
+      issues.set(entry.itemId, CART_ISSUE.ownProvider);
+      continue;
+    }
     if (!entry.date || !entry.time) {
       issues.set(entry.itemId, CART_ISSUE.noSchedule);
       continue;

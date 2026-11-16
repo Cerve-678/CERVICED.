@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 
 import { PAGE_STYLES } from '../constants/pageStyles';
@@ -135,18 +136,20 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('Lashes.')).toBeTruthy();
   });
 
-  it('prints the name in capitals on Apothecary\'s tag', () => {
+  it('keeps Apothecary\'s hero simple: the name, no prescription pad', () => {
     renderPreview('apothecary');
-    expect(screen.getByText('AMARA LASHES')).toBeTruthy();
-    expect(screen.getByText('lashes')).toBeTruthy();
-    expect(screen.getByText('PECKHAM')).toBeTruthy();
+    expect(screen.getByText('Amara Lashes')).toBeTruthy();
+    expect(screen.queryByText('℞')).toBeNull();
+    expect(screen.queryByText('PRESCRIPTION')).toBeNull();
+    expect(screen.queryByText('PRACTITIONER')).toBeNull();
   });
 
   it('sets the name in the style\'s own font even when the provider chose a Branding font', () => {
     renderPreview('groovy', 'great-vibes');
     expect(screen.getByText('amara lashes')).toBeTruthy();
     renderPreview('apothecary', 'great-vibes');
-    expect(screen.getAllByText('AMARA LASHES').length).toBeGreaterThan(0);
+    const padName = screen.getAllByText('Amara Lashes')[0]!;
+    expect(StyleSheet.flatten(padName.props['style']).fontFamily).toBe('MarcellusSC-Regular');
   });
 
 });

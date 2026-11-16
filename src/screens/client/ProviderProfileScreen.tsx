@@ -50,7 +50,10 @@ import {
   HeroPills,
   ProfileHeroLayout,
   detailsSitOnCard,
+  heroIsDarkForStyle,
 } from "../../features/providers/ProfileHero";
+import { cardInk } from "../../features/providers/heroes/BoutiqueHero";
+import { VeilBackdrop, veilAccent, veilPageTheme } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -62,13 +65,15 @@ import { FullImageViewer } from "../../components/FullImageViewer";
 import { LogoZoomViewer } from "../../components/LogoZoomViewer";
 import { policyImageEdges, policyImageUrls } from "../../features/providers/policyImages";
 import {
+  PolicyPagesCompact,
   PolicyPagesInline,
+  PolicyPagesShowcase,
   PolicyStoryRings,
   PolicyStoryViewer,
   usePolicyEdgeColours,
 } from "../../features/providers/PolicyPages";
 import { StackScreenProps } from "@react-navigation/stack";
-import { usePreventRemove } from "@react-navigation/native";
+import { useFocusEffect, usePreventRemove } from "@react-navigation/native";
 import { useHideTabBar } from "../../navigation/useHideTabBar";
 
 // Correct icon imports - using your IconLibrary.tsx
@@ -95,10 +100,10 @@ import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
 import CategoryTabItem from "../../components/CategoryTabPill";
 import {
   getProviderDepositPoliciesByDisplayNames,
-  getUserWaitlistEntries,
+  getMyWaitlist,
   joinWaitlist,
   leaveWaitlist,
-  type WaitlistEntry,
+  type MyWaitlistPlace,
   setProviderFollowNotify,
   recordProviderStat,
   addMyExternalBooking,
@@ -125,14 +130,15 @@ import {
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { mapsUrlFor } from "../../utils/mapsLink";
-import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { dateToYMD, formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
+import { placeInLineLabel } from "../../features/bookings/waitlist";
 import { releaseTimeLabel } from "../../utils/bookingHorizon";
 import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
+import { getPageStyle, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
 import {
   GlossShine,
   onAccentInk,
@@ -1508,17 +1514,26 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
-  const OP = resolveProviderTheme(provider?.profileTheme);
+  // Branding → Page Style (constants/pageStyles): headings, card treatment,
+  // the policy layout and the logo frame, on top of the colours. Classic is
+  // the profile exactly as it was.
+  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
+  // A veil page (Sheer) keeps the theme's hero and accent but puts the
+  // content on see-through dark glass, so every section inks itself white.
+  const baseTheme = resolveProviderTheme(provider?.profileTheme);
+  const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
+  const OP = veilTheme ?? baseTheme;
   // Branding → Card Shape: square corners on the profile's cards (the service
   // cards and category pills, About/Policies, the sharing card, Reviews,
   // Contact, Opening hours, Additional info), or the rounded look it has
   // always had. The availability pill and Instagram button beside it stay
   // rounded, and so do photos (owner's call, 2026-11-09).
   const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
-  // Branding → Page Style (constants/pageStyles): headings, card treatment,
-  // the policy layout and the logo frame, on top of the colours. Classic is
-  // the profile exactly as it was.
-  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
+  // Branding → Policy Pictures: story circles near the top, or one of the
+  // designs (full size, framed, swipe, fanned, peek, thumbnails, a button)
+  // after the services.
+  const policyLook = parseThemeKey(provider?.profileTheme).policyLook;
+  const policyPlacement = policyPicturePlacement(policyLook);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1618,7 +1633,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // non-cacheable viewer request. viewerChecked remains a separate gate so
   // deep-linked booking UI never auto-opens before that check settles.
   const [userWaitlistMap, setUserWaitlistMap] = useState<
-    Record<string, WaitlistEntry>
+    Record<string, MyWaitlistPlace>
   >({});
   // service.dbId -> "has a bookable slot in the next 14 days". The Waitlist
   // button only makes sense once we've confirmed there's genuinely nothing
@@ -1641,7 +1656,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistJoining, setWaitlistJoining] = useState(false);
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [leaveConfirmEntry, setLeaveConfirmEntry] =
-    useState<WaitlistEntry | null>(null);
+    useState<MyWaitlistPlace | null>(null);
   const [waitlistDateMode, setWaitlistDateMode] = useState<"anytime" | "range">(
     "anytime",
   );
@@ -1730,6 +1745,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
     );
   }, []);
+  // Studio's Book now, in its hero.
+  const jumpToServices = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    scrollToSection(servicesSectionRef.current);
+  }, [scrollToSection]);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -1747,7 +1767,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // brown for the default theme). There used to be a middle step that guessed
   // an accent from the gradient's first colour through a table of old
   // placeholder presets, falling back to purple for anything else.
-  const adaptiveAccentColor = provider?.accentColor ?? OP.accent;
+  const rawAccentColor = provider?.accentColor ?? OP.accent;
+  // On a veil page's dark glass a dark accent is lifted so it still reads.
+  const adaptiveAccentColor = veilTheme ? veilAccent(rawAccentColor) : rawAccentColor;
   // Recommend's badge on the logo wears this page's colours.
   const recommendBadgeTheme = useMemo<RecommendBadgeTheme>(() => ({
     card: OP.card,
@@ -1969,15 +1991,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     ? provider?.gradient[0]
     : OP.hero;
   const heroIsDark =
+    heroIsDarkForStyle(pageStyle) ||
     !!provider?.backgroundImage ||
     (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
   const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
-  // Duet draws the stars, years and link-only caption on its white card, so
-  // they take dark ink there whatever is behind the hero.
+  // Duet and Calling Card draw the stars, years and link-only caption on a
+  // card, so they take that card's ink whatever is behind the hero.
   const detailsOnCard = detailsSitOnCard(pageStyle);
-  const detailsText = detailsOnCard ? DETAILS_ON_CARD_INK.text : heroText;
-  const detailsSub = detailsOnCard ? DETAILS_ON_CARD_INK.sub : heroSub;
+  // Boutique's panel and Duet's welcome card are their card colour, so their
+  // ink follows that colour; Calling Card's cream card is always inked dark.
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" ? cardInk(OP.card) : DETAILS_ON_CARD_INK;
+  const detailsText = detailsOnCard ? cardDetailsInk.text : heroText;
+  const detailsSub = detailsOnCard ? cardDetailsInk.sub : heroSub;
   const detailsShadow = heroIsDark && !detailsOnCard;
 
   // What they do, for Arch's curved caption, Spa's top line and the like.
@@ -2013,20 +2039,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
   }, [promotions.length, offersTabSlide]);
 
-  useEffect(() => {
+  // The client's live places on this provider's waitlists, with their real
+  // place in line. A place whose hold ended (status 'expired') isn't one:
+  // the service offers Waitlist again so they can rejoin.
+  const loadWaitlistMap = useCallback(async () => {
     if (!currentUserId || !providerDbId) return;
-    getUserWaitlistEntries(currentUserId)
-      .then((entries) => {
-        const map: Record<string, WaitlistEntry> = {};
-        entries
-          .filter((e) => e.provider_id === providerDbId)
-          .forEach((e) => {
-            map[e.service_id ?? "__any__"] = e;
-          });
-        setUserWaitlistMap(map);
-      })
-      .catch(() => {});
+    try {
+      const places = await getMyWaitlist();
+      const map: Record<string, MyWaitlistPlace> = {};
+      places
+        .filter((place) => place.providerId === providerDbId && (place.status === "waiting" || place.status === "notified"))
+        .forEach((place) => {
+          map[place.serviceId ?? "__any__"] = place;
+        });
+      setUserWaitlistMap(map);
+    } catch (error) {
+      logger.warn("[ProviderProfile] waitlist places failed to load", error);
+    }
   }, [currentUserId, providerDbId]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadWaitlistMap();
+    }, [loadWaitlistMap]),
+  );
 
   // Check near-term availability per service so the Waitlist button (or,
   // when waitlists are off, the plain "no openings" note) only shows once a
@@ -2506,12 +2541,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     try {
       let preferredDates: string[] | undefined;
       if (waitlistDateMode === "range" && waitlistDateFrom) {
-        const fromStr = waitlistDateFrom.toISOString().split("T")[0]!;
+        // Local calendar dates: toISOString() went through UTC and could
+        // slip a day back during British Summer Time.
+        const fromStr = dateToYMD(waitlistDateFrom);
         preferredDates = waitlistDateTo
-          ? [fromStr, waitlistDateTo.toISOString().split("T")[0]!]
+          ? [fromStr, dateToYMD(waitlistDateTo)]
           : [fromStr];
       }
-      const entry = await joinWaitlist({
+      await joinWaitlist({
         providerId: providerDbId,
         userId: currentUserId,
         serviceId: waitlistModal.service.dbId,
@@ -2521,11 +2558,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         ...(preferredDates ? { preferredDates } : {}),
         ...(waitlistNotes.trim() ? { notes: waitlistNotes.trim() } : {}),
       });
-      setUserWaitlistMap((prev) => ({
-        ...prev,
-        [entry.service_id ?? "__any__"]: entry,
-      }));
       closeWaitlistModal();
+      await loadWaitlistMap();
     } catch {
       setWaitlistError("Couldn't save — check your connection and try again.");
     }
@@ -2541,14 +2575,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     waitlistDateFrom,
     waitlistDateTo,
     closeWaitlistModal,
+    loadWaitlistMap,
   ]);
 
-  const handleLeaveWaitlist = useCallback(async (entry: WaitlistEntry) => {
+  const handleLeaveWaitlist = useCallback(async (entry: MyWaitlistPlace) => {
     try {
       await leaveWaitlist(entry.id);
       setUserWaitlistMap((prev) => {
         const next = { ...prev };
-        delete next[entry.service_id ?? "__any__"];
+        delete next[entry.serviceId ?? "__any__"];
         return next;
       });
     } catch {
@@ -4177,7 +4212,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               ? "Not taking bookings"
                               : fullyBooked
                               ? "Fully Booked"
-                              : "Book"}
+                              // Boutique says "Add to basket"; it still opens the booking sheet.
+                              : pageStyle.bookLabel ?? "Book"}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -4185,63 +4221,46 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                   {(() => {
                     const wEntry = userWaitlistMap[service.dbId];
+                    // Held: the slot is theirs for 15 minutes; it's paid for
+                    // from Bookings, so the chip goes there. No ✕ while held:
+                    // they pass on it from Bookings instead.
+                    if (wEntry?.status === "notified") {
+                      return (
+                        <TouchableOpacity
+                          style={[styles.waitlistChip, { borderColor: adaptiveAccentColor, backgroundColor: adaptiveAccentColor }]}
+                          onPress={() => {
+                            runAction(() => navigation.navigate("Bookings" as never));
+                          }}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="A slot is held for you. Open Bookings to confirm and pay."
+                        >
+                          <Text style={[styles.waitlistChipText, { color: "#fff" }]}>Held for you</Text>
+                          <Ionicons name="chevron-forward" size={11} color="#fff" />
+                        </TouchableOpacity>
+                      );
+                    }
                     if (wEntry) {
                       return (
                         <View
                           style={[
                             styles.waitlistChip,
-                            {
-                              borderColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "70"
-                                  : "#FF9500" + "70",
-                              backgroundColor:
-                                wEntry.status === "notified"
-                                  ? adaptiveAccentColor + "0D"
-                                  : "#FF950010",
-                            },
+                            { borderColor: adaptiveAccentColor + "70", backgroundColor: adaptiveAccentColor + "0D" },
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.waitlistChipText,
-                              {
-                                color:
-                                  wEntry.status === "notified"
-                                    ? adaptiveAccentColor
-                                    : "#FF9500",
-                              },
-                            ]}
-                          >
-                            {wEntry.status === "notified"
-                              ? "Slot Held — Confirm!"
-                              : `Waiting · #${wEntry.position}`}
+                          <Text style={[styles.waitlistChipText, { color: adaptiveAccentColor }]}>
+                            {placeInLineLabel(wEntry.placeInLine)}
                           </Text>
                           <TouchableOpacity
                             onPress={() => {
                               runAction(() => setLeaveConfirmEntry(wEntry));
                             }}
                             activeOpacity={0.6}
-                            hitSlop={{
-                              top: 6,
-                              bottom: 6,
-                              left: 6,
-                              right: 6,
-                            }}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Leave the ${service.name} waitlist`}
                           >
-                            <Text
-                              style={[
-                                styles.waitlistChipX,
-                                {
-                                  color:
-                                    wEntry.status === "notified"
-                                      ? adaptiveAccentColor
-                                      : "#FF9500",
-                                },
-                              ]}
-                            >
-                              ✕
-                            </Text>
+                            <Text style={[styles.waitlistChipX, { color: adaptiveAccentColor }]}>✕</Text>
                           </TouchableOpacity>
                         </View>
                       );
@@ -4347,11 +4366,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </>
         ) : (
           <ProfileHeroBackdrop
-            colors={provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]}
+            colors={provider.hasCustomGradient ? provider.gradient : [baseTheme.hero, baseTheme.bg]}
             finish={parseThemeKey(provider.profileTheme).finish}
             style={styles.heroImage}
           />
         )}
+        {/* Sheer: the black veil over the whole backdrop, behind the hero and
+            the see-through content sheet alike. */}
+        {veilTheme ? <VeilBackdrop style={styles.heroImage} /> : null}
 
         {/* Driven by this provider's hero, not theme.statusBar: their profile
             theme never follows the viewer's dark mode, so reading the viewer's
@@ -4762,7 +4784,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
 
               <Text style={[styles.waitlistPopupSub, { color: OP.sub }]}>
-                We'll notify you when a slot opens up.
+                If a slot that suits you opens, it's held for you for 15 minutes to confirm and pay, deposit and fee included. If you don't pay in time, you come off the waitlist and can rejoin.
               </Text>
 
               {/* Availability toggle */}
@@ -5084,7 +5106,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   ]}
                   numberOfLines={1}
                 >
-                  {leaveConfirmEntry.service_name_snapshot}
+                  {leaveConfirmEntry.serviceName}
                 </Text>
               )}
               <Text style={[styles.leavePopupBody, { color: OP.sub }]}>
@@ -5225,9 +5247,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 heroSub={heroSub}
                 heroIsDark={heroIsDark}
                 accent={adaptiveAccentColor}
+                heroColour={heroBgColor ?? OP.hero}
+                cardColour={OP.card}
                 photoUris={heroPhotoUris}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}
+                // Link-only providers have no Services section to jump to.
+                onBookNow={isLinkOnly ? undefined : jumpToServices}
                 renderLogo={(size) => (
                   <HeroLogo
                     size={size}
@@ -5563,11 +5589,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <View
               style={[
                 styles.contentSheet,
-                { minHeight: screenHeight, backgroundColor: OP.bg },
+                { minHeight: screenHeight, backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg },
                 // With a background image, inset the sheet so the photo shows
                 // along its sides — the content reads as a card floating over
-                // the image rather than covering it edge to edge.
-                provider.backgroundImage ? styles.contentSheetFloating : null,
+                // the image rather than covering it edge to edge. A veil page
+                // always floats: its sheet is a see-through glass card.
+                provider.backgroundImage || veilTheme ? styles.contentSheetFloating : null,
+                veilTheme ? styles.contentSheetGlass : null,
               ]}
             >
               {/* Cover: a bar of links to the main sections. */}
@@ -5607,16 +5635,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </View>
               ) : null}
 
-              {/* Templates only: their policy pictures as story circles; a
-                  tap opens them full screen, one page at a time. Classic keeps
-                  the round button on the About card. */}
-              {pageStyle.key !== "classic" ? (
-                <PolicyStoryRings
-                  urls={policyPages}
-                  accent={adaptiveAccentColor}
-                  sheet={OP.bg}
-                  onOpen={setPolicyStoryIndex}
-                />
+              {/* Templates only, when Branding → Policy Pictures is Story:
+                  their policy pictures as story circles; a tap opens them full
+                  screen, one page at a time. Classic keeps the round button on
+                  the About card. */}
+              {pageStyle.key !== "classic" && policyPlacement === "top" && policyPages.length > 0 ? (
+                <View ref={policyPagesRef} collapsable={false}>
+                  <PolicyStoryRings
+                    urls={policyPages}
+                    accent={adaptiveAccentColor}
+                    sheet={OP.bg}
+                    onOpen={setPolicyStoryIndex}
+                  />
+                </View>
               ) : null}
 
               {!pageStyle.separateAboutAndPolicies ? (
@@ -5932,18 +5963,38 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
               )}
 
-              {/* Templates only: their policy pictures in the page itself,
-                  after the price list (Branding → Policy Pictures picks Melt
-                  in or Bleed). Classic keeps them behind the round button. */}
-              {pageStyle.key !== "classic" && policyPages.length > 0 ? (
+              {/* Templates only: their policy pictures after the price list,
+                  in the design Branding → Policy Pictures picks. Story puts
+                  them at the top instead. Classic keeps them behind the round
+                  button. */}
+              {pageStyle.key !== "classic" && policyPages.length > 0 && policyPlacement === "afterServices" ? (
                 <View ref={policyPagesRef} collapsable={false}>
-                  <PolicyPagesInline
-                    urls={policyPages}
-                    edges={policyEdges}
-                    look={parseThemeKey(provider.profileTheme).policyLook}
-                    palette={sectionPalette}
-                    onOpen={() => setShowPolicyImage(true)}
-                  />
+                  {policyLook === "framed" || policyLook === "swipe" || policyLook === "fan" || policyLook === "peek" ? (
+                    <PolicyPagesShowcase
+                      urls={policyPages}
+                      edges={policyEdges}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpenPage={setPolicyStoryIndex}
+                      onOpenAll={() => setShowPolicyImage(true)}
+                    />
+                  ) : policyLook === "thumbs" || policyLook === "button" ? (
+                    <PolicyPagesCompact
+                      urls={policyPages}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpenPage={setPolicyStoryIndex}
+                      onOpenAll={() => setShowPolicyImage(true)}
+                    />
+                  ) : (
+                    <PolicyPagesInline
+                      urls={policyPages}
+                      edges={policyEdges}
+                      look={policyLook}
+                      palette={sectionPalette}
+                      onOpen={() => setShowPolicyImage(true)}
+                    />
+                  )}
                 </View>
               ) : null}
 
@@ -6112,6 +6163,14 @@ const styles = StyleSheet.create({
   // from both edges so the photo stays visible down its sides.
   contentSheetFloating: {
     marginHorizontal: 10,
+  },
+  // Sheer: the sheet is see-through glass over the veil, edged in a hairline.
+  contentSheetGlass: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: "rgba(255,255,255,0.22)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   skeletonShell: {
     flex: 1,

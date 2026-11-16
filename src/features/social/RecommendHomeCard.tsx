@@ -22,13 +22,13 @@ interface Props {
   error: string | null;
   onRecommend: () => void;
   onBookAgain: () => void;
-  onNotNow: () => void;
+  onClose: () => void;
   P: AppTheme;
   errorColour: string;
 }
 
 export function RecommendHomeCard({
-  providerName, providerLogoUri, bookingDate, busy, error, onRecommend, onBookAgain, onNotNow, P, errorColour,
+  providerName, providerLogoUri, bookingDate, busy, error, onRecommend, onBookAgain, onClose, P, errorColour,
 }: Props) {
   return (
     <View style={[styles.card, { backgroundColor: P.card, borderColor: P.accent }]}>
@@ -53,11 +53,11 @@ export function RecommendHomeCard({
           <Text style={[styles.body, { color: P.sub }]}>Recommend them to the people who follow you.</Text>
         </View>
         <TouchableOpacity
-          onPress={() => { hapticLight(); onNotNow(); }}
+          onPress={() => { hapticLight(); onClose(); }}
           style={styles.close}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
-          accessibilityLabel="Not now"
+          accessibilityLabel="Close recommendation"
           activeOpacity={0.6}
         >
           <Ionicons name="close" size={18} color={P.sub} />

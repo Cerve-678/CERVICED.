@@ -9,6 +9,12 @@
 //     their own colour (A) — Branding → Policy Pictures.
 //   - PolicyStoryRings + PolicyStoryViewer: story-style circles near the top
 //     of the profile that open the pages full screen, one at a time (D).
+//   - PolicyPagesCompact: the subtle choices — a small row of page
+//     thumbnails, or just a "Read my policy" button — after the services.
+//   - PolicyPagesShowcase: more designs after the services — framed prints,
+//     a swipe-through, a fanned stack, or a peek at the top page.
+//
+// Which one shows is the provider's pick (pageStyles.policyPicturePlacement).
 //
 // Both lean on each page's edge colours (policyImages.ts): saved at upload,
 // or worked out on this phone for pages uploaded before that.
@@ -183,6 +189,272 @@ export function PolicyPagesInline({
       </TouchableOpacity>
     </View>
   );
+}
+
+// ── Thumbnails and the button ────────────────────────────────────────────────
+
+/**
+ * The subtle choices, after the services under the same heading as the full
+ * pages: a row of small page thumbnails (a tap opens that page full screen),
+ * or a single "Read my policy" button that opens the pages to read.
+ */
+export function PolicyPagesCompact({
+  urls,
+  look,
+  palette,
+  onOpenPage,
+  onOpenAll,
+}: {
+  urls: readonly string[];
+  look: "thumbs" | "button";
+  palette: PageStylePalette;
+  /** Opens one page full screen, like a story (thumbnails). */
+  onOpenPage: (index: number) => void;
+  /** Opens every page in the zoomable reader (the button). */
+  onOpenAll: () => void;
+}) {
+  if (urls.length === 0) return null;
+  const ink = sheetInk(palette.background);
+  const pageCount = urls.length === 1 ? "1 page" : `${urls.length} pages`;
+  return (
+    <View style={styles.compactWrap}>
+      <PageSectionHeading section="policyPages" palette={palette} />
+      {look === "thumbs" ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow} style={styles.thumbScroll}>
+          {urls.map((url, index) => (
+            <TouchableOpacity
+              key={url}
+              style={styles.thumbItem}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                onOpenPage(index);
+              }}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={urls.length === 1 ? "Open their policy" : `Open policy page ${index + 1} of ${urls.length}`}
+            >
+              <View style={[styles.thumb, { borderColor: ink.border }]}>
+                <Image source={{ uri: url }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" transition={0} />
+              </View>
+              <Text style={[styles.thumbLabel, { color: ink.sub }]} numberOfLines={1}>
+                {urls.length === 1 ? "Policy" : `Page ${index + 1}`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : (
+        <TouchableOpacity
+          style={[styles.readButton, { borderColor: ink.border }]}
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            onOpenAll();
+          }}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Read my policy, ${pageCount}`}
+        >
+          <Ionicons name="document-text-outline" size={18} color={ink.text} />
+          <Text style={[styles.readButtonText, { color: ink.text }]}>Read my policy</Text>
+          <Text style={[styles.readButtonCount, { color: ink.sub }]}>{pageCount}</Text>
+          <Ionicons name="chevron-forward" size={16} color={ink.sub} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+// ── Framed, Swipe, Fanned, Peek ──────────────────────────────────────────────
+
+/** A page at its own shape: the width given, the height from the picture. */
+function SizedPage({ uri, width, background }: { uri: string; width: number; background: string }) {
+  const [ratio, setRatio] = useState<number | null>(null);
+  return (
+    <Image
+      source={{ uri }}
+      style={{ width, height: ratio ? width / ratio : width * 1.3, backgroundColor: background }}
+      contentFit="cover"
+      transition={0}
+      onLoad={event => {
+        const { width: w, height: h } = event.source;
+        if (w > 0 && h > 0) setRatio(w / h);
+      }}
+    />
+  );
+}
+
+/**
+ * More ways to set the pages in the page, after the services:
+ *   - framed: each page as a print in a card-coloured mount with a soft shadow
+ *   - swipe: full width, one page at a time, with dots
+ *   - fan: up to three pages fanned like cards, the first on top
+ *   - peek: the top of the first page fading into the page, then a button
+ */
+export function PolicyPagesShowcase({
+  urls,
+  edges,
+  look,
+  palette,
+  onOpenPage,
+  onOpenAll,
+}: {
+  urls: readonly string[];
+  edges: Record<string, PolicyImageEdge>;
+  look: "framed" | "swipe" | "fan" | "peek";
+  palette: PageStylePalette;
+  onOpenPage: (index: number) => void;
+  onOpenAll: () => void;
+}) {
+  const { width: screenWidth } = useWindowDimensions();
+  const [current, setCurrent] = useState(0);
+  if (urls.length === 0) return null;
+  // The content sheet keeps 20pt each side.
+  const width = screenWidth - 40;
+  const ink = sheetInk(palette.background);
+  const edgeOf = (url: string) => edges[url]?.top ?? palette.cardBackground;
+  const pageLabel = (index: number) =>
+    urls.length > 1 ? `Policy page ${index + 1} of ${urls.length}. Tap to read it up close` : "Policy page. Tap to read it up close";
+  const readMore = (
+    <TouchableOpacity
+      style={[styles.readCloser, { borderColor: ink.border }]}
+      onPress={onOpenAll}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel="Read the full policy"
+    >
+      <Ionicons name="document-text-outline" size={16} color={ink.text} />
+      <Text style={[styles.readCloserText, { color: ink.text }]}>Read the full policy</Text>
+    </TouchableOpacity>
+  );
+
+  let body: React.ReactNode;
+  if (look === "framed") {
+    body = (
+      <View style={styles.framedList}>
+        {urls.map((url, index) => (
+          <TouchableOpacity
+            key={url}
+            activeOpacity={0.94}
+            onPress={onOpenAll}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={pageLabel(index)}
+            style={[styles.frame, { backgroundColor: palette.cardBackground }]}
+          >
+            <SizedPage uri={url} width={width - 24} background={edgeOf(url)} />
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  } else if (look === "swipe") {
+    body = (
+      <>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={[styles.swipe, { width }]}
+          onMomentumScrollEnd={event => setCurrent(Math.round(event.nativeEvent.contentOffset.x / width))}
+        >
+          {urls.map((url, index) => (
+            <TouchableOpacity
+              key={url}
+              activeOpacity={0.94}
+              onPress={() => onOpenPage(index)}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={pageLabel(index)}
+            >
+              <Image
+                source={{ uri: url }}
+                style={{ width, height: width * 1.3, backgroundColor: edgeOf(url) }}
+                contentFit="contain"
+                transition={0}
+              />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        {urls.length > 1 ? (
+          <View style={styles.dots} accessible accessibilityLabel={`Page ${current + 1} of ${urls.length}`}>
+            {urls.map((url, index) => (
+              <View key={url} style={[styles.dot, { backgroundColor: ink.text, opacity: index === current ? 1 : 0.25 }]} />
+            ))}
+          </View>
+        ) : null}
+      </>
+    );
+  } else if (look === "fan") {
+    const fanned = urls.slice(0, 3);
+    // The first page on top, the others tilted out behind it.
+    const tilts = fanned.length === 1 ? [0] : fanned.length === 2 ? [-5, 6] : [-9, 0, 9];
+    const order = fanned.map((_, i) => i).reverse();
+    body = (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => onOpenPage(0)}
+        accessibilityRole="button"
+        accessibilityLabel={urls.length > 1 ? `Open their policy, ${urls.length} pages` : "Open their policy"}
+        style={styles.fan}
+      >
+        {order.map(i => {
+          const tilt = tilts[i] ?? 0;
+          return (
+            <View
+              key={fanned[i]}
+              style={[
+                styles.fanCard,
+                {
+                  backgroundColor: edgeOf(fanned[i]!),
+                  transform: [{ translateX: tilt * 5 }, { rotate: `${tilt}deg` }],
+                },
+              ]}
+            >
+              <Image source={{ uri: fanned[i]! }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="top" transition={0} />
+            </View>
+          );
+        })}
+        <Text style={[styles.fanCaption, { color: ink.sub }]}>
+          {urls.length > 1 ? `${urls.length} pages · Tap to read` : "Tap to read"}
+        </Text>
+      </TouchableOpacity>
+    );
+  } else {
+    // peek
+    const first = urls[0]!;
+    body = (
+      <>
+        <TouchableOpacity
+          activeOpacity={0.94}
+          onPress={onOpenAll}
+          accessibilityRole="imagebutton"
+          accessibilityLabel="The top of their policy. Tap to read it all"
+          style={[styles.peek, { width }]}
+        >
+          <SizedPage uri={first} width={width} background={edgeOf(first)} />
+          <LinearGradient
+            colors={[withAlphaHex(palette.background, 0), palette.background]}
+            style={styles.peekFade}
+            pointerEvents="none"
+          />
+        </TouchableOpacity>
+        {readMore}
+      </>
+    );
+  }
+
+  return (
+    <View style={styles.compactWrap}>
+      <PageSectionHeading section="policyPages" palette={palette} />
+      {body}
+      {look === "framed" || look === "swipe" ? readMore : null}
+    </View>
+  );
+}
+
+/** A #RRGGBB colour at an opacity, so a fade ends in the page's own colour
+ *  rather than through grey (a plain "transparent" fades through black). */
+function withAlphaHex(hex: string, alpha: number): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return `rgba(0,0,0,${alpha})`;
+  const n = parseInt(match[1]!, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
 // ── Story rings ──────────────────────────────────────────────────────────────
@@ -376,6 +648,35 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   readCloserText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 13 },
+
+  compactWrap: { marginBottom: 26 },
+  framedList: { gap: 18 },
+  frame: {
+    padding: 12, borderRadius: 4, alignSelf: "center",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.14, shadowRadius: 12, elevation: 4,
+  },
+  swipe: { alignSelf: "center", borderRadius: 6 },
+  dots: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 12 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  fan: { height: 270, alignItems: "center", justifyContent: "flex-start", paddingTop: 8 },
+  fanCard: {
+    position: "absolute", top: 8, width: 150, height: 200, borderRadius: 6, overflow: "hidden",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.16, shadowRadius: 8, elevation: 3,
+  },
+  fanCaption: { position: "absolute", bottom: 0, fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 13 },
+  peek: { alignSelf: "center", height: 220, overflow: "hidden", borderRadius: 6 },
+  peekFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 120 },
+  thumbScroll: { marginHorizontal: -20 },
+  thumbRow: { gap: 12, paddingHorizontal: 20 },
+  thumbItem: { alignItems: "center", gap: 6 },
+  thumb: { width: 84, height: 112, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+  thumbLabel: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 12 },
+  readButton: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    minHeight: 52, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1,
+  },
+  readButtonText: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 15, flex: 1 },
+  readButtonCount: { fontFamily: "Jura-VariableFont_wght", fontWeight: "600", fontSize: 13 },
 
   ringScroll: { marginBottom: 18, marginHorizontal: -20 },
   ringRow: { gap: 16, paddingHorizontal: 20 },

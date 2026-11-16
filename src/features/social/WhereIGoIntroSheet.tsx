@@ -24,21 +24,19 @@ interface Props {
 export function WhereIGoIntroSheet({ visible, busy, error, onGotIt, onTurnOff, onClose, P, errorColour }: Props) {
   return (
     <Sheet visible={visible} onClose={onClose} P={P}>
-      {/* A gradient stands in for a provider until there is a real one to show. */}
-      <View style={[styles.preview, { backgroundColor: P.accentDim }]} accessible={false}>
-        <View style={styles.faces}>
-          <LinearGradient
-            colors={['#F5B7D2', '#9A84C5', '#4A6B8F']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.face, { borderColor: P.card }]}
-          />
-          <View style={[styles.face, styles.overlap, { backgroundColor: P.accent, borderColor: P.card }]}>
-            <Text style={[styles.faceText, { color: P.onAccent }]}>YOU</Text>
-          </View>
+      {/* The provider card is a gradient until there is a real provider to show. */}
+      <LinearGradient
+        colors={['#3F1E36', '#8F4D79', '#4A6B8F']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.preview}
+        accessible={false}
+      >
+        <View style={[styles.face, { backgroundColor: P.accent, borderColor: P.card }]}>
+          <Text style={[styles.faceText, { color: P.onAccent }]}>YOU</Text>
         </View>
-        <Text style={[styles.previewLabel, { color: P.text }]}>A provider you visit</Text>
-      </View>
+        <Text style={styles.previewLabel}>A provider you visit</Text>
+      </LinearGradient>
       <Text style={[styles.title, { color: P.text }]}>Your followers can see where you go</Text>
       <Text style={[styles.body, { color: P.sub }]}>
         From now on, your face shows on the providers you visit. Never what you had done.
@@ -54,11 +52,9 @@ export function WhereIGoIntroSheet({ visible, busy, error, onGotIt, onTurnOff, o
 
 const styles = StyleSheet.create({
   preview: { height: 110, borderRadius: 18, padding: 12, justifyContent: 'space-between' },
-  faces: { flexDirection: 'row', alignSelf: 'flex-end' },
-  face: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  overlap: { marginLeft: -8 },
+  face: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, alignSelf: 'flex-end', alignItems: 'center', justifyContent: 'center' },
   faceText: { fontSize: 8, fontWeight: '700' },
-  previewLabel: { fontFamily: FONT_DISPLAY, fontSize: 15 },
+  previewLabel: { fontFamily: FONT_DISPLAY, fontSize: 15, color: '#FFFFFF' },
   title: { fontFamily: FONT_BODY, fontSize: 20, fontWeight: '700' },
   body: { fontFamily: FONT_BODY, fontSize: 14, lineHeight: 20 },
   buttons: { flexDirection: 'row', gap: 10, marginTop: 4 },
