@@ -27,7 +27,8 @@ export type PageStyleKey =
   | 'callingCard'
   | 'boutique'
   | 'gazette'
-  | 'novel';
+  | 'novel'
+  | 'studio';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -54,7 +55,8 @@ export type PageHeading =
   | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
   | 'shopSerif' // a big serif title on the left, like a shop's department heading (Boutique)
   | 'newsRule'  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
-  | 'chapter';   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
+  | 'chapter'   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
+  | 'chunkyCaps'; // a lowercase script word, then the title in huge chunky caps, centred (Studio)
 
 /** What a section sits on. */
 export type PageCards =
@@ -77,7 +79,8 @@ export type PageCards =
   | 'clipped' // a near-square card with an inner rule, held at the top by a clip in the accent (Calling Card)
   | 'product' // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
   | 'ruled'   // straight on the page, each item over a printed rule (Gazette)
-  | 'pages';   // a square card with two page edges showing behind it, like a closed book (Novel)
+  | 'pages'   // a square card with two page edges showing behind it, like a closed book (Novel)
+  | 'tabbed';  // a square solid card with a little tab on its top edge naming the section (Studio)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -100,7 +103,8 @@ export type PagePolicies =
   | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
   | 'accordion'  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
   | 'columns'   // two-up newspaper columns boxed by ink rules (Gazette)
-  | 'numberedRules'; // numbered paragraphs, the label in small caps running into its value (Novel)
+  | 'numberedRules' // numbered paragraphs, the label in small caps running into its value (Novel)
+  | 'membership';  // two-up square tiles in blush, the card colour and a deep accent, like a studio's price plans (Studio)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -132,6 +136,7 @@ export type PageHero =
   | 'callingCard' // satin in the theme colour, and a cream calling card held by an accent clip with the logo and name
   | 'shop'      // the top of an online boutique: a running strip, the name as a wordmark, what they do as the menu, their photo with Book now (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
+  | 'studio'    // a studio website's top: a deep bar with the name pressed in as a lowercase wordmark, their photo with what they do in huge caps
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -351,6 +356,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     key: 'novel', name: 'Novel', description: 'A book\'s title page with your name set in old type, sections as chapters',
     heading: 'chapter', cards: 'pages', policies: 'numberedRules', logo: 'circle',
     hero: 'titlePage', aboutInHero: false, pagePhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-16: from the owner's references, a burgundy-and-blush studio
+  // website ("TURN UP the HEAT.") and an embossed lowercase wordmark ("imani.").
+  {
+    key: 'studio', name: 'Studio', description: 'A studio website: your name pressed into a bar, what you do in huge caps across your photo',
+    heading: 'chunkyCaps', cards: 'tabbed', policies: 'membership', logo: 'circle',
+    hero: 'studio', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
 ];

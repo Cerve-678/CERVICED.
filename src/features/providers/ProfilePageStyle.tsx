@@ -108,6 +108,20 @@ const GAZETTE_HEADLINES: Record<PageSectionKey, string> = {
   policyPages: "Before You Book",
 };
 
+/** Studio's card tabs: a short label on the tab above each section's card. */
+const STUDIO_TABS: Record<PageSectionKey, string> = {
+  about: "Meet me",
+  policies: "Read first",
+  services: "Book in",
+  reviews: "Kind words",
+  hours: "Open",
+  contact: "Say hi",
+  info: "Good to know",
+  portfolio: "My work",
+  specialities: "What I love",
+  policyPages: "Before you book",
+};
+
 /** A section heading in the page style's voice. Classic's heading lives inside
  *  the card, so it's drawn by PageSection, not here. */
 export function PageSectionHeading({
@@ -314,6 +328,19 @@ export function PageSectionHeading({
           </Text>
         </View>
       );
+    case "chunkyCaps": {
+      // Studio: a lowercase script word in the accent, then the title in
+      // huge chunky caps, on one centred line where it fits.
+      const [lead, rest] = headingPair(section);
+      return (
+        <View {...a11y} accessible style={headingStyles.stack}>
+          <Text style={[headingStyles.chunkyCaps, { color: ink }]}>
+            <Text style={[headingStyles.chunkyScript, { color: accent }]}>{lead.toLowerCase()} </Text>
+            {rest.toUpperCase()}
+          </Text>
+        </View>
+      );
+    }
     case "chapter": {
       // Novel: "CHAPTER III" in small caps, the title in italic, a foil-style
       // ornament under it (rule, diamond, rule) in the accent.
@@ -485,6 +512,24 @@ export function PageSection({
     : pageStyle.cards === "offset" ? 22
     : 18;
 
+  if (pageStyle.cards === "tabbed") {
+    // Studio: a square solid card with a little tab on its top edge, in the
+    // card's own colour, naming the section.
+    return (
+      <View style={[surfaceStyles.block, style]}>
+        {heading}
+        <View style={[surfaceStyles.tab, { backgroundColor: palette.cardBackground }]}>
+          <Text style={[surfaceStyles.tabText, { color: palette.text }]} numberOfLines={1}>
+            {STUDIO_TABS[section].toUpperCase()}
+          </Text>
+        </View>
+        <View style={[surfaceStyles.solid, surfaceStyles.tabbedCard, { backgroundColor: palette.cardBackground }]}>
+          {children}
+        </View>
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "pages") {
     // Novel: a square card with two page edges peeking out below and to the
     // right of it, like the closed block of a book.
@@ -595,6 +640,7 @@ function isCentredHeading(style: PageStyle): boolean {
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
     || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "lacePair"
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
+    || style.heading === "chunkyCaps"
   );
 }
 
@@ -834,6 +880,9 @@ export function serviceCardSurface(
         borderBottomColor: withAlpha(sheetInk(colours.sheet).text, 0.4),
         marginBottom: 0,
       };
+    case "tabbed":
+      // Studio: a square solid block, no outline, like a studio's class card.
+      return { ...flat, backgroundColor: colours.card, borderRadius: 0 };
     case "pages":
       // A page: square, a fine edge, a little lift off the paper under it.
       return {
@@ -899,6 +948,7 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
     || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
     || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion" || layout === "columns"
+    || layout === "membership"
   );
 }
 
@@ -1285,6 +1335,29 @@ export function StyledPolicyList({
           );
         }
 
+        if (layout === "membership") {
+          // Studio: square tiles like a studio's price plans, cycling blush,
+          // the card colour and a deep shade of the accent.
+          const index = rows.indexOf(row);
+          const fills = [blend(palette.accent, "#FFFFFF", 0.72), palette.cardBackground, blend(palette.accent, "#000000", 0.35)];
+          const fill = fills[index % 3]!;
+          const tileInk = onAccentInk(fill);
+          return (
+            <View key={row.label} style={[policyStyles.cell, policyStyles.membership, { backgroundColor: fill }]}>
+              <Text style={[policyStyles.membershipLabel, { color: tileInk.text }]}>{row.label.toUpperCase()}</Text>
+              <Text style={[policyStyles.smallValue, policyStyles.centreText, { color: tileInk.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, policyStyles.centreText, { color: tileInk.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? (
+                <View style={[policyStyles.membershipTag, { borderColor: tileInk.text }]}>
+                  <Text style={[policyStyles.membershipTagText, { color: tileInk.text }]}>{row.tag.toUpperCase()}</Text>
+                </View>
+              ) : null}
+            </View>
+          );
+        }
+
         if (layout === "stickers") {
           // Groovy: filled tiles, each tilted a little, cycling through the accent,
           // a pale accent, an outlined card and the ink.
@@ -1443,6 +1516,10 @@ const headingStyles = StyleSheet.create({
   // Gazette: Oswald, between a thick rule and a thin one.
   newsRule: { borderTopWidth: 4, borderBottomWidth: 1, paddingTop: 4, paddingBottom: 3, marginBottom: 12, alignSelf: "stretch" },
   newsTitle: { fontFamily: "Oswald-Bold", fontSize: 24, lineHeight: 31, letterSpacing: 0.3 },
+  // Studio: Lilita One caps with an Ephesis lead word. The line is set for the
+  // script (≥1.45× its size) so its loops aren't cropped.
+  chunkyCaps: { fontFamily: "LilitaOne-Regular", fontSize: 32, lineHeight: 52, letterSpacing: 0.4, textAlign: "center", paddingHorizontal: 8 },
+  chunkyScript: { fontFamily: "Ephesis-Regular", fontSize: 34, letterSpacing: 0 },
   // Novel: IM Fell English, an old book face no other style uses.
   chapterNumber: { fontFamily: "IMFellEnglishSC-Regular", fontSize: 13, lineHeight: 17, letterSpacing: 3.6 },
   chapterTitle: { fontFamily: "IMFellEnglish-Italic", fontSize: 28, lineHeight: 37, textAlign: "center", marginBottom: 2 },
@@ -1472,6 +1549,10 @@ const surfaceStyles = StyleSheet.create({
     overflow: "hidden",
   },
   square: { borderRadius: 0 },
+  // Studio: the tab sits on the card's top edge, left of centre.
+  tab: { alignSelf: "flex-start", marginLeft: 22, paddingHorizontal: 16, paddingTop: 7, paddingBottom: 5 },
+  tabText: { fontFamily: "LilitaOne-Regular", fontSize: 10, lineHeight: 14, letterSpacing: 1.6 },
+  tabbedCard: { borderRadius: 0 },
   onPage: { marginBottom: 26 },
   onPageRule: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 22 },
   block: { marginBottom: 24 },
@@ -1565,6 +1646,10 @@ const policyStyles = StyleSheet.create({
   dividedBottom: { borderBottomWidth: 1.5 },
   dividedLabel: { fontFamily: "Montserrat-ExtraBold", fontSize: 10, letterSpacing: 1.6, marginTop: 4, textAlign: "center" },
   tile: { borderRadius: 14, padding: 14, gap: 6 },
+  membership: { borderRadius: 0, paddingHorizontal: 12, paddingVertical: 16, alignItems: "center", gap: 2 },
+  membershipLabel: { fontFamily: "LilitaOne-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 0.6, textAlign: "center" },
+  membershipTag: { borderWidth: 1, borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2, marginTop: 6 },
+  membershipTagText: { fontFamily: "LilitaOne-Regular", fontSize: 9, lineHeight: 12, letterSpacing: 0.8 },
   tileLabel: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 13, letterSpacing: 1 },
   sticker: { borderRadius: 22, padding: 14 },
   stickerLabel: { fontFamily: "Fraunces-SoftBlackItalic", fontSize: 16 },
