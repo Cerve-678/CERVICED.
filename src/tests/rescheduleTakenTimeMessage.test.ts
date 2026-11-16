@@ -7,7 +7,7 @@ import { join } from 'path';
 // of which exists, so building it failed and the provider saw a generic error.
 describe('reschedule offer: a taken time is named', () => {
   const sql = readFileSync(
-    join(__dirname, '..', '..', 'supabase/migrations/20261113230000_reschedule_taken_time_message.sql'),
+    join(__dirname, '..', '..', 'supabase/migrations/20261116090000_reschedule_taken_time_message.sql'),
     'utf8',
   ).split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
 

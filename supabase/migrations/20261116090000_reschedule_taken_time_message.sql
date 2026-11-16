@@ -10,8 +10,9 @@
 --
 -- Only the two message expressions change. Rebuilt from live
 -- (pg_get_functiondef, 2026-11-14); the md5 guard refuses to run if it
--- changed since. Numbered above the queued 20261113200000 (#505),
--- 20261113210000 (#474) and 20261113220000 (#473), none of which touch it.
+-- changed since. Renumbered 2026-11-16 from 20261113230000 to sit above the
+-- live frontier (20261115090000); #505, #474 and the dispute change, now
+-- live, do not touch it, and #473 (renumbered 20261116100000) does not either.
 
 BEGIN;
 
@@ -77,7 +78,7 @@ END;
 $function$;
 
 INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES ('20261113230000', 'reschedule_taken_time_message')
+VALUES ('20261116090000', 'reschedule_taken_time_message')
 ON CONFLICT (version) DO NOTHING;
 
 COMMIT;
