@@ -310,7 +310,7 @@
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
 ### `src/features/providers/heroes/` (9)
-- `BoutiqueHero.tsx` — **BoutiqueHero** · onScrollEnd
+- `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
