@@ -9,7 +9,9 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1207,6 +1209,20 @@ function ProfilePreviewScreen({
 }) {
   const insets = useSafeAreaInsets();
   const onAccent = isDarkColor(accent) ? '#FFFFFF' : '#1F1A18';
+  const { width: screenWidth } = useWindowDimensions();
+  // The chips row opens on the style they picked, centred, rather than at
+  // Classic (owner, 2026-11-17), and a chip tapped later slides to the middle.
+  const chipsRef = useRef<ScrollViewInstance>(null);
+  const chipFrames = useRef(new Map<PageStyleKey, { x: number; width: number }>());
+  const openedOnPick = useRef(false);
+  const centreChip = useCallback((key: PageStyleKey, animated: boolean) => {
+    const frame = chipFrames.current.get(key);
+    if (!frame) return;
+    chipsRef.current?.scrollTo({ x: Math.max(0, frame.x + frame.width / 2 - screenWidth / 2), animated });
+  }, [screenWidth]);
+  useEffect(() => {
+    if (openedOnPick.current) centreChip(pageStyle, true);
+  }, [pageStyle, centreChip]);
   return (
     <View style={previewStyles.root}>
       {children}
@@ -1226,13 +1242,22 @@ function ProfilePreviewScreen({
           Picking one here is the same as picking it in Page Style; nothing
           saves until Save. */}
       <View style={[previewStyles.bar, { paddingBottom: insets.bottom + 12 }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={previewStyles.chips}>
+        <ScrollView ref={chipsRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={previewStyles.chips}>
           {PAGE_STYLES.map(style => {
             const selected = style.key === pageStyle;
             const locked = isLocked(style.key);
             return (
               <TouchableOpacity
                 key={style.key}
+                onLayout={event => {
+                  const { x, width } = event.nativeEvent.layout;
+                  chipFrames.current.set(style.key, { x, width });
+                  // Jump straight to their pick the first time it's laid out.
+                  if (selected && !openedOnPick.current) {
+                    openedOnPick.current = true;
+                    centreChip(style.key, false);
+                  }
+                }}
                 style={[previewStyles.chip, selected && { backgroundColor: accent, borderColor: accent }]}
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
