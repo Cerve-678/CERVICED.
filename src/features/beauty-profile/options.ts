@@ -66,6 +66,19 @@ export const ALLERGENS        = [
 // Beauty Profile editor shows these; sign-up doesn't ask them.
 export const NAIL_LENGTHS     = ['Natural / bare', 'Short', 'Medium', 'Long', 'Extra long'];
 export const NAIL_SHAPES      = ['Round', 'Square', 'Squoval', 'Oval', 'Almond', 'Coffin', 'Ballerina', 'Stiletto', 'Lipstick', 'Flare'];
+// Added 2026-11-17 (owner: "nails should have better questions"). Asked in
+// this order: what their own nails are like, what they get done, then length,
+// shape, looks and colours, each leading the next (tailoredOptions.ts).
+export const NAIL_CONDITIONS  = [
+  'Strong & healthy', 'Weak / peeling', 'Brittle / break easily', 'Bitten', 'Ridged', 'Short nail beds', 'Damaged from extensions',
+];
+export const NAIL_SERVICES    = [
+  'Gel polish', 'BIAB / builder gel', 'Acrylic', 'Gel extensions (Gel-X)', 'Hard gel', 'Natural manicure', 'Press-ons', 'Pedicure',
+];
+export const NAIL_STYLES      = [
+  'Plain colour', 'French tip', 'Micro French', 'Chrome', 'Ombré', 'Nail art', 'Glitter', 'Minimal / negative space', '3D / charms', 'Milky / jelly',
+];
+export const NAIL_COLOURS     = ['Nudes', 'Milky white', 'Pinks', 'Reds', 'Darks', 'Pastels', 'Brights / neons', 'Seasonal'];
 export const LASH_STYLES      = [
   'Natural', 'Classic', 'Wispy', 'Hybrid', 'Wet look', 'Cat eye', 'Doll eye',
   'Dramatic', 'Russian volume', 'Mega volume', 'Lifted natural lashes',

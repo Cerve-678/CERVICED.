@@ -3,6 +3,8 @@ import {
   BROW_STYLES, LASH_STYLES, MAKEUP_FINISH, NAIL_SHAPES, SCALP_CONDITIONS, SKIN_CONCERNS, TREATMENT_HISTORY,
 } from '../features/beauty-profile/options';
 import { suitedIdeas } from '../features/beauty-profile/suitedIdeas';
+import { buildMaintenanceSuggestions, EMPTY_SETUP_ANSWERS } from '../utils/maintenanceSuggestions';
+import { NAIL_SERVICES } from '../features/beauty-profile/options';
 import { EMPTY_BEAUTY_DATA, type BeautyData } from '../types/beautyProfile';
 
 const profile = (p: Partial<BeautyData>): BeautyData => ({ ...EMPTY_BEAUTY_DATA, ...p });
@@ -71,4 +73,32 @@ describe('the Beauty Profile follows earlier answers', () => {
       .map(i => i.label);
     expect(labels).toEqual(expect.arrayContaining(['Wig install', 'Scalp treatment']));
   });
+
+  it('follows their natural nails into what suits them, then length', () => {
+    const service = tailoredOptions('nailService', profile({ nailCondition: ['Bitten'] }));
+    expect(service.because).toBe('your bitten nails');
+    expect(service.suited[0]).toBe('BIAB / builder gel');
+    expect([...service.suited, ...service.rest].sort()).toEqual([...NAIL_SERVICES].sort());
+    expect(tailoredOptions('nailService', profile({ nailCondition: ['Short nail beds'] })).suited[0]).toBe('Gel extensions (Gel-X)');
+    const length = tailoredOptions('nailLength', profile({ nailService: ['Acrylic'] }));
+    expect(length.suited).toEqual(['Medium', 'Long', 'Extra long']);
+    expect(length.because).toBe('Acrylic');
+    expect(tailoredOptions('nailColours', profile({ styleVibe: ['Natural'] })).suited).toEqual(['Nudes', 'Milky white', 'Pinks']);
+  });
 });
+
+describe('what they get done sets the nail reminder', () => {
+  const keys = (p: Partial<BeautyData>) =>
+    buildMaintenanceSuggestions(profile(p), EMPTY_SETUP_ANSWERS, [], new Date('2026-11-17T12:00:00Z')).map(s => s.typeKey);
+
+  it('suggests gel nails for BIAB and an infill for acrylic, not a general nail appointment', () => {
+    expect(keys({ nailService: ['BIAB / builder gel'], nailShape: ['Almond'] })).toContain('gel_nails');
+    expect(keys({ nailService: ['BIAB / builder gel'], nailShape: ['Almond'] })).not.toContain('nails_general');
+    expect(keys({ nailService: ['Acrylic'] })).toContain('acrylic_infill');
+  });
+
+  it('still suggests a nail appointment from shape alone', () => {
+    expect(keys({ nailShape: ['Almond'] })).toEqual(expect.arrayContaining(['nails_general', 'pedicure']));
+  });
+});
+

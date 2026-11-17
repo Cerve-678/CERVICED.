@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/beauty-profile-nails-and-look (Claude, 2026-11-17) — 20261117120000_beauty_profile_nail_questions, written, dry run passed, NOT applied
 ```
+
+### Pending 2026-11-17 (Beauty Profile nail questions)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261117120000 | `beauty_profile_nail_questions` | **Written, NOT applied.** Four nullable `text[]` columns on `users` (`nail_condition`, `nail_service`, `nail_style`, `nail_colours`); `beauty_profile_fields_for_category` shares them on NAILS and OTHER; `get_client_beauty_profile_for_booking` dropped and recreated with the four extra columns, grants restored (authenticated + service_role). Both redefined from live with md5 guards (`6ee6ddfa…`, `74cfaa79…`). Live max `20261116120000`; no open branch has a higher migration; three stale locks from 2026-11-09 branches (`feat/import-from-photo-pdf-link`, `feat/marketing-studio`, `fix/ship-account-hat-restore-fix`), all below the frontier — the user's call. Forced-rollback dry run passed 2026-11-17 (4 columns, NAILS fields, HAIR unchanged, anon can't execute, authenticated can, still SECURITY DEFINER); live max unchanged after. **Must be applied before the app change on this branch merges** — the app selects the new columns. |
 
 ### Applied 2026-11-16 (provider sees bank dispute state)
 
