@@ -10,7 +10,12 @@
 
 import type { Gender } from '../../types/beautyProfile';
 
-export const SCALP_CONDITIONS = ['Healthy', 'Dry', 'Oily', 'Sensitive', 'Flaky'];
+// Scalp, treatment history and skin concerns were widened 2026-11-17 so the
+// answers can follow the client's hair and skin (tailoredOptions.ts): a 4C
+// client gets the scalp, edge and protective-style answers that fit them.
+export const SCALP_CONDITIONS = [
+  'Healthy', 'Dry', 'Oily', 'Sensitive', 'Flaky', 'Itchy', 'Product build-up', 'Thinning edges', 'Tension from styles',
+];
 // Hair goals. The first six are the originals; the rest were added
 // 2026-11-09 so the profile can tell, say, a 4C client who wants length
 // retention and protective styles from someone after volume and highlights
@@ -48,7 +53,8 @@ export const SKIN_TYPES       = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensit
 
 export const SKIN_CONCERNS    = [
   'Acne prone', 'Hyperpigmentation', 'Rosacea', 'Eczema',
-  'Psoriasis', 'Fine lines', 'Dark circles', 'Dry patches', 'Oiliness', 'None',
+  'Psoriasis', 'Fine lines', 'Dark circles', 'Dry patches', 'Oiliness',
+  'Redness', 'Enlarged pores', 'Dullness', 'Uneven texture', 'None',
 ];
 export const SENSITIVE_AREAS  = ['Face', 'Arms', 'Legs', 'Back', 'Chest', 'Bikini / Brazilian', 'None'];
 export const ALLERGENS        = [
@@ -75,8 +81,9 @@ export const STYLE_VIBES      = ['Natural', 'Glam', 'Bold', 'Classic', 'Editoria
 // Shown under Hair. 'Lash extensions' was here until 2026-11-09; lashes have
 // their own status in Lashes & Brows ('Currently have extensions').
 export const TREATMENT_HISTORY = [
-  'Virgin hair', 'Coloured', 'Bleached / lightened', 'Relaxed / permed',
-  'Keratin / smoothing', 'Locs', 'Hair extensions', 'Microblading', 'Fillers / Botox', 'Chemical peels', 'None',
+  'Virgin hair', 'Natural (never relaxed)', 'Coloured', 'Bleached / lightened', 'Relaxed / permed', 'Texturised',
+  'Silk pressed', 'Keratin / smoothing', 'Locs', 'Braids / twists', 'Wigs / units', 'Hair extensions',
+  'Microblading', 'Fillers / Botox', 'Chemical peels', 'None',
 ];
 
 /**

@@ -5,7 +5,7 @@
 
 #generated
 
-**3964 functions** across **555 files**.
+**3971 functions** across **556 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -131,15 +131,16 @@
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 - `useSignInAsAccount.ts` — **useSignInAsAccount**
 
-### `src/features/beauty-profile/` (9)
+### `src/features/beauty-profile/` (10)
 - `BeautyProfileLanding.tsx` — **BeautyProfileLanding** · card · dateStub · go · groups · headline · ideas
-- `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
+- `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · renderTailored · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 - `options.ts` — **hairGoalsFor** · **hairTreatmentHistory**
 - `pickList.ts` — **formatPickList** · parseJsonArray · **toPickColumn** · **toPickList**
 - `profileRow.ts` — **beautyDataFromRow**
 - `suitedIdeas.ts` — add · **allSuitedIdeas** · from · goal · hairIdeas · **isSuitedCategory** · lashBrowIdeas · makeupIdeas · nailIdeas · **suitedIdeas**
+- `tailoredOptions.ts` — fromPicks · hairBecause · hairFamily · joinLower · split · **tailoredOptions**
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
 
 ### `src/features/bookings/` (31)
