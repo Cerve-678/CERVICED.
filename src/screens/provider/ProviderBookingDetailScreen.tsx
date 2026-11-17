@@ -1847,7 +1847,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
                         const hasSkin = (clientProfile.skinType.length > 0) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
                         const hasHair = (clientProfile.hairType.length > 0) || (clientProfile.scalpCondition.length > 0) || (clientProfile.hairGoals.length > 0) || (hairHistory.length > 0);
-                        const hasNails = (clientProfile.nailLength.length > 0) || (clientProfile.nailShape.length > 0);
+                        const hasNails = (clientProfile.nailLength.length > 0) || (clientProfile.nailShape.length > 0)
+                          || (clientProfile.nailCondition.length > 0) || (clientProfile.nailService.length > 0)
+                          || (clientProfile.nailStyle.length > 0) || (clientProfile.nailColours.length > 0);
                         const hasLashesBrows = (clientProfile.lashStyle.length > 0) || (clientProfile.lashStatus) || (clientProfile.browStyle.length > 0) || (clientProfile.browCondition.length > 0);
                         const hasMakeup = (clientProfile.makeupCoverage.length > 0) || (clientProfile.makeupFinish.length > 0) || (clientProfile.makeupEyes.length > 0) || (clientProfile.makeupLips.length > 0);
                         const hasStyle = clientProfile.styleVibe.length > 0;
@@ -1916,8 +1918,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                             {hasNails && (
                               <>
                                 {catLabel('Nails')}
+                                {clientProfile.nailCondition.length > 0 ? <Row label="Natural nails" value={formatPickList(clientProfile.nailCondition)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.nailService.length > 0 ? <Row label="Usually gets" value={formatPickList(clientProfile.nailService)} textColor={P.text} divColor={rowDiv} /> : null}
                                 {clientProfile.nailLength.length > 0 ? <Row label="Preferred length" value={formatPickList(clientProfile.nailLength)} textColor={P.text} divColor={rowDiv} /> : null}
                                 {clientProfile.nailShape.length > 0 ? <Row label="Preferred shape" value={formatPickList(clientProfile.nailShape)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.nailStyle.length > 0 ? <Row label="Looks" value={formatPickList(clientProfile.nailStyle)} textColor={P.text} divColor={rowDiv} /> : null}
+                                {clientProfile.nailColours.length > 0 ? <Row label="Colours" value={formatPickList(clientProfile.nailColours)} textColor={P.text} divColor={rowDiv} /> : null}
                               </>
                             )}
 

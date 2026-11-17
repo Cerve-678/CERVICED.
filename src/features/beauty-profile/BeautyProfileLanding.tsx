@@ -17,7 +17,7 @@ import React, { useMemo } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { TodoMark } from '../../components/TodoMark';
@@ -40,12 +40,15 @@ const L = {
   dark: '#3F1E36', darkInk: '#FBF2F8', darkSoft: '#D2B5C8', darkDisc: '#5A3550',
   deep: '#7A4A6C', track: '#EADFE6', ink: '#1E1019', soft: '#64525E', soft2: '#54434F',
   btn: '#3F1E36', btnInk: '#FFFFFF', future: '#A8A2B0',
+  // Your look stands out in the deeper plum (owner, 2026-11-17: "more prominent").
+  lookBg: '#7A4A6C', lookInk: '#FFFFFF', lookSoft: 'rgba(255,255,255,0.8)', lookTrack: 'rgba(255,255,255,0.25)', lookPill: 'rgba(255,255,255,0.16)',
 };
 const D: typeof L = {
   card: '#21181F', tint: '#35242F', warm: '#2E2A22',
   dark: '#E5ECF4', darkInk: '#151013', darkSoft: '#56606C', darkDisc: '#CBD6E3',
   deep: '#E5ECF4', track: '#33282F', ink: '#F4EDF2', soft: '#B4A5AF', soft2: '#C9BAC4',
   btn: '#E5ECF4', btnInk: '#151013', future: '#6E6670',
+  lookBg: '#CDBCE7', lookInk: '#151013', lookSoft: 'rgba(21,16,19,0.72)', lookTrack: 'rgba(21,16,19,0.16)', lookPill: 'rgba(21,16,19,0.08)',
 };
 
 const TODO_LABEL: Record<BeautyTodoField, TranslationKey> = {
@@ -160,7 +163,7 @@ export function BeautyProfileLanding({
   const ideas = useMemo(() => allSuitedIdeas(profile, 2).slice(0, 4), [profile]);
 
   const percent = Math.max(0, Math.min(100, Math.round(stats.overallPercent)));
-  const RING = 104;
+  const RING = 120;
   const STROKE = 9;
   const radius = (RING - STROKE) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -210,40 +213,52 @@ export function BeautyProfileLanding({
           <Ionicons name="sparkles" size={26} color={C.deep} style={styles.sparkle} />
         </View>
 
-        {/* Your look, and how complete the profile is. */}
-        <View style={[styles.lookCard, { backgroundColor: C.card }]}>
-          <TouchableOpacity style={styles.lookText} onPress={go(() => onEditCategory('general'))} activeOpacity={0.6} accessibilityRole="button">
-            <Text style={[styles.cap, { color: C.soft }]}>{t('beautyProfile.hello.look').toUpperCase()}</Text>
-            {headline(look.lead, styles.lookLead, C.ink, C.deep)}
-            <Text style={[styles.small, { color: C.soft }]}>{t('beautyProfile.hello.lookSub')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={go(onOpenAllProfile)}
-            activeOpacity={0.6}
-            accessibilityRole="button"
-            accessibilityLabel={t('beautyProfile.hello.ringA11y', { percent })}
-          >
-            <View style={{ width: RING, height: RING }}>
-              <Svg width={RING} height={RING}>
-                <Circle cx={RING / 2} cy={RING / 2} r={radius} stroke={C.track} strokeWidth={STROKE} fill="none" />
-                <Circle
-                  cx={RING / 2}
-                  cy={RING / 2}
-                  r={radius}
-                  stroke={C.deep}
-                  strokeWidth={STROKE}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={`${(circumference * percent) / 100} ${circumference}`}
-                  transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
-                />
-              </Svg>
-              <View style={styles.ringCentre} pointerEvents="none">
-                <Text style={[styles.ringNumber, { color: C.ink }]}>{percent}%</Text>
-                <Text style={[styles.cap, styles.ringCap, { color: C.soft }]}>{t('beautyProfile.hello.complete').toUpperCase()}</Text>
+        {/* Your look, and how complete the profile is: the card that leads the page. */}
+        <View style={[styles.lookCard, { backgroundColor: C.lookBg }]}>
+          <View style={styles.lookTop}>
+            <TouchableOpacity style={styles.lookText} onPress={go(() => onEditCategory('general'))} activeOpacity={0.6} accessibilityRole="button">
+              <Text style={[styles.cap, { color: C.lookSoft }]}>{t('beautyProfile.hello.look').toUpperCase()}</Text>
+              {headline(look.lead, styles.lookLead, C.lookInk, C.lookInk)}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={go(onOpenAllProfile)}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel={t('beautyProfile.hello.ringA11y', { percent })}
+            >
+              <View style={{ width: RING, height: RING }}>
+                <Svg width={RING} height={RING}>
+                  <Circle cx={RING / 2} cy={RING / 2} r={radius} stroke={C.lookTrack} strokeWidth={STROKE} fill="none" />
+                  <Circle
+                    cx={RING / 2}
+                    cy={RING / 2}
+                    r={radius}
+                    stroke={C.lookInk}
+                    strokeWidth={STROKE}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(circumference * percent) / 100} ${circumference}`}
+                    transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+                  />
+                </Svg>
+                <View style={styles.ringCentre} pointerEvents="none">
+                  <Text style={[styles.ringNumber, { color: C.lookInk }]}>{percent}%</Text>
+                  <Text style={[styles.cap, styles.ringCap, { color: C.lookSoft }]}>{t('beautyProfile.hello.complete').toUpperCase()}</Text>
+                </View>
               </View>
+            </TouchableOpacity>
+          </View>
+          {/* Every style they picked, and what they're into. */}
+          {profile.styleVibe.length + profile.serviceInterests.length > 0 ? (
+            <View style={styles.lookPills}>
+              {[...profile.styleVibe, ...profile.serviceInterests].slice(0, 6).map((word) => (
+                <View key={word} style={[styles.lookPill, { backgroundColor: C.lookPill }]}>
+                  <Text style={[styles.lookPillText, { color: C.lookInk }]}>{word}</Text>
+                </View>
+              ))}
             </View>
-          </TouchableOpacity>
+          ) : null}
+          <Text style={[styles.small, { color: C.lookSoft }]}>{t('beautyProfile.hello.lookSub')}</Text>
         </View>
 
         <View style={styles.sectionHead}>
@@ -262,6 +277,21 @@ export function BeautyProfileLanding({
             accessibilityRole="button"
             accessibilityLabel={`${t('beautyProfile.hello.hair')}, ${hair.lead ?? t('beautyProfile.card.add')}`}
           >
+            {/* Strands of hair drawn faintly across the card's corner, as in the design. */}
+            <Svg
+              style={styles.strands}
+              width={150}
+              height={190}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={C.darkInk}
+              strokeWidth={0.9}
+              strokeLinecap="round"
+              opacity={0.22}
+              pointerEvents="none"
+            >
+              <Path d="M7 2c-3 5 3 8 0 13s2 7 0 9M12 2c-3 5 3 8 0 13s2 7 0 9M17 2c-3 5 3 8 0 13s2 7 0 9" />
+            </Svg>
             <View style={[styles.disc, { backgroundColor: C.darkDisc }]}>
               <Ionicons name="cut-outline" size={17} color={C.darkInk} />
             </View>
@@ -321,6 +351,11 @@ export function BeautyProfileLanding({
           <View style={styles.flex}>
             <Text style={[styles.cap, { color: C.soft }]}>{t('beautyProfile.hello.nails').toUpperCase()}</Text>
             {headline(nails.lead && nails.details[0] ? `${nails.lead} · ${nails.details[0]}` : nails.lead, styles.leadMid, C.ink, C.deep)}
+            {profile.nailService.length + profile.nailStyle.length > 0 ? (
+              <Text style={[styles.tiny, { color: C.soft }]} numberOfLines={1}>
+                {[...profile.nailService, ...profile.nailStyle].slice(0, 3).join(' · ')}
+              </Text>
+            ) : null}
           </View>
         </TouchableOpacity>
 
@@ -542,9 +577,13 @@ const styles = StyleSheet.create({
   h1: { fontFamily: FONT_DISPLAY, fontSize: 36, lineHeight: 40 },
   h2: { fontFamily: FONT_DISPLAY, fontSize: 20, letterSpacing: 0.3 },
 
-  lookCard: { borderRadius: 28, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  lookText: { flex: 1, gap: 7 },
-  lookLead: { fontSize: 26, lineHeight: 30 },
+  lookCard: { borderRadius: 30, padding: 22, gap: 14, minHeight: 200 },
+  lookTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  lookText: { flex: 1, gap: 8 },
+  lookLead: { fontSize: 36, lineHeight: 40 },
+  lookPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  lookPill: { borderRadius: 100, paddingVertical: 6, paddingHorizontal: 12 },
+  lookPillText: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 0.6 },
   ringCentre: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   ringNumber: { fontFamily: FONT_DISPLAY, fontSize: 24 },
   ringCap: { fontSize: 8, marginTop: 2 },
@@ -555,7 +594,8 @@ const styles = StyleSheet.create({
   column: { flex: 1, gap: 10 },
   tile: { borderRadius: 26, padding: 14, gap: 4 },
   flexTile: { flex: 1 },
-  hairTile: { flex: 1, minHeight: 280, padding: 16, gap: 8 },
+  hairTile: { flex: 1, minHeight: 280, padding: 16, gap: 8, overflow: 'hidden' },
+  strands: { position: 'absolute', right: -18, bottom: -10 },
   disc: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   hairDetails: { marginTop: 'auto', gap: 5 },
   cardLead: { fontFamily: FONT_DISPLAY },

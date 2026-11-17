@@ -167,12 +167,19 @@ export function buildMaintenanceSuggestions(
     // Natural lashes, no extensions: a lift is the bookable lash service.
     offer('lash_lift', 'Lashes: Natural, no extensions');
   }
+  // What they get done decides the reminder: gel and builder gel need redoing
+  // every few weeks, acrylic needs infills, a pedicure is its own.
+  const services = new Set(profile.nailService);
+  const gel = ['Gel polish', 'BIAB / builder gel', 'Gel extensions (Gel-X)', 'Hard gel'].find(s => services.has(s));
+  if (gel) offer('gel_nails', `Nails: ${gel}`);
+  if (services.has('Acrylic')) offer('acrylic_infill', 'Nails: Acrylic');
+  if (services.has('Pedicure')) offer('pedicure', 'Nails: Pedicure');
   const nailAnswer = profile.nailShape.length ? `Nails: ${formatPickList(profile.nailShape)}`
     : profile.nailLength.length ? `Nails: ${formatPickList(profile.nailLength)}`
     : null;
-  if (nailAnswer) {
+  if (nailAnswer && !gel && !services.has('Acrylic')) {
     offer('nails_general', nailAnswer);
-    offer('pedicure', nailAnswer);
+    if (!services.has('Pedicure')) offer('pedicure', nailAnswer);
   }
   if (profile.browStyle.includes('Laminated')) offer('brow_lamination', 'Brows: Laminated');
   else if (profile.browStyle.length) offer('brows_general', `Brows: ${formatPickList(profile.browStyle)}`);

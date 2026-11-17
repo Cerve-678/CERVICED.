@@ -15,13 +15,14 @@
 
 import type { BeautyData } from '../../types/beautyProfile';
 import {
-  BROW_STYLES, LASH_STYLES, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_SHAPES,
+  BROW_STYLES, LASH_STYLES, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_COLOURS, NAIL_LENGTHS, NAIL_SERVICES, NAIL_SHAPES,
   SCALP_CONDITIONS, SKIN_CONCERNS, TREATMENT_HISTORY, hairGoalsFor, HAIR_GOALS,
 } from './options';
 
 export type TailoredQuestion =
   | 'scalpCondition' | 'treatmentHistory' | 'hairGoals' | 'skinConcerns' | 'lashStyle'
-  | 'browStyle' | 'nailShape' | 'makeupFinish' | 'makeupEyes' | 'makeupLips';
+  | 'browStyle' | 'nailService' | 'nailLength' | 'nailShape' | 'nailColours'
+  | 'makeupFinish' | 'makeupEyes' | 'makeupLips';
 
 export interface TailoredOptions {
   /** The options that fit their earlier answers, in the order to show them. */
@@ -103,6 +104,36 @@ const SHAPES_BY_LENGTH: Record<string, string[]> = {
   'Extra long': ['Coffin', 'Stiletto', 'Ballerina', 'Flare'],
 };
 
+const SERVICES_BY_CONDITION: Record<string, string[]> = {
+  'Weak / peeling': ['BIAB / builder gel', 'Natural manicure', 'Gel polish'],
+  'Brittle / break easily': ['BIAB / builder gel', 'Natural manicure', 'Hard gel'],
+  Bitten: ['BIAB / builder gel', 'Natural manicure', 'Gel polish'],
+  Ridged: ['BIAB / builder gel', 'Gel polish', 'Natural manicure'],
+  'Short nail beds': ['Gel extensions (Gel-X)', 'Acrylic', 'BIAB / builder gel', 'Press-ons'],
+  'Damaged from extensions': ['Natural manicure', 'BIAB / builder gel'],
+  'Strong & healthy': ['Gel polish', 'BIAB / builder gel', 'Natural manicure'],
+};
+
+const LENGTHS_BY_SERVICE: Record<string, string[]> = {
+  'Natural manicure': ['Natural / bare', 'Short'],
+  'Gel polish': ['Short', 'Medium'],
+  'BIAB / builder gel': ['Short', 'Medium'],
+  'Hard gel': ['Medium', 'Long'],
+  Acrylic: ['Medium', 'Long', 'Extra long'],
+  'Gel extensions (Gel-X)': ['Medium', 'Long', 'Extra long'],
+  'Press-ons': ['Medium', 'Long'],
+};
+
+const NAIL_COLOURS_BY_VIBE: Record<string, string[]> = {
+  Natural: ['Nudes', 'Milky white', 'Pinks'],
+  'Low-maintenance': ['Nudes', 'Milky white'],
+  Classic: ['Reds', 'Nudes', 'Milky white'],
+  Glam: ['Reds', 'Darks', 'Nudes'],
+  Bold: ['Brights / neons', 'Reds', 'Darks'],
+  Editorial: ['Darks', 'Brights / neons'],
+  Experimental: ['Brights / neons', 'Pastels', 'Seasonal'],
+};
+
 const EYES_BY_VIBE: Record<string, string[]> = {
   Natural: ['Subtle', 'Defined'],
   'Low-maintenance': ['Subtle', 'Defined'],
@@ -170,6 +201,21 @@ export function tailoredOptions(question: TailoredQuestion, d: BeautyData): Tail
     case 'browStyle': {
       const suited = fromPicks(d.browCondition, BROWS_BY_CONDITION);
       return split(BROW_STYLES, suited, suited.length ? `${joinLower(d.browCondition, p => p in BROWS_BY_CONDITION).replace(' / barely there', '')} brows` : null);
+    }
+    case 'nailService': {
+      const suited = fromPicks(d.nailCondition, SERVICES_BY_CONDITION);
+      const named = joinLower(d.nailCondition, p => p in SERVICES_BY_CONDITION)
+        .replace(' / peeling', '').replace(' / break easily', '').replace('strong & healthy', 'healthy');
+      return split(NAIL_SERVICES, suited, suited.length ? `your ${named} nails` : null);
+    }
+    case 'nailLength': {
+      const suited = fromPicks(d.nailService, LENGTHS_BY_SERVICE);
+      const service = d.nailService.find(p => p in LENGTHS_BY_SERVICE);
+      return split(NAIL_LENGTHS, suited, suited.length && service ? service.replace(' (Gel-X)', '').replace(' / builder gel', '') : null);
+    }
+    case 'nailColours': {
+      const suited = fromPicks(d.styleVibe, NAIL_COLOURS_BY_VIBE);
+      return split(NAIL_COLOURS, suited, suited.length ? `your ${joinLower(d.styleVibe, p => p in NAIL_COLOURS_BY_VIBE)} style` : null);
     }
     case 'nailShape': {
       const suited = fromPicks(d.nailLength, SHAPES_BY_LENGTH);
