@@ -23,9 +23,13 @@ export interface BeautyData {
   skinTone:           string;
   skinConcerns:       string[];
   sensitiveAreas:     string[];
-  // Nails
+  // Nails (condition, service, style and colours added 2026-11-17)
+  nailCondition:      string[];
+  nailService:        string[];
   nailLength:         string[];
   nailShape:          string[];
+  nailStyle:          string[];
+  nailColours:        string[];
   // Lashes & Brows
   lashStyle:          string[];
   lashStatus:         string;
@@ -51,7 +55,7 @@ export interface BeautyData {
 export const EMPTY_BEAUTY_DATA: BeautyData = {
   hairType: [], scalpCondition: [], hairGoals: [], treatmentHistory: [],
   skinType: [], skinTone: '', skinConcerns: [], sensitiveAreas: [],
-  nailLength: [], nailShape: [],
+  nailCondition: [], nailService: [], nailLength: [], nailShape: [], nailStyle: [], nailColours: [],
   lashStyle: [], lashStatus: '', browStyle: [], browCondition: [],
   makeupCoverage: [], makeupFinish: [], makeupEyes: [], makeupLips: [],
   styleVibe: [], serviceInterests: [],

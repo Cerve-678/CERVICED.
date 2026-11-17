@@ -6601,6 +6601,10 @@ export interface ClientBeautyProfile {
   // Nails
   nailLength: string[];
   nailShape: string[];
+  nailCondition: string[];
+  nailService: string[];
+  nailStyle: string[];
+  nailColours: string[];
   // Lashes & Brows
   lashStyle: string[];
   lashStatus: string | null;
@@ -6634,6 +6638,10 @@ interface BookingBeautyProfileRow {
   sensitive_areas: string[] | null;
   nail_length: string[] | string | null;
   nail_shape: string[] | string | null;
+  nail_condition: string[] | null;
+  nail_service: string[] | null;
+  nail_style: string[] | null;
+  nail_colours: string[] | null;
   lash_style: string[] | string | null;
   lash_status: string | null;
   brow_style: string[] | string | null;
@@ -6689,6 +6697,10 @@ export async function getClientBeautyProfileForBooking(
     sensitiveAreas: d.sensitive_areas ?? [],
     nailLength: toPickList(d.nail_length),
     nailShape: toPickList(d.nail_shape),
+    nailCondition: d.nail_condition ?? [],
+    nailService: d.nail_service ?? [],
+    nailStyle: d.nail_style ?? [],
+    nailColours: d.nail_colours ?? [],
     lashStyle: toPickList(d.lash_style),
     lashStatus: d.lash_status ?? null,
     browStyle: toPickList(d.brow_style),
@@ -9849,6 +9861,10 @@ export async function updateUserBeautyProfile(
     makeup_lips?: string[] | null;
     nail_length?: string[] | null;
     nail_shape?: string[] | null;
+    nail_condition?: string[];
+    nail_service?: string[];
+    nail_style?: string[];
+    nail_colours?: string[];
     lash_style?: string[] | null;
     lash_status?: string | null;
     brow_style?: string[] | null;
@@ -9883,6 +9899,10 @@ export interface UserBeautyProfileRow {
   sensitive_areas: string[];
   nail_length: string[] | string | null;
   nail_shape: string[] | string | null;
+  nail_condition: string[] | null;
+  nail_service: string[] | null;
+  nail_style: string[] | null;
+  nail_colours: string[] | null;
   lash_style: string[] | string | null;
   lash_status: string | null;
   brow_style: string[] | string | null;
@@ -9908,7 +9928,7 @@ export async function getUserBeautyProfile(
   const { data, error } = await supabase
     .from("users")
     .select(
-      "hair_type, scalp_condition, hair_goals, treatment_history, skin_type, skin_tone, skin_concerns, sensitive_areas, nail_length, nail_shape, lash_style, lash_status, brow_style, brow_condition, makeup_coverage, makeup_finish, makeup_eyes, makeup_lips, style_vibe, service_interests, gender, has_kids, allergies, medical_notes, photography_consent",
+      "hair_type, scalp_condition, hair_goals, treatment_history, skin_type, skin_tone, skin_concerns, sensitive_areas, nail_length, nail_shape, nail_condition, nail_service, nail_style, nail_colours, lash_style, lash_status, brow_style, brow_condition, makeup_coverage, makeup_finish, makeup_eyes, makeup_lips, style_vibe, service_interests, gender, has_kids, allergies, medical_notes, photography_consent",
     )
     .eq("id", userId)
     .maybeSingle();

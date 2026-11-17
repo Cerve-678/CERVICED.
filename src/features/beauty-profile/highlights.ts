@@ -38,7 +38,7 @@ function orderedAnswers(key: CategoryKey, d: BeautyData, L: HighlightLabels): st
   switch (key) {
     case 'hair':        return nonEmpty([d.hairType, d.scalpCondition.map(c => L.scalp(c)), d.hairGoals, hairTreatmentHistory(d.treatmentHistory)]);
     case 'skin':        return nonEmpty([d.skinType, d.skinConcerns, d.sensitiveAreas]);
-    case 'nails':       return nonEmpty([d.nailShape, d.nailLength]);
+    case 'nails':       return nonEmpty([d.nailShape, d.nailLength, d.nailService, d.nailStyle, d.nailColours]);
     case 'lashesBrows': return nonEmpty([d.lashStyle, d.browStyle, d.lashStatus, d.browCondition]);
     case 'makeup':      return nonEmpty([d.makeupCoverage, d.makeupFinish, d.makeupEyes, d.makeupLips]);
     case 'general':     return nonEmpty([d.styleVibe, d.serviceInterests]);

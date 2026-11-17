@@ -5,7 +5,7 @@
 // through `setDraft`, so SAVE PROFILE stays one transaction across all nine
 // categories (see the screen's note on selectedCategory).
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { AppTheme } from '../../constants/theme';
@@ -14,7 +14,8 @@ import { HAIR_TYPES } from '../../constants/hairTypes';
 import type { BeautyData, CategoryKey, Gender } from '../../types/beautyProfile';
 import {
   ALLERGENS, BROW_CONDITIONS, BROW_STYLES, GENDER_LABELS, HAIR_GOALS, LASH_STATUS, LASH_STYLES,
-  MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_LENGTHS, NAIL_SHAPES,
+  MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_COLOURS, NAIL_CONDITIONS, NAIL_LENGTHS,
+  NAIL_SERVICES, NAIL_SHAPES, NAIL_STYLES,
   SCALP_CONDITIONS, SENSITIVE_AREAS, SKIN_CONCERNS, SKIN_TYPES, STYLE_VIBES, TREATMENT_HISTORY, hairTreatmentHistory,
 } from './options';
 import { tailoredOptions, type TailoredQuestion } from './tailoredOptions';
@@ -28,6 +29,8 @@ interface Props {
 }
 
 export function CategoryEditor({ category, draft, editing, setDraft, P }: Props) {
+  // Which tailored questions have "More options" open.
+  const [showAll, setShowAll] = useState<Partial<Record<TailoredQuestion, boolean>>>({});
   const setSingle = (field: keyof BeautyData, value: string) => {
     if (!editing) return;
     Haptics.selectionAsync().catch(() => {});
@@ -86,9 +89,10 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
     </View>
   );
 
-  // A question that follows an earlier answer: the options that suit it
-  // first, under "Suited to your 4C hair", then every other option. Nothing
-  // is hidden, and a saved answer that's no longer a chip still shows.
+  // A question that follows an earlier answer shows only the options that
+  // suit it, under "Suited to your 4C hair" (owner, 2026-11-17: the options
+  // should change, not just the label). Everything else folds under "More
+  // options", and anything already picked always shows.
   const renderTailored = (
     question: TailoredQuestion,
     picked: string[],
@@ -97,11 +101,14 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
   ) => {
     const { suited, rest, because } = tailoredOptions(question, draft);
     if (!because) return renderChips(withSaved(rest, picked), isOn, onPress);
+    const shown = withSaved(suited, picked);
+    const folded = rest.filter(o => !shown.includes(o));
+    const open = !!showAll[question];
     return (
       <>
         <Text style={[styles.suitedLabel, { color: P.accentText }]}>{`Suited to ${because}`.toUpperCase()}</Text>
         <View style={[styles.chips, styles.chipsTight]}>
-          {suited.map(opt => (
+          {shown.map(opt => (
             <TouchableOpacity
               key={opt}
               style={chipStyle(isOn(opt))}
@@ -109,14 +116,26 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
               activeOpacity={editing ? 0.5 : 1}
               accessibilityRole="button"
               accessibilityState={{ selected: isOn(opt), disabled: !editing }}
-              accessibilityHint={`Suited to ${because}`}
             >
               <Text style={chipTextStyle(isOn(opt))}>{opt}</Text>
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={[styles.suitedLabel, { color: P.sub }]}>MORE</Text>
-        {renderChips(withSaved(rest, picked.filter(v => !suited.includes(v))), isOn, onPress)}
+        {folded.length > 0 ? (
+          <TouchableOpacity
+            style={styles.moreToggle}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowAll(prev => ({ ...prev, [question]: !open })); }}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            accessibilityLabel={open ? 'Fewer options' : `More options, ${folded.length}`}
+          >
+            <Text style={[styles.suitedLabel, styles.moreText, { color: P.sub }]}>
+              {open ? 'FEWER OPTIONS ▴' : `MORE OPTIONS (${folded.length}) ▾`}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        {open && folded.length > 0 ? renderChips(folded, isOn, onPress) : <View style={styles.tailoredGap} />}
       </>
     );
   };
@@ -210,15 +229,32 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
       );
 
     case 'nails':
+      // Their own nails first: they decide what suits them, which decides length, then shape.
       return (
         <>
+          {sectionHead('YOUR NATURAL NAILS', { selected: draft.nailCondition.length, total: NAIL_CONDITIONS.length }, { optional: true })}
+          {sub('What your own nails are like. Pick all that apply.')}
+          {renderChips(withSaved(NAIL_CONDITIONS, draft.nailCondition), o => draft.nailCondition.includes(o), o => toggleMulti('nailCondition', o))}
+
+          {sectionHead('WHAT YOU USUALLY GET', { selected: draft.nailService.length, total: NAIL_SERVICES.length }, { optional: true })}
+          {sub('The nail services you book. Pick all you have.')}
+          {renderTailored('nailService', draft.nailService, o => draft.nailService.includes(o), o => toggleMulti('nailService', o))}
+
           {sectionHead('PREFERRED LENGTH', { selected: draft.nailLength.length, total: NAIL_LENGTHS.length }, { optional: true })}
           {sub('How long you like your nails. Pick all you wear.')}
-          {renderChips(withSaved(NAIL_LENGTHS, draft.nailLength), o => draft.nailLength.includes(o), o => toggleMulti('nailLength', o))}
+          {renderTailored('nailLength', draft.nailLength, o => draft.nailLength.includes(o), o => toggleMulti('nailLength', o))}
 
           {sectionHead('PREFERRED SHAPE', { selected: draft.nailShape.length, total: NAIL_SHAPES.length }, { optional: true })}
           {sub('Nail shapes you like. Pick as many as you want.')}
           {renderTailored('nailShape', draft.nailShape, o => draft.nailShape.includes(o), o => toggleMulti('nailShape', o))}
+
+          {sectionHead('LOOKS YOU LIKE', { selected: draft.nailStyle.length, total: NAIL_STYLES.length }, { optional: true })}
+          {sub('French, chrome, art… pick as many as you like.')}
+          {renderChips(withSaved(NAIL_STYLES, draft.nailStyle), o => draft.nailStyle.includes(o), o => toggleMulti('nailStyle', o))}
+
+          {sectionHead('COLOURS YOU GO FOR', { selected: draft.nailColours.length, total: NAIL_COLOURS.length }, { optional: true })}
+          {sub('Pick all you wear.')}
+          {renderTailored('nailColours', draft.nailColours, o => draft.nailColours.includes(o), o => toggleMulti('nailColours', o))}
         </>
       );
 
@@ -347,6 +383,9 @@ const styles = StyleSheet.create({
   // The suited chips sit close above "More".
   chipsTight: { marginBottom: 12 },
   suitedLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 1.4, marginBottom: 8 },
+  moreToggle: { alignSelf: 'flex-start', minHeight: 36, justifyContent: 'center' },
+  moreText: { marginBottom: 0 },
+  tailoredGap: { height: 12 },
   chip:     { borderRadius: 100, borderWidth: 1.5, paddingVertical: 9, paddingHorizontal: 15 },
   chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.7 },
 
