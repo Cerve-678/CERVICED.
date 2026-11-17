@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/beauty-profile-style-and-look (Claude, 2026-11-17) — 20261117130000_beauty_profile_style_questions, written, dry run passed, NOT applied
 ```
+
+### Pending 2026-11-17 (Beauty Profile style questions)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261117130000 | `beauty_profile_style_questions` | **Written, NOT applied.** Three nullable columns on `users`: `style_aesthetics text[]`, `style_occasions text[]`, `style_routine text`. Private to the client (not added to `beauty_profile_fields_for_category`); no function changes. Live max `20261117120000`. Must be applied before the app change on this branch merges (the app selects the new columns). |
 
 ### Applied 2026-11-17 (Beauty Profile nail questions)
 
