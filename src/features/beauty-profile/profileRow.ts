@@ -22,6 +22,7 @@ export function beautyDataFromRow(m: UserBeautyProfileRow | null): BeautyData {
     makeupCoverage: toPickList(m.makeup_coverage), makeupFinish: toPickList(m.makeup_finish),
     makeupEyes: toPickList(m.makeup_eyes), makeupLips: toPickList(m.makeup_lips),
     styleVibe: toPickList(m.style_vibe), serviceInterests: m.service_interests ?? [],
+    styleAesthetics: m.style_aesthetics ?? [], styleOccasions: m.style_occasions ?? [], styleRoutine: m.style_routine ?? '',
     gender: (m.gender as Gender | null) ?? null, has_kids: m.has_kids ?? false,
     allergies: m.allergies ?? [], medicalNotes: m.medical_notes ?? '',
     photographyConsent: m.photography_consent ?? true,

@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-17 (Beauty Profile style questions)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261117130000 | `beauty_profile_style_questions` | **APPLIED 2026-11-17** on the user's go-ahead ("merge", then "apply"), via `supabase db query --linked -f` from the main folder. Right before: live max `20261117120000`, lock `(none)` on main, columns absent. Verified live: version recorded (live max); the three columns exist; not in the OTHER sharing list. As written: Three nullable columns on `users`: `style_aesthetics text[]`, `style_occasions text[]`, `style_routine text`. Private to the client (not added to `beauty_profile_fields_for_category`); no function changes. Live max `20261117120000`. Applied before the app change merged. |
+
 ### Applied 2026-11-17 (Beauty Profile nail questions)
 
 | Authored version | Name | Status |

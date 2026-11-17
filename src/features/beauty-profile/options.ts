@@ -91,6 +91,38 @@ export const MAKEUP_FINISH    = ['Matte', 'Soft matte', 'Satin', 'Dewy', 'Glowy'
 export const MAKEUP_EYES      = ['Subtle', 'Defined', 'Smoky', 'Cut crease', 'Graphic liner', 'Glitter / sparkle', 'Bold / dramatic'];
 export const MAKEUP_LIPS      = ['Nude', 'Gloss', 'Brown / 90s liner', 'Berry / wine', 'Coral / peach', 'Classic red', 'Bold colour'];
 export const STYLE_VIBES      = ['Natural', 'Glam', 'Bold', 'Classic', 'Editorial', 'Low-maintenance', 'Experimental'];
+
+// Style & vibe, added 2026-11-17 (owner: "add more to style and vibe so it's
+// not just pills"). Picked as cards, each with a line saying what it looks like.
+export interface DescribedOption { name: string; line: string }
+export const STYLE_AESTHETICS: readonly DescribedOption[] = [
+  { name: 'Clean girl', line: 'Slick bun, dewy skin, brushed-up brows' },
+  { name: 'Soft glam', line: 'Soft eyes, fluttery lashes, a glowy base' },
+  { name: 'Old money', line: 'Polished blow-dry, neat nails, quiet luxury' },
+  { name: 'Y2K', line: 'Gloss, frosty shades, playful nails' },
+  { name: 'Coquette', line: 'Bows, blush pinks, soft curls' },
+  { name: 'Baddie', line: 'Sharp lashes, sculpted brows, long nails' },
+  { name: 'Streetwear', line: 'Fresh cuts, braids, clean nails' },
+  { name: 'Boho', line: 'Loose waves, bronzed skin, earthy tones' },
+  { name: 'Minimalist', line: 'Bare skin, natural nails, little fuss' },
+  { name: 'Editorial', line: 'Bold colour, graphic lines, statement hair' },
+];
+export const STYLE_OCCASIONS  = ['Everyday', 'Work', 'Date nights', 'Nights out', 'Weddings', 'Holidays', 'Special events', 'Photoshoots'];
+export const STYLE_ROUTINES: readonly DescribedOption[] = [
+  { name: 'Quick & easy', line: 'Ten minutes and out the door' },
+  { name: 'A bit of effort', line: 'A little time most days' },
+  { name: 'Full routine', line: 'I love the whole process' },
+];
+/** The aesthetics that usually go with each vibe, shown first. */
+export const AESTHETICS_BY_VIBE: Record<string, readonly string[]> = {
+  Natural: ['Clean girl', 'Minimalist', 'Boho'],
+  'Low-maintenance': ['Minimalist', 'Clean girl'],
+  Classic: ['Old money', 'Clean girl'],
+  Glam: ['Soft glam', 'Baddie', 'Old money'],
+  Bold: ['Baddie', 'Y2K', 'Editorial'],
+  Editorial: ['Editorial', 'Y2K'],
+  Experimental: ['Y2K', 'Editorial', 'Streetwear'],
+};
 // Shown under Hair. 'Lash extensions' was here until 2026-11-09; lashes have
 // their own status in Lashes & Brows ('Currently have extensions').
 export const TREATMENT_HISTORY = [

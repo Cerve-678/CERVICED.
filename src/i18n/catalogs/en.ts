@@ -288,6 +288,7 @@ export const en = {
   'beautyProfile.hello.title': 'Hello {name}',
   'beautyProfile.hello.there': 'there',
   'beautyProfile.hello.look': 'Your look',
+  'beautyProfile.hello.routine': 'Routine',
   'beautyProfile.hello.lookSub': 'Edit any card below.',
   'beautyProfile.hello.ringA11y': 'Your beauty profile is {percent}% complete. Tap to see all of it',
   'beautyProfile.hello.complete': 'Complete',
