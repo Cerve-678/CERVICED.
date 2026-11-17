@@ -26,6 +26,7 @@ import { SEALED_LOGO_SIZE, SealedEnvelope } from "./heroes/SealedHero";
 import { sealLetter, waxColour } from "./WaxSeal";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
+import { BowHero, HushHero, LoungeHero, PearlHero, SoftFocusHero } from "./heroes/DemureHeroes";
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -201,6 +202,13 @@ export interface ProfileHeroLayoutProps {
   /** Jumps to Services: Studio's Book now. Left out when there are
    *  no services on the page (a link-only provider), and then there's no button. */
   onBookNow?: (() => void) | undefined;
+  /** The content sheet's colour: Lounge's cut-out name and the strip it
+   *  lands on, Hush's print borders. */
+  sheetColour?: string;
+  /** Hush and Pearl's fan: the photos picked in Branding (fanPhotos). */
+  fanPhotoUris?: readonly string[];
+  /** Opens a fan photo full size. Left out in the preview. */
+  onOpenFanPhoto?: ((index: number) => void) | undefined;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -250,6 +258,9 @@ export function ProfileHeroLayout({
   heroColour,
   cardColour,
   onBookNow,
+  sheetColour,
+  fanPhotoUris,
+  onOpenFanPhoto,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
@@ -836,6 +847,83 @@ export function ProfileHeroLayout({
         />
       );
 
+    case "lounge":
+      // Lounge: the name cut out of the page across their photo (heroes/DemureHeroes).
+      return (
+        <LoungeHero
+          name={name}
+          photoUri={photoUris?.[0]}
+          accent={accent}
+          sheetColour={sheetColour ?? cardColour}
+          heroText={heroText}
+          details={details}
+          tick={tick}
+        />
+      );
+
+    case "softCard":
+      return (
+        <SoftFocusHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          location={location}
+          accent={accent}
+          renderLogo={renderLogo}
+          details={details}
+          // The tick sits on the pale tinted card.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color="#007AFF" accessibilityLabel="Verified" /> : null}
+        />
+      );
+
+    case "hushFan":
+      return (
+        <HushHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          kicker={kicker}
+          location={location}
+          heroText={heroText}
+          heroSub={heroSub}
+          shadow={shadow}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+          fanUris={fanPhotoUris ?? []}
+          paper={sheetColour ?? cardColour}
+          onOpenFanPhoto={onOpenFanPhoto}
+        />
+      );
+
+    case "pearlFan":
+      return (
+        <PearlHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          cardColour={cardColour}
+          renderLogo={renderLogo}
+          details={details}
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+          fanUris={fanPhotoUris ?? []}
+          onOpenFanPhoto={onOpenFanPhoto}
+        />
+      );
+
+    case "bow":
+      return (
+        <BowHero
+          name={name}
+          phrase={kickerPhrase(kicker)}
+          heroText={heroText}
+          heroSub={heroSub}
+          shadow={shadow}
+          accent={accent}
+          photoUri={photoUris?.[0]}
+          renderLogo={renderLogo}
+          details={details}
+          tick={tick}
+        />
+      );
+
     case "titlePage":
       // Novel: a book's title page set straight on the backdrop (heroes/NovelHero).
       return (
@@ -927,7 +1015,8 @@ function SealRing({
  * so the profile inks them dark.
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
-  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage";
+  return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage"
+    || pageStyle.hero === "lounge" || pageStyle.hero === "pearlFan";
 }
 
 /**

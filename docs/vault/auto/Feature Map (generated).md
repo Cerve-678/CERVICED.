@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **103 files**
 - … +73 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **212 files**
+Curated: [[Availability & Slots]] · **213 files**
 - `src/services/databaseService.ts` _(340)_
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **212 files**
 - `src/components/AvailabilityCard.tsx` _(24)_
 - `src/features/cart/presentation.ts` _(24)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(24)_
-- … +182 more
+- … +183 more
 
 ## Payments
 Curated: [[Payments]] · **172 files**
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **380 files**
 - … +350 more
 
 ## Notifications
-Curated: [[Notifications]] · **192 files**
+Curated: [[Notifications]] · **193 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(345)_
 - `src/services/databaseService.ts` _(192)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **192 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(25)_
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `src/screens/client/BookingsScreen.tsx` _(24)_
-- … +162 more
+- … +163 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **88 files**

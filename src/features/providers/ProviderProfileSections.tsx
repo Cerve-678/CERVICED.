@@ -431,7 +431,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                             // A slight, alternating tilt, as if pinned by hand.
                             { transform: [{ rotate: (columnIndex + rowIndex) % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
                           ]
-                        : styles.portfolioTile
+                        : palette.pageStyle?.roundedPhotos
+                          ? [styles.portfolioTile, styles.roundedTile]
+                          : styles.portfolioTile
                 }
               >
                 <Image
@@ -571,6 +573,8 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  // Lounge, Soft Focus and Bow: rounder, softer photos.
+  roundedTile: { borderRadius: 24 },
   halftoneTile: { borderRadius: 0, borderWidth: 1, padding: 3, overflow: "hidden" },
   bookPlateTile: { borderRadius: 2, padding: 5, paddingBottom: 0 },
   plateCaption: { fontFamily: "IMFellEnglish-Italic", fontSize: 13, lineHeight: 18, paddingVertical: 6, textAlign: "center" },
