@@ -5,7 +5,7 @@
 
 #generated
 
-**3994 functions** across **560 files**.
+**3999 functions** across **561 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -132,10 +132,11 @@
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 - `useSignInAsAccount.ts` — **useSignInAsAccount**
 
-### `src/features/beauty-profile/` (10)
+### `src/features/beauty-profile/` (11)
 - `BeautyProfileLanding.tsx` — **BeautyProfileLanding** · card · dateStub · go · groups · headline · ideas
-- `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · renderTailored · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
+- `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderCards · renderChips · renderTailored · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
+- `lookSummary.ts` — hairWord · listOf · **lookLine** · **lookTitle**
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 - `options.ts` — **hairGoalsFor** · **hairTreatmentHistory**
 - `pickList.ts` — **formatPickList** · parseJsonArray · **toPickColumn** · **toPickList**

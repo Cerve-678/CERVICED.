@@ -9865,6 +9865,9 @@ export async function updateUserBeautyProfile(
     nail_service?: string[];
     nail_style?: string[];
     nail_colours?: string[];
+    style_aesthetics?: string[];
+    style_occasions?: string[];
+    style_routine?: string | null;
     lash_style?: string[] | null;
     lash_status?: string | null;
     brow_style?: string[] | null;
@@ -9903,6 +9906,9 @@ export interface UserBeautyProfileRow {
   nail_service: string[] | null;
   nail_style: string[] | null;
   nail_colours: string[] | null;
+  style_aesthetics: string[] | null;
+  style_occasions: string[] | null;
+  style_routine: string | null;
   lash_style: string[] | string | null;
   lash_status: string | null;
   brow_style: string[] | string | null;
@@ -9928,7 +9934,7 @@ export async function getUserBeautyProfile(
   const { data, error } = await supabase
     .from("users")
     .select(
-      "hair_type, scalp_condition, hair_goals, treatment_history, skin_type, skin_tone, skin_concerns, sensitive_areas, nail_length, nail_shape, nail_condition, nail_service, nail_style, nail_colours, lash_style, lash_status, brow_style, brow_condition, makeup_coverage, makeup_finish, makeup_eyes, makeup_lips, style_vibe, service_interests, gender, has_kids, allergies, medical_notes, photography_consent",
+      "hair_type, scalp_condition, hair_goals, treatment_history, skin_type, skin_tone, skin_concerns, sensitive_areas, nail_length, nail_shape, nail_condition, nail_service, nail_style, nail_colours, lash_style, lash_status, brow_style, brow_condition, makeup_coverage, makeup_finish, makeup_eyes, makeup_lips, style_vibe, style_aesthetics, style_occasions, style_routine, service_interests, gender, has_kids, allergies, medical_notes, photography_consent",
     )
     .eq("id", userId)
     .maybeSingle();

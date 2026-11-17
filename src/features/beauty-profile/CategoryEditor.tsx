@@ -15,7 +15,8 @@ import type { BeautyData, CategoryKey, Gender } from '../../types/beautyProfile'
 import {
   ALLERGENS, BROW_CONDITIONS, BROW_STYLES, GENDER_LABELS, HAIR_GOALS, LASH_STATUS, LASH_STYLES,
   MAKEUP_COVERAGE, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_COLOURS, NAIL_CONDITIONS, NAIL_LENGTHS,
-  NAIL_SERVICES, NAIL_SHAPES, NAIL_STYLES,
+  NAIL_SERVICES, NAIL_SHAPES, NAIL_STYLES, STYLE_AESTHETICS, STYLE_OCCASIONS, STYLE_ROUTINES, AESTHETICS_BY_VIBE,
+  type DescribedOption,
   SCALP_CONDITIONS, SENSITIVE_AREAS, SKIN_CONCERNS, SKIN_TYPES, STYLE_VIBES, TREATMENT_HISTORY, hairTreatmentHistory,
 } from './options';
 import { tailoredOptions, type TailoredQuestion } from './tailoredOptions';
@@ -139,6 +140,43 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
       </>
     );
   };
+
+  // Options picked as cards: the name, and a line saying what it looks like.
+  const renderCards = (
+    options: readonly DescribedOption[],
+    isOn: (name: string) => boolean,
+    onPress: (name: string) => void,
+    columns: 2 | 1,
+  ) => (
+    <View style={[styles.cards, columns === 1 && styles.cardsOne]}>
+      {options.map(({ name, line }) => {
+        const on = isOn(name);
+        return (
+          <TouchableOpacity
+            key={name}
+            style={[
+              styles.card,
+              columns === 2 ? styles.cardHalf : styles.cardFull,
+              { backgroundColor: on ? P.accentDim : P.surface, borderColor: on ? P.accent : P.border },
+            ]}
+            onPress={() => onPress(name)}
+            activeOpacity={editing ? 0.6 : 1}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on, disabled: !editing }}
+            accessibilityLabel={`${name}. ${line}`}
+          >
+            <View style={styles.cardTop}>
+              <Text style={[styles.cardName, { color: P.text }]} numberOfLines={1}>{name}</Text>
+              <View style={[styles.cardTick, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.accent : 'transparent' }]}>
+                {on ? <Text style={[styles.cardTickMark, { color: P.onAccent }]}>✓</Text> : null}
+              </View>
+            </View>
+            <Text style={[styles.cardLine, { color: P.sub }]} numberOfLines={2}>{line}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
 
   const sectionHead = (
     label: string,
@@ -301,14 +339,33 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
         </>
       );
 
-    case 'general':
+    case 'general': {
+      // The aesthetics that go with their vibe come first; none are hidden.
+      const suitedAesthetics = new Set(draft.styleVibe.flatMap(v => AESTHETICS_BY_VIBE[v] ?? []));
+      const aesthetics = [
+        ...STYLE_AESTHETICS.filter(a => suitedAesthetics.has(a.name)),
+        ...STYLE_AESTHETICS.filter(a => !suitedAesthetics.has(a.name)),
+      ];
       return (
         <>
           {sectionHead('STYLE VIBE', { selected: draft.styleVibe.length, total: STYLE_VIBES.length })}
           {sub('How would you describe your overall look? Pick as many as fit.')}
           {renderChips(withSaved(STYLE_VIBES, draft.styleVibe), o => draft.styleVibe.includes(o), o => toggleMulti('styleVibe', o))}
+
+          {sectionHead('AESTHETICS YOU LOVE', { selected: draft.styleAesthetics.length, total: STYLE_AESTHETICS.length }, { optional: true })}
+          {sub(suitedAesthetics.size > 0 ? 'The ones that go with your vibe are first. Pick any you love.' : 'Pick any you love.')}
+          {renderCards(aesthetics, o => draft.styleAesthetics.includes(o), o => toggleMulti('styleAesthetics', o), 2)}
+
+          {sectionHead('WHAT YOU GET READY FOR', { selected: draft.styleOccasions.length, total: STYLE_OCCASIONS.length }, { optional: true })}
+          {sub('Where your look is usually going. Pick all that apply.')}
+          {renderChips(withSaved(STYLE_OCCASIONS, draft.styleOccasions), o => draft.styleOccasions.includes(o), o => toggleMulti('styleOccasions', o))}
+
+          {sectionHead('HOW MUCH TIME YOU GIVE IT', { selected: draft.styleRoutine ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('So providers and ideas match your routine.')}
+          {renderCards(STYLE_ROUTINES, o => draft.styleRoutine === o, o => setSingle('styleRoutine', o), 1)}
         </>
       );
+    }
 
     case 'personalisation':
       return (
@@ -380,6 +437,16 @@ const styles = StyleSheet.create({
   optionalBadge:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, letterSpacing: 0.3, fontStyle: 'italic' },
 
   chips:    { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 24 },
+  cards:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
+  cardsOne: { flexDirection: 'column' },
+  card:     { borderRadius: 18, borderWidth: 1.5, padding: 14, gap: 6 },
+  cardHalf: { width: '48%', minHeight: 92 },
+  cardFull: { width: '100%' },
+  cardTop:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  cardName: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 0.6, flexShrink: 1 },
+  cardTick: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  cardTickMark: { fontSize: 11, fontWeight: '700' },
+  cardLine: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16 },
   // The suited chips sit close above "More".
   chipsTight: { marginBottom: 12 },
   suitedLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 1.4, marginBottom: 8 },

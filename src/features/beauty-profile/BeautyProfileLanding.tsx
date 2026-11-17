@@ -3,10 +3,12 @@
 // The Beauty Profile landing, design C "Hello" (owner, 2026-11-17; boards on
 // the demure canvas, plum set). From the top:
 // - "Hello {first name}", with Your circle behind the sharing button.
-// - Your look: their style answer, and a ring of how complete the profile is.
+// - Your look: two words for their look ("Natural & dewy"), a sentence from
+//   their answers (lookSummary.ts), their routine, and a ring of how complete
+//   the profile is.
 // - Your Beauty Profile: a card per area in a mosaic (a tall dark Hair card,
-//   Skin, Lashes & brows, a wide Nails card, Makeup, and Health & Safety,
-//   dashed with "Finish this" until it's started). Each opens its editor.
+//   Skin, Lashes & brows, a wide Nails card, Makeup, and Health & Safety in a
+//   black outline, "Finish this" until it's started). Each opens its editor.
 // - Maintenance schedule: the next four items on a timeline, Book on the
 //   ones that are due, the whole list one tap away.
 // - Still to fill in, and Suited to you, as before.
@@ -32,6 +34,7 @@ import { FONT_BODY, FONT_DISPLAY, hapticLight, semanticColors } from '../mainten
 import { groupMaintenanceItems, needsAttention, type PresentedItem } from '../maintenance/presentation';
 import type { MaintenanceState } from '../maintenance/useMaintenance';
 import { highlightCategory, type HighlightLabels } from './highlights';
+import { lookLine, lookTitle } from './lookSummary';
 import { allSuitedIdeas, type SuitedIdea } from './suitedIdeas';
 
 // Design C's plum set, light and dark (the client hat's plum / blue-grey).
@@ -41,14 +44,14 @@ const L = {
   deep: '#7A4A6C', track: '#EADFE6', ink: '#1E1019', soft: '#64525E', soft2: '#54434F',
   btn: '#3F1E36', btnInk: '#FFFFFF', future: '#A8A2B0',
   // Your look stands out in the deeper plum (owner, 2026-11-17: "more prominent").
-  lookBg: '#7A4A6C', lookInk: '#FFFFFF', lookSoft: 'rgba(255,255,255,0.8)', lookTrack: 'rgba(255,255,255,0.25)', lookPill: 'rgba(255,255,255,0.16)',
+  lookBg: '#7A4A6C', lookInk: '#FFFFFF', lookSoft: 'rgba(255,255,255,0.8)', lookTrack: 'rgba(255,255,255,0.25)',
 };
 const D: typeof L = {
   card: '#21181F', tint: '#35242F', warm: '#2E2A22',
   dark: '#E5ECF4', darkInk: '#151013', darkSoft: '#56606C', darkDisc: '#CBD6E3',
   deep: '#E5ECF4', track: '#33282F', ink: '#F4EDF2', soft: '#B4A5AF', soft2: '#C9BAC4',
   btn: '#E5ECF4', btnInk: '#151013', future: '#6E6670',
-  lookBg: '#CDBCE7', lookInk: '#151013', lookSoft: 'rgba(21,16,19,0.72)', lookTrack: 'rgba(21,16,19,0.16)', lookPill: 'rgba(21,16,19,0.08)',
+  lookBg: '#CDBCE7', lookInk: '#151013', lookSoft: 'rgba(21,16,19,0.72)', lookTrack: 'rgba(21,16,19,0.16)',
 };
 
 const TODO_LABEL: Record<BeautyTodoField, TranslationKey> = {
@@ -124,7 +127,8 @@ export function BeautyProfileLanding({
     photosOff: t('beautyProfile.photosOff'),
   }), [t]);
   const card = (key: CategoryKey) => highlightCategory(key, profile, labels);
-  const look = card('general');
+  const title = lookTitle(profile);
+  const line = lookLine(profile);
   const hair = card('hair');
   const skin = card('skin');
   const lashes = card('lashesBrows');
@@ -218,7 +222,7 @@ export function BeautyProfileLanding({
           <View style={styles.lookTop}>
             <TouchableOpacity style={styles.lookText} onPress={go(() => onEditCategory('general'))} activeOpacity={0.6} accessibilityRole="button">
               <Text style={[styles.cap, { color: C.lookSoft }]}>{t('beautyProfile.hello.look').toUpperCase()}</Text>
-              {headline(look.lead, styles.lookLead, C.lookInk, C.lookInk)}
+              {headline(title, styles.lookLead, C.lookInk, C.lookInk)}
             </TouchableOpacity>
             <TouchableOpacity
               onPress={go(onOpenAllProfile)}
@@ -248,15 +252,10 @@ export function BeautyProfileLanding({
               </View>
             </TouchableOpacity>
           </View>
-          {/* Every style they picked, and what they're into. */}
-          {profile.styleVibe.length + profile.serviceInterests.length > 0 ? (
-            <View style={styles.lookPills}>
-              {[...profile.styleVibe, ...profile.serviceInterests].slice(0, 6).map((word) => (
-                <View key={word} style={[styles.lookPill, { backgroundColor: C.lookPill }]}>
-                  <Text style={[styles.lookPillText, { color: C.lookInk }]}>{word}</Text>
-                </View>
-              ))}
-            </View>
+          {/* A sentence from the rest of their answers (owner: not just pills). */}
+          {line ? <Text style={[styles.lookLine, { color: C.lookInk }]}>{line}</Text> : null}
+          {profile.styleRoutine ? (
+            <Text style={[styles.cap, { color: C.lookSoft }]}>{`${t('beautyProfile.hello.routine')} · ${profile.styleRoutine}`.toUpperCase()}</Text>
           ) : null}
           <Text style={[styles.small, { color: C.lookSoft }]}>{t('beautyProfile.hello.lookSub')}</Text>
         </View>
@@ -379,14 +378,16 @@ export function BeautyProfileLanding({
             style={[
               styles.tile,
               styles.flexTile,
-              health.started ? { backgroundColor: C.card } : [styles.dashed, { borderColor: C.deep }],
+              // A black outline, started or not (owner, 2026-11-17).
+              styles.outlined,
+              { backgroundColor: C.card, borderColor: C.ink },
             ]}
             onPress={go(() => onEditCategory('health'))}
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel={`${t('beautyProfile.health.title')}, ${health.started ? healthLine : t('beautyProfile.hello.finish')}`}
           >
-            <Ionicons name="shield-checkmark-outline" size={19} color={health.started ? C.ink : C.deep} />
+            <Ionicons name="shield-checkmark-outline" size={19} color={C.ink} />
             <Text style={[styles.cap, { color: C.soft }]}>{t('beautyProfile.health.title').toUpperCase()}</Text>
             <Text style={[styles.cardLead, styles.leadSmall, { color: C.ink }]} numberOfLines={2}>
               {(health.started ? healthLine : t('beautyProfile.hello.finish')).toUpperCase()}
@@ -581,9 +582,7 @@ const styles = StyleSheet.create({
   lookTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   lookText: { flex: 1, gap: 8 },
   lookLead: { fontSize: 36, lineHeight: 40 },
-  lookPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  lookPill: { borderRadius: 100, paddingVertical: 6, paddingHorizontal: 12 },
-  lookPillText: { fontFamily: FONT_DISPLAY, fontSize: 11, letterSpacing: 0.6 },
+  lookLine: { fontFamily: FONT_BODY, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   ringCentre: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   ringNumber: { fontFamily: FONT_DISPLAY, fontSize: 24 },
   ringCap: { fontSize: 8, marginTop: 2 },
@@ -605,7 +604,7 @@ const styles = StyleSheet.create({
   nailsTile: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
   nailBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   nailBar: { width: 13, borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomLeftRadius: 4, borderBottomRightRadius: 4 },
-  dashed: { borderWidth: 1.5, borderStyle: 'dashed' },
+  outlined: { borderWidth: 1.5 },
 
   nudge: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 },
   nudgeTitle: { fontFamily: FONT_DISPLAY, fontSize: 12, letterSpacing: 1 },

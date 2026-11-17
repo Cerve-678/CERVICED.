@@ -42,6 +42,10 @@ export interface BeautyData {
   makeupLips:         string[];
   // General
   styleVibe:          string[];
+  /** Added 2026-11-17: aesthetics they love, what they get ready for, how much time they give it. */
+  styleAesthetics:    string[];
+  styleOccasions:     string[];
+  styleRoutine:       string;
   serviceInterests:   string[];
   // Personalisation
   gender:             Gender | null;
@@ -58,7 +62,7 @@ export const EMPTY_BEAUTY_DATA: BeautyData = {
   nailCondition: [], nailService: [], nailLength: [], nailShape: [], nailStyle: [], nailColours: [],
   lashStyle: [], lashStatus: '', browStyle: [], browCondition: [],
   makeupCoverage: [], makeupFinish: [], makeupEyes: [], makeupLips: [],
-  styleVibe: [], serviceInterests: [],
+  styleVibe: [], styleAesthetics: [], styleOccasions: [], styleRoutine: '', serviceInterests: [],
   gender: null, has_kids: false,
   allergies: [], medicalNotes: '', photographyConsent: true,
 };
