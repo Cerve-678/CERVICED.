@@ -57,10 +57,10 @@ import {
 } from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
-import { getMyProviderBranding, getProviderPortfolio, setFanPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
+import { getMyProviderBranding, getProviderPortfolio, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
-import { FanPhotoPicker } from '../../features/providers/FanPhotoPicker';
-import { FAN_PHOTO_LIMIT, fanPhotos } from '../../features/providers/fanPhotos';
+import { HeroPhotoPicker } from '../../features/providers/HeroPhotoPicker';
+import { HERO_PHOTO_LIMIT, heroPhotos } from '../../features/providers/heroPhotos';
 import { toUserMessage } from '../../utils/userFacingError';
 import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
 import { ImageCropModal } from '../../components/ImageCropModal';
@@ -161,8 +161,8 @@ export default function BrandingScreen({ navigation }: any) {
   // Branding → Your Photos (Hush): their work photos and the ones picked for
   // its hero, saved with everything else.
   const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
-  const [fanPicked, setFanPicked]             = useState<string[]>([]);
-  const savedFanPicked = useRef<string[]>([]);
+  const [heroPicked, setHeroPicked]             = useState<string[]>([]);
+  const savedHeroPicked = useRef<string[]>([]);
   const [part, setPart]                       = useState<BrandingPart>('layout');
 
   useEffect(() => {
@@ -346,27 +346,31 @@ export default function BrandingScreen({ navigation }: any) {
     getProviderPortfolio(providerId)
       .then(({ work }) => {
         if (!active) return;
-        const picks = work.filter(item => item.is_featured).map(item => item.id).slice(0, FAN_PHOTO_LIMIT);
+        const picks = work.filter(item => item.is_featured).map(item => item.id).slice(0, HERO_PHOTO_LIMIT);
         setPortfolioItems(work);
-        setFanPicked(picks);
-        savedFanPicked.current = picks;
+        setHeroPicked(picks);
+        savedHeroPicked.current = picks;
       })
-      // The fan picker and the preview's photos just stay empty; the rest of Branding works.
-      .catch(e => logger.warn('[Branding] could not load the portfolio for the fan:', e));
+      // The photo picker and the preview's photos just stay empty; the rest of Branding works.
+      .catch(e => logger.warn('[Branding] could not load the portfolio for Your Photos:', e));
     return () => { active = false; };
   }, [providerId]);
 
-  // Hush shows three picked photos.
+  // Editorial shows one picked photo, Snapshot and Hush three.
   const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle));
-  const usesFan = heroPickLimit > 0;
-  // Picks saved before the limit came down (Pearl's fan took five) keep the first ones.
+  const picksHeroPhotos = heroPickLimit > 0;
+  // Moving to a style that shows fewer (Snapshot's 3 → Editorial's 1) keeps
+  // the picks that style shows, so the count never reads "3 of 1".
   useEffect(() => {
-    if (heroPickLimit > 0 && fanPicked.length > heroPickLimit) setFanPicked(fanPicked.slice(0, heroPickLimit));
-  }, [heroPickLimit, fanPicked]);
-  const previewPhotoUris = portfolioItems.slice(0, 3).map(item => item.image_url);
-  const previewFanUris = usesFan
-    ? fanPhotos(portfolioItems.map(item => ({ ...item, is_featured: fanPicked.includes(item.id) })), heroPickLimit).map(item => item.image_url)
-    : [];
+    if (heroPickLimit > 0 && heroPicked.length > heroPickLimit) {
+      const marked = portfolioItems.map(item => ({ ...item, is_featured: heroPicked.includes(item.id) }));
+      setHeroPicked(heroPhotos(marked, heroPickLimit).filter(item => item.is_featured).map(item => item.id));
+    }
+  }, [heroPickLimit, heroPicked, portfolioItems]);
+  // The preview's hero, as the profile will show it with these picks.
+  const previewPhotoUris = picksHeroPhotos
+    ? heroPhotos(portfolioItems.map(item => ({ ...item, is_featured: heroPicked.includes(item.id) })), heroPickLimit).map(item => item.image_url)
+    : portfolioItems.slice(0, 3).map(item => item.image_url);
 
   const handleSave = useCallback(async () => {
     if (!providerId) return;
@@ -395,12 +399,12 @@ export default function BrandingScreen({ navigation }: any) {
         brand_font: brandFont,
       });
 
-      // The fan's photos live on the portfolio rows, so they save on their own.
-      const fanChanged = fanPicked.length !== savedFanPicked.current.length
-        || fanPicked.some(id => !savedFanPicked.current.includes(id));
-      if (fanChanged) {
-        await setFanPortfolioPhotos(providerId, fanPicked);
-        savedFanPicked.current = fanPicked;
+      // The picked photos live on the portfolio rows, so they save on their own.
+      const picksChanged = heroPicked.length !== savedHeroPicked.current.length
+        || heroPicked.some(id => !savedHeroPicked.current.includes(id));
+      if (picksChanged) {
+        await setHeroPortfolioPhotos(providerId, heroPicked);
+        savedHeroPicked.current = heroPicked;
       }
 
       // Keep My Profile's render cache in step with the DB so returning to it
@@ -422,7 +426,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, fanPicked, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, heroPicked, navigation]);
 
   // The profile_theme the on-screen choices would save, for the preview.
   const liveThemeKey = encodeThemeKey(
@@ -512,7 +516,6 @@ export default function BrandingScreen({ navigation }: any) {
               kicker={heroKicker}
               location={heroLocation}
               photoUris={previewPhotoUris}
-              fanPhotoUris={previewFanUris}
             />
           </ProfilePreviewScreen>
         </SafeAreaProvider>
@@ -616,23 +619,22 @@ export default function BrandingScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Your Photos (Hush, three boxes): the photos their hero opens on. */}
-              {usesFan && (
+              {/* Your Photos (Editorial, Snapshot, Hush): the photos their hero opens on. */}
+              {picksHeroPhotos && (
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>Your Photos</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  {`${getPageStyle(pageStyle).name} opens your page with ${heroPickLimit} of your photos, each in its own box. Pick them from your portfolio. Nothing picked? Your newest show.`}
+                  {heroPickLimit === 1
+                    ? `${getPageStyle(pageStyle).name} shows one of your photos at the top. Tap the one you want. Nothing picked? Your newest shows.`
+                    : `${getPageStyle(pageStyle).name} shows ${heroPickLimit} of your photos at the top. Tap the ones you want. Pick fewer and your newest fill the rest.`}
                 </Text>
-                <FanPhotoPicker
+                <HeroPhotoPicker
                   items={portfolioItems}
-                  picked={fanPicked}
-                  onChange={setFanPicked}
+                  picked={heroPicked}
+                  onChange={setHeroPicked}
                   limit={heroPickLimit}
-                  sheet={sheetColor}
                   accent={accentColor}
-                  textColor={P.text}
                   subColor={P.sub}
-                  borderColor={P.border}
                 />
               </View>
               )}

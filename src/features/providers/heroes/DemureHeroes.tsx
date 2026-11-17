@@ -19,7 +19,7 @@
 // - Bow: their photo with a satin ribbon down it and a bow tied on top, the
 //   logo on its foot, the name in Sorts Mill Goudy italic.
 //
-// Hush's boxes show the photos picked in Branding (fanPhotos).
+// Hush's boxes show the photos picked in Branding (heroPhotos).
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
@@ -235,14 +235,14 @@ export function HushHero({
   renderLogo,
   details,
   tick,
-  fanUris,
+  photoUris,
   paper,
-  onOpenFanPhoto,
+  onOpenPhoto,
 }: DemureHeroProps & {
-  fanUris: readonly string[];
+  photoUris: readonly string[];
   /** The print border: the content sheet's colour. */
   paper: string;
-  onOpenFanPhoto?: ((index: number) => void) | undefined;
+  onOpenPhoto?: ((index: number) => void) | undefined;
 }) {
   const top = [kicker, location.toUpperCase()].filter(Boolean).join(" · ");
   return (
@@ -257,9 +257,9 @@ export function HushHero({
       </View>
       {phrase ? <Text style={[hush.phrase, { color: heroSub }, shadow]}>{phrase.toUpperCase()}</Text> : null}
       <View style={hush.details}>{details}</View>
-      {fanUris.length > 0 ? (
+      {photoUris.length > 0 ? (
         <>
-          <HushBoxes uris={fanUris} paper={paper} onOpen={onOpenFanPhoto} />
+          <HushBoxes uris={photoUris} paper={paper} onOpen={onOpenPhoto} />
           <Text style={[hush.caption, { color: heroSub }, shadow]}>a few of my favourites · tap to look closer</Text>
         </>
       ) : null}

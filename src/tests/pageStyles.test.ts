@@ -302,9 +302,12 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
     expect(new Set(styles.map(s => s.heading)).size).toBe(5);
   });
 
-  it('opens only Hush (three boxes) on picked photos', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['hush']);
+  it('lets every style with a photo in its hero pick it, except Bow', () => {
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush']);
+    expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
+    expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
+    expect(heroPhotoPickLimit(getPageStyle('bow'))).toBe(0);
     expect(heroPhotoPickLimit(getPageStyle('stripes'))).toBe(0);
     expect(heroPhotoPickLimit(getPageStyle('lounge'))).toBe(0);
   });

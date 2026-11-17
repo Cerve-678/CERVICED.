@@ -397,7 +397,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-16, the demure set (https://claude.ai/artifact/LPquiWNrboArq6NjcZi9ny,
   // boards 28–32), from the owner's Acuity "lash lounge" booking sites and a
   // lilac beauty-app mockup. Hush opens on three photos the provider picks in
-  // Branding (portfolio_items.is_featured; see fanPhotos.ts). 2026-11-17
+  // Branding (portfolio_items.is_featured; see heroPhotos.ts). 2026-11-17
   // (https://claude.ai/artifact/L6KZ2rjSqidNWQ7r9sd8ee): Lounge lost its photo
   // and got ruled section tabs, and Pearl's fan was replaced by colour strips
   // and outlined boxes and renamed Stripes.
@@ -433,10 +433,19 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   },
 ];
 
-/** How many photos this style's hero shows from the ones the provider picks
- *  in Branding (Hush: three boxes); 0 for the rest. */
+/** How many portfolio photos this style's hero shows, from the ones the
+ *  provider picks in Branding → Your Photos (heroPhotos.ts); 0 when it has
+ *  nothing to pick (owner, 2026-11-17: "any template with images should be
+ *  able to select the image"). */
 export function heroPhotoPickLimit(style: PageStyle): number {
-  return style.hero === 'hushFan' ? 3 : 0;
+  switch (style.hero) {
+    case 'editorial': return 1; // the tilted card
+    case 'blockName': return 3; // Snapshot's strip
+    case 'hushFan': return 3;   // three boxes
+    // Bow keeps its newest photo under the ribbon, unpicked (owner,
+    // 2026-11-17: "leave Bow alone").
+    default: return 0;
+  }
 }
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {
