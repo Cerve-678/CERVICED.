@@ -818,7 +818,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleTipSubmit = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedBooking || tipAmount <= 0) {
-      Alert.alert('Invalid Tip', 'Please enter a valid tip amount.');
+      Alert.alert('Choose an amount', 'Pick or type how much you want to tip.');
       return;
     }
 
@@ -840,14 +840,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
       setShowTipModal(false);
       setSuccessMessage(tipStatus === 'succeeded'
-        ? `Your £${tipAmount.toFixed(2)} tip has been paid to ${selectedBooking.providerName}.`
+        ? `Your £${tipAmount.toFixed(2)} tip has been sent to ${selectedBooking.providerName}.`
         : `Your £${tipAmount.toFixed(2)} tip for ${selectedBooking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
     } catch (error) {
       logger.error('Failed to save tip:', error);
-      Alert.alert('Error', 'Failed to save your tip. Please try again.');
+      Alert.alert('Tip not sent', 'Please try again in a moment.');
     } finally {
       setIsLoading(false);
     }
@@ -1772,7 +1772,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       onPress={() => {
                                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                         if (hasBookingBeenTipped(booking.id)) {
-                                          Alert.alert('Already Tipped', 'You have already tipped for this appointment.');
+                                          Alert.alert('Already tipped', "You've already tipped for this visit.");
                                           return;
                                         }
                                         setSelectedBooking(booking);
@@ -1876,7 +1876,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           onPress={() => {
                                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                             if (hasBookingBeenTipped(currentBooking.id)) {
-                                              Alert.alert('Already Tipped', 'You have already tipped for this appointment.');
+                                              Alert.alert('Already tipped', "You've already tipped for this visit.");
                                               return;
                                             }
                                             setSelectedBooking(currentBooking);
@@ -1982,7 +1982,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                               onPress={() => {
                                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                                 if (hasBookingBeenTipped(booking.id)) {
-                                                  Alert.alert('Already Tipped', 'You have already tipped for this appointment.');
+                                                  Alert.alert('Already tipped', "You've already tipped for this visit.");
                                                   return;
                                                 }
                                                 setSelectedBooking(booking);
@@ -2416,9 +2416,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={popSt.overlay} dismissOnTap>
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
-                <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a Tip</Text>
+                <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a tip</Text>
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  Show your appreciation for {selectedBooking?.providerName}. It's paid by card and all of it goes to them: CERVICED covers the card fee. You can tip for 48 hours after your appointment. Tips can't be refunded.
+                  Show your appreciation for {selectedBooking?.providerName}. You can tip for 48 hours after your appointment. Tips can't be refunded.
                 </Text>
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>
@@ -2446,7 +2446,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Text style={{ color: P.text }}>Skip</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: tipAmount <= 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : P.accent }]} disabled={tipAmount <= 0 || isLoading} onPress={handleTipSubmit} activeOpacity={0.7}>
-                    {isLoading ? <ActivityIndicator size="small" color={P.onAccent} /> : <Text style={{ color: P.onAccent, fontWeight: '600' }}>Send Tip</Text>}
+                    {isLoading ? <ActivityIndicator size="small" color={P.onAccent} /> : <Text style={{ color: P.onAccent, fontWeight: '600' }}>Send tip</Text>}
                   </TouchableOpacity>
                 </View>
               </View>

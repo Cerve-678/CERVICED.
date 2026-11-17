@@ -140,7 +140,7 @@ import type { ProviderProfileService } from "../../features/providers/profileTyp
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
 import { getPageStyle, heroPhotoPickLimit, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
-import { fanPhotos } from "../../features/providers/fanPhotos";
+import { heroPhotos } from "../../features/providers/heroPhotos";
 import {
   GlossShine,
   onAccentInk,
@@ -1845,17 +1845,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // already separated by getProviderPortfolio's own SQL, each with its own
   // row cap, so there is nothing left to divide here.
   const { work: workPortfolio, venue: venuePortfolio } = portfolio;
-  // Up to three of their portfolio photos for the heroes that show them
-  // (Editorial's tilted card, Snapshot's photo strip).
-  const heroPhotoUris = useMemo(
-    () => workPortfolio.slice(0, 3).map((item) => item.image_url).filter(Boolean),
-    [workPortfolio],
-  );
-  // Hush (three boxes) opens on the photos picked in
-  // Branding (their newest when none are picked).
+  // The photos the hero shows: Editorial (1), Snapshot (3) and Hush (3) open
+  // on the ones picked in Branding → Your Photos, topped up with the newest.
+  // Bow, which has nothing to pick, keeps its newest photo.
   const heroPickLimit = heroPhotoPickLimit(pageStyle);
-  const fanPhotoUris = useMemo(
-    () => (heroPickLimit > 0 ? fanPhotos(workPortfolio, heroPickLimit).map((item) => item.image_url).filter(Boolean) : []),
+  const heroPhotoUris = useMemo(
+    () => (heroPickLimit > 0 ? heroPhotos(workPortfolio, heroPickLimit) : workPortfolio.slice(0, 3))
+      .map((item) => item.image_url)
+      .filter(Boolean),
     [heroPickLimit, workPortfolio],
   );
   // A salon/studio on "Always visible" shows its full address in Contact
@@ -2371,9 +2368,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       key: prev.key + 1,
     }));
   }, []);
-  const openFanPhoto = useCallback(
-    (index: number) => openImageViewer(fanPhotoUris.map((uri) => ({ uri })), index),
-    [fanPhotoUris, openImageViewer],
+  const openHeroPhoto = useCallback(
+    (index: number) => openImageViewer(heroPhotoUris.map((uri) => ({ uri })), index),
+    [heroPhotoUris, openImageViewer],
   );
   const closeImageViewer = useCallback(() => {
     setServiceImageModal((prev) => ({
@@ -5274,8 +5271,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 cardColour={OP.card}
                 photoUris={heroPhotoUris}
                 sheetColour={sheetColour}
-                fanPhotoUris={fanPhotoUris}
-                onOpenFanPhoto={openFanPhoto}
+                onOpenHeroPhoto={openHeroPhoto}
                 rating={!isLinkOnly && Number(provider.rating) > 0 ? String(provider.rating) : null}
                 isVerified={provider.isVerified}
                 // Link-only providers have no Services section to jump to.

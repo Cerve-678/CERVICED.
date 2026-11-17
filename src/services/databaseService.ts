@@ -2025,17 +2025,17 @@ export async function addPortfolioItem(
 }
 
 /**
- * Branding → Your Photos: marks exactly these portfolio photos as
- * the ones the Hush page style opens on (three boxes)
+ * Branding → Your Photos: marks exactly these portfolio photos as the ones a
+ * page style's hero opens on (Editorial, Snapshot, Hush)
  * (portfolio_items.is_featured, which nothing else sets), and no others. At
- * most FAN_PHOTO_LIMIT are sent (features/providers/fanPhotos). The provider's
+ * most HERO_PHOTO_LIMIT are sent (features/providers/heroPhotos). The provider's
  * own rows only: RLS portfolio_owner_all.
  *
  * Two updates, not one transaction: if the second fails after the first,
  * nothing is picked, and the hero falls back to the newest photos rather than
  * showing a half-saved choice.
  */
-export async function setFanPortfolioPhotos(providerId: string, itemIds: readonly string[]): Promise<void> {
+export async function setHeroPortfolioPhotos(providerId: string, itemIds: readonly string[]): Promise<void> {
   const { error: clearError } = await supabase
     .from("portfolio_items")
     .update({ is_featured: false })

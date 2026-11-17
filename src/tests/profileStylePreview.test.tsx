@@ -16,7 +16,11 @@ jest.mock('react-native-svg', () => ({ __esModule: true, default: () => null, Pa
 jest.mock('../components/ProfileHeroBackdrop', () => () => null);
 jest.mock('../components/FramedLogo', () => ({ LogoCircle: () => null }));
 
-function renderPreview(styleKey: (typeof PAGE_STYLES)[number]['key'], brandFont = 'default') {
+function renderPreview(
+  styleKey: (typeof PAGE_STYLES)[number]['key'],
+  brandFont = 'default',
+  content?: React.ComponentProps<typeof ProfileStylePreview>['content'],
+) {
   return render(
     <ProfileStylePreview
       themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', styleKey)}
@@ -31,11 +35,25 @@ function renderPreview(styleKey: (typeof PAGE_STYLES)[number]['key'], brandFont 
       pillLabels={['LASHES', 'PECKHAM', 'HOME STUDIO']}
       kicker="LASHES"
       location="Peckham"
+      content={content}
     />,
   );
 }
 
 describe('Branding preview', () => {
+  it('shows their own About, categories and services instead of grey bars', () => {
+    renderPreview('stripes', 'default', {
+      about: 'Soft lash sets from a quiet studio.',
+      categories: ['Lash extensions', 'Brows'],
+      services: [{ name: 'Classic full set', minutes: 120, price: 65 }, { name: 'Infill', minutes: 45, price: 40.5 }],
+    });
+    expect(screen.getByText('Soft lash sets from a quiet studio.')).toBeTruthy();
+    expect(screen.getByText('Lash extensions')).toBeTruthy();
+    expect(screen.getByText('Classic full set')).toBeTruthy();
+    expect(screen.getByText('2h · £65')).toBeTruthy();
+    expect(screen.getByText('45m · £40.50')).toBeTruthy();
+  });
+
   it.each(PAGE_STYLES.map(style => style.key))('draws the %s profile with the name and every key heading', key => {
     renderPreview(key);
     // Some heroes set the name in two voices; screen readers still hear it whole.
