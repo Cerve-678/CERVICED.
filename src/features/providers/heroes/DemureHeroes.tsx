@@ -32,11 +32,11 @@ import { cardInk } from "./BoutiqueHero";
 import { BowGlyph, PearlRing, ribbonColours, stripeColours } from "./demureOrnaments";
 
 /** How far Lounge's name line hangs below the panel's foot, as a share of its
- *  size. 0.55 at first, 0.42 (#578), then 0.16 once the photo went (owner,
- *  2026-11-17: "lift the name higher"), which sets the letters' feet just
- *  above the foot. BY … above it rises by the same amount so the gap stays. */
-const LOUNGE_NAME_DROP = 0.16;
-const LOUNGE_BY_LIFT = 1.11;
+ *  size. 0.55 at first, 0.42 (#578), 0.16 once the photo went (owner,
+ *  2026-11-17: "lift the name higher"), then 0.21 ("bring it slightly down").
+ *  BY … above it moves by the same amount so the gap stays. */
+const LOUNGE_NAME_DROP = 0.21;
+const LOUNGE_BY_LIFT = 1.06;
 
 /** How far the content sheet rides up over Lounge's page-coloured strip. */
 const LOUNGE_SHEET_OVERLAP = 40;
