@@ -29,6 +29,7 @@ import {
   PageSection,
   PageSectionHeading,
   AccentBandSection,
+  RuledJumpBar,
   policiesBringOwnSurface,
   sectionInk,
   sectionsSitOnPage,
@@ -67,7 +68,7 @@ export interface ProfileStylePreviewProps {
   location: string;
   /** Their newest portfolio photos, for the heroes that show one (Lounge, Bow, Editorial…). */
   photoUris?: readonly string[];
-  /** Hush and Pearl's fan, as Branding → Your fan has it right now. */
+  /** Hush's three photos, as Branding → Your Photos has them right now. */
   fanPhotoUris?: readonly string[];
 }
 
@@ -238,7 +239,9 @@ export function ProfileStylePreview({
         </View>
 
         <View style={[styles.sheet, { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg }, veilTheme && styles.sheetGlass]}>
-          {pageStyle.jumpBar ? (
+          {pageStyle.jumpBar && pageStyle.jumpBarRuled ? (
+            <RuledJumpBar sections={jumpKeys} sheet={veilTheme ? veilTheme.sheetFill : OP.bg} />
+          ) : pageStyle.jumpBar ? (
             <View style={[styles.jumpBar, { backgroundColor: accent }, squareCards && styles.square]}>
               {jumpKeys.map(key => (
                 <View key={key} style={styles.jumpItem}>

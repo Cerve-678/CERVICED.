@@ -53,6 +53,7 @@ import {
   heroIsDarkForStyle,
 } from "../../features/providers/ProfileHero";
 import { cardInk } from "../../features/providers/heroes/BoutiqueHero";
+import { stripesHeroColour } from "../../features/providers/heroes/DemureHeroes";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -146,6 +147,7 @@ import {
   PageSection,
   PageSectionHeading,
   AccentBandSection,
+  RuledJumpBar,
   policiesBringOwnSurface,
   sectionInk,
   sectionsSitOnPage,
@@ -1849,7 +1851,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     () => workPortfolio.slice(0, 3).map((item) => item.image_url).filter(Boolean),
     [workPortfolio],
   );
-  // Hush (three boxes) and Pearl (a fan) open on the photos picked in
+  // Hush (three boxes) opens on the photos picked in
   // Branding (their newest when none are picked).
   const heroPickLimit = heroPhotoPickLimit(pageStyle);
   const fanPhotoUris = useMemo(
@@ -2009,10 +2011,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const detailsOnCard = detailsSitOnCard(pageStyle);
   // Boutique's panel and Duet's welcome card are their card colour, so their
   // ink follows that colour; Calling Card's cream card is always inked dark.
-  // Lounge's sit on a strip of the page colour under the photo, Pearl's on its card.
+  // Lounge's sit on a strip of the page colour under its panel, Stripes' on
+  // its strip of the accent.
   const sheetColour = veilTheme ? veilTheme.sheetFill : OP.bg;
-  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet" || pageStyle.hero === "pearlFan"
+  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet"
     ? cardInk(OP.card)
+    : pageStyle.hero === "stripes"
+      ? cardInk(stripesHeroColour(adaptiveAccentColor))
     : pageStyle.hero === "lounge"
       ? cardInk(sheetColour)
       : DETAILS_ON_CARD_INK;
@@ -5619,8 +5624,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 veilTheme ? styles.contentSheetGlass : null,
               ]}
             >
-              {/* Cover: a bar of links to the main sections. */}
-              {pageStyle.jumpBar ? (
+              {/* Cover: a bar of links to the main sections. Lounge: the
+                  same links between two fine rules. */}
+              {pageStyle.jumpBar && pageStyle.jumpBarRuled ? (
+                <RuledJumpBar
+                  sections={jumpTargets.map(({ key }) => key)}
+                  sheet={sheetColour}
+                  onJump={(section) => {
+                    Haptics.selectionAsync().catch(() => {});
+                    scrollToSection(jumpTargets.find(({ key }) => key === section)?.ref.current ?? null);
+                  }}
+                />
+              ) : pageStyle.jumpBar ? (
                 <View
                   style={[
                     styles.jumpBar,

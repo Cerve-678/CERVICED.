@@ -2025,8 +2025,8 @@ export async function addPortfolioItem(
 }
 
 /**
- * Branding → Your Photos / Your Fan: marks exactly these portfolio photos as
- * the ones the Hush (three boxes) and Pearl (a fan) page styles open on
+ * Branding → Your Photos: marks exactly these portfolio photos as
+ * the ones the Hush page style opens on (three boxes)
  * (portfolio_items.is_featured, which nothing else sets), and no others. At
  * most FAN_PHOTO_LIMIT are sent (features/providers/fanPhotos). The provider's
  * own rows only: RLS portfolio_owner_all.

@@ -158,8 +158,8 @@ export default function BrandingScreen({ navigation }: any) {
   // The colour square and hue bar take a vertical drag, so the page stops
   // scrolling while a finger is on them.
   const [colourDragging, setColourDragging]   = useState(false);
-  // Branding → Your fan (Hush and Pearl): their work photos and the ones
-  // picked for the fan, saved with everything else.
+  // Branding → Your Photos (Hush): their work photos and the ones picked for
+  // its hero, saved with everything else.
   const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
   const [fanPicked, setFanPicked]             = useState<string[]>([]);
   const savedFanPicked = useRef<string[]>([]);
@@ -356,10 +356,10 @@ export default function BrandingScreen({ navigation }: any) {
     return () => { active = false; };
   }, [providerId]);
 
-  // Hush shows three picked photos, Pearl a fan of five.
+  // Hush shows three picked photos.
   const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle));
   const usesFan = heroPickLimit > 0;
-  // Switching from Pearl's five to Hush's three keeps the first three picks.
+  // Picks saved before the limit came down (Pearl's fan took five) keep the first ones.
   useEffect(() => {
     if (heroPickLimit > 0 && fanPicked.length > heroPickLimit) setFanPicked(fanPicked.slice(0, heroPickLimit));
   }, [heroPickLimit, fanPicked]);
@@ -616,21 +616,18 @@ export default function BrandingScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Your Photos (Hush, three boxes) / Your Fan (Pearl): the photos their hero opens on. */}
+              {/* Your Photos (Hush, three boxes): the photos their hero opens on. */}
               {usesFan && (
               <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>{heroPickLimit === 3 ? 'Your Photos' : 'Your Fan'}</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>Your Photos</Text>
                 <Text style={[styles.sectionSub, { color: P.sub }]}>
-                  {heroPickLimit === 3
-                    ? `${getPageStyle(pageStyle).name} opens your page with three of your photos, each in its own box. Pick them from your portfolio. Nothing picked? Your newest show.`
-                    : `${getPageStyle(pageStyle).name} opens your page with your work fanned out like prints. Pick up to ${heroPickLimit} photos from your portfolio. Nothing picked? Your newest photos fan out.`}
+                  {`${getPageStyle(pageStyle).name} opens your page with ${heroPickLimit} of your photos, each in its own box. Pick them from your portfolio. Nothing picked? Your newest show.`}
                 </Text>
                 <FanPhotoPicker
                   items={portfolioItems}
                   picked={fanPicked}
                   onChange={setFanPicked}
                   limit={heroPickLimit}
-                  variant={heroPickLimit === 3 ? 'boxes' : 'pearls'}
                   sheet={sheetColor}
                   accent={accentColor}
                   textColor={P.text}
