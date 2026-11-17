@@ -5,7 +5,7 @@
 
 #generated
 
-**3980 functions** across **559 files**.
+**3964 functions** across **555 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -131,12 +131,9 @@
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 - `useSignInAsAccount.ts` — **useSignInAsAccount**
 
-### `src/features/beauty-profile/` (13)
-- `BeautyMapLanding.tsx` — **BeautyMapLanding** · go · ideas · maintenanceStrip · nextUp · visibleItems
-- `BodyFigure.tsx` — **BodyMap** · **FigureThumb** · LineFigure · onLayout · PortraitFigure · SegmentsFigure · zone · ZonesFigure
-- `bodyMap.ts` — **areaForMaintenanceItem** · **areaRows** · **dueDotsByArea** · **maintenanceForMap** · **parseFigurePrefs**
+### `src/features/beauty-profile/` (9)
+- `BeautyProfileLanding.tsx` — **BeautyProfileLanding** · card · dateStub · go · groups · headline · ideas
 - `CategoryEditor.tsx` — **CategoryEditor** · chipStyle · chipTextStyle · renderChips · sectionHead · setSingle · sub · toggleAllergen · toggleExclusive · toggleMulti · withSaved
-- `FigureSheet.tsx` — **FigureSheet**
 - `highlights.ts` — **highlightCategory** · **leadingCategory** · orderedAnswers
 - `MyProfileView.tsx` — editToggle · **MyProfileView** · renderTile · tapLight · weight
 - `options.ts` — **hairGoalsFor** · **hairTreatmentHistory**
@@ -144,7 +141,6 @@
 - `profileRow.ts` — **beautyDataFromRow**
 - `suitedIdeas.ts` — add · **allSuitedIdeas** · from · goal · hairIdeas · **isSuitedCategory** · lashBrowIdeas · makeupIdeas · nailIdeas · **suitedIdeas**
 - `useBeautyProfileTodo.ts` — **useBeautyProfileTodo**
-- `useFigurePrefs.ts` — save · **useFigurePrefs**
 
 ### `src/features/bookings/` (31)
 - `activityCentre.ts` — **activityTimeline** · appointmentMs · beforeDay · **bookingTodoCounts** · **buildClientActivity** · byDueDate · isoMs · isStillAhead · localDayKey · names · needsYouPulse · pounds · shortDay · when
@@ -399,7 +395,7 @@
 ### `src/screens/client/` (24)
 - `ActivityCentreScreen.tsx` — ActivityCentreScreen · doneSection · onRefresh · openItem · pillMessages · renderList · sectionHead · tile · timeline
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
-- `BeautyProfileScreen.tsx` — BeautyProfileScreen · circle · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openCategoryFromMap · openSetup · openTodoField · pickedCount · runCardAction · stats · stepBack · todo · toggleEdit
+- `BeautyProfileScreen.tsx` — BeautyProfileScreen · circle · closeCategory · findProvider · handleCancel · handleItemAction · handleSave · loadProfile · openCategory · openCategoryFromLanding · openSetup · openTodoField · pickedCount · stats · stepBack · todo · toggleEdit
 - `BookingDetailScreen.tsx` — addRebookToCart · agreedTerms · booking · BookingDetailScreen · cancelRefund · canDispute · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleSubmitDispute · handleSubmitSupport · handleTipSubmit · isMobile · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · openSupportForm · policyRows · refundOutcome · refundScopeCopy · refundTimeline · shareReceipt · showRecommendError · tick
 - `BookingsScreen.tsx` — applyLocation · bookingIdsForReviewState · bookingListKeyExtractor · BookingsScreen · confirmRebook · createStyles · endLeftoverHold · externalSplit · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · handleBookingPress · handleConfirmAndPay · handledFromWaitlist · handleDismissWaitlist · handleExternalBookingPress · handleLeaveFromDatesSheet · handleOpenWaitlistDates · handlePassWaitlist · handleRatingSubmit · handleRebook · handleRejoinWaitlist · handleSaveWaitlistDates · handleTipSubmit · handleWaitlistHoldEnded · hasBookingBeenRated · hasBookingBeenTipped · heldWaitlistPlaces · isMessagingAvailable · isTipClosed · listItems · loadWaitlist · mapBookings · onRefresh · openActivityCentre · openContactSheet · openInMaps · openPastFilterMenu · openProviderChat · otherWaitlistPlaces · pastBookingsFiltered · pastCategories · refreshUserLocation · removeHoldFromCart · renderBookingsListRow · renderPastBookingRow · renderServiceCategoryRow · renderWaitlistPlace · resolveMissingPins · retryLoadBookings · routeCoordinates · sortedWaitlistPlaces · startLocationUpdates · styles · to · toggleFilter · virtualizedListRows
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · filteredProviders · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · renderEmptyState · SkeletonProviderCard
