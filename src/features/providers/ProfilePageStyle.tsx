@@ -29,7 +29,7 @@ import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { BulldogClip } from "./heroes/CallingCardHero";
 import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
-import { BowGlyph, Pearl, PearlStrand, ribbonColours } from "./heroes/demureOrnaments";
+import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -412,13 +412,12 @@ export function PageSectionHeading({
         </View>
       );
     }
-    case "pearlStrand":
-      // Pearl: a strand of pearls over an italic serif title.
+    case "stripeCaps":
+      // Stripes: spaced serif caps, centred at the top of the section's strip.
       return (
-        <View {...a11y} accessible style={headingStyles.stack}>
-          <PearlStrand page={palette.background} />
-          <Text style={[headingStyles.pearlTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
-        </View>
+        <Text {...a11y} style={[headingStyles.stripeCaps, { color: ink }]}>
+          {title.toUpperCase()}
+        </Text>
       );
     case "bowSerif":
       // Bow: a small satin bow over an italic serif title.
@@ -454,6 +453,22 @@ export function PageSectionHeading({
  * `bare` drops the surface but keeps the heading, for content that brings its
  * own tiles (the policy grids).
  */
+/** Which of Stripes' sections sit on a tinted strip, so the page alternates
+ *  in its usual order (About, Services, Portfolio, Policies, Reviews) and
+ *  ends on the hero's stronger shade. */
+const STRIPE_TINT: Record<PageSectionKey, "soft" | "strong" | null> = {
+  about: null,
+  services: "soft",
+  portfolio: null,
+  policies: "soft",
+  policyPages: null,
+  reviews: "strong",
+  hours: null,
+  contact: "soft",
+  info: null,
+  specialities: null,
+};
+
 export function PageSection({
   section,
   palette,
@@ -521,6 +536,33 @@ export function PageSection({
     </HeadingLine>
   );
 
+  if (pageStyle.cards === "stripes") {
+    // Stripes: the section on a full-width strip, bled out of the sheet's
+    // 20pt side padding. Every other section is tinted, with fine rules along
+    // its edges, so the page reads as bands; the content sits in an outlined box.
+    const colours = stripeColours(palette.accent);
+    const tint = STRIPE_TINT[section];
+    const strip = tint === "strong" ? colours.strong : tint === "soft" ? colours.soft : null;
+    return (
+      <View
+        style={[
+          surfaceStyles.stripe,
+          strip ? [surfaceStyles.stripeTinted, { backgroundColor: strip, borderColor: colours.line }] : null,
+          style,
+        ]}
+      >
+        <HeadingLine headingRight={headingRight} centered>
+          <PageSectionHeading section={section} palette={palette} color={sheetInk(strip ?? palette.background).text} />
+        </HeadingLine>
+        {bare ? children : (
+          <View style={[surfaceStyles.solid, surfaceStyles.stripeBox, { backgroundColor: palette.cardBackground, borderColor: colours.line }]}>
+            {children}
+          </View>
+        )}
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "soft" && !bare) {
     // Soft Focus: the heading sits inside its own soft card, in the card's ink.
     return (
@@ -568,7 +610,6 @@ export function PageSection({
     : pageStyle.cards === "raised" ? 3
     : pageStyle.cards === "flat" || pageStyle.cards === "product" ? 6
     : pageStyle.cards === "gloss" || pageStyle.cards === "outlineRound" ? 28
-    : pageStyle.cards === "pearl" ? 26
     : pageStyle.cards === "bow" ? 22
     : pageStyle.cards === "chunky" ? 26
     : pageStyle.cards === "offset" ? 22
@@ -703,7 +744,7 @@ function isCentredHeading(style: PageStyle): boolean {
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
     || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "lacePair"
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
-    || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "pearlStrand"
+    || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "stripeCaps"
     || style.heading === "bowSerif"
   );
 }
@@ -952,8 +993,9 @@ export function serviceCardSurface(
       return { backgroundColor: colours.card, borderWidth: 1, borderColor: outlineInk(colours.card), borderRadius: 24, shadowOpacity: 0 };
     case "soft":
       return { ...flat, backgroundColor: colours.card, borderRadius: 22 };
-    case "pearl":
-      return { ...flat, backgroundColor: colours.card, borderRadius: 26 };
+    case "stripes":
+      // Stripes: a fine outlined box, like the section boxes.
+      return { backgroundColor: colours.card, borderWidth: 1, borderColor: stripeColours(colours.accent).line, borderRadius: 16, shadowOpacity: 0 };
     case "bow":
       return { ...flat, backgroundColor: colours.card, borderRadius: 22 };
     case "pages":
@@ -972,6 +1014,64 @@ export function serviceCardSurface(
       return null;
   }
 }
+
+// ── Ruled section links ──────────────────────────────────────────────────────
+
+/**
+ * Lounge's section links: the titles in tall caps between two fine rules
+ * across the sheet, short dividers between them, instead of a filled pill
+ * (owner, 2026-11-17, option C on https://claude.ai/artifact/L6KZ2rjSqidNWQ7r9sd8ee).
+ * `onJump` is left out in Branding's preview, where the links do nothing.
+ */
+export function RuledJumpBar({
+  sections,
+  sheet,
+  onJump,
+}: {
+  sections: readonly PageSectionKey[];
+  sheet: string;
+  onJump?: ((section: PageSectionKey) => void) | undefined;
+}) {
+  const ink = sheetInk(sheet);
+  const rule = outlineInk(sheet);
+  return (
+    <View style={[ruledBarStyles.bar, { borderColor: rule }]}>
+      {sections.map((section, index) => {
+        const label = (
+          <Text style={[ruledBarStyles.text, { color: ink.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {PAGE_SECTION_TITLES[section].toUpperCase()}
+          </Text>
+        );
+        return (
+          <React.Fragment key={section}>
+            {index > 0 ? <View style={[ruledBarStyles.divider, { backgroundColor: ink.border }]} /> : null}
+            {onJump ? (
+              <TouchableOpacity
+                style={ruledBarStyles.item}
+                onPress={() => onJump(section)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Go to ${PAGE_SECTION_TITLES[section]}`}
+              >
+                {label}
+              </TouchableOpacity>
+            ) : (
+              <View style={ruledBarStyles.item}>{label}</View>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+const ruledBarStyles = StyleSheet.create({
+  // Edge to edge across the sheet's 20pt side padding.
+  bar: { flexDirection: "row", borderTopWidth: 1, borderBottomWidth: 1, marginHorizontal: -20, marginBottom: 24 },
+  item: { flex: 1, minHeight: 50, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  divider: { width: StyleSheet.hairlineWidth, marginVertical: 14 },
+  text: { fontFamily: "LeagueGothic-Regular", fontSize: 20, lineHeight: 26, letterSpacing: 0.8 },
+});
 
 // ── Accent bands ─────────────────────────────────────────────────────────────
 
@@ -1137,7 +1237,7 @@ export function StyledPolicyList({
   }
 
   if (layout === "pearlNotes") {
-    // Pearl: rows on the card, each beside a single pearl.
+    // Stripes: rows in the outlined box, each beside a single pearl.
     return (
       <View style={policyStyles.pearlList}>
         {rows.map(row => (
@@ -1710,12 +1810,12 @@ const headingStyles = StyleSheet.create({
   chunkyCaps: { fontFamily: "YoungSerif-Regular", fontSize: 28, lineHeight: 50, letterSpacing: 0.6, textAlign: "center", paddingHorizontal: 8 },
   chunkyScript: { fontFamily: "Ephesis-Regular", fontSize: 34, letterSpacing: 0 },
   // The demure set (2026-11-16): League Gothic (Lounge), Archivo (Soft Focus),
-  // Hanken Grotesk (Hush), Castoro (Pearl), Sorts Mill Goudy (Bow).
+  // Hanken Grotesk (Hush), Castoro (Stripes), Sorts Mill Goudy (Bow).
   loungeKicker: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.4, textAlign: "center", marginBottom: 2 },
   loungeCaps: { fontFamily: "LeagueGothic-Regular", fontSize: 32, lineHeight: 41, letterSpacing: 0.6, textAlign: "center" },
   softCaps: { fontFamily: "Archivo-ExtraBold", fontSize: 15, lineHeight: 20, letterSpacing: -0.1, marginBottom: 12 },
   hushRule: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.2, flexShrink: 1 },
-  pearlTitle: { fontFamily: "Castoro-Italic", fontSize: 23, lineHeight: 30, textAlign: "center", marginTop: 10 },
+  stripeCaps: { fontFamily: "Castoro-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 4, textAlign: "center" },
   bowTitle: { fontFamily: "SortsMillGoudy-Italic", fontSize: 25, lineHeight: 34, textAlign: "center", marginTop: 2 },
   // Novel: IM Fell English, an old book face no other style uses.
   chapterNumber: { fontFamily: "IMFellEnglishSC-Regular", fontSize: 13, lineHeight: 17, letterSpacing: 3.6 },
@@ -1781,6 +1881,10 @@ const surfaceStyles = StyleSheet.create({
   blockCard: { borderWidth: 2 },
   product: { borderWidth: 1 },
   outlineRound: { borderWidth: 1 },
+  // Stripes: each section a full-width strip, butting onto the next.
+  stripe: { marginHorizontal: -20, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 20 },
+  stripeTinted: { borderTopWidth: 1, borderBottomWidth: 1, marginVertical: -0.5 },
+  stripeBox: { borderWidth: 1, borderRadius: 16, padding: 16 },
   softCard: { borderRadius: 26, padding: 18, marginBottom: 16 },
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },

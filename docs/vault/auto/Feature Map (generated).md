@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **103 files**
 - … +73 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **213 files**
+Curated: [[Availability & Slots]] · **212 files**
 - `src/services/databaseService.ts` _(340)_
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
@@ -71,10 +71,10 @@ Curated: [[Availability & Slots]] · **213 files**
 - `src/components/AvailabilityCard.tsx` _(24)_
 - `src/features/cart/presentation.ts` _(24)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(24)_
-- … +183 more
+- … +182 more
 
 ## Payments
-Curated: [[Payments]] · **172 files**
+Curated: [[Payments]] · **178 files**
 - `src/screens/client/CartScreen.tsx` _(534)_
 - `src/services/databaseService.ts` _(253)_
 - `src/screens/provider/PaymentsScreen.tsx` _(173)_
@@ -102,10 +102,10 @@ Curated: [[Payments]] · **172 files**
 - `supabase/provider_reminder_jobs.sql` _(34)_
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/booking.ts` _(33)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(31)_
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `supabase/phase1_schema.sql` _(28)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(27)_
-- … +142 more
+- … +148 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **380 files**

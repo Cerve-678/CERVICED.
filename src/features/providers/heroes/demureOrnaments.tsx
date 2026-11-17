@@ -2,8 +2,9 @@
 //
 // The small drawn ornaments of the demure page styles, shared by their heroes
 // (heroes/DemureHeroes) and their section headings and policies
-// (ProfilePageStyle): Pearl's pearls and strand, and Bow's satin bow. Kept
-// apart from both so neither imports the other.
+// (ProfilePageStyle): the pearls round Stripes' logo and beside its policies,
+// Stripes' strip colours, and Bow's satin bow. Kept apart from both so
+// neither imports the other.
 
 import React from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -33,20 +34,6 @@ export function Pearl({ size, onDark = false, style }: { size: number; onDark?: 
         style,
       ]}
     />
-  );
-}
-
-/** Pearl's section divider: a short strand, the pearls growing to the middle. */
-export const STRAND_SIZES = [5, 6, 7, 8, 9, 12, 9, 8, 7, 6, 5] as const;
-
-export function PearlStrand({ page }: { page: string }) {
-  const onDark = isDarkColor(page);
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }} accessible={false} importantForAccessibility="no-hide-descendants">
-      {STRAND_SIZES.map((size, index) => (
-        <Pearl key={index} size={size} onDark={onDark} />
-      ))}
-    </View>
   );
 }
 
@@ -113,4 +100,15 @@ export function BowGlyph({ width, accent, detailed = false }: { width: number; a
       <Ellipse cx={50} cy={31} rx={6.5} ry={8} fill={detailed ? satin : edge} {...stroke} />
     </Svg>
   );
+}
+
+/** Stripes' colours from the accent: `strong` for the hero's strip and the
+ *  last section's, `soft` for the strips between, `line` for the fine rules
+ *  along each strip's edges and round every box. */
+export function stripeColours(accent: string): { strong: string; soft: string; line: string } {
+  return {
+    strong: blend(accent, "#FFFFFF", 0.45),
+    soft: blend(accent, "#FFFFFF", 0.75),
+    line: isDarkColor(accent) ? accent : blend(accent, "#000000", 0.2),
+  };
 }

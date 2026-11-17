@@ -26,7 +26,7 @@ import { SEALED_LOGO_SIZE, SealedEnvelope } from "./heroes/SealedHero";
 import { sealLetter, waxColour } from "./WaxSeal";
 import { SheerHero } from "./heroes/SheerHero";
 import { CallingCardHero } from "./heroes/CallingCardHero";
-import { BowHero, HushHero, LoungeHero, PearlHero, SoftFocusHero } from "./heroes/DemureHeroes";
+import { BowHero, HushHero, LoungeHero, SoftFocusHero, StripesHero, stripesHeroColour } from "./heroes/DemureHeroes";
 
 /** The business name under the logo; a thin script is drawn larger than
  *  this (see resolveProviderFontScale), and Cover larger still (nameScale). */
@@ -205,7 +205,7 @@ export interface ProfileHeroLayoutProps {
   /** The content sheet's colour: Lounge's cut-out name and the strip it
    *  lands on, Hush's print borders. */
   sheetColour?: string;
-  /** Hush and Pearl's fan: the photos picked in Branding (fanPhotos). */
+  /** Hush's three boxes: the photos picked in Branding (fanPhotos). */
   fanPhotoUris?: readonly string[];
   /** Opens a fan photo full size. Left out in the preview. */
   onOpenFanPhoto?: ((index: number) => void) | undefined;
@@ -848,14 +848,12 @@ export function ProfileHeroLayout({
       );
 
     case "lounge":
-      // Lounge: the name cut out of the page across their photo (heroes/DemureHeroes).
+      // Lounge: the name cut out of the page across a panel of their colour (heroes/DemureHeroes).
       return (
         <LoungeHero
           name={name}
-          photoUri={photoUris?.[0]}
           accent={accent}
           sheetColour={sheetColour ?? cardColour}
-          heroText={heroText}
           details={details}
           tick={tick}
         />
@@ -894,17 +892,16 @@ export function ProfileHeroLayout({
         />
       );
 
-    case "pearlFan":
+    case "stripes":
       return (
-        <PearlHero
+        <StripesHero
           name={name}
           phrase={kickerPhrase(kicker)}
-          cardColour={cardColour}
+          accent={accent}
           renderLogo={renderLogo}
           details={details}
-          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
-          fanUris={fanPhotoUris ?? []}
-          onOpenFanPhoto={onOpenFanPhoto}
+          // The tick sits on the strip, usually a pale shade of the accent.
+          tick={isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(stripesHeroColour(accent)) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
         />
       );
 
@@ -1016,7 +1013,7 @@ function SealRing({
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
   return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage"
-    || pageStyle.hero === "lounge" || pageStyle.hero === "pearlFan";
+    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes";
 }
 
 /**

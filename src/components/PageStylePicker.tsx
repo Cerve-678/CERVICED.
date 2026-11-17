@@ -15,7 +15,7 @@ import Svg, { Polygon } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
-import { BowGlyph, ribbonColours } from '../features/providers/heroes/demureOrnaments';
+import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
 
 interface Props {
   value: PageStyleKey;
@@ -115,27 +115,9 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   lounge: { text: 'THE SERVICES' },
   softFocus: { text: 'THE SERVICES' },
   hush: { text: 'SERVICES' },
-  pearl: { text: 'The Services' },
+  stripes: { text: 'SERVICES' },
   bow: { text: 'The Services' },
 };
-
-/** Three photo cards fanned from a point below them (Pearl). */
-function MiniFan({ colour, border }: { colour: string; border: string }) {
-  return (
-    <View style={mini.fanStage}>
-      {[-14, 0, 14].map(deg => (
-        <View
-          key={deg}
-          style={[
-            mini.fanCard,
-            { backgroundColor: colour, borderColor: border, borderRadius: 5 },
-            { transform: [{ translateY: 22 }, { rotate: `${deg}deg` }, { translateY: -22 }] },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
 
 /** A tiny drawing of the profile top and one section in this style. */
 function MiniProfile({
@@ -311,17 +293,8 @@ function MiniProfile({
             <View style={[mini.hushLine, { backgroundColor: line }]} />
           </View>
         );
-      case 'pearlStrand':
-        return (
-          <View style={mini.stack}>
-            <View style={mini.strand}>
-              {[3, 4, 5, 4, 3].map((size, index) => (
-                <View key={index} style={[mini.pearlDot, { width: size, height: size, borderRadius: size / 2 }]} />
-              ))}
-            </View>
-            <Text style={[mini.pearlTitle, { color: ink }]}>{heading.text}</Text>
-          </View>
-        );
+      case 'stripeCaps':
+        return <Text style={[mini.stripeCaps, { color: ink }]}>{heading.text}</Text>;
       case 'bowSerif':
         return (
           <View style={mini.stack}>
@@ -402,8 +375,15 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.pagesCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'outlineRound':
         return <View key={key} style={[mini.card, mini.roundCard, { backgroundColor: cardColour, borderWidth: 1, borderColor: isDarkColor(cardColour) ? '#F2EDEA' : '#1F1A1C' }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'stripes': {
+        const stripe = stripeColours(accent);
+        return (
+          <View key={key} style={[mini.stripeBand, { backgroundColor: key % 2 === 0 ? stripe.soft : 'transparent', borderColor: key % 2 === 0 ? stripe.line : 'transparent' }]}>
+            <View style={[mini.card, mini.stripeBox, { backgroundColor: cardColour, borderColor: stripe.line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>
+          </View>
+        );
+      }
       case 'soft':
-      case 'pearl':
       case 'bow':
         return <View key={key} style={[mini.card, mini.roundCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'gloss':
@@ -592,8 +572,8 @@ function MiniProfile({
             </View>
           </View>
         ) : style.hero === 'lounge' ? (
-          // Lounge: a rounded-top photo, the name in tall caps cut out of the page across its foot.
-          <View style={[mini.loungePhoto, { backgroundColor: blend(accent, '#000000', 0.15) }]}>
+          // Lounge: a rounded-top panel of their colour, the name in tall caps cut out of the page near its foot.
+          <View style={[mini.loungePanel, { backgroundColor: accent }]}>
             <Text style={[mini.loungeName, { color: sheet }]} numberOfLines={1}>NAME</Text>
           </View>
         ) : style.hero === 'softCard' ? (
@@ -615,11 +595,11 @@ function MiniProfile({
               ))}
             </View>
           </View>
-        ) : style.hero === 'pearlFan' ? (
-          // Pearl: a card with a fan of photos and the name in spaced serif caps.
-          <View style={[mini.pearlCard, { backgroundColor: cardColour }]}>
-            <MiniFan colour={blend(accent, '#FFFFFF', 0.45)} border="#FFFDF8" />
-            <Text style={[mini.pearlName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>NAME</Text>
+        ) : style.hero === 'stripes' ? (
+          // Stripes: a full-width strip of their colour, a pearl-ringed logo, the name in spaced serif caps.
+          <View style={[mini.stripeHero, { backgroundColor: stripeColours(accent).strong, borderColor: stripeColours(accent).line }]}>
+            <View style={[mini.logo, mini.stripeLogo]} />
+            <Text style={[mini.stripeName, { color: isDarkColor(stripeColours(accent).strong) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>NAME</Text>
           </View>
         ) : style.hero === 'bow' ? (
           // Bow: their photo with a ribbon down it and a bow on top.
@@ -688,12 +668,10 @@ const mini = StyleSheet.create({
   hushRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   hushLine: { flex: 1, height: StyleSheet.hairlineWidth * 2 },
   hushCaps: { fontFamily: 'HankenGrotesk-Medium', fontSize: 6, lineHeight: 9, letterSpacing: 1.6 },
-  strand: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  pearlDot: { backgroundColor: '#FFFDF8', borderWidth: 0.5, borderColor: 'rgba(120,104,88,0.5)' },
-  pearlTitle: { fontFamily: 'Castoro-Italic', fontSize: 11, lineHeight: 15 },
+  stripeCaps: { fontFamily: 'Castoro-Regular', fontSize: 9, lineHeight: 13, letterSpacing: 2, textAlign: 'center' },
   bowTitle: { fontFamily: 'SortsMillGoudy-Italic', fontSize: 12, lineHeight: 17 },
-  loungePhoto: { alignSelf: 'stretch', marginHorizontal: 6, marginTop: 10, flex: 1, borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end' },
-  loungeName: { fontFamily: 'LeagueGothic-Regular', fontSize: 30, lineHeight: 38, textAlign: 'center', marginBottom: -16 },
+  loungePanel: { alignSelf: 'stretch', marginHorizontal: 6, marginTop: 10, flex: 1, borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', justifyContent: 'flex-end' },
+  loungeName: { fontFamily: 'LeagueGothic-Regular', fontSize: 30, lineHeight: 38, textAlign: 'center', marginBottom: -6 },
   softCard: { flexDirection: 'row', alignItems: 'center', gap: 5, width: '86%', borderRadius: 10, padding: 6, overflow: 'hidden' },
   softWave: { position: 'absolute', right: -14, bottom: -14, width: 46, height: 30, borderTopLeftRadius: 30 },
   softLogo: { width: 26, height: 26, borderRadius: 13 },
@@ -702,10 +680,11 @@ const mini = StyleSheet.create({
   hushBox: { width: 18, height: 24, padding: 2 },
   hushBoxPhoto: { flex: 1 },
   hushName: { fontFamily: 'Newsreader-LightItalic', fontSize: 14, lineHeight: 20, color: '#FFFFFF' },
-  fanStage: { width: 60, height: 40, alignItems: 'center' },
-  fanCard: { position: 'absolute', top: 4, width: 18, height: 26, borderWidth: 1.5 },
-  pearlCard: { width: '80%', borderRadius: 10, alignItems: 'center', paddingTop: 2, paddingBottom: 3 },
-  pearlName: { fontFamily: 'Castoro-Regular', fontSize: 9, lineHeight: 12, letterSpacing: 2 },
+  stripeHero: { alignSelf: 'stretch', alignItems: 'center', borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 6, marginTop: 8 },
+  stripeLogo: { borderWidth: 1.5, borderStyle: 'dotted', borderColor: '#FFFDF8' },
+  stripeName: { fontFamily: 'Castoro-Regular', fontSize: 9, lineHeight: 12, letterSpacing: 2, marginTop: 3 },
+  stripeBand: { alignSelf: 'stretch', borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 3 },
+  stripeBox: { borderWidth: 1, borderRadius: 5 },
   bowWrap: { alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: 14, paddingTop: 8 },
   bowPhoto: { alignSelf: 'stretch', height: 38, borderRadius: 8, overflow: 'hidden' },
   bowRibbon: { position: 'absolute', top: 0, bottom: 0, left: '30%', width: 4 },
