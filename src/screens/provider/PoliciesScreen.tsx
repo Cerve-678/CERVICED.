@@ -2,7 +2,12 @@
  * Policies — cancellations, reschedules, no-shows, refund policy, booking
  * instructions, and a detailed policy image.
  *
- * NOT deposits. The deposit setup (whether one applies, how much, whether it's
+ * NOT deposits, including whether a deposit is non-refundable: that switch
+ * moved to PaymentsScreen's Deposits card on 2026-11-17. Link-only providers
+ * have no Payments screen, so for them alone the switch stays here as a line
+ * on their profile (CERVICED takes no deposit for them).
+ *
+ * The rest of the deposit setup moved earlier: The deposit setup (whether one applies, how much, whether it's
  * new-clients-only) moved to PaymentsScreen on 2026-08-20 — it's a payment
  * question, and it was previously split across both screens. The deposit keys
  * still round-trip through this screen's save because the write below is a
@@ -72,7 +77,6 @@ import {
   Card, ChipGroup, Field, SectionLabel, Toast, SaveButton, ToggleRow,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
-import { resolveDepositMode } from '../../utils/depositPolicy';
 import {
   BOOKING_INSTRUCTION_SUGGESTIONS,
   selectedBookingInstructions,
@@ -117,6 +121,8 @@ interface PolicyState {
   emergencyBookingPolicy: string;
   travelPolicy: string;
   // Enforced by apply-cancellation-refund through each booking's frozen copy.
+  // Edited here only by a link-only provider; a full provider sets it in
+  // Payments, and this screen just round-trips the loaded value.
   depositNonRefundable: boolean;
 }
 
@@ -293,9 +299,6 @@ export default function PoliciesScreen({ navigation }: any) {
       }
     })();
   }, []);
-
-  const hasDeposit = resolveDepositMode(carriedPolicies) !== 'full_only'
-    && Boolean(carriedPolicies['depositAmount']);
 
   const setPolicy = useCallback(<K extends keyof PolicyState>(key: K, value: PolicyState[K]) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
@@ -550,29 +553,19 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             </>)}
 
-            <Card
-              title="Non-Refundable Deposit"
-              sub={isLinkOnly
-                ? 'Tell clients if a booking needs a non-refundable deposit. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn\'t apply it or take any money.'
-                : 'If you say yes, you keep the deposit whenever a client cancels, even in good time. It still goes back to them if you cancel, decline or don\'t answer. It only applies to new bookings.'}
-            >
-              <ToggleRow
-                label="Do you require a non-refundable deposit to secure bookings?"
-                value={policies.depositNonRefundable}
-                onChange={v => setPolicy('depositNonRefundable', v)}
-              />
-              {!isLinkOnly && policies.depositNonRefundable && !hasDeposit && (
-                <TouchableOpacity
-                  onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Payments'); }}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                >
-                  <Text style={[s.cardSub, { color: C.accentText, marginTop: 10, marginBottom: 0 }]}>
-                    You don't take a deposit yet, so this won't apply. Set one up in Payments.
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </Card>
+            {/* A full provider sets this in Payments → Deposits. */}
+            {isLinkOnly && (
+              <Card
+                title="Non-Refundable Deposit"
+                sub="Tell clients if a booking needs a non-refundable deposit. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn't apply it or take any money."
+              >
+                <ToggleRow
+                  label="Do you require a non-refundable deposit to secure bookings?"
+                  value={policies.depositNonRefundable}
+                  onChange={v => setPolicy('depositNonRefundable', v)}
+                />
+              </Card>
+            )}
 
             {/* Refund policy — free-text disclosure only. This app has no
                 refund-processing infra, so there is deliberately no

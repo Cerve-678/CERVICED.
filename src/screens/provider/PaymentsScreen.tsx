@@ -9,10 +9,13 @@
  * halves of it now live in one place rather than split across two screens:
  *   • booking_policies.depositMode/Type/Amount/Note — whether a deposit
  *     applies at all, and how much.
+ *   • booking_policies.depositNonRefundable          — whether it's kept even
+ *     on a cancel in good time (moved from PoliciesScreen on 2026-11-17;
+ *     link-only providers, who have no Payments screen, still set it there).
  *   • automation_settings.depositRequiredNew         — whether it applies to
  *     first-time clients only.
- * PoliciesScreen no longer edits any deposit field; it only carries the keys
- * through its own full-replace save. Do not reintroduce a deposit control
+ * PoliciesScreen edits no deposit field for a full provider; it only carries
+ * the keys through its own full-replace save. Do not reintroduce a deposit control
  * there — one editor per setting.
  *
  * depositMode is a THREE-way choice, and it has to be. The client booking
@@ -103,6 +106,13 @@ export default function PaymentsScreen({ navigation, route }: any) {
   const [depositType, setDepositType]     = useState<'percent' | 'fixed'>('percent');
   const [depositAmount, setDepositAmount] = useState('');
   const [depositNote, setDepositNote]     = useState('');
+  // Moved here from PoliciesScreen on 2026-11-17: whether the deposit is kept
+  // even when a client cancels in good time. Only means anything with a
+  // deposit, so the switch shows only then; checkout and the cancel refund
+  // already ignore it without one (resolveDepositMode), so the value is kept
+  // as-is when the provider turns deposits off. Link-only providers have no
+  // Payments screen and still state it on PoliciesScreen.
+  const [depositNonRefundable, setDepositNonRefundable] = useState(false);
   // saveProviderPolicies REPLACES the whole booking_policies blob rather than
   // merging, exactly like PoliciesScreen — every cancellation/reschedule/
   // no-show key this screen doesn't edit has to be carried back through the
@@ -146,6 +156,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
             depositType: savedType,
             depositAmount: savedAmount,
             depositNote: savedNote,
+            depositNonRefundable: savedNonRefundable,
             ...restPolicies
           } = saved as Record<string, unknown>;
           setOtherPolicies(restPolicies);
@@ -155,6 +166,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
           const amount = typeof savedAmount === 'string' ? savedAmount : savedAmount == null ? '' : String(savedAmount);
           setDepositAmount(amount);
           setDepositNote(typeof savedNote === 'string' ? savedNote : '');
+          setDepositNonRefundable(savedNonRefundable === true);
           const refund = restPolicies['refundPolicyNote'];
           setRefundPolicyNote(typeof refund === 'string' ? refund : '');
         }
@@ -206,6 +218,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
               depositType,
               depositAmount:   depositMode === 'full_only' ? '' : depositAmount,
               depositNote:     depositMode === 'full_only' ? '' : depositNote,
+              depositNonRefundable,
             })
           : Promise.resolve(),
       ]);
@@ -218,14 +231,14 @@ export default function PaymentsScreen({ navigation, route }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, paymentMethods, depositRequiredNew, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed]);
+  }, [providerId, userId, paymentMethods, depositRequiredNew, depositMode, depositType, depositAmount, depositNote, depositNonRefundable, otherPolicies, loadFailed]);
 
 
   const acceptedLabels = paymentMethods.map(paymentLabel);
   const depositAmountLabel = depositType === 'percent' ? `${depositAmount}%` : `£${depositAmount}`;
   const setupSummary = loading || loadFailed ? undefined : {
     deposit: depositMode === 'full_only' ? 'No deposit'
-      : [depositMode === 'client_choice' ? 'Optional' : 'Required', depositAmount && depositAmountLabel, depositRequiredNew && 'new clients']
+      : [depositMode === 'client_choice' ? 'Optional' : 'Required', depositAmount && depositAmountLabel, depositRequiredNew && 'new clients', depositNonRefundable && 'non-refundable']
           .filter(Boolean).join(' · '),
     inPerson: acceptedLabels.length ? acceptedLabels.join(', ') : 'None set',
   };
@@ -320,6 +333,13 @@ export default function PaymentsScreen({ navigation, route }: any) {
                   sub="Only first-time clients pay your deposit. Returning clients book as normal."
                   value={depositRequiredNew}
                   onChange={setDepositRequiredNew}
+                />
+
+                <ToggleRow
+                  label="Non-refundable"
+                  sub="You keep the deposit whenever a client cancels, even in good time. It still goes back to them if you cancel, decline or don't answer. It only applies to new bookings."
+                  value={depositNonRefundable}
+                  onChange={setDepositNonRefundable}
                 />
 
                 <Field
