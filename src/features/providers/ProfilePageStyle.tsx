@@ -16,6 +16,7 @@ import Svg, { Path } from "react-native-svg";
 import {
   chapterHeading,
   headingPair,
+  HUSH_TITLES,
   PAGE_SECTION_TITLES,
   romanNumeral,
   SECTION_NUMBERS,
@@ -28,6 +29,7 @@ import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { BulldogClip } from "./heroes/CallingCardHero";
 import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
+import { BowGlyph, Pearl, PearlStrand, ribbonColours } from "./heroes/demureOrnaments";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -380,6 +382,52 @@ export function PageSectionHeading({
         </View>
       );
     }
+    case "loungeCaps":
+      // Lounge: tall condensed caps, centred, with "PLEASE REVIEW MY" over the policies.
+      return (
+        <View {...a11y} accessible style={headingStyles.stack}>
+          {section === "policies" ? (
+            <Text style={[headingStyles.loungeKicker, { color: color ?? sheetInk(palette.background).sub }]}>PLEASE REVIEW MY</Text>
+          ) : null}
+          <Text style={[headingStyles.loungeCaps, { color: ink }]}>{headingPair(section).join(" ").toUpperCase()}</Text>
+        </View>
+      );
+    case "softCaps":
+      // Soft Focus: heavy grotesk caps at the top left of the section's own card.
+      return (
+        <Text {...a11y} style={[headingStyles.softCaps, { color: ink }]}>
+          {headingPair(section).join(" ").toUpperCase()}
+        </Text>
+      );
+    case "hushRule": {
+      // Hush: tiny spaced caps between hairlines, in its own quiet words.
+      const line = color ? withAlpha(color, 0.3) : sheetInk(palette.background).border;
+      return (
+        <View {...a11y} accessible style={headingStyles.ruledRow}>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+          <Text style={[headingStyles.hushRule, { color: color ?? sheetInk(palette.background).sub }]} numberOfLines={1}>
+            {HUSH_TITLES[section].toUpperCase()}
+          </Text>
+          <View style={[headingStyles.rule, { backgroundColor: line }]} />
+        </View>
+      );
+    }
+    case "pearlStrand":
+      // Pearl: a strand of pearls over an italic serif title.
+      return (
+        <View {...a11y} accessible style={headingStyles.stack}>
+          <PearlStrand page={palette.background} />
+          <Text style={[headingStyles.pearlTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
+        </View>
+      );
+    case "bowSerif":
+      // Bow: a small satin bow over an italic serif title.
+      return (
+        <View {...a11y} accessible style={headingStyles.stack}>
+          <BowGlyph width={34} accent={accent} />
+          <Text style={[headingStyles.bowTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
+        </View>
+      );
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -473,6 +521,18 @@ export function PageSection({
     </HeadingLine>
   );
 
+  if (pageStyle.cards === "soft" && !bare) {
+    // Soft Focus: the heading sits inside its own soft card, in the card's ink.
+    return (
+      <View style={[surfaceStyles.solid, surfaceStyles.softCard, { backgroundColor: palette.cardBackground }, square && surfaceStyles.square, style]}>
+        <HeadingLine headingRight={headingRight}>
+          <PageSectionHeading section={section} palette={palette} color={palette.text} />
+        </HeadingLine>
+        {children}
+      </View>
+    );
+  }
+
   if (pageStyle.cards === "sheer") {
     // Sheer: the heading on the page, the content in a see-through hairline box.
     return (
@@ -507,7 +567,9 @@ export function PageSection({
     : pageStyle.cards === "stationery" ? 3
     : pageStyle.cards === "raised" ? 3
     : pageStyle.cards === "flat" || pageStyle.cards === "product" ? 6
-    : pageStyle.cards === "gloss" ? 28
+    : pageStyle.cards === "gloss" || pageStyle.cards === "outlineRound" ? 28
+    : pageStyle.cards === "pearl" ? 26
+    : pageStyle.cards === "bow" ? 22
     : pageStyle.cards === "chunky" ? 26
     : pageStyle.cards === "offset" ? 22
     : 18;
@@ -618,6 +680,7 @@ export function PageSection({
           pageStyle.cards === "raised" && [surfaceStyles.raised, raisedEdges(palette.cardBackground)],
           pageStyle.cards === "clipped" && [surfaceStyles.paper, surfaceStyles.clippedCard],
           pageStyle.cards === "product" && [surfaceStyles.product, { borderColor: withAlpha(outlineInk(palette.cardBackground), 0.14) }],
+          pageStyle.cards === "outlineRound" && [surfaceStyles.outlineRound, { borderColor: outlineInk(palette.cardBackground) }],
         ]}
       >
         {pageStyle.cards === "gloss" ? <GlossShine radius={radius} /> : null}
@@ -640,7 +703,8 @@ function isCentredHeading(style: PageStyle): boolean {
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
     || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "lacePair"
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
-    || style.heading === "chunkyCaps"
+    || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "pearlStrand"
+    || style.heading === "bowSerif"
   );
 }
 
@@ -883,6 +947,15 @@ export function serviceCardSurface(
     case "tabbed":
       // Studio: a square solid block, no outline, like a studio's class card.
       return { ...flat, backgroundColor: colours.card, borderRadius: 0 };
+    case "outlineRound":
+      // Lounge: a fine dark outline and big round corners.
+      return { backgroundColor: colours.card, borderWidth: 1, borderColor: outlineInk(colours.card), borderRadius: 24, shadowOpacity: 0 };
+    case "soft":
+      return { ...flat, backgroundColor: colours.card, borderRadius: 22 };
+    case "pearl":
+      return { ...flat, backgroundColor: colours.card, borderRadius: 26 };
+    case "bow":
+      return { ...flat, backgroundColor: colours.card, borderRadius: 22 };
     case "pages":
       // A page: square, a fine edge, a little lift off the paper under it.
       return {
@@ -948,7 +1021,7 @@ export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
     layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
     || layout === "tiles" || layout === "divided" || layout === "stickers" || layout === "sealedNotes"
     || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion" || layout === "columns"
-    || layout === "membership"
+    || layout === "membership" || layout === "loungeGrid" || layout === "ribbonBand"
   );
 }
 
@@ -993,6 +1066,121 @@ export function StyledPolicyList({
             </View>
           </View>
         ))}
+      </View>
+    );
+  }
+
+  if (layout === "loungeGrid") {
+    // Lounge: two-up columns straight on the page, a condensed caps label over each.
+    return (
+      <View style={policyStyles.grid}>
+        {rows.map(row => (
+          <View key={row.label} style={[policyStyles.cell, policyStyles.loungeCell]}>
+            <Text style={[policyStyles.loungeLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.smallValue, { color: ink.sub }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+            ))}
+            {row.tag ? (
+              <View style={[policyStyles.tag, policyStyles.tagLeft, { backgroundColor: palette.accent }]}>
+                <Text style={[policyStyles.tagText, { color: onAccentInk(palette.accent).text }]}>{row.tag}</Text>
+              </View>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "softTiles") {
+    // Soft Focus: round tiles tinted with the accent, inside the section's card.
+    const tile = blend(palette.accent, palette.cardBackground, isDarkColor(palette.cardBackground) ? 0.72 : 0.8);
+    const tileInk = onAccentInk(tile);
+    return (
+      <View style={policyStyles.grid}>
+        {rows.map(row => (
+          <View key={row.label} style={[policyStyles.cell, policyStyles.softTile, { backgroundColor: tile }, square && policyStyles.square]}>
+            <Text style={[policyStyles.softLabel, { color: tileInk.text }]}>{row.label}</Text>
+            <Text style={[policyStyles.smallValue, { color: tileInk.sub }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, { color: tileInk.sub }]}>{note}</Text>
+            ))}
+            {row.tag ? (
+              <View style={[policyStyles.tag, policyStyles.tagLeft, { backgroundColor: palette.text }]}>
+                <Text style={[policyStyles.tagText, { color: palette.cardBackground }]}>{row.tag}</Text>
+              </View>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "gentleNotes") {
+    // Hush: centred notes, a small caps label over the policy in a light italic.
+    return (
+      <View style={policyStyles.gentleList}>
+        {rows.map(row => (
+          <View key={row.label} style={policyStyles.gentleRow}>
+            <Text style={[policyStyles.gentleLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.gentleValue, { color: ink.sub }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, policyStyles.centreText, { color: ink.sub }]}>{note}</Text>
+            ))}
+            {row.tag ? (
+              <Text style={[policyStyles.gentleLabel, { color: palette.accent }]}>{row.tag.toUpperCase()}</Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "pearlNotes") {
+    // Pearl: rows on the card, each beside a single pearl.
+    return (
+      <View style={policyStyles.pearlList}>
+        {rows.map(row => (
+          <View key={row.label} style={policyStyles.pearlRow}>
+            <Pearl size={10} onDark={isDarkColor(palette.cardBackground)} style={policyStyles.pearlBullet} />
+            <View style={policyStyles.numeralBody}>
+              <Text style={[policyStyles.pearlLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
+              <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? (
+                <Text style={[policyStyles.pearlLabel, { color: palette.accent }]}>{row.tag.toUpperCase()}</Text>
+              ) : null}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "ribbonBand") {
+    // Bow: one card with a satin ribbon across its top, two-up italic titles.
+    const ribbon = ribbonColours(palette.accent);
+    return (
+      <View style={[policyStyles.ribbonBandCard, { backgroundColor: palette.cardBackground }, square && policyStyles.square]}>
+        <View style={[policyStyles.ribbonBand, { backgroundColor: ribbon.satin, borderBottomColor: ribbon.edge }]} />
+        <View style={[policyStyles.ribbonGrid, policyStyles.ribbonBandGrid]}>
+          {rows.map(row => (
+            <View key={row.label} style={policyStyles.ribbonCell}>
+              <Text style={[policyStyles.bowLabel, { color: palette.text }]}>{row.label}</Text>
+              <Text style={[policyStyles.smallValue, { color: palette.sub }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, { color: palette.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? (
+                <View style={[policyStyles.tag, policyStyles.tagLeft, { backgroundColor: ribbon.soft }]}>
+                  <Text style={[policyStyles.tagText, { color: "#2E2224" }]}>{row.tag}</Text>
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </View>
       </View>
     );
   }
@@ -1521,6 +1709,14 @@ const headingStyles = StyleSheet.create({
   // for the script (≥1.45× its size) so its loops aren't cropped.
   chunkyCaps: { fontFamily: "YoungSerif-Regular", fontSize: 28, lineHeight: 50, letterSpacing: 0.6, textAlign: "center", paddingHorizontal: 8 },
   chunkyScript: { fontFamily: "Ephesis-Regular", fontSize: 34, letterSpacing: 0 },
+  // The demure set (2026-11-16): League Gothic (Lounge), Archivo (Soft Focus),
+  // Hanken Grotesk (Hush), Castoro (Pearl), Sorts Mill Goudy (Bow).
+  loungeKicker: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.4, textAlign: "center", marginBottom: 2 },
+  loungeCaps: { fontFamily: "LeagueGothic-Regular", fontSize: 32, lineHeight: 41, letterSpacing: 0.6, textAlign: "center" },
+  softCaps: { fontFamily: "Archivo-ExtraBold", fontSize: 15, lineHeight: 20, letterSpacing: -0.1, marginBottom: 12 },
+  hushRule: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.2, flexShrink: 1 },
+  pearlTitle: { fontFamily: "Castoro-Italic", fontSize: 23, lineHeight: 30, textAlign: "center", marginTop: 10 },
+  bowTitle: { fontFamily: "SortsMillGoudy-Italic", fontSize: 25, lineHeight: 34, textAlign: "center", marginTop: 2 },
   // Novel: IM Fell English, an old book face no other style uses.
   chapterNumber: { fontFamily: "IMFellEnglishSC-Regular", fontSize: 13, lineHeight: 17, letterSpacing: 3.6 },
   chapterTitle: { fontFamily: "IMFellEnglish-Italic", fontSize: 28, lineHeight: 37, textAlign: "center", marginBottom: 2 },
@@ -1584,6 +1780,8 @@ const surfaceStyles = StyleSheet.create({
   topRule: { borderTopWidth: 3 },
   blockCard: { borderWidth: 2 },
   product: { borderWidth: 1 },
+  outlineRound: { borderWidth: 1 },
+  softCard: { borderRadius: 26, padding: 18, marginBottom: 16 },
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
@@ -1690,6 +1888,23 @@ const policyStyles = StyleSheet.create({
   ribbonCell: { flexBasis: "44%", flexGrow: 1, gap: 4 },
   ribbonLabel: { fontFamily: "Forum-Regular", fontSize: 14, lineHeight: 19, letterSpacing: 2.2 },
   tagLeft: { alignSelf: "flex-start" },
+  // The demure set (2026-11-16).
+  loungeCell: { gap: 2, paddingVertical: 4 },
+  loungeLabel: { fontFamily: "LeagueGothic-Regular", fontSize: 19, lineHeight: 25, letterSpacing: 0.5 },
+  softTile: { borderRadius: 18, padding: 12 },
+  softLabel: { fontFamily: "Archivo-ExtraBold", fontSize: 13, lineHeight: 18 },
+  gentleList: { gap: 18, paddingTop: 2 },
+  gentleRow: { alignItems: "center", gap: 4, paddingHorizontal: 8 },
+  gentleLabel: { fontFamily: "HankenGrotesk-Medium", fontSize: 9.5, lineHeight: 13, letterSpacing: 3, textAlign: "center" },
+  gentleValue: { fontFamily: "Newsreader-LightItalic", fontSize: 16, lineHeight: 24, textAlign: "center" },
+  pearlList: { gap: 14 },
+  pearlRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  pearlBullet: { marginTop: 3 },
+  pearlLabel: { fontFamily: "Figtree-SemiBold", fontSize: 10, lineHeight: 14, letterSpacing: 2.4 },
+  ribbonBandCard: { borderRadius: 26, overflow: "hidden" },
+  ribbonBand: { height: 12, borderBottomWidth: 1 },
+  ribbonBandGrid: { padding: 18 },
+  bowLabel: { fontFamily: "SortsMillGoudy-Italic", fontSize: 17, lineHeight: 24 },
   accordion: { borderBottomWidth: StyleSheet.hairlineWidth },
   accordionRow: { borderTopWidth: StyleSheet.hairlineWidth },
   accordionHead: { minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },

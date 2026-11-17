@@ -48,6 +48,8 @@ import PageStylePicker from '../../components/PageStylePicker';
 import {
   DEFAULT_PAGE_STYLE,
   DEFAULT_POLICY_PICTURE_LOOK,
+  getPageStyle,
+  heroPhotoPickLimit,
   PAGE_STYLES,
   POLICY_PICTURE_LOOKS,
   type PageStyleKey,
@@ -55,7 +57,10 @@ import {
 } from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
-import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
+import { getMyProviderBranding, getProviderPortfolio, setFanPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
+import type { DbPortfolioItem } from '../../types/database';
+import { FanPhotoPicker } from '../../features/providers/FanPhotoPicker';
+import { FAN_PHOTO_LIMIT, fanPhotos } from '../../features/providers/fanPhotos';
 import { toUserMessage } from '../../utils/userFacingError';
 import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
 import { ImageCropModal } from '../../components/ImageCropModal';
@@ -153,6 +158,11 @@ export default function BrandingScreen({ navigation }: any) {
   // The colour square and hue bar take a vertical drag, so the page stops
   // scrolling while a finger is on them.
   const [colourDragging, setColourDragging]   = useState(false);
+  // Branding → Your fan (Hush and Pearl): their work photos and the ones
+  // picked for the fan, saved with everything else.
+  const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
+  const [fanPicked, setFanPicked]             = useState<string[]>([]);
+  const savedFanPicked = useRef<string[]>([]);
   const [part, setPart]                       = useState<BrandingPart>('layout');
 
   useEffect(() => {
@@ -330,6 +340,34 @@ export default function BrandingScreen({ navigation }: any) {
     setBackgroundImage(null);
   }, []);
 
+  useEffect(() => {
+    if (!providerId) return;
+    let active = true;
+    getProviderPortfolio(providerId)
+      .then(({ work }) => {
+        if (!active) return;
+        const picks = work.filter(item => item.is_featured).map(item => item.id).slice(0, FAN_PHOTO_LIMIT);
+        setPortfolioItems(work);
+        setFanPicked(picks);
+        savedFanPicked.current = picks;
+      })
+      // The fan picker and the preview's photos just stay empty; the rest of Branding works.
+      .catch(e => logger.warn('[Branding] could not load the portfolio for the fan:', e));
+    return () => { active = false; };
+  }, [providerId]);
+
+  // Hush shows three picked photos, Pearl a fan of five.
+  const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle));
+  const usesFan = heroPickLimit > 0;
+  // Switching from Pearl's five to Hush's three keeps the first three picks.
+  useEffect(() => {
+    if (heroPickLimit > 0 && fanPicked.length > heroPickLimit) setFanPicked(fanPicked.slice(0, heroPickLimit));
+  }, [heroPickLimit, fanPicked]);
+  const previewPhotoUris = portfolioItems.slice(0, 3).map(item => item.image_url);
+  const previewFanUris = usesFan
+    ? fanPhotos(portfolioItems.map(item => ({ ...item, is_featured: fanPicked.includes(item.id) })), heroPickLimit).map(item => item.image_url)
+    : [];
+
   const handleSave = useCallback(async () => {
     if (!providerId) return;
     setSaving(true);
@@ -357,6 +395,14 @@ export default function BrandingScreen({ navigation }: any) {
         brand_font: brandFont,
       });
 
+      // The fan's photos live on the portfolio rows, so they save on their own.
+      const fanChanged = fanPicked.length !== savedFanPicked.current.length
+        || fanPicked.some(id => !savedFanPicked.current.includes(id));
+      if (fanChanged) {
+        await setFanPortfolioPhotos(providerId, fanPicked);
+        savedFanPicked.current = fanPicked;
+      }
+
       // Keep My Profile's render cache in step with the DB so returning to it
       // doesn't flash the previous colours/photo for a frame before the live
       // row loads. Best-effort — the save already succeeded regardless.
@@ -376,7 +422,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, fanPicked, navigation]);
 
   // The profile_theme the on-screen choices would save, for the preview.
   const liveThemeKey = encodeThemeKey(
@@ -465,6 +511,8 @@ export default function BrandingScreen({ navigation }: any) {
               pillLabels={pillLabels}
               kicker={heroKicker}
               location={heroLocation}
+              photoUris={previewPhotoUris}
+              fanPhotoUris={previewFanUris}
             />
           </ProfilePreviewScreen>
         </SafeAreaProvider>
@@ -567,6 +615,30 @@ export default function BrandingScreen({ navigation }: any) {
                   borderColor={P.border}
                 />
               </View>
+
+              {/* Your Photos (Hush, three boxes) / Your Fan (Pearl): the photos their hero opens on. */}
+              {usesFan && (
+              <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>{heroPickLimit === 3 ? 'Your Photos' : 'Your Fan'}</Text>
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {heroPickLimit === 3
+                    ? `${getPageStyle(pageStyle).name} opens your page with three of your photos, each in its own box. Pick them from your portfolio. Nothing picked? Your newest show.`
+                    : `${getPageStyle(pageStyle).name} opens your page with your work fanned out like prints. Pick up to ${heroPickLimit} photos from your portfolio. Nothing picked? Your newest photos fan out.`}
+                </Text>
+                <FanPhotoPicker
+                  items={portfolioItems}
+                  picked={fanPicked}
+                  onChange={setFanPicked}
+                  limit={heroPickLimit}
+                  variant={heroPickLimit === 3 ? 'boxes' : 'pearls'}
+                  sheet={sheetColor}
+                  accent={accentColor}
+                  textColor={P.text}
+                  subColor={P.sub}
+                  borderColor={P.border}
+                />
+              </View>
+              )}
 
               {/* Policy pictures — how their uploaded policy pages sit in the
                   profile. Templates only: Classic keeps them behind the button. */}
