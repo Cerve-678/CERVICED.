@@ -49,7 +49,7 @@ import {
   DEFAULT_PAGE_STYLE,
   DEFAULT_POLICY_PICTURE_LOOK,
   getPageStyle,
-  heroUsesFan,
+  heroPhotoPickLimit,
   PAGE_STYLES,
   POLICY_PICTURE_LOOKS,
   type PageStyleKey,
@@ -346,10 +346,16 @@ export default function BrandingScreen({ navigation }: any) {
     return () => { active = false; };
   }, [providerId]);
 
-  const usesFan = heroUsesFan(getPageStyle(pageStyle));
+  // Hush shows three picked photos, Pearl a fan of five.
+  const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle));
+  const usesFan = heroPickLimit > 0;
+  // Switching from Pearl's five to Hush's three keeps the first three picks.
+  useEffect(() => {
+    if (heroPickLimit > 0 && fanPicked.length > heroPickLimit) setFanPicked(fanPicked.slice(0, heroPickLimit));
+  }, [heroPickLimit, fanPicked]);
   const previewPhotoUris = portfolioItems.slice(0, 3).map(item => item.image_url);
   const previewFanUris = usesFan
-    ? fanPhotos(portfolioItems.map(item => ({ ...item, is_featured: fanPicked.includes(item.id) }))).map(item => item.image_url)
+    ? fanPhotos(portfolioItems.map(item => ({ ...item, is_featured: fanPicked.includes(item.id) })), heroPickLimit).map(item => item.image_url)
     : [];
 
   const handleSave = useCallback(async () => {
@@ -643,15 +649,18 @@ export default function BrandingScreen({ navigation }: any) {
           {/* Your fan — Hush and Pearl open on a fan of photos they pick. */}
           {usesFan && (
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Your Fan</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>{heroPickLimit === 3 ? 'Your Photos' : 'Your Fan'}</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              {getPageStyle(pageStyle).name} opens your page with your work fanned out like prints. Pick up to {FAN_PHOTO_LIMIT} photos from your portfolio. Nothing picked? Your newest photos fan out.
+              {heroPickLimit === 3
+                ? `${getPageStyle(pageStyle).name} opens your page with three of your photos, each in its own box. Pick them from your portfolio. Nothing picked? Your newest show.`
+                : `${getPageStyle(pageStyle).name} opens your page with your work fanned out like prints. Pick up to ${heroPickLimit} photos from your portfolio. Nothing picked? Your newest photos fan out.`}
             </Text>
             <FanPhotoPicker
               items={portfolioItems}
               picked={fanPicked}
               onChange={setFanPicked}
-              variant={pageStyle === 'pearl' ? 'pearls' : 'prints'}
+              limit={heroPickLimit}
+              variant={heroPickLimit === 3 ? 'boxes' : 'pearls'}
               sheet={sheetColor}
               accent={accentColor}
               textColor={P.text}

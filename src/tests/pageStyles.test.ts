@@ -4,7 +4,7 @@ import {
   SECTION_NUMBERS,
   getPageStyle,
   headingPair,
-  heroUsesFan,
+  heroPhotoPickLimit,
   HUSH_TITLES,
   menuNumber,
   PAGE_SECTION_TITLES,
@@ -300,8 +300,11 @@ describe('the demure set (Lounge, Soft Focus, Hush, Pearl, Bow)', () => {
     expect(new Set(styles.map(s => s.heading)).size).toBe(5);
   });
 
-  it('opens only Hush and Pearl on the fan of picked photos', () => {
-    expect(PAGE_STYLES.filter(heroUsesFan).map(s => s.key)).toEqual(['hush', 'pearl']);
+  it('opens only Hush (three boxes) and Pearl (a fan of five) on picked photos', () => {
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['hush', 'pearl']);
+    expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
+    expect(heroPhotoPickLimit(getPageStyle('pearl'))).toBe(5);
+    expect(heroPhotoPickLimit(getPageStyle('lounge'))).toBe(0);
   });
 
   it('outlines Lounge\'s cards in ink with big round corners, and puts its policies on the page', () => {

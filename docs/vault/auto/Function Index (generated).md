@@ -5,7 +5,7 @@
 
 #generated
 
-**3976 functions** across **559 files**.
+**3977 functions** across **559 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -96,7 +96,7 @@
 
 ### `src/constants/` (11)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
-- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **heroUsesFan** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
+- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **heroPhotoPickLimit** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
@@ -317,7 +317,7 @@
 ### `src/features/providers/heroes/` (11)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
-- `DemureHeroes.tsx` — **BowHero** · **HeroFan** · **HushHero** · **LoungeHero** · **PearlHero** · **SoftFocusHero**
+- `DemureHeroes.tsx` — **BowHero** · **HeroFan** · **HushBoxes** · **HushHero** · **LoungeHero** · **PearlHero** · **SoftFocusHero**
 - `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **PearlStrand** · **ribbonColours**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**

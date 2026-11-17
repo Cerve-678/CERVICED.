@@ -158,7 +158,7 @@ export type PageHero =
   | 'studio'    // a studio website's top: what they do in chunky caps on a deep bar, then the logo and the name pressed into a panel of the accent as a lowercase wordmark
   | 'lounge'   // a rounded-top photo with the name in tall caps cut out of the page across its foot
   | 'softCard' // a tinted card with a wave: the round logo beside the name in heavy caps and a pill of what they do
-  | 'hushFan'  // quiet: what they do in tiny caps, a ringed logo, the name in light italic, a fan of their chosen photos
+  | 'hushFan'  // quiet: what they do in tiny caps, a ringed logo, the name in light italic, three of their chosen photos in separate boxes
   | 'pearlFan' // a card with a fan of their chosen photos, the logo in a ring of pearls, the name in spaced serif caps
   | 'bow'      // their photo with a ribbon down it and a bow on top, the logo on its foot, the name in italic serif
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
@@ -394,8 +394,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   },
   // 2026-11-16, the demure set (https://claude.ai/artifact/LPquiWNrboArq6NjcZi9ny,
   // boards 28–32), from the owner's Acuity "lash lounge" booking sites and a
-  // lilac beauty-app mockup. Hush and Pearl open on a fan of photos the
-  // provider picks in Branding (portfolio_items.is_featured; see fanPhotos.ts).
+  // lilac beauty-app mockup. Hush and Pearl open on photos the provider picks
+  // in Branding (portfolio_items.is_featured; see fanPhotos.ts): three in
+  // separate boxes for Hush, a fan of five for Pearl (owner, 2026-11-17).
   {
     key: 'lounge', name: 'Lounge', description: 'Your name in tall caps cut into your photo, outlined round boxes',
     heading: 'loungeCaps', cards: 'outlineRound', policies: 'loungeGrid', logo: 'circle',
@@ -409,7 +410,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
   {
-    key: 'hush', name: 'Hush', description: 'Very quiet: a light italic name and a fan of your favourite photos',
+    key: 'hush', name: 'Hush', description: 'Very quiet: a light italic name and three of your favourite photos',
     heading: 'hushRule', cards: 'open', policies: 'gentleNotes', logo: 'doubleRing',
     hero: 'hushFan', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
@@ -428,9 +429,12 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   },
 ];
 
-/** Whether this style's hero opens on the fan of photos the provider picks in Branding. */
-export function heroUsesFan(style: PageStyle): boolean {
-  return style.hero === 'hushFan' || style.hero === 'pearlFan';
+/** How many photos this style's hero shows from the ones the provider picks
+ *  in Branding (Hush: three boxes, Pearl: a fan of five); 0 for the rest. */
+export function heroPhotoPickLimit(style: PageStyle): number {
+  if (style.hero === 'hushFan') return 3;
+  if (style.hero === 'pearlFan') return 5;
+  return 0;
 }
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {

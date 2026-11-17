@@ -2025,14 +2025,14 @@ export async function addPortfolioItem(
 }
 
 /**
- * Branding → Your fan: marks exactly these portfolio photos as the ones the
- * Hush and Pearl page styles fan out at the top of the profile
+ * Branding → Your Photos / Your Fan: marks exactly these portfolio photos as
+ * the ones the Hush (three boxes) and Pearl (a fan) page styles open on
  * (portfolio_items.is_featured, which nothing else sets), and no others. At
  * most FAN_PHOTO_LIMIT are sent (features/providers/fanPhotos). The provider's
  * own rows only: RLS portfolio_owner_all.
  *
  * Two updates, not one transaction: if the second fails after the first,
- * nothing is picked, and the fan falls back to the newest photos rather than
+ * nothing is picked, and the hero falls back to the newest photos rather than
  * showing a half-saved choice.
  */
 export async function setFanPortfolioPhotos(providerId: string, itemIds: readonly string[]): Promise<void> {

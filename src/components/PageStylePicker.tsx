@@ -119,8 +119,8 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   bow: { text: 'The Services' },
 };
 
-/** Three photo cards fanned from a point below them (Hush and Pearl). */
-function MiniFan({ colour, border, round }: { colour: string; border: string; round: boolean }) {
+/** Three photo cards fanned from a point below them (Pearl). */
+function MiniFan({ colour, border }: { colour: string; border: string }) {
   return (
     <View style={mini.fanStage}>
       {[-14, 0, 14].map(deg => (
@@ -128,7 +128,7 @@ function MiniFan({ colour, border, round }: { colour: string; border: string; ro
           key={deg}
           style={[
             mini.fanCard,
-            { backgroundColor: colour, borderColor: border, borderRadius: round ? 5 : 0 },
+            { backgroundColor: colour, borderColor: border, borderRadius: 5 },
             { transform: [{ translateY: 22 }, { rotate: `${deg}deg` }, { translateY: -22 }] },
           ]}
         />
@@ -604,15 +604,21 @@ function MiniProfile({
             <Text style={mini.softName} numberOfLines={2}>NAME</Text>
           </View>
         ) : style.hero === 'hushFan' ? (
-          // Hush: the name in light italic over a fan of prints.
+          // Hush: the name in light italic over three photos in their own boxes.
           <View style={mini.stack}>
             <Text style={mini.hushName} numberOfLines={1}>name</Text>
-            <MiniFan colour={blend(accent, '#FFFFFF', 0.45)} border={sheet} round={false} />
+            <View style={mini.hushBoxes}>
+              {[0, 1, 2].map(index => (
+                <View key={index} style={[mini.hushBox, { backgroundColor: sheet }]}>
+                  <View style={[mini.hushBoxPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.45) }]} />
+                </View>
+              ))}
+            </View>
           </View>
         ) : style.hero === 'pearlFan' ? (
           // Pearl: a card with a fan of photos and the name in spaced serif caps.
           <View style={[mini.pearlCard, { backgroundColor: cardColour }]}>
-            <MiniFan colour={blend(accent, '#FFFFFF', 0.45)} border="#FFFDF8" round />
+            <MiniFan colour={blend(accent, '#FFFFFF', 0.45)} border="#FFFDF8" />
             <Text style={[mini.pearlName, { color: isDarkColor(cardColour) ? '#F7F1F3' : '#1F1A1C' }]} numberOfLines={1}>NAME</Text>
           </View>
         ) : style.hero === 'bow' ? (
@@ -692,6 +698,9 @@ const mini = StyleSheet.create({
   softWave: { position: 'absolute', right: -14, bottom: -14, width: 46, height: 30, borderTopLeftRadius: 30 },
   softLogo: { width: 26, height: 26, borderRadius: 13 },
   softName: { fontFamily: 'Archivo-ExtraBold', fontSize: 11, lineHeight: 14, color: '#16131A', flexShrink: 1 },
+  hushBoxes: { flexDirection: 'row', gap: 4, marginTop: 4 },
+  hushBox: { width: 18, height: 24, padding: 2 },
+  hushBoxPhoto: { flex: 1 },
   hushName: { fontFamily: 'Newsreader-LightItalic', fontSize: 14, lineHeight: 20, color: '#FFFFFF' },
   fanStage: { width: 60, height: 40, alignItems: 'center' },
   fanCard: { position: 'absolute', top: 4, width: 18, height: 26, borderWidth: 1.5 },

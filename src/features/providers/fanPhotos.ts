@@ -1,12 +1,13 @@
 // src/features/providers/fanPhotos.ts
 //
-// The fan of photos that opens the Hush and Pearl page styles (pageStyles
-// heroUsesFan). The provider picks up to FAN_PHOTO_LIMIT of their portfolio
-// photos in Branding → Your fan, stored as portfolio_items.is_featured (a
+// The photos that open the Hush and Pearl page styles: three in boxes for
+// Hush, a fan of five for Pearl (pageStyles heroPhotoPickLimit). The provider
+// picks them from their portfolio in Branding → Your Photos / Your Fan, stored as portfolio_items.is_featured (a
 // column nothing else set before, so no migration). With nothing picked, the
 // fan shows their newest photos, so the hero is never empty for a provider
 // who has a portfolio at all.
 
+/** The most any hero shows (Pearl's fan); the database keeps no more picks than this. */
 export const FAN_PHOTO_LIMIT = 5;
 
 /**
@@ -14,9 +15,9 @@ export const FAN_PHOTO_LIMIT = 5;
  * `items` come newest first (getProviderPortfolio orders featured first, then
  * by date), so the picked photos keep that order among themselves.
  */
-export function fanPhotos<T extends { is_featured?: boolean | null }>(items: readonly T[]): T[] {
+export function fanPhotos<T extends { is_featured?: boolean | null }>(items: readonly T[], limit = FAN_PHOTO_LIMIT): T[] {
   const picked = items.filter(item => item.is_featured);
-  return (picked.length > 0 ? picked : items).slice(0, FAN_PHOTO_LIMIT);
+  return (picked.length > 0 ? picked : items).slice(0, limit);
 }
 
 /** The tilt of each photo in a fan of `count`, in degrees, spread evenly round the middle. */

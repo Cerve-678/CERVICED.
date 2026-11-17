@@ -138,7 +138,7 @@ import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { getPageStyle, heroUsesFan, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
+import { getPageStyle, heroPhotoPickLimit, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
 import { fanPhotos } from "../../features/providers/fanPhotos";
 import {
   GlossShine,
@@ -1849,12 +1849,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     () => workPortfolio.slice(0, 3).map((item) => item.image_url).filter(Boolean),
     [workPortfolio],
   );
-  // Hush and Pearl open on a fan of the photos picked in Branding → Your fan
-  // (their newest when none are picked).
-  const usesFan = heroUsesFan(pageStyle);
+  // Hush (three boxes) and Pearl (a fan) open on the photos picked in
+  // Branding (their newest when none are picked).
+  const heroPickLimit = heroPhotoPickLimit(pageStyle);
   const fanPhotoUris = useMemo(
-    () => (usesFan ? fanPhotos(workPortfolio).map((item) => item.image_url).filter(Boolean) : []),
-    [usesFan, workPortfolio],
+    () => (heroPickLimit > 0 ? fanPhotos(workPortfolio, heroPickLimit).map((item) => item.image_url).filter(Boolean) : []),
+    [heroPickLimit, workPortfolio],
   );
   // A salon/studio on "Always visible" shows its full address in Contact
   // instead of the area. The server decides who qualifies and returns null for

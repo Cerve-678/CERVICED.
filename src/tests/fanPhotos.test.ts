@@ -13,9 +13,14 @@ describe('the fan of photos (Hush and Pearl)', () => {
     expect(fanPhotos(items).map(p => p.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
   });
 
-  it('never fans out more than five', () => {
+  it('never fans out more than five, and gives Hush three', () => {
     const items = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => photo(id, true));
     expect(fanPhotos(items)).toHaveLength(FAN_PHOTO_LIMIT);
+    expect(fanPhotos(items, 3).map(p => p.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('refuses a fourth pick for Hush', () => {
+    expect(toggleFanPick(['a', 'b', 'c'], 'd', 3)).toEqual(['a', 'b', 'c']);
   });
 
   it('is empty for an empty portfolio', () => {

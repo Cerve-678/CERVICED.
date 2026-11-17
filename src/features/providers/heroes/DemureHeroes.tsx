@@ -11,13 +11,14 @@
 // - Soft Focus: a card tinted with the accent, a wave in its corner, the round
 //   logo beside the name in heavy Archivo caps and a pill of what they do.
 // - Hush: everything quiet inside a hairline frame. What they do in tiny caps,
-//   a ringed logo, the name in light italic, then a fan of their chosen photos.
+//   a ringed logo, the name in light italic, then three of their chosen photos,
+//   each in its own box (owner, 2026-11-17: boxes, not a fan).
 // - Pearl: a card with the fan of their chosen photos, the logo in a ring of
 //   pearls over its foot, the name in spaced Castoro caps.
 // - Bow: their photo with a satin ribbon down it and a bow tied on top, the
 //   logo on its foot, the name in Sorts Mill Goudy italic.
 //
-// Hush and Pearl's fan photos come from fanPhotos (Branding → Your fan).
+// Hush's boxes and Pearl's fan show the photos picked in Branding (fanPhotos).
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
@@ -53,30 +54,25 @@ interface DemureHeroProps {
 // ── The fan ─────────────────────────────────────────────────────────────────
 
 /**
- * Up to five photos fanned out from a point below them, like prints held in
- * one hand. Tapping one opens it full size. Hush's are prints with a border
- * of the page colour; Pearl's are round-cornered photos edged in pearl.
+ * Pearl's fan: up to five photos fanned out from a point below them, like
+ * prints held in one hand, each edged in pearl. Tapping one opens it full size.
  */
 export function HeroFan({
   uris,
-  variant,
   paper,
   onOpen,
 }: {
   uris: readonly string[];
-  variant: "prints" | "pearls";
-  /** Hush: the print border. Pearl: the card the fan sits on. */
+  /** The card the fan sits on. */
   paper: string;
   onOpen?: ((index: number) => void) | undefined;
 }) {
   if (uris.length === 0) return null;
   const angles = fanAngles(uris.length);
-  const width = variant === "prints" ? 124 : 120;
-  const height = variant === "prints" ? 166 : 168;
-  // Turning about a point a photo's height below its centre, as
-  // transform-origin 50% 150% did on the canvas.
-  const pivot = height;
+  const width = 120;
+  const height = 168;
   const onDark = isDarkColor(paper);
+  const look = [fan.card, { borderColor: onDark ? "#E8E1D7" : "#FFFDF8", shadowColor: onDark ? "#000000" : "#2B2623" }];
   return (
     <View style={fan.stage}>
       {uris.map((uri, index) => {
@@ -89,37 +85,28 @@ export function HeroFan({
           height,
           marginLeft: -width / 2,
           transform: [
-            { translateY: pivot },
+            { translateY: height },
             { rotate: `${deg}deg` },
-            { translateY: -pivot },
+            { translateY: -height },
             { translateY: Math.abs(deg) * 0.35 },
           ],
         };
-        const look = variant === "prints"
-          ? [fan.print, { backgroundColor: paper, borderColor: withAlpha(onDark ? "#FFFFFF" : "#2A2826", 0.16) }]
-          : [fan.pearlCard, { borderColor: onDark ? "#E8E1D7" : "#FFFDF8", shadowColor: onDark ? "#000000" : "#2B2623" }];
         const photo = (
-          <Image
-            source={{ uri }}
-            style={[StyleSheet.absoluteFill, variant === "prints" ? fan.printPhoto : fan.pearlPhoto]}
-            contentFit="cover"
-            transition={0}
-            recyclingKey={uri}
-          />
+          <Image source={{ uri }} style={[StyleSheet.absoluteFill, fan.photo]} contentFit="cover" transition={0} recyclingKey={uri} />
         );
         return onOpen ? (
           <TouchableOpacity
             key={`${index}-${uri}`}
             activeOpacity={0.9}
             onPress={() => onOpen(index)}
-            style={[fan.slot, fan.card, look, placed]}
+            style={[fan.slot, look, placed]}
             accessibilityRole="imagebutton"
             accessibilityLabel={`Photo ${index + 1} of ${uris.length}. Tap to see it full size`}
           >
             {photo}
           </TouchableOpacity>
         ) : (
-          <View key={`${index}-${uri}`} style={[fan.slot, fan.card, look, placed]} pointerEvents="none">
+          <View key={`${index}-${uri}`} style={[fan.slot, look, placed]} pointerEvents="none">
             {photo}
           </View>
         );
@@ -133,15 +120,62 @@ const fan = StyleSheet.create({
   // Each photo is placed from the stage's middle; the last drawn is on top.
   slot: { position: "absolute", left: "50%", top: 34 },
   card: {
+    borderWidth: 4,
+    borderRadius: 26,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.14,
     shadowRadius: 12,
     elevation: 4,
   },
-  print: { borderWidth: StyleSheet.hairlineWidth, shadowColor: "#2A2826" },
-  printPhoto: { top: 7, left: 7, right: 7, bottom: 7 },
-  pearlCard: { borderWidth: 4, borderRadius: 26 },
-  pearlPhoto: { borderRadius: 22 },
+  photo: { borderRadius: 22 },
+});
+
+// ── Hush's boxes ───────────────────────────────────────────────────────────
+
+/** Up to three photos side by side, each matted in its own fine-edged box. Tapping one opens it full size. */
+export function HushBoxes({
+  uris,
+  paper,
+  onOpen,
+}: {
+  uris: readonly string[];
+  /** The mat round each photo: the content sheet's colour. */
+  paper: string;
+  onOpen?: ((index: number) => void) | undefined;
+}) {
+  if (uris.length === 0) return null;
+  const edge = withAlpha(isDarkColor(paper) ? "#FFFFFF" : "#2A2826", 0.16);
+  return (
+    <View style={boxes.row}>
+      {uris.slice(0, 3).map((uri, index) => {
+        const photo = <Image source={{ uri }} style={boxes.photo} contentFit="cover" transition={0} recyclingKey={uri} />;
+        const look = [boxes.box, { backgroundColor: paper, borderColor: edge }];
+        return onOpen ? (
+          <TouchableOpacity
+            key={`${index}-${uri}`}
+            style={look}
+            activeOpacity={0.9}
+            onPress={() => onOpen(index)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={`Photo ${index + 1} of ${Math.min(uris.length, 3)}. Tap to see it full size`}
+          >
+            {photo}
+          </TouchableOpacity>
+        ) : (
+          <View key={`${index}-${uri}`} style={look}>{photo}</View>
+        );
+      })}
+    </View>
+  );
+}
+
+const boxes = StyleSheet.create({
+  row: { flexDirection: "row", gap: 10, alignSelf: "stretch", marginTop: 22, marginBottom: 12 },
+  box: {
+    flex: 1, aspectRatio: 0.76, padding: 6, borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: "#2A2826", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2,
+  },
+  photo: { flex: 1 },
 });
 
 // ── Lounge ──────────────────────────────────────────────────────────────────
@@ -304,7 +338,7 @@ export function HushHero({
       <View style={hush.details}>{details}</View>
       {fanUris.length > 0 ? (
         <>
-          <HeroFan uris={fanUris} variant="prints" paper={paper} onOpen={onOpenFanPhoto} />
+          <HushBoxes uris={fanUris} paper={paper} onOpen={onOpenFanPhoto} />
           <Text style={[hush.caption, { color: heroSub }, shadow]}>a few of my favourites · tap to look closer</Text>
         </>
       ) : null}
@@ -348,7 +382,7 @@ export function PearlHero({
   const onDark = isDarkColor(cardColour);
   return (
     <View style={[pearl.card, { backgroundColor: cardColour }]}>
-      {fanUris.length > 0 ? <HeroFan uris={fanUris} variant="pearls" paper={cardColour} onOpen={onOpenFanPhoto} /> : null}
+      {fanUris.length > 0 ? <HeroFan uris={fanUris} paper={cardColour} onOpen={onOpenFanPhoto} /> : null}
       <View style={[pearl.logoBox, fanUris.length > 0 && pearl.logoOverFan]}>
         <View style={pearl.logo}>{renderLogo(84)}</View>
         <PearlRing diameter={84} pearl={9} count={22} onDark={onDark} />
