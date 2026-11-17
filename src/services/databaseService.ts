@@ -2024,6 +2024,34 @@ export async function addPortfolioItem(
   return data as DbPortfolioItem;
 }
 
+/**
+ * Branding → Your Photos / Your Fan: marks exactly these portfolio photos as
+ * the ones the Hush (three boxes) and Pearl (a fan) page styles open on
+ * (portfolio_items.is_featured, which nothing else sets), and no others. At
+ * most FAN_PHOTO_LIMIT are sent (features/providers/fanPhotos). The provider's
+ * own rows only: RLS portfolio_owner_all.
+ *
+ * Two updates, not one transaction: if the second fails after the first,
+ * nothing is picked, and the hero falls back to the newest photos rather than
+ * showing a half-saved choice.
+ */
+export async function setFanPortfolioPhotos(providerId: string, itemIds: readonly string[]): Promise<void> {
+  const { error: clearError } = await supabase
+    .from("portfolio_items")
+    .update({ is_featured: false })
+    .eq("provider_id", providerId)
+    .eq("is_featured", true);
+  if (clearError) throw clearError;
+  if (itemIds.length === 0) return;
+
+  const { error } = await supabase
+    .from("portfolio_items")
+    .update({ is_featured: true })
+    .eq("provider_id", providerId)
+    .in("id", [...itemIds]);
+  if (error) throw error;
+}
+
 /** Delete a portfolio item by id */
 export async function deletePortfolioItem(id: string): Promise<void> {
   const { error } = await supabase

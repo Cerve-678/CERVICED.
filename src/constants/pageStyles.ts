@@ -28,7 +28,12 @@ export type PageStyleKey =
   | 'boutique'
   | 'gazette'
   | 'novel'
-  | 'studio';
+  | 'studio'
+  | 'lounge'
+  | 'softFocus'
+  | 'hush'
+  | 'pearl'
+  | 'bow';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -56,7 +61,12 @@ export type PageHeading =
   | 'shopSerif' // a big serif title on the left, like a shop's department heading (Boutique)
   | 'newsRule'  // condensed caps under a thick rule, a thin rule beneath, like a newspaper section (Gazette)
   | 'chapter'   // "CHAPTER III" in small caps over an italic title and a foil ornament (Novel)
-  | 'chunkyCaps'; // a lowercase script word, then the title in big serif caps, centred (Studio)
+  | 'chunkyCaps' // a lowercase script word, then the title in big serif caps, centred (Studio)
+  | 'loungeCaps' // tall condensed caps, centred; Policies gets "PLEASE REVIEW MY" over it (Lounge)
+  | 'softCaps'   // heavy grotesk caps at the top left of its own card (Soft Focus)
+  | 'hushRule'   // tiny spaced caps between hairlines, in the style's own quiet words (Hush)
+  | 'pearlStrand' // a strand of pearls over an italic serif title, centred (Pearl)
+  | 'bowSerif';  // a small satin bow over an italic serif title, centred (Bow)
 
 /** What a section sits on. */
 export type PageCards =
@@ -80,7 +90,11 @@ export type PageCards =
   | 'product' // a clean card, a fine outline and small corners, like a shop's product tile (Boutique)
   | 'ruled'   // straight on the page, each item over a printed rule (Gazette)
   | 'pages'   // a square card with two page edges showing behind it, like a closed book (Novel)
-  | 'tabbed';  // a square solid card with a little tab on its top edge naming the section (Studio)
+  | 'tabbed'  // a square solid card with a little tab on its top edge naming the section (Studio)
+  | 'outlineRound' // a card with a fine dark outline and big round corners (Lounge)
+  | 'soft'    // a soft solid card with big round corners, its heading inside (Soft Focus)
+  | 'pearl'   // a solid card with round corners, no outline (Pearl)
+  | 'bow';    // a solid card with round corners, a touch less round than Pearl's (Bow)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -104,7 +118,12 @@ export type PagePolicies =
   | 'accordion'  // rows that open and close, like a shop's "Delivery & returns" (Boutique)
   | 'columns'   // two-up newspaper columns boxed by ink rules (Gazette)
   | 'numberedRules' // numbered paragraphs, the label in small caps running into its value (Novel)
-  | 'membership';  // two-up square tiles in blush, the card colour and a deep accent, like a studio's price plans (Studio)
+  | 'membership'  // two-up square tiles in blush, the card colour and a deep accent, like a studio's price plans (Studio)
+  | 'loungeGrid'  // two-up columns straight on the page, a condensed caps label over each (Lounge)
+  | 'softTiles'   // two-up round tiles tinted with the accent, inside the section's card (Soft Focus)
+  | 'gentleNotes' // centred notes: a small caps label, then the policy in a light italic (Hush)
+  | 'pearlNotes'  // rows on the card, each beside a single pearl (Pearl)
+  | 'ribbonBand'; // one card with a satin ribbon across its top, two-up italic titles (Bow)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -137,6 +156,11 @@ export type PageHero =
   | 'productPage' // a product page: their logo big on their colour, then the name as the product title on a white panel with Add to basket (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
   | 'studio'    // a studio website's top: what they do in chunky caps on a deep bar, then the logo and the name pressed into a panel of the accent as a lowercase wordmark
+  | 'lounge'   // a rounded-top photo with the name in tall caps cut out of the page across its foot
+  | 'softCard' // a tinted card with a wave: the round logo beside the name in heavy caps and a pill of what they do
+  | 'hushFan'  // quiet: what they do in tiny caps, a ringed logo, the name in light italic, three of their chosen photos in separate boxes
+  | 'pearlFan' // a card with a fan of their chosen photos, the logo in a ring of pearls, the name in spaced serif caps
+  | 'bow'      // their photo with a ribbon down it and a bow on top, the logo on its foot, the name in italic serif
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -188,6 +212,8 @@ export interface PageStyle {
    *  whole profile, and the content sits on a see-through dark glass sheet in
    *  white ink (Sheer, owner 2026-11-15). */
   veilPage?: boolean;
+  /** Portfolio photos with big round corners (Lounge, Soft Focus, Bow). */
+  roundedPhotos?: boolean;
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -366,7 +392,50 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'studio', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
+  // 2026-11-16, the demure set (https://claude.ai/artifact/LPquiWNrboArq6NjcZi9ny,
+  // boards 28–32), from the owner's Acuity "lash lounge" booking sites and a
+  // lilac beauty-app mockup. Hush and Pearl open on photos the provider picks
+  // in Branding (portfolio_items.is_featured; see fanPhotos.ts): three in
+  // separate boxes for Hush, a fan of five for Pearl (owner, 2026-11-17).
+  {
+    key: 'lounge', name: 'Lounge', description: 'Your name in tall caps cut into your photo, outlined round boxes',
+    heading: 'loungeCaps', cards: 'outlineRound', policies: 'loungeGrid', logo: 'circle',
+    hero: 'lounge', aboutInHero: false, roundedPhotos: true,
+    heroPills: false, jumpBar: true, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'softFocus', name: 'Soft Focus', description: 'Soft tinted cards, your logo on a wave, heavy caps',
+    heading: 'softCaps', cards: 'soft', policies: 'softTiles', logo: 'circle',
+    hero: 'softCard', aboutInHero: false, roundedPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  {
+    key: 'hush', name: 'Hush', description: 'Very quiet: a light italic name and three of your favourite photos',
+    heading: 'hushRule', cards: 'open', policies: 'gentleNotes', logo: 'doubleRing',
+    hero: 'hushFan', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'pearl', name: 'Pearl', description: 'A fan of your favourite photos, your logo in a ring of pearls',
+    heading: 'pearlStrand', cards: 'pearl', policies: 'pearlNotes', logo: 'circle',
+    hero: 'pearlFan', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'bow', name: 'Bow', description: 'A satin bow tied over your photo, soft italic headings',
+    heading: 'bowSerif', cards: 'bow', policies: 'ribbonBand', logo: 'circle',
+    hero: 'bow', aboutInHero: false, roundedPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
 ];
+
+/** How many photos this style's hero shows from the ones the provider picks
+ *  in Branding (Hush: three boxes, Pearl: a fan of five); 0 for the rest. */
+export function heroPhotoPickLimit(style: PageStyle): number {
+  if (style.hero === 'hushFan') return 3;
+  if (style.hero === 'pearlFan') return 5;
+  return 0;
+}
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {
   return PAGE_STYLES.some(style => style.key === value);
@@ -414,6 +483,20 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
 export function headingPair(section: PageSectionKey): [string, string] {
   return HEADING_PAIRS[section];
 }
+
+/** Hush's section titles: small quiet words, drawn in spaced caps between hairlines. */
+export const HUSH_TITLES: Record<PageSectionKey, string> = {
+  about: 'hello',
+  policies: 'a few gentle notes',
+  services: 'services',
+  reviews: 'kind words',
+  hours: 'opening hours',
+  contact: 'say hello',
+  info: 'good to know',
+  portfolio: 'my work',
+  specialities: 'what I love',
+  policyPages: 'before you book',
+};
 
 /** Signature's section numbers, in the order the profile shows its sections. */
 export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
