@@ -5,7 +5,7 @@
 
 #generated
 
-**3975 functions** across **559 files**.
+**3976 functions** across **559 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -425,7 +425,7 @@
 ### `src/screens/provider/` (33)
 - `AboutYouScreen.tsx` — AboutYouScreen · flash · handleSave · languageOptions · toggleChip
 - `AddBookingScreen.tsx` — AddBookingScreen · goToCalendar · handleContinue · handleCreate · hhmmss · load · openBookingDetail · pickService · pickSlot · submitBooking · timeToMinutes · toggleAddOn
-- `BrandingScreen.tsx` — BrandingScreen · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · PolicyLookSmallPreview · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
+- `BrandingScreen.tsx` — BrandingScreen · centreChip · chooseColourPhoto · handleImageCropped · handleSave · handleThemeChange · pickImage · PolicyLookSmallPreview · ProfilePreviewScreen · removeImage · showLocked · uploadBackgroundImage
 - `BusinessDetailsScreen.tsx` — BusinessDetailsScreen
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
