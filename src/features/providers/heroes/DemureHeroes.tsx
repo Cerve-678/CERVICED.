@@ -31,6 +31,13 @@ import { fanAngles } from "../fanPhotos";
 import { cardInk } from "./BoutiqueHero";
 import { BowGlyph, PearlRing, ribbonColours } from "./demureOrnaments";
 
+/** How far Lounge's name hangs below the photo's foot, as a share of its size:
+ *  the rest shows on the photo. 0.55 at first; lifted to 0.42 (owner,
+ *  2026-11-17: "lift the business name up slightly"), with BY … above it
+ *  lifted by the same 0.13 so the gap between them stays. */
+const LOUNGE_NAME_DROP = 0.42;
+const LOUNGE_BY_LIFT = 0.85;
+
 /** How far the content sheet rides up over Lounge's page-coloured strip. */
 const LOUNGE_SHEET_OVERLAP = 40;
 
@@ -208,13 +215,13 @@ export function LoungeHero({
           <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
         ) : null}
         {first ? (
-          <View style={[lounge.byRow, { bottom: size * 0.72 }]}>
+          <View style={[lounge.byRow, { bottom: size * LOUNGE_BY_LIFT }]}>
             <Text style={[lounge.by, { color: byInk }, photoUri ? lounge.byShadow : null]}>BY {first}</Text>
             {tick}
           </View>
         ) : null}
         <Text
-          style={[lounge.name, { fontSize: size, lineHeight: Math.round(size * 1.3), bottom: -Math.round(size * 0.55), color: sheetColour }]}
+          style={[lounge.name, { fontSize: size, lineHeight: Math.round(size * 1.3), bottom: -Math.round(size * LOUNGE_NAME_DROP), color: sheetColour }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.5}
