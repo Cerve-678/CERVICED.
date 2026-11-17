@@ -841,7 +841,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setShowTipModal(false);
       setSuccessMessage(tipStatus === 'succeeded'
         ? `Your £${tipAmount.toFixed(2)} tip has been sent to ${selectedBooking.providerName}.`
-        : `Your £${tipAmount.toFixed(2)} tip for ${selectedBooking.providerName} is on its way.`);
+        : `Your £${tipAmount.toFixed(2)} tip for ${selectedBooking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -2418,7 +2418,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             <View style={[popSt.sheetContent, { backgroundColor: P.card }]}>
                 <Text style={[popSt.sheetTitle, { color: P.text }]}>Leave a tip</Text>
                 <Text style={[popSt.sheetSub, { color: P.sub }]}>
-                  All of it goes to {selectedBooking?.providerName}. You can tip for 48 hours after your visit. Tips can't be refunded.
+                  Show your appreciation for {selectedBooking?.providerName}. You can tip for 48 hours after your appointment. Tips can't be refunded.
                 </Text>
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>

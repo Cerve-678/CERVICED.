@@ -849,7 +849,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setShowTipModal(false);
       setSuccessMessage(tipStatus === 'succeeded'
         ? `Your £${tipAmount.toFixed(2)} tip has been sent to ${booking.providerName}.`
-        : `Your £${tipAmount.toFixed(2)} tip for ${booking.providerName} is on its way.`);
+        : `Your £${tipAmount.toFixed(2)} tip for ${booking.providerName} is processing. It'll show as tipped once it's through.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
@@ -2057,7 +2057,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 <Text style={[st.sheetTitle, { color: C.text }]}>Leave a tip</Text>
-                <Text style={[st.sheetSub, { color: C.sub }]}>All of it goes to {booking.providerName}. You can tip for 48 hours after your visit. Tips can't be refunded.</Text>
+                <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}. You can tip for 48 hours after your appointment. Tips can't be refunded.</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
                   {[5, 10, 15, 20].map(amt => (
                     <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); setTipAmount(amt); }} activeOpacity={0.7}>
