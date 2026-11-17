@@ -72,7 +72,6 @@ import {
   Card, ChipGroup, Field, SectionLabel, Toast, SaveButton, ToggleRow,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
-import { resolveDepositMode } from '../../utils/depositPolicy';
 import {
   BOOKING_INSTRUCTION_SUGGESTIONS,
   selectedBookingInstructions,
@@ -117,6 +116,8 @@ interface PolicyState {
   emergencyBookingPolicy: string;
   travelPolicy: string;
   // Enforced by apply-cancellation-refund through each booking's frozen copy.
+  // Edited in Payments, beside the deposit; only a link-only provider edits
+  // it here. Kept in this state either way so the full-replace save carries it.
   depositNonRefundable: boolean;
 }
 
@@ -293,9 +294,6 @@ export default function PoliciesScreen({ navigation }: any) {
       }
     })();
   }, []);
-
-  const hasDeposit = resolveDepositMode(carriedPolicies) !== 'full_only'
-    && Boolean(carriedPolicies['depositAmount']);
 
   const setPolicy = useCallback(<K extends keyof PolicyState>(key: K, value: PolicyState[K]) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
@@ -550,29 +548,21 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             </>)}
 
-            <Card
-              title="Non-Refundable Deposit"
-              sub={isLinkOnly
-                ? 'Tell clients if a booking needs a non-refundable deposit. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn\'t apply it or take any money.'
-                : 'If you say yes, you keep the deposit whenever a client cancels, even in good time. It still goes back to them if you cancel, decline or don\'t answer. It only applies to new bookings.'}
-            >
-              <ToggleRow
-                label="Do you require a non-refundable deposit to secure bookings?"
-                value={policies.depositNonRefundable}
-                onChange={v => setPolicy('depositNonRefundable', v)}
-              />
-              {!isLinkOnly && policies.depositNonRefundable && !hasDeposit && (
-                <TouchableOpacity
-                  onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Payments'); }}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                >
-                  <Text style={[s.cardSub, { color: C.accentText, marginTop: 10, marginBottom: 0 }]}>
-                    You don't take a deposit yet, so this won't apply. Set one up in Payments.
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </Card>
+            {/* A provider who takes bookings in the app sets this beside their
+                deposit, in Payments. A link-only provider has no deposits there,
+                so it stays here for them as a line on their profile. */}
+            {isLinkOnly && (
+              <Card
+                title="Non-Refundable Deposit"
+                sub="Tell clients if a booking needs a non-refundable deposit. Shown on your profile. Clients pay on your own booking site, so CERVICED doesn't apply it or take any money."
+              >
+                <ToggleRow
+                  label="Do you require a non-refundable deposit to secure bookings?"
+                  value={policies.depositNonRefundable}
+                  onChange={v => setPolicy('depositNonRefundable', v)}
+                />
+              </Card>
+            )}
 
             {/* Refund policy — free-text disclosure only. This app has no
                 refund-processing infra, so there is deliberately no

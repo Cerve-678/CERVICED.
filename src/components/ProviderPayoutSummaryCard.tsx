@@ -112,14 +112,14 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
       <>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: subTextColor }]}>IN STRIPE</Text>
+            <Text style={[styles.statLabel, { color: subTextColor }]}>READY FOR PAYDAY</Text>
             <Text style={[styles.statValue, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>
               {finance ? total(finance.available) : '—'}
             </Text>
           </View>
           <View style={[styles.divider, { backgroundColor: borderColor }]} />
           <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: subTextColor }]}>HELD</Text>
+            <Text style={[styles.statLabel, { color: subTextColor }]}>PROCESSING</Text>
             <Text style={[styles.statValue, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>
               {payouts ? heldTotal : '—'}
             </Text>
@@ -129,7 +129,7 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
           {nextPayout
             ? `Next to your bank: ${money(nextPayout.amount, nextPayout.currency)}, expected ${arrival(nextPayout.arrivalDate)}`
             : held.length > 0
-              ? `${held.length} booking payment${held.length === 1 ? '' : 's'} release after the appointment.`
+              ? `${held.length} booking payment${held.length === 1 ? '' : 's'} processing.`
               : 'No payout on its way right now.'}
         </Text>
         {finance && !finance.livemode && (

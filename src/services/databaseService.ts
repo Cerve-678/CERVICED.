@@ -12676,6 +12676,8 @@ export interface ProviderPayout {
    *  appointment too" on a booking that's still upcoming or pending. */
   booking?: {
     service_name_snapshot: string | null; customer_name: string | null; booking_date: string;
+    /** Start and end time of day, shown on the payment's timeline. */
+    booking_time?: string | null; end_time?: string | null;
     status: DbBooking['status']; group_booking_id: string | null;
   } | undefined;
   platform_fee: number;
@@ -12727,7 +12729,7 @@ export async function getProviderPayouts(): Promise<ProviderPayout[]> {
   const bookingIds = data.map(row => row.booking_id);
   const [{ data: bookings, error: bookingsError }, { data: openRequests, error: requestsError }, disputes] = await Promise.all([
     supabase.from('bookings')
-      .select('id, service_name_snapshot, customer_name, booking_date, status, group_booking_id')
+      .select('id, service_name_snapshot, customer_name, booking_date, booking_time, end_time, status, group_booking_id')
       .eq('provider_id', provider.id).in('id', bookingIds),
     // At most one open request per booking, so the cap matches the payouts'.
     supabase.from('refund_requests')

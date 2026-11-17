@@ -11,9 +11,15 @@
  *     applies at all, and how much.
  *   • automation_settings.depositRequiredNew         — whether it applies to
  *     first-time clients only.
- * PoliciesScreen no longer edits any deposit field; it only carries the keys
- * through its own full-replace save. Do not reintroduce a deposit control
- * there — one editor per setting.
+ *   • booking_policies.depositNonRefundable          — whether the provider
+ *     keeps the deposit when a client cancels (moved here from PoliciesScreen
+ *     on 2026-11-17).
+ * PoliciesScreen no longer edits any deposit field for a provider who takes
+ * bookings in the app; it only carries the keys through its own full-replace
+ * save. The one exception is a link-only provider, who has no deposits here,
+ * so PoliciesScreen still shows them the non-refundable deposit switch as a
+ * line for their profile. Do not reintroduce a deposit control there for
+ * anyone else — one editor per setting.
  *
  * depositMode is a THREE-way choice, and it has to be. The client booking
  * sheet has always been able to show "Pay Full Amount" and "Pay Deposit" side
@@ -47,10 +53,10 @@
 import ProviderStripePayments from '../../components/ProviderStripePayments';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { PaySection } from '../../features/payments/PaymentsCardKit';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -63,7 +69,7 @@ import {
   loadProviderPolicies,
 } from '../../services/providerRegistrationService';
 import {
-  Card, ChipGroup, Field, ToggleRow, SectionLabel, Toast, SaveButton,
+  ChipGroup, Field, ToggleRow, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import { PAYMENT_OPTS } from '../../features/business-details/options';
@@ -103,15 +109,12 @@ export default function PaymentsScreen({ navigation, route }: any) {
   const [depositType, setDepositType]     = useState<'percent' | 'fixed'>('percent');
   const [depositAmount, setDepositAmount] = useState('');
   const [depositNote, setDepositNote]     = useState('');
+  const [depositNonRefundable, setDepositNonRefundable] = useState(false);
   // saveProviderPolicies REPLACES the whole booking_policies blob rather than
   // merging, exactly like PoliciesScreen — every cancellation/reschedule/
   // no-show key this screen doesn't edit has to be carried back through the
   // save or it's silently wiped.
   const [otherPolicies, setOtherPolicies] = useState<Record<string, unknown>>({});
-  // Read-only here — PoliciesScreen owns the write. Held only so the card
-  // below can show what clients are currently told about refunds.
-  const [refundPolicyNote, setRefundPolicyNote] = useState('');
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -146,6 +149,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
             depositType: savedType,
             depositAmount: savedAmount,
             depositNote: savedNote,
+            depositNonRefundable: savedNonRefundable,
             ...restPolicies
           } = saved as Record<string, unknown>;
           setOtherPolicies(restPolicies);
@@ -155,8 +159,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
           const amount = typeof savedAmount === 'string' ? savedAmount : savedAmount == null ? '' : String(savedAmount);
           setDepositAmount(amount);
           setDepositNote(typeof savedNote === 'string' ? savedNote : '');
-          const refund = restPolicies['refundPolicyNote'];
-          setRefundPolicyNote(typeof refund === 'string' ? refund : '');
+          setDepositNonRefundable(savedNonRefundable === true);
         }
       } catch {
         setLoadFailed(true);
@@ -206,6 +209,9 @@ export default function PaymentsScreen({ navigation, route }: any) {
               depositType,
               depositAmount:   depositMode === 'full_only' ? '' : depositAmount,
               depositNote:     depositMode === 'full_only' ? '' : depositNote,
+              // Kept as set even with no deposit, so switching deposits off
+              // and on again doesn't quietly drop it.
+              depositNonRefundable,
             })
           : Promise.resolve(),
       ]);
@@ -218,14 +224,14 @@ export default function PaymentsScreen({ navigation, route }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, paymentMethods, depositRequiredNew, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed]);
+  }, [providerId, userId, paymentMethods, depositRequiredNew, depositMode, depositType, depositAmount, depositNote, depositNonRefundable, otherPolicies, loadFailed]);
 
 
   const acceptedLabels = paymentMethods.map(paymentLabel);
   const depositAmountLabel = depositType === 'percent' ? `${depositAmount}%` : `£${depositAmount}`;
   const setupSummary = loading || loadFailed ? undefined : {
     deposit: depositMode === 'full_only' ? 'No deposit'
-      : [depositMode === 'client_choice' ? 'Optional' : 'Required', depositAmount && depositAmountLabel, depositRequiredNew && 'new clients']
+      : [depositMode === 'client_choice' ? 'Optional' : 'Required', depositAmount && depositAmountLabel, depositNonRefundable && 'non-refundable', depositRequiredNew && 'new clients']
           .filter(Boolean).join(' · '),
     inPerson: acceptedLabels.length ? acceptedLabels.join(', ') : 'None set',
   };
@@ -237,11 +243,13 @@ export default function PaymentsScreen({ navigation, route }: any) {
         <View style={[s.header, { borderBottomColor: C.border }]}>
           <Text style={[s.headerTitle, { color: C.text }]}>Payments & payouts</Text>
           <TouchableOpacity
-            style={[s.closeBtn, { backgroundColor: C.surface }]}
+            accessibilityRole="button"
+            accessibilityLabel="Done, close payments"
+            style={st.doneBtn}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); closeWithinTab(navigation); }}
             activeOpacity={0.5}
           >
-            <Ionicons name="close" size={22} color={C.sub} />
+            <Text style={[st.rowAction, { color: C.accentText, fontSize: 14 }]}>Done</Text>
           </TouchableOpacity>
         </View>
 
@@ -257,7 +265,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
           {loading ? <ActivityIndicator color={C.accent} size="large" /> : <>
           {loadFailed && <Toast message="Payment settings could not load. Reopen this screen before saving." type="error" />}
 
-          <Card title="Deposits" sub="Whether clients pay something up front to hold their slot.">
+          <PaySection title="Deposits" sub="Whether clients pay something up front to hold their slot.">
             <View style={st.modeRow}>
               {DEPOSIT_MODE_OPTS.map(o => {
                 const on = depositMode === o.value;
@@ -316,6 +324,13 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 </View>
 
                 <ToggleRow
+                  label="Non-refundable deposit"
+                  sub="You keep the deposit whenever a client cancels, even in good time. It still goes back to them if you cancel, decline or don't answer. It only applies to new bookings."
+                  value={depositNonRefundable}
+                  onChange={setDepositNonRefundable}
+                />
+
+                <ToggleRow
                   label="New clients only"
                   sub="Only first-time clients pay your deposit. Returning clients book as normal."
                   value={depositRequiredNew}
@@ -344,10 +359,10 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 <Text style={[st.footnote, { color: C.sub }]}>The balance is due at their appointment.</Text>
               )}
             </View>
-          </Card>
+          </PaySection>
 
-          <Card
-            title="How You Take Payment"
+          <PaySection
+            title="How you take payment"
             sub="Shown on your profile so clients know what to expect."
           >
             <SectionLabel text="Preferred payment types" />
@@ -373,56 +388,30 @@ export default function PaymentsScreen({ navigation, route }: any) {
                   : `Accepts ${acceptedLabels.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`}
               </Text>
             </View>
-          </Card>
+          </PaySection>
 
-          {/* Refunds are cancellation policy and PoliciesScreen owns the field.
-              Read-only signpost — never a second editor. */}
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={refundPolicyNote ? 'Refund policy. Edit in Policies' : 'Refund policy not written yet. Write one in Policies'}
-            style={[st.rowCard, { backgroundColor: C.card, borderColor: C.border }]}
-            onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Policies'); }}
-            activeOpacity={0.7}
-          >
-            <View style={[st.iconChip, { backgroundColor: C.surface }]}>
-              <Ionicons name="document-text-outline" size={18} color={C.accentText} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[st.rowTitle, { color: C.text }]}>Refund policy</Text>
-              <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>
-                {refundPolicyNote || 'Not written yet — clients booking with you won’t see one.'}
-              </Text>
-            </View>
-            <Text style={[st.rowAction, { color: C.accentText }]}>{refundPolicyNote ? 'Edit in Policies' : 'Write one'}</Text>
-          </TouchableOpacity>
-
-          <View style={st.gettingPaid}>
-            <Ionicons name="shield-checkmark-outline" size={16} color={C.sub} style={{ marginTop: 2 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={[st.rowTitle, { color: C.text, fontSize: 13 }]}>Getting Paid</Text>
-              <Text style={[st.footnote, { color: C.sub }]}>
-                Anything a client pays in person — the balance after a deposit included — is between you and them. Cerviced doesn’t collect, hold, verify or record those payments, so keep your own receipts.
-              </Text>
-            </View>
-          </View>
+          <PaySection title="Getting paid in person">
+            <Text style={[st.footnote, { color: C.sub }]}>
+              Anything a client pays in person — the balance after a deposit included — is between you and them. Cerviced doesn’t collect, hold, verify or record those payments, so keep your own receipts.
+            </Text>
+          </PaySection>
 
           {!loadFailed && <SaveButton saving={saving} onPress={handleSave} />}
 
+          {/* Refund policy, cancellation, rescheduling, late and no-show fees
+              are PoliciesScreen's. A signpost only — never a second editor. */}
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Your policies. Cancellation, rescheduling, late and no-show fees and refunds"
-            style={[st.rowCard, { backgroundColor: C.card, borderColor: C.border, marginTop: 16 }]}
+            accessibilityLabel="Your policies. Cancellation, rescheduling, refunds, late and no-show fees"
+            style={[st.policiesRow, { borderTopColor: C.border }]}
             onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Policies'); }}
             activeOpacity={0.7}
           >
-            <View style={[st.iconChip, { backgroundColor: C.surface }]}>
-              <Ionicons name="reader-outline" size={18} color={C.accentText} />
-            </View>
             <View style={{ flex: 1 }}>
               <Text style={[st.rowTitle, { color: C.text }]}>Your policies</Text>
-              <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>Cancellation, rescheduling, late and no-show fees</Text>
+              <Text numberOfLines={1} style={[st.footnote, { color: C.sub }]}>Cancelling, rescheduling, refunds, late and no-show fees</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={C.accentText} />
+            <Text style={[st.rowAction, { color: C.accentText }]}>Open</Text>
           </TouchableOpacity>
           </>}
           </ProviderStripePayments>
@@ -452,9 +441,8 @@ const st = StyleSheet.create({
   body:         { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, marginTop: 4 },
   footnote:     { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
   toldPanel:    { borderRadius: 12, padding: 12, marginTop: 12 },
-  rowCard:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, minHeight: 64, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, marginBottom: 16 },
-  iconChip:     { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  policiesRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, marginTop: 18, minHeight: 56, borderTopWidth: StyleSheet.hairlineWidth },
+  doneBtn:      { minHeight: 44, minWidth: 44, paddingHorizontal: 6, alignItems: 'flex-end', justifyContent: 'center' },
   rowTitle:     { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
   rowAction:    { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
-  gettingPaid:  { flexDirection: 'row', gap: 10, paddingHorizontal: 6, marginBottom: 20 },
 });
