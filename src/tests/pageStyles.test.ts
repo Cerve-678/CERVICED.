@@ -23,7 +23,7 @@ import {
   serviceCardSurface,
   sheetInk,
 } from '../features/providers/ProfilePageStyle';
-import { kickerPhrase } from '../features/providers/ProfileHero';
+import { heroUsesBrandFont, kickerPhrase } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
   it('reads keys saved before page styles existed as Classic', () => {
@@ -352,6 +352,20 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   it('round-trips each in the stored theme key', () => {
     keys.forEach(key => {
       expect(parseThemeKey(encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', key)).pageStyle).toBe(key);
+    });
+  });
+});
+
+describe('which styles show the picked name font', () => {
+  it('is only the styles whose hero draws the name in it', () => {
+    expect(PAGE_STYLES.filter(heroUsesBrandFont).map(s => s.key)).toEqual([
+      'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
+    ]);
+  });
+
+  it('leaves the font off the demure set, which letters the name itself', () => {
+    ['lounge', 'softFocus', 'hush', 'stripes', 'bow'].forEach(key => {
+      expect(heroUsesBrandFont(getPageStyle(key))).toBe(false);
     });
   });
 });
