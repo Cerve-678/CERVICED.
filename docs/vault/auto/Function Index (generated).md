@@ -5,7 +5,7 @@
 
 #generated
 
-**3977 functions** across **559 files**.
+**3976 functions** across **559 files**.
 
 ### `src/components/` (67)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -46,7 +46,7 @@
 - `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handlePanelPickTime · handleRequestDateChange · handleTimeClick · maxDate · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · releaseNote · renderGroup · requestPanel · requestTimesForDate · selectDateFromTap · tooFarAheadNote
 - `MultiBookingSheet.tsx` — cancelSeparateEmergency · confirmSeparateEmergency · depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSeparateDate · handleSeparateTime · handleSubmit · lengthOf · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
 - `NotificationPreferencesView.tsx` — load · NotificationPreferencesView · persist · retrySave · StaticRow · toggle · ToggleRow
-- `PageStylePicker.tsx` — card · headingNode · logo · MiniFan · MiniProfile · PageStylePicker
+- `PageStylePicker.tsx` — card · headingNode · logo · MiniProfile · PageStylePicker
 - `PasswordRequirements.tsx` — **PasswordRequirements**
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · secondColourIsContentArea · **sheenColors**
@@ -277,7 +277,7 @@
 - `ExpandableAboutText.tsx` — **ExpandableAboutText** · link · **revealIfScrolledPast** · toggle
 - `externalBookingLink.ts` — **displayExternalBookingUrl** · **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
 - `FanPhotoPicker.tsx` — **FanPhotoPicker** · fanUris
-- `fanPhotos.ts` — **fanAngles** · **fanPhotos** · **toggleFanPick**
+- `fanPhotos.ts` — **fanPhotos** · **toggleFanPick**
 - `FullCervicedLockedSheet.tsx` — **FullCervicedLockedSheet** · seeMore
 - `FullMemberConversion.tsx` — createStyles · **FullMemberConversion** · MockTab · run · steps · styles
 - `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
@@ -289,7 +289,7 @@
 - `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
-- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **GlossShine** · HeadingLine · isCentredHeading · LaceTrimmedCard · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
+- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **GlossShine** · HeadingLine · isCentredHeading · LaceTrimmedCard · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProfileStylePreview.tsx` — lines · noop · **ProfileStylePreview**
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
@@ -317,8 +317,8 @@
 ### `src/features/providers/heroes/` (11)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
-- `DemureHeroes.tsx` — **BowHero** · **HeroFan** · **HushBoxes** · **HushHero** · **LoungeHero** · **PearlHero** · **SoftFocusHero**
-- `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **PearlStrand** · **ribbonColours**
+- `DemureHeroes.tsx` — **BowHero** · **HushBoxes** · **HushHero** · **LoungeHero** · **SoftFocusHero** · **StripesHero** · **stripesHeroColour**
+- `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **ribbonColours** · **stripeColours**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
 - `LaceHero.tsx` — LaceDrape · **LaceHero** · **LaceRosette** · **LaceTrim** · scallopXs

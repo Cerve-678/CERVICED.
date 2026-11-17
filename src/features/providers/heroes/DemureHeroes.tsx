@@ -4,21 +4,22 @@
 // https://claude.ai/artifact/LPquiWNrboArq6NjcZi9ny), drawn by
 // ProfileHero.ProfileHeroLayout for the profile and Branding's preview alike:
 //
-// - Lounge: their first portfolio photo with rounded top corners, the name in
-//   tall League Gothic caps in the page's own colour across its foot, so the
-//   letters look cut out of the page. The photo ends on a strip of the page
-//   colour that the content sheet overlaps, so there's no seam.
+// - Lounge: a rounded-top panel of their colour (no photo, owner 2026-11-17),
+//   the name in tall League Gothic caps in the page's own colour near its
+//   foot, so the letters look cut out of the page. The panel ends on a strip
+//   of the page colour that the content sheet overlaps, so there's no seam.
 // - Soft Focus: a card tinted with the accent, a wave in its corner, the round
 //   logo beside the name in heavy Archivo caps and a pill of what they do.
 // - Hush: everything quiet inside a hairline frame. What they do in tiny caps,
 //   a ringed logo, the name in light italic, then three of their chosen photos,
 //   each in its own box (owner, 2026-11-17: boxes, not a fan).
-// - Pearl: a card with the fan of their chosen photos, the logo in a ring of
-//   pearls over its foot, the name in spaced Castoro caps.
+// - Stripes: a full-width strip of their colour between two fine rules, the
+//   logo in a ring of pearls, the name in spaced Castoro caps. No photo
+//   (replaced Pearl's fan, owner 2026-11-17).
 // - Bow: their photo with a satin ribbon down it and a bow tied on top, the
 //   logo on its foot, the name in Sorts Mill Goudy italic.
 //
-// Hush's boxes and Pearl's fan show the photos picked in Branding (fanPhotos).
+// Hush's boxes show the photos picked in Branding (fanPhotos).
 
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
@@ -27,16 +28,15 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 import { blend, isDarkColor, withAlpha } from "../../../constants/providerThemes";
-import { fanAngles } from "../fanPhotos";
 import { cardInk } from "./BoutiqueHero";
-import { BowGlyph, PearlRing, ribbonColours } from "./demureOrnaments";
+import { BowGlyph, PearlRing, ribbonColours, stripeColours } from "./demureOrnaments";
 
-/** How far Lounge's name hangs below the photo's foot, as a share of its size:
- *  the rest shows on the photo. 0.55 at first; lifted to 0.42 (owner,
- *  2026-11-17: "lift the business name up slightly"), with BY … above it
- *  lifted by the same 0.13 so the gap between them stays. */
-const LOUNGE_NAME_DROP = 0.42;
-const LOUNGE_BY_LIFT = 0.85;
+/** How far Lounge's name line hangs below the panel's foot, as a share of its
+ *  size. 0.55 at first, 0.42 (#578), then 0.16 once the photo went (owner,
+ *  2026-11-17: "lift the name higher"), which sets the letters' feet just
+ *  above the foot. BY … above it rises by the same amount so the gap stays. */
+const LOUNGE_NAME_DROP = 0.16;
+const LOUNGE_BY_LIFT = 1.11;
 
 /** How far the content sheet rides up over Lounge's page-coloured strip. */
 const LOUNGE_SHEET_OVERLAP = 40;
@@ -57,85 +57,6 @@ interface DemureHeroProps {
   details: React.ReactNode;
   tick: React.ReactNode;
 }
-
-// ── The fan ─────────────────────────────────────────────────────────────────
-
-/**
- * Pearl's fan: up to five photos fanned out from a point below them, like
- * prints held in one hand, each edged in pearl. Tapping one opens it full size.
- */
-export function HeroFan({
-  uris,
-  paper,
-  onOpen,
-}: {
-  uris: readonly string[];
-  /** The card the fan sits on. */
-  paper: string;
-  onOpen?: ((index: number) => void) | undefined;
-}) {
-  if (uris.length === 0) return null;
-  const angles = fanAngles(uris.length);
-  const width = 120;
-  const height = 168;
-  const onDark = isDarkColor(paper);
-  const look = [fan.card, { borderColor: onDark ? "#E8E1D7" : "#FFFDF8", shadowColor: onDark ? "#000000" : "#2B2623" }];
-  return (
-    <View style={fan.stage}>
-      {uris.map((uri, index) => {
-        const deg = angles[index] ?? 0;
-        // The whole photo turns (and its tap area with it), about a point a
-        // photo's height below its centre, as transform-origin 50% 150% did
-        // on the canvas.
-        const placed = {
-          width,
-          height,
-          marginLeft: -width / 2,
-          transform: [
-            { translateY: height },
-            { rotate: `${deg}deg` },
-            { translateY: -height },
-            { translateY: Math.abs(deg) * 0.35 },
-          ],
-        };
-        const photo = (
-          <Image source={{ uri }} style={[StyleSheet.absoluteFill, fan.photo]} contentFit="cover" transition={0} recyclingKey={uri} />
-        );
-        return onOpen ? (
-          <TouchableOpacity
-            key={`${index}-${uri}`}
-            activeOpacity={0.9}
-            onPress={() => onOpen(index)}
-            style={[fan.slot, look, placed]}
-            accessibilityRole="imagebutton"
-            accessibilityLabel={`Photo ${index + 1} of ${uris.length}. Tap to see it full size`}
-          >
-            {photo}
-          </TouchableOpacity>
-        ) : (
-          <View key={`${index}-${uri}`} style={[fan.slot, look, placed]} pointerEvents="none">
-            {photo}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-const fan = StyleSheet.create({
-  stage: { alignSelf: "stretch", height: 250 },
-  // Each photo is placed from the stage's middle; the last drawn is on top.
-  slot: { position: "absolute", left: "50%", top: 34 },
-  card: {
-    borderWidth: 4,
-    borderRadius: 26,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  photo: { borderRadius: 22 },
-});
 
 // ── Hush's boxes ───────────────────────────────────────────────────────────
 
@@ -189,34 +110,27 @@ const boxes = StyleSheet.create({
 
 export function LoungeHero({
   name,
-  photoUri,
   accent,
   sheetColour,
-  heroText,
   details,
   tick,
-}: Pick<DemureHeroProps, "name" | "heroText" | "details" | "tick"> & {
-  photoUri: string | undefined;
+}: Pick<DemureHeroProps, "name" | "details" | "tick"> & {
   accent: string;
-  /** The content sheet's colour: the name and the strip under the photo. */
+  /** The content sheet's colour: the name and the strip under the panel. */
   sheetColour: string;
 }) {
   const { width } = useWindowDimensions();
   const upper = name.toUpperCase();
   const first = (name.trim().split(/\s+/)[0] ?? "").toUpperCase();
   // League Gothic is narrow: a cap is about 0.38 of its size across. Fill the
-  // photo's width, never past 112pt.
+  // panel's width, never past 112pt.
   const size = Math.round(Math.max(48, Math.min(112, (width - 44) / Math.max(upper.length * 0.38, 1))));
-  const byInk = photoUri ? "#FFFFFF" : withAlpha(heroText, 0.92);
   return (
     <View style={lounge.wrap}>
-      <View style={[lounge.photo, { backgroundColor: photoUri ? "#1A1817" : accent }]}>
-        {photoUri ? (
-          <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
-        ) : null}
+      <View style={[lounge.panel, { backgroundColor: accent }]}>
         {first ? (
           <View style={[lounge.byRow, { bottom: size * LOUNGE_BY_LIFT }]}>
-            <Text style={[lounge.by, { color: byInk }, photoUri ? lounge.byShadow : null]}>BY {first}</Text>
+            <Text style={[lounge.by, { color: cardInk(accent).text }]}>BY {first}</Text>
             {tick}
           </View>
         ) : null}
@@ -237,12 +151,12 @@ export function LoungeHero({
 }
 
 const lounge = StyleSheet.create({
-  // Opens on the photo, straight under the header buttons.
+  // Opens on the panel, straight under the header buttons. Shorter than the
+  // photo it replaced (340), since there's no picture to show.
   wrap: { alignSelf: "stretch", marginTop: -20, marginBottom: -LOUNGE_SHEET_OVERLAP },
-  photo: { height: 340, marginHorizontal: 10, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: "hidden" },
+  panel: { height: 230, marginHorizontal: 10, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: "hidden" },
   byRow: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
   by: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 5 },
-  byShadow: { textShadowColor: "rgba(0,0,0,0.45)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
   name: { position: "absolute", left: 6, right: 6, fontFamily: "LeagueGothic-Regular", textAlign: "center", letterSpacing: 0.5 },
   strip: { alignItems: "center", paddingTop: 16, paddingBottom: 18 + LOUNGE_SHEET_OVERLAP, paddingHorizontal: 20 },
 });
@@ -369,57 +283,58 @@ const hush = StyleSheet.create({
   caption: { fontFamily: "Newsreader-LightItalic", fontSize: 13, lineHeight: 19, textAlign: "center" },
 });
 
-// ── Pearl ───────────────────────────────────────────────────────────────────
+// ── Stripes ─────────────────────────────────────────────────────────────────
 
-export function PearlHero({
+export function StripesHero({
   name,
   phrase,
-  cardColour,
+  accent,
   renderLogo,
   details,
   tick,
-  fanUris,
-  onOpenFanPhoto,
 }: Pick<DemureHeroProps, "name" | "phrase" | "renderLogo" | "details" | "tick"> & {
-  cardColour: string;
-  fanUris: readonly string[];
-  onOpenFanPhoto?: ((index: number) => void) | undefined;
+  accent: string;
 }) {
-  const ink = cardInk(cardColour);
-  const onDark = isDarkColor(cardColour);
+  const { strong, line } = stripeColours(accent);
+  const ink = cardInk(strong);
   return (
-    <View style={[pearl.card, { backgroundColor: cardColour }]}>
-      {fanUris.length > 0 ? <HeroFan uris={fanUris} paper={cardColour} onOpen={onOpenFanPhoto} /> : null}
-      <View style={[pearl.logoBox, fanUris.length > 0 && pearl.logoOverFan]}>
-        <View style={pearl.logo}>{renderLogo(84)}</View>
-        <PearlRing diameter={84} pearl={9} count={22} onDark={onDark} />
+    <View style={[stripes.band, { backgroundColor: strong, borderColor: line }]}>
+      <View style={stripes.logoBox}>
+        <View style={stripes.logo}>{renderLogo(64)}</View>
+        <PearlRing diameter={64} pearl={7} count={20} onDark={isDarkColor(strong)} />
       </View>
-      <View style={pearl.nameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
-        <Text style={[pearl.name, { color: ink.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+      <View style={stripes.nameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+        <Text style={[stripes.name, { color: ink.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
           {name.toUpperCase()}
         </Text>
         {tick}
       </View>
-      {phrase ? <Text style={[pearl.phrase, { color: ink.sub }]}>{phrase.toLowerCase()}</Text> : null}
-      <View style={pearl.details}>{details}</View>
+      {phrase ? <Text style={[stripes.phrase, { color: ink.sub }]}>{phrase.toLowerCase()}</Text> : null}
+      <View style={stripes.details}>{details}</View>
     </View>
   );
 }
 
-const pearl = StyleSheet.create({
-  card: {
-    alignSelf: "stretch", alignItems: "center", marginHorizontal: 16, marginBottom: 26,
-    borderRadius: 34, paddingTop: 22, paddingBottom: 24, paddingHorizontal: 18,
+/** The colour of Stripes' hero strip: its details (stars, years) take this strip's ink. */
+export function stripesHeroColour(accent: string): string {
+  return stripeColours(accent).strong;
+}
+
+const stripes = StyleSheet.create({
+  // Edge to edge, fine rules along its top and foot.
+  band: {
+    alignSelf: "stretch", alignItems: "center", marginBottom: 26,
+    borderTopWidth: 1, borderBottomWidth: 1,
+    paddingTop: 24, paddingBottom: 22, paddingHorizontal: 20,
   },
-  logoBox: { width: 84, height: 84, marginTop: 10 },
-  logoOverFan: { marginTop: -30 },
+  logoBox: { width: 64, height: 64, marginTop: 6 },
   // HeroLogo keeps 20pt under itself; the box sizes it already.
   logo: { marginBottom: -20 },
-  nameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 22 },
+  nameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 18 },
   // Castoro's caps need 1.3× or their tops crop.
-  name: { fontFamily: "Castoro-Regular", fontSize: 28, lineHeight: 37, letterSpacing: 5, textAlign: "center", flexShrink: 1 },
-  phrase: { fontFamily: "Castoro-Italic", fontSize: 16, lineHeight: 22, textAlign: "center", marginTop: 2 },
-  details: { alignItems: "center", marginTop: 14, alignSelf: "stretch" },
+  name: { fontFamily: "Castoro-Regular", fontSize: 27, lineHeight: 36, letterSpacing: 5, textAlign: "center", flexShrink: 1 },
+  phrase: { fontFamily: "Castoro-Italic", fontSize: 16, lineHeight: 22, textAlign: "center" },
+  details: { alignItems: "center", marginTop: 12, alignSelf: "stretch" },
 });
 
 // ── Bow ─────────────────────────────────────────────────────────────────────

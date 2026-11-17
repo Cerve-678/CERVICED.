@@ -1,9 +1,9 @@
 // src/features/providers/FanPhotoPicker.tsx
 //
-// Branding → Your Photos (Hush, three boxes) / Your Fan (Pearl, a fan of
-// five): the provider picks the portfolio photos that open those page styles (board "Branding — pick your
-// fan photos" on https://claude.ai/artifact/LPquiWNrboArq6NjcZi9ny). A live
-// fan of the picks sits above their portfolio grid. Controlled: Branding
+// Branding → Your Photos (Hush, three boxes): the provider picks the portfolio
+// photos that open that page style (board "Branding — pick your fan photos" on
+// https://claude.ai/artifact/LPquiWNrboArq6NjcZi9ny). A live preview of the
+// picks sits above their portfolio grid. Controlled: Branding
 // keeps the picks and saves them with everything else (setFanPortfolioPhotos).
 
 import React, { useMemo } from 'react';
@@ -15,14 +15,13 @@ import * as Haptics from 'expo-haptics';
 import { isDarkColor } from '../../constants/providerThemes';
 import type { DbPortfolioItem } from '../../types/database';
 import { fanPhotos, toggleFanPick } from './fanPhotos';
-import { HeroFan, HushBoxes } from './heroes/DemureHeroes';
+import { HushBoxes } from './heroes/DemureHeroes';
 
 export function FanPhotoPicker({
   items,
   picked,
   onChange,
   limit,
-  variant,
   sheet,
   accent,
   textColor,
@@ -34,10 +33,8 @@ export function FanPhotoPicker({
   /** The ids picked, in the order they were picked. */
   picked: readonly string[];
   onChange: (next: string[]) => void;
-  /** How many the hero shows: Hush 3, Pearl 5. */
+  /** How many the hero shows (Hush: 3). */
   limit: number;
-  /** Hush draws three boxes, Pearl a fan of pearl-edged photos. */
-  variant: 'boxes' | 'pearls';
   sheet: string;
   accent: string;
   textColor: string;
@@ -54,7 +51,7 @@ export function FanPhotoPicker({
   if (items.length === 0) {
     return (
       <Text style={[styles.empty, { color: subColor }]}>
-        Add photos to your portfolio in My Profile and they'll fan out here.
+        Add photos to your portfolio in My Profile and they'll show here.
       </Text>
     );
   }
@@ -62,11 +59,7 @@ export function FanPhotoPicker({
   return (
     <View>
       <View style={[styles.preview, { backgroundColor: sheet, borderColor }]}>
-        {variant === 'boxes' ? (
-          <View style={styles.boxesPad}><HushBoxes uris={fanUris} paper={sheet} /></View>
-        ) : (
-          <HeroFan uris={fanUris} paper={sheet} />
-        )}
+        <View style={styles.boxesPad}><HushBoxes uris={fanUris} paper={sheet} /></View>
       </View>
       <View style={styles.countRow}>
         <Text style={[styles.countLabel, { color: textColor }]}>Your portfolio</Text>

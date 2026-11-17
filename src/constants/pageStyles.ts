@@ -32,7 +32,7 @@ export type PageStyleKey =
   | 'lounge'
   | 'softFocus'
   | 'hush'
-  | 'pearl'
+  | 'stripes'
   | 'bow';
 
 /** How a section's title is drawn. */
@@ -65,7 +65,7 @@ export type PageHeading =
   | 'loungeCaps' // tall condensed caps, centred; Policies gets "PLEASE REVIEW MY" over it (Lounge)
   | 'softCaps'   // heavy grotesk caps at the top left of its own card (Soft Focus)
   | 'hushRule'   // tiny spaced caps between hairlines, in the style's own quiet words (Hush)
-  | 'pearlStrand' // a strand of pearls over an italic serif title, centred (Pearl)
+  | 'stripeCaps' // spaced serif caps, centred, at the top of the section's colour strip (Stripes)
   | 'bowSerif';  // a small satin bow over an italic serif title, centred (Bow)
 
 /** What a section sits on. */
@@ -93,8 +93,8 @@ export type PageCards =
   | 'tabbed'  // a square solid card with a little tab on its top edge naming the section (Studio)
   | 'outlineRound' // a card with a fine dark outline and big round corners (Lounge)
   | 'soft'    // a soft solid card with big round corners, its heading inside (Soft Focus)
-  | 'pearl'   // a solid card with round corners, no outline (Pearl)
-  | 'bow';    // a solid card with round corners, a touch less round than Pearl's (Bow)
+  | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
+  | 'bow';    // a solid card with round corners (Bow)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -122,7 +122,7 @@ export type PagePolicies =
   | 'loungeGrid'  // two-up columns straight on the page, a condensed caps label over each (Lounge)
   | 'softTiles'   // two-up round tiles tinted with the accent, inside the section's card (Soft Focus)
   | 'gentleNotes' // centred notes: a small caps label, then the policy in a light italic (Hush)
-  | 'pearlNotes'  // rows on the card, each beside a single pearl (Pearl)
+  | 'pearlNotes'  // rows in the outlined box, each beside a single pearl (Stripes)
   | 'ribbonBand'; // one card with a satin ribbon across its top, two-up italic titles (Bow)
 
 /**
@@ -156,10 +156,10 @@ export type PageHero =
   | 'productPage' // a product page: their logo big on their colour, then the name as the product title on a white panel with Add to basket (Boutique)
   | 'gazette'  // a newsprint front page: blackletter masthead, today's dateline, what they do as the headline
   | 'studio'    // a studio website's top: what they do in chunky caps on a deep bar, then the logo and the name pressed into a panel of the accent as a lowercase wordmark
-  | 'lounge'   // a rounded-top photo with the name in tall caps cut out of the page across its foot
+  | 'lounge'   // a rounded-top panel of their colour with the name in tall caps in the page's colour across its foot
   | 'softCard' // a tinted card with a wave: the round logo beside the name in heavy caps and a pill of what they do
   | 'hushFan'  // quiet: what they do in tiny caps, a ringed logo, the name in light italic, three of their chosen photos in separate boxes
-  | 'pearlFan' // a card with a fan of their chosen photos, the logo in a ring of pearls, the name in spaced serif caps
+  | 'stripes'  // a full-width strip of their colour: the logo in a ring of pearls, the name in spaced serif caps, no photo
   | 'bow'      // their photo with a ribbon down it and a bow on top, the logo on its foot, the name in italic serif
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
@@ -187,6 +187,8 @@ export interface PageStyle {
   heroPills: boolean;
   /** A bar of section links (About, Services, Policies, Reviews) at the top of the page. */
   jumpBar: boolean;
+  /** The section links as words between two fine rules instead of a filled pill (Lounge, owner 2026-11-17). */
+  jumpBarRuled?: boolean;
   /** About and Policies as two sections of their own instead of one tabbed card. */
   separateAboutAndPolicies: boolean;
   /** A service without a photo shows its number in the menu (01, 02…) instead of its first letter. */
@@ -394,14 +396,16 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   },
   // 2026-11-16, the demure set (https://claude.ai/artifact/LPquiWNrboArq6NjcZi9ny,
   // boards 28–32), from the owner's Acuity "lash lounge" booking sites and a
-  // lilac beauty-app mockup. Hush and Pearl open on photos the provider picks
-  // in Branding (portfolio_items.is_featured; see fanPhotos.ts): three in
-  // separate boxes for Hush, a fan of five for Pearl (owner, 2026-11-17).
+  // lilac beauty-app mockup. Hush opens on three photos the provider picks in
+  // Branding (portfolio_items.is_featured; see fanPhotos.ts). 2026-11-17
+  // (https://claude.ai/artifact/L6KZ2rjSqidNWQ7r9sd8ee): Lounge lost its photo
+  // and got ruled section tabs, and Pearl's fan was replaced by colour strips
+  // and outlined boxes and renamed Stripes.
   {
-    key: 'lounge', name: 'Lounge', description: 'Your name in tall caps cut into your photo, outlined round boxes',
+    key: 'lounge', name: 'Lounge', description: 'Your name in tall caps on your colour, outlined round boxes',
     heading: 'loungeCaps', cards: 'outlineRound', policies: 'loungeGrid', logo: 'circle',
     hero: 'lounge', aboutInHero: false, roundedPhotos: true,
-    heroPills: false, jumpBar: true, separateAboutAndPolicies: true, numberedServices: false,
+    heroPills: false, jumpBar: true, jumpBarRuled: true, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
     key: 'softFocus', name: 'Soft Focus', description: 'Soft tinted cards, your logo on a wave, heavy caps',
@@ -416,9 +420,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
-    key: 'pearl', name: 'Pearl', description: 'A fan of your favourite photos, your logo in a ring of pearls',
-    heading: 'pearlStrand', cards: 'pearl', policies: 'pearlNotes', logo: 'circle',
-    hero: 'pearlFan', aboutInHero: false,
+    key: 'stripes', name: 'Stripes', description: 'Each section on a strip of your colour, everything in fine outlined boxes',
+    heading: 'stripeCaps', cards: 'stripes', policies: 'pearlNotes', logo: 'circle',
+    hero: 'stripes', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   {
@@ -430,11 +434,9 @@ export const PAGE_STYLES: readonly PageStyle[] = [
 ];
 
 /** How many photos this style's hero shows from the ones the provider picks
- *  in Branding (Hush: three boxes, Pearl: a fan of five); 0 for the rest. */
+ *  in Branding (Hush: three boxes); 0 for the rest. */
 export function heroPhotoPickLimit(style: PageStyle): number {
-  if (style.hero === 'hushFan') return 3;
-  if (style.hero === 'pearlFan') return 5;
-  return 0;
+  return style.hero === 'hushFan' ? 3 : 0;
 }
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {

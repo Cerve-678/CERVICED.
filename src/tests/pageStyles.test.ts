@@ -6,6 +6,7 @@ import {
   headingPair,
   heroPhotoPickLimit,
   HUSH_TITLES,
+  isPageStyleKey,
   menuNumber,
   PAGE_SECTION_TITLES,
   PAGE_STYLES,
@@ -13,7 +14,8 @@ import {
   policyPicturePlacement,
   type PageSectionKey,
 } from '../constants/pageStyles';
-import { encodeThemeKey, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
+import { encodeThemeKey, isDarkColor, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
+import { stripeColours } from '../features/providers/heroes/demureOrnaments';
 import { sealLetter, waxColour } from '../features/providers/WaxSeal';
 import {
   policiesBringOwnSurface,
@@ -60,7 +62,7 @@ describe('page styles', () => {
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'lace', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
-      'studio', 'lounge', 'softFocus', 'hush', 'pearl', 'bow',
+      'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
     ]);
   });
 
@@ -289,8 +291,8 @@ describe('Calling Card', () => {
   });
 });
 
-describe('the demure set (Lounge, Soft Focus, Hush, Pearl, Bow)', () => {
-  const keys = ['lounge', 'softFocus', 'hush', 'pearl', 'bow'] as const;
+describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
+  const keys = ['lounge', 'softFocus', 'hush', 'stripes', 'bow'] as const;
   const styles = keys.map(getPageStyle);
   const colours = { card: '#FFFFFF', accent: '#A58CCB', sheet: SHEET_BG };
 
@@ -300,22 +302,35 @@ describe('the demure set (Lounge, Soft Focus, Hush, Pearl, Bow)', () => {
     expect(new Set(styles.map(s => s.heading)).size).toBe(5);
   });
 
-  it('opens only Hush (three boxes) and Pearl (a fan of five) on picked photos', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['hush', 'pearl']);
+  it('opens only Hush (three boxes) on picked photos', () => {
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['hush']);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
-    expect(heroPhotoPickLimit(getPageStyle('pearl'))).toBe(5);
+    expect(heroPhotoPickLimit(getPageStyle('stripes'))).toBe(0);
     expect(heroPhotoPickLimit(getPageStyle('lounge'))).toBe(0);
+  });
+
+  it('gives Stripes outlined service boxes in a deeper shade of the accent', () => {
+    const line = stripeColours(colours.accent).line;
+    expect(serviceCardSurface(getPageStyle('stripes'), colours)).toMatchObject({ borderWidth: 1, borderColor: line, borderRadius: 16 });
+    expect(isDarkColor(line)).toBe(true);
+  });
+
+  it('no longer knows Pearl (renamed Stripes before anyone used it)', () => {
+    expect(isPageStyleKey('pearl')).toBe(false);
+    expect(getPageStyle('pearl').key).toBe('classic');
   });
 
   it('outlines Lounge\'s cards in ink with big round corners, and puts its policies on the page', () => {
     expect(serviceCardSurface(getPageStyle('lounge'), colours)).toMatchObject({ borderWidth: 1, borderColor: '#1F1A1C', borderRadius: 24 });
     expect(policiesBringOwnSurface(getPageStyle('lounge'))).toBe(true);
     expect(getPageStyle('lounge').jumpBar).toBe(true);
+    expect(getPageStyle('lounge').jumpBarRuled).toBe(true);
+    expect(PAGE_STYLES.filter(s => s.jumpBarRuled).map(s => s.key)).toEqual(['lounge']);
   });
 
-  it('keeps Soft Focus and Pearl policies inside their section card, and Bow\'s on its ribbon card', () => {
+  it('keeps Soft Focus and Stripes policies inside their section box, and Bow\'s on its ribbon card', () => {
     expect(policiesBringOwnSurface(getPageStyle('softFocus'))).toBe(false);
-    expect(policiesBringOwnSurface(getPageStyle('pearl'))).toBe(false);
+    expect(policiesBringOwnSurface(getPageStyle('stripes'))).toBe(false);
     expect(policiesBringOwnSurface(getPageStyle('bow'))).toBe(true);
   });
 
