@@ -90,7 +90,8 @@ describe('the Beauty Profile landing (design C)', () => {
     renderLanding({ hairType: ['Curly 3B'], skinType: ['Combination'], nailShape: ['Almond'], nailLength: ['Medium'] });
     expect(screen.getByText('BEAUTYPROFILE.HELLO.TITLE {"NAME":"JESS"}')).toBeTruthy();
     expect(screen.getByText('PROFILE.FORYOU.BEAUTY.TITLE')).toBeTruthy();
-    expect(screen.getByText('CURLY 3B')).toBeTruthy();
+    // On the Hair card, and in Your look's title too.
+    expect(screen.getAllByText('CURLY 3B').length).toBeGreaterThan(0);
     expect(screen.getByText('COMBINATION')).toBeTruthy();
     expect(screen.getByText('ALMOND · MEDIUM')).toBeTruthy();
   });
@@ -98,7 +99,7 @@ describe('the Beauty Profile landing (design C)', () => {
   it('opens the editor for the card tapped', () => {
     const onEditCategory = jest.fn();
     renderLanding({ hairType: ['Curly 3B'] }, [], { onEditCategory });
-    fireEvent.press(screen.getByText('CURLY 3B'));
+    fireEvent.press(screen.getByLabelText('beautyProfile.hello.hair, Curly 3B'));
     expect(onEditCategory).toHaveBeenCalledWith('hair');
   });
 
@@ -170,5 +171,13 @@ describe('How Maintenance works', () => {
     expect(screen.getByText('maintenance.howto.frame4')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('maintenance.howto.frameN {"n":2}'));
     expect(screen.getByText('maintenance.howto.frame2')).toBeTruthy();
+  });
+});
+
+describe('Your look', () => {
+  it('reads as two words and a sentence, not one word', () => {
+    renderLanding({ styleVibe: ['Natural'], makeupFinish: ['Dewy'], hairType: ['4C'], styleOccasions: ['Everyday'] });
+    expect(screen.getByText('NATURAL & DEWY')).toBeTruthy();
+    expect(screen.getByText('4C hair and a dewy finish, for everyday.')).toBeTruthy();
   });
 });
