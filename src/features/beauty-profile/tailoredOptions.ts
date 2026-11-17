@@ -1,0 +1,190 @@
+// src/features/beauty-profile/tailoredOptions.ts
+//
+// The Beauty Profile follows the client's own answers (owner, 2026-11-17: "if
+// they select 4C for their hair the rest of the questions and options need to
+// tie in and make sense"). For each question that depends on an earlier one,
+// this says which options suit what they've already told us and why, so the
+// editor can show those first under "Suited to your 4C hair".
+//
+// Nothing is ever hidden: every option is still there under the suited ones,
+// and an answer already saved always shows. The rules are plain lookups from
+// one answer to the options it points to, not guesses: hair type → scalp,
+// treatment history and goals; skin type → concerns and makeup finish; lash
+// status → lash style; brow condition → brow style; nail length → shape;
+// style vibe → eye and lip looks.
+
+import type { BeautyData } from '../../types/beautyProfile';
+import {
+  BROW_STYLES, LASH_STYLES, MAKEUP_EYES, MAKEUP_FINISH, MAKEUP_LIPS, NAIL_SHAPES,
+  SCALP_CONDITIONS, SKIN_CONCERNS, TREATMENT_HISTORY, hairGoalsFor, HAIR_GOALS,
+} from './options';
+
+export type TailoredQuestion =
+  | 'scalpCondition' | 'treatmentHistory' | 'hairGoals' | 'skinConcerns' | 'lashStyle'
+  | 'browStyle' | 'nailShape' | 'makeupFinish' | 'makeupEyes' | 'makeupLips';
+
+export interface TailoredOptions {
+  /** The options that fit their earlier answers, in the order to show them. */
+  suited: string[];
+  /** Everything else, in the usual order. */
+  rest: string[];
+  /** What the suited ones are suited to ("your 4C hair"), or null when nothing earlier applies. */
+  because: string | null;
+}
+
+const COILY = new Set(['Coily', '4A', '4B', '4C']);
+
+type HairFamily = 'coily' | 'curly' | 'smooth';
+
+function hairFamily(types: readonly string[]): HairFamily | null {
+  if (types.some(t => COILY.has(t))) return 'coily';
+  if (types.includes('Curly')) return 'curly';
+  if (types.some(t => t === 'Straight' || t === 'Wavy')) return 'smooth';
+  return null;
+}
+
+/** "your 4C hair", "your 4B & 4C hair", "your curly hair". */
+function hairBecause(types: readonly string[]): string {
+  const named = types.map(t => (/^\d/.test(t) ? t : t.toLowerCase()));
+  return `your ${named.join(' & ')} hair`;
+}
+
+const SCALP_BY_HAIR: Record<HairFamily, string[]> = {
+  coily: ['Dry', 'Itchy', 'Product build-up', 'Thinning edges', 'Tension from styles', 'Flaky'],
+  curly: ['Dry', 'Itchy', 'Product build-up', 'Flaky'],
+  smooth: ['Oily', 'Flaky', 'Sensitive'],
+};
+
+const TREATMENT_BY_HAIR: Record<HairFamily, string[]> = {
+  coily: [
+    'Natural (never relaxed)', 'Relaxed / permed', 'Texturised', 'Silk pressed',
+    'Braids / twists', 'Wigs / units', 'Locs', 'Coloured',
+  ],
+  curly: ['Natural (never relaxed)', 'Coloured', 'Bleached / lightened', 'Silk pressed', 'Keratin / smoothing', 'Braids / twists'],
+  smooth: ['Virgin hair', 'Coloured', 'Bleached / lightened', 'Keratin / smoothing', 'Hair extensions'],
+};
+
+const CONCERNS_BY_SKIN: Record<string, string[]> = {
+  Oily: ['Acne prone', 'Oiliness', 'Enlarged pores', 'Hyperpigmentation'],
+  Dry: ['Dry patches', 'Dullness', 'Fine lines', 'Eczema'],
+  Combination: ['Oiliness', 'Dry patches', 'Enlarged pores', 'Dullness'],
+  Sensitive: ['Redness', 'Rosacea', 'Eczema'],
+  Normal: ['Fine lines', 'Dark circles', 'Dullness'],
+};
+
+const FINISH_BY_SKIN: Record<string, string[]> = {
+  Oily: ['Matte', 'Soft matte', 'Satin'],
+  Combination: ['Soft matte', 'Satin'],
+  Dry: ['Dewy', 'Glowy', 'Satin'],
+};
+
+const LASHES_BY_STATUS: Record<string, { suited: string[]; because: string }> = {
+  'No extensions': { suited: ['Lifted natural lashes', 'Natural', 'Classic', 'Wispy'], because: 'your natural lashes' },
+  'Lash lift & tint': { suited: ['Lifted natural lashes', 'Natural', 'Classic'], because: 'your lash lift' },
+  'Growing out': { suited: ['Lifted natural lashes', 'Natural', 'Classic'], because: 'growing out your extensions' },
+  'Currently have extensions': { suited: ['Classic', 'Hybrid', 'Wispy', 'Russian volume', 'Wet look'], because: 'your extensions' },
+  'Wear strip lashes': { suited: ['Wispy', 'Dramatic', 'Cat eye', 'Hybrid'], because: 'wearing strip lashes' },
+};
+
+const BROWS_BY_CONDITION: Record<string, string[]> = {
+  Sparse: ['Ombré / powder', 'Microbladed', 'Laminated', 'Fluffy'],
+  'Light / barely there': ['Ombré / powder', 'Microbladed', 'Defined'],
+  Overplucked: ['Ombré / powder', 'Microbladed', 'Soft arch'],
+  Uneven: ['Defined', 'Soft arch', 'Ombré / powder'],
+  Unruly: ['Laminated', 'Fluffy', 'Feathered', 'Defined'],
+  Full: ['Natural', 'Fluffy', 'Laminated', 'Soft arch'],
+};
+
+const SHAPES_BY_LENGTH: Record<string, string[]> = {
+  'Natural / bare': ['Round', 'Squoval', 'Oval'],
+  Short: ['Round', 'Squoval', 'Oval', 'Square'],
+  Medium: ['Almond', 'Oval', 'Squoval', 'Square', 'Coffin'],
+  Long: ['Almond', 'Coffin', 'Ballerina', 'Stiletto', 'Lipstick'],
+  'Extra long': ['Coffin', 'Stiletto', 'Ballerina', 'Flare'],
+};
+
+const EYES_BY_VIBE: Record<string, string[]> = {
+  Natural: ['Subtle', 'Defined'],
+  'Low-maintenance': ['Subtle', 'Defined'],
+  Classic: ['Defined', 'Subtle', 'Smoky'],
+  Glam: ['Smoky', 'Cut crease', 'Glitter / sparkle'],
+  Bold: ['Bold / dramatic', 'Graphic liner', 'Cut crease'],
+  Editorial: ['Graphic liner', 'Bold / dramatic', 'Glitter / sparkle'],
+  Experimental: ['Graphic liner', 'Glitter / sparkle', 'Bold / dramatic'],
+};
+
+const LIPS_BY_VIBE: Record<string, string[]> = {
+  Natural: ['Nude', 'Gloss'],
+  'Low-maintenance': ['Nude', 'Gloss'],
+  Classic: ['Classic red', 'Nude'],
+  Glam: ['Brown / 90s liner', 'Berry / wine', 'Classic red'],
+  Bold: ['Bold colour', 'Classic red', 'Berry / wine'],
+  Editorial: ['Bold colour', 'Berry / wine'],
+  Experimental: ['Bold colour', 'Coral / peach'],
+};
+
+/** The suited options from every picked answer, in pick order, no repeats. */
+function fromPicks(picks: readonly string[], table: Record<string, string[]>): string[] {
+  return [...new Set(picks.flatMap(p => table[p] ?? []))];
+}
+
+/** Lower-cased answers joined for a "because" line: "oily & sensitive". */
+function joinLower(picks: readonly string[], keep: (p: string) => boolean): string {
+  return picks.filter(keep).map(p => p.toLowerCase()).join(' & ');
+}
+
+function split(all: readonly string[], suited: readonly string[], because: string | null): TailoredOptions {
+  const known = suited.filter(o => all.includes(o));
+  if (known.length === 0 || !because) return { suited: [], rest: [...all], because: null };
+  return { suited: known, rest: all.filter(o => !known.includes(o)), because };
+}
+
+export function tailoredOptions(question: TailoredQuestion, d: BeautyData): TailoredOptions {
+  switch (question) {
+    case 'scalpCondition':
+    case 'treatmentHistory': {
+      const family = hairFamily(d.hairType);
+      if (!family) return split(question === 'scalpCondition' ? SCALP_CONDITIONS : TREATMENT_HISTORY, [], null);
+      return question === 'scalpCondition'
+        ? split(SCALP_CONDITIONS, SCALP_BY_HAIR[family], hairBecause(d.hairType))
+        : split(TREATMENT_HISTORY, TREATMENT_BY_HAIR[family], hairBecause(d.hairType));
+    }
+    case 'hairGoals': {
+      const family = hairFamily(d.hairType);
+      if (!family) return split(HAIR_GOALS, [], null);
+      // hairGoalsFor leads with the goals that fit; the first five are the suited ones.
+      return split(HAIR_GOALS, hairGoalsFor(d.hairType).slice(0, 5), hairBecause(d.hairType));
+    }
+    case 'skinConcerns': {
+      const suited = fromPicks(d.skinType, CONCERNS_BY_SKIN);
+      return split(SKIN_CONCERNS, suited, suited.length ? `your ${joinLower(d.skinType, p => p in CONCERNS_BY_SKIN)} skin` : null);
+    }
+    case 'makeupFinish': {
+      const suited = fromPicks(d.skinType, FINISH_BY_SKIN);
+      return split(MAKEUP_FINISH, suited, suited.length ? `your ${joinLower(d.skinType, p => p in FINISH_BY_SKIN)} skin` : null);
+    }
+    case 'lashStyle': {
+      const rule = LASHES_BY_STATUS[d.lashStatus];
+      return split(LASH_STYLES, rule?.suited ?? [], rule?.because ?? null);
+    }
+    case 'browStyle': {
+      const suited = fromPicks(d.browCondition, BROWS_BY_CONDITION);
+      return split(BROW_STYLES, suited, suited.length ? `${joinLower(d.browCondition, p => p in BROWS_BY_CONDITION).replace(' / barely there', '')} brows` : null);
+    }
+    case 'nailShape': {
+      const suited = fromPicks(d.nailLength, SHAPES_BY_LENGTH);
+      const named = joinLower(d.nailLength, p => p in SHAPES_BY_LENGTH).replace('natural / bare', 'natural');
+      return split(NAIL_SHAPES, suited, suited.length ? `${named} nails` : null);
+    }
+    case 'makeupEyes':
+    case 'makeupLips': {
+      const table = question === 'makeupEyes' ? EYES_BY_VIBE : LIPS_BY_VIBE;
+      const suited = fromPicks(d.styleVibe, table);
+      return split(
+        question === 'makeupEyes' ? MAKEUP_EYES : MAKEUP_LIPS,
+        suited,
+        suited.length ? `your ${joinLower(d.styleVibe, p => p in table)} style` : null,
+      );
+    }
+  }
+}

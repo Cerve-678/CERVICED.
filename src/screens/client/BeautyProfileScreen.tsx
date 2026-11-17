@@ -7,8 +7,8 @@
 // src/features/maintenance/; this file owns the state they share — the
 // profile draft and its single SAVE PROFILE transaction, and the maintenance
 // data.
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, PanResponder } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
@@ -332,8 +332,11 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
   // All profile, a category, Maintenance and setup are views of
   // this one screen, so a back-swipe (or Android back) would leave Beauty
   // Profile altogether. While one is open, back goes one step instead, the
-  // same step as that view's own back button. usePreventRemove, not a
-  // beforeRemove listener: it's the one that holds native-stack's swipe.
+  // same step as that view's own back button. usePreventRemove catches the
+  // header back and Android back. It can't hold iOS's native swipe: that
+  // gesture has already popped the screen, so the stack showed Settings and
+  // then pushed Beauty Profile back (owner, 2026-11-17). So while a view is
+  // open the native swipe is off, and an edge swipe of our own steps back.
   const setupBackRef = useRef<(() => void) | null>(null);
   const innerOpen = view !== 'landing' || selectedCategory !== null;
   // Anything that isn't a plain back (a tab re-tap, sign-out, a hat switch)
@@ -351,6 +354,30 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
     if (type === 'GO_BACK' || type === 'POP') { stepBack(); return; }
     setLeaving(data.action);
   });
+  useLayoutEffect(() => {
+    navigation.setOptions({ gestureEnabled: !innerOpen });
+  }, [innerOpen, navigation]);
+  // The edge swipe that stands in for it: from the left edge, rightwards,
+  // far enough, steps back one view. Read through a ref so the responder,
+  // made once, always steps from the view that's open now.
+  const stepBackRef = useRef(stepBack);
+  stepBackRef.current = stepBack;
+  const innerOpenRef = useRef(innerOpen);
+  innerOpenRef.current = innerOpen;
+  const edgeSwipe = useRef(PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (event, gesture) =>
+      innerOpenRef.current
+      && event.nativeEvent.pageX - gesture.dx <= EDGE_SWIPE_START
+      && gesture.dx > 12
+      && Math.abs(gesture.dy) < Math.abs(gesture.dx) * 0.6,
+    onPanResponderRelease: (_event, gesture) => {
+      if (gesture.dx > EDGE_SWIPE_DISTANCE || gesture.vx > 0.5) {
+        Haptics.selectionAsync().catch(() => {});
+        stepBackRef.current();
+      }
+    },
+    onPanResponderTerminationRequest: () => true,
+  })).current;
   useEffect(() => {
     if (!leaving) return;
     // A frame later, so the prevention above has been switched off first.
@@ -467,12 +494,18 @@ export default function BeautyProfileScreen({ navigation, route }: ProfileScreen
 
   return (
     <>
-      {content}
+      <View style={styles.bg} {...edgeSwipe.panHandlers}>
+        {content}
+      </View>
       {/* Rendered last so dialogs layer above every view. */}
       <DialogHost />
     </>
   );
 }
+
+/** How close to the left edge a back swipe has to start, and how far it has to go. */
+const EDGE_SWIPE_START = 28;
+const EDGE_SWIPE_DISTANCE = 70;
 
 const styles = StyleSheet.create({
   bg:          { flex: 1 },
