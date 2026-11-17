@@ -205,10 +205,8 @@ export interface ProfileHeroLayoutProps {
   /** The content sheet's colour: Lounge's cut-out name and the strip it
    *  lands on, Hush's print borders. */
   sheetColour?: string;
-  /** Hush's three boxes: the photos picked in Branding (fanPhotos). */
-  fanPhotoUris?: readonly string[];
-  /** Opens a fan photo full size. Left out in the preview. */
-  onOpenFanPhoto?: ((index: number) => void) | undefined;
+  /** Opens one of Hush's photos full size. Left out in the preview. */
+  onOpenHeroPhoto?: ((index: number) => void) | undefined;
 }
 
 /** "LASHES · BROWS" → "Lashes & brows" (Gallery's line under the name, Apothecary's label). */
@@ -259,8 +257,7 @@ export function ProfileHeroLayout({
   cardColour,
   onBookNow,
   sheetColour,
-  fanPhotoUris,
-  onOpenFanPhoto,
+  onOpenHeroPhoto,
 }: ProfileHeroLayoutProps) {
   const shadow = heroIsDark ? layout.shadow : null;
   const tick = isVerified ? (
@@ -886,9 +883,9 @@ export function ProfileHeroLayout({
           renderLogo={renderLogo}
           details={details}
           tick={tick}
-          fanUris={fanPhotoUris ?? []}
+          photoUris={photoUris ?? []}
           paper={sheetColour ?? cardColour}
-          onOpenFanPhoto={onOpenFanPhoto}
+          onOpenPhoto={onOpenHeroPhoto}
         />
       );
 
