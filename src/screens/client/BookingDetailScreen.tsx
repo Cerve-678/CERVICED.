@@ -828,7 +828,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
    * update immediately.
    */
   const handleTipSubmit = useCallback(async () => {
-    if (!booking || tipAmount <= 0) { Alert.alert('Invalid Tip', 'Please enter a valid tip amount.'); return; }
+    if (!booking || tipAmount <= 0) { Alert.alert('Choose an amount', 'Pick or type how much you want to tip.'); return; }
     setIsLoading(true);
     try {
       const sheet = await startBookingTipPayment(booking.id, Math.round(tipAmount * 100));
@@ -848,14 +848,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       if (tipStatus === 'succeeded') setTippedBookings(prev => new Set(prev).add(booking.id));
       setShowTipModal(false);
       setSuccessMessage(tipStatus === 'succeeded'
-        ? `Your £${tipAmount.toFixed(2)} tip has been paid to ${booking.providerName}.`
-        : `Your £${tipAmount.toFixed(2)} tip for ${booking.providerName} is processing. It'll show as tipped once it's through.`);
+        ? `Your £${tipAmount.toFixed(2)} tip has been sent to ${booking.providerName}.`
+        : `Your £${tipAmount.toFixed(2)} tip for ${booking.providerName} is on its way.`);
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
     } catch (err) {
       logger.error('[BookingDetail] save tip failed:', err);
-      Alert.alert('Tip Not Saved', 'Please try again in a moment.');
+      Alert.alert('Tip not sent', 'Please try again in a moment.');
     } finally {
       setIsLoading(false);
     }
@@ -2056,8 +2056,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent navigationBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
-                <Text style={[st.sheetTitle, { color: C.text }]}>Leave a Tip</Text>
-                <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}. It's paid by card and all of it goes to them: CERVICED covers the card fee. You can tip for 48 hours after your appointment. Tips can't be refunded.</Text>
+                <Text style={[st.sheetTitle, { color: C.text }]}>Leave a tip</Text>
+                <Text style={[st.sheetSub, { color: C.sub }]}>All of it goes to {booking.providerName}. You can tip for 48 hours after your visit. Tips can't be refunded.</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
                   {[5, 10, 15, 20].map(amt => (
                     <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); setTipAmount(amt); }} activeOpacity={0.7}>
@@ -2075,7 +2075,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.text }}>Skip</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[st.sheetBtn, { backgroundColor: tipAmount <= 0 ? C.border : C.accent }]} disabled={tipAmount <= 0} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleTipSubmit(); }} activeOpacity={0.7}>
-                    <Text style={{ color: tipAmount <= 0 ? C.text : C.onAccent, fontWeight: '600' }}>Send Tip</Text>
+                    <Text style={{ color: tipAmount <= 0 ? C.text : C.onAccent, fontWeight: '600' }}>Send tip</Text>
                   </TouchableOpacity>
                 </View>
               </View>
