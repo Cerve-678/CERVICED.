@@ -23,6 +23,14 @@ describe('Beauty Profile back-swipe', () => {
     expect(screen).toContain('navigation.dispatch(leaving);');
   });
 
+  it('turns the native swipe off while a view is open, and steps back with its own edge swipe', () => {
+    // The native iOS swipe can't be held: it popped to Settings, then the
+    // screen came back (owner, 2026-11-17).
+    expect(screen).toContain('navigation.setOptions({ gestureEnabled: !innerOpen });');
+    expect(screen).toContain('stepBackRef.current();');
+    expect(screen).toContain('{...edgeSwipe.panHandlers}');
+  });
+
   it("steps setup back the way setup's own back button does", () => {
     const setup = read('features', 'maintenance', 'SetupFlow.tsx');
     expect(setup).toContain('if (backRef) backRef.current = goBack;');
