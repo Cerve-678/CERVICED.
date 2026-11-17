@@ -15,7 +15,7 @@ import type { ScrollViewInstance } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ProfileStylePreview } from '../../features/providers/ProfileStylePreview';
+import { ProfileStylePreview, type PreviewContent } from '../../features/providers/ProfileStylePreview';
 import { BUSINESS_TYPE_LABEL } from '../../features/providers/profilePresentation';
 import type { LogoFraming } from '../../types/database';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -59,7 +59,7 @@ import {
 } from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { heroUsesBrandFont } from '../../features/providers/ProfileHero';
-import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
+import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding, serviceDurationToMinutes } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, getProviderPortfolio, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 import { HeroPhotoPicker } from '../../features/providers/HeroPhotoPicker';
@@ -164,6 +164,8 @@ export default function BrandingScreen({ navigation }: any) {
   // Branding → Your Photos (Hush): their work photos and the ones picked for
   // its hero, saved with everything else.
   const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
+  // Their About, categories and first services, so Preview reads like their page.
+  const [previewContent, setPreviewContent]   = useState<PreviewContent | undefined>(undefined);
   const [heroPicked, setHeroPicked]             = useState<string[]>([]);
   const savedHeroPicked = useRef<string[]>([]);
   const [part, setPart]                       = useState<BrandingPart>('layout');
@@ -196,6 +198,20 @@ export default function BrandingScreen({ navigation }: any) {
           setPillLabels([...new Set([...where, ...how])]);
           setHeroKicker([...new Set(types)].join(' · '));
           setHeroLocation(cached.location ?? '');
+        }
+        // Their own words and menu for the preview: the first two categories
+        // and the first two services in the first one.
+        {
+          const categoryNames = Object.keys(cached.categories ?? {}).filter(name => (cached.categories[name]?.length ?? 0) > 0);
+          const firstServices = (categoryNames[0] ? cached.categories[categoryNames[0]] : []) ?? [];
+          setPreviewContent({
+            about: cached.aboutText ?? '',
+            categories: categoryNames,
+            services: firstServices
+              .filter(service => service.name.trim())
+              .slice(0, 2)
+              .map(service => ({ name: service.name.trim(), minutes: serviceDurationToMinutes(service.duration), price: service.price })),
+          });
         }
         const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
@@ -521,6 +537,7 @@ export default function BrandingScreen({ navigation }: any) {
               kicker={heroKicker}
               location={heroLocation}
               photoUris={previewPhotoUris}
+              content={previewContent}
             />
           </ProfilePreviewScreen>
         </SafeAreaProvider>

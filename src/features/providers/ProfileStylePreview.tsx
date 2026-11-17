@@ -21,6 +21,7 @@ import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNam
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
+import { formatDurationMinutes } from "../../utils/dateUtils";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
 import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle } from "./ProfileHero";
 import {
@@ -69,6 +70,22 @@ export interface ProfileStylePreviewProps {
   /** The photos the hero shows, as Branding → Your Photos has them right now
    *  (Editorial, Snapshot, Hush), or their newest (Bow). */
   photoUris?: readonly string[];
+  /** Their own About, menu categories and first services, so the preview
+   *  reads like their page rather than grey bars (owner, 2026-11-17: "make
+   *  preview more accurate"). Anything missing falls back to the bars. */
+  content?: PreviewContent | undefined;
+}
+
+/** What Branding already has of the provider's page, for the preview. */
+export interface PreviewContent {
+  about: string;
+  categories: readonly string[];
+  services: readonly { name: string; minutes: number; price: number }[];
+}
+
+/** "£45", or "£45.50" when there are pence. */
+function previewPrice(price: number): string {
+  return `£${Number.isInteger(price) ? price : price.toFixed(2)}`;
 }
 
 export function ProfileStylePreview({
@@ -85,6 +102,7 @@ export function ProfileStylePreview({
   kicker,
   location,
   photoUris,
+  content,
 }: ProfileStylePreviewProps) {
   const { finish, shape, pageStyle: styleKey } = parseThemeKey(themeKey);
   const pageStyle = getPageStyle(styleKey);
@@ -136,6 +154,13 @@ export function ProfileStylePreview({
   );
 
   const jumpKeys: PageSectionKey[] = ["about", "services", "policies", "reviews"];
+  const about = content?.about.trim() ?? "";
+  // Their About in the section's ink, or the bars when they haven't written one.
+  const aboutBody = (ink: string, barColour: string, widths?: number[]) => (about
+    ? <Text style={[styles.aboutText, { color: ink }]} numberOfLines={4}>{about}</Text>
+    : lines(barColour, widths));
+  const categories = content?.categories.slice(0, 2) ?? [];
+  const services = content?.services.slice(0, 2) ?? [];
 
   return (
     <ScrollView style={{ backgroundColor: OP.bg }} showsVerticalScrollIndicator={false}>
@@ -266,17 +291,17 @@ export function ProfileStylePreview({
                   <Text style={[styles.tabText, { color: OP.sub }]}>Policy</Text>
                 </View>
               </View>
-              {lines(OP.sep)}
+              {aboutBody(OP.text, OP.sep)}
             </BlurView>
           ) : (
             <>
               {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
                 <AccentBandSection section="about" palette={palette} waves={false}>
-                  {lines(withAlpha(onAccentInk(accent).text, 0.35))}
+                  {aboutBody(onAccentInk(accent).text, withAlpha(onAccentInk(accent).text, 0.35))}
                 </AccentBandSection>
               ) : !pageStyle.aboutInHero ? (
                 <PageSection section="about" palette={palette}>
-                  {lines(cardInk.separator)}
+                  {aboutBody(cardInk.text, cardInk.separator)}
                 </PageSection>
               ) : null}
               {pageStyle.policies === "band" ? (
@@ -304,14 +329,30 @@ export function ProfileStylePreview({
             </View>
           )}
           <View style={styles.pillRow}>
-            <View style={[styles.categoryPill, { backgroundColor: accent }, squareCards && styles.square]}>
-              <View style={[styles.pillBar, { backgroundColor: withAlpha(onAccentInk(accent).text, 0.6) }]} />
-            </View>
-            <View style={[styles.categoryPill, { backgroundColor: cardBg, borderColor: OP.border, borderWidth: StyleSheet.hairlineWidth }, squareCards && styles.square]}>
-              <View style={[styles.pillBar, { backgroundColor: OP.sep }]} />
-            </View>
+            {[0, 1].map(index => {
+              const label = categories[index];
+              const on = index === 0;
+              if (index > 0 && categories.length === 1) return null;
+              return (
+                <View
+                  key={index}
+                  style={[
+                    styles.categoryPill,
+                    on ? { backgroundColor: accent } : { backgroundColor: cardBg, borderColor: OP.border, borderWidth: StyleSheet.hairlineWidth },
+                    label ? styles.categoryPillText : null,
+                    squareCards && styles.square,
+                  ]}
+                >
+                  {label ? (
+                    <Text style={[styles.categoryText, { color: on ? onAccentInk(accent).text : OP.text }]} numberOfLines={1}>{label}</Text>
+                  ) : (
+                    <View style={[styles.pillBar, { backgroundColor: on ? withAlpha(onAccentInk(accent).text, 0.6) : OP.sep }]} />
+                  )}
+                </View>
+              );
+            })}
           </View>
-          {[0, 1].map(index => (
+          {(services.length > 0 ? services.map((_, index) => index) : [0, 1]).map(index => (
             <BlurView
               key={index}
               intensity={surface ? 0 : blurIntensity}
@@ -323,13 +364,22 @@ export function ProfileStylePreview({
               <View style={styles.serviceRow}>
                 <View style={[styles.serviceThumb, { backgroundColor: withAlpha(accent, 0.11) }]}>
                   <Text style={[styles.serviceThumbText, { color: accent }]}>
-                    {pageStyle.numberedServices ? `0${index + 1}` : "S"}
+                    {pageStyle.numberedServices ? `0${index + 1}` : (services[index]?.name.trim().charAt(0).toUpperCase() || "S")}
                   </Text>
                 </View>
-                <View style={styles.serviceText}>
-                  <View style={[styles.line, { width: "70%", backgroundColor: withAlpha(serviceInk.text, 0.22) }]} />
-                  <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
-                </View>
+                {services[index] ? (
+                  <View style={styles.serviceText}>
+                    <Text style={[styles.serviceName, { color: serviceInk.text }]} numberOfLines={1}>{services[index].name}</Text>
+                    <Text style={[styles.serviceMeta, { color: serviceInk.sub }]} numberOfLines={1}>
+                      {[formatDurationMinutes(services[index].minutes), previewPrice(services[index].price)].filter(Boolean).join(" · ")}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.serviceText}>
+                    <View style={[styles.line, { width: "70%", backgroundColor: withAlpha(serviceInk.text, 0.22) }]} />
+                    <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
+                  </View>
+                )}
                 <View style={[styles.bookPill, { backgroundColor: accent }]}>
                   <Text style={[styles.bookText, { color: onAccentInk(accent).text }]}>Book</Text>
                 </View>
@@ -409,6 +459,11 @@ const styles = StyleSheet.create({
   serviceThumb: { width: 64, height: 64, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   serviceThumbText: { fontFamily: "BakbakOne-Regular", fontSize: 20 },
   serviceText: { flex: 1, gap: 8 },
+  serviceName: { fontSize: 15, fontWeight: "600" },
+  serviceMeta: { fontSize: 13, marginTop: -4 },
+  aboutText: { fontSize: 14, lineHeight: 21 },
+  categoryPillText: { width: undefined, paddingHorizontal: 16, maxWidth: 170 },
+  categoryText: { fontSize: 13, fontWeight: "600" },
   bookPill: { height: 32, paddingHorizontal: 14, borderRadius: 100, justifyContent: "center" },
   bookText: { fontFamily: "BakbakOne-Regular", fontSize: 12 },
   reviews: { marginTop: 12 },
