@@ -973,8 +973,13 @@ function WeekView({
                     }
                     return blocks;
                   })()}
+                  {/* Explicit height, not bottom: 0. Every child of this row is
+                      absolutely positioned, so the row itself is 0px tall and a
+                      top/bottom-anchored shade collapsed to nothing: the closed
+                      day showed clean while the open days' out-of-hours bands
+                      (which have real heights) made them look like the shut ones. */}
                   {(isBlocked || dayAvail?.is_closed) && (
-                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: WK_HEIGHT, backgroundColor: 'rgba(0,0,0,0.4)' }} />
                   )}
 
                   {/* Booking blocks */}
