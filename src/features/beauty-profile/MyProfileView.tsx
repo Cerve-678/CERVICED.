@@ -44,7 +44,7 @@ interface Props {
   onToggleEdit: () => void;
   onSave: () => void;
   /** Where the category's back control leads, when it isn't the tile view
-   *  (a category opened from the body map goes back to the map). */
+   *  (a category opened from a landing card goes back to the landing). */
   categoryBackLabel?: string | undefined;
 }
 
