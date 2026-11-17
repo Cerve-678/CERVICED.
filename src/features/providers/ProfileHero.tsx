@@ -1003,6 +1003,15 @@ function SealRing({
   );
 }
 
+/** The heroes that draw the business name in the font picked in Branding →
+ *  Name (through renderName). Every other style letters the name in its own
+ *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa"];
+
+export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
+  return BRAND_FONT_HEROES.includes(pageStyle.hero);
+}
+
 /**
  * Whether this style draws the stars, years and slots pill on a pale card
  * (Duet's welcome card, the Calling Card) rather than straight on the hero,

@@ -58,6 +58,7 @@ import {
   type PolicyPictureLook,
 } from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
+import { heroUsesBrandFont } from '../../features/providers/ProfileHero';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, getProviderPortfolio, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
@@ -358,6 +359,8 @@ export default function BrandingScreen({ navigation }: any) {
     return () => { active = false; };
   }, [providerId]);
 
+  // The picked font only shows on styles whose hero draws the name in it.
+  const fontShows = heroUsesBrandFont(getPageStyle(pageStyle));
   // Editorial shows one picked photo, Snapshot and Hush three.
   const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle));
   const picksHeroPhotos = heroPickLimit > 0;
@@ -854,7 +857,14 @@ export default function BrandingScreen({ navigation }: any) {
           {part === 'name' && (
             <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
               <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
-              <Text style={[styles.sectionSub, { color: P.sub }]}>How your business name appears on your profile.</Text>
+              {fontShows ? (
+                <Text style={[styles.sectionSub, { color: P.sub }]}>How your business name appears on your profile.</Text>
+              ) : (
+                <Text style={[styles.sectionSub, { color: P.sub }]}>
+                  {`${getPageStyle(pageStyle).name} writes your name in its own lettering, so this font doesn't show on your page. It shows on ${BRAND_FONT_STYLE_NAMES}.`}
+                </Text>
+              )}
+              <View style={!fontShows && styles.fontOff} pointerEvents={fontShows ? 'auto' : 'none'} accessibilityElementsHidden={!fontShows} importantForAccessibility={fontShows ? 'auto' : 'no-hide-descendants'}>
               <ProviderFontPicker
                 value={brandFont}
                 onChange={setBrandFont}
@@ -866,6 +876,7 @@ export default function BrandingScreen({ navigation }: any) {
                 unlockedFonts={limited ? LINK_ONLY_FONTS : undefined}
                 onLockedPress={showLocked}
               />
+              </View>
             </View>
           )}
 
@@ -961,7 +972,15 @@ function PolicyLookSmallPreview({ look, pageColour, sheet }: { look: Exclude<Pol
   );
 }
 
+/** The styles the picked font shows on, for the note when it doesn't. */
+const BRAND_FONT_STYLE_NAMES = (() => {
+  const names = PAGE_STYLES.filter(heroUsesBrandFont).map(style => style.name);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+})();
+
 const styles = StyleSheet.create({
+  // Business Name Font on a style that letters the name itself.
+  fontOff: { opacity: 0.4 },
   bg:      { flex: 1 },
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll:  { paddingHorizontal: 20, paddingBottom: 24 },
