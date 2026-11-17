@@ -5,7 +5,7 @@ const read = (...p: string[]): string =>
   fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
 
 /**
- * THE BUG: Beauty Profile's views (body map, All profile, a category,
+ * THE BUG: Beauty Profile's views (the landing, All profile, a category,
  * Maintenance, setup) are state inside one screen, so a back-swipe popped the
  * whole screen instead of going back one view.
  */
