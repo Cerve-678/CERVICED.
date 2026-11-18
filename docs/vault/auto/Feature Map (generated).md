@@ -108,7 +108,7 @@ Curated: [[Payments]] · **182 files**
 - … +152 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **388 files**
+Curated: [[Booking Flow]] · **389 files**
 - `src/services/databaseService.ts` _(1242)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/screens/client/CartScreen.tsx` _(726)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **388 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/features/bookings/activityCentre.ts` _(96)_
-- … +358 more
+- … +359 more
 
 ## Notifications
 Curated: [[Notifications]] · **193 files**
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **221 files**
 - … +191 more
 
 ## Auth
-Curated: [[Contexts]] · **223 files**
+Curated: [[Contexts]] · **224 files**
 - `src/services/databaseService.ts` _(344)_
 - `src/contexts/AuthContext.tsx` _(205)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **223 files**
 - `src/features/admin/useSignInAsAccount.ts` _(14)_
 - `src/i18n/catalogs/en.ts` _(12)_
 - `src/services/authProfileSnapshot.ts` _(12)_
-- … +193 more
+- … +194 more
 
 ## Becca / AI
 Curated: [[Services]] · **56 files**

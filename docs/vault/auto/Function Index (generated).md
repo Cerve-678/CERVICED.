@@ -5,7 +5,7 @@
 
 #generated
 
-**4071 functions** across **568 files**.
+**4081 functions** across **569 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -203,10 +203,11 @@
 - `SkeletonSection.tsx` — **SkeletonSection**
 - `useRevealTogether.ts` — **allPartsDone** · markDone · **useRevealTogether**
 
-### `src/features/info-packs/` (4)
+### `src/features/info-packs/` (5)
 - `infoPackLogic.ts` — **clientPreviewNames** · **countClients** · **formsNotYetSent** · **hasPlaceholder** · **hasSection** · **insertSection** · **isHeadingLine** · **isUpcomingOpenBooking** · **packCoversService** · **packHasContent** · **packServiceLabel** · **packsNotYetSent** · **splitUpcomingForPack** · **summarizeDeliveries**
 - `InfoPackSendSheet.tsx` — hint · **InfoPackSendSheet**
 - `InfoPackWelcome.tsx` — **InfoPackWelcome** · renderStage · writeLine
+- `PackFormHint.tsx` — dismiss · line · open · **PackFormHint** · **PackFormHintLines** · **PackFormTipCard** · **usePackFormTip**
 - `packTemplates.ts` — **allPackTemplates** · mentions · **packTemplatesFor** · **rankPackTemplates** · **servicesForTemplate** · t · words
 
 ### `src/features/intake-forms/` (4)
@@ -311,7 +312,7 @@
 - `searchResultsLayout.ts` — **highlightSearchTerms** · isWordChar · pushServices · **scatterServicesBetweenProviders**
 - `ServiceBookingCharts.tsx` — MostBookedCard · onLayout · ServiceBookingCharts · ticks · TrendCard · xFor · yFor
 - `serviceBookingSummary.ts` — busiestFirst · **chartTicks** · **summariseServiceBookings**
-- `ServiceEditorSheet.tsx` — addOwnTags · descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · latestStartChoices · push · ServiceEditorSheet · **splitDuration** · suggestion · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
+- `ServiceEditorSheet.tsx` — addOwnTags · descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · latestStartChoices · push · readyDraft · saveAndOpen · ServiceEditorSheet · **splitDuration** · suggestion · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
 - `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · **normalizeTag** · optionsFor · **parseTypedTags** · readWords · sameWord · **suggestServiceDetails** · **tagLabel** · words
 - `todaySchedule.ts` — **bookingCardsLead** · **buildTodaySchedule** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **shortClientName** · todosFrom
 - `TodayScheduleCards.tsx` — handleScrollEnd · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
@@ -444,7 +445,7 @@
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · joinNudgeTotal · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · curatedSpecialtyOptions · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · styles
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
-- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · open · Pills · PoliciesScreen · removeText · setPolicy · shows · TextLink · toggle
+- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · open · openPackOrForm · Pills · PoliciesScreen · removeText · setPolicy · shows · TextLink · toggle
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view
