@@ -14,3 +14,22 @@ export type ClosureReason = (typeof CLOSURE_REASONS)[number]['value'];
 export function closureReasonForClient(reason: string | null | undefined): string | null {
   return CLOSURE_REASONS.find(r => r.value === reason)?.clientLabel ?? null;
 }
+
+/** Upcoming bookings the provider hasn't answered yet. Closing waits for every
+ *  one: kept ("I can do it"), being moved, or cancelled (off the list). */
+export function unansweredBookingCount(
+  bookings: ReadonlyArray<{ id: string; moving: boolean }> | null,
+  keptIds: ReadonlySet<string>,
+): number {
+  return bookings?.filter((b) => !b.moving && !keptIds.has(b.id)).length ?? 0;
+}
+
+/** Closing needs the list loaded (not failed, not still loading) and every
+ *  booking on it answered. */
+export function canCloseSchedule(
+  bookings: ReadonlyArray<{ id: string; moving: boolean }> | null,
+  keptIds: ReadonlySet<string>,
+  loadFailed: boolean,
+): boolean {
+  return bookings !== null && !loadFailed && unansweredBookingCount(bookings, keptIds) === 0;
+}

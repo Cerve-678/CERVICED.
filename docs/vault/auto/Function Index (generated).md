@@ -5,7 +5,7 @@
 
 #generated
 
-**4102 functions** across **570 files**.
+**4104 functions** across **570 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -308,7 +308,7 @@
 - `recentBookingActivity.ts` — bookedAgo · **describeRecentBooking**
 - `RecentBookingRow.tsx` — **RecentBookingRow**
 - `releaseQuickView.ts` — **describeReleaseQuickView**
-- `scheduleClosure.ts` — **closureReasonForClient**
+- `scheduleClosure.ts` — **canCloseSchedule** · **closureReasonForClient** · **unansweredBookingCount**
 - `SearchGuideSheet.tsx` — GuideRow · GuideSection · SearchGuideSheet
 - `searchResultsLayout.ts` — **highlightSearchTerms** · isWordChar · pushServices · **scatterServicesBetweenProviders**
 - `ServiceBookingCharts.tsx` — MostBookedCard · onLayout · ServiceBookingCharts · ticks · TrendCard · xFor · yFor
