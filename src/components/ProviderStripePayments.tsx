@@ -333,7 +333,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
 
 
         <PaySection>
-          <View style={styles.headRow}>
+          <View style={[styles.headRow, styles.headRowSpaced]}>
             <Text style={[styles.sectionTitle, { color: C.text }]}>Recent booking payments</Text>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="See all booking payments" onPress={() => pick('bookings')} hitSlop={12}>
               <Text style={[styles.link, { color: C.accentText }]}>See all</Text>
@@ -456,8 +456,23 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
       </>}
     </View>
 
+    {/* Your setup: its own card too (user, 2026-11-18). */}
+    {shownSection === 'overview' && dashboardReady && setup && <View style={[styles.card, styles.setupCard, { backgroundColor: C.card, borderColor: C.border }]}>
+      <Text style={[styles.eyebrow, { color: C.accentText, marginBottom: 6 }]}>YOUR SETUP</Text>
+      <View style={styles.setupGrid}>
+        {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
+          <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
+            onPress={() => pick('settings')} activeOpacity={0.75}
+            style={[styles.setupTile, { backgroundColor: C.bg, borderColor: C.border }]}>
+            <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
+            <Text style={[styles.label, { color: C.text }]}>{value}</Text>
+          </TouchableOpacity>)}
+      </View>
+    </View>}
+
     {/* The payout account: its own card, outside the tabbed card and only
-        with Overview (user, 2026-11-18: "on a single card, not together"). */}
+        with Overview (user, 2026-11-18: "on a single card, not together"),
+        and the last card on the page (user, same day). */}
     {shownSection === 'overview' && dashboardReady && account && <View style={[styles.card, styles.accountCard, { backgroundColor: C.card, borderColor: C.border }]}>
           <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? 'Manage payout account' : 'Continue with Stripe'}`}
             disabled={busy} onPress={() => void openStripe(manageAccount ? 'dashboard' : 'onboard')} activeOpacity={0.75} style={styles.plainRow}>
@@ -473,19 +488,6 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
           {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
     </View>}
 
-    {/* Your setup: its own card too, under the payout account (user, 2026-11-18). */}
-    {shownSection === 'overview' && dashboardReady && setup && <View style={[styles.card, styles.setupCard, { backgroundColor: C.card, borderColor: C.border }]}>
-      <Text style={[styles.eyebrow, { color: C.accentText, marginBottom: 6 }]}>YOUR SETUP</Text>
-      <View style={styles.setupGrid}>
-        {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
-          <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
-            onPress={() => pick('settings')} activeOpacity={0.75}
-            style={[styles.setupTile, { backgroundColor: C.bg, borderColor: C.border }]}>
-            <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
-            <Text style={[styles.label, { color: C.text }]}>{value}</Text>
-          </TouchableOpacity>)}
-      </View>
-    </View>}
 
     {timelineRow && <BookingPaymentTimeline
       row={timelineRow}
@@ -609,6 +611,8 @@ const styles = StyleSheet.create({
   heroTileAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 17 },
   plainRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 56 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  /** A little room between "Recent booking payments" and its first payment. */
+  headRowSpaced: { marginBottom: 8 },
   sectionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
   listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 13 },
   rowRight: { alignItems: 'flex-end' },
