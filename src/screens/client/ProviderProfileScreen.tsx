@@ -2680,7 +2680,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [provider]);
 
   // Configure the navigation header with your gradient and icons
+  // Only the MyPublicProfile route (navigation/types.ts) carries asPreview;
+  // this component is typed by the ProviderProfile route it mostly serves.
+  const asOwnPreview = (route.params as { asPreview?: boolean } | undefined)?.asPreview === true;
   React.useLayoutEffect(() => {
+    // The owner tapping their logo on My Profile: the page alone, no header
+    // and no buttons. They close it by swiping (MyPublicProfile's options).
+    if (asOwnPreview) {
+      navigation.setOptions({ headerShown: false });
+      return;
+    }
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
@@ -2774,6 +2783,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     OP.bg,
     OP.text,
     provider?.brandFont,
+    asOwnPreview,
   ]);
   const handleScroll = useCallback(
     (event: any) => {
