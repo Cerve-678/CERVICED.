@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-18 (Clientele sheet: client Beauty Profile + private notes)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261118205332 | `clientele_notes_and_beauty_profile` (written as 20261118160000, renamed to the MCP's version) | Forced-rollback dry run first, then applied. `provider_client_notes` RLS on, `authenticated` has no SELECT; `get_client_beauty_profile_for_provider` not executable by anon; `get_my_client_note` / `save_my_client_note` executable by authenticated; `my_provider_id_for_client` executable by neither. 0 rows. PR #630. |
+
 ### Applied 2026-11-18 (waitlist Auto, 10-minute holds, closing when full with the waitlist)
 
 | Authored version | Name | Status |

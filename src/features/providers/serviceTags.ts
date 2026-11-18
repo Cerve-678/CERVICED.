@@ -34,17 +34,50 @@ const CATEGORY_KEYWORDS: Record<CategoryKind, string[]> = {
   OTHER:      [],
 };
 
-/** Resolve a category name to a kind — exact match → keyword match → fallback. */
+// The word that names a kind outright. "Brow Lift" is brows even though "lift"
+// is a lash word, so these are read before any other keyword.
+const KIND_NAME_WORDS: Partial<Record<CategoryKind, string[]>> = {
+  HAIR:   ['hair'],
+  NAILS:  ['nail'],
+  LASHES: ['lash'],
+  BROWS:  ['brow'],
+  MUA:    ['makeup', 'make up'],
+};
+
+// Words a kind also does, though on their own they usually mean another kind.
+// They count only for the provider's own business: "Waxing" at a brow bar is
+// brow waxing, at a salon it's body waxing (AESTHETICS 'wax').
+const SHARED_KEYWORDS: Partial<Record<CategoryKind, string[]>> = {
+  BROWS:      ['wax', 'tint', 'lift', 'shap', 'sculpt', 'henna'],
+  LASHES:     ['tint', 'lamination'],
+  AESTHETICS: ['tint'],
+};
+
+/**
+ * Resolve a category name to a kind. In order: the kind itself ("BROWS") →
+ * a word that names a kind ("Brow Lift") → a word the provider's own business
+ * does ("Waxing" at a brow bar) → any keyword ("Waxing" elsewhere) → fallback.
+ * `fallback` is the business's own kind (providers.service_category).
+ */
 export const inferCategoryKind = (name: string, fallback: string = 'OTHER'): CategoryKind => {
   const upper = (name || '').trim().toUpperCase();
   if ((CATEGORY_KINDS as string[]).includes(upper)) return upper as CategoryKind;
   const lower = (name || '').toLowerCase();
+  const fb = (fallback || '').trim().toUpperCase();
+  const business = (CATEGORY_KINDS as string[]).includes(fb) ? (fb as CategoryKind) : 'OTHER';
+  const has = (keywords: string[] | undefined) => (keywords ?? []).some(kw => lower.includes(kw));
+
+  for (const kind of CATEGORY_KINDS) {
+    if (has(KIND_NAME_WORDS[kind])) return kind;
+  }
+  if (business !== 'OTHER' && (has(CATEGORY_KEYWORDS[business]) || has(SHARED_KEYWORDS[business]))) {
+    return business;
+  }
   for (const kind of CATEGORY_KINDS) {
     if (kind === 'OTHER') continue;
-    if (CATEGORY_KEYWORDS[kind].some(kw => lower.includes(kw))) return kind;
+    if (has(CATEGORY_KEYWORDS[kind])) return kind;
   }
-  const fb = (fallback || '').trim().toUpperCase();
-  return (CATEGORY_KINDS as string[]).includes(fb) ? (fb as CategoryKind) : 'OTHER';
+  return business;
 };
 
 // ─── Tag presets per context ─────────────────────────────────────────────────
