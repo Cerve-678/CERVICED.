@@ -52,8 +52,8 @@ function hairBecause(types: readonly string[]): string {
 
 const SCALP_BY_HAIR: Record<HairFamily, string[]> = {
   coily: ['Dry', 'Itchy', 'Product build-up', 'Thinning edges', 'Tension from styles', 'Flaky'],
-  curly: ['Dry', 'Itchy', 'Product build-up', 'Flaky'],
-  smooth: ['Oily', 'Flaky', 'Sensitive'],
+  curly: ['Dry', 'Itchy', 'Product build-up', 'Flaky', 'Dandruff'],
+  smooth: ['Oily', 'Flaky', 'Sensitive', 'Dandruff'],
 };
 
 const TREATMENT_BY_HAIR: Record<HairFamily, string[]> = {
@@ -61,22 +61,26 @@ const TREATMENT_BY_HAIR: Record<HairFamily, string[]> = {
     'Natural (never relaxed)', 'Relaxed / permed', 'Texturised', 'Silk pressed',
     'Braids / twists', 'Wigs / units', 'Locs', 'Coloured',
   ],
-  curly: ['Natural (never relaxed)', 'Coloured', 'Bleached / lightened', 'Silk pressed', 'Keratin / smoothing', 'Braids / twists'],
-  smooth: ['Virgin hair', 'Coloured', 'Bleached / lightened', 'Keratin / smoothing', 'Hair extensions'],
+  curly: ['Natural (never relaxed)', 'Coloured', 'Bleached / lightened', 'Silk pressed', 'Keratin / smoothing', 'Braids / twists', 'Henna'],
+  smooth: ['Virgin hair', 'Coloured', 'Bleached / lightened', 'Box dye at home', 'Keratin / smoothing', 'Hair extensions', 'Bond repair treatment'],
 };
 
 const CONCERNS_BY_SKIN: Record<string, string[]> = {
-  Oily: ['Acne prone', 'Oiliness', 'Enlarged pores', 'Hyperpigmentation'],
+  Oily: ['Acne prone', 'Oiliness', 'Enlarged pores', 'Hyperpigmentation', 'Blackheads', 'Acne scarring'],
   Dry: ['Dry patches', 'Dullness', 'Fine lines', 'Eczema'],
-  Combination: ['Oiliness', 'Dry patches', 'Enlarged pores', 'Dullness'],
-  Sensitive: ['Redness', 'Rosacea', 'Eczema'],
+  Combination: ['Oiliness', 'Dry patches', 'Enlarged pores', 'Dullness', 'Blackheads'],
+  Sensitive: ['Redness', 'Rosacea', 'Eczema', 'Ingrown hairs'],
   Normal: ['Fine lines', 'Dark circles', 'Dullness'],
+  Dehydrated: ['Dullness', 'Fine lines', 'Uneven texture', 'Dry patches'],
+  Mature: ['Fine lines', 'Loss of firmness', 'Sun damage', 'Hyperpigmentation', 'Dullness'],
 };
 
 const FINISH_BY_SKIN: Record<string, string[]> = {
   Oily: ['Matte', 'Soft matte', 'Satin'],
   Combination: ['Soft matte', 'Satin'],
   Dry: ['Dewy', 'Glowy', 'Satin'],
+  Dehydrated: ['Dewy', 'Skin-like', 'Satin'],
+  Mature: ['Satin', 'Skin-like', 'Dewy'],
 };
 
 const LASHES_BY_STATUS: Record<string, { suited: string[]; because: string }> = {
@@ -85,6 +89,8 @@ const LASHES_BY_STATUS: Record<string, { suited: string[]; because: string }> = 
   'Growing out': { suited: ['Lifted natural lashes', 'Natural', 'Classic'], because: 'growing out your extensions' },
   'Currently have extensions': { suited: ['Classic', 'Hybrid', 'Wispy', 'Russian volume', 'Wet look'], because: 'your extensions' },
   'Wear strip lashes': { suited: ['Wispy', 'Dramatic', 'Cat eye', 'Hybrid'], because: 'wearing strip lashes' },
+  'Lash tint only': { suited: ['Lifted natural lashes', 'Natural', 'Classic'], because: 'your tinted lashes' },
+  'Extensions for events': { suited: ['Classic', 'Wispy', 'Hybrid', 'Dramatic', 'Fox eye'], because: 'extensions for events' },
 };
 
 const BROWS_BY_CONDITION: Record<string, string[]> = {
@@ -94,6 +100,9 @@ const BROWS_BY_CONDITION: Record<string, string[]> = {
   Uneven: ['Defined', 'Soft arch', 'Ombré / powder'],
   Unruly: ['Laminated', 'Fluffy', 'Feathered', 'Defined'],
   Full: ['Natural', 'Fluffy', 'Laminated', 'Soft arch'],
+  Thinning: ['Ombré / powder', 'Microbladed', 'Hybrid (powder & strokes)', 'Henna brows', 'Tinted'],
+  'Grey / white hairs': ['Tinted', 'Henna brows', 'Defined'],
+  'Old tattoo / fading PMU': ['Ombré / powder', 'Hybrid (powder & strokes)', 'Natural'],
 };
 
 const SHAPES_BY_LENGTH: Record<string, string[]> = {
@@ -101,7 +110,7 @@ const SHAPES_BY_LENGTH: Record<string, string[]> = {
   Short: ['Round', 'Squoval', 'Oval', 'Square'],
   Medium: ['Almond', 'Oval', 'Squoval', 'Square', 'Coffin'],
   Long: ['Almond', 'Coffin', 'Ballerina', 'Stiletto', 'Lipstick'],
-  'Extra long': ['Coffin', 'Stiletto', 'Ballerina', 'Flare'],
+  'Extra long': ['Coffin', 'Stiletto', 'Ballerina', 'Flare', 'Edge'],
 };
 
 const SERVICES_BY_CONDITION: Record<string, string[]> = {
@@ -112,6 +121,10 @@ const SERVICES_BY_CONDITION: Record<string, string[]> = {
   'Short nail beds': ['Gel extensions (Gel-X)', 'Acrylic', 'BIAB / builder gel', 'Press-ons'],
   'Damaged from extensions': ['Natural manicure', 'BIAB / builder gel'],
   'Strong & healthy': ['Gel polish', 'BIAB / builder gel', 'Natural manicure'],
+  'Thin / bendy': ['BIAB / builder gel', 'Hard gel', 'Japanese manicure'],
+  Splitting: ['BIAB / builder gel', 'Japanese manicure', 'Natural manicure'],
+  'Dry cuticles': ['Russian manicure', 'Natural manicure', 'Japanese manicure'],
+  'Wide nail beds': ['Gel extensions (Gel-X)', 'Polygel', 'Gel polish'],
 };
 
 const LENGTHS_BY_SERVICE: Record<string, string[]> = {
@@ -122,6 +135,10 @@ const LENGTHS_BY_SERVICE: Record<string, string[]> = {
   Acrylic: ['Medium', 'Long', 'Extra long'],
   'Gel extensions (Gel-X)': ['Medium', 'Long', 'Extra long'],
   'Press-ons': ['Medium', 'Long'],
+  Polygel: ['Short', 'Medium', 'Long'],
+  'Dip powder': ['Short', 'Medium'],
+  'Russian manicure': ['Natural / bare', 'Short', 'Medium'],
+  'Japanese manicure': ['Natural / bare', 'Short'],
 };
 
 const NAIL_COLOURS_BY_VIBE: Record<string, string[]> = {
@@ -132,6 +149,11 @@ const NAIL_COLOURS_BY_VIBE: Record<string, string[]> = {
   Bold: ['Brights / neons', 'Reds', 'Darks'],
   Editorial: ['Darks', 'Brights / neons'],
   Experimental: ['Brights / neons', 'Pastels', 'Seasonal'],
+  Polished: ['Nudes', 'Milky white', 'Reds'],
+  Romantic: ['Pinks', 'Milky white', 'Pastels'],
+  Edgy: ['Black & white', 'Darks', 'Metallics'],
+  Sporty: ['Nudes', 'Milky white', 'Brights / neons'],
+  Effortless: ['Nudes', 'Browns / earthy', 'Milky white'],
 };
 
 const EYES_BY_VIBE: Record<string, string[]> = {
@@ -142,6 +164,11 @@ const EYES_BY_VIBE: Record<string, string[]> = {
   Bold: ['Bold / dramatic', 'Graphic liner', 'Cut crease'],
   Editorial: ['Graphic liner', 'Bold / dramatic', 'Glitter / sparkle'],
   Experimental: ['Graphic liner', 'Glitter / sparkle', 'Bold / dramatic'],
+  Polished: ['Defined', 'Winged liner', 'Soft brown'],
+  Romantic: ['Soft brown', 'Subtle', 'Glitter / sparkle'],
+  Edgy: ['Smoky', 'Graphic liner', 'Siren eyes'],
+  Sporty: ['Subtle', 'Soft brown'],
+  Effortless: ['Subtle', 'Soft brown', 'Defined'],
 };
 
 const LIPS_BY_VIBE: Record<string, string[]> = {
@@ -152,6 +179,11 @@ const LIPS_BY_VIBE: Record<string, string[]> = {
   Bold: ['Bold colour', 'Classic red', 'Berry / wine'],
   Editorial: ['Bold colour', 'Berry / wine'],
   Experimental: ['Bold colour', 'Coral / peach'],
+  Polished: ['Nude', 'Classic red', 'Brown / 90s liner'],
+  Romantic: ['Pinks', 'Gloss', 'Blurred / ombré'],
+  Edgy: ['Dark / vampy', 'Berry / wine', 'Brown / 90s liner'],
+  Sporty: ['Lip oil / balm', 'Nude'],
+  Effortless: ['Lip oil / balm', 'Nude', 'Gloss'],
 };
 
 /** The suited options from every picked answer, in pick order, no repeats. */

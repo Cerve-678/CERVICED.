@@ -180,4 +180,11 @@ describe('Your look', () => {
     expect(screen.getByText('NATURAL & DEWY')).toBeTruthy();
     expect(screen.getByText('4C hair and a dewy finish, for everyday.')).toBeTruthy();
   });
+
+  it('opens Style & vibe from anywhere on the card, not just the title', () => {
+    const onEditCategory = jest.fn();
+    renderLanding({ styleVibe: ['Natural'], hairType: ['4C'], styleOccasions: ['Everyday'] }, [], { onEditCategory });
+    fireEvent.press(screen.getByText('4C hair, for everyday.'));
+    expect(onEditCategory).toHaveBeenCalledWith('general');
+  });
 });
