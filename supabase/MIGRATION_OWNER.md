@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-18 (provider told when someone joins their waitlist)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261118220000 | `waitlist_joined_notification` | **APPLIED 2026-11-18** on the user's go-ahead ("apply merge"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. md5 guard on the live `notifications_type_check` matched. Two forced-rollback dry runs passed first (one alert, rejoin within a day sends none, title "<Service> · 1st in line"). Verified live: version recorded (live max); CHECK has `waitlist_joined` **and `provider_no_show` again** (live had lost it, unrecorded, while `handle_booking_status_change` still inserts it); `trg_waitlist_joined_notify` AFTER INSERT on `provider_waitlist`; `notify_provider_waitlist_joined` SECURITY DEFINER, not executable by anon/authenticated. `send-push-notification` redeployed (v31) with `waitlist_joined: 'providerWaitlist'`. PR #636. |
+
 ### Applied 2026-11-18 (Clientele sheet: client Beauty Profile + private notes)
 
 | Recorded version | Name | Verified live |

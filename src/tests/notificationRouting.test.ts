@@ -214,7 +214,7 @@ describe('notification preferences gate the push', () => {
   const prefKeys = ['bookingConfirm', 'bookingReminder', 'bookingUpdates', 'promotions', 'newProviders', 'weeklySummary', 'maintenanceReminders'];
   const providerPrefKeys = [
     'providerNewBookings', 'providerBookingChanges', 'providerReminders', 'providerForms',
-    'providerMessages', 'providerPayments', 'providerReviews', 'providerDailyRecap', 'providerFullyBooked', 'providerSaves',
+    'providerMessages', 'providerPayments', 'providerReviews', 'providerDailyRecap', 'providerFullyBooked', 'providerSaves', 'providerWaitlist',
   ];
 
   it('reads preferences on the send path', () => {
@@ -494,5 +494,63 @@ describe('notification routing — follow request', () => {
     expect(sql).toContain('AFTER INSERT OR UPDATE OF status OR DELETE ON public.client_follows');
     expect(sql).toMatch(/OLD\.status = 'pending'[\s\S]*DELETE FROM public\.notifications/);
     expect(sql).toMatch(/SET is_read = true, is_actionable = false/);
+  });
+});
+
+describe('notification routing — someone joined the waitlist', () => {
+  const migration = () => read('supabase', 'migrations', '20261118220000_waitlist_joined_notification.sql');
+  const check = () => {
+    const sql = migration();
+    const from = sql.slice(sql.indexOf('ADD CONSTRAINT notifications_type_check'));
+    return new Set([...from.slice(0, from.indexOf(']::text[]')).matchAll(/'(\w+)'/g)].map(m => m[1]));
+  };
+
+  it('declares waitlist_joined everywhere a notification type has to exist', () => {
+    // Memory: new-notification-type-is-four-places.
+    expect(check()).toContain('waitlist_joined');
+    expect(read('src', 'types', 'database.ts')).toContain('| "waitlist_joined"');
+    expect(notificationsScreen()).toContain("'waitlist_joined'");
+    expect(tapHandler()).toContain("'waitlist_joined'");
+    expect(edgeFunction()).toContain("waitlist_joined: 'providerWaitlist'");
+  });
+
+  it('keeps every type the previous check allowed', () => {
+    const sql = read('supabase', 'migrations', '20261109190000_follow_request_notification.sql');
+    const from = sql.slice(sql.indexOf('ADD CONSTRAINT notifications_type_check'));
+    const before = [...from.slice(0, from.indexOf(']')).matchAll(/'(\w+)'/g)].map(m => m[1]);
+    expect(before.length).toBeGreaterThan(50);
+    for (const type of before) expect(check()).toContain(type);
+  });
+
+  it('never stops the client joining when the notification fails', () => {
+    expect(migration()).toMatch(/EXCEPTION WHEN OTHERS THEN\s+--[^\n]*\n\s+RAISE WARNING/);
+    expect(migration()).toContain('AFTER INSERT ON public.provider_waitlist');
+  });
+
+  it('leads with the service and their place in line, as the app words it', () => {
+    // User's pick 2026-11-18: "Mini Manicure · 3rd in line" / "Faith joined your waitlist."
+    expect(migration()).toContain("' in line'");
+    expect(migration()).toContain("v_who || ' joined your waitlist.'");
+  });
+
+  it('tells the provider once a day about the same person rejoining', () => {
+    expect(migration()).toContain("n.created_at > now() - interval '24 hours'");
+  });
+
+  it('opens the provider’s To Do tab, where their waitlist is', () => {
+    expect(tapHandler()).toMatch(/waitlist_joined[\s\S]{0,200}'BookingHistory', \{ initialTab: 'todo' \}/);
+    expect(notificationsScreen()).toMatch(/waitlist_joined[\s\S]{0,200}'BookingHistory', \{ initialTab: 'todo' \}/);
+  });
+
+  it('has a switch in the provider’s notification settings', () => {
+    expect(read('src', 'screens', 'provider', 'ProviderNotificationSettingsScreen.tsx')).toContain("key: 'providerWaitlist'");
+  });
+});
+
+describe('notification type check — provider_no_show', () => {
+  it('allows the type handle_booking_status_change writes when a client reports a missed appointment', () => {
+    const sql = read('supabase', 'migrations', '20261118220000_waitlist_joined_notification.sql');
+    const check = sql.slice(sql.indexOf('ADD CONSTRAINT notifications_type_check'));
+    expect(check.slice(0, check.indexOf(']'))).toContain("'provider_no_show'");
   });
 });

@@ -113,6 +113,7 @@ const KIND_LABELS: Readonly<Record<string, string>> = {
   maintenance_due: 'Beauty upkeep',
   aftercare_available: 'Aftercare',
   waitlist_slot_available: 'Waitlist',
+  waitlist_joined: 'Waitlist',
   terms_updated: 'Terms',
   promotion: 'Offer',
   new_provider: 'New provider',

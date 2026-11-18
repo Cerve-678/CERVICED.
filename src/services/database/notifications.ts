@@ -197,6 +197,7 @@ export interface ProviderNotificationPreferences {
   providerDailyRecap: boolean;
   providerFullyBooked: boolean;
   providerSaves: boolean;
+  providerWaitlist: boolean;
 }
 
 export const DEFAULT_PROVIDER_NOTIF_PREFS: ProviderNotificationPreferences = {
@@ -210,6 +211,7 @@ export const DEFAULT_PROVIDER_NOTIF_PREFS: ProviderNotificationPreferences = {
   providerDailyRecap: true,
   providerFullyBooked: true,
   providerSaves: true,
+  providerWaitlist: true,
 };
 
 /** The signed-in user's whole stored preferences object, both hats' keys. */

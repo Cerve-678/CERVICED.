@@ -134,7 +134,9 @@ export type NotificationType =
   /** Provider: a daily count of the people who saved them. Never names. */
   | "provider_saved"
   /** Client: someone asked to follow their private account. metadata.follower_id says who. */
-  | "follow_request";
+  | "follow_request"
+  /** Provider: a client joined their waitlist. metadata.waitlist_id says which entry. */
+  | "waitlist_joined";
 
 export type NotificationPriority = "high" | "medium" | "low";
 

@@ -124,8 +124,8 @@ Curated: [[Booking Flow]] · **415 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(148)_
+- `src/screens/shared/NotificationsScreen.tsx` _(143)_
 - `src/services/database/edgeFunctions.ts` _(143)_
-- `src/screens/shared/NotificationsScreen.tsx` _(141)_
 - `src/services/AvailabilityService.ts` _(141)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `src/services/becca/engine.ts` _(130)_
@@ -144,7 +144,7 @@ Curated: [[Booking Flow]] · **415 files**
 ## Notifications
 Curated: [[Notifications]] · **211 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(345)_
+- `src/screens/shared/NotificationsScreen.tsx` _(346)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/database/notifications.ts` _(107)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(104)_
@@ -155,7 +155,7 @@ Curated: [[Notifications]] · **211 files**
 - `supabase/client_automation_jobs.sql` _(56)_
 - `src/services/pushNotificationService.ts` _(54)_
 - `supabase/automation_jobs.sql` _(51)_
-- `src/services/notificationTapHandler.ts` _(49)_
+- `src/services/notificationTapHandler.ts` _(50)_
 - `src/services/becca/capabilities/client.ts` _(48)_
 - `supabase/booking_flow_fixes.sql` _(40)_
 - `supabase/fix_provider_no_show_status.sql` _(40)_
@@ -210,7 +210,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **106 files**
 - … +76 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **79 files**
+Curated: [[Booking Flow]] · **81 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(224)_
 - `src/screens/client/BookingsScreen.tsx` _(169)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(81)_
@@ -229,19 +229,19 @@ Curated: [[Booking Flow]] · **79 files**
 - `supabase/booking_flow_fixes.sql` _(19)_
 - `src/services/databaseService.ts` _(18)_
 - `src/contexts/CartContext.tsx` _(17)_
+- `src/types/database.ts` _(15)_
 - `supabase/booking_cancellation_actor_aware_fix.sql` _(13)_
-- `src/types/database.ts` _(12)_
+- `src/screens/shared/NotificationsScreen.tsx` _(12)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(12)_
 - `src/features/bookings/WaitlistDatesSheet.tsx` _(11)_
 - `src/screens/provider/InfoRegScreen.tsx` _(10)_
 - `src/components/WaitlistHoldCountdown.tsx` _(9)_
 - `src/services/database/providers.ts` _(8)_
+- `src/services/notificationTapHandler.ts` _(8)_
 - `src/screens/client/ActivityCentreScreen.tsx` _(7)_
 - `src/services/database/bookings.ts` _(7)_
 - `src/constants/waitlist.ts` _(6)_
-- `src/features/bookings/activityCentre.ts` _(6)_
-- `src/features/cart/presentation.ts` _(6)_
-- … +49 more
+- … +51 more
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **240 files**

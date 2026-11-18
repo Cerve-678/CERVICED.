@@ -23,6 +23,7 @@ const BOOKINGS: Section = {
     { key: 'providerBookingChanges', icon: 'sliders', title: 'Changes & Cancellations', subtitle: 'Cancelled bookings and reschedule outcomes' },
     { key: 'providerReminders', icon: 'notifications', title: 'Appointment Reminders', subtitle: 'The day before, and forms not sent yet' },
     { key: 'providerForms', icon: 'receipt', title: 'Client Forms', subtitle: 'When a client fills in a form' },
+    { key: 'providerWaitlist', icon: 'people', title: 'Waitlist', subtitle: 'When someone joins your waitlist' },
   ],
 };
 const MESSAGES: Section = {
