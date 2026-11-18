@@ -5,7 +5,7 @@
 
 #generated
 
-**4024 functions** across **563 files**.
+**4027 functions** across **564 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -262,7 +262,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (54)
+### `src/features/providers/` (55)
 - `aboutPreview.ts` — **aboutPreview**
 - `additionalInfo.ts` — **additionalInfoGroups** · **goodToKnowText** · **howToGetThere**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
@@ -291,6 +291,7 @@
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
+- `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
 - `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **GlossShine** · HeadingLine · isCentredHeading · LaceTrimmedCard · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
@@ -434,7 +435,7 @@
 - `BusinessInfoScreen.tsx` — BusinessInfoScreen · commitSave · flash · handleSave · isValidEmail
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
 - `FullCervicedFeaturesScreen.tsx` — createStyles · FullCervicedFeaturesScreen · styles
-- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · addOtherTag · allCategoryNames · applyDragPosition · applySuggestions · categoryNames · chrome · chromeTheme · closeAddOnEditor · descriptionHint · documentEnd · dotWindow · edgeForTheme · EditCategoryModal · editTheme · fgForTheme · filled · getCategoryDragResponder · goToSection · handleActivePageChange · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteAddOn · handleDeleteCategory · handleDeleteService · handleFrameLogo · handleInputFocus · handleLogoFramed · handleNameChange · handlePreviewAboutCollapse · handlePreviewScroll · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderImages · handleSave · handleSaveAddOn · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · nextCrop · openAddOnEditor · openedTags · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · resolveChromeTheme · retryLoadProvider · sectionSummaries · selectBusinessType · selectServiceType · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · serviceTypeOptions · serviceTypes · showDescriptionHistory · styles · submitOther · suggestion · surfForTheme · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · toggleTag · TransferDataModal · typeOfCategory · useChrome · useScreenStyles · withSuggested
+- `InfoRegScreen.tsx` — adaptiveAccentColor · addCategory · AddCategoryModal · addOtherTag · allCategoryNames · applyDragPosition · applySuggestions · categoryNames · chrome · chromeTheme · closeAddOnEditor · descriptionHint · documentEnd · dotWindow · edgeForTheme · EditCategoryModal · editTheme · extraSections · fgForTheme · filled · getCategoryDragResponder · goToSection · handleActivePageChange · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteAddOn · handleDeleteCategory · handleDeleteService · handleFrameLogo · handleInputFocus · handleLogoFramed · handleNameChange · handlePreviewAboutCollapse · handlePreviewScroll · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderImages · handleSave · handleSaveAddOn · handleSaveService · handleSelectLogo · handleSetCategoryOrder · handleSetServiceOrder · handleSubmit · handleTemplateScrollEnd · handleTransferData · handleTransferPress · InfoRegScreen · isDuplicate · jumpToMissingField · makeStyles · missingRequired · missingRequiredEntries · missingRequiredSet · nextCrop · openAddOnEditor · openedTags · pickSuggestion · portfolioColumns · PreviewModal · registerField · registerSectionContent · registerSectionScroll · remove · resolveChromeTheme · retryLoadProvider · sectionSummaries · selectBusinessType · selectServiceType · serviceCount · serviceDragKeys · serviceDragOnReorder · ServiceModal · ServiceTemplatePicker · serviceTypeOptions · serviceTypes · showDescriptionHistory · styles · submitOther · suggestion · surfForTheme · TagSelectWithOther · tapLight · tapMedium · tapSelect · tapWarn · toggleTag · TransferDataModal · typeOfCategory · useChrome · useScreenStyles · withSuggested
 - `LinkOnlyAnalyticsScreen.tsx` — bars · days · LinkOnlyAnalyticsScreen · load · onRefresh · totals
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · joinNudgeTotal · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · curatedSpecialtyOptions · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · styles

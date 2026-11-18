@@ -108,7 +108,7 @@ Curated: [[Payments]] · **182 files**
 - … +152 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **385 files**
+Curated: [[Booking Flow]] · **387 files**
 - `src/services/databaseService.ts` _(1216)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/screens/client/CartScreen.tsx` _(726)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **385 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(100)_
 - `src/services/becca/capabilities/provider.ts` _(99)_
 - `src/features/bookings/activityCentre.ts` _(96)_
-- … +355 more
+- … +357 more
 
 ## Notifications
 Curated: [[Notifications]] · **192 files**
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **192 files**
 - … +162 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **88 files**
+Curated: [[Provider Onboarding & Go-Live]] · **89 files**
 - `src/services/databaseService.ts` _(96)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(60)_
 - `src/features/providers/goLiveStatus.ts` _(59)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **88 files**
 - `src/screens/client/CartScreen.tsx` _(4)_
 - `src/screens/auth/ClaimProviderScreen.tsx` _(3)_
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
-- … +58 more
+- … +59 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **74 files**
