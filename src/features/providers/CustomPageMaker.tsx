@@ -8,7 +8,7 @@
 // Branding → Name sets, and the corners are the same Card Shape as Layout's.
 
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -170,7 +170,13 @@ export function CustomPageMaker({
           FONT_SET_COLLECTIONS.map(collection => (
             <View key={collection.key} style={styles.group}>
               <Text style={[styles.groupLabel, { color: P.sub }]}>{collection.name.toUpperCase()}</Text>
-              <View style={styles.setRow}>
+              {/* One swipeable row per collection, so each set keeps room to show its fonts. */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.setScroll}
+                contentContainerStyle={styles.setRow}
+              >
                 {FONT_SETS.filter(fontSet => fontSet.collection === collection.key).map(fontSet => {
                   const selected = active && current?.key === fontSet.key;
                   const heading = customHeadingFont(fontSet.heading);
@@ -204,7 +210,7 @@ export function CustomPageMaker({
                     </TouchableOpacity>
                   );
                 })}
-              </View>
+              </ScrollView>
             </View>
           ))
         ) : (
@@ -425,8 +431,10 @@ const styles = StyleSheet.create({
   group: { marginTop: 14 },
   groupLabel: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '800', fontSize: 10, letterSpacing: 1.6, marginBottom: 8 },
   touchLabel: { marginTop: 12 },
-  setRow: { flexDirection: 'row', gap: 8 },
-  setCard: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 10, minHeight: 92 },
+  // Bleeds to the section card's edges (its padding is 18) so the row scrolls edge to edge.
+  setScroll: { marginHorizontal: -18 },
+  setRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 18 },
+  setCard: { width: 132, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 10, minHeight: 92 },
   setName: { paddingHorizontal: 3 },
   setHeading: { marginTop: 2 },
   setText: { fontSize: 11, marginTop: 2 },
