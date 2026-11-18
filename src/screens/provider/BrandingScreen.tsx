@@ -16,7 +16,8 @@ import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProfileStylePreview, type PreviewContent } from '../../features/providers/ProfileStylePreview';
-import { BUSINESS_TYPE_LABEL } from '../../features/providers/profilePresentation';
+import { heroLabelsFrom, previewContentFrom } from '../../features/providers/previewContent';
+import { policyImageEdges, policyImageUrls, type PolicyImageEdge } from '../../features/providers/policyImages';
 import type { LogoFraming } from '../../types/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -59,7 +60,7 @@ import {
 } from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { heroUsesBrandFont } from '../../features/providers/ProfileHero';
-import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding, serviceDurationToMinutes } from '../../services/providerRegistrationService';
+import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, getProviderPortfolio, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 import { HeroPhotoPicker } from '../../features/providers/HeroPhotoPicker';
@@ -166,6 +167,9 @@ export default function BrandingScreen({ navigation }: any) {
   const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
   // Their About, categories and first services, so Preview reads like their page.
   const [previewContent, setPreviewContent]   = useState<PreviewContent | undefined>(undefined);
+  const [previewPolicyPages, setPreviewPolicyPages] = useState<string[]>([]);
+  const [previewPolicyEdges, setPreviewPolicyEdges] = useState<Record<string, PolicyImageEdge>>({});
+  const [previewRating, setPreviewRating] = useState<string | undefined>(undefined);
   const [heroPicked, setHeroPicked]             = useState<string[]>([]);
   const savedHeroPicked = useRef<string[]>([]);
   const [part, setPart]                       = useState<BrandingPart>('layout');
@@ -188,31 +192,17 @@ export default function BrandingScreen({ navigation }: any) {
         setLogoFraming(cached.logoFraming ?? null);
         {
           // The same line the profile prints under the name (and Cover's pills).
-          const types = (cached.serviceCategories?.length ? cached.serviceCategories : [cached.providerService])
-            .filter(Boolean)
-            .map(type => (type === 'OTHER' ? cached.customServiceType || 'SERVICE' : type).toUpperCase());
-          const where = cached.location ? [cached.location.toUpperCase()] : [];
-          const how = cached.businessType ? [BUSINESS_TYPE_LABEL[cached.businessType].toUpperCase()] : [];
-          setMetaLabels([...new Set([...types, ...where])]);
-          // Cover's pills leave out what they do, as the profile does.
-          setPillLabels([...new Set([...where, ...how])]);
-          setHeroKicker([...new Set(types)].join(' · '));
-          setHeroLocation(cached.location ?? '');
+          const labels = heroLabelsFrom(cached);
+          setMetaLabels(labels.metaLabels);
+          setPillLabels(labels.pillLabels);
+          setHeroKicker(labels.kicker);
+          setHeroLocation(labels.location);
         }
-        // Their own words and menu for the preview: the first two categories
-        // and the first two services in the first one.
-        {
-          const categoryNames = Object.keys(cached.categories ?? {}).filter(name => (cached.categories[name]?.length ?? 0) > 0);
-          const firstServices = (categoryNames[0] ? cached.categories[categoryNames[0]] : []) ?? [];
-          setPreviewContent({
-            about: cached.aboutText ?? '',
-            categories: categoryNames,
-            services: firstServices
-              .filter(service => service.name.trim())
-              .slice(0, 2)
-              .map(service => ({ name: service.name.trim(), minutes: serviceDurationToMinutes(service.duration), price: service.price })),
-          });
-        }
+        // Their own words, menu, policy pictures and rating for the preview.
+        setPreviewContent(previewContentFrom(cached));
+        setPreviewPolicyPages(policyImageUrls(cached.bookingPolicies));
+        setPreviewPolicyEdges(policyImageEdges(cached.bookingPolicies));
+        setPreviewRating(String(Number(cached.rating) || 0));
         const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
         setPageStyle(cachedPageStyle);
@@ -538,6 +528,9 @@ export default function BrandingScreen({ navigation }: any) {
               location={heroLocation}
               photoUris={previewPhotoUris}
               content={previewContent}
+              policyPages={previewPolicyPages}
+              policyEdges={previewPolicyEdges}
+              rating={previewRating}
             />
           </ProfilePreviewScreen>
         </SafeAreaProvider>

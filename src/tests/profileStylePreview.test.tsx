@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { PAGE_STYLES } from '../constants/pageStyles';
 import { encodeThemeKey, SHEET_BG } from '../constants/providerThemes';
@@ -36,6 +36,7 @@ function renderPreview(
       kicker="LASHES"
       location="Peckham"
       content={content}
+      rating="5.0"
     />,
   );
 }
@@ -144,6 +145,35 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByLabelText('Rated 5.0')).toBeTruthy();
     expect(screen.getByText('amara lashes')).toBeTruthy();
     expect(screen.getByText('PECKHAM')).toBeTruthy();
+  });
+
+  it('shows a new provider no rating sticker rather than a made-up one', () => {
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'groovy')}
+        gradient={['#4A2C20', '#F5F1EC']} accent="#4A2C1E" backgroundImage={null} brandFont="default"
+        name="Amara Lashes" logoUri={null} logoFraming={null} metaLabels={[]} pillLabels={[]} kicker="LASHES" location="Peckham"
+        rating="0"
+      />,
+    );
+    expect(screen.queryByLabelText(/^Rated /)).toBeNull();
+  });
+
+  it('shows every category as the profile\'s pills, and switches services on tap', () => {
+    renderPreview('stripes', 'default', {
+      about: '',
+      categories: ['Lashes', 'Brows', 'Lash lifts and tints'],
+      services: [{ name: 'Classic set', minutes: 90, price: 45 }],
+      servicesByCategory: {
+        Lashes: [{ name: 'Classic set', minutes: 90, price: 45 }],
+        Brows: [{ name: 'Brow lamination', minutes: 45, price: 35 }],
+        'Lash lifts and tints': [{ name: 'Lift', minutes: 60, price: 40 }],
+      },
+    });
+    expect(screen.getByText('Lash lifts and tints')).toBeTruthy();
+    expect(screen.getByText('Classic set')).toBeTruthy();
+    fireEvent(screen.getByText('Brows'), 'pressOut');
+    expect(screen.getByText('Brow lamination')).toBeTruthy();
   });
 
   it('leaves Gallery without a placard or wall labels', () => {
