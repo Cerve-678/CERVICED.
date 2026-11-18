@@ -27,7 +27,7 @@ describe('Beauty Profile options', () => {
     const names = STYLE_AESTHETICS.map(a => a.name);
     for (const vibe of STYLE_VIBES) {
       expect({ vibe, any: (AESTHETICS_BY_VIBE[vibe] ?? []).length > 0 }).toEqual({ vibe, any: true });
-      for (const a of AESTHETICS_BY_VIBE[vibe]) expect(names).toContain(a);
+      for (const a of AESTHETICS_BY_VIBE[vibe] ?? []) expect(names).toContain(a);
     }
   });
 
