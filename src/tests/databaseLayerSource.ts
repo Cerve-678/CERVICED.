@@ -10,7 +10,8 @@ export function databaseLayerFiles(): string[] {
   const barrel = fs.readFileSync(barrelPath, 'utf8');
   const order: string[] = [];
   for (const match of barrel.matchAll(/from "\.\/database\/([\w-]+)"/g)) {
-    if (!order.includes(match[1])) order.push(match[1]);
+    const name = match[1];
+    if (name && !order.includes(name)) order.push(name);
   }
   return order.map((name) => path.join(servicesDir, 'database', `${name}.ts`));
 }
