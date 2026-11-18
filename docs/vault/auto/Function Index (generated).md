@@ -5,7 +5,7 @@
 
 #generated
 
-**4081 functions** across **569 files**.
+**4095 functions** across **570 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -54,7 +54,7 @@
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · secondColourIsContentArea · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
-- `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
+- `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · paydays · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chooseInterval · chooseSchedule · closeFeeSheet · date · EmptyState · feeStatusLabel · feesToCharge · handleRefunded · load · loadMore · money · Notice · openFeeSheet · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
@@ -232,9 +232,10 @@
 ### `src/features/notifications/` (1)
 - `notificationPresentation.ts` — **isCertificateNotification** · **isScheduleAutoClosedNotification** · **notificationAmount** · **notificationDayHeadings** · **notificationDayLabel** · **notificationKindLabel** · startOfDay
 
-### `src/features/payments/` (6)
+### `src/features/payments/` (7)
 - `bankDisputeStatus.ts` — **bankDisputeStates** · **bookingDisputeLabel** · **feeDisputeLabel** · stageOf
 - `bookingPaymentTimeline.ts` — appointmentWhen · **bookingPaymentTimeline** · dayAndTime · parseDay · **payoutNeedsAttention** · **payoutStatusLabel** · **shortDay** · **tipStatusLabel**
+- `paydayForecast.ts` — addDays · **addWorkingDays** · **clearsOn** · isWeekend · lastDayOfMonth · **nextPayday** · onItsWay · **paydayLabel** · place · startOfDay · **upcomingPaydays** · validDate · ymd
 - `PaymentsCardKit.tsx` — **InfoLabel** · **PayCard** · **PaySection** · **ProcessingLabel** · **StatusChip**
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
