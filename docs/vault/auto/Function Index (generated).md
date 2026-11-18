@@ -5,7 +5,7 @@
 
 #generated
 
-**4061 functions** across **567 files**.
+**4068 functions** across **567 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -14,7 +14,7 @@
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showAlert · showConfirm · showToast · Toast · **useAppDialog**
 - `AppLoadingScreen.tsx` — AppLoadingScreen
-- `AreaPicker.tsx` — AreaPicker · back · close · confirmFreeText · isPicked · matches · open · pickArea · pickCity · pickCounty · pickOtherCity · pickRegion · pickSearchedArea · pickWholeTown · regionData · rowEnd · startAreaOther · useTypedPlace
+- `AreaPicker.tsx` — AreaPicker · back · close · confirmFreeText · exactly · freeMatches · inTown · isPicked · matches · matchRow · open · pickArea · pickCity · pickCounty · pickMatch · pickOtherCity · pickRegion · pickSearchedArea · pickWholeTown · regionData · rowEnd · startAreaOther · useTypedPlace
 - `AreasYouCoverPicker.tsx` — add · addSuggestion · AreasYouCoverPicker · remove
 - `AvailabilityCard.tsx` — animatedStyle · handlePress · handlePressIn · handlePressOut · highlightColors
 - `BookingFeeSheet.tsx` — BookingFeeSheet
@@ -120,7 +120,7 @@
 - `ThemeContext.tsx` — contextValue · createEnterpriseTheme · enterpriseTheme · legacyTheme · loadThemePreference · saveThemePreference · setDarkMode · setThemePreference · **ThemeProvider** · toggleTheme · **useEnterpriseTheme** · **useLegacyTheme** · **useTheme**
 
 ### `src/data/` (3)
-- `cityAreas.ts` — consider · normalizePlace · **searchPlaces**
+- `cityAreas.ts` — allowedSlips · consider · editDistance · normalizePlace · **searchPlaces**
 - `languages.ts` — **recognizeLanguage**
 - `portfolioFeed.ts` — **getAllPortfolioItems** · **getPortfolioByCategory** · **getPortfolioByProvider** · **getPortfolioItemById** · **getProviderForItem** · **searchPortfolio**
 

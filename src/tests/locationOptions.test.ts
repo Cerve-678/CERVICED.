@@ -35,7 +35,7 @@ it('never lists an area twice in one town', () => {
 });
 
 it('finds a neighbourhood by name without knowing its region', () => {
-  expect(searchPlaces('stoke newington')).toEqual([{ kind: 'area', name: 'Stoke Newington', town: 'London' }]);
+  expect(searchPlaces('stoke newington')).toEqual([{ kind: 'area', name: 'Stoke Newington', town: 'London', region: 'North London' }]);
 });
 
 it('offers a county as a place of its own', () => {
@@ -65,7 +65,7 @@ it('keeps two different places with the same name apart', () => {
   // Loughton in Essex is a town; Loughton in Milton Keynes is one of its areas.
   const loughtons = searchPlaces('Loughton');
   expect(loughtons).toContainEqual({ kind: 'town', name: 'Loughton' });
-  expect(loughtons).toContainEqual({ kind: 'area', name: 'Loughton', town: 'Milton Keynes' });
+  expect(loughtons).toContainEqual(expect.objectContaining({ kind: 'area', name: 'Loughton', town: 'Milton Keynes' }));
 });
 
 it('never leaves a stray backslash in a place name', () => {
@@ -76,7 +76,23 @@ it('never leaves a stray backslash in a place name', () => {
 });
 
 it('lists the Hackney neighbourhoods between Dalston and Shoreditch', () => {
-  expect(searchPlaces('haggerston')).toEqual([{ kind: 'area', name: 'Haggerston', town: 'London' }]);
-  expect(searchPlaces('hoxton')).toEqual([{ kind: 'area', name: 'Hoxton', town: 'London' }]);
-  expect(searchPlaces('london fields')).toContainEqual({ kind: 'area', name: 'London Fields', town: 'London' });
+  expect(searchPlaces('haggerston')).toEqual([{ kind: 'area', name: 'Haggerston', town: 'London', region: 'East London' }]);
+  expect(searchPlaces('hoxton')).toEqual([{ kind: 'area', name: 'Hoxton', town: 'London', region: 'East London' }]);
+  expect(searchPlaces('london fields')).toContainEqual({ kind: 'area', name: 'London Fields', town: 'London', region: 'East London' });
+});
+
+it('finds a place typed with a slip in it', () => {
+  expect(searchPlaces('leyetonstone')[0]).toEqual({ kind: 'area', name: 'Leytonstone', town: 'London', region: 'East London' });
+  expect(searchPlaces('Stroke Newington')[0]).toEqual({ kind: 'area', name: 'Stoke Newington', town: 'London', region: 'North London' });
+});
+
+it('does not guess at short text', () => {
+  // "bow" is listed; "bpw" is one slip away but too short to trust.
+  expect(searchPlaces('bpw')).toEqual([]);
+});
+
+it('lists the London neighbourhoods people actually say', () => {
+  for (const area of ['Kingsland', 'Brockley', 'Maida Vale', 'Wapping', 'Belgravia', 'Tufnell Park', 'Isle of Dogs']) {
+    expect(searchPlaces(area)[0]).toMatchObject({ kind: 'area', name: area, town: 'London' });
+  }
 });
