@@ -416,9 +416,13 @@ export type {
 } from "./database/reschedule";
 export {
   getClientBeautyProfileForBooking,
+  getClientBeautyProfileForProvider,
+  getMyClientNote,
+  saveMyClientNote,
 } from "./database/beautyProfile";
 export type {
   ClientBeautyProfile,
+  ClientNote,
 } from "./database/beautyProfile";
 export {
   getProviderFormLibrary,
