@@ -59,3 +59,19 @@ export function formProblem(questions: readonly CheckableQuestion[]): string | n
   }
   return null;
 }
+
+export interface SentFormRow {
+  booking_id: string;
+  library_form_id: string | null;
+  title: string;
+}
+
+/** Bookings that already have this form: the same saved form, or one sent
+ *  under the same name (a copy, or one sent before it was saved) — the same
+ *  rule the booking page uses, so a client never gets it twice. */
+export function bookingsHoldingForm(sent: readonly SentFormRow[], libraryFormId: string, title: string): string[] {
+  const name = title.trim().toLowerCase();
+  return [...new Set(sent
+    .filter(row => row.library_form_id === libraryFormId || (!!name && row.title.trim().toLowerCase() === name))
+    .map(row => row.booking_id))];
+}
