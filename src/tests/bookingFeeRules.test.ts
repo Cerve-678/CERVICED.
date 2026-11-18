@@ -1,4 +1,4 @@
-import { feeChargeWindow, feeDisputeOpen, isChargeableLateCancel, liveFee } from '../features/bookings/bookingFeeRules';
+import { feeChargeWindow, feeDisputeOpen, feesToChargeNow, isChargeableLateCancel, liveFee } from '../features/bookings/bookingFeeRules';
 import type { BookingFeeCharge, BookingFeeTerms } from '../services/databaseService';
 
 const terms: BookingFeeTerms = {
@@ -54,4 +54,20 @@ test('no late cancellation fee for an early cancel, a provider cancel, a full pa
   expect(isChargeableLateCancel({ ...lateCancelled, cancelNoticeHours: 0 })).toBe(false);
   // Moved after the window started: late however early the cancel.
   expect(isChargeableLateCancel({ ...lateCancelled, cancelledAt: new Date('2026-06-28T08:00:00').toISOString(), lateRescheduleFrom: '2026-06-27' })).toBe(true);
+});
+
+test('lists what can be charged now in Payments & payouts, skipping anything already charged', () => {
+  const cand = (id: string, t: BookingFeeTerms, charges: { status: BookingFeeCharge['status'] }[] = []) =>
+    ({ bookingId: id, customerName: 'Sam', serviceName: 'Gel nails', terms: t, charges });
+  const list = feesToChargeNow([
+    cand('late', terms),
+    cand('noShow', { ...terms, status: 'no_show' }),
+    cand('charged', terms, [{ status: 'succeeded' }]),
+    cand('retry', terms, [{ status: 'failed' }]),
+    cand('none', { ...terms, lateFeePence: null, noShowFeePence: null }),
+  ], end);
+  expect(list.map(f => f.bookingId)).toEqual(['late', 'noShow', 'retry']);
+  expect(list[0]!.kinds).toEqual(['late']);
+  expect(list[1]!.kinds).toEqual(['no_show']);
+  expect(feesToChargeNow([cand('late', terms)], end + 24 * 3600e3 + 1)).toEqual([]);
 });

@@ -64,3 +64,41 @@ export function feeDisputeOpen(charge: BookingFeeCharge, nowMs: number): boolean
   if (charge.status !== 'succeeded' || !charge.chargedAt) return false;
   return nowMs <= new Date(charge.chargedAt).getTime() + FEE_DISPUTE_MS;
 }
+
+export interface FeeToCharge {
+  bookingId: string;
+  customerName: string | null;
+  serviceName: string | null;
+  bookingDate: string;
+  /** The fees open on it right now, e.g. ['late arrival fee']. */
+  kinds: BookingFeeKind[];
+  closesAtLabel: string;
+}
+
+/** Bookings with a fee the provider can still charge, soonest-closing first:
+ *  inside the window, nothing already charged or in progress (a failed
+ *  attempt can be tried again). Payments & payouts lists these. */
+export function feesToChargeNow(
+  candidates: readonly { bookingId: string; customerName: string | null; serviceName: string | null; terms: BookingFeeTerms; charges: readonly Pick<BookingFeeCharge, 'status'>[] }[],
+  nowMs: number,
+): FeeToCharge[] {
+  const out: (FeeToCharge & { closes: number })[] = [];
+  for (const c of candidates) {
+    if (c.charges.some(ch => ch.status !== 'failed')) continue;
+    const window = feeChargeWindow(c.terms, nowMs);
+    if (!window.open) continue;
+    const kinds = (['late', 'no_show', 'late_cancel'] as const).filter(k => window.canCharge[k]);
+    if (kinds.length === 0) continue;
+    const end = new Date(`${c.terms.bookingDate}T${c.terms.endTime ?? c.terms.bookingTime}`).getTime();
+    out.push({
+      bookingId: c.bookingId,
+      customerName: c.customerName,
+      serviceName: c.serviceName,
+      bookingDate: c.terms.bookingDate,
+      kinds,
+      closesAtLabel: window.closesAtLabel,
+      closes: end,
+    });
+  }
+  return out.sort((a, b) => a.closes - b.closes).map(({ closes: _closes, ...rest }) => rest);
+}

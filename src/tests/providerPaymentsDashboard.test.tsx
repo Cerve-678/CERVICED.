@@ -2,17 +2,19 @@ import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ProviderStripePayments from '../components/ProviderStripePayments';
-import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderRefundState, getProviderFeeEarnings, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule } from '../services/providerPaymentService';
+import { getConnectStatus, getProviderPayouts, getProviderFinance, getProviderRefundState, getProviderFeeEarnings, getFeeChargeCandidates, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule } from '../services/providerPaymentService';
 
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn().mockResolvedValue({ type: 'dismiss' }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../services/providerPaymentService', () => ({
-  getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(), getProviderTipEarnings: jest.fn(),
+  getConnectStatus: jest.fn(), getProviderPayouts: jest.fn(), getProviderFinance: jest.fn(), getProviderFeeEarnings: jest.fn(), getFeeChargeCandidates: jest.fn(), getProviderTipEarnings: jest.fn(),
   getConnectLink: jest.fn(), refundProviderBooking: jest.fn(), getProviderRefundState: jest.fn(),
   getPayoutSchedule: jest.fn(), setPayoutSchedule: jest.fn(),
 }));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
+// The fee sheet pulls in the Stripe SDK, which has no native module in Jest.
+jest.mock('../components/BookingFeeSheet', () => () => null);
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../contexts/ThemeContext', () => ({
   useTheme: () => ({ isDarkMode: false, palette: { accent: '#5C4033', onAccent: '#FFFFFF', text: '#1C1A18', secondaryText: '#8A8680', card: '#FFFFFF', border: '#eeeeee' } }),
@@ -32,6 +34,7 @@ jest.mock('../features/business-details/BusinessDetailsKit', () => {
 beforeEach(() => {
   jest.clearAllMocks();
   (getProviderFeeEarnings as jest.Mock).mockResolvedValue([]);
+  (getFeeChargeCandidates as jest.Mock).mockResolvedValue([]);
   (getProviderTipEarnings as jest.Mock).mockResolvedValue([]);
   (getConnectStatus as jest.Mock).mockResolvedValue({ connected: true, payoutsEnabled: true, detailsSubmitted: true });
   (getPayoutSchedule as jest.Mock).mockResolvedValue({ interval: 'monthly', weeklyDays: [], monthlyDays: [1] });
