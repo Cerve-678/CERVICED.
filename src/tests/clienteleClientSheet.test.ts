@@ -14,7 +14,7 @@ import { readDatabaseLayer } from './databaseLayerSource';
  */
 const root = path.join(__dirname, '..', '..');
 const read = (...p: string[]) => fs.readFileSync(path.join(root, ...p), 'utf8');
-const sql = read('supabase', 'migrations', '20261118160000_clientele_notes_and_beauty_profile.sql');
+const sql = read('supabase', 'migrations', '20261118205332_clientele_notes_and_beauty_profile.sql');
 const screen = read('src', 'screens', 'provider', 'ProviderClienteleScreen.tsx');
 const bookingScreen = read('src', 'screens', 'provider', 'ProviderBookingDetailScreen.tsx');
 const service = readDatabaseLayer();

@@ -156,7 +156,7 @@ export async function getClientBeautyProfileForBooking(
  * completed), and only the fields the categories of those bookings get —
  * allergies, medical notes and photography consent always. Null means "not
  * shared", never "nothing on file". See
- * 20261118160000_clientele_notes_and_beauty_profile.sql.
+ * 20261118205332_clientele_notes_and_beauty_profile.sql.
  */
 export async function getClientBeautyProfileForProvider(
   clientUserId: string,
