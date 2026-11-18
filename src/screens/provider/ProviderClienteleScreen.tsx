@@ -8,8 +8,11 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
+  ScrollView,
   Switch,
   Platform,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from '../../components/SafeArea';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +26,10 @@ import {
   sendAnnouncement,
   queueScheduledAnnouncement,
   getClientBookingHistory,
+  getClientBeautyProfileForProvider,
+  getMyClientNote,
+  saveMyClientNote,
+  type ClientBeautyProfile,
   getMyAnnouncementFollowers,
   type AnnouncementFollower,
   getMyProviderProfile,
@@ -36,7 +43,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
-import { toUserMessage } from '../../utils/userFacingError';
+import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
+import { reportError } from '../../utils/logger';
+import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
@@ -118,65 +127,283 @@ const tbSt = StyleSheet.create({
   wrap: { flexDirection: 'row', height: 48, marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
 });
 
-// ── Client history dropdown ──────────────────────────────────────────────────
-// Opens under the client's header on their card — every booking they've had
-// with you, newest first.
+// ── Client sheet ──────────────────────────────────────────────────────────────
+// Opens from a client's card: their Beauty Profile (once you've accepted a
+// booking from them), your own private notes on them, and every booking
+// they've had with you, newest first.
 
-function ClientHistoryList({ bookings, loading, failed, P }: {
-  bookings: DbBooking[] | undefined; loading: boolean; failed: boolean; P: typeof LIGHT;
+type Loadable<T> = { state: 'loading' } | { state: 'failed' } | { state: 'ready'; value: T };
+
+function ClientSheet({ member, onClose, P, isDark }: {
+  member: ClienteleMember | null;
+  onClose: () => void;
+  P: typeof LIGHT;
+  isDark: boolean;
 }) {
-  if (loading && !bookings) {
-    return <View style={chSt.center}><ActivityIndicator color={P.accent} /></View>;
-  }
-  if (failed && !bookings) {
-    return <View style={chSt.center}><Text style={[chSt.emptySub, { color: P.sub }]}>Couldn't load their history. Tap to try again.</Text></View>;
-  }
-  if (!bookings || bookings.length === 0) {
-    return <View style={chSt.center}><Text style={[chSt.emptySub, { color: P.sub }]}>No booking history</Text></View>;
-  }
+  // Inside a <Modal>, so the live inset, not SafeAreaView (inert here).
+  const bottomInset = useSystemBottomInset();
+  const clientId = member?.user_id ?? null;
+  const [history, setHistory] = useState<Loadable<DbBooking[]>>({ state: 'loading' });
+  const [profile, setProfile] = useState<Loadable<ClientBeautyProfile | null>>({ state: 'loading' });
+  const [noteState, setNoteState] = useState<'loading' | 'failed' | 'ready'>('loading');
+  const [note, setNote] = useState('');
+  const [savedNote, setSavedNote] = useState('');
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // Shown in the notes box itself: a toast would sit behind this Modal.
+  const [saveError, setSaveError] = useState('');
+  // Which client the in-flight loads belong to, so a slow answer for the
+  // last client opened can't land in this one's sheet.
+  const forId = useRef<string | null>(null);
+
+  const loadHistory = useCallback((id: string) => {
+    setHistory({ state: 'loading' });
+    getClientBookingHistory(id)
+      .then(v => { if (forId.current === id) setHistory({ state: 'ready', value: v }); })
+      .catch(e => {
+        if (forId.current !== id) return;
+        setHistory({ state: 'failed' });
+        reportError(e, 'ProviderClienteleScreen.history');
+      });
+  }, []);
+  const loadProfile = useCallback((id: string) => {
+    setProfile({ state: 'loading' });
+    getClientBeautyProfileForProvider(id)
+      .then(v => { if (forId.current === id) setProfile({ state: 'ready', value: v }); })
+      .catch(e => {
+        if (forId.current !== id) return;
+        setProfile({ state: 'failed' });
+        reportError(e, 'ProviderClienteleScreen.beautyProfile');
+      });
+  }, []);
+  const loadNote = useCallback((id: string) => {
+    setNoteState('loading');
+    getMyClientNote(id)
+      .then(n => {
+        if (forId.current !== id) return;
+        setNote(n?.note ?? '');
+        setSavedNote(n?.note ?? '');
+        setSavedAt(n?.updatedAt ?? null);
+        setNoteState('ready');
+      })
+      .catch(e => {
+        if (forId.current !== id) return;
+        setNoteState('failed');
+        reportError(e, 'ProviderClienteleScreen.note');
+      });
+  }, []);
+
+  useEffect(() => {
+    forId.current = clientId;
+    if (!clientId) return;
+    setNote(''); setSavedNote(''); setSavedAt(null); setSaveError('');
+    loadHistory(clientId);
+    loadProfile(clientId);
+    loadNote(clientId);
+  }, [clientId, loadHistory, loadProfile, loadNote]);
+
+  const dirty = noteState === 'ready' && note.trim() !== savedNote.trim();
+
+  const saveNote = async (): Promise<boolean> => {
+    if (!clientId || !dirty || saving) return true;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const at = await saveMyClientNote(clientId, note);
+      const trimmed = note.trim();
+      setNote(trimmed);
+      setSavedNote(trimmed);
+      setSavedAt(at);
+      return true;
+    } catch (e) {
+      setSaveError(`${toUserMessageAllowingDbGuard(e, 'Could not save your note.', 'ProviderClienteleScreen.saveNote')} Tap Save to try again, or close to discard.`);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Closing keeps what you typed: an unsaved note is saved on the way out.
+  // If that save fails the sheet stays open with the reason, and closing a
+  // second time lets the change go rather than trapping them here.
+  const close = async () => {
+    if (dirty && !saveError && !(await saveNote())) return;
+    onClose();
+  };
+
+  const bookings = history.state === 'ready' ? history.value : [];
+  const sectionLabel = (label: string) => (
+    <Text style={[csSt.sectionLabel, { color: P.sub }]}>{label}</Text>
+  );
+  const retry = (label: string, onPress: () => void) => (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={csSt.center}>
+      <Text style={[csSt.emptySub, { color: P.sub }]}>Couldn't load {label}. Tap to try again.</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={[chSt.list, { borderTopColor: P.border }]}>
-      {bookings.map((b, i) => {
-        const statusColor = b.status === 'completed' ? GREEN
-          : b.status === 'cancelled' ? DANGER : P.sub;
-        return (
-          <View key={b.id} style={[chSt.bookingRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border }]}>
-            <View style={[chSt.dateBadge, { backgroundColor: P.card }]}>
-              <Text style={[chSt.dateDay, { color: P.text }]}>{new Date(b.booking_date).getDate()}</Text>
-              <Text style={[chSt.dateMon, { color: P.sub }]}>{new Date(b.booking_date).toLocaleString('en-GB', { month: 'short' })}</Text>
+    <Modal visible={member !== null} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={close}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* The dim fills the whole window BEHIND the sheet, so the sheet's
+          rounded top corners show the dim, not the screen, through them. */}
+      <View style={csSt.overlay}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={close} accessibilityRole="button" accessibilityLabel="Close" />
+      <View style={[csSt.sheet, { backgroundColor: P.surface, paddingBottom: bottomInset }]}>
+        <View style={[csSt.handle, { backgroundColor: P.border }]} />
+        <View style={csSt.header}>
+          {member && (
+            <View style={[csSt.avatar, { backgroundColor: avatarColor(member.customer_name) + '22', borderColor: avatarColor(member.customer_name) + '44' }]}>
+              <Text style={[csSt.avatarText, { color: avatarColor(member.customer_name) }]}>{initials(member.customer_name)}</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[chSt.svcName, { color: P.text }]} numberOfLines={1}>{b.service_name_snapshot}</Text>
-              <Text style={[chSt.timeText, { color: P.sub }]}>
-                {[new Date(b.booking_date).getFullYear() !== new Date().getFullYear() ? String(new Date(b.booking_date).getFullYear()) : null,
-                  b.booking_time ? formatTime12Safe(b.booking_time) : null].filter(Boolean).join(' · ')}
-              </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 3 }}>
-              <Text style={[chSt.amount, { color: P.text }]}>£{(b.base_price + b.add_ons_total).toFixed(0)}</Text>
-              <View style={[chSt.statusPill, { backgroundColor: statusColor + '22' }]}>
-                <Text style={[chSt.statusText, { color: statusColor }]}>{b.status.replace(/_/g, ' ')}</Text>
-              </View>
-            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[csSt.title, { color: P.text }]}>{member?.customer_name ?? ''}</Text>
+            <Text style={[csSt.sub, { color: P.sub }]}>
+              {member ? `${member.booking_count} booking${member.booking_count !== 1 ? 's' : ''} with you` : ''}
+            </Text>
           </View>
-        );
-      })}
-    </View>
+          <TouchableOpacity onPress={close} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Close">
+            <Ionicons name="close" size={22} color={P.sub} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 16 }}>
+          {/* ── Beauty Profile ── */}
+          {sectionLabel('Beauty Profile')}
+          <View style={[csSt.block, { backgroundColor: P.card }]}>
+            {profile.state === 'loading' ? (
+              <View style={csSt.center}><ActivityIndicator color={P.accent} /></View>
+            ) : profile.state === 'failed' ? (
+              retry('their Beauty Profile', () => clientId && loadProfile(clientId))
+            ) : profile.value === null ? (
+              // Null is "not shared yet", never "nothing on file" — saying
+              // nothing here would read as "no allergies".
+              <Text style={[csSt.emptySub, csSt.blockText, { color: P.sub }]}>
+                Shared with you once you've accepted a booking from them.
+              </Text>
+            ) : (
+              <ClientBeautyProfileDetails
+                profile={profile.value}
+                text={P.text}
+                sub={P.sub}
+                surface={P.surface}
+                divider={P.border}
+                isDark={isDark}
+              />
+            )}
+          </View>
+
+          {/* ── Your notes ── */}
+          {sectionLabel('Your notes')}
+          <View style={[csSt.block, { backgroundColor: P.card }]}>
+            {noteState === 'loading' ? (
+              <View style={csSt.center}><ActivityIndicator color={P.accent} /></View>
+            ) : noteState === 'failed' ? (
+              retry('your notes', () => clientId && loadNote(clientId))
+            ) : (
+              <>
+                <TextInput
+                  value={note}
+                  onChangeText={t => { setNote(t); if (saveError) setSaveError(''); }}
+                  placeholder="Anything to remember about them: preferences, formulas, what they liked last time…"
+                  placeholderTextColor={P.sub}
+                  multiline
+                  maxLength={2000}
+                  style={[csSt.noteInput, { color: P.text }]}
+                  accessibilityLabel="Your notes on this client"
+                />
+                <View style={csSt.noteFooter}>
+                  <Text style={[csSt.noteHint, { color: saveError ? DANGER : P.sub }]}>
+                    {saveError ? saveError : dirty ? 'Not saved yet' : savedAt ? `Only you can see this · Saved ${formatShort(savedAt)}` : 'Only you can see this'}
+                  </Text>
+                  {dirty && (
+                    <TouchableOpacity
+                      onPress={() => { Haptics.selectionAsync().catch(() => {}); saveNote(); }}
+                      disabled={saving}
+                      activeOpacity={0.7}
+                      style={[csSt.saveBtn, { backgroundColor: P.accent }]}
+                    >
+                      {saving
+                        ? <ActivityIndicator size="small" color={P.onAccent} />
+                        : <Text style={[csSt.saveText, { color: P.onAccent }]}>Save</Text>}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* ── Booking history ── */}
+          {sectionLabel('Booking history')}
+          {history.state === 'loading' ? (
+            <View style={csSt.center}><ActivityIndicator color={P.accent} /></View>
+          ) : history.state === 'failed' ? (
+            retry('their history', () => clientId && loadHistory(clientId))
+          ) : bookings.length === 0 ? (
+            <View style={csSt.center}><Text style={[csSt.emptySub, { color: P.sub }]}>No booking history</Text></View>
+          ) : (
+            bookings.map(b => {
+              const statusColor = b.status === 'completed' ? GREEN
+                : b.status === 'cancelled' ? DANGER : P.sub;
+              const d = new Date(b.booking_date);
+              return (
+                <View key={b.id} style={[csSt.bookingRow, { borderBottomColor: P.border }]}>
+                  <View style={[csSt.dateBadge, { backgroundColor: P.card }]}>
+                    <Text style={[csSt.dateDay, { color: P.text }]}>{d.getDate()}</Text>
+                    <Text style={[csSt.dateMon, { color: P.sub }]}>{d.toLocaleString('en-GB', { month: 'short' })}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[csSt.svcName, { color: P.text }]} numberOfLines={1}>{b.service_name_snapshot}</Text>
+                    <Text style={[csSt.timeText, { color: P.sub }]}>
+                      {[d.getFullYear() !== new Date().getFullYear() ? String(d.getFullYear()) : null,
+                        b.booking_time ? formatTime12Safe(b.booking_time) : null].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                    <Text style={[csSt.amount, { color: P.text }]}>£{(b.base_price + b.add_ons_total).toFixed(0)}</Text>
+                    <View style={[csSt.statusPill, { backgroundColor: statusColor + '22' }]}>
+                      <Text style={[csSt.statusText, { color: statusColor }]}>{b.status.replace(/_/g, ' ')}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      </View>
+      </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
-const chSt = StyleSheet.create({
-  list:        { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 12 },
-  center:      { paddingVertical: 18, alignItems: 'center' },
-  emptySub:    { fontSize: 13 },
-  bookingRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  dateBadge:   { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  dateDay:     { fontSize: 15, fontWeight: '800', lineHeight: 17 },
-  dateMon:     { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-  svcName:     { fontSize: 14, fontWeight: '600' },
-  timeText:    { fontSize: 12, marginTop: 2 },
-  amount:      { fontSize: 13, fontWeight: '700' },
-  statusPill:  { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  statusText:  { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+const csSt = StyleSheet.create({
+  overlay:      { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet:        { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '88%' },
+  handle:       { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  header:       { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  avatar:       { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  avatarText:   { fontSize: 15, fontWeight: '700' },
+  title:        { fontSize: 18, fontWeight: '700' },
+  sub:          { fontSize: 12, marginTop: 2 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 18, marginBottom: 8 },
+  block:        { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4 },
+  blockText:    { paddingVertical: 12 },
+  center:       { paddingVertical: 24, alignItems: 'center' },
+  emptySub:     { fontSize: 14 },
+  noteInput:    { fontSize: 14, lineHeight: 20, minHeight: 88, paddingTop: 10, paddingBottom: 6, textAlignVertical: 'top' },
+  noteFooter:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, gap: 8 },
+  noteHint:     { fontSize: 12, flex: 1 },
+  saveBtn:      { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 10, minWidth: 64, alignItems: 'center' },
+  saveText:     { fontSize: 13, fontWeight: '700' },
+  bookingRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  dateBadge:    { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  dateDay:      { fontSize: 16, fontWeight: '800', lineHeight: 18 },
+  dateMon:      { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
+  svcName:      { fontSize: 14, fontWeight: '600' },
+  timeText:     { fontSize: 12, marginTop: 2 },
+  amount:       { fontSize: 13, fontWeight: '700' },
+  statusPill:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  statusText:   { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
 });
 
 // ── Announcement Sheet ────────────────────────────────────────────────────────
@@ -583,16 +810,12 @@ const anSt = StyleSheet.create({
 
 // ── Client Card ───────────────────────────────────────────────────────────────
 
-function ClientCard({ member, onMessage, onRebook, onToggleHistory, expanded, history, historyLoading, historyFailed, lapsed, reliability, P }: {
+function ClientCard({ member, onMessage, onRebook, onOpen, lapsed, reliability, P }: {
   member: ClienteleMember;
   onMessage: (m: ClienteleMember) => void;
   onRebook: (m: ClienteleMember) => void;
-  /** Tapping the client's header opens or closes their history under it. */
-  onToggleHistory: (m: ClienteleMember) => void;
-  expanded: boolean;
-  history: DbBooking[] | undefined;
-  historyLoading: boolean;
-  historyFailed: boolean;
+  /** Tapping the card opens the client sheet: Beauty Profile, notes, history. */
+  onOpen: (m: ClienteleMember) => void;
   lapsed?: boolean;
   // No-show / late-cancel history this client has with THIS provider
   // (client_provider_reliability, batch-fetched once for the whole list —
@@ -605,14 +828,12 @@ function ClientCard({ member, onMessage, onRebook, onToggleHistory, expanded, hi
   const hasReliabilityFlag = !!reliability && (reliability.noShowCount > 0 || reliability.lateCancelCount > 0);
 
   return (
-    <View style={[ccSt.card, { backgroundColor: P.surface }]}>
     <TouchableOpacity
-      style={ccSt.wrap}
-      onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggleHistory(member); }}
+      style={[ccSt.wrap, { backgroundColor: P.surface }]}
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(member); }}
       activeOpacity={0.8}
       accessibilityRole="button"
-      accessibilityState={{ expanded }}
-      accessibilityHint={expanded ? 'Hides their booking history' : 'Shows their booking history'}
+      accessibilityHint="Opens their Beauty Profile, your notes and their booking history"
     >
       <View style={[ccSt.avatar, { backgroundColor: color + '22', borderColor: color + '44' }]}>
         <Text style={[ccSt.avatarText, { color }]}>{initials(member.customer_name)}</Text>
@@ -620,7 +841,6 @@ function ClientCard({ member, onMessage, onRebook, onToggleHistory, expanded, hi
       <View style={ccSt.info}>
         <View style={ccSt.nameRow}>
           <Text style={[ccSt.name, { color: P.text }]} numberOfLines={1}>{member.customer_name}</Text>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={P.sub} />
           {lapsed && (
             <View style={ccSt.lapsedBadge}>
               <Text style={[ccSt.lapsedText, { color: DANGER }]}>{days}d ago</Text>
@@ -663,17 +883,10 @@ function ClientCard({ member, onMessage, onRebook, onToggleHistory, expanded, hi
         </View>
       </View>
     </TouchableOpacity>
-    {expanded && (
-      <TouchableOpacity activeOpacity={1} disabled={!historyFailed} onPress={() => onToggleHistory(member)}>
-        <ClientHistoryList bookings={history} loading={historyLoading} failed={historyFailed} P={P} />
-      </TouchableOpacity>
-    )}
-    </View>
   );
 }
 const ccSt = StyleSheet.create({
-  card:        { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
-  wrap:        { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  wrap:        { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8, gap: 12 },
   avatar:      { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   avatarText:  { fontSize: 15, fontWeight: '700' },
   info:        { flex: 1 },
@@ -704,12 +917,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const [tab, setTab] = useState<Tab>('all');
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [followers, setFollowers] = useState<AnnouncementFollower[]>([]);
-  // Whose history is open under their card, and each client's history once
-  // loaded (kept, so closing and reopening doesn't fetch it again).
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [historyById, setHistoryById] = useState<Record<string, DbBooking[]>>({});
-  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null);
-  const [historyFailedId, setHistoryFailedId] = useState<string | null>(null);
+  const [sheetFor, setSheetFor] = useState<ClienteleMember | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showToast, DialogHost } = useAppDialog();
 
@@ -793,23 +1001,8 @@ export default function ProviderClienteleScreen({ navigation }: any) {
     }
   };
 
-  const handleToggleHistory = async (member: ClienteleMember) => {
-    const id = member.user_id;
-    if (expandedId === id && historyFailedId !== id) { setExpandedId(null); return; }
-    setExpandedId(id);
-    if (historyById[id]) return;
-    setHistoryFailedId(null);
-    setHistoryLoadingId(id);
-    try {
-      const data = await getClientBookingHistory(id);
-      setHistoryById(prev => ({ ...prev, [id]: data }));
-    } catch (e: any) {
-      setHistoryFailedId(id);
-      showToast(toUserMessage(e, 'Could not load that history.', 'ProviderClienteleScreen.history'), 'error');
-    } finally {
-      setHistoryLoadingId(prev => (prev === id ? null : prev));
-    }
-  };
+  const handleOpenClient = useCallback((member: ClienteleMember) => setSheetFor(member), []);
+  const handleCloseClient = useCallback(() => setSheetFor(null), []);
 
   if (loading) {
     return (
@@ -875,7 +1068,6 @@ export default function ProviderClienteleScreen({ navigation }: any) {
           ) : (
             <FlatList
               data={displayed}
-              extraData={[expandedId, historyById, historyLoadingId, historyFailedId]}
               keyExtractor={item => item.user_id}
               renderItem={({ item }) => (
                 <ClientCard
@@ -884,11 +1076,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                   reliability={reliabilityByClient[item.user_id]}
                   onMessage={handleMessage}
                   onRebook={handleRebook}
-                  onToggleHistory={handleToggleHistory}
-                  expanded={expandedId === item.user_id}
-                  history={historyById[item.user_id]}
-                  historyLoading={historyLoadingId === item.user_id}
-                  historyFailed={historyFailedId === item.user_id}
+                  onOpen={handleOpenClient}
                   P={P}
                 />
               )}
@@ -909,6 +1097,13 @@ export default function ProviderClienteleScreen({ navigation }: any) {
         onScheduled={handleAnnouncementScheduled}
         onError={msg => showToast(msg, 'error')}
         P={P}
+      />
+
+      <ClientSheet
+        member={sheetFor}
+        onClose={handleCloseClient}
+        P={P}
+        isDark={isDarkMode}
       />
 
       <DialogHost />

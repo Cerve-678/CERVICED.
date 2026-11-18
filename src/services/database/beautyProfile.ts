@@ -44,10 +44,9 @@ export interface ClientBeautyProfile {
   photographyConsent: boolean;
 }
 
-/** One row of get_client_beauty_profile_for_booking. Every field the booked
- *  service's category doesn't get comes back null. */
-interface BookingBeautyProfileRow {
-  service_category: string | null;
+/** The profile columns both RPCs return. Every field the booked service
+ *  category(ies) don't get comes back null. */
+interface BeautyProfileFields {
   hair_type: string[] | string | null;
   scalp_condition: string[] | string | null;
   hair_goals: string[] | null;
@@ -75,6 +74,47 @@ interface BookingBeautyProfileRow {
   allergies: string[] | null;
   medical_notes: string | null;
   photography_consent: boolean | null;
+}
+
+/** One row of get_client_beauty_profile_for_booking. */
+interface BookingBeautyProfileRow extends BeautyProfileFields {
+  service_category: string | null;
+}
+
+/** One row of get_client_beauty_profile_for_provider. */
+interface ClientBeautyProfileRow extends BeautyProfileFields {
+  service_categories: string[] | null;
+}
+
+function toClientBeautyProfile(d: BeautyProfileFields): ClientBeautyProfile {
+  return {
+    hairType: toPickList(d.hair_type),
+    scalpCondition: toPickList(d.scalp_condition),
+    hairGoals: d.hair_goals ?? [],
+    treatmentHistory: d.treatment_history ?? [],
+    skinType: toPickList(d.skin_type),
+    skinTone: d.skin_tone ?? null,
+    skinConcerns: d.skin_concerns ?? [],
+    sensitiveAreas: d.sensitive_areas ?? [],
+    nailLength: toPickList(d.nail_length),
+    nailShape: toPickList(d.nail_shape),
+    nailCondition: d.nail_condition ?? [],
+    nailService: d.nail_service ?? [],
+    nailStyle: d.nail_style ?? [],
+    nailColours: d.nail_colours ?? [],
+    lashStyle: toPickList(d.lash_style),
+    lashStatus: d.lash_status ?? null,
+    browStyle: toPickList(d.brow_style),
+    browCondition: toPickList(d.brow_condition),
+    makeupCoverage: toPickList(d.makeup_coverage),
+    makeupFinish: toPickList(d.makeup_finish),
+    makeupEyes: toPickList(d.makeup_eyes),
+    makeupLips: toPickList(d.makeup_lips),
+    styleVibe: toPickList(d.style_vibe),
+    allergies: d.allergies ?? [],
+    medicalNotes: d.medical_notes ?? null,
+    photographyConsent: d.photography_consent ?? false,
+  };
 }
 
 /**
@@ -106,33 +146,60 @@ export async function getClientBeautyProfileForBooking(
   if (error) throw error;
   if (!data) return null;
 
-  const d = data as BookingBeautyProfileRow;
-  return {
-    hairType: toPickList(d.hair_type),
-    scalpCondition: toPickList(d.scalp_condition),
-    hairGoals: d.hair_goals ?? [],
-    treatmentHistory: d.treatment_history ?? [],
-    skinType: toPickList(d.skin_type),
-    skinTone: d.skin_tone ?? null,
-    skinConcerns: d.skin_concerns ?? [],
-    sensitiveAreas: d.sensitive_areas ?? [],
-    nailLength: toPickList(d.nail_length),
-    nailShape: toPickList(d.nail_shape),
-    nailCondition: d.nail_condition ?? [],
-    nailService: d.nail_service ?? [],
-    nailStyle: d.nail_style ?? [],
-    nailColours: d.nail_colours ?? [],
-    lashStyle: toPickList(d.lash_style),
-    lashStatus: d.lash_status ?? null,
-    browStyle: toPickList(d.brow_style),
-    browCondition: toPickList(d.brow_condition),
-    makeupCoverage: toPickList(d.makeup_coverage),
-    makeupFinish: toPickList(d.makeup_finish),
-    makeupEyes: toPickList(d.makeup_eyes),
-    makeupLips: toPickList(d.makeup_lips),
-    styleVibe: toPickList(d.style_vibe),
-    allergies: d.allergies ?? [],
-    medicalNotes: d.medical_notes ?? null,
-    photographyConsent: d.photography_consent ?? false,
-  };
+  return toClientBeautyProfile(data as BookingBeautyProfileRow);
+}
+
+/**
+ * A client's Beauty Profile as one of their providers sees it, outside any
+ * single booking (My Clientele). Same gate as the booking page: null until
+ * this provider has accepted a booking with them (confirmed, in progress or
+ * completed), and only the fields the categories of those bookings get —
+ * allergies, medical notes and photography consent always. Null means "not
+ * shared", never "nothing on file". See
+ * 20261118205332_clientele_notes_and_beauty_profile.sql.
+ */
+export async function getClientBeautyProfileForProvider(
+  clientUserId: string,
+): Promise<ClientBeautyProfile | null> {
+  const { data, error } = await supabase
+    .rpc("get_client_beauty_profile_for_provider", { p_client_id: clientUserId })
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return toClientBeautyProfile(data as ClientBeautyProfileRow);
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDER'S PRIVATE NOTES ON A CLIENT
+// ─────────────────────────────────────────────────────────
+
+export interface ClientNote {
+  note: string;
+  updatedAt: string;
+}
+
+/** This provider's own note on a client, or null if they haven't written
+ *  one. The client never sees it. */
+export async function getMyClientNote(clientUserId: string): Promise<ClientNote | null> {
+  const { data, error } = await supabase
+    .rpc("get_my_client_note", { p_client_id: clientUserId })
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as { note: string; updated_at: string };
+  return { note: row.note, updatedAt: row.updated_at };
+}
+
+/** Saves (or, when blank, deletes) this provider's note on a client. Returns
+ *  when it was saved, or null when it was cleared. */
+export async function saveMyClientNote(
+  clientUserId: string,
+  note: string,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc("save_my_client_note", {
+    p_client_id: clientUserId,
+    p_note: note,
+  });
+  if (error) throw error;
+  return (data as string | null) ?? null;
 }
