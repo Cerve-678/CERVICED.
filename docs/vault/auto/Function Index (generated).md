@@ -5,7 +5,7 @@
 
 #generated
 
-**4067 functions** across **567 files**.
+**4068 functions** across **567 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -233,7 +233,7 @@
 ### `src/features/payments/` (6)
 - `bankDisputeStatus.ts` — **bankDisputeStates** · **bookingDisputeLabel** · **feeDisputeLabel** · stageOf
 - `bookingPaymentTimeline.ts` — appointmentWhen · **bookingPaymentTimeline** · dayAndTime · parseDay · **payoutNeedsAttention** · **payoutStatusLabel** · **shortDay** · **tipStatusLabel**
-- `PaymentsCardKit.tsx` — **InfoLabel** · **PaySection** · **ProcessingLabel** · **StatusChip**
+- `PaymentsCardKit.tsx` — **InfoLabel** · **PayCard** · **PaySection** · **ProcessingLabel** · **StatusChip**
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
 - `tipsByBooking.ts` — **groupTipsByBooking**
