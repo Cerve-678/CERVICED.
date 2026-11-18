@@ -72,6 +72,7 @@ import {
   addPortfolioItem,
   createMyService,
   deletePortfolioItem,
+  forgetCachedProviderProfile,
   getMyBookmarkCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
@@ -1187,6 +1188,25 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('Branding');
   }, [navigation]);
 
+  // Tapping the logo shows the profile exactly as clients see it. Clients
+  // can't open it at all before go-live, so say that rather than open a
+  // "Provider not found" page. Unknown status (load failed) still opens it,
+  // same as the QR sheet.
+  const handleOpenClientView = useCallback(() => {
+    if (!providerSlug) return;
+    Haptics.selectionAsync().catch(() => {});
+    if (goLive?.isLive === false) {
+      Alert.alert(
+        'Not live yet',
+        'Clients will see your profile once you go live. Finish the steps on this page to get there.',
+      );
+      return;
+    }
+    // Fresh, so anything just changed in Edit Profile shows.
+    forgetCachedProviderProfile(providerSlug);
+    navigation.navigate('MyPublicProfile', { providerId: providerSlug });
+  }, [navigation, providerSlug, goLive?.isLive]);
+
   // Today's two cards. They haptick on their own presses, so these only
   // navigate.
   const todaySchedule = useTodaySchedule(providerId);
@@ -1855,20 +1875,28 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </Text>
               </View>
 
-              {providerData.logo ? (
-                <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
-                  <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                    {providerData.providerName
-                      .split(' ')
-                      .map(w => w[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <TouchableOpacity
+                onPress={handleOpenClientView}
+                disabled={!providerSlug}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="See your profile as clients see it"
+              >
+                {providerData.logo ? (
+                  <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
+                    <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
+                      {providerData.providerName
+                        .split(' ')
+                        .map(w => w[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Counts live here rather than in a sentence under the Services

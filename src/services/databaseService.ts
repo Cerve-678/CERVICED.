@@ -1713,6 +1713,22 @@ export async function getProviderBySlug(
   }
 }
 
+/**
+ * Drop a profile's cached copy so the next open reads it fresh. A provider
+ * previewing their own profile right after an edit would otherwise see the
+ * version from up to a minute ago. Also stops the next open joining a request
+ * that was already in flight before the edit.
+ */
+export function forgetCachedProviderProfile(slug: string): void {
+  const normalizedSlug = slug.trim();
+  if (!normalizedSlug) return;
+  providerProfileCache.delete(normalizedSlug);
+  providerProfilePreviewCache.delete(normalizedSlug);
+  providerProfileRequests.delete(normalizedSlug);
+  providerProfilePreviewRequests.delete(normalizedSlug);
+  providerProfileRequestTokens.delete(normalizedSlug);
+}
+
 /** Warm the fast first-paint cache before a navigation transition completes. */
 export function prefetchProviderBySlug(slug: string): void {
   void getProviderProfilePreviewBySlug(slug).catch((error: unknown) => {

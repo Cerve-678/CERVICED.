@@ -80,8 +80,8 @@ Curated overview: [[Screens & Navigation]].
 - `Branding`
 - `BusinessInfo`
 - `ProviderServicesMain`
-- `ProviderAccountMain`
 - `MyPublicProfile`
+- `ProviderAccountMain`
 - `PublicProviderProfile`
 - `NotificationSettings`
 - `Achievements`

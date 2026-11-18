@@ -308,6 +308,8 @@ export type ProviderHomeStackParamList = {
 // Provider Services Stack (profile preview + edit via InfoRegScreen)
 export type ProviderServicesStackParamList = {
   ProviderServicesMain: undefined;
+  // Tapping the logo on My Profile: their own profile, as clients see it.
+  MyPublicProfile: { providerId: string };
   AccountHolderDetails: { addDetailsForCurrentUser: true };
   EditProfile: { transferProviderId?: string } | undefined;
   // Pushed from EditProfile's "Your Terms & Conditions" card, so the form
