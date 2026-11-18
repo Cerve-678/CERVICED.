@@ -5,7 +5,7 @@
 
 #generated
 
-**4142 functions** across **605 files**.
+**4136 functions** across **604 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -303,7 +303,7 @@
 - `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
-- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · LaceTrimmedCard · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
+- `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · Squiggle · **StyledPolicyList** · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
 - `ProfileStylePreview.tsx` — aboutBody · lines · noop · previewPrice · **ProfileStylePreview**
 - `ProviderLogoCircle.tsx` — **ProviderLogoCircle**
@@ -328,14 +328,13 @@
 - `WaxSeal.tsx` — **sealLetter** · **waxColour** · **WaxSeal**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (11)
+### `src/features/providers/heroes/` (10)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `DemureHeroes.tsx` — **BowHero** · **HushBoxes** · **HushHero** · **LoungeHero** · **SoftFocusHero** · **StripesHero** · **stripesHeroColour**
 - `demureOrnaments.tsx` — **BowGlyph** · **Pearl** · **PearlRing** · **ribbonColours** · **stripeColours**
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
-- `LaceHero.tsx` — LaceDrape · **LaceHero** · **LaceRosette** · **LaceTrim** · scallopXs
 - `NovelHero.tsx` — **NovelHero** · subtitle
 - `SealedHero.tsx` — Postmark · **SealedEnvelope**
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**

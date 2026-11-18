@@ -23,7 +23,6 @@ export type PageStyleKey =
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
   | 'snapshot' | 'signature' | 'quiet'
   | 'sealed'
-  | 'lace'
   | 'sheer'
   | 'embossed'
   | 'callingCard'
@@ -59,7 +58,6 @@ export type PageHeading =
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
   | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
   | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
-  | 'lacePair'  // a lowercase script word in the accent over spaced display caps (Lace)
   | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
   | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
   | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
@@ -91,7 +89,6 @@ export type PageCards =
   | 'topRule'  // a square card with a heavy rule along its top edge
   | 'block'    // a square card with a thick dark outline
   | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
-  | 'lace'    // a fine-lined card with a scalloped lace trim hanging from its foot (Lace)
   | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
   | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
   | 'clipped' // a near-square card with an inner rule, held at the top by a clip in the accent (Calling Card)
@@ -121,7 +118,6 @@ export type PagePolicies =
   | 'stickers'  // two-up filled tiles, each tilted a little
   | 'definition' // a small caps label beside each value, between hairlines
   | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
-  | 'rosettes'  // one card, each policy beside a small lace rosette (Lace)
   | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
   | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
   | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
@@ -160,7 +156,6 @@ export type PageHero =
   | 'signed'     // a big ringed logo with the whole name signed across its foot
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
   | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
-  | 'lace'      // a piece of lace cloth draped across the foot of the hero, a clean ringed logo, the name in script
   | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
   | 'pressed'  // pressed straight into the theme backdrop, no card: the logo in a blind-stamped ring, the name raised out of it
@@ -351,14 +346,6 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     key: 'sealed', name: 'Sealed', description: 'Your initial in a wax seal, your logo tucked in an envelope, stamped photos',
     heading: 'sealCaps', cards: 'stationery', policies: 'sealedNotes', logo: 'circle',
     hero: 'envelope', aboutInHero: false, stampPhotos: true,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-  },
-  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
-  // lace cloth dropped across the hero, the way fabric falls, not framing the logo (owner).
-  {
-    key: 'lace', name: 'Lace', description: 'Lace cloth draped over your photo, a script name, a lace-trimmed price list',
-    heading: 'lacePair', cards: 'lace', policies: 'rosettes', logo: 'doubleRing',
-    hero: 'lace', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
