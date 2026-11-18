@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const root = path.join(__dirname, '..', '..');
 const read = (...p: string[]): string =>
@@ -11,7 +12,7 @@ const tapHandler = () => read('src', 'services', 'notificationTapHandler.ts');
 const edgeFunction = () =>
   read('supabase', 'functions', 'send-push-notification', 'index.ts');
 const pushService = () => read('src', 'services', 'pushNotificationService.ts');
-const databaseService = () => read('src', 'services', 'databaseService.ts');
+const databaseService = () => readDatabaseLayer();
 const providerProfileLink = () =>
   read('src', 'navigation', 'openProviderProfileLink.ts');
 

@@ -12,6 +12,7 @@ import {
 } from '../features/providers/ownSections';
 import { PAGE_SECTION_TITLES, chapterHeading, customHeadingPair, headingPair } from '../constants/pageStyles';
 import { mapProviderProfileData } from '../features/providers/profileMapper';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const read = (path: string) => readFileSync(join(__dirname, '..', path), 'utf8');
 
@@ -117,13 +118,13 @@ describe('own sections on the profile', () => {
   });
 
   it('is in the public profile select and drawn after Additional Information', () => {
-    expect(read('services/databaseService.ts')).toMatch(/PROVIDER_PROFILE_PUBLIC_FIELDS = `[\s\S]*?\bprofile_sections,[\s\S]*?`;/);
+    expect(readDatabaseLayer()).toMatch(/PROVIDER_PROFILE_PUBLIC_FIELDS = `[\s\S]*?\bprofile_sections,[\s\S]*?`;/);
     const screen = read('screens/client/ProviderProfileScreen.tsx');
     expect(screen.indexOf('<ProviderOwnSections')).toBeGreaterThan(screen.indexOf('<ProviderAdditionalInfoSection'));
   });
 
   it('is saved cleaned with the agreement time, only when it changed, and only once agreed', () => {
-    expect(read('services/databaseService.ts')).toMatch(/update\(\{ profile_sections: \{ \.\.\.normalizeOwnSections\(sections\), agreedAt \} \}\)/);
+    expect(readDatabaseLayer()).toMatch(/update\(\{ profile_sections: \{ \.\.\.normalizeOwnSections\(sections\), agreedAt \} \}\)/);
     const screen = read('screens/provider/PoliciesScreen.tsx');
     expect(screen).toMatch(/const ownChanged = ownSectionsChanged\(ownDraft, loadedOwn\)/);
     expect(screen).toMatch(/if \(ownChanged && !termsAcknowledged\) \{/);

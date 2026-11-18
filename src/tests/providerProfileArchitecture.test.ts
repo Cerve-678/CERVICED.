@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readDatabaseLayer } from "./databaseLayerSource";
 
 describe("ProviderProfileScreen data architecture", () => {
   const source = readFileSync(
@@ -156,10 +157,7 @@ describe("ProviderProfileScreen data architecture", () => {
   });
 
   it("resolves an owned provider id deterministically and does not swallow the error", () => {
-    const db = readFileSync(
-      join(__dirname, "../services/databaseService.ts"),
-      "utf8",
-    );
+    const db = readDatabaseLayer();
     const fn = db.slice(
       db.indexOf("export async function getProviderIdForUserId"),
       db.indexOf("export async function getProviderBrandingByUserId"),
