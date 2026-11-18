@@ -237,12 +237,14 @@ const st = StyleSheet.create({
   qRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth },
   qIcon: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   qLabel: { flex: 1, fontSize: 12, fontWeight: '600' },
-  belowCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
-  chips: { flex: 1, flexDirection: 'row', gap: 6, overflow: 'hidden' },
-  chip: { borderRadius: 100, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 6, overflow: 'hidden', flexShrink: 1 },
+  // Chips get the full width and wrap, so service names show whole; the
+  // Auto-send switch sits under them.
+  belowCard: { gap: 8, marginTop: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { borderRadius: 100, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 6, overflow: 'hidden', maxWidth: '100%' },
   chipLit: { borderRadius: 100, borderWidth: 1 },
   chipText: { fontSize: 12, fontWeight: '600' },
-  auto: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  auto: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-end' },
   autoText: { fontSize: 11, fontWeight: '700' },
   track: { width: 26, height: 16, borderRadius: 8, overflow: 'hidden', justifyContent: 'center' },
   trackOn: { borderRadius: 8 },
