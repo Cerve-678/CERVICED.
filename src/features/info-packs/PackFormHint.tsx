@@ -174,7 +174,9 @@ export function PackFormHint({
 }
 
 const s = StyleSheet.create({
-  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12, marginTop: 12 },
+  // Spaced like the cards around it (Card's marginBottom: 14), so the card
+  // under it isn't flush against it (owner, 2026-11-18).
+  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 12, marginBottom: 14 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   title: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 14 },
   body: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18, marginTop: 2 },

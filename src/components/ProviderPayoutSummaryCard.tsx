@@ -21,7 +21,7 @@ import {
   type ProviderPayout,
   type ProviderTipEarning,
 } from '../services/providerPaymentService';
-import type { PayoutSchedule } from '../constants/payoutSchedule';
+import { PAYOUT_RELEASE_HOURS, type PayoutSchedule } from '../constants/payoutSchedule';
 import { isDarkColor } from '../constants/providerThemes';
 import { paydayLabel, upcomingPaydays } from '../features/payments/paydayForecast';
 import { logger } from '../utils/logger';
@@ -144,6 +144,10 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
             <Ionicons name="chevron-forward" size={11} color={accentColor} />
           </View>
         </TouchableOpacity>
+        {/* What the card is (user, 2026-11-18: "what is it showing exactly?"). */}
+        <Text style={[styles.note, { color: subTextColor, marginTop: -4, marginBottom: 10 }]}>
+          Money from your bookings and tips on its way to your bank, by the day it should arrive.
+        </Text>
 
         <View style={styles.days}>
           {paydays.map(day => {
@@ -170,6 +174,9 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
           })}
         </View>
 
+        <Text style={[styles.statLabel, { color: subTextColor, marginTop: 10, marginBottom: 0 }]}>
+          {`IN YOUR ${paydayLabel(picked.date).toUpperCase()} PAYDAY`}
+        </Text>
         {lines.map(item => (
           <View key={item.key} style={[styles.line, { borderTopColor: borderColor }]}>
             <Text style={[styles.lineTitle, { color: textColor }]} numberOfLines={1}>
@@ -182,7 +189,9 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
         {more > 0 && (
           <Text style={[styles.note, { color: subTextColor, marginTop: 6 }]}>and {more} more</Text>
         )}
-        <Text style={[styles.note, { color: subTextColor, marginTop: 8 }]}>Expected dates, from your payout schedule.</Text>
+        <Text style={[styles.note, { color: subTextColor, marginTop: 8 }]}>
+          Amounts are what you get. Dates are estimates from your payout schedule. Tap a day to see what's in it.
+        </Text>
         {finance && !finance.livemode && (
           <Text style={[styles.testMode, { color: subTextColor }]}>Test mode · no real money moves</Text>
         )}
@@ -222,6 +231,9 @@ const ProviderPayoutSummaryCard: React.FC<ProviderPayoutSummaryCardProps> = ({
             </Text>
           </View>
         </View>
+        <Text style={[styles.note, { color: subTextColor, marginBottom: 6 }]}>
+          Ready for payday is cleared money Stripe sends on your next payday. Processing is booking payments held until {PAYOUT_RELEASE_HOURS} hours after the appointment.
+        </Text>
         <Text style={[styles.note, { color: subTextColor }]}>
           {nextPayout
             ? `Next to your bank: ${money(nextPayout.amount, nextPayout.currency)}, expected ${arrival(nextPayout.arrivalDate)}`

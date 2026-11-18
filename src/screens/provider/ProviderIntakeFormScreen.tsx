@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   View,
@@ -271,7 +271,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setEditingId(form.id);
     setTitle(form.title);
     setQuestions(form.questions.map(q => ({ ...q, id: makeId() })));
-    setSelectedServices(form.serviceNames);
+    setSelectedServices([...new Set(form.serviceNames)]);
     setAutoSend(form.autoSend);
     setRequiresSignature(form.requiresSignature);
     setIsTerms(form.isTerms);
@@ -291,7 +291,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         ]);
 
         setLibraryForms(forms);
-        const svcNames = services.map(s => s.name);
+        // Forms link to services by name, so two services with the same name
+        // (e.g. "Skin Consultation" in two categories) are one choice here.
+        // Listed twice, they also gave two chips the same key.
+        const svcNames = [...new Set(services.map(s => s.name))];
         setProviderServiceNames(svcNames);
         setRelevantTemplates(getRelevantTemplates(
           declaredCategories(
@@ -1243,6 +1246,9 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
       Animated.spring(lift, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
     ]).start();
   }, [fade, index, lift]);
+  // Each linked service once: a name can be saved twice from before services
+  // were listed once each.
+  const linkedServices = useMemo(() => [...new Set(form.serviceNames)], [form.serviceNames]);
 
   return (
     <Animated.View style={[styles.libraryCard, { backgroundColor: P.card, borderColor: P.border, opacity: fade, transform: [{ translateY: lift }] }]}>
@@ -1283,14 +1289,14 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
             <Text style={[styles.badgeText, { color: P.sub }]}>Due {deadlineLabel(form.deadlineHours).toLowerCase()}</Text>
           </View>
         )}
-        {form.serviceNames.slice(0, 3).map(name => (
+        {linkedServices.slice(0, 3).map(name => (
           <View key={name} style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
             <Text style={[styles.badgeText, { color: P.sub }]}>{name}</Text>
           </View>
         ))}
-        {form.serviceNames.length > 3 && (
+        {linkedServices.length > 3 && (
           <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
-            <Text style={[styles.badgeText, { color: P.sub }]}>+{form.serviceNames.length - 3} more</Text>
+            <Text style={[styles.badgeText, { color: P.sub }]}>+{linkedServices.length - 3} more</Text>
           </View>
         )}
       </View>
