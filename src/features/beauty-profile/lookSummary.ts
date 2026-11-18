@@ -19,6 +19,8 @@ const NAIL_SERVICE_WORD: Record<string, string> = {
   'Hard gel': 'hard gel',
   'Natural manicure': 'natural',
   'Press-ons': 'press-on',
+  Polygel: 'polygel',
+  'Dip powder': 'dip',
 };
 
 /** "4C", "curly", "3B": hair types read as they're said. */

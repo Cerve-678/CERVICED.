@@ -12,7 +12,6 @@ import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle, Defs, Path, Polygon, Text as SvgText, TextPath } from "react-native-svg";
 
 import { LogoCircle } from "../../components/FramedLogo";
-import { LaceHero } from "./heroes/LaceHero";
 import { PressedHero } from "./heroes/EmbossedHero";
 import { BoutiqueHero, cardInk } from "./heroes/BoutiqueHero";
 import { GazetteHero } from "./heroes/GazetteHero";
@@ -731,25 +730,6 @@ export function ProfileHeroLayout({
         </View>
       );
     }
-    case "lace":
-      // Lace: a piece of lace fabric draped across the foot of the hero, the
-      // logo clean above it, the name in script (heroes/LaceHero).
-      return (
-        <LaceHero
-          name={name}
-          kicker={kicker}
-          location={location}
-          heroText={heroText}
-          heroSub={heroSub}
-          heroIsDark={heroIsDark}
-          accent={accent}
-          renderLogo={renderLogo}
-          details={details}
-          tick={tick}
-          shadow={shadow}
-        />
-      );
-
     case "veil":
       // Sheer: their photo under a see-through black veil (heroes/SheerHero).
       return (
