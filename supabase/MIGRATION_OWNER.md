@@ -53,8 +53,14 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  feat/policies-own-sections (20261118120000_provider_profile_sections), taken 2026-11-18
+OWNER:  (none)
 ```
+
+### Applied 2026-11-18 (provider's own profile sections)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118120000 | `provider_profile_sections` | **APPLIED 2026-11-18** on the user's go-ahead (Policies & Info part 3, "yes u should"), via `supabase db query --linked -f` from the main folder. Right before: live max `20261117130000`, lock taken by `feat/policies-own-sections`, no open PR with a higher version (`fix/booking-times-uk-time`'s `20261113140000` is below the frontier). Forced-rollback dry run passed on live (22 providers default, `[]` refused, 40 KB refused; live unchanged after). Verified live: version recorded (live max); `providers.profile_sections jsonb NOT NULL DEFAULT '{}'`; `providers_profile_sections_shape` check present; 0 non-default rows; RLS still on. As written: one additive column plus a shape/size check; no policy or grant change (`providers` uses table-level grants). Applied before the app change merged (the public profile select names the column). Written on `feat/policies-own-sections` (#597). |
 
 ### Applied 2026-11-17 (Beauty Profile style questions)
 
