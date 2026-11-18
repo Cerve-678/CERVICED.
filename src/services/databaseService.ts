@@ -12160,13 +12160,9 @@ interface BookingFeeTermsRow {
   policy_snapshot: Record<string, unknown> | null;
 }
 
-export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
-  const { data, error } = await supabase.from('bookings')
-    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, deposit_amount, payment_status, cancelled_by, cancelled_at, confirmed_at, cancel_notice_hours, late_reschedule_from, policy_snapshot')
-    .eq('id', bookingId)
-    .single();
-  if (error) throw error;
-  const row = data as BookingFeeTermsRow;
+const BOOKING_FEE_TERMS_COLUMNS = 'status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, deposit_amount, payment_status, cancelled_by, cancelled_at, confirmed_at, cancel_notice_hours, late_reschedule_from, policy_snapshot';
+
+function mapBookingFeeTerms(row: BookingFeeTermsRow): BookingFeeTerms {
   return {
     status: row.status,
     bookingDate: row.booking_date,
@@ -12184,6 +12180,67 @@ export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeT
     lateRescheduleFrom: row.late_reschedule_from,
     cancelPenalty: typeof row.policy_snapshot?.['cancelPenalty'] === 'string' ? row.policy_snapshot['cancelPenalty'] as string : null,
   };
+}
+
+export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
+  const { data, error } = await supabase.from('bookings')
+    .select(BOOKING_FEE_TERMS_COLUMNS)
+    .eq('id', bookingId)
+    .single();
+  if (error) throw error;
+  return mapBookingFeeTerms(data as BookingFeeTermsRow);
+}
+
+/** A recent booking of the provider's own that has a late, no-show or
+ *  late-cancel fee on it, with the fee attempts made so far — Payments &
+ *  payouts decides which can be charged now (bookingFeeRules.feesToChargeNow). */
+export interface FeeChargeCandidate {
+  bookingId: string;
+  customerName: string | null;
+  serviceName: string | null;
+  terms: BookingFeeTerms;
+  charges: Pick<BookingFeeCharge, 'status'>[];
+}
+
+/** Fees can be charged until 24 hours after the appointment ends, and a late
+ *  cancel can come up to the notice period before it, so this reads a short
+ *  window either side of today. Two queries, however many bookings. */
+export async function getFeeChargeCandidates(): Promise<FeeChargeCandidate[]> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return [];
+  const day = (offset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  // Own bookings only — RLS plus this provider_id filter.
+  const { data, error } = await supabase.from('bookings')
+    .select(`id, customer_name, service_name_snapshot, ${BOOKING_FEE_TERMS_COLUMNS}`)
+    .eq('provider_id', provider.id)
+    .gte('booking_date', day(-2))
+    .lte('booking_date', day(30))
+    .or('late_fee_pence.gt.0,no_show_fee_pence.gt.0,late_cancel_fee_pence.gt.0')
+    .order('booking_date', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  const rows = (data ?? []) as (BookingFeeTermsRow & { id: string; customer_name: string | null; service_name_snapshot: string | null })[];
+  if (rows.length === 0) return [];
+  const { data: charges, error: chargesError } = await supabase.from('booking_fee_charges')
+    .select('booking_id, status')
+    .in('booking_id', rows.map(r => r.id))
+    .limit(500);
+  if (chargesError) throw chargesError;
+  const byBooking = new Map<string, Pick<BookingFeeCharge, 'status'>[]>();
+  for (const c of (charges ?? []) as { booking_id: string; status: BookingFeeCharge['status'] }[]) {
+    byBooking.set(c.booking_id, [...(byBooking.get(c.booking_id) ?? []), { status: c.status }]);
+  }
+  return rows.map(r => ({
+    bookingId: r.id,
+    customerName: r.customer_name,
+    serviceName: r.service_name_snapshot,
+    terms: mapBookingFeeTerms(r),
+    charges: byBooking.get(r.id) ?? [],
+  }));
 }
 
 /** The client's own booking: what the provider could charge on top of the
