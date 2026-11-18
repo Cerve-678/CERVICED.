@@ -479,7 +479,7 @@ export type PageSectionKey =
   | 'about' | 'policies' | 'services' | 'reviews' | 'hours' | 'contact'
   | 'info' | 'portfolio' | 'specialities' | 'policyPages'
   // The provider's own sections (features/providers/ownSections.ts), under Additional Information.
-  | 'keyInfo' | 'faq' | 'aftercare' | 'houseRules' | 'disclaimer';
+  | 'keyInfo' | 'faq' | 'aftercare' | 'custom' | 'disclaimer';
 
 /** The plain title of each section — what Classic shows, and what screen readers hear in every style. */
 export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
@@ -496,7 +496,8 @@ export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
   keyInfo: 'Key Information',
   faq: 'FAQs',
   aftercare: 'Aftercare',
-  houseRules: 'House Rules',
+  // Only a fallback: a Custom section is headed with its own name (customHeading).
+  custom: 'More Information',
   disclaimer: 'Disclaimer',
 };
 
@@ -516,12 +517,20 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
   keyInfo: ['Key', 'Information'],
   faq: ['Common', 'Questions'],
   aftercare: ['Your', 'Aftercare'],
-  houseRules: ['House', 'Rules'],
+  custom: ['More', 'Information'],
   disclaimer: ['The', 'Disclaimer'],
 };
 
 export function headingPair(section: PageSectionKey): [string, string] {
   return HEADING_PAIRS[section];
+}
+
+/** A Custom section's name split the way the two-part headings need it: the
+ *  first word as the lead-in, the rest as the name ("Before" / "you arrive").
+ *  A one-word name is all name, with no lead-in. */
+export function customHeadingPair(title: string): [string, string] {
+  const words = title.trim().split(/\s+/);
+  return words.length > 1 ? [words[0]!, words.slice(1).join(' ')] : ['', words[0] ?? ''];
 }
 
 /** Hush's section titles: small quiet words, drawn in spaced caps between hairlines. */
@@ -539,7 +548,7 @@ export const HUSH_TITLES: Record<PageSectionKey, string> = {
   keyInfo: 'key information',
   faq: 'questions',
   aftercare: 'aftercare',
-  houseRules: 'house rules',
+  custom: 'more information',
   disclaimer: 'disclaimer',
 };
 
@@ -558,8 +567,8 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   keyInfo: '11',
   faq: '12',
   aftercare: '13',
-  houseRules: '14',
-  disclaimer: '15',
+  disclaimer: '14',
+  custom: '15',
 };
 
 /** Novel's chapter titles: plain section names under each "Chapter" line. */
@@ -577,7 +586,7 @@ const CHAPTER_TITLES: Record<PageSectionKey, string> = {
   keyInfo: 'Key Information',
   faq: 'Common Questions',
   aftercare: 'Your Aftercare',
-  houseRules: 'House Rules',
+  custom: 'More Information',
   disclaimer: 'Disclaimer',
 };
 

@@ -171,7 +171,7 @@ export default function BrandingScreen({ navigation }: any) {
   // Branding → Your Photos (Hush): their work photos and the ones picked for
   // its hero, saved with everything else.
   const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
-  // Their About, categories and first services, so Preview reads like their page.
+  // Their About and categories, so Preview reads like their page (services stay outlines).
   const [previewContent, setPreviewContent]   = useState<PreviewContent | undefined>(undefined);
   const [previewPolicyPages, setPreviewPolicyPages] = useState<string[]>([]);
   const [previewPolicyEdges, setPreviewPolicyEdges] = useState<Record<string, PolicyImageEdge>>({});
@@ -204,7 +204,7 @@ export default function BrandingScreen({ navigation }: any) {
           setHeroKicker(labels.kicker);
           setHeroLocation(labels.location);
         }
-        // Their own words, menu, policy pictures and rating for the preview.
+        // Their own words, categories, policy pictures and rating for the preview.
         setPreviewContent(previewContentFrom(cached));
         setPreviewPolicyPages(policyImageUrls(cached.bookingPolicies));
         setPreviewPolicyEdges(policyImageEdges(cached.bookingPolicies));

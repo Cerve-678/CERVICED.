@@ -212,8 +212,9 @@ export function ProfileStylePreview({
   const servicesForSelected = content?.servicesByCategory?.[selectedCategory]
     ?? (selectedCategory === categories[0] ? content?.services : undefined)
     ?? [];
-  // Branding outlines the first two; Info Reg shows the lot.
-  const services = full ? servicesForSelected : servicesForSelected.slice(0, 2);
+  // Info Reg shows the lot. Branding keeps two outline cards and lists none of
+  // their services: it's about the look, not the menu (owner, 2026-11-18).
+  const services = full ? servicesForSelected : [];
   const categoryDescription = full ? content?.categoryDescriptions?.[selectedCategory]?.trim() : undefined;
 
   // Policy pictures, in the layout Branding → Policy Pictures picks. Classic
