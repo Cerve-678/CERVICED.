@@ -15,7 +15,7 @@ import type {
 } from '../types/maintenance';
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
-import { formProblem } from "../features/intake-forms/sendForms";
+import { bookingsHoldingForm, formProblem, type SentFormRow } from "../features/intake-forms/sendForms";
 import type { SavedCard } from '../features/payments/savedCards';
 import type { MissRecord as BeccaMissRecord } from './becca/missLog';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
@@ -7013,14 +7013,9 @@ export async function sendLibraryFormToBookings(
   if (!provider) throw new Error("No provider profile");
 
   const bookingIds = [...new Set(targets.map(t => t.bookingId))];
-  const [libraryRead, existingRead] = await Promise.all([
+  const [libraryRead, sentRows] = await Promise.all([
     supabase.from("provider_form_library").select("*").eq("id", libraryFormId).single(),
-    supabase
-      .from("booking_intake_forms")
-      .select("booking_id")
-      .eq("library_form_id", libraryFormId)
-      .in("booking_id", bookingIds)
-      .limit(bookingIds.length),
+    getSentFormsOnBookings(bookingIds),
   ]);
   const lf = libraryRead.data;
   if (libraryRead.error || !lf) throw new Error("Library form not found");
@@ -7028,8 +7023,7 @@ export async function sendLibraryFormToBookings(
   // reason; this is the last stop).
   const problem = formProblem((lf.questions ?? []) as IntakeFormQuestion[]);
   if (problem) throw new Error(problem);
-  if (existingRead.error) throw existingRead.error;
-  const already = new Set((existingRead.data ?? []).map((r: { booking_id: string }) => r.booking_id));
+  const already = new Set(bookingsHoldingForm(sentRows, libraryFormId, lf.title));
 
   const seen = new Set<string>();
   const fresh = targets.filter(t => {
@@ -7076,14 +7070,24 @@ export async function getBookingIdsWithLibraryForm(
   bookingIds: string[],
 ): Promise<string[]> {
   if (bookingIds.length === 0) return [];
+  const [libraryRead, sentRows] = await Promise.all([
+    supabase.from("provider_form_library").select("title").eq("id", libraryFormId).single(),
+    getSentFormsOnBookings(bookingIds),
+  ]);
+  if (libraryRead.error) throw libraryRead.error;
+  return bookingsHoldingForm(sentRows, libraryFormId, (libraryRead.data as { title: string }).title);
+}
+
+/** Every form already sent on these bookings (a few per booking at most). */
+async function getSentFormsOnBookings(bookingIds: string[]): Promise<SentFormRow[]> {
+  if (bookingIds.length === 0) return [];
   const { data, error } = await supabase
     .from("booking_intake_forms")
-    .select("booking_id")
-    .eq("library_form_id", libraryFormId)
+    .select("booking_id, library_form_id, title")
     .in("booking_id", bookingIds)
-    .limit(bookingIds.length);
+    .limit(bookingIds.length * 10);
   if (error) throw error;
-  return (data ?? []).map((row: { booking_id: string }) => row.booking_id);
+  return (data ?? []) as SentFormRow[];
 }
 
 /** Tell the client (in-app + push via DB trigger) that a form is waiting for them.
