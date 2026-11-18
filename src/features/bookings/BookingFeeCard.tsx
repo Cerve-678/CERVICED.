@@ -10,7 +10,7 @@ import { buildPaymentSheetAppearance } from '../payments/paymentSheetAppearance'
 import { formatShortDayDate } from '../../utils/dateUtils';
 import { PaymentRequestError } from '../../utils/paymentRequestError';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
-import { feeChargeWindow, feeDisputeOpen, feeKindLabel, liveFee } from './bookingFeeRules';
+import { bookingFeeButtons, feeChargeWindow, feeDisputeOpen, feeKindLabel, liveFee } from './bookingFeeRules';
 
 // Late-arrival, no-show and late cancellation fees on one booking (auto-memory
 // late-and-no-show-fees-decision, late-cancel-half-top-up). The provider
@@ -90,6 +90,21 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   const lastFailed = charges?.[0]?.status === 'failed' ? charges[0] : null;
   const window = terms && !fee ? feeChargeWindow(terms, Date.now()) : null;
 
+  // Provider's booking page: a button per fee on their policy, greyed out
+  // until it can be charged. Re-checked every minute while one shows, so it
+  // turns on (and goes) without leaving the page.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const feeButtons = useMemo(
+    () => (role === 'provider' && onOpenPayments && terms && !fee ? bookingFeeButtons(terms, nowMs) : []),
+    [role, onOpenPayments, terms, fee, nowMs],
+  );
+  const hasFeeButtons = feeButtons.length > 0;
+  useEffect(() => {
+    if (!hasFeeButtons) return;
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [hasFeeButtons]);
+
   const run = useCallback(async (action: () => Promise<string | void>, fallback: string, context: string, done?: string) => {
     setBusy(true);
     try {
@@ -155,6 +170,42 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   }, 'Could not take this payment.', 'BookingFeeCard.pay');
 
   if (!charges) return null;
+
+  if (role === 'provider' && onOpenPayments && hasFeeButtons) {
+    return (
+      <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+        <Text style={[st.heading, { color: C.sub }]}>LATE & NO-SHOW FEES</Text>
+        {lastFailed && <Text style={[st.sub, { color: C.sub }]}>Your last attempt couldn't be collected — the client's bank declined it.</Text>}
+        {feeButtons.map(b => {
+          const label = `Charge ${b.kind === 'late' ? 'late fee' : 'no-show fee'} · ${pounds(b.pence)}`;
+          const off = !b.enabled || busy;
+          return (
+            <View key={b.kind} style={{ gap: 4 }}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${label}. ${b.note}`}
+                accessibilityState={{ disabled: off }}
+                disabled={off}
+                onPress={() => confirmCharge(b.kind, b.pence)}
+                activeOpacity={0.75}
+                style={[st.button, b.enabled
+                  ? { backgroundColor: C.accent }
+                  : { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}
+              >
+                {busy && b.enabled
+                  ? <ActivityIndicator color={C.onAccent} size="small" />
+                  : <Text style={[st.buttonText, { color: b.enabled ? C.onAccent : C.sub }]}>{label}</Text>}
+              </TouchableOpacity>
+              <Text style={[st.sub, { color: C.sub, textAlign: 'center' }]}>{b.note}</Text>
+            </View>
+          );
+        })}
+        <TouchableOpacity accessibilityRole="button" onPress={onOpenPayments} activeOpacity={0.7} hitSlop={8} style={{ alignSelf: 'center', marginTop: 4 }}>
+          <Text style={[st.link, { color: C.accent }]}>Refunds and disputes are in Payments ›</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (role === 'provider' && onOpenPayments) {
     const line = providerFeeSummary(fee, terms, window, otherName);
