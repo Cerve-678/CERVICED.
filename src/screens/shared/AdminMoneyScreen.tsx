@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView,
+  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
@@ -81,6 +81,8 @@ export default function AdminMoneyScreen({ navigation }: any) {
           try {
             await adminRetryPayout(payoutId);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            // Reloading turns the card's button into the "In the next payment
+            // run" panel, read from the server, so it's still there on return.
             await load();
           } catch (err) {
             showAlert("Couldn't retry it", toUserMessageAllowingDbGuard(err, 'Please try again in a moment.', 'AdminMoney.retry'));
@@ -136,7 +138,16 @@ export default function AdminMoneyScreen({ navigation }: any) {
   }, [picked, load, showAlert, showConfirm]);
 
   const now = useMemo(() => new Date(), [data]);
-  const failed = useMemo(() => (data?.failed ?? []).map(describeFailedPayout), [data]);
+  const failed = useMemo(() => (data?.failed ?? []).map(f => describeFailedPayout(f, now)), [data, now]);
+  const anyQueued = failed.some(f => f.queued);
+
+  // While a payment is waiting on the run, check every minute so its card
+  // goes away (or shows the new reason) without a pull to refresh.
+  useEffect(() => {
+    if (!anyQueued) return;
+    const timer = setInterval(() => { void load(); }, 60_000);
+    return () => clearInterval(timer);
+  }, [anyQueued, load]);
   const owed = useMemo(() => (data?.owed ?? []).map(describeOwed), [data]);
   const refunds = useMemo(() => (data?.refunds ?? []).map(r => ({ row: r, view: describeRefundRequest(r, now) })), [data, now]);
   const disputeViews = useMemo(() => (disputes ?? []).map(describeBankDispute), [disputes]);
@@ -278,7 +289,9 @@ export default function AdminMoneyScreen({ navigation }: any) {
                 </View>
                 <Text style={[styles.body, { color: P.text }]}><Text style={{ fontWeight: '700' }}>Why: </Text>{f.why}</Text>
                 <Text style={[styles.small, { color: P.sub }]}>{f.tries}</Text>
-                {f.canRetry ? (
+                {f.queued ? (
+                  <QueuedPanel note={f.queuedNote} dark={isDarkMode} />
+                ) : f.canRetry ? (
                   <TouchableOpacity
                     style={[styles.cta, { backgroundColor: P.accent, opacity: busyId === f.key ? 0.5 : 1 }]}
                     disabled={busyId === f.key}
@@ -352,6 +365,35 @@ export default function AdminMoneyScreen({ navigation }: any) {
       )}
       <DialogHost />
     </ThemedBackground>
+  );
+}
+
+/** Where the retry button was, once the payment is due: says it's on its way
+ *  and when. Pops in so pressing the button visibly did something. */
+function QueuedPanel({ note, dark }: { note: string | null; dark: boolean }) {
+  const pop = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(pop, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }).start();
+  }, [pop]);
+  const green = dark ? '#6FD08C' : '#2E7D32';
+  return (
+    <Animated.View
+      accessibilityRole="text"
+      accessibilityLabel={`In the next payment run. ${note ?? ''}`}
+      style={[
+        styles.queued,
+        { backgroundColor: dark ? '#6FD08C1F' : '#2E7D321A', borderColor: green },
+        { opacity: pop, transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] },
+      ]}
+    >
+      <View style={[styles.queuedTick, { backgroundColor: green }]}>
+        <Text style={{ color: dark ? '#0F1A12' : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✓</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.label, { color: green }]}>IN THE NEXT PAYMENT RUN</Text>
+        {!!note && <Text style={[styles.small, { color: green }]}>{note}</Text>}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -532,6 +574,8 @@ const styles = StyleSheet.create({
   cta: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   ctaText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 1 },
   waiting: { borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  queued: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, borderRadius: 12, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12, marginTop: 4 },
+  queuedTick: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 10, paddingHorizontal: 12 },
   tick: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   pill: { alignSelf: 'flex-start', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },

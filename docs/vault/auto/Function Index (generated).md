@@ -5,7 +5,7 @@
 
 #generated
 
-**4067 functions** across **567 files**.
+**4069 functions** across **567 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -129,7 +129,7 @@
 
 ### `src/features/admin/` (4)
 - `dashboardPresentation.ts` — **buildProblemRows** · **describeDelta** · **formatCount** · **pounds** · **updatedLabel** · **weekLabel**
-- `moneyPresentation.ts` — day · **describeBankDispute** · **describeFailedPayout** · **describeOwed** · **describeRefundRequest** · **formatPence** · **parsePounds**
+- `moneyPresentation.ts` — day · **describeBankDispute** · **describeFailedPayout** · **describeOwed** · **describeRefundRequest** · **formatPence** · **nextPayoutRun** · **parsePounds**
 - `useIsCervicedAdmin.ts` — **useCervicedAdminStatus** · **useIsCervicedAdmin**
 - `useSignInAsAccount.ts` — **useSignInAsAccount**
 
@@ -469,7 +469,7 @@
 - `AdminCreateAccountScreen.tsx` — AdminCreateAccountScreen · back · Field · handleCreate · resetForm · shareLogin · signInAsThem · startBlankProvider
 - `AdminCreatedAccountsScreen.tsx` — AccountCard · addDetails · AdminCreatedAccountsScreen · header · load · onRefresh · openProviderSide
 - `AdminDashboardScreen.tsx` — AdminDashboardScreen · deltaColor · go · load · onRefresh · problems · Row · StatTile · statusColors · ToolRow · WeeklyChart
-- `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · assign · decline · disputeViews · failed · load · now · onRefresh · owed · pickedFor · RefundReview · refunds · retry · togglePick
+- `AdminMoneyScreen.tsx` — AdminMoneyScreen · approve · assign · decline · disputeViews · failed · load · now · onRefresh · owed · pickedFor · QueuedPanel · RefundReview · refunds · retry · togglePick
 - `BeccaScreen.tsx` — beat · BeccaScreen · buildWelcomeMessage · chatAnimStyle · flushMiss · formatHeroDate · handleClearHistory · handleDeleteChat · handleHistorySheetChange · handleImagePick · handleInspirationPress · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleStopTyping · handleSuggestionPress · heroAnimStyle · historySnapPoints · isActiveTurn · persistResponse · refreshSessions · scheduleNextTick · sendMisses · showReveal · showSteps
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave
