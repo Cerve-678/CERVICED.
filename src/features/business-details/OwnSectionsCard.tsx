@@ -2,6 +2,8 @@
  * "Your Sections" on Policies & Info: each section the provider has added is
  * written right here in the card, its box growing to show everything typed.
  * Sections not added yet are "+" chips underneath, like Travel and Emergency.
+ * "+ Custom" can be tapped again for another one (up to five), each named by
+ * the provider.
  *
  * (A list of rows opening a sheet was tried in #605 and the user preferred
  * editing in the card, 2026-11-18.)
@@ -15,7 +17,7 @@ import * as Haptics from 'expo-haptics';
 import {
   ATTRIBUTED_SECTION_KINDS, OWN_SECTION_KINDS, OWN_SECTION_LABELS, OWN_SECTION_LIMITS,
   normalizeOwnSections,
-  type FaqItem, type OwnSectionKind, type TextSectionKind,
+  type CustomSection, type FaqItem, type OwnSectionKind, type TextSectionKind,
 } from '../providers/ownSections';
 import { Card, MinusButton, useBusinessPalette } from './BusinessDetailsKit';
 
@@ -25,7 +27,7 @@ export interface OwnDraft {
   keyInfo: string;
   faq: FaqItem[];
   aftercare: string;
-  houseRules: string;
+  custom: CustomSection[];
   disclaimer: string;
 }
 
@@ -35,21 +37,24 @@ export function toOwnDraft(raw: unknown): OwnDraft {
     keyInfo: clean.keyInfo ?? '',
     faq: clean.faq ?? [],
     aftercare: clean.aftercare ?? '',
-    houseRules: clean.houseRules ?? '',
+    custom: clean.custom ?? [],
     disclaimer: clean.disclaimer ?? '',
   };
 }
 
 function hasContent(draft: OwnDraft, kind: OwnSectionKind): boolean {
-  return kind === 'faq'
-    ? draft.faq.some(item => item.question.trim() || item.answer.trim())
-    : draft[kind].trim() !== '';
+  if (kind === 'faq') return draft.faq.some(item => item.question.trim() || item.answer.trim());
+  // Shown from the moment "+ Custom" adds one, so it can be named and written.
+  if (kind === 'custom') return draft.custom.length > 0;
+  return draft[kind].trim() !== '';
 }
+
+/** One block in the card: a section, or one of the Custom sections. */
+type Entry = { kind: OwnSectionKind; customIndex?: number };
 
 const PLACEHOLDERS: Record<TextSectionKind, string> = {
   keyInfo: 'e.g. I work from home and have a small dog. Street parking is free.',
   aftercare: 'e.g. Keep your lashes dry for 24 hours and avoid oil-based products.',
-  houseRules: 'e.g. Please come on your own. Arrive with clean, product-free hair.',
   disclaimer: 'e.g. Results vary from person to person.',
 };
 
@@ -90,18 +95,32 @@ export function OwnSectionsCard({ draft, onChange }: {
   const [added, setAdded] = useState<Partial<Record<OwnSectionKind, boolean>>>({});
   const shows = (kind: OwnSectionKind) => !!added[kind] || hasContent(draft, kind);
   const shown = OWN_SECTION_KINDS.filter(shows);
-  const addable = OWN_SECTION_KINDS.filter(kind => !shows(kind));
+  const entries: Entry[] = shown.flatMap((kind): Entry[] =>
+    kind === 'custom' ? draft.custom.map((_, customIndex) => ({ kind, customIndex })) : [{ kind }]);
+  const addable = OWN_SECTION_KINDS.filter(kind =>
+    kind === 'custom' ? draft.custom.length < OWN_SECTION_LIMITS.customItems : !shows(kind));
 
   const add = useCallback((kind: OwnSectionKind) => {
     Haptics.selectionAsync().catch(() => {});
+    if (kind === 'custom') {
+      onChange(prev => prev.custom.length >= OWN_SECTION_LIMITS.customItems
+        ? prev : { ...prev, custom: [...prev.custom, { title: '', body: '' }] });
+      return;
+    }
     setAdded(prev => ({ ...prev, [kind]: true }));
     if (kind === 'faq') onChange(prev => prev.faq.length > 0 ? prev : { ...prev, faq: [{ question: '', answer: '' }] });
   }, [onChange]);
 
   const remove = useCallback((kind: OwnSectionKind) => {
     setAdded(prev => ({ ...prev, [kind]: false }));
-    onChange(prev => kind === 'faq' ? { ...prev, faq: [] } : { ...prev, [kind]: '' });
+    onChange(prev => kind === 'faq' ? { ...prev, faq: [] }
+      : kind === 'custom' ? { ...prev, custom: [] }
+        : { ...prev, [kind]: '' });
   }, [onChange]);
+
+  const setCustom = (index: number, field: keyof CustomSection, value: string) => {
+    onChange(prev => ({ ...prev, custom: prev.custom.map((item, i) => i === index ? { ...item, [field]: value } : item) }));
+  };
 
   const setFaq = (index: number, field: keyof FaqItem, value: string) => {
     onChange(prev => ({ ...prev, faq: prev.faq.map((item, i) => i === index ? { ...item, [field]: value } : item) }));
@@ -109,7 +128,36 @@ export function OwnSectionsCard({ draft, onChange }: {
 
   return (
     <Card title="Your Sections" sub="Your own sections, each shown on your profile under Additional Information. Add only what you need.">
-      {shown.map((kind, position) => (
+      {entries.map(({ kind, customIndex }, position) => customIndex !== undefined ? (
+        <View
+          key={`custom-${customIndex}`}
+          style={[st.section, position > 0 && { borderTopColor: C.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+        >
+          <View style={st.head}>
+            <TextInput
+              style={[st.box, st.nameBox, { backgroundColor: C.surface, borderColor: C.border, color: C.text }]}
+              value={draft.custom[customIndex]!.title}
+              onChangeText={v => setCustom(customIndex, 'title', v)}
+              placeholder="Name it, e.g. Parking"
+              placeholderTextColor={C.sub}
+              maxLength={OWN_SECTION_LIMITS.customTitle}
+              returnKeyType="done"
+              accessibilityLabel={`Custom section ${customIndex + 1} name`}
+            />
+            <MinusButton
+              label={`Remove ${draft.custom[customIndex]!.title.trim() || `custom section ${customIndex + 1}`}`}
+              onPress={() => onChange(prev => ({ ...prev, custom: prev.custom.filter((_, i) => i !== customIndex) }))}
+            />
+          </View>
+          <GrowingBox
+            label={`${draft.custom[customIndex]!.title.trim() || `Custom section ${customIndex + 1}`} text`}
+            value={draft.custom[customIndex]!.body}
+            onChange={v => setCustom(customIndex, 'body', v)}
+            placeholder="What clients should know"
+            maxLength={OWN_SECTION_LIMITS.text}
+          />
+        </View>
+      ) : kind === 'custom' ? null : (
         <View key={kind} style={[st.section, position > 0 && { borderTopColor: C.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
           <View style={st.head}>
             <Text style={[st.title, { color: C.text }]}>{OWN_SECTION_LABELS[kind]}</Text>
@@ -199,6 +247,7 @@ const st = StyleSheet.create({
   section:     { paddingTop: 14, paddingBottom: 6 },
   head:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
   title:       { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  nameBox:     { flex: 1, fontFamily: 'BakbakOne-Regular', fontSize: 14, fontWeight: '400', paddingTop: 10, paddingBottom: 10 },
   note:        { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', lineHeight: 17, marginTop: -4, marginBottom: 10 },
   box:         { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '600', lineHeight: 21, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12 },
   count:       { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, textAlign: 'right', marginTop: 4 },
