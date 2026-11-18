@@ -117,6 +117,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   hush: { text: 'SERVICES' },
   stripes: { text: 'SERVICES' },
   bow: { text: 'The Services' },
+  custom: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */

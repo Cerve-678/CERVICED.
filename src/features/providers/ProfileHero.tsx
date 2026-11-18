@@ -935,6 +935,32 @@ export function ProfileHeroLayout({
         />
       );
 
+    case "customLeft":
+      // Custom · Cards: the logo on the left, the name and what they do beside it.
+      return (
+        <>
+          <View style={layout.customLeftRow}>
+            {renderLogo(84)}
+            <View style={layout.customLeftText}>
+              {renderName({ scale: 0.9 })}
+              {meta}
+            </View>
+          </View>
+          <View style={layout.customLeftDetails}>{details}</View>
+        </>
+      );
+
+    case "customBig":
+      // Custom · Big Name: no logo, what they do in small caps, then the name large.
+      return (
+        <View style={layout.customBig}>
+          {kicker ? <Text style={[layout.kicker, { color: heroSub }, shadow]}>{kicker}</Text> : null}
+          {renderName({ scale: 1.6 })}
+          {location ? <Text style={[layout.customBigPlace, { color: heroSub }, shadow]}>{location}</Text> : null}
+          <View style={layout.customBigDetails}>{details}</View>
+        </View>
+      );
+
     default:
       return (
         <>
@@ -1006,7 +1032,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return BRAND_FONT_HEROES.includes(pageStyle.hero);
@@ -1043,6 +1069,13 @@ const TEXT_FIRST_DROP = 48;
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
+  // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
+  customLeftRow: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP },
+  customLeftText: { flex: 1, alignItems: "flex-start" },
+  customLeftDetails: { alignItems: "flex-start", paddingHorizontal: 20, marginTop: 10, marginBottom: 26 },
+  customBig: { alignItems: "flex-start", paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  customBigPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 13, marginTop: 2 },
+  customBigDetails: { alignItems: "flex-start", marginTop: 10 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
   labelWrap: { alignSelf: "stretch", paddingHorizontal: 28, marginBottom: 14 },
   labelCard: { borderWidth: 1, paddingHorizontal: 22, paddingVertical: 20 },

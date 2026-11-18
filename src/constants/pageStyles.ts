@@ -16,6 +16,8 @@
 // Each style is a small set of switches the profile reads, not a layout of its
 // own: the profile keeps one structure, and these decide how each part looks.
 
+import { customPageStyle, DEFAULT_CUSTOM_CHOICES, type CustomChoices } from './customPageStyle';
+
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
@@ -33,7 +35,8 @@ export type PageStyleKey =
   | 'softFocus'
   | 'hush'
   | 'stripes'
-  | 'bow';
+  | 'bow'
+  | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -66,7 +69,8 @@ export type PageHeading =
   | 'softCaps'   // heavy grotesk caps at the top left of its own card (Soft Focus)
   | 'hushRule'   // tiny spaced caps between hairlines, in the style's own quiet words (Hush)
   | 'stripeCaps' // spaced serif caps, centred, at the top of the section's colour strip (Stripes)
-  | 'bowSerif';  // a small satin bow over an italic serif title, centred (Bow)
+  | 'bowSerif'  // a small satin bow over an italic serif title, centred (Bow)
+  | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
 export type PageCards =
@@ -161,6 +165,8 @@ export type PageHero =
   | 'hushFan'  // quiet: what they do in tiny caps, a ringed logo, the name in light italic, three of their chosen photos in separate boxes
   | 'stripes'  // a full-width strip of their colour: the logo in a ring of pearls, the name in spaced serif caps, no photo
   | 'bow'      // their photo with a ribbon down it and a bow on top, the logo on its foot, the name in italic serif
+  | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
+  | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -216,6 +222,14 @@ export interface PageStyle {
   veilPage?: boolean;
   /** Portfolio photos with big round corners (Lounge, Soft Focus, Bow). */
   roundedPhotos?: boolean;
+  /** Custom only: the provider's own picks (constants/customPageStyle). */
+  custom?: {
+    layout: 'plain' | 'cards' | 'bigName' | 'banner';
+    headingFont: string;
+    headingScale: number;
+    textFont: string;
+    caps: boolean;
+  };
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -449,11 +463,14 @@ export function heroPhotoPickLimit(style: PageStyle): number {
 }
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {
-  return PAGE_STYLES.some(style => style.key === value);
+  return value === 'custom' || PAGE_STYLES.some(style => style.key === value);
 }
 
-/** The style for a stored key; anything unknown is Classic. */
-export function getPageStyle(key: string | null | undefined): PageStyle {
+/** The style for a stored key; anything unknown is Classic. Custom isn't in
+ *  PAGE_STYLES (it has no fixed design): pass the provider's picks, or it
+ *  shows with the default ones. */
+export function getPageStyle(key: string | null | undefined, custom?: CustomChoices): PageStyle {
+  if (key === 'custom') return customPageStyle(custom ?? DEFAULT_CUSTOM_CHOICES);
   return PAGE_STYLES.find(style => style.key === key) ?? PAGE_STYLES[0]!;
 }
 

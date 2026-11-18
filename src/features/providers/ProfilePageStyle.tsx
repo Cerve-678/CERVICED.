@@ -69,6 +69,14 @@ export function onAccentInk(accent: string): { text: string; sub: string } {
     : { text: "#1F1A18", sub: "rgba(31,26,24,0.78)" };
 }
 
+/** Custom's text font as a style to lay over a line of body text, or null on
+ *  every other page style (they keep the app's text font). The weight goes
+ *  back to regular: the bold set for Jura would make a phone fake a bold, or
+ *  fall back to the system font, for a face that only comes in one weight. */
+export function customTextStyle(style: PageStyle | undefined): { fontFamily: string; fontWeight: "400" } | null {
+  return style?.custom ? { fontFamily: style.custom.textFont, fontWeight: "400" } : null;
+}
+
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
   return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer" || style?.cards === "ruled";
@@ -437,6 +445,33 @@ export function PageSectionHeading({
           <Text style={[headingStyles.bowTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
         </View>
       );
+    case "custom": {
+      // Custom: the title in the font the provider picked, as typed or in
+      // small spaced caps. On Banner's outlined boxes it sits in the top line,
+      // so it carries the page colour behind it to break the line.
+      const picks = style.custom;
+      if (!picks) break;
+      const size = picks.caps ? 13 : Math.round(22 * picks.headingScale);
+      return (
+        <Text
+          {...a11y}
+          style={[
+            headingStyles.custom,
+            {
+              color: ink,
+              fontFamily: picks.headingFont,
+              fontSize: size,
+              lineHeight: Math.round(size * 1.4),
+              letterSpacing: picks.caps ? 3.5 : 0,
+            },
+            picks.layout === "plain" && headingStyles.customCentred,
+            style.cards === "outline" && [headingStyles.customLegend, { backgroundColor: palette.background }],
+          ]}
+        >
+          {picks.caps ? title.toUpperCase() : title}
+        </Text>
+      );
+    }
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -445,13 +480,14 @@ export function PageSectionHeading({
         </Text>
       );
     default:
-      return (
+      break;
+  }
+  return (
         // Only ever drawn on the page: Classic's in-card title is PageSection's own Text.
         <Text {...a11y} style={[headingStyles.plain, { color: ink }]}>
           {title}
         </Text>
-      );
-  }
+  );
 }
 
 // ── Section surface ───────────────────────────────────────────────────────────
@@ -761,6 +797,7 @@ function isCentredHeading(style: PageStyle): boolean {
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
     || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "stripeCaps"
     || style.heading === "bowSerif"
+    || (style.heading === "custom" && style.custom?.layout === "plain")
   );
 }
 
@@ -1158,6 +1195,8 @@ export function StyledPolicyList({
   const layout = palette.pageStyle?.policies ?? "hairline";
   const square = !!palette.squareCards;
   const page = sheetInk(palette.background);
+  // Custom's text font, on the four policy layouts Custom uses.
+  const tf = customTextStyle(palette.pageStyle);
 
   if (layout === "numerals") {
     // Heritage's House Rules (I, II…) and Apothecary's "Before your visit" (i., ii.).
@@ -1369,11 +1408,11 @@ export function StyledPolicyList({
             key={row.label}
             style={[policyStyles.defRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
           >
-            <Text style={[policyStyles.defLabel, { color: ink.sub }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.defLabel, { color: ink.sub }, tf]}>{row.label.toUpperCase()}</Text>
             <View style={policyStyles.hairValueCol}>
-              <Text style={[policyStyles.defValue, { color: ink.text }]}>{row.value}</Text>
+              <Text style={[policyStyles.defValue, { color: ink.text }, tf]}>{row.value}</Text>
               {row.notes?.map(note => (
-                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }, tf]}>{note}</Text>
               ))}
             </View>
           </View>
@@ -1533,11 +1572,11 @@ export function StyledPolicyList({
             key={row.label}
             style={[policyStyles.hairRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
           >
-            <Text style={[policyStyles.hairLabel, { color: ink.text }]}>{row.label}</Text>
+            <Text style={[policyStyles.hairLabel, { color: ink.text }, tf]}>{row.label}</Text>
             <View style={policyStyles.hairValueCol}>
-              <Text style={[policyStyles.hairValue, { color: ink.sub }]}>{row.value}</Text>
+              <Text style={[policyStyles.hairValue, { color: ink.sub }, tf]}>{row.value}</Text>
               {row.notes?.map(note => (
-                <Text key={note} style={[policyStyles.note, policyStyles.alignRight, { color: ink.sub }]}>{note}</Text>
+                <Text key={note} style={[policyStyles.note, policyStyles.alignRight, { color: ink.sub }, tf]}>{note}</Text>
               ))}
             </View>
           </View>
@@ -1555,7 +1594,7 @@ export function StyledPolicyList({
           </View>
         ) : null;
         const notes = row.notes?.map(note => (
-          <Text key={note} style={[policyStyles.note, { color: ink.sub }, layout !== "boxes" && policyStyles.centreText]}>{note}</Text>
+          <Text key={note} style={[policyStyles.note, { color: ink.sub }, layout !== "boxes" && policyStyles.centreText, tf]}>{note}</Text>
         ));
 
         if (layout === "boxes") {
@@ -1565,10 +1604,10 @@ export function StyledPolicyList({
               style={[policyStyles.cell, policyStyles.box, { borderColor: page.border }, square && policyStyles.square]}
             >
               <View style={policyStyles.boxLabelRow}>
-                <Text style={[policyStyles.capsLabel, { color: ink.sub }]}>{row.label.toUpperCase()}</Text>
+                <Text style={[policyStyles.capsLabel, { color: ink.sub }, tf]}>{row.label.toUpperCase()}</Text>
                 {tag}
               </View>
-              <Text style={[policyStyles.value, { color: ink.text }]}>{row.value}</Text>
+              <Text style={[policyStyles.value, { color: ink.text }, tf]}>{row.value}</Text>
               {notes}
             </View>
           );
@@ -1773,6 +1812,9 @@ function AccordionPolicies({
 
 const headingStyles = StyleSheet.create({
   plain: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
+  custom: { marginBottom: 12 },
+  customCentred: { textAlign: "center" },
+  customLegend: { paddingHorizontal: 12, marginBottom: 0 },
   bigLower: { fontFamily: "Syne_700Bold", fontSize: 38, lineHeight: 49, letterSpacing: -1.2, marginBottom: 14 },
   pairRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: 6, marginBottom: 14 },
   script: { fontFamily: "PinyonScript_400Regular", fontSize: 32, lineHeight: 47, paddingHorizontal: 6 },
