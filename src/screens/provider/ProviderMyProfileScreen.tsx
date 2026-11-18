@@ -1204,7 +1204,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     }
     // Fresh, so anything just changed in Edit Profile shows.
     forgetCachedProviderProfile(providerSlug);
-    navigation.navigate('MyPublicProfile', { providerId: providerSlug });
+    navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
   }, [navigation, providerSlug, goLive?.isLive]);
 
   // Today's two cards. They haptick on their own presses, so these only
