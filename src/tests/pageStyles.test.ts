@@ -57,12 +57,13 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the twenty-nine picked styles plus Classic, each once', () => {
+  it('has the thirty-one picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'lace', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
+      'pure', 'grid',
     ]);
   });
 
