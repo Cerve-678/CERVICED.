@@ -75,6 +75,8 @@ export const TOUR_SEEN_PREFIXES = {
   PROVIDER_SERVICE_PACK_TIP: '@provider_service_pack_tip_seen_',
   /** Policies — the Info Pack / Form tip card, closed or used */
   PROVIDER_POLICIES_PACK_TIP: '@provider_policies_pack_tip_seen_',
+  /** ProviderMyProfileScreen — the spotlight tour */
+  PROVIDER_MY_PROFILE: '@provider_my_profile_tour_seen_',
 } as const;
 
 export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];

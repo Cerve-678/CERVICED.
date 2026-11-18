@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **119 files**
+Curated: [[Address Release]] · **120 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/services/database/addressRelease.ts` _(94)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **119 files**
 - `src/features/providers/goLiveStatus.ts` _(20)_
 - `src/services/addressLookupService.ts` _(20)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(18)_
-- … +89 more
+- … +90 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **234 files**
@@ -47,7 +47,7 @@ Curated: [[Availability & Slots]] · **234 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(161)_
 - `src/screens/client/SearchScreen.tsx` _(110)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
-- `src/screens/provider/InfoRegScreen.tsx` _(98)_
+- `src/screens/provider/InfoRegScreen.tsx` _(97)_
 - `src/services/becca/capabilities/client.ts` _(92)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(83)_
 - `src/contexts/BookingContext.tsx` _(81)_
@@ -176,8 +176,8 @@ Curated: [[Notifications]] · **211 files**
 - … +181 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **106 files**
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(69)_
+Curated: [[Provider Onboarding & Go-Live]] · **107 files**
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(72)_
 - `src/features/providers/goLiveStatus.ts` _(64)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(44)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **106 files**
 - `src/screens/auth/SignUpStep5Screen.tsx` _(5)_
 - `src/services/acuityTransferService.ts` _(5)_
 - `src/services/database/providerAccount.ts` _(5)_
-- … +76 more
+- … +77 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **81 files**
