@@ -127,7 +127,6 @@ import {
 import { AddOnLibrarySection } from '../../features/provider-registration/AddOnLibrarySection';
 import { AddOnEditorModal, type AddOnEditorResult } from '../../features/provider-registration/AddOnEditorModal';
 import { ServiceAddOnsField } from '../../features/provider-registration/ServiceAddOnsField';
-import { formatAddOnExtraTime } from '../../features/bookings/addOnTime';
 import { InfoRegPager } from '../../features/provider-registration/InfoRegPager';
 import {
   CATEGORY_KINDS,
@@ -2793,29 +2792,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                           </View>
                         </View>
 
-                        {/* Add-ons preview: the ones ticked on this service
-                            that clients can actually pick (paused ones hidden). */}
-                        {(() => {
-                          const shown = (providerData.addOnLibrary ?? []).filter(
-                            addOn => addOn.isActive && service.addOnKeys.includes(addOn.key),
-                          );
-                          if (shown.length === 0) return null;
-                          return (
-                            <View style={[styles.previewServiceAddOns, { borderTopColor: PP.border }]}>
-                              <Text style={[styles.previewAddOnsLabel, { color: PP.sub }]}>Add-ons available:</Text>
-                              {shown.map((addOn) => (
-                                <View key={addOn.key} style={styles.previewAddOnRow}>
-                                  <Text style={[styles.previewAddOnName, { color: PP.sub }]}>
-                                    + {addOn.name}{addOn.extraMinutes > 0 ? ` (${formatAddOnExtraTime(addOn.extraMinutes)})` : ''}
-                                  </Text>
-                                  <Text style={[styles.previewAddOnPrice, { color: accentColor }]}>
-                                    +£{addOn.price}
-                                  </Text>
-                                </View>
-                              ))}
-                            </View>
-                          );
-                        })()}
                       </BlurView>
                     ))}
                   </View>
@@ -8585,33 +8561,6 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     fontSize: 12,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  // Add-ons in preview
-  previewServiceAddOns: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 8,
-    paddingTop: 8,
-  },
-  previewAddOnsLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 10,
-    marginBottom: 4,
-  },
-  previewAddOnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 3,
-  },
-  previewAddOnName: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  previewAddOnPrice: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
   },
   // Contact rows — matches ProviderProfileScreen's contactRow layout
   previewContactRow: {
