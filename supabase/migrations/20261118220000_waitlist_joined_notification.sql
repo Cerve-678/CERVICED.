@@ -43,6 +43,8 @@ DECLARE
   v_provider_user uuid;
   v_who text;
   v_what text;
+  v_title text;
+  v_place int;
 BEGIN
   IF NEW.status IS DISTINCT FROM 'waiting' THEN
     RETURN NEW;
@@ -68,17 +70,29 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Service first, then their place, the way the app says it ("2nd in line",
+  -- placeInLineLabel): "Mini Manicure · 3rd in line" / "Faith joined your waitlist."
+  SELECT count(*)::int INTO v_place
+    FROM public.provider_waitlist w
+   WHERE w.provider_id = NEW.provider_id
+     AND w.service_id IS NOT DISTINCT FROM NEW.service_id
+     AND w.status = 'waiting'
+     AND w.position <= NEW.position;
   v_who := COALESCE(NULLIF(btrim(NEW.user_name_snapshot), ''), 'Someone');
-  v_what := CASE WHEN NULLIF(btrim(NEW.service_name_snapshot), '') IS NOT NULL
-                 THEN 'your ' || btrim(NEW.service_name_snapshot) || ' waitlist'
-                 ELSE 'your waitlist' END;
+  v_what := COALESCE(NULLIF(btrim(NEW.service_name_snapshot), ''), 'Your waitlist');
+  v_title := v_what || CASE WHEN v_place >= 1 THEN ' · ' || v_place ||
+    CASE WHEN v_place % 100 IN (11, 12, 13) THEN 'th'
+         WHEN v_place % 10 = 1 THEN 'st'
+         WHEN v_place % 10 = 2 THEN 'nd'
+         WHEN v_place % 10 = 3 THEN 'rd'
+         ELSE 'th' END || ' in line' ELSE '' END;
 
   BEGIN
     INSERT INTO public.notifications
       (user_id, type, title, message, priority, is_actionable, provider_id, recipient_role, metadata)
     VALUES
-      (v_provider_user, 'waitlist_joined', 'New on your waitlist',
-       v_who || ' joined ' || v_what || '.',
+      (v_provider_user, 'waitlist_joined', v_title,
+       v_who || ' joined your waitlist.',
        'low', true, NEW.provider_id, 'provider',
        jsonb_build_object('kind', 'waitlist_joined', 'waitlist_id', NEW.id,
                           'client_id', NEW.user_id, 'service_id', NEW.service_id));

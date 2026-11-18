@@ -527,6 +527,12 @@ describe('notification routing — someone joined the waitlist', () => {
     expect(migration()).toContain('AFTER INSERT ON public.provider_waitlist');
   });
 
+  it('leads with the service and their place in line, as the app words it', () => {
+    // User's pick 2026-11-18: "Mini Manicure · 3rd in line" / "Faith joined your waitlist."
+    expect(migration()).toContain("' in line'");
+    expect(migration()).toContain("v_who || ' joined your waitlist.'");
+  });
+
   it('tells the provider once a day about the same person rejoining', () => {
     expect(migration()).toContain("n.created_at > now() - interval '24 hours'");
   });
