@@ -104,7 +104,6 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   signature: { lead: '03', text: 'The Services' },
   quiet: { text: 'THE SERVICES' },
   sealed: { text: 'THE SERVICES' },
-  lace: { lead: 'the', text: 'SERVICES' },
   sheer: { text: 'THE SERVICES' },
   embossed: { text: 'THE SERVICES' },
   callingCard: { text: 'THE SERVICES' },
@@ -264,13 +263,6 @@ function MiniProfile({
             <Text style={[mini.sealCaps, { color: ink }]}>{heading.text}</Text>
           </View>
         );
-      case 'lacePair':
-        return (
-          <View style={mini.stack}>
-            <Text style={[mini.laceScript, { color: accent }]}>{heading.lead}</Text>
-            <Text style={[mini.laceCaps, { color: ink }]}>{heading.text}</Text>
-          </View>
-        );
       case 'sheerCaps':
         return <Text style={[mini.sheerCaps, { color: ink }]}>{heading.text}</Text>;
       case 'embossCaps':
@@ -366,12 +358,6 @@ function MiniProfile({
         return <View key={key} style={[mini.card, mini.labelCard]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'stationery':
         return <View key={key} style={[mini.card, mini.paper, mini.stationeryCard, { borderColor: withAlpha(accent, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
-      case 'lace':
-        return (
-          <View key={key} style={[mini.card, mini.laceCard, { borderColor: withAlpha(accent, 0.3) }]}>
-            <View style={[mini.bar, { backgroundColor: line }]} />
-          </View>
-        );
       case 'sheer':
         return <View key={key} style={[mini.card, mini.sheerCard, { borderColor: withAlpha(ink, 0.42) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'raised':
@@ -548,13 +534,6 @@ function MiniProfile({
             <View style={mini.envelopeSeal}>
               <WaxSeal size={16} wax={waxColour(accent)} />
             </View>
-          </View>
-        ) : style.hero === 'lace' ? (
-          // Lace: the logo clean, a script name, lace lying across the foot.
-          <View style={mini.laceHero}>
-            {logo}
-            <Text style={mini.laceName} numberOfLines={1}>Name</Text>
-            <View style={mini.laceDrape} />
           </View>
         ) : style.hero === 'veil' ? (
           // Sheer: a see-through black veil over the hero, an oval round the logo, spaced caps.
@@ -762,17 +741,6 @@ const mini = StyleSheet.create({
   envelope: { position: 'absolute', left: 4, top: 4 },
   envelopeCard: { position: 'absolute', left: 44, top: 24, width: 22, height: 24, backgroundColor: '#FBF6EE', borderRadius: 2, transform: [{ rotate: '-9deg' }] },
   envelopeSeal: { position: 'absolute', left: 24, top: 18 },
-  laceHero: { alignItems: 'center', alignSelf: 'stretch' },
-  laceName: { fontFamily: 'Allura-Regular', fontSize: 20, lineHeight: 30, color: '#FFFFFF', paddingHorizontal: 6 },
-  // A sheer diagonal band standing in for the lace drape.
-  laceDrape: {
-    position: 'absolute', left: -20, right: -20, bottom: -26, height: 26,
-    backgroundColor: 'rgba(255,255,255,0.32)', borderTopWidth: 2, borderStyle: 'dotted',
-    borderColor: 'rgba(255,255,255,0.9)', transform: [{ rotate: '-8deg' }],
-  },
-  laceScript: { fontFamily: 'Allura-Regular', fontSize: 15, lineHeight: 22, paddingHorizontal: 4 },
-  laceCaps: { fontFamily: 'GildaDisplay-Regular', fontSize: 8, letterSpacing: 2, marginTop: -6 },
-  laceCard: { borderRadius: 2, borderWidth: 1, backgroundColor: '#FFFFFF' },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
   logo: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)' },
