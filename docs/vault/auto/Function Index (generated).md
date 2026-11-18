@@ -5,7 +5,7 @@
 
 #generated
 
-**4095 functions** across **570 files**.
+**4097 functions** across **570 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -154,8 +154,8 @@
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
-- `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · load · payFee · pounds · providerFeeSummary · run
-- `bookingFeeRules.ts` — **feeChargeWindow** · **feeDisputeOpen** · **feesToChargeNow** · **isChargeableLateCancel** · **liveFee**
+- `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · feeButtons · load · payFee · pounds · providerFeeSummary · run
+- `bookingFeeRules.ts` — **bookingFeeButtons** · **feeChargeWindow** · **feeDisputeOpen** · **feesToChargeNow** · **isChargeableLateCancel** · **liveFee**
 - `bookingForms.ts` — **formsToDoFirst**
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · hasReadableDate · **hasRefundRequestDeadline** · **isRefundRequestWindowOpen** · **isSupportRequestReady** · money · **passRefundRequestOn** · **refundRequestLastDay** · ticket

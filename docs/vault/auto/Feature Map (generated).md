@@ -90,9 +90,9 @@ Curated: [[Payments]] · **183 files**
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(74)_
 - `src/types/database.ts` _(59)_
 - `src/features/providers/goLiveStatus.ts` _(54)_
+- `src/features/bookings/BookingFeeCard.tsx` _(47)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
 - `src/services/becca/capabilities/client.ts` _(46)_
-- `src/features/bookings/BookingFeeCard.tsx` _(42)_
 - `src/features/bookings/bookingSupportRequest.ts` _(42)_
 - `src/screens/provider/PoliciesScreen.tsx` _(42)_
 - `src/utils/policyDisplay.ts` _(42)_
