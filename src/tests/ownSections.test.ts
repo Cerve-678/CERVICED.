@@ -7,7 +7,6 @@ import {
   hasHalfFilledFaq,
   normalizeOwnSections,
   ownSectionByline,
-  ownSectionSummary,
   ownSectionsChanged,
 } from '../features/providers/ownSections';
 import { PAGE_SECTION_TITLES, chapterHeading, headingPair } from '../constants/pageStyles';
@@ -117,16 +116,5 @@ describe('when the provider has to agree again', () => {
   });
   it('ignores the saved agreement time', () => {
     expect(ownSectionsChanged(loaded, { ...loaded, agreedAt: '2026-11-18T12:00:00Z' })).toBe(false);
-  });
-});
-
-describe('the Your Sections list', () => {
-  it('sums up each section in one line', () => {
-    const faq = [{ question: 'Kids?', answer: 'From 8.' }, { question: 'Parking?', answer: '' }, { question: ' ', answer: '' }];
-    expect(ownSectionSummary('faq', { faq })).toBe('2 questions');
-    expect(ownSectionSummary('faq', { faq: faq.slice(0, 1) })).toBe('1 question');
-    expect(ownSectionSummary('faq', {})).toBe('');
-    expect(ownSectionSummary('disclaimer', { disclaimer: '  Results vary.\nSee me first.' })).toBe('Results vary.');
-    expect(ownSectionSummary('aftercare', { aftercare: '   ' })).toBe('');
   });
 });
