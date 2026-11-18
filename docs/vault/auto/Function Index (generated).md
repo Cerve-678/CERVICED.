@@ -5,7 +5,7 @@
 
 #generated
 
-**4069 functions** across **567 files**.
+**4069 functions** across **568 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -179,10 +179,11 @@
 - `WaitlistDatesSheet.tsx` — createStyles · openPicker · save · styles · **WaitlistDatesSheet**
 - `WaitlistPlaceCard.tsx` — createStyles · styles
 
-### `src/features/business-details/` (6)
+### `src/features/business-details/` (7)
 - `bookingInstructions.ts` — **selectedBookingInstructions** · **toggleBookingInstruction**
-- `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
+- `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **MinusButton** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
 - `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
+- `OwnSectionsCard.tsx` — close · hasContent · openSection · **OwnSectionsCard** · remove · setFaq · **toOwnDraft**
 - `productBrands.ts` — brandKey · **joinProductsUsed** · **productBrandSections** · **splitProductsUsed**
 - `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `useLearnedSpecialities.ts` — **useSpecialityOptionsWithLearned**
@@ -233,7 +234,7 @@
 ### `src/features/payments/` (6)
 - `bankDisputeStatus.ts` — **bankDisputeStates** · **bookingDisputeLabel** · **feeDisputeLabel** · stageOf
 - `bookingPaymentTimeline.ts` — appointmentWhen · **bookingPaymentTimeline** · dayAndTime · parseDay · **payoutNeedsAttention** · **payoutStatusLabel** · **shortDay** · **tipStatusLabel**
-- `PaymentsCardKit.tsx` — **InfoLabel** · **PaySection** · **ProcessingLabel** · **StatusChip**
+- `PaymentsCardKit.tsx` — **InfoLabel** · **PayCard** · **PaySection** · **ProcessingLabel** · **StatusChip**
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
 - `tipsByBooking.ts` — **groupTipsByBooking**
@@ -291,7 +292,7 @@
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
-- `ownSections.ts` — cleanText · **filledOwnSections** · **hasHalfFilledFaq** · **normalizeOwnSections** · **ownSectionByline** · **ownSectionsChanged**
+- `ownSections.ts` — cleanText · **filledOwnSections** · **hasHalfFilledFaq** · **normalizeOwnSections** · **ownSectionByline** · **ownSectionsChanged** · **ownSectionSummary**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
 - `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**
@@ -443,7 +444,7 @@
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · joinNudgeTotal · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · curatedSpecialtyOptions · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · styles
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
-- `PoliciesScreen.tsx` — addOwn · buildInfoPreview · flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · MinusButton · open · openSetting · ownHasContent · ownShows · Pills · PoliciesScreen · refreshInfoPreview · removeOwn · removeText · setFaq · setPolicy · shows · TextLink · toggle · toOwnDraft
+- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · open · Pills · PoliciesScreen · removeText · setPolicy · shows · TextLink · toggle
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view

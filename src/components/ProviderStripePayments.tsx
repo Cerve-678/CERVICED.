@@ -5,7 +5,7 @@ import { PaymentRequestError } from '../utils/paymentRequestError';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
-import { PaySection, ProcessingLabel, StatusChip } from '../features/payments/PaymentsCardKit';
+import { PayCard, PaySection, ProcessingLabel, StatusChip } from '../features/payments/PaymentsCardKit';
 import BookingPaymentTimeline from './BookingPaymentTimeline';
 import { onRefundHold, payoutNeedsAttention, payoutStatusLabel, tipPence, tipStatusLabel } from '../features/payments/bookingPaymentTimeline';
 import { useAppDialog } from './AppDialog';
@@ -331,7 +331,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
           <Text style={[styles.link, { color: C.accentText }]}>Payouts</Text>
         </TouchableOpacity>
 
-        {account && <PaySection>
+        {/* The payout account: a card of its own (user, 2026-11-18). */}
+        {account && <PayCard>
           <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? 'Manage payout account' : 'Continue with Stripe'}`}
             disabled={busy} onPress={() => void openStripe(manageAccount ? 'dashboard' : 'onboard')} activeOpacity={0.75} style={styles.plainRow}>
             <View style={{ flex: 1 }}>
@@ -344,7 +345,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
               : <Text style={[styles.link, { color: C.accentText }]}>{manageAccount ? 'Manage' : 'Continue'}</Text>}
           </TouchableOpacity>
           {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
-        </PaySection>}
+        </PayCard>}
 
         <PaySection>
           <View style={styles.headRow}>
@@ -448,7 +449,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
       </>}
 
       {shownSection === 'settings' && <>
-        <PaySection first title="When you get paid" sub={`Each payment is processing for ${PAYOUT_RELEASE_HOURS} hours after its appointment. Stripe then pays it into your bank on the schedule you choose here.`}>
+        {/* Each part of Settings is its own card; the rest come from PaymentsScreen. */}
+        <PayCard title="When you get paid" sub={`Each payment is processing for ${PAYOUT_RELEASE_HOURS} hours after its appointment. Stripe then pays it into your bank on the schedule you choose here.`}>
           {!!scheduleError && <Notice text={scheduleError} />}
           {scheduleLoaded && !schedule
             ? <Notice text="Set up your Stripe account to choose when you get paid." />
@@ -476,7 +478,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
               </>}
               {!!schedule && <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>{payoutScheduleSentence(schedule)} Stripe can only send money once it has cleared, usually about 3 working days after the client pays.</Text>}
             </>}
-        </PaySection>
+        </PayCard>
         {children}
       </>}
     </View>

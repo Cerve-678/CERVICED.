@@ -87,6 +87,34 @@ export function Card({ title, sub, children, action }: {
   );
 }
 
+// ─── MinusButton ──────────────────────────────────────────────────────────────
+
+/** The round "−" that takes away something added with "+": a note, Travel,
+ *  Emergency appointments, one of Your Sections, or one FAQ question. */
+export function MinusButton({ label, onPress, style }: { label: string; onPress: () => void; style?: object }) {
+  const C = useBusinessPalette();
+  return (
+    <TouchableOpacity
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+      activeOpacity={0.6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={10}
+      style={[minusSt.btn, { borderColor: C.border, backgroundColor: C.surface }, style]}
+    >
+      <Text style={[minusSt.text, { color: C.sub }]}>−</Text>
+    </TouchableOpacity>
+  );
+}
+
+/** Puts a MinusButton over a Field, level with its label. */
+export const MINUS_ON_FIELD = { position: 'absolute', top: -6, right: 0, zIndex: 1 } as const;
+
+const minusSt = StyleSheet.create({
+  btn:  { width: 26, height: 26, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  text: { fontSize: 18, lineHeight: 20, fontWeight: '500' },
+});
+
 // ─── Field ────────────────────────────────────────────────────────────────────
 
 export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline, maxLength }: {
