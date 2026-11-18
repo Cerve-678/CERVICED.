@@ -2396,6 +2396,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             colors={{ card: P.card, text: P.text, sub: P.sub, border: P.border, accent: P.accent, onAccent: P.ice }}
             showConfirm={showConfirm}
             showAlert={showAlert}
+            // Charging, refunds and disputes live in Payments & payouts; the
+            // booking just says where things stand and links there.
+            onOpenPayments={() => navigation.navigate('Payments', { feeBookingId: booking.id || bookingId })}
           />
         )}
 

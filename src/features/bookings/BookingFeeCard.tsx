@@ -43,11 +43,14 @@ interface Props {
   role: 'provider' | 'client';
   colors: BookingFeeColors;
   /** The other party's name, for copy ("Ask Sam to…"). */
-  otherName?: string;
+  otherName?: string | undefined;
   /** Changes when the booking's status changes, so the card re-reads (e.g. just marked no-show). */
   refreshKey?: string;
   showConfirm: (title: string, message: string | undefined, buttons: { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }[]) => void;
   showAlert: (title: string, message?: string) => void;
+  /** Provider only: show a one-line summary that opens Payments & payouts,
+   *  where charging, refunds and disputes live, instead of the actions. */
+  onOpenPayments?: () => void;
 }
 
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
@@ -58,7 +61,7 @@ function errorMessage(err: unknown, fallback: string, context: string): string {
   return toUserMessageAllowingDbGuard(err, fallback, context);
 }
 
-export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert }: Props) {
+export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert, onOpenPayments }: Props) {
   const [charges, setCharges] = useState<BookingFeeCharge[] | null>(null);
   const [terms, setTerms] = useState<BookingFeeTerms | null>(null);
   const [busy, setBusy] = useState(false);
@@ -152,6 +155,26 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   }, 'Could not take this payment.', 'BookingFeeCard.pay');
 
   if (!charges) return null;
+
+  if (role === 'provider' && onOpenPayments) {
+    const line = providerFeeSummary(fee, terms, window, otherName);
+    if (!line) return null;
+    return (
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={`${line}. Open in Payments & payouts`}
+        onPress={onOpenPayments}
+        activeOpacity={0.75}
+        style={[st.card, st.compact, { backgroundColor: C.card, borderColor: C.border }]}
+      >
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[st.heading, { color: C.sub }]}>LATE & NO-SHOW FEES</Text>
+          <Text style={[st.sub, { color: C.text }]}>{line}</Text>
+        </View>
+        <Text style={[st.link, { color: C.accent }]}>Payments</Text>
+      </TouchableOpacity>
+    );
+  }
 
   const body: React.ReactNode[] = [];
 
@@ -253,6 +276,34 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   );
 }
 
+/** One line for the booking page; the actions themselves are in Payments &
+ *  payouts. Null when there's nothing to charge or follow up. */
+function providerFeeSummary(
+  fee: BookingFeeCharge | null,
+  terms: BookingFeeTerms | null,
+  window: ReturnType<typeof feeChargeWindow> | null,
+  otherName: string | undefined,
+): string | null {
+  const who = otherName || 'The client';
+  if (fee) {
+    const label = `${pounds(fee.amountPence)} ${kindLabel(fee.kind)}`;
+    if (fee.status === 'processing') return `${label} · charging…`;
+    if (fee.status === 'awaiting_client') return `${label} · waiting for ${otherName || 'the client'} to pay`;
+    if (fee.status === 'refunded') return `${label} · refunded`;
+    if (fee.status === 'succeeded') {
+      return fee.disputedAt && !fee.disputeResolvedAt ? `${who} disputed the ${label}` : `${label} · charged`;
+    }
+    return null;
+  }
+  if (!terms || !window?.open) return null;
+  const open = ([
+    ['late', terms.lateFeePence], ['no_show', terms.noShowFeePence], ['late_cancel', terms.lateCancelFeePence],
+  ] as const).filter(([k, p]) => window.canCharge[k] && !!p);
+  if (open.length === 0) return null;
+  const what = open.map(([k, p]) => `${kindLabel(k)} (${pounds(p!)})`).join(' or ');
+  return `You can charge a ${what} until ${window.closesAtLabel}.`;
+}
+
 function Action({ C, label, onPress, busy, ghost }: { C: BookingFeeColors; label: string; onPress: () => void; busy: boolean; ghost?: boolean }) {
   return (
     <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={onPress} activeOpacity={0.75}
@@ -271,4 +322,6 @@ const st = StyleSheet.create({
   input: { minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 10, fontSize: 14, textAlignVertical: 'top', marginBottom: 8 },
   button: { borderRadius: 20, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  compact: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  link: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
 });
