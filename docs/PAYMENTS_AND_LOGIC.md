@@ -720,6 +720,7 @@ stops a no-show being marked until it has passed.
 | The provider receives | The fee **minus Stripe's actual card fee**, held 24 hours, then sent, less any money they owe (section 2.8) |
 | CERVICED | Takes nothing |
 | Saved card | The client can't remove it until 24 hours after the appointment |
+| Where the provider charges it | **Payments & payouts → Bookings → Late & no-show fees** (since 18 November; it was on the booking page). Every fee that can still be charged is listed there, with the charged ones underneath; tapping one opens it to charge, refund or answer a dispute. The booking page keeps a one-line status that links there. Same rules and server checks either way |
 
 **If the card is declined** (or the bank wants the client to approve the
 payment):
