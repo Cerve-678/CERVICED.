@@ -245,6 +245,8 @@ describe('the 2026-11-15 templates', () => {
         location="Peckham"
         content={{ about: 'Soft lash sets.', categories: ['Lashes'], services: [{ name: 'Classic set', minutes: 120, price: 65 }] }}
         rating="5.0"
+        // Services only list in the full preview (Info Reg's); Branding's shows outline cards.
+        full
       />,
     );
     expect(StyleSheet.flatten(screen.getByText('Amara Lashes').props["style"]).fontFamily).toBe('Italiana_400Regular');
