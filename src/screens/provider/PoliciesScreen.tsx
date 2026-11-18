@@ -63,7 +63,7 @@ import { PackFormHintLines, PackFormTipCard, usePackFormTip, type PackFormKind }
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { getMyProviderProfile, updateProviderCancellationPolicy, updateProviderProfileSections } from '../../services/databaseService';
 import {
-  hasHalfFilledFaq, normalizeOwnSections, ownSectionsChanged,
+  hasHalfFilledCustom, hasHalfFilledFaq, normalizeOwnSections, ownSectionsChanged,
   type OwnSections,
 } from '../../features/providers/ownSections';
 import { OwnSectionsCard, toOwnDraft, type OwnDraft } from '../../features/business-details/OwnSectionsCard';
@@ -415,6 +415,10 @@ export default function PoliciesScreen({ navigation }: any) {
     }
     if (hasHalfFilledFaq(ownDraft.faq)) {
       flash('Each question needs an answer, or remove it', 'error');
+      return;
+    }
+    if (hasHalfFilledCustom(ownDraft.custom)) {
+      flash('Each custom section needs a name and some words, or remove it', 'error');
       return;
     }
     if (ownChanged && !termsAcknowledged) {

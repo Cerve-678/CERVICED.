@@ -11,7 +11,7 @@ import {
  * The client side of the waitlist: how a place reads, how long a held slot
  * has left, and the cart item that pays for it.
  *
- * A held slot is a 15-minute on_hold booking. It's paid for through the
+ * A held slot is a 10-minute on_hold booking. It's paid for through the
  * normal checkout (prepare_checkout with waitlist_hold_id), and the 15
  * minutes keep running while the client pays. Missing them, or passing, takes
  * the client off that waitlist. See

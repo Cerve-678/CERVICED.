@@ -15,6 +15,7 @@ import Svg, { Path } from "react-native-svg";
 
 import {
   chapterHeading,
+  customHeadingPair,
   headingPair,
   HUSH_TITLES,
   PAGE_SECTION_TITLES,
@@ -111,7 +112,7 @@ const GAZETTE_HEADLINES: Record<PageSectionKey, string> = {
   keyInfo: "Key Information",
   faq: "Questions Answered",
   aftercare: "Aftercare",
-  houseRules: "House Rules",
+  custom: "More Information",
   disclaimer: "Disclaimer",
 };
 
@@ -130,7 +131,7 @@ const STUDIO_TABS: Record<PageSectionKey, string> = {
   keyInfo: "Key info",
   faq: "Q&A",
   aftercare: "Aftercare",
-  houseRules: "House rules",
+  custom: "More info",
   disclaimer: "Disclaimer",
 };
 
@@ -142,6 +143,7 @@ export function PageSectionHeading({
   color,
   accentColor,
   align,
+  title: ownTitle,
 }: {
   section: PageSectionKey;
   palette: PageStylePalette;
@@ -149,9 +151,16 @@ export function PageSectionHeading({
   color?: string;
   accentColor?: string;
   align?: "left" | "center";
+  /** A Custom section's own name, drawn in place of the style's wording. */
+  title?: string | undefined;
 }) {
   const style = palette.pageStyle;
-  const title = PAGE_SECTION_TITLES[section];
+  const custom = ownTitle?.trim() || null;
+  const title = custom ?? PAGE_SECTION_TITLES[section];
+  // Two-part headings: a lead-in, then the name. A one-word Custom name has
+  // no lead-in, so each style below draws the lead only when there is one.
+  const pair: [string, string] = custom ? customHeadingPair(custom) : headingPair(section);
+  const words = pair.filter(Boolean).join(" ");
   const ink = color ?? sheetInk(palette.background).text;
   const accent = accentColor ?? palette.accent;
   const a11y = { accessibilityRole: "header" as const, accessibilityLabel: title };
@@ -164,23 +173,23 @@ export function PageSectionHeading({
         </Text>
       );
     case "scriptPair": {
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.pairRow}>
-          <Text style={[headingStyles.script, { color: ink }]}>{lead}</Text>
+          {lead ? <Text style={[headingStyles.script, { color: ink }]}>{lead}</Text> : null}
           <Text style={[headingStyles.serif, { color: ink }]}>{rest}</Text>
         </View>
       );
     }
     case "capsScript": {
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View
           {...a11y}
           accessible
           style={[headingStyles.capsRow, align === "center" && headingStyles.centerRow]}
         >
-          <Text style={[headingStyles.caps, { color: color ?? accent }]}>{lead.toUpperCase()}</Text>
+          {lead ? <Text style={[headingStyles.caps, { color: color ?? accent }]}>{lead.toUpperCase()}</Text> : null}
           <Text style={[headingStyles.capsScript, { color: color ?? accent }]}>{rest.toLowerCase()}</Text>
         </View>
       );
@@ -205,13 +214,13 @@ export function PageSectionHeading({
       );
     case "dotCaps": {
       // Editorial: "The .SERVICES" between hairlines.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       const line = color ? withAlpha(color, 0.35) : sheetInk(palette.background).border;
       return (
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.dotLight, { color: ink }]} numberOfLines={1}>
-            {lead}{" "}
+            {lead ? `${lead} ` : ""}
             <Text style={headingStyles.dotBold}>
               <Text style={{ color: accent }}>.</Text>
               {rest.toUpperCase()}
@@ -223,24 +232,26 @@ export function PageSectionHeading({
     }
     case "italicCaps": {
       // Heritage: an italic word between short rules, engraved caps under it.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
-          <View style={headingStyles.shortRuleRow}>
-            <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
-            <Text style={[headingStyles.heritageScript, { color: accent }]}>{lead}</Text>
-            <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
-          </View>
+          {lead ? (
+            <View style={headingStyles.shortRuleRow}>
+              <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
+              <Text style={[headingStyles.heritageScript, { color: accent }]}>{lead}</Text>
+              <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
+            </View>
+          ) : null}
           <Text style={[headingStyles.heritageCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
     }
     case "layered": {
       // Duet: a big script word with heavy caps over its foot.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
-          <Text style={[headingStyles.layeredScript, { color: accent }]}>{lead}</Text>
+          {lead ? <Text style={[headingStyles.layeredScript, { color: accent }]}>{lead}</Text> : null}
           <Text style={[headingStyles.layeredCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
@@ -248,14 +259,14 @@ export function PageSectionHeading({
     case "groovy":
       return (
         <View {...a11y} accessible style={headingStyles.groovyWrap}>
-          <Text style={[headingStyles.groovy, { color: ink }]}>{headingPair(section).join(" ").toLowerCase()}</Text>
+          <Text style={[headingStyles.groovy, { color: ink }]}>{words.toLowerCase()}</Text>
           <Squiggle color={accent} />
         </View>
       );
     case "serifTitle":
       return (
         <Text {...a11y} style={[headingStyles.serifTitle, { color: ink }]}>
-          {headingPair(section).join(" ")}
+          {words}
         </Text>
       );
     case "indexed":
@@ -264,7 +275,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.indexRow}>
           <Text style={[headingStyles.indexNumber, { color: accent }]}>{SECTION_NUMBERS[section]}</Text>
           <View style={[headingStyles.indexRule, { backgroundColor: accent }]} />
-          <Text style={[headingStyles.indexTitle, { color: ink }]} numberOfLines={1}>{headingPair(section).join(" ")}</Text>
+          <Text style={[headingStyles.indexTitle, { color: ink }]} numberOfLines={1}>{words}</Text>
         </View>
       );
     case "condensed":
@@ -272,7 +283,7 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.condensedWrap}>
           <Text style={[headingStyles.condensed, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.condensedBar, { backgroundColor: accent }]} />
         </View>
@@ -283,7 +294,7 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <Text style={[headingStyles.quietCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -296,7 +307,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <WaxSeal size={26} wax={waxColour(accent)} />
           <Text style={[headingStyles.sealCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -306,7 +317,7 @@ export function PageSectionHeading({
       // Sheer: thin Bellefair caps, widely spaced, centred.
       return (
         <Text {...a11y} style={[headingStyles.sheerCaps, { color: ink }]}>
-          {headingPair(section).join(" ").toUpperCase()}
+          {words.toUpperCase()}
         </Text>
       );
     case "embossCaps":
@@ -314,7 +325,7 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.embossWrap}>
           <EmbossedText paper={palette.background} style={headingStyles.embossCaps} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </EmbossedText>
         </View>
       );
@@ -325,7 +336,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.engravedCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -336,18 +347,18 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={[headingStyles.newsRule, { borderColor: ink }]}>
           <Text style={[headingStyles.newsTitle, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-            {GAZETTE_HEADLINES[section].toUpperCase()}
+            {(custom ?? GAZETTE_HEADLINES[section]).toUpperCase()}
           </Text>
         </View>
       );
     case "chunkyCaps": {
       // Studio: a lowercase script word in the accent, then the title in
       // big Young Serif caps, on one centred line where it fits.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
           <Text style={[headingStyles.chunkyCaps, { color: ink }]}>
-            <Text style={[headingStyles.chunkyScript, { color: accent }]}>{lead.toLowerCase()} </Text>
+            {lead ? <Text style={[headingStyles.chunkyScript, { color: accent }]}>{lead.toLowerCase()} </Text> : null}
             {rest.toUpperCase()}
           </Text>
         </View>
@@ -356,7 +367,8 @@ export function PageSectionHeading({
     case "chapter": {
       // Novel: "CHAPTER III" in small caps, the title in italic, a foil-style
       // ornament under it (rule, diamond, rule) in the accent.
-      const [number, chapterTitle] = chapterHeading(section);
+      const [number, defaultChapterTitle] = chapterHeading(section);
+      const chapterTitle = custom ?? defaultChapterTitle;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
           <Text style={[headingStyles.chapterNumber, { color: color ?? sheetInk(palette.background).sub }]}>
@@ -376,7 +388,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.labelCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -384,10 +396,10 @@ export function PageSectionHeading({
     }
     case "lacePair": {
       // Lace: a lowercase script word in the accent, spaced display caps tucked under it.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
-          <Text style={[headingStyles.laceScript, { color: accent }]}>{lead.toLowerCase()}</Text>
+          {lead ? <Text style={[headingStyles.laceScript, { color: accent }]}>{lead.toLowerCase()}</Text> : null}
           <Text style={[headingStyles.laceCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
@@ -399,14 +411,14 @@ export function PageSectionHeading({
           {section === "policies" ? (
             <Text style={[headingStyles.loungeKicker, { color: color ?? sheetInk(palette.background).sub }]}>PLEASE REVIEW MY</Text>
           ) : null}
-          <Text style={[headingStyles.loungeCaps, { color: ink }]}>{headingPair(section).join(" ").toUpperCase()}</Text>
+          <Text style={[headingStyles.loungeCaps, { color: ink }]}>{words.toUpperCase()}</Text>
         </View>
       );
     case "softCaps":
       // Soft Focus: heavy grotesk caps at the top left of the section's own card.
       return (
         <Text {...a11y} style={[headingStyles.softCaps, { color: ink }]}>
-          {headingPair(section).join(" ").toUpperCase()}
+          {words.toUpperCase()}
         </Text>
       );
     case "hushRule": {
@@ -416,7 +428,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.hushRule, { color: color ?? sheetInk(palette.background).sub }]} numberOfLines={1}>
-            {HUSH_TITLES[section].toUpperCase()}
+            {(custom ?? HUSH_TITLES[section]).toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -434,7 +446,7 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
           <BowGlyph width={34} accent={accent} />
-          <Text style={[headingStyles.bowTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
+          <Text style={[headingStyles.bowTitle, { color: ink }]}>{words}</Text>
         </View>
       );
     case "appBold":
@@ -456,7 +468,7 @@ export function PageSectionHeading({
       // Boutique: a big serif title on the left, like a shop's department.
       return (
         <Text {...a11y} style={[headingStyles.shopSerif, { color: ink }]}>
-          {headingPair(section).join(" ")}
+          {words}
         </Text>
       );
     default:
@@ -495,7 +507,7 @@ const STRIPE_TINT: Record<PageSectionKey, "soft" | "strong" | null> = {
   keyInfo: "soft",
   faq: null,
   aftercare: "soft",
-  houseRules: null,
+  custom: null,
   disclaimer: "soft",
 };
 
@@ -506,6 +518,7 @@ export function PageSection({
   bare = false,
   headingRight,
   style,
+  title,
 }: {
   section: PageSectionKey;
   palette: PageStylePalette;
@@ -513,6 +526,8 @@ export function PageSection({
   bare?: boolean;
   /** Something on the heading's line, at the right (Portfolio's "See all"). */
   headingRight?: React.ReactNode;
+  /** A Custom section's own name, used for its heading in every style. */
+  title?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const pageStyle = palette.pageStyle;
@@ -533,7 +548,7 @@ export function PageSection({
         <LinearGradient colors={palette.highlightColors} style={StyleSheet.absoluteFill} />
         <HeadingLine headingRight={headingRight}>
           <Text accessibilityRole="header" style={[headingStyles.plain, { color: palette.text }]}>
-            {PAGE_SECTION_TITLES[section]}
+            {title?.trim() || PAGE_SECTION_TITLES[section]}
           </Text>
         </HeadingLine>
         {children}
@@ -552,7 +567,7 @@ export function PageSection({
         ]}
       >
         <View style={surfaceStyles.legendWrap} pointerEvents="box-none">
-          <PageSectionHeading section={section} palette={palette} />
+          <PageSectionHeading section={section} palette={palette} title={title} />
         </View>
         {headingRight ? <View style={surfaceStyles.legendRight}>{headingRight}</View> : null}
         {children}
@@ -562,7 +577,7 @@ export function PageSection({
 
   const heading = (
     <HeadingLine headingRight={headingRight} centered={isCentredHeading(pageStyle)}>
-      <PageSectionHeading section={section} palette={palette} />
+      <PageSectionHeading section={section} palette={palette} title={title} />
     </HeadingLine>
   );
 
@@ -582,7 +597,7 @@ export function PageSection({
         ]}
       >
         <HeadingLine headingRight={headingRight} centered>
-          <PageSectionHeading section={section} palette={palette} color={sheetInk(strip ?? palette.background).text} />
+          <PageSectionHeading section={section} palette={palette} title={title} color={sheetInk(strip ?? palette.background).text} />
         </HeadingLine>
         {bare ? children : (
           <View style={[surfaceStyles.solid, surfaceStyles.stripeBox, { backgroundColor: palette.cardBackground, borderColor: colours.line }]}>
@@ -598,7 +613,7 @@ export function PageSection({
     return (
       <View style={[surfaceStyles.solid, surfaceStyles.softCard, { backgroundColor: palette.cardBackground }, square && surfaceStyles.square, style]}>
         <HeadingLine headingRight={headingRight}>
-          <PageSectionHeading section={section} palette={palette} color={palette.text} />
+          <PageSectionHeading section={section} palette={palette} title={title} color={palette.text} />
         </HeadingLine>
         {children}
       </View>
@@ -672,7 +687,7 @@ export function PageSection({
         {heading}
         <View style={[surfaceStyles.tab, { backgroundColor: palette.cardBackground }]}>
           <Text style={[surfaceStyles.tabText, { color: palette.text }]} numberOfLines={1}>
-            {STUDIO_TABS[section].toUpperCase()}
+            {(title?.trim() || STUDIO_TABS[section]).toUpperCase()}
           </Text>
         </View>
         <View style={[surfaceStyles.solid, surfaceStyles.tabbedCard, { backgroundColor: palette.cardBackground }]}>

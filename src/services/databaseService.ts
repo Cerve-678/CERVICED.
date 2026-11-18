@@ -2922,7 +2922,7 @@ export type CheckoutIntentItem = {
   emergency_ack?: boolean;
   // A waitlist slot held for this client (bookings.id of the on_hold row).
   // prepare_checkout reuses that row instead of inserting one, keeps its own
-  // 15 minutes, and refuses it if the hold has ended or isn't theirs. One per
+  // 10 minutes, and refuses it if the hold has ended or isn't theirs. One per
   // checkout. See 20261113210000_waitlist_pays_at_confirm.sql.
   waitlist_hold_id?: string;
   // Where a MOBILE provider should travel to. prepare_checkout() reads the
@@ -4695,7 +4695,7 @@ export interface WaitlistEntry {
   position: number;
   created_at: string;
   notified_at: string | null;
-  /** The slot last offered to this client (a 15-minute hold), and when that
+  /** The slot last offered to this client (a 10-minute hold), and when that
    *  hold ends or ended. offer_expires_at is the hold's real end, not an
    *  estimate. See 20261113210000_waitlist_pays_at_confirm.sql. */
   offered_booking_id: string | null;
@@ -4865,7 +4865,7 @@ export interface ReleasedWaitlistSlot {
   bookingTime: string;
   endTime: string | null;
   releasedByName: string | null;
-  reason: "missed" | "passed";
+  reason: "missed" | "passed" | "cancelled";
   createdAt: string;
 }
 
@@ -4877,7 +4877,7 @@ interface ReleasedWaitlistSlotRow {
   booking_time: string;
   end_time: string | null;
   released_by_name: string | null;
-  reason: "missed" | "passed";
+  reason: "missed" | "passed" | "cancelled";
   created_at: string;
 }
 
@@ -4901,7 +4901,7 @@ export async function getProviderReleasedWaitlistSlots(
   }));
 }
 
-/** The provider offers a waiting client a time they pick: a 15-minute hold
+/** The provider offers a waiting client a time they pick: a 10-minute hold
  *  the client confirms and pays for, never an unpaid booking. Throws the
  *  database's reason (taken, outside hours, notice) if it can't be held. */
 export async function providerOfferWaitlistSlot(

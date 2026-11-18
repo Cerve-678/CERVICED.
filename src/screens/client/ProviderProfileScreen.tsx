@@ -168,6 +168,7 @@ import {
   ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
+import { WAITLIST_HOLD_MINUTES } from "../../constants/waitlist";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -4146,7 +4147,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                   {(() => {
                     const wEntry = userWaitlistMap[service.dbId];
-                    // Held: the slot is theirs for 15 minutes; it's paid for
+                    // Held: the slot is theirs for WAITLIST_HOLD_MINUTES; it's paid for
                     // from Bookings, so the chip goes there. No ✕ while held:
                     // they pass on it from Bookings instead.
                     if (wEntry?.status === "notified") {
@@ -4191,8 +4192,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       );
                     }
                     // undefined means "still checking" and true means
-                    // "still has openings" — both stay quiet here.
-                    if (!DEBUG_FORCE_FULLY_BOOKED && serviceNearTermAvailability[service.dbId] !== false)
+                    // "still has openings" — both stay quiet here. A closed
+                    // schedule reads as "has openings" (the free-slot check
+                    // skips closed providers), but its waitlist still takes
+                    // people: a slot freed while full goes to them.
+                    if (!DEBUG_FORCE_FULLY_BOOKED && takingBookings && serviceNearTermAvailability[service.dbId] !== false)
                       return null;
                     // Provider turned waitlists off in Automations — still
                     // surface the scarcity so the client isn't only told
@@ -4201,7 +4205,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     // the Book button above already reads "Fully Booked" —
                     // this note would just repeat the same claim.
                     if (!DEBUG_FORCE_FULLY_BOOKED && !provider.waitlistEnabled) {
-                      if (serviceFullyBooked[service.dbId] === true) return null;
+                      if (!takingBookings || serviceFullyBooked[service.dbId] === true) return null;
                       return (
                         <Text
                           style={[
@@ -4709,7 +4713,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               </View>
 
               <Text style={[styles.waitlistPopupSub, { color: OP.sub }]}>
-                If a slot that suits you opens, it's held for you for 15 minutes to confirm and pay, deposit and fee included. If you don't pay in time, you come off the waitlist and can rejoin.
+                If a slot that suits you is offered to you, it's held for {WAITLIST_HOLD_MINUTES} minutes to confirm and pay, deposit and fee included. If you don't pay in time, you come off the waitlist and can rejoin.
               </Text>
 
               {/* Availability toggle */}

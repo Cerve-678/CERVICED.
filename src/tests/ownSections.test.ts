@@ -4,12 +4,13 @@ import {
   OWN_SECTION_KINDS,
   OWN_SECTION_LIMITS,
   filledOwnSections,
+  hasHalfFilledCustom,
   hasHalfFilledFaq,
   normalizeOwnSections,
   ownSectionByline,
   ownSectionsChanged,
 } from '../features/providers/ownSections';
-import { PAGE_SECTION_TITLES, chapterHeading, headingPair } from '../constants/pageStyles';
+import { PAGE_SECTION_TITLES, chapterHeading, customHeadingPair, headingPair } from '../constants/pageStyles';
 import { mapProviderProfileData } from '../features/providers/profileMapper';
 
 const read = (path: string) => readFileSync(join(__dirname, '..', path), 'utf8');
@@ -19,7 +20,7 @@ describe('normalizeOwnSections', () => {
     expect(normalizeOwnSections({
       keyInfo: '  Free street parking  ',
       aftercare: '   ',
-      houseRules: 42,
+      custom: 'not a list',
       disclaimer: 'Results vary.',
       secretAddress: '1 High Street',
     })).toEqual({ keyInfo: 'Free street parking', disclaimer: 'Results vary.' });
@@ -38,6 +39,24 @@ describe('normalizeOwnSections', () => {
     const out = normalizeOwnSections({ keyInfo: 'x'.repeat(5000), faq: [{ question: 'q'.repeat(500), answer: 'a' }] });
     expect(out.keyInfo).toHaveLength(OWN_SECTION_LIMITS.text);
     expect(out.faq![0]!.question).toHaveLength(OWN_SECTION_LIMITS.question);
+  });
+
+  it('keeps custom sections that have a name and words, up to five', () => {
+    const custom = Array.from({ length: 7 }, (_, i) => ({ title: ` Parking ${i} `, body: `Body ${i}` }));
+    custom.splice(1, 0, { title: 'No words', body: ' ' }, { title: '', body: 'No name' });
+    const out = normalizeOwnSections({ custom });
+    expect(out.custom).toHaveLength(OWN_SECTION_LIMITS.customItems);
+    expect(out.custom![0]).toEqual({ title: 'Parking 0', body: 'Body 0' });
+    expect(normalizeOwnSections({ custom: [{ title: 't'.repeat(99), body: 'b' }] }).custom![0]!.title)
+      .toHaveLength(OWN_SECTION_LIMITS.customTitle);
+  });
+
+  it('carries House Rules already written over as a custom section of that name', () => {
+    expect(normalizeOwnSections({ houseRules: ' Come on your own. ', custom: [{ title: 'Parking', body: 'Free' }] }))
+      .toEqual({ custom: [{ title: 'House Rules', body: 'Come on your own.' }, { title: 'Parking', body: 'Free' }] });
+    // Saved back without the old key, and not counted as a change to re-agree to.
+    expect(normalizeOwnSections({ houseRules: 'x' })).not.toHaveProperty('houseRules');
+    expect(ownSectionsChanged({ custom: [{ title: 'House Rules', body: 'x' }] }, { houseRules: 'x' })).toBe(false);
   });
 
   it('is empty for anything that is not an object', () => {
@@ -59,6 +78,18 @@ describe('filledOwnSections / hasHalfFilledFaq', () => {
     expect(hasHalfFilledFaq([{ question: 'q', answer: 'a' }, { question: '', answer: '' }])).toBe(false);
     expect(hasHalfFilledFaq(undefined)).toBe(false);
   });
+
+  it('places custom sections last, after the Disclaimer', () => {
+    expect(filledOwnSections({ disclaimer: 'd', custom: [{ title: 'Parking', body: 'Free' }], aftercare: 'a' }))
+      .toEqual(['aftercare', 'disclaimer', 'custom']);
+  });
+
+  it('spots a custom section with a name and no words, or words and no name', () => {
+    expect(hasHalfFilledCustom([{ title: 'Parking', body: '' }])).toBe(true);
+    expect(hasHalfFilledCustom([{ title: ' ', body: 'Free' }])).toBe(true);
+    expect(hasHalfFilledCustom([{ title: 'Parking', body: 'Free' }, { title: '', body: '' }])).toBe(false);
+    expect(hasHalfFilledCustom(undefined)).toBe(false);
+  });
 });
 
 describe('own sections on the profile', () => {
@@ -68,6 +99,13 @@ describe('own sections on the profile', () => {
       expect(headingPair(kind)).toHaveLength(2);
       expect(chapterHeading(kind)[0]).toMatch(/^Chapter [IVX]+$/);
     }
+  });
+
+  it('a custom section is headed with its own name, split for two-part headings', () => {
+    expect(customHeadingPair('Before you arrive')).toEqual(['Before', 'you arrive']);
+    expect(customHeadingPair(' Parking ')).toEqual(['', 'Parking']);
+    const sections = read('features/providers/ProviderProfileSections.tsx');
+    expect(sections).toContain('section="custom" title={item.title}');
   });
 
   it('the mapper reads them cleaned from providers.profile_sections', () => {
@@ -100,7 +138,7 @@ describe('provider-written sections are attributed', () => {
     expect(ownSectionByline('disclaimer', '')).toBe('Written by the provider');
     expect(ownSectionByline('keyInfo', 'Glow Studio')).toBeNull();
     expect(ownSectionByline('faq', 'Glow Studio')).toBeNull();
-    expect(ownSectionByline('houseRules', 'Glow Studio')).toBeNull();
+    expect(ownSectionByline('custom', 'Glow Studio')).toBeNull();
   });
 });
 

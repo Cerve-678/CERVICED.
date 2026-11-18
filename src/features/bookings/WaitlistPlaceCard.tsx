@@ -23,7 +23,7 @@ interface WaitlistPlaceCardProps {
   onChangeDates: (place: MyWaitlistPlace) => void;
   onRejoin: (place: MyWaitlistPlace) => void;
   onDismiss: (place: MyWaitlistPlace) => void;
-  /** A held card's 15 minutes just ran out. */
+  /** A held card's time just ran out. */
   onHoldEnded: () => void;
 }
 
