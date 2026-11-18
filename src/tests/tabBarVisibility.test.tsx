@@ -62,6 +62,14 @@ describe("provider Home tab", () => {
 });
 
 describe("screens that never show the bar", () => {
+  it("hides it on Payments, including when My Profile's Payouts card opens it", () => {
+    expect(stackHidesTabBar("MyServices", ["ProviderServicesMain", "Payments"])).toBe(true);
+    expect(stackHidesTabBar(PROVIDER_HOME_TAB, ["ProviderHomeMain", "Payments"])).toBe(true);
+    expect(stackHidesTabBar(SETTINGS_TAB, ["ProviderAccountMain", "Payments"])).toBe(true);
+    // My Profile itself keeps it.
+    expect(stackHidesTabBar("MyServices", ["ProviderServicesMain"])).toBe(false);
+  });
+
   it("hides it on Branding from every tab that opens it, and on anything opened from it", () => {
     expect(stackHidesTabBar(SETTINGS_TAB, ["ProviderAccountMain", "Branding"])).toBe(true);
     expect(stackHidesTabBar(PROVIDER_HOME_TAB, ["ProviderHomeMain", "Branding"])).toBe(true);
