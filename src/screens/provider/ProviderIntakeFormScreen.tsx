@@ -29,7 +29,7 @@ import {
   saveFormToLibrary,
   updateLibraryForm,
   deleteLibraryForm,
-  sendLibraryFormToClient,
+  sendLibraryFormToBookings,
   IntakeFormQuestion,
   IntakeForm,
   LibraryForm,
@@ -45,6 +45,8 @@ import {
   getRelevantTemplates,
 } from '../../features/intake-forms/formTemplates';
 import { FormsWelcome } from '../../features/intake-forms/FormsWelcome';
+import { DEADLINE_OPTIONS, deadlineLabel, dueByLabel } from '../../features/intake-forms/formDeadline';
+import { appointmentLabel, sentFormsMessage, upcomingForForms } from '../../features/intake-forms/sendForms';
 import { recordTourSeen, resolveTourForUser } from '../../services/tourService';
 import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { useHowItWorks } from '../../components/HowItWorksSheet';
@@ -184,7 +186,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     providerServiceNames.every(name => selectedServices.includes(name));
   const [autoSend, setAutoSend]             = useState(false);
   const [requiresSignature, setRequiresSignature] = useState(false);
+  const [deadlineHours, setDeadlineHours]   = useState<number | null>(null);
   const [saving, setSaving]                 = useState(false);
+  // One save or send at a time. `saving` only disables the buttons after the
+  // next render, so a quick second tap used to start a second save and add
+  // the same form to My Forms twice.
+  const busyRef = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   // ── Readonly state ────────────────────────────────────────────────────────
@@ -196,6 +203,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   // ── Booking picker (opened from Quick Access — no booking context yet) ────
   const [pickingBookingFor, setPickingBookingFor] = useState<string | null>(null); // library form id
   const [pickableBookings, setPickableBookings] = useState<BookingWithAddOns[]>([]);
+  const [pickedBookingIds, setPickedBookingIds] = useState<string[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
 
   // ── How Forms work (first visit, then the ⓘ) ──────────────────────────────
@@ -232,6 +240,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setSelectedServices([]);
     setAutoSend(false);
     setRequiresSignature(false);
+    setDeadlineHours(null);
     setMode('builder');
   }, [serviceName]);
 
@@ -243,6 +252,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setSelectedServices([]);
     setAutoSend(false);
     setRequiresSignature(false);
+    setDeadlineHours(null);
     // Carried through the save so get_provider_terms can find this one row
     // among a library that also holds medical-history and patch-test forms.
     setIsTerms(tpl.kind === 'terms');
@@ -258,6 +268,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setAutoSend(form.autoSend);
     setRequiresSignature(form.requiresSignature);
     setIsTerms(form.isTerms);
+    setDeadlineHours(form.deadlineHours);
     setMode('builder');
   }, []);
 
@@ -385,28 +396,29 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const handleSaveToLibrary = useCallback(async (): Promise<LibraryForm | null> => {
     if (questions.length === 0) { showToast('Add at least one question.', 'warning'); return null; }
     if (questions.some(q => !q.label.trim())) { showToast('All questions must have a label.', 'warning'); return null; }
+    if (busyRef.current) return null;
+    busyRef.current = true;
     setSaving(true);
     try {
+      const fields = {
+        title: title.trim() || 'Consultation Form',
+        questions,
+        serviceNames: selectedServices,
+        autoSend,
+        requiresSignature,
+        isTerms,
+        deadlineHours: isTerms ? null : deadlineHours,
+      };
       let saved: LibraryForm;
       if (editingId) {
-        await updateLibraryForm(editingId, {
-          title: title.trim() || 'Consultation Form',
-          questions,
-          serviceNames: selectedServices,
-          autoSend,
-          requiresSignature,
-          isTerms,
-        });
-        saved = { id: editingId, providerId: '', title, questions, serviceNames: selectedServices, autoSend, requiresSignature, isTerms, sentCount: 0, createdAt: '' };
+        await updateLibraryForm(editingId, fields);
+        saved = { id: editingId, providerId: '', ...fields, sentCount: 0, createdAt: '' };
       } else {
-        saved = await saveFormToLibrary({
-          title: title.trim() || 'Consultation Form',
-          questions,
-          serviceNames: selectedServices,
-          autoSend,
-          requiresSignature,
-          isTerms,
-        });
+        saved = await saveFormToLibrary(fields);
+        // From here on this builder edits the form it just made. Without
+        // this, Save & Send followed by closing the client list (or a second
+        // Save) added another copy to My Forms every time.
+        setEditingId(saved.id);
       }
       // Refresh library
       const updated = await getProviderFormLibrary();
@@ -417,60 +429,78 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       showToast('Could not save the form. Please try again.', 'error');
       return null;
     } finally {
+      busyRef.current = false;
       setSaving(false);
     }
-  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, isTerms, showToast]);
+  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, isTerms, deadlineHours, showToast]);
 
   // ── Send to client ────────────────────────────────────────────────────────
   // Opened from a booking: bookingId/clientUserId are already known — send
   // straight away. Opened from Quick Access (library-only): no target yet,
   // so open a booking picker first and recurse once one is chosen.
-  const handleSendToClient = useCallback(async (libraryFormId: string, targetBookingId?: string, targetClientUserId?: string) => {
-    const toBookingId = targetBookingId ?? bookingId;
-    const toClientUserId = targetClientUserId ?? clientUserId;
-
-    if (!toBookingId || !toClientUserId) {
-      setLoadingBookings(true);
-      setPickingBookingFor(libraryFormId);
-      try {
-        const all = await getProviderBookings();
-        const upcoming = all.filter(b => b.status === 'pending' || b.status === 'confirmed');
-        setPickableBookings(upcoming);
-      } catch {
-        showToast('Could not load your bookings. Please try again.', 'error');
-        setPickingBookingFor(null);
-      } finally {
-        setLoadingBookings(false);
-      }
-      return;
+  const openBookingPicker = useCallback(async (libraryFormId: string) => {
+    setLoadingBookings(true);
+    setPickedBookingIds([]);
+    setPickingBookingFor(libraryFormId);
+    try {
+      setPickableBookings(upcomingForForms(await getProviderBookings(0), Date.now()));
+    } catch {
+      showToast('Could not load your bookings. Please try again.', 'error');
+      setPickingBookingFor(null);
+    } finally {
+      setLoadingBookings(false);
     }
+  }, [showToast]);
 
+  const sendToBookings = useCallback(async (libraryFormId: string, targets: { bookingId: string; clientUserId: string }[]) => {
+    if (busyRef.current || targets.length === 0) return;
+    busyRef.current = true;
     setSaving(true);
     try {
-      // sendLibraryFormToClient looks up the provider profile itself and already
-      // notifies the client (intake_form_received / "Form to Complete") — a second
-      // insert here used to double-send the push.
-      await sendLibraryFormToClient(libraryFormId, toBookingId, toClientUserId);
+      // sendLibraryFormToBookings looks up the provider profile itself and
+      // already notifies each client (intake_form_received / "Form to
+      // Complete") — a second insert here used to double-send the push.
+      const sent = await sendLibraryFormToBookings(libraryFormId, targets);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast('Form sent to client.', 'success');
+      showToast(sentFormsMessage(sent.length, targets.length), 'success');
       setPickingBookingFor(null);
+      setPickedBookingIds([]);
       if (hasBookingContext) navigation.goBack();
+      else setMode('picker');
     } catch {
       showToast('Could not send the form. Please try again.', 'error');
     } finally {
+      busyRef.current = false;
       setSaving(false);
     }
-  }, [bookingId, clientUserId, hasBookingContext, navigation, showToast]);
+  }, [hasBookingContext, navigation, showToast]);
 
-  const handlePickBookingForSend = useCallback((booking: BookingWithAddOns) => {
-    if (!pickingBookingFor) return;
+  // Opened from a booking: send straight to that client. Opened from Quick
+  // Access (library only): no target yet, so pick the appointments first.
+  const handleSendToClient = useCallback((libraryFormId: string) => {
+    if (bookingId && clientUserId) {
+      void sendToBookings(libraryFormId, [{ bookingId, clientUserId }]);
+    } else {
+      void openBookingPicker(libraryFormId);
+    }
+  }, [bookingId, clientUserId, openBookingPicker, sendToBookings]);
+
+  const togglePickedBooking = useCallback((id: string) => {
     Haptics.selectionAsync().catch(() => {});
-    handleSendToClient(pickingBookingFor, booking.id, booking.user_id);
-  }, [pickingBookingFor, handleSendToClient]);
+    setPickedBookingIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  }, []);
+
+  const sendToPickedBookings = useCallback(() => {
+    if (!pickingBookingFor) return;
+    const targets = pickableBookings
+      .filter(b => pickedBookingIds.includes(b.id) && !!b.user_id)
+      .map(b => ({ bookingId: b.id, clientUserId: b.user_id }));
+    void sendToBookings(pickingBookingFor, targets);
+  }, [pickingBookingFor, pickableBookings, pickedBookingIds, sendToBookings]);
 
   const handleSaveAndSend = useCallback(async () => {
     const saved = await handleSaveToLibrary();
-    if (saved) await handleSendToClient(saved.id);
+    if (saved) handleSendToClient(saved.id);
   }, [handleSaveToLibrary, handleSendToClient]);
 
   const handleDeleteLibraryForm = useCallback(async (id: string) => {
@@ -839,6 +869,34 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
               ))}
             </View>
 
+            {/* Deadline — not on Terms, which a client reads before booking */}
+            {!isTerms && (
+              <>
+                <Text style={[styles.fieldLabel, { color: P.sub, marginTop: 8 }]}>DEADLINE</Text>
+                <Text style={[styles.fieldHint, { color: P.sub }]}>
+                  When your client should fill this in by.
+                </Text>
+                <View style={styles.deadlineRow}>
+                  {DEADLINE_OPTIONS.map(o => {
+                    const on = deadlineHours === o.hours;
+                    return (
+                      <TouchableOpacity
+                        key={o.label}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on }}
+                        style={[styles.serviceChip, { borderColor: on ? P.accent : P.border, backgroundColor: on ? P.accent + '18' : P.card }]}
+                        onPress={() => { Haptics.selectionAsync().catch(() => {}); setDeadlineHours(o.hours); }}
+                        activeOpacity={0.7}
+                      >
+                        {on && <Ionicons name="checkmark" size={12} color={P.accent} />}
+                        <Text style={[styles.serviceChipText, { color: on ? P.accent : P.sub }]}>{o.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
             {/* Signature toggle */}
             <View style={[styles.autoSendRow, { borderColor: P.border, marginTop: 8 }]}>
               <View style={{ flex: 1 }}>
@@ -892,7 +950,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             {existingForm?.status === 'pending' && (
               <View style={[styles.pendingBanner, { backgroundColor: P.card, borderColor: P.border }]}>
                 <Ionicons name="time-outline" size={16} color={P.sub} />
-                <Text style={[styles.pendingText, { color: P.sub }]}>Awaiting client response</Text>
+                <Text style={[styles.pendingText, { color: P.sub }]}>
+                  {existingForm.dueAt ? `Awaiting client response · due ${dueByLabel(existingForm.dueAt)}` : 'Awaiting client response'}
+                </Text>
               </View>
             )}
           </ScrollView>
@@ -922,7 +982,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                 disabled={saving || !canSave}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.sendBtnText, { color: canSave ? P.onAccent : P.sub }]}>Save & Send</Text>
+                {saving
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[styles.sendBtnText, { color: canSave ? P.onAccent : P.sub }]}>Save & Send</Text>
+                }
               </TouchableOpacity>
             </View>
           </View>
@@ -948,6 +1011,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           <ScrollView contentContainerStyle={styles.previewContent} showsVerticalScrollIndicator={false}>
             <Text style={[styles.previewFormTitle, { color: P.text }]}>{title || 'Consultation Form'}</Text>
             <Text style={[styles.previewFormSub, { color: P.sub }]}>{questions.length} question{questions.length !== 1 ? 's' : ''}{requiresSignature ? '  ·  Signature required' : ''}</Text>
+            {!isTerms && deadlineHours != null && (
+              <Text style={[styles.previewFormSub, { color: P.accent, marginTop: -4 }]}>
+                Fill in by {deadlineLabel(deadlineHours).toLowerCase()} your appointment
+              </Text>
+            )}
             <View style={[styles.divider, { backgroundColor: P.border, marginBottom: 20 }]} />
             {questions.length === 0 ? (
               <View style={[styles.builderEmpty, { borderColor: P.border }]}>
@@ -1012,9 +1080,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         </SafeAreaProvider>
       </Modal>
 
-      {/* ── Booking picker — shown when "Send to Client" is tapped from the
-            library with no booking already in context (i.e. opened from
-            Quick Access rather than from a specific booking). ── */}
+      {/* ── Appointment picker — shown when "Send to clients" is tapped from
+            the library with no booking already in context (opened from Quick
+            Access rather than from a specific booking). Pick as many
+            upcoming appointments as you like, then send once. ── */}
       <Modal
         visible={!!pickingBookingFor}
         animationType="fade"
@@ -1023,37 +1092,71 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPickingBookingFor(null)} />
-          <View style={{ maxHeight: '75%', backgroundColor: P.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 14, paddingBottom: insets.bottom + 20 }}>
+          <View style={{ maxHeight: '80%', backgroundColor: P.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 14, paddingBottom: insets.bottom + 16 }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, alignSelf: 'center', backgroundColor: P.border, marginBottom: 14 }} />
-            <Text style={{ fontSize: 17, fontWeight: '700', color: P.text, textAlign: 'center', marginBottom: 4 }}>Send to Which Booking?</Text>
-            <Text style={{ fontSize: 12, color: P.sub, textAlign: 'center', marginBottom: 14, paddingHorizontal: 24 }}>
-              Choose the appointment this form is for
+            <Text style={{ fontSize: 17, fontWeight: '700', color: P.text, textAlign: 'center', marginBottom: 4 }}>Send to who?</Text>
+            <Text style={{ fontSize: 12, color: P.sub, textAlign: 'center', marginBottom: 10, paddingHorizontal: 24 }}>
+              Pick the upcoming appointments this form is for
             </Text>
             {loadingBookings ? (
               <ActivityIndicator color={P.accent} style={{ marginVertical: 30 }} />
             ) : pickableBookings.length === 0 ? (
               <Text style={{ fontSize: 13, color: P.sub, textAlign: 'center', paddingVertical: 30, paddingHorizontal: 24 }}>
-                No upcoming bookings to send this to yet.
+                No upcoming appointments to send this to yet.
               </Text>
             ) : (
-              <ScrollView style={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
-                {pickableBookings.map(b => (
+              <>
+                <TouchableOpacity
+                  style={styles.pickAllRow}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setPickedBookingIds(prev => (prev.length === pickableBookings.length ? [] : pickableBookings.map(b => b.id)));
+                  }}
+                  activeOpacity={0.6}
+                >
+                  <Text style={[styles.serviceLinkAction, { color: P.accent }]}>
+                    {pickedBookingIds.length === pickableBookings.length ? 'CLEAR ALL' : 'SELECT ALL'}
+                  </Text>
+                </TouchableOpacity>
+                <ScrollView style={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
+                  {pickableBookings.map(b => {
+                    const on = pickedBookingIds.includes(b.id);
+                    return (
+                      <TouchableOpacity
+                        key={b.id}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                        style={[styles.formRow, { backgroundColor: P.card, borderColor: on ? P.accent : P.border }]}
+                        activeOpacity={0.75}
+                        onPress={() => togglePickedBooking(b.id)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.formRowTitle, { color: P.text }]}>{b.customer_name ?? 'Client'}</Text>
+                          <Text style={[styles.formRowSub, { color: P.sub }]}>
+                            {b.service_name_snapshot} · {appointmentLabel(b)}
+                          </Text>
+                        </View>
+                        <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? P.accent : P.sub} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
                   <TouchableOpacity
-                    key={b.id}
-                    style={[styles.formRow, { backgroundColor: P.card, borderColor: P.border }]}
-                    activeOpacity={0.75}
-                    onPress={() => handlePickBookingForSend(b)}
+                    style={[styles.sendBtn, { flex: 0, backgroundColor: pickedBookingIds.length > 0 ? P.accent : P.surface }]}
+                    onPress={sendToPickedBookings}
+                    disabled={saving || pickedBookingIds.length === 0}
+                    activeOpacity={0.8}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.formRowTitle, { color: P.text }]}>{b.customer_name ?? 'Client'}</Text>
-                      <Text style={[styles.formRowSub, { color: P.sub }]}>
-                        {b.service_name_snapshot} · {b.booking_date}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={P.sub} />
+                    {saving
+                      ? <ActivityIndicator color={P.onAccent} size="small" />
+                      : <Text style={[styles.sendBtnText, { color: pickedBookingIds.length > 0 ? P.onAccent : P.sub }]}>
+                          {pickedBookingIds.length === 0 ? 'Pick who to send it to' : `Send to ${pickedBookingIds.length} ${pickedBookingIds.length === 1 ? 'client' : 'clients'}`}
+                        </Text>
+                    }
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                </View>
+              </>
             )}
           </View>
         </View>
@@ -1129,6 +1232,12 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
             <Text style={[styles.badgeText, { color: P.accent }]}>Auto-send</Text>
           </View>
         )}
+        {form.deadlineHours != null && (
+          <View style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
+            <Ionicons name="time-outline" size={10} color={P.sub} />
+            <Text style={[styles.badgeText, { color: P.sub }]}>Due {deadlineLabel(form.deadlineHours).toLowerCase()}</Text>
+          </View>
+        )}
         {form.serviceNames.slice(0, 3).map(name => (
           <View key={name} style={[styles.badge, { backgroundColor: P.surface, borderColor: P.border }]}>
             <Text style={[styles.badgeText, { color: P.sub }]}>{name}</Text>
@@ -1144,7 +1253,7 @@ function LibraryFormCard({ form, index, P, onSend, onEdit, onDelete }: {
       {/* Send button */}
       <TouchableOpacity style={[styles.librarySendBtn, { borderColor: P.accent + '55', backgroundColor: P.accent + '10' }]} onPress={onSend} activeOpacity={0.75}>
         <Ionicons name="send-outline" size={14} color={P.accent} />
-        <Text style={[styles.librarySendBtnText, { color: P.accent }]}>Send to Client</Text>
+        <Text style={[styles.librarySendBtnText, { color: P.accent }]}>Send to clients</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -1361,6 +1470,8 @@ const styles = StyleSheet.create({
   saveBtn: { flex: 1, borderWidth: 1.5, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   saveBtnText: { fontSize: 15, fontWeight: '700' },
   sendBtn: { flex: 1, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
+  deadlineRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  pickAllRow: { alignSelf: 'flex-end', paddingHorizontal: 20, paddingVertical: 6 },
   sendBtnText: { fontSize: 15, fontWeight: '700' },
 
   // Preview modal

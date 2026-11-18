@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Written 2026-11-18 (form deadline)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118130000 | `form_deadline` | **UNAPPLIED** — on `feat/forms-send-many-and-deadline`. `provider_form_library.deadline_hours int` (0–336, NULL = none), `booking_intake_forms.due_at timestamptz`, and a BEFORE INSERT trigger `stamp_intake_form_due_at` that sets due_at = booking start (UK time) − deadline_hours. No existing function changed, so all three senders (app, `handle_auto_send_intake_form`, `apply_hold_claimed_side_effects`) get it untouched. Live max `20261118120000` when written; no open branch holds a higher number. Apply before merging the app change (the app writes `deadline_hours`). |
+
 ### Applied 2026-11-17 (Beauty Profile style questions)
 
 | Authored version | Name | Status |

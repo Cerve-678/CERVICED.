@@ -6747,6 +6747,9 @@ export interface IntakeForm {
   requiresSignature: boolean;
   clientSignature: string | null;
   libraryFormId: string | null;
+  /** When the client should have it filled in by (null = no deadline).
+   *  Stamped server-side from the saved form's deadlineHours. */
+  dueAt: string | null;
 }
 
 // ── Library forms (saved to provider's form library, not yet sent) ───────────
@@ -6763,6 +6766,9 @@ export interface LibraryForm {
    *  read from the booking sheet before booking. At most one per provider
    *  (enforced by a partial unique index, not just here). */
   isTerms: boolean;
+  /** Hours before the appointment the client should fill it in by
+   *  (null = no deadline). See features/intake-forms/formDeadline.ts. */
+  deadlineHours: number | null;
   sentCount: number;
   createdAt: string;
 }
@@ -6881,6 +6887,7 @@ export async function saveFormToLibrary(params: {
   autoSend: boolean;
   requiresSignature: boolean;
   isTerms?: boolean;
+  deadlineHours?: number | null;
 }): Promise<LibraryForm> {
   const provider = await getMyProviderProfile();
   if (!provider) throw new Error("No provider profile");
@@ -6894,6 +6901,7 @@ export async function saveFormToLibrary(params: {
       auto_send: params.autoSend,
       requires_signature: params.requiresSignature,
       is_terms: params.isTerms ?? false,
+      deadline_hours: params.deadlineHours ?? null,
     })
     .select()
     .single();
@@ -6910,6 +6918,7 @@ export async function updateLibraryForm(
     autoSend: boolean;
     requiresSignature: boolean;
     isTerms: boolean;
+    deadlineHours: number | null;
   }>,
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
@@ -6921,6 +6930,8 @@ export async function updateLibraryForm(
   if (params.requiresSignature !== undefined)
     patch["requires_signature"] = params.requiresSignature;
   if (params.isTerms !== undefined) patch["is_terms"] = params.isTerms;
+  if (params.deadlineHours !== undefined)
+    patch["deadline_hours"] = params.deadlineHours;
   patch["updated_at"] = new Date().toISOString();
   const { error } = await supabase
     .from("provider_form_library")
@@ -6942,48 +6953,75 @@ export async function sendLibraryFormToClient(
   bookingId: string,
   clientUserId: string,
 ): Promise<IntakeForm> {
+  const [sent] = await sendLibraryFormToBookings(libraryFormId, [{ bookingId, clientUserId }]);
+  if (!sent) throw new Error("Form not sent");
+  return sent;
+}
+
+/** Send one saved form to several upcoming appointments at once: one read of
+ *  the form, one insert for every copy, one sent_count update. Each client is
+ *  told about their own booking (the notification is tied to it). A booking
+ *  that already has this form is skipped, so tapping Send twice never gives a
+ *  client the same form twice. */
+export async function sendLibraryFormToBookings(
+  libraryFormId: string,
+  targets: { bookingId: string; clientUserId: string }[],
+): Promise<IntakeForm[]> {
+  if (targets.length === 0) return [];
   const provider = await getMyProviderProfile();
   if (!provider) throw new Error("No provider profile");
 
-  // Fetch the library form to copy its content
-  const { data: lf, error: lfErr } = await supabase
-    .from("provider_form_library")
-    .select("*")
-    .eq("id", libraryFormId)
-    .single();
-  if (lfErr || !lf) throw new Error("Library form not found");
+  const bookingIds = [...new Set(targets.map(t => t.bookingId))];
+  const [libraryRead, existingRead] = await Promise.all([
+    supabase.from("provider_form_library").select("*").eq("id", libraryFormId).single(),
+    supabase
+      .from("booking_intake_forms")
+      .select("booking_id")
+      .eq("library_form_id", libraryFormId)
+      .in("booking_id", bookingIds)
+      .limit(bookingIds.length),
+  ]);
+  const lf = libraryRead.data;
+  if (libraryRead.error || !lf) throw new Error("Library form not found");
+  if (existingRead.error) throw existingRead.error;
+  const already = new Set((existingRead.data ?? []).map((r: { booking_id: string }) => r.booking_id));
 
-  // Create the sent instance
+  const seen = new Set<string>();
+  const fresh = targets.filter(t => {
+    if (already.has(t.bookingId) || seen.has(t.bookingId)) return false;
+    seen.add(t.bookingId);
+    return true;
+  });
+  if (fresh.length === 0) return [];
+
   const { data, error } = await supabase
     .from("booking_intake_forms")
-    .insert({
-      booking_id: bookingId,
+    .insert(fresh.map(t => ({
+      booking_id: t.bookingId,
       provider_id: provider.id,
-      client_user_id: clientUserId,
+      client_user_id: t.clientUserId,
       title: lf.title,
       questions: lf.questions,
       requires_signature: lf.requires_signature,
       library_form_id: libraryFormId,
-    })
-    .select()
-    .single();
+    })))
+    .select();
   if (error) throw error;
 
-  // Increment sent_count on the library form
   await supabase
     .from("provider_form_library")
-    .update({ sent_count: (lf.sent_count ?? 0) + 1 })
+    .update({ sent_count: (lf.sent_count ?? 0) + fresh.length })
     .eq("id", libraryFormId);
 
-  await notifyClientIntakeFormSent(
-    clientUserId,
-    bookingId,
+  await Promise.allSettled(fresh.map(t => notifyClientIntakeFormSent(
+    t.clientUserId,
+    t.bookingId,
     provider.id,
     lf.title,
     provider.display_name,
-  );
+  )));
 
-  return mapIntakeForm(data);
+  return (data ?? []).map(mapIntakeForm);
 }
 
 /** Tell the client (in-app + push via DB trigger) that a form is waiting for them.
@@ -7029,6 +7067,7 @@ function mapLibraryForm(d: any): LibraryForm {
     autoSend: d.auto_send ?? false,
     requiresSignature: d.requires_signature ?? false,
     isTerms: d.is_terms ?? false,
+    deadlineHours: d.deadline_hours ?? null,
     sentCount: d.sent_count ?? 0,
     createdAt: d.created_at,
   };
@@ -7779,6 +7818,7 @@ function mapIntakeForm(d: any): IntakeForm {
     requiresSignature: d.requires_signature ?? false,
     clientSignature: d.client_signature ?? null,
     libraryFormId: d.library_form_id ?? null,
+    dueAt: d.due_at ?? null,
   };
 }
 
