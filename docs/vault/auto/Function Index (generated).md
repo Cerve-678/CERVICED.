@@ -5,7 +5,7 @@
 
 #generated
 
-**4098 functions** across **570 files**.
+**4101 functions** across **570 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -98,7 +98,7 @@
 
 ### `src/constants/` (11)
 - `maintenanceServiceTypes.ts` — **getMaintenanceServiceType**
-- `pageStyles.ts` — **chapterHeading** · **getPageStyle** · **headingPair** · **heroPhotoPickLimit** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
+- `pageStyles.ts` — **chapterHeading** · **customHeadingPair** · **getPageStyle** · **headingPair** · **heroPhotoPickLimit** · **isPageStyleKey** · **isPolicyPictureLook** · **menuNumber** · **policyPicturePlacement** · **romanNumeral**
 - `payoutSchedule.ts` — list · ordinal · **payoutIntervalLabel** · **payoutMonthDayLabel** · **payoutScheduleSentence** · **payoutWeekdayLabel**
 - `PlatformDimensions.ts` — for
 - `priceBands.ts` — **rangeForBands** · **tierForBands**
@@ -183,7 +183,7 @@
 - `bookingInstructions.ts` — **selectedBookingInstructions** · **toggleBookingInstruction**
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **MinusButton** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
 - `options.ts` — **appointmentVenue** · **businessTypeLabel** · **isAddressReleaseAllowed** · **providerTravelsToClient** · **reconcileAddressReleasePolicy** · **styleAestheticOptions**
-- `OwnSectionsCard.tsx` — add · GrowingBox · hasContent · **OwnSectionsCard** · remove · setFaq · shows · **toOwnDraft**
+- `OwnSectionsCard.tsx` — add · GrowingBox · hasContent · **OwnSectionsCard** · remove · setCustom · setFaq · shows · **toOwnDraft**
 - `productBrands.ts` — brandKey · **joinProductsUsed** · **productBrandSections** · **splitProductsUsed**
 - `ReleaseDayPicker.tsx` — **ReleaseDayPicker**
 - `useLearnedSpecialities.ts` — **useSpecialityOptionsWithLearned**
@@ -294,7 +294,7 @@
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
-- `ownSections.ts` — cleanText · **filledOwnSections** · **hasHalfFilledFaq** · **normalizeOwnSections** · **ownSectionByline** · **ownSectionsChanged**
+- `ownSections.ts` — cleanText · **filledOwnSections** · **hasHalfFilledCustom** · **hasHalfFilledFaq** · **normalizeOwnSections** · **ownSectionByline** · **ownSectionsChanged**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
 - `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**

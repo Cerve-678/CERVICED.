@@ -314,9 +314,10 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   );
 });
 
-/** The provider's own sections (Key Information, FAQs, Aftercare, House
- *  Rules, Disclaimer), each its own section under Additional Information,
- *  in a fixed order. Written on Policies & Info. */
+/** The provider's own sections (Key Information, FAQs, Aftercare, Custom
+ *  sections, Disclaimer), each its own section under Additional Information,
+ *  in a fixed order. A Custom section is headed with the name the provider
+ *  gave it. Written on Policies & Info. */
 export const ProviderOwnSections = React.memo(function ProviderOwnSections({
   sections,
   palette,
@@ -330,7 +331,15 @@ export const ProviderOwnSections = React.memo(function ProviderOwnSections({
   const ink = sectionInk(palette);
   return (
     <>
-      {filledOwnSections(sections).map(kind => (
+      {filledOwnSections(sections).map(kind => kind === "custom" ? (
+        // No ids to key by: the list only changes when the provider saves,
+        // and then the whole profile reloads.
+        (sections.custom ?? []).map((item, index) => (
+          <PageSection key={`custom-${index}`} section="custom" title={item.title} palette={palette}>
+            <Text style={[styles.infoText, { color: ink.text }]}>{item.body}</Text>
+          </PageSection>
+        ))
+      ) : (
         <PageSection key={kind} section={kind} palette={palette}>
           {kind === "faq" ? (
             (sections.faq ?? []).map((item, index) => (

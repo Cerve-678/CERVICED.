@@ -1,38 +1,42 @@
 /**
  * A provider's own profile sections (providers.profile_sections): Key
- * Information, FAQs, Aftercare, House Rules and a Disclaimer, written on
+ * Information, FAQs, Aftercare, Custom sections and a Disclaimer, written on
  * Policies & Info. Each one shows as its own section under Additional
  * Information on the profile, in the fixed order below.
  *
- * A fixed set rather than free-titled sections, so every page style can give
- * each one a heading in its own voice (see PAGE_SECTION_TITLES and the tables
- * beside it). Everything here is public: it's read by anyone browsing the
- * profile, so it's for the provider's own wording only, never private details.
+ * The named kinds get a heading in each page style's own voice (see
+ * PAGE_SECTION_TITLES and the tables beside it). A Custom section is headed
+ * with the name the provider gives it instead, drawn in the same style
+ * (owner, 2026-11-18: House Rules removed, Custom added). Everything here is
+ * public: it's read by anyone browsing the profile, so it's for the
+ * provider's own wording only, never private details.
  *
  * Pure, so the editor, the profile and the save all clean it the same way.
  */
 
-export type TextSectionKind = 'keyInfo' | 'aftercare' | 'houseRules' | 'disclaimer';
-export type OwnSectionKind = TextSectionKind | 'faq';
+export type TextSectionKind = 'keyInfo' | 'aftercare' | 'disclaimer';
+export type OwnSectionKind = TextSectionKind | 'faq' | 'custom';
 
 export interface FaqItem { question: string; answer: string }
+/** A section the provider names themselves, e.g. "Parking". */
+export interface CustomSection { title: string; body: string }
 
 export interface OwnSections {
   keyInfo?: string;
   faq?: FaqItem[];
   aftercare?: string;
-  houseRules?: string;
+  custom?: CustomSection[];
   disclaimer?: string;
 }
 
 /** Profile order, and the order of the "+" chips on Policies & Info. */
-export const OWN_SECTION_KINDS: readonly OwnSectionKind[] = ['keyInfo', 'faq', 'aftercare', 'houseRules', 'disclaimer'];
+export const OWN_SECTION_KINDS: readonly OwnSectionKind[] = ['keyInfo', 'faq', 'aftercare', 'custom', 'disclaimer'];
 
 export const OWN_SECTION_LABELS: Record<OwnSectionKind, string> = {
   keyInfo: 'Key Information',
   faq: 'FAQs',
   aftercare: 'Aftercare',
-  houseRules: 'House Rules',
+  custom: 'Custom',
   disclaimer: 'Disclaimer',
 };
 
@@ -41,7 +45,14 @@ export const OWN_SECTION_LIMITS = {
   question: 150,
   answer: 600,
   faqItems: 10,
+  customTitle: 40,
+  customItems: 5,
 } as const;
+
+/** House Rules was a fixed section until 2026-11-18. Anything already written
+ *  there is read as a Custom section of the same name, so nobody's words go
+ *  missing, and saved back that way the next time they save. */
+const LEGACY_HOUSE_RULES_TITLE = 'House Rules';
 
 function cleanText(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -70,6 +81,22 @@ export function normalizeOwnSections(raw: unknown): OwnSections {
         .filter(item => item.question && item.answer)
         .slice(0, OWN_SECTION_LIMITS.faqItems);
       if (faq.length > 0) out.faq = faq;
+    } else if (kind === 'custom') {
+      const items: unknown[] = Array.isArray(source['custom']) ? [...source['custom']] : [];
+      if (typeof source['houseRules'] === 'string' && source['houseRules'].trim()) {
+        items.unshift({ title: LEGACY_HOUSE_RULES_TITLE, body: source['houseRules'] });
+      }
+      const custom = items
+        .map((item): CustomSection => {
+          const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+          return {
+            title: cleanText(row['title'], OWN_SECTION_LIMITS.customTitle),
+            body: cleanText(row['body'], OWN_SECTION_LIMITS.text),
+          };
+        })
+        .filter(item => item.title && item.body)
+        .slice(0, OWN_SECTION_LIMITS.customItems);
+      if (custom.length > 0) out.custom = custom;
     } else {
       const text = cleanText(source[kind], OWN_SECTION_LIMITS.text);
       if (text) out[kind] = text;
@@ -80,13 +107,21 @@ export function normalizeOwnSections(raw: unknown): OwnSections {
 
 /** The kinds that have something to show, in profile order. */
 export function filledOwnSections(sections: OwnSections): OwnSectionKind[] {
-  return OWN_SECTION_KINDS.filter(kind => kind === 'faq' ? (sections.faq?.length ?? 0) > 0 : !!sections[kind]);
+  return OWN_SECTION_KINDS.filter(kind =>
+    kind === 'faq' ? (sections.faq?.length ?? 0) > 0
+      : kind === 'custom' ? (sections.custom?.length ?? 0) > 0
+        : !!sections[kind]);
 }
 
 /** A question with no answer, or an answer with no question: the editor
  *  stops the save rather than quietly dropping what was typed. */
 export function hasHalfFilledFaq(faq: readonly FaqItem[] | undefined): boolean {
   return (faq ?? []).some(item => !item.question.trim() !== !item.answer.trim());
+}
+
+/** A Custom section with a name but nothing written, or words but no name. */
+export function hasHalfFilledCustom(custom: readonly CustomSection[] | undefined): boolean {
+  return (custom ?? []).some(item => !item.title.trim() !== !item.body.trim());
 }
 
 /** Sections that carry a "Written by" line on the profile, so clients can see
