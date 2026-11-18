@@ -166,8 +166,7 @@ import {
   ProviderReviewPreviewSection,
   ProviderSpecialitiesSection,
 } from "../../features/providers/ProviderProfileSections";
-import { productsGroup, workWithGroups } from "../../features/providers/workWith";
-import { PAYMENT_OPTS } from "../../features/business-details/options";
+import { additionalInfoGroups, goodToKnowText, howToGetThere } from "../../features/providers/additionalInfo";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -190,14 +189,6 @@ const StarIcon = ({ size, color }: { size: number; color: string }) => (
   <Text style={{ fontSize: size, color }}>★</Text>
 );
 
-// Client-facing wording for providers.team_size. Module scope, not inside the
-// component — it never varies, and as a component-local object it would be a
-// new identity on every render for the memo that reads it.
-const TEAM_SIZE_LABELS: Record<string, string> = {
-  solo: "Solo practitioner",
-  small_team: "Small team",
-  large_team: "Large team",
-};
 type ServiceData = ProviderProfileService;
 
 // Most dots the 60px pill ever shows, however many images the service has.
@@ -1889,104 +1880,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   ]);
 
   // ── Additional Information ──────────────────────────────────────────────────
-  // Practice details the provider fills in across Business Profile (About You /
-  // Services & Pricing). They're facts about how the business operates rather
-  // than anything bookable, so they sit at the foot of the profile, below the
-  // portfolio, with the venue shots.
-  //
-  // Insured / DBS are ALWAYS suffixed "(self-declared)". Cerviced verifies
-  // neither, and an unqualified "DBS checked" chip on a beauty marketplace
-  // reads as a platform guarantee — see AboutYouScreen.tsx, which carries the
-  // same warning at the point of collection.
-  //
-  // Grouped, not one undifferentiated chip row: "Polish", "Just me",
-  // "Insured (self-declared)" and "Step-free access" are four different kinds
-  // of fact, and side by side with no subheading a client has to work out
-  // what each chip is even answering. Each group prints its own subheading,
-  // matching the Qualifications / Good to know / Venue blocks below it.
-  const additionalInfoGroups = useMemo(() => {
-    if (!provider) return [];
-    const groups: { label: string; chips: string[] }[] = [];
-    // First, because it's what clients most often scan for ("do they do
-    // knotless?"). Same values Search's Speciality filter matches on. A
-    // link-only profile shows them in their own section instead.
-    if (provider.specialties.length > 0 && !provider.isLinkOnly) {
-      groups.push({ label: "Specialities", chips: [...provider.specialties] });
-    }
-    // What they do (Nails, Lashes…). Cover and Duet leave it out of the top
-    // of the page, so it's said here instead (owner, 2026-11-15).
-    if (pageStyle.hero === "cover" || pageStyle.hero === "duet") {
-      const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
-      const chips = [...new Set(types.map((type) => {
-        const label = type === "OTHER" ? provider.customServiceType || "Service" : type;
-        return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
-      }))];
-      if (chips.length > 0) groups.push({ label: "Category", chips });
-    }
-    // Salon, studio, home-based or mobile. Classic already shows it as the
-    // icon in the line under the name; most page styles' heroes have no such
-    // line, so there it is said here in words (owner, 2026-11-15).
-    if (provider.businessType && pageStyle.key !== "classic") {
-      groups.push({ label: "Business type", chips: [BUSINESS_TYPE_LABEL[provider.businessType]] });
-    }
-    // Who they work with (clients, skin tones, hair types) from About You's
-    // "I Work With" — here, not in the About/Policy card, which is the bio.
-    groups.push(...workWithGroups(provider));
-    // Its own section, from Services & Pricing's "Products I Work With".
-    const products = productsGroup(provider);
-    if (products) groups.push(products);
-    if (provider.languagesSpoken.length > 0) {
-      groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
-    }
-    const teamLabel = provider.teamSize
-      ? TEAM_SIZE_LABELS[provider.teamSize]
-      : null;
-    if (teamLabel) groups.push({ label: "Team", chips: [teamLabel] });
-    const credentials: string[] = [];
-    if (provider.isInsuredSelfDeclared) {
-      credentials.push("Insured (self-declared)");
-    }
-    if (provider.dbsCheckedSelfDeclared) {
-      credentials.push("DBS checked (self-declared)");
-    }
-    if (credentials.length > 0) {
-      groups.push({ label: "Credentials", chips: credentials });
-    }
-    if (provider.accessibilityTags.length > 0) {
-      groups.push({
-        label: "Accessibility",
-        chips: [...provider.accessibilityTags],
-      });
-    }
-    // The provider's stated preference only (Payments, or Business Info for a
-    // link-only pro) — Cerviced doesn't collect or track off-app payments.
-    // Labelled from the shared PAYMENT_OPTS so this can't drift from the
-    // pickers that write it.
-    const paymentLabels = provider.paymentMethods
-      .map(v => PAYMENT_OPTS.find(o => o.value === v)?.label)
-      .filter((l): l is string => !!l);
-    if (paymentLabels.length > 0) {
-      groups.push({ label: "Payment methods", chips: paymentLabels });
-    }
-    return groups;
-  }, [provider, pageStyle.key, pageStyle.hero]);
-
-  // One natural-language paragraph rather than a label/value dump — these are
-  // unrelated one-liners, and as rows they read like a spec sheet for
-  // facts a client only skims.
-  const goodToKnowText = useMemo(() => {
-    if (!provider) return "";
-    const sentences: string[] = [];
-    if (provider.walkInsWelcome) sentences.push("Walk-ins are welcome");
-    if (provider.groupBookingsAvailable) {
-      sentences.push("Group bookings are available");
-    }
-    return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
-  }, [provider]);
-
-  // A mobile provider travels to the client, so there is nowhere to direct
-  // them to — an old value left from before a business-type change stays hidden.
-  const howToGetThere = provider?.businessType === "mobile" ? "" : provider?.publicDirections ?? "";
+  // Built in features/providers/additionalInfo, shared with the provider's own
+  // preview on Policies & Info so the two can't drift apart.
+  const additionalInfo = useMemo(() => provider
+    ? {
+        groups: additionalInfoGroups(provider, pageStyle),
+        goodToKnow: goodToKnowText(provider),
+        directions: howToGetThere(provider),
+      }
+    : { groups: [], goodToKnow: '', directions: '' },
+  // pageStyle is rebuilt each render; only its key and hero change the groups.
+  [provider, pageStyle.key, pageStyle.hero]);
 
   // Hero info floats over the photo/gradient. Every theme always carries a
   // gradient now (saved as [backdrop, sheetColor]), so "is there a gradient"
@@ -6063,10 +5967,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               />
 
               <ProviderAdditionalInfoSection
-                groups={additionalInfoGroups}
+                groups={additionalInfo.groups}
                 qualifications={provider.qualifications.trim()}
-                goodToKnow={goodToKnowText}
-                howToGetThere={howToGetThere}
+                goodToKnow={additionalInfo.goodToKnow}
+                howToGetThere={additionalInfo.directions}
                 venueItems={venuePortfolio}
                 palette={sectionPalette}
                 onOpenImage={openImageViewer}

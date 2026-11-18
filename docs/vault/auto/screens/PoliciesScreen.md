@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `Policies`
 
 ## → Navigates to
-- [[PaymentsScreen\|Payments]]
+- `Profile` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

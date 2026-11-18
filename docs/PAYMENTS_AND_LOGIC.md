@@ -441,7 +441,7 @@ appointment ends ─► + 24 hours (the same for every provider)
 - **The release hold is always 24 hours**, set by the database when the
   payout is created (`create_held_payout_on_finalize`).
 - **The bank payout schedule** is chosen by the provider in *Payments &
-  payouts → Payment settings*: daily, weekly on a weekday, or monthly on the
+  payouts → Settings*: daily, weekly on a weekday, or monthly on the
   1st, 15th or last day. Stripe holds it, not CERVICED: `create-connect-account`
   sets it on their connected account through Stripe's Balance Settings API and
   reads it back from there, so a change made in Stripe's own dashboard shows
@@ -500,11 +500,19 @@ details are fixed. The app is built to tell the provider and support, but
 only if Stripe sends CERVICED events from providers' accounts, which **isn't
 confirmed** (Part 6).
 
-**What the provider sees** (*Payments & payouts*): the Overview, Booking
-payments, Payouts and Payment settings sections. Each held payout shows
-"Eligible for release from <date>. This is not a bank arrival date."
-Providers never see CERVICED's fee, the client's fee-inclusive total or
-CERVICED's revenue.
+**What the provider sees** (*Payments & payouts*): one card with four tabs,
+Overview, Bookings, Payouts and Settings. A held payout is called
+**Processing** (an "i" beside the word explains the 24-hour hold), and one
+sent to their Stripe balance is **Sent for payday**. Tapping a booking payment
+opens its timeline: booked and paid, the appointment, any tip, processing
+until `release_after`, any refund request or bank dispute, then sent for
+payday and paid to the bank on their schedule. The timeline can't say which
+bank payout a booking went out in, because CERVICED doesn't match Stripe
+payouts to bookings. Providers never see CERVICED's fee, the client's
+fee-inclusive total or CERVICED's revenue. The **non-refundable deposit**
+switch sits in Settings → Deposits, beside the deposit itself (moved from
+Policies on 17 Nov). A link-only provider still sets it in Policies, as a line
+on their profile only.
 
 ### 2.3 Cancellations and refunds
 
@@ -880,7 +888,7 @@ and never the dispute's amount, reason or Stripe ids.
 | Dispute open, payout already taken back | Taken back · bank dispute open |
 | Payment disputed, CERVICED still matching it to a booking | On hold · bank dispute on this payment |
 | CERVICED won and money was returned | Paid back · dispute won |
-| CERVICED won and nothing had been taken | The normal line (Awaiting release / Released to Stripe) |
+| CERVICED won and nothing had been taken | The normal line (Processing / Sent for payday) |
 | The client's bank won | Taken back · bank dispute lost, or Not paid · bank dispute lost |
 | A late/no-show fee won back (support pays it by hand) | Dispute won · being paid back |
 
