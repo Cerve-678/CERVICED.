@@ -19,7 +19,7 @@ import {
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { chooseFullyBookedResponse } from '../../features/providers/scheduleClosure';
+import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C_DARK = {
@@ -199,7 +199,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
         const a = (profile as any)?.automation_settings ?? {};
-        const waitlistEnabled = a.waitlistEnabled ?? DEFAULTS.waitlistEnabled;
         setD({
           clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
           rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
@@ -211,9 +210,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           // and the booking flow read them from there, not user_metadata) —
           // the row is the real answer, not just a fallback.
           autoConfirmBookings:     profile?.auto_accept_bookings ?? m['pa_auto_confirm_bookings'] ?? DEFAULTS.autoConfirmBookings,
-          waitlistEnabled,
+          waitlistEnabled:         a.waitlistEnabled ?? DEFAULTS.waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
-          autoCloseWhenFull:       !waitlistEnabled && a.autoCloseWhenFull === true,
+          autoCloseWhenFull:       a.autoCloseWhenFull === true,
         });
       } finally {
         setLoading(false);
@@ -281,9 +280,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   }, [d, providerId, navigation]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
-    setD(prev => key === 'waitlistEnabled' || key === 'autoCloseWhenFull'
-      ? chooseFullyBookedResponse(prev, key, val as boolean)
-      : { ...prev, [key]: val });
+    setD(prev => ({ ...prev, [key]: val }));
   }, []);
 
   const toggleReminder = useCallback((v: string) => {
@@ -349,13 +346,13 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         <SectionHeader
           icon="calendar-outline"
           label="WHEN YOU'RE FULLY BOOKED"
-          sub="Choose how new spaces are handled. Turning on waitlist or automatic closure turns the other off."
+          sub="Choose how freed-up spaces are handled. You can use any of these together."
           C={C}
         />
 
         <AutoCard
           title="Enable waitlist"
-          description="Clients can join when your slots are full. If a matching space opens, the next person in line gets it held for 15 minutes to confirm and pay."
+          description={`Clients can join when your slots are full. When a space opens, we tell you and you offer it to someone on your waitlist from Bookings. They get ${WAITLIST_HOLD_MINUTES} minutes to confirm and pay.`}
           value={d.waitlistEnabled}
           onToggle={v => set('waitlistEnabled', v)}
           C={C}
@@ -363,8 +360,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         {d.waitlistEnabled && (
           <AutoCard
-            title="Offer it to the next person automatically"
-            description="If a client doesn't pay within their 15 minutes, or passes, the slot is held for the next person in line. With this off, it opens to everyone and you can offer it to someone on your waitlist from Bookings."
+            title="Auto"
+            description={`When a space opens, it's held for the next person in line for ${WAITLIST_HOLD_MINUTES} minutes to confirm and pay. If they don't, or they pass, it goes to the next person.`}
             value={d.autoAcceptWaitlist}
             onToggle={v => set('autoAcceptWaitlist', v)}
             C={C}
@@ -373,7 +370,9 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
 
         <AutoCard
           title="Close my schedule when fully booked"
-          description="When every open slot fills, stop new bookings until you reopen your schedule or your next release day. Turning this on switches off waitlist; a cancelled slot stays unavailable while closed."
+          description={d.waitlistEnabled
+            ? 'When every open slot fills, stop new bookings until you reopen your schedule or your next release day. A slot that frees up while closed goes to your waitlist only.'
+            : 'When every open slot fills, stop new bookings until you reopen your schedule or your next release day. A slot that frees up while closed stays unavailable.'}
           value={d.autoCloseWhenFull}
           onToggle={v => set('autoCloseWhenFull', v)}
           C={C}
