@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `Policies`
 
 ## → Navigates to
-- _— none —_
+- `Profile` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

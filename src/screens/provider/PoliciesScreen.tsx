@@ -59,7 +59,14 @@ import { edgeColoursFromPhoto } from '../../features/provider-registration/photo
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMyProviderProfile, updateProviderCancellationPolicy } from '../../services/databaseService';
+import { getMyProviderProfile, getProviderSpecialties, updateProviderCancellationPolicy } from '../../services/databaseService';
+import type { DbProvider } from '../../types/database';
+import { mapProviderProfileData } from '../../features/providers/profileMapper';
+import { additionalInfoGroups, goodToKnowText, howToGetThere } from '../../features/providers/additionalInfo';
+import type { ChipGroup as InfoGroup } from '../../features/providers/workWith';
+import { getPageStyle } from '../../constants/pageStyles';
+import { parseThemeKey } from '../../constants/providerThemes';
+import { logger } from '../../utils/logger';
 import { noticeChoiceForHours, noticeHoursToSave, type NoticeChoice } from '../../utils/policyDisplay';
 import { toUserMessage } from '../../utils/userFacingError';
 import { openLegalPage } from '../../utils/legalPage';
@@ -200,6 +207,55 @@ const pSt = StyleSheet.create({
   pillText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
 });
 
+/** Additional Information exactly as clients see it on the profile. */
+interface InfoPreview {
+  groups: InfoGroup[];
+  qualifications: string;
+  goodToKnow: string;
+  directions: string;
+}
+
+// Where each part of Additional Information is set. All live under the
+// Profile tab; some tabs' stacks register them too (see openSetting).
+const INFO_SOURCES: { route: string; label: string }[] = [
+  { route: 'AboutYou', label: 'About You' },
+  { route: 'ServicesPricing', label: 'Services & Pricing' },
+  { route: 'Scheduling', label: 'Scheduling' },
+  { route: 'Payments', label: 'Payments' },
+  { route: 'EditProfile', label: 'Edit Profile' },
+];
+
+async function buildInfoPreview(profile: DbProvider): Promise<InfoPreview> {
+  const specialties = await getProviderSpecialties(profile.id);
+  const data = mapProviderProfileData({
+    ...profile,
+    services: [],
+    specialties: specialties.map(specialty => ({ specialty })),
+  });
+  return {
+    groups: additionalInfoGroups(data, getPageStyle(parseThemeKey(data.profileTheme).pageStyle)),
+    qualifications: data.qualifications.trim(),
+    goodToKnow: goodToKnowText(data),
+    directions: howToGetThere(data),
+  };
+}
+
+/** A quiet text link: "+ Add a note", "How this works ›". */
+function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const C = useBusinessPalette();
+  return (
+    <TouchableOpacity
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+      activeOpacity={0.6}
+      accessibilityRole="button"
+      hitSlop={8}
+      style={linkSt.wrap}
+    >
+      <Text style={[linkSt.text, { color: C.accentText }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function PoliciesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
@@ -241,6 +297,40 @@ export default function PoliciesScreen({ navigation }: any) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [providerId, setProviderId] = useState<string | null>(null);
   const [loadedNotice, setLoadedNotice] = useState('');
+  // Notes, written policies and explanations stay folded away until there's
+  // something in them or the provider opens one, so the screen reads calm.
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const open = useCallback((key: string) => setOpened(prev => ({ ...prev, [key]: true })), []);
+  const toggle = useCallback((key: string) => setOpened(prev => ({ ...prev, [key]: !prev[key] })), []);
+  const shows = (key: keyof PolicyState) => opened[key] || String(policies[key] ?? '').trim() !== '';
+  // null until loaded, and if it can't load: the card is just left out.
+  const [infoPreview, setInfoPreview] = useState<InfoPreview | null>(null);
+
+  const refreshInfoPreview = useCallback((profile: DbProvider) => {
+    buildInfoPreview(profile)
+      .then(setInfoPreview)
+      .catch(e => { logger.error('PoliciesScreen.infoPreview', e); setInfoPreview(null); });
+  }, []);
+
+  // Coming back from About You and the rest, show what was just changed there.
+  useEffect(() => {
+    let first = true;
+    return navigation.addListener('focus', () => {
+      if (first) { first = false; return; }
+      getMyProviderProfile()
+        .then(profile => { if (profile) refreshInfoPreview(profile); })
+        .catch(e => logger.error('PoliciesScreen.infoPreview', e));
+    });
+  }, [navigation, refreshInfoPreview]);
+
+  // Opens a screen in this tab's stack when it has one, or under the Profile
+  // tab (which has them all) otherwise — the same jump Becca makes.
+  const openSetting = useCallback((route: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    const here: string[] = navigation.getState?.()?.routeNames ?? [];
+    if (here.includes(route)) navigation.navigate(route);
+    else navigation.getParent()?.navigate('Profile', { screen: route });
+  }, [navigation]);
 
   function flash(message: string, type: 'success' | 'error') {
     setToast({ message, type });
@@ -254,6 +344,8 @@ export default function PoliciesScreen({ navigation }: any) {
         if (!profile?.user_id) { setLoadFailed(true); setLoading(false); return; }
         setUserId(profile.user_id);
         setProviderId(profile.id);
+        // Not awaited: the preview loads beside the policies, not before them.
+        if (profile.booking_mode !== 'external') refreshInfoPreview(profile);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
         // Reads the old single image too, so a provider's existing page stays.
@@ -293,7 +385,7 @@ export default function PoliciesScreen({ navigation }: any) {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [refreshInfoPreview]);
 
   const setPolicy = useCallback(<K extends keyof PolicyState>(key: K, value: PolicyState[K]) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
@@ -415,7 +507,7 @@ export default function PoliciesScreen({ navigation }: any) {
       <SafeAreaView style={s.safe} edges={['top']}>
         <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
-            <Text style={[s.headerTitle, { color: C.text }]}>Policies</Text>
+            <Text style={[s.headerTitle, { color: C.text }]}>{isLinkOnly ? 'Policies' : 'Policies & Info'}</Text>
             <TouchableOpacity
               style={[s.closeBtn, { backgroundColor: C.surface }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
@@ -439,16 +531,13 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Every card opens with one plain line saying what it sets up,
                 so a provider never has to guess from the pills alone. */}
-            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : 'How much notice a client must give to cancel, and what happens if they cancel later than that.'}>
+            <Card title="Cancellation" sub={isLinkOnly ? 'How much notice you ask clients to give before they cancel.' : "How much notice clients give, and what happens if it's late."}>
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'none', l: 'None' }, { v: '12h', l: '12h' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
                 value={policies.cancelNotice}
                 onChange={v => setPolicy('cancelNotice', v)}
               />
-              {!isLinkOnly && (
-                <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>A change applies to new bookings. Bookings already made keep the notice they were booked with.</Text>
-              )}
               {!isLinkOnly && (<>
                 <SectionLabel text="If cancelled late" />
                 <Pills
@@ -457,23 +546,37 @@ export default function PoliciesScreen({ navigation }: any) {
                   onChange={v => setPolicy('cancelPenalty', v)}
                 />
                 {policies.cancelPenalty === 'deposit' && (
-                  <>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>If they paid a deposit, you keep the deposit.</Text>
-                    <Text style={[capSt.note, { color: C.text }]}>If they paid in full, you can only charge up to half the service price.</Text>
-                  </>
+                  <Text style={[capSt.note, { color: C.text }]}>If they paid in full, you can only charge up to half the service price.</Text>
                 )}
                 {policies.cancelPenalty === 'half' && (
+                  <Text style={[capSt.note, { color: C.text }]}>The app works out the amount for each booking. You don't type anything.</Text>
+                )}
+                {/* The detail, folded away: it's there when wanted, not in the way. */}
+                {opened['cancelHow'] && (
                   <>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Paid in full: you keep half and they get the rest back.</Text>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid a deposit: you keep the deposit. If it's less than half the price and they agreed at checkout, you can also charge their saved card the difference, from the booking, until 24 hours after the appointment would have ended. Bookings made before 13 November keep the policy they were booked with.</Text>
-                    <Text style={[capSt.note, { color: C.text }]}>The app works out the amount for each booking. You don't type anything.</Text>
+                    {policies.cancelPenalty === 'deposit' && (
+                      <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>If they paid a deposit, you keep the deposit.</Text>
+                    )}
+                    {policies.cancelPenalty === 'half' && (
+                      <>
+                        <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Paid in full: you keep half and they get the rest back.</Text>
+                        <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid a deposit: you keep the deposit. If it's less than half the price and they agreed at checkout, you can also charge their saved card the difference, from the booking, until 24 hours after the appointment would have ended. Bookings made before 13 November keep the policy they were booked with.</Text>
+                      </>
+                    )}
+                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>A change applies to new bookings. Bookings already made keep the notice they were booked with.</Text>
                   </>
                 )}
               </>)}
-              <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
+              {shows('cancelNote') && (
+                <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
+              )}
+              <View style={linkSt.row}>
+                {!isLinkOnly && <TextLink label={opened['cancelHow'] ? 'Hide' : 'How this works ›'} onPress={() => toggle('cancelHow')} />}
+                {!shows('cancelNote') && <TextLink label="+ Add a note" onPress={() => open('cancelNote')} />}
+              </View>
             </Card>
 
-            <Card title="Rescheduling" sub="How much notice a client must give to move their appointment, how many times they can move one booking, and to when.">
+            <Card title="Rescheduling" sub="Notice, how many times, and to when.">
               <SectionLabel text="Notice required" />
               <Pills
                 options={[{ v: 'same_day', l: 'Same day' }, { v: '24h', l: '24h' }, { v: '48h', l: '48h' }, { v: '72h', l: '72h' }]}
@@ -495,7 +598,9 @@ export default function PoliciesScreen({ navigation }: any) {
               {policies.rescheduleWithin === 'same_month' && (
                 <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Clients can only move it to another day in the same calendar month. A booking on the 14th can move up to the last day of that month.</Text>
               )}
-              <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
+              {shows('rescheduleNote')
+                ? <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
+                : <View style={linkSt.row}><TextLink label="+ Add a note" onPress={() => open('rescheduleNote')} /></View>}
             </Card>
 
             {!isLinkOnly && (<>
@@ -503,7 +608,7 @@ export default function PoliciesScreen({ navigation }: any) {
               {/* One grace period, kept under noShowGraceMinutes: checkout quotes it
                   beside the late fee, and provider_update_booking_status() won't
                   accept a no-show until it has passed. */}
-              <Card title="Late" sub="How long a client can be late, and what you can charge after that. Leave the fee blank for no fee.">
+              <Card title="Late" sub="How long a client can be late, and the fee after that. Leave the fee blank for no fee.">
                 <Field
                   label="Grace period (minutes)"
                   value={policies.noShowGraceMinutes}
@@ -521,7 +626,12 @@ export default function PoliciesScreen({ navigation }: any) {
                   note="For arriving after your grace period above."
                 />
                 <HalfPriceCap />
-                <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>{FEE_CHARGE_NOTE}</Text>
+                {opened['lateHow'] && (
+                  <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>{FEE_CHARGE_NOTE}</Text>
+                )}
+                <View style={linkSt.row}>
+                  <TextLink label={opened['lateHow'] ? 'Hide' : 'How fees are charged ›'} onPress={() => toggle('lateHow')} />
+                </View>
               </Card>
 
               <Card title="No-show" sub="What happens when a client doesn't turn up.">
@@ -538,13 +648,23 @@ export default function PoliciesScreen({ navigation }: any) {
                 />
                 {policies.noShowAction === 'half' && (
                   <>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Paid a deposit: you keep the deposit. If it's less than half the price and they agreed at checkout, you can also charge their saved card the difference, from the booking, after you mark the no-show.</Text>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid in full: nothing more is charged.</Text>
                     <Text style={[capSt.note, { color: C.text }]}>The app works out the amount for each booking. You don't type anything.</Text>
-                    <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 12 }]}>{FEE_CHARGE_NOTE}</Text>
+                    {opened['noShowHow'] && (
+                      <>
+                        <Text style={[s.cardSub, { color: C.sub, marginTop: 10, marginBottom: 0 }]}>Paid a deposit: you keep the deposit. If it's less than half the price and they agreed at checkout, you can also charge their saved card the difference, from the booking, after you mark the no-show.</Text>
+                        <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Paid in full: nothing more is charged.</Text>
+                        <Text style={[s.cardSub, { color: C.sub, marginTop: 8, marginBottom: 0 }]}>{FEE_CHARGE_NOTE}</Text>
+                      </>
+                    )}
                   </>
                 )}
-                <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+                {shows('noShowNote') && (
+                  <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+                )}
+                <View style={linkSt.row}>
+                  {policies.noShowAction === 'half' && <TextLink label={opened['noShowHow'] ? 'Hide' : 'How this works ›'} onPress={() => toggle('noShowHow')} />}
+                  {!shows('noShowNote') && <TextLink label="+ Add a note" onPress={() => open('noShowNote')} />}
+                </View>
               </Card>
             </>)}
 
@@ -580,7 +700,7 @@ export default function PoliciesScreen({ navigation }: any) {
 
             {/* Shown on CERVICED bookings, which link-only pros don't have. */}
             {!isLinkOnly && (
-              <Card title="Your Instructions" sub="Shown to clients as your instructions in their booking details and in the reminder the day before, on every new booking (optional), like arriving early or what to bring. Directions and door codes have their own boxes beside your address, so there's no need to repeat them here. Changing it later won't update bookings already made.">
+              <Card title="Your Instructions" sub="Shown in their booking details and in the reminder the day before, like arriving early or what to bring (optional). Directions and door codes go beside your address. Changes apply to new bookings.">
                 <Field
                   label="Instructions"
                   value={policies.bookingInstructions}
@@ -605,27 +725,48 @@ export default function PoliciesScreen({ navigation }: any) {
                 there is no separate distance field elsewhere (Edit Profile's
                 "How far you travel" / providers.travel_radius was removed so
                 the distance is stated once). */}
-            <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
-              <Field
-                label="Your travel policy"
-                value={policies.travelPolicy}
-                onChange={v => setPolicy('travelPolicy', v)}
-                placeholder='e.g. "I travel up to 10 miles and need somewhere to set up with a plug socket"'
-                multiline
-              />
-            </Card>
+            {shows('travelPolicy') && (
+              <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
+                <Field
+                  label="Your travel policy"
+                  value={policies.travelPolicy}
+                  onChange={v => setPolicy('travelPolicy', v)}
+                  placeholder='e.g. "I travel up to 10 miles and need somewhere to set up with a plug socket"'
+                  multiline
+                />
+              </Card>
+            )}
+            {shows('emergencyBookingPolicy') && (
 
-            <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly.">
-              <Field
-                label="Your emergency appointment policy"
-                value={policies.emergencyBookingPolicy}
-                onChange={v => setPolicy('emergencyBookingPolicy', v)}
-                placeholder="e.g. I only take emergencies from existing clients, message me and I'll let you know if I can fit you in"
-                multiline
-              />
-            </Card>
+              <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly.">
+                <Field
+                  label="Your emergency appointment policy"
+                  value={policies.emergencyBookingPolicy}
+                  onChange={v => setPolicy('emergencyBookingPolicy', v)}
+                  placeholder="e.g. I only take emergencies from existing clients, message me and I'll let you know if I can fit you in"
+                  multiline
+                />
+              </Card>
+            )}
+            {(!shows('travelPolicy') || !shows('emergencyBookingPolicy')) && (
+              <View style={addSt.wrap}>
+                <SectionLabel text="Add if you need them" />
+                <View style={addSt.row}>
+                  {!shows('travelPolicy') && (
+                    <TouchableOpacity style={[addSt.chip, { borderColor: C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); open('travelPolicy'); }} activeOpacity={0.7} accessibilityRole="button">
+                      <Text style={[addSt.chipText, { color: C.accentText }]}>+ Travel</Text>
+                    </TouchableOpacity>
+                  )}
+                  {!shows('emergencyBookingPolicy') && (
+                    <TouchableOpacity style={[addSt.chip, { borderColor: C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); open('emergencyBookingPolicy'); }} activeOpacity={0.7} accessibilityRole="button">
+                      <Text style={[addSt.chipText, { color: C.accentText }]}>+ Emergency appointments</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
 
-            <Card title="Detailed Policy Images" sub={`Pictures of your full policy, for anything too detailed for the fields above, like a house-rules sheet or consent form. Add up to ${MAX_POLICY_IMAGES}, in the order clients should read them. Clients open them from your profile and can zoom in (optional).`}>
+            <Card title="Detailed Policy Images" sub={`Pages of your full policy, like a house-rules sheet or consent form. Up to ${MAX_POLICY_IMAGES}, in reading order. Clients can zoom in (optional).`}>
               <View style={imgSt.grid}>
                 {policies.policyImageUrls.map((url, index) => (
                   <View key={url} style={imgSt.thumbWrap}>
@@ -669,6 +810,60 @@ export default function PoliciesScreen({ navigation }: any) {
               )}
             </Card>
 
+            {/* Additional Information, read-only: a preview of the profile
+                section, built by the same helper the profile uses. Each part
+                is set on another screen, so this only points there. */}
+            {!isLinkOnly && infoPreview && (
+              <Card title="Additional Information">
+                <View style={[infoSt.preview, { backgroundColor: C.surface }]}>
+                  <View style={infoSt.eyebrowRow}>
+                    <Ionicons name="eye-outline" size={13} color={C.sub} />
+                    <Text style={[infoSt.eyebrow, { color: C.sub }]}>AS CLIENTS SEE IT</Text>
+                  </View>
+                  {infoPreview.groups.map(group => (
+                    <View key={group.label}>
+                      <Text style={[infoSt.label, { color: C.sub }]}>{group.label}</Text>
+                      <View style={infoSt.chips}>
+                        {group.chips.map(chip => (
+                          <View key={chip} style={[infoSt.chip, { borderColor: `${C.accent}40`, backgroundColor: `${C.accent}14` }]}>
+                            <Text style={[infoSt.chipText, { color: C.text }]}>{chip}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                  {([
+                    ['Qualifications', infoPreview.qualifications],
+                    ['Good to know', infoPreview.goodToKnow],
+                    ['How to get there', infoPreview.directions],
+                  ] as const).filter(([, text]) => text).map(([label, text]) => (
+                    <View key={label}>
+                      <Text style={[infoSt.label, { color: C.sub }]}>{label}</Text>
+                      <Text style={[infoSt.text, { color: C.text }]}>{text}</Text>
+                    </View>
+                  ))}
+                  {infoPreview.groups.length === 0 && !infoPreview.qualifications && !infoPreview.goodToKnow && !infoPreview.directions && (
+                    <Text style={[infoSt.text, { color: C.sub, marginTop: 8 }]}>Nothing here yet. Add details in the places below and they'll show on your profile.</Text>
+                  )}
+                </View>
+                <Text style={[s.cardSub, { color: C.sub, marginTop: 12, marginBottom: 8 }]}>To change any of this, go to:</Text>
+                <View style={infoSt.chips}>
+                  {INFO_SOURCES.map(({ route, label }) => (
+                    <TouchableOpacity
+                      key={route}
+                      style={[infoSt.go, { backgroundColor: C.surface, borderColor: C.border }]}
+                      onPress={() => openSetting(route)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Change in ${label}`}
+                    >
+                      <Text style={[infoSt.goText, { color: C.accentText }]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Card>
+            )}
+
             {/* Re-affirmation, not a gate — first-publish acceptance in
                 InfoRegScreen is what actually blocks Publish. This is shown
                 here too since a provider can come back and change their
@@ -699,6 +894,32 @@ export default function PoliciesScreen({ navigation }: any) {
     </View>
   );
 }
+
+const linkSt = StyleSheet.create({
+  row:  { flexDirection: 'row', flexWrap: 'wrap', gap: 18, marginTop: 12 },
+  wrap: { paddingVertical: 2 },
+  text: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
+});
+
+const addSt = StyleSheet.create({
+  wrap:     { marginBottom: 14, paddingHorizontal: 2 },
+  row:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip:     { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 20, paddingHorizontal: 13, paddingVertical: 8 },
+  chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 12.5 },
+});
+
+const infoSt = StyleSheet.create({
+  preview:    { borderRadius: 14, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 14, marginTop: 8 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 10 },
+  eyebrow:    { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1 },
+  label:      { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 },
+  chips:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip:       { borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  chipText:   { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12 },
+  text:       { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13, lineHeight: 19 },
+  go:         { borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  goText:     { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
+});
 
 const capSt = StyleSheet.create({
   note: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 13, lineHeight: 18, marginTop: 8 },
