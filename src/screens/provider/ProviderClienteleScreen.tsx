@@ -47,6 +47,7 @@ import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFac
 import { reportError } from '../../utils/logger';
 import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
+import { searchClientele } from '../../features/providers/clienteleSearch';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -918,6 +919,10 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [followers, setFollowers] = useState<AnnouncementFollower[]>([]);
   const [sheetFor, setSheetFor] = useState<ClienteleMember | null>(null);
+  // Same pattern as the Inbox: a search button in the header opens the box,
+  // closing it clears the search. It narrows whichever tab is open.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showToast, DialogHost } = useAppDialog();
 
@@ -962,6 +967,8 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const newClients    = clients.filter(c => c.booking_count === 1);
   const lapsedClients = clients.filter(c => daysSince(c.last_booking_date) > 60);
   const displayed = tab === 'all' ? clients : tab === 'repeat' ? repeatClients : tab === 'new' ? newClients : lapsedClients;
+  const shown = searchClientele(displayed, search);
+  const searching = search.trim() !== '';
   const counts = { all: clients.length, repeat: repeatClients.length, new: newClients.length, lapsed: lapsedClients.length };
   const audienceCounts = { ...counts, followers: followers.length };
 
@@ -1001,6 +1008,12 @@ export default function ProviderClienteleScreen({ navigation }: any) {
     }
   };
 
+  const toggleSearch = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (searchOpen) setSearch('');
+    setSearchOpen(!searchOpen);
+  };
+
   const handleOpenClient = useCallback((member: ClienteleMember) => setSheetFor(member), []);
   const handleCloseClient = useCallback(() => setSheetFor(null), []);
 
@@ -1032,11 +1045,42 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                 <Text style={[s.announceBtnText, { color: P.accent }]}>Announce</Text>
               </TouchableOpacity>
             )}
+            {clients.length > 0 && (
+              <TouchableOpacity
+                style={[s.closeBtn, { backgroundColor: searchOpen ? P.accent : P.surface }]}
+                onPress={toggleSearch}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: searchOpen }}
+                accessibilityLabel={searchOpen ? 'Close search' : 'Search clients by name'}
+              >
+                <Ionicons name={searchOpen ? 'close' : 'search'} size={18} color={searchOpen ? P.onAccent : P.sub} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()}>
               <Ionicons name="close" size={22} color={P.sub} />
             </TouchableOpacity>
           </View>
         </View>
+
+        {searchOpen && (
+          <View style={[s.searchBox, { backgroundColor: P.surface }]}>
+            <Ionicons name="search" size={15} color={P.sub} />
+            <TextInput
+              style={[s.searchInput, { color: P.text }]}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search by name"
+              placeholderTextColor={P.sub}
+              autoFocus
+              autoCorrect={false}
+              autoCapitalize="words"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              accessibilityLabel="Search clients by name"
+            />
+          </View>
+        )}
 
         <TabBar active={tab} onChange={setTab} counts={counts} P={P} />
 
@@ -1049,7 +1093,18 @@ export default function ProviderClienteleScreen({ navigation }: any) {
               </Text>
             </View>
           )}
-          {displayed.length === 0 ? (
+          {displayed.length > 0 && shown.length === 0 && searching ? (
+            <View style={s.empty}>
+              <View style={[s.emptyIcon, { backgroundColor: P.surface }]}>
+                <Ionicons name="search-outline" size={36} color={P.sub} />
+              </View>
+              <Text style={[s.emptyTitle, { color: P.text }]}>No matches</Text>
+              <Text style={[s.emptySub, { color: P.sub }]}>No client here is called "{search.trim()}".</Text>
+              <TouchableOpacity onPress={() => setSearch('')} style={[s.clearSearchBtn, { borderColor: P.border }]} activeOpacity={0.75}>
+                <Text style={[s.clearSearchText, { color: P.accent }]}>Clear search</Text>
+              </TouchableOpacity>
+            </View>
+          ) : displayed.length === 0 ? (
             <View style={s.empty}>
               <View style={[s.emptyIcon, { backgroundColor: P.surface }]}>
                 <Ionicons name="people-outline" size={36} color={P.sub} />
@@ -1067,8 +1122,10 @@ export default function ProviderClienteleScreen({ navigation }: any) {
             </View>
           ) : (
             <FlatList
-              data={displayed}
+              data={shown}
               keyExtractor={item => item.user_id}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               renderItem={({ item }) => (
                 <ClientCard
                   member={item}
@@ -1121,6 +1178,10 @@ const s = StyleSheet.create({
   headerActions:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
   announceBtn:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
   announceBtnText:  { fontSize: 12, fontWeight: '700' },
+  searchBox:        { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, paddingHorizontal: 12, height: 38, borderRadius: 100 },
+  searchInput:      { flex: 1, fontSize: 14, paddingVertical: 0 },
+  clearSearchBtn:   { marginTop: 4, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 10, paddingHorizontal: 22 },
+  clearSearchText:  { fontSize: 14, fontWeight: '700' },
   closeBtn:         { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   list:             { flex: 1 },
   listContent:      { paddingHorizontal: 16, paddingBottom: 40 },

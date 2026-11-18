@@ -278,6 +278,9 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   // on while the provider checks both.
   const [filters,       setFilters]       = useState<InboxFilters>(NO_INBOX_FILTERS);
   const filtersOn = hasInboxFilters(filters);
+  // The name search lives behind the header's search button so the list
+  // starts higher. Opening it focuses the box; closing it clears the search.
+  const [searchOpen,    setSearchOpen]    = useState(false);
 
   const [replyTarget,  setReplyTarget]  = useState<ProviderConversationWithClient | null>(null);
   const [replyText,    setReplyText]    = useState('');
@@ -437,8 +440,17 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const clearFilters = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setFilters(NO_INBOX_FILTERS);
+    setSearchOpen(false);
     Keyboard.dismiss();
   }, []);
+  const toggleSearch = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (searchOpen) {
+      setFilters(prev => ({ ...prev, search: '' }));
+      Keyboard.dismiss();
+    }
+    setSearchOpen(!searchOpen);
+  }, [searchOpen]);
   const showEnquiries = isLinkOnly || filter === 'enquiries';
 
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -459,17 +471,17 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
           {/* A link-only provider's Messages tab opens this as its root, where
               there's nothing to go back to — keep the slot so the title stays
               centred. */}
-          {navigation.canGoBack() ? (
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={[s.iconBtn, { backgroundColor: P.iconBg }]}
-            >
-              <Ionicons name="chevron-back" size={18} color={P.text} />
-            </TouchableOpacity>
-          ) : (
-            <View style={s.iconBtn} />
-          )}
+          <View style={s.headerSide}>
+            {navigation.canGoBack() && (
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={[s.iconBtn, { backgroundColor: P.iconBg }]}
+              >
+                <Ionicons name="chevron-back" size={18} color={P.text} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View style={s.headerCenter}>
             <Text style={[s.title, { color: P.text }]}>{isLinkOnly ? 'General enquiries' : 'Inbox'}</Text>
@@ -480,14 +492,27 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
             )}
           </View>
 
-          <TouchableOpacity
-            onPress={openTemplates}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={[s.iconBtn, { backgroundColor: P.iconBg }]}
-            accessibilityLabel="Message templates"
-          >
-            <Ionicons name="documents-outline" size={18} color={P.text} />
-          </TouchableOpacity>
+          <View style={[s.headerSide, s.headerSideRight]}>
+            <TouchableOpacity
+              onPress={toggleSearch}
+              activeOpacity={0.75}
+              hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }}
+              style={[s.iconBtn, { backgroundColor: searchOpen ? P.accent : P.iconBg }]}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: searchOpen }}
+              accessibilityLabel={searchOpen ? 'Close search' : 'Search conversations by name'}
+            >
+              <Ionicons name={searchOpen ? 'close' : 'search'} size={18} color={searchOpen ? P.onAccent : P.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={openTemplates}
+              hitSlop={{ top: 12, bottom: 12, left: 6, right: 12 }}
+              style={[s.iconBtn, { backgroundColor: P.iconBg }]}
+              accessibilityLabel="Message templates"
+            >
+              <Ionicons name="documents-outline" size={18} color={P.text} />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* ── Filter tabs ─────────────────────────────────────────── */}
@@ -523,21 +548,24 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
 
         {/* ── Search + filters ────────────────────────────────────── */}
         <View style={[s.filterBar, { backgroundColor: P.card, borderBottomColor: P.border }]}>
-          <View style={[s.searchBox, { backgroundColor: P.surface }]}>
-            <Ionicons name="search" size={15} color={P.sub} />
-            <TextInput
-              style={[s.searchInput, { color: P.text }]}
-              value={filters.search}
-              onChangeText={search => setFilters(prev => ({ ...prev, search }))}
-              placeholder="Search by name"
-              placeholderTextColor={P.sub}
-              autoCorrect={false}
-              autoCapitalize="words"
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-              accessibilityLabel="Search conversations by name"
-            />
-          </View>
+          {searchOpen && (
+            <View style={[s.searchBox, { backgroundColor: P.surface }]}>
+              <Ionicons name="search" size={15} color={P.sub} />
+              <TextInput
+                style={[s.searchInput, { color: P.text }]}
+                value={filters.search}
+                onChangeText={search => setFilters(prev => ({ ...prev, search }))}
+                placeholder="Search by name"
+                placeholderTextColor={P.sub}
+                autoFocus
+                autoCorrect={false}
+                autoCapitalize="words"
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+                accessibilityLabel="Search conversations by name"
+              />
+            </View>
+          )}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -851,6 +879,8 @@ const s = StyleSheet.create({
 
   header:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14 },
   iconBtn:      { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  headerSide:   { width: 80, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerSideRight: { justifyContent: 'flex-end' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   title:        { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
   badge:        { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
@@ -862,8 +892,8 @@ const s = StyleSheet.create({
   filterBadge:  { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
   filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
 
-  filterBar:   { paddingTop: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, paddingHorizontal: 12, height: 38, borderRadius: 100 },
+  filterBar:   { borderBottomWidth: StyleSheet.hairlineWidth },
+  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 12, height: 38, borderRadius: 100 },
   searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
   chipRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
   chip:        { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth },

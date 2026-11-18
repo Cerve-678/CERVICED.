@@ -5,7 +5,7 @@
 
 #generated
 
-**4142 functions** across **605 files**.
+**4145 functions** across **606 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -269,7 +269,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (57)
+### `src/features/providers/` (58)
 - `aboutPreview.ts` — **aboutPreview**
 - `additionalInfo.ts` — **additionalInfoGroups** · **goodToKnowText** · **howToGetThere**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
@@ -278,6 +278,7 @@
 - `calendarBusySync.ts` — **resetCalendarSyncThrottle** · run · runSync · **syncCalendarBusyTimes** · **useAutoCalendarSync**
 - `CalendarChooserSheet.tsx` — **CalendarChooserSheet**
 - `CalendarSyncCard.tsx` — blockedLine · **CalendarSyncCard** · disconnect · load · openChooser · saveChoice · sync · toggleCalendar
+- `clienteleSearch.ts` — **searchClientele**
 - `CloseScheduleSection.tsx` — CloseScheduleSection · handleClose · handleReopen · keepBooking · loadUpcoming · onDateChange · openBooking · openSheet · reopensLabel · tomorrow
 - `conversionSteps.ts` — **buildConversionSteps** · **countLeftToGoLive**
 - `CustomPageMaker.tsx` — **CustomPageMaker** · FontRow · guard · LayoutSketch · set · tap
@@ -462,11 +463,11 @@
 - `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
 - `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · cancelBooking · canDispute · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · displayDuration · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleRefund · handleRefunded · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · handleSubmitDispute · hasFormForService · hasPackForService · isAddressReleased · loadSentItems · missingForms · missingPacks · parseMin · Perf · ProviderBookingDetailScreen · refreshBookingStatus · releaseAddressNow · Row · sendMissingForm · sendMissingPack · statusCard · submitPassOn · suggestRow · to12 · toggleInitTime · updateBookingStatus
 - `ProviderBookingHistoryScreen.tsx` — agendaSort · BookingCard · counts · fetchBookings · fetchUnreadMessages · fetchWaitlist · filterBookings · fmtDayLabel · fmtMoney · fmtTime · handleComplete · handleConfirmInvite · handleDismissReleasedSlot · handleHistoryFilterPress · handleOfferReleasedSlot · handlePickForReleasedSlot · handleRemoveWaitlistEntry · handleTabPress · isHistoryStatus · items · matchesHistoryFilter · onRefresh · openInvitePicker · pendingCount · PendingPill · ProviderBookingHistoryScreen · rescheduleRequestCount · rescheduleRequestRows · SkeletonList · statusFor · waitlistCount · waitlistPlaces
-- `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · clientCount · ClientSheet · close · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleCloseClient · handleMessage · handleOpenClient · handleRebook · handleSend · handleSheetChange · initials · load · loadHistory · loadNote · loadProfile · peopleCount · ProviderClienteleScreen · retry · sectionLabel · snapPoints · TabBar · tomorrow9am
+- `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · clientCount · ClientSheet · close · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleCloseClient · handleMessage · handleOpenClient · handleRebook · handleSend · handleSheetChange · initials · load · loadHistory · loadNote · loadProfile · peopleCount · ProviderClienteleScreen · retry · sectionLabel · snapPoints · TabBar · toggleSearch · tomorrow9am
 - `ProviderCommunicationsScreen.tsx` — effective · flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod
 - `ProviderConversationScreen.tsx` — ProviderConversationScreen · renderMessage · sendMessage
 - `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsByDate · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · dayAvailability · DayTimeline · displayMonth · finishTour · firstNameOf · formatCreatedAt · formatDateString · getMondayOf · getMonthDays · getWeekDates · goNextWeek · goPrevWeek · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · shiftDateString · SkeletonCard · statusCfg · SummaryRow · tap · timelineBookings · todayAvailability · toggleExpand · toggleMonth · visibleTourSteps · weekDates · WeekView · windowsByDate
-- `ProviderInboxScreen.tsx` — addTemplate · clearFilters · ConversationRow · flatItems · handleMarkConversationRead · handleSaveTemplates · handleSendReply · initials · loadInbox · onRefresh · openTemplates · ProviderInboxScreen · removeTemplate · renderRightActions · SkeletonRow · tabItems · timeAgoISO · toggleDateFilter · toggleReadFilter · unreadCounts · updateTemplate
+- `ProviderInboxScreen.tsx` — addTemplate · clearFilters · ConversationRow · flatItems · handleMarkConversationRead · handleSaveTemplates · handleSendReply · initials · loadInbox · onRefresh · openTemplates · ProviderInboxScreen · removeTemplate · renderRightActions · SkeletonRow · tabItems · timeAgoISO · toggleDateFilter · toggleReadFilter · toggleSearch · unreadCounts · updateTemplate
 - `ProviderInfoPackScreen.tsx` — addSection · applyTemplate · closeForm · fmtDate · formSplit · handleDelete · handlePickBooking · handleSave · load · loadUpcoming · openCreate · openEdit · PackCard · performDelete · previewText · ProviderInfoPackScreen · rankedTemplates · reach · sendSplit · starterTemplates · templates · todayYmd · toggleService · toPack
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · handleDeleteLibraryForm · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · linkedServices · makeId · openBookingPicker · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · sendToBookings · sendToPickedBookings · togglePickedBooking · toggleService · updateOption · updateQuestion
 - `ProviderMyProfileScreen.tsx` — attachSwipeable · cardHighlightColors · catalogue · closeCertificate · closeEditor · DashCard · DashEmpty · FindabilityCard · findabilityGaps · halfWidth · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handleOpenAnalytics · handleOpenBooking · handleOpenClientView · handleOpenPayments · handleOpenRecentActivity · handleOpenRelease · handleOpenTodayDay · handlePress · handleRemovePhoto · handleSaveService · handleScroll · handleSelectTab · handleToggleActive · handleToggleSteps · hidden · live · load · needing · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ProviderProfileLoadingShell · releaseQuickView · renderRow · row · ServiceCategoryCard · ServiceRow · serviceType · setup · startLowerSections

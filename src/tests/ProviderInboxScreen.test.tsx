@@ -96,8 +96,15 @@ it('filters the open tab by read state and name, and offers a way out when nothi
   fireEvent.press(screen.getByText('Unread'));
   expect(screen.getByText('Visitor')).toBeTruthy();
 
+  // The search box stays hidden until the header's search button opens it.
+  fireEvent.press(screen.getByLabelText('Search conversations by name'));
   fireEvent.changeText(screen.getByLabelText('Search conversations by name'), 'nobody');
   expect(screen.queryByText('Visitor')).toBeNull();
   fireEvent.changeText(screen.getByLabelText('Search conversations by name'), 'vis');
+  expect(screen.getByText('Visitor')).toBeTruthy();
+
+  // Closing the search clears what was typed.
+  fireEvent.changeText(screen.getByLabelText('Search conversations by name'), 'nobody');
+  fireEvent.press(screen.getByLabelText('Close search'));
   expect(screen.getByText('Visitor')).toBeTruthy();
 });
