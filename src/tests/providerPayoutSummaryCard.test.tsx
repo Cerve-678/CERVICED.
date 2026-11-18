@@ -50,6 +50,7 @@ test('shows the Stripe balance, the held total and the next bank payout, and ope
   // Only held rows count towards "held" — the transferred one has already left.
   expect(ui.getByText('£75.00')).toBeTruthy();
   expect(ui.getByText(/Next to your bank: £12\.00/)).toBeTruthy();
+  expect(ui.getByText(/Ready for payday is cleared money/)).toBeTruthy();
   fireEvent.press(ui.getByRole('button', { name: 'Payouts. Open Payments.' }));
   expect(onOpenPayments).toHaveBeenCalledTimes(1);
 });
@@ -85,7 +86,10 @@ test('with a payout schedule, shows the next paydays and the bookings in the one
   fireEvent.press(ui.getByRole('button', { name: /£35\.70, 1 payment/ }));
   expect(ui.getByText(/Brow Lamination/)).toBeTruthy();
   expect(ui.queryByText(/Lash Lift/)).toBeNull();
-  expect(ui.getByText('Expected dates, from your payout schedule.')).toBeTruthy();
+  // Says what it is, and what the amounts and dates mean.
+  expect(ui.getByText(/on its way to your bank, by the day it should arrive/)).toBeTruthy();
+  expect(ui.getByText(/^IN YOUR .+ PAYDAY$/)).toBeTruthy();
+  expect(ui.getByText(/Amounts are what you get\. Dates are estimates/)).toBeTruthy();
   fireEvent.press(ui.getByRole('button', { name: 'Your paydays. Open Payments.' }));
   expect(onOpenPayments).toHaveBeenCalledTimes(1);
 });
