@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **211 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **106 files**
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(67)_
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(69)_
 - `src/features/providers/goLiveStatus.ts` _(64)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(44)_

@@ -72,7 +72,7 @@ import {
   addPortfolioItem,
   createMyService,
   deletePortfolioItem,
-  forgetCachedProviderProfile,
+  refreshCachedProviderProfile,
   getMyBookmarkCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
@@ -1188,6 +1188,21 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('Branding');
   }, [navigation]);
 
+  // Keep a fresh copy of the profile as clients see it ready while My Profile
+  // is open, so the logo tap below opens it instantly and fully drawn: no
+  // wait on tap, and no grey loading frame (the preview opens with no slide
+  // to hide one). Refreshed on every focus, so coming back from Edit Profile
+  // picks the edit up. Not before go-live: clients can't see it yet.
+  const isLiveForPreview = goLive?.isLive !== false;
+  useFocusEffect(
+    useCallback(() => {
+      if (!providerSlug || !isLiveForPreview) return;
+      refreshCachedProviderProfile(providerSlug).catch((error: unknown) => {
+        logger.warn('Could not warm own profile for the logo preview:', error);
+      });
+    }, [providerSlug, isLiveForPreview]),
+  );
+
   // Tapping the logo shows the profile exactly as clients see it. Clients
   // can't open it at all before go-live, so say that rather than open a
   // "Provider not found" page. Unknown status (load failed) still opens it,
@@ -1202,8 +1217,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       );
       return;
     }
-    // Fresh, so anything just changed in Edit Profile shows.
-    forgetCachedProviderProfile(providerSlug);
     navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
   }, [navigation, providerSlug, goLive?.isLive]);
 

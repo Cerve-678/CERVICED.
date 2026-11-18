@@ -11,6 +11,7 @@ import {
   getProviderProfilePreviewBySlug,
   getProviderPortfolio,
   getProviderProfileViewerContext,
+  peekCachedProviderProfile,
   getProviderReviews,
   trackUserInteraction,
 } from "../../services/databaseService";
@@ -73,9 +74,18 @@ export function useProviderProfileData(
     knownOwnedProviderId,
   );
   knownOwnedProviderIdRef.current = knownOwnedProviderId;
-  const [provider, setProvider] = useState<ProviderProfileData | null>(null);
-  const [providerDbId, setProviderDbId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // A profile already in the cache (an Explore prefetch, or My Profile's logo
+  // tap) draws on the first frame. Starting on the skeleton and swapping a
+  // frame later read as a flash, most of all on the logo preview, which opens
+  // with no transition to hide it.
+  const [seed] = useState(() => {
+    const cached = peekCachedProviderProfile(providerSlug);
+    return cached ? { profile: mapProviderProfileData(cached), id: cached.id } : null;
+  });
+  const [provider, setProvider] = useState<ProviderProfileData | null>(seed?.profile ?? null);
+  const [providerDbId, setProviderDbId] = useState<string | null>(seed?.id ?? null);
+  const [loading, setLoading] = useState(!seed);
+  const keepSeedRef = useRef(seed !== null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [unclaimedProvider, setUnclaimedProvider] =
     useState<UnclaimedProviderDetail | null>(null);
@@ -103,10 +113,17 @@ export function useProviderProfileData(
   useEffect(() => {
     profileGenerationRef.current += 1;
     let cancelled = false;
-    setLoading(true);
+    // The first run keeps the first frame's cached copy; a later slug change
+    // looks in the cache again.
+    if (keepSeedRef.current) {
+      keepSeedRef.current = false;
+    } else {
+      const cached = peekCachedProviderProfile(providerSlug);
+      setProvider(cached ? mapProviderProfileData(cached) : null);
+      setProviderDbId(cached?.id ?? null);
+      setLoading(!cached);
+    }
     setLoadFailed(false);
-    setProvider(null);
-    setProviderDbId(null);
     setUnclaimedProvider(null);
     setReviews([]);
     setReviewsLoading(true);
