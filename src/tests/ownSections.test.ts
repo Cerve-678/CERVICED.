@@ -119,8 +119,8 @@ describe('own sections on the profile', () => {
 
   it('is in the public profile select and drawn after Additional Information', () => {
     expect(readDatabaseLayer()).toMatch(/PROVIDER_PROFILE_PUBLIC_FIELDS = `[\s\S]*?\bprofile_sections,[\s\S]*?`;/);
-    const screen = read('screens/client/ProviderProfileScreen.tsx');
-    expect(screen.indexOf('<ProviderOwnSections')).toBeGreaterThan(screen.indexOf('<ProviderAdditionalInfoSection'));
+    const page = read('features/providers/page/ProviderPageSheet.tsx');
+    expect(page.indexOf('<ProviderOwnSections')).toBeGreaterThan(page.indexOf('<ProviderAdditionalInfoSection'));
   });
 
   it('is saved cleaned with the agreement time, only when it changed, and only once agreed', () => {
