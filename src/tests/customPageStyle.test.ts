@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
 import {
   CUSTOM_HEADING_FONTS,
   CUSTOM_LAYOUTS,
@@ -63,6 +66,26 @@ describe('Custom page style', () => {
       expect(CUSTOM_TEXT_FONTS.map(font => font.key)).toContain(fontSet.text);
     }
     expect(new Set(FONT_SETS.map(fontSet => fontSet.key)).size).toBe(FONT_SETS.length);
+  });
+
+  it('only offers fonts the app actually loads', () => {
+    const app = readFileSync(join(__dirname, '../../App.tsx'), 'utf8');
+    for (const font of [...CUSTOM_HEADING_FONTS, ...CUSTOM_TEXT_FONTS]) {
+      expect(app).toContain(font.fontFamily);
+    }
+    expect(new Set(CUSTOM_HEADING_FONTS.map(font => font.key)).size).toBe(CUSTOM_HEADING_FONTS.length);
+    expect(new Set(CUSTOM_TEXT_FONTS.map(font => font.key)).size).toBe(CUSTOM_TEXT_FONTS.length);
+  });
+
+  it('gives every font set its own three fonts', () => {
+    const triples = FONT_SETS.map(fontSet => `${fontSet.nameFont}/${fontSet.heading}/${fontSet.text}`);
+    expect(new Set(triples).size).toBe(FONT_SETS.length);
+  });
+
+  it('lays Soft out on round cards and Bold Boxes on round outlined boxes, both reading back', () => {
+    expect(customPageStyle({ ...DEFAULT_CUSTOM_CHOICES, layout: 'soft' })).toMatchObject({ cards: 'soft', policies: 'softTiles', hero: 'stacked' });
+    expect(customPageStyle({ ...DEFAULT_CUSTOM_CHOICES, layout: 'bigBoxes' })).toMatchObject({ cards: 'outlineRound', policies: 'boxes', hero: 'customBig' });
+    expect(parseCustomChoices('bigBoxes~cinzel~oldStandard~0')).toEqual({ layout: 'bigBoxes', heading: 'cinzel', text: 'oldStandard', caps: false });
   });
 
   it('knows which set three fonts make, and when they make none', () => {

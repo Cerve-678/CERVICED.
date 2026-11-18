@@ -121,7 +121,7 @@ export function CustomPageMaker({
       {/* 1 · Layout */}
       <View style={sectionStyle}>
         <Text style={[styles.sectionTitle, { color: P.text }]}>Layout</Text>
-        <Text style={[styles.sectionSub, { color: P.sub }]}>Four plain ways to lay out your page.</Text>
+        <Text style={[styles.sectionSub, { color: P.sub }]}>Six plain ways to lay out your page.</Text>
         <View style={styles.layoutGrid}>
           {CUSTOM_LAYOUTS.map(layout => {
             const selected = active && choices.layout === layout.key;
@@ -376,6 +376,21 @@ function LayoutSketch({ layout, accent, surface, line, card }: { layout: CustomL
           <View style={[styles.sketchBox, styles.sketchBoxShort, { borderColor: line }]} />
         </>
       )}
+      {layout === 'soft' && (
+        <>
+          <View style={[styles.sketchLogo, styles.sketchCentre, { backgroundColor: accent, marginTop: 0 }]} />
+          <View style={[styles.sketchName, styles.sketchCentre, { backgroundColor: accent }]} />
+          <View style={[styles.sketchCard, styles.sketchSoft, { backgroundColor: card }]} />
+          <View style={[styles.sketchCard, styles.sketchSoft, { backgroundColor: card }]} />
+        </>
+      )}
+      {layout === 'bigBoxes' && (
+        <>
+          <View style={[styles.sketchBig, { backgroundColor: accent, width: '80%' }]} />
+          <View style={[styles.sketchBox, styles.sketchBoxRound, { borderColor: line }]} />
+          <View style={[styles.sketchBox, styles.sketchBoxRound, { borderColor: line }]} />
+        </>
+      )}
     </View>
   );
 }
@@ -433,4 +448,6 @@ const styles = StyleSheet.create({
   sketchBand: { height: 22, marginHorizontal: -8, marginTop: -8 },
   sketchBox: { height: 14, borderWidth: 1, borderRadius: 4 },
   sketchBoxShort: { height: 10 },
+  sketchSoft: { height: 18, borderRadius: 8 },
+  sketchBoxRound: { height: 16, borderRadius: 8 },
 });

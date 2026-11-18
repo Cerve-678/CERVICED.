@@ -1190,7 +1190,7 @@ export function StyledPolicyList({
   const layout = palette.pageStyle?.policies ?? "hairline";
   const square = !!palette.squareCards;
   const page = sheetInk(palette.background);
-  // Custom's text font, on the four policy layouts Custom uses.
+  // Custom's text font, on the policy layouts Custom uses.
   const tf = customTextStyle(palette.pageStyle);
 
   if (layout === "numerals") {
@@ -1249,10 +1249,10 @@ export function StyledPolicyList({
       <View style={policyStyles.grid}>
         {rows.map(row => (
           <View key={row.label} style={[policyStyles.cell, policyStyles.softTile, { backgroundColor: tile }, square && policyStyles.square]}>
-            <Text style={[policyStyles.softLabel, { color: tileInk.text }]}>{row.label}</Text>
-            <Text style={[policyStyles.smallValue, { color: tileInk.sub }]}>{row.value}</Text>
+            <Text style={[policyStyles.softLabel, { color: tileInk.text }, tf]}>{row.label}</Text>
+            <Text style={[policyStyles.smallValue, { color: tileInk.sub }, tf]}>{row.value}</Text>
             {row.notes?.map(note => (
-              <Text key={note} style={[policyStyles.note, { color: tileInk.sub }]}>{note}</Text>
+              <Text key={note} style={[policyStyles.note, { color: tileInk.sub }, tf]}>{note}</Text>
             ))}
             {row.tag ? (
               <View style={[policyStyles.tag, policyStyles.tagLeft, { backgroundColor: palette.text }]}>
