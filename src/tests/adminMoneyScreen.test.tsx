@@ -1,8 +1,8 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import AdminMoneyScreen from '../screens/shared/AdminMoneyScreen';
 import {
-  adminDeclineRefundRequest, assignBankDispute, getAdminBankDisputes, getAdminMoneyOverview, refundProviderBooking,
+  adminDeclineRefundRequest, adminRetryPayout, assignBankDispute, getAdminBankDisputes, getAdminMoneyOverview, refundProviderBooking,
 } from '../services/databaseService';
 
 jest.mock('expo-haptics', () => ({
@@ -50,6 +50,25 @@ test('shows the three lists and counts', async () => {
   expect(ui.getByText('£18.50')).toBeTruthy();
   fireEvent.press(ui.getByRole('tab', { name: /REFUNDS/ }));
   expect(ui.getByText('NEEDS YOU')).toBeTruthy();
+});
+
+test('retrying a payment swaps the button for an "in the next payment run" panel', async () => {
+  (adminRetryPayout as jest.Mock).mockResolvedValue(undefined);
+  const ui = render(<AdminMoneyScreen navigation={{ goBack: jest.fn() }} />);
+  await waitFor(() => expect(ui.getByText('Lash Lab')).toBeTruthy());
+  fireEvent.press(ui.getByText('TRY PAYMENT AGAIN NOW'));
+  const buttons = mockShowConfirm.mock.calls[0][2] as Array<{ text: string; onPress?: () => Promise<void> }>;
+  // What admin_retry_payout leaves behind: held again, due now.
+  (getAdminMoneyOverview as jest.Mock).mockResolvedValue({
+    ...overview,
+    failed: [{ ...overview.failed[0], status: 'held', next_try_at: new Date().toISOString() }],
+  });
+  await act(async () => { await buttons.find(b => b.text === 'Try again')!.onPress!(); });
+  expect(adminRetryPayout).toHaveBeenCalledWith('p1');
+  expect(ui.getByText('IN THE NEXT PAYMENT RUN')).toBeTruthy();
+  expect(ui.getByText(/^Goes out by /)).toBeTruthy();
+  expect(ui.queryByText('TRY PAYMENT AGAIN NOW')).toBeNull();
+  ui.unmount();
 });
 
 test('a decline needs a note, and approving the full amount sends a full refund', async () => {

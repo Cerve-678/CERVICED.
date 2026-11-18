@@ -1,6 +1,7 @@
 // Building blocks for the Payments & payouts screen, which is one card with
-// tabs across its top. Sections inside it are split by a thin line; the
-// payout account and each part of Settings sit in a PayCard of their own.
+// tabs across its top. Sections inside it are split by a thin line; each
+// part of Settings sits in a PayCard of its own. The payout account is a
+// separate card outside it (ProviderStripePayments).
 // Nothing uses an icon.
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -20,8 +21,8 @@ export function PaySection({ title, sub, first = false, children }: {
   </View>;
 }
 
-/** A card of its own inside the big card: the payout account on Overview,
- *  and each part of Settings, so separate settings read as separate. */
+/** A card of its own inside the big card: each part of Settings, so
+ *  separate settings read as separate. */
 export function PayCard({ title, sub, children }: {
   title?: string; sub?: string; children?: React.ReactNode;
 }) {

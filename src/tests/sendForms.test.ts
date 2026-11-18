@@ -43,3 +43,18 @@ describe('a form is never sent empty', () => {
     ])).toBeNull();
   });
 });
+
+describe('a client never gets the same form twice', () => {
+  const { bookingsHoldingForm } = require('../features/intake-forms/sendForms') as typeof import('../features/intake-forms/sendForms');
+  it('counts the same saved form, or one with the same name', () => {
+    const sent = [
+      { booking_id: 'a', library_form_id: 'f1', title: 'Lash consultation' },
+      { booking_id: 'b', library_form_id: 'f2', title: ' lash Consultation ' },
+      { booking_id: 'c', library_form_id: 'f3', title: 'Patch test' },
+      { booking_id: 'a', library_form_id: null, title: 'Lash consultation' },
+    ];
+    expect(bookingsHoldingForm(sent, 'f1', 'Lash consultation').sort()).toEqual(['a', 'b']);
+    expect(bookingsHoldingForm(sent, 'f3', 'Patch test')).toEqual(['c']);
+    expect(bookingsHoldingForm(sent, 'f9', 'Aftercare')).toEqual([]);
+  });
+});
