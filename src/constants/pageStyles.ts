@@ -33,7 +33,9 @@ export type PageStyleKey =
   | 'softFocus'
   | 'hush'
   | 'stripes'
-  | 'bow';
+  | 'bow'
+  | 'pure'
+  | 'grid';
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -66,7 +68,9 @@ export type PageHeading =
   | 'softCaps'   // heavy grotesk caps at the top left of its own card (Soft Focus)
   | 'hushRule'   // tiny spaced caps between hairlines, in the style's own quiet words (Hush)
   | 'stripeCaps' // spaced serif caps, centred, at the top of the section's colour strip (Stripes)
-  | 'bowSerif';  // a small satin bow over an italic serif title, centred (Bow)
+  | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
+  | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
+  | 'gridIndex'; // the section's number in the accent, then a bold sans title (Grid)
 
 /** What a section sits on. */
 export type PageCards =
@@ -94,7 +98,9 @@ export type PageCards =
   | 'outlineRound' // a card with a fine dark outline and big round corners (Lounge)
   | 'soft'    // a soft solid card with big round corners, its heading inside (Soft Focus)
   | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
-  | 'bow';    // a solid card with round corners (Bow)
+  | 'bow'     // a solid card with round corners (Bow)
+  | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
+  | 'gridBox'; // a square card in a fine ink outline, its heading inside (Grid)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -123,7 +129,9 @@ export type PagePolicies =
   | 'softTiles'   // two-up round tiles tinted with the accent, inside the section's card (Soft Focus)
   | 'gentleNotes' // centred notes: a small caps label, then the policy in a light italic (Hush)
   | 'pearlNotes'  // rows in the outlined box, each beside a single pearl (Stripes)
-  | 'ribbonBand'; // one card with a satin ribbon across its top, two-up italic titles (Bow)
+  | 'ribbonBand' // one card with a satin ribbon across its top, two-up italic titles (Bow)
+  | 'settingsRows' // the label on the left, the policy on the right, a fine line between rows (Pure)
+  | 'gridCells';   // two-up cells split by fine lines, a small caps label over each policy (Grid)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -161,6 +169,8 @@ export type PageHero =
   | 'hushFan'  // quiet: what they do in tiny caps, a ringed logo, the name in light italic, three of their chosen photos in separate boxes
   | 'stripes'  // a full-width strip of their colour: the logo in a ring of pearls, the name in spaced serif caps, no photo
   | 'bow'      // their photo with a ribbon down it and a bow on top, the logo on its foot, the name in italic serif
+  | 'appHeader' // the logo on the left, the name and what they do beside it, like an app's profile top (Pure)
+  | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -170,7 +180,9 @@ export type PageLogoFrame =
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
   | 'mat'        // square, in a white mat and a thin dark frame (Gallery)
   | 'square'     // a square with barely rounded corners (Snapshot)
-  | 'stamped';   // a ring pressed into the paper round it (Embossed)
+  | 'stamped'    // a ring pressed into the paper round it (Embossed)
+  | 'rounded'    // a square with soft, round corners, like an app icon (Pure)
+  | 'sharp';     // a square with barely any rounding (Grid)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -430,6 +442,21 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'bowSerif', cards: 'bow', policies: 'ribbonBand', logo: 'circle',
     hero: 'bow', aboutInHero: false, roundedPhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  // 2026-11-18: two simple, clean templates the owner picked (2 and 6) from
+  // https://claude.ai/artifact/CouRMrARqSAzAiqF73dtYe. No ornaments: the
+  // provider's colours do the work.
+  {
+    key: 'pure', name: 'Pure', description: 'Clean and modern: your logo beside your name, tidy grouped rows',
+    heading: 'appBold', cards: 'grouped', policies: 'settingsRows', logo: 'rounded',
+    hero: 'appHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'grid', name: 'Grid', description: 'Neat and graphic: fine lines box everything in, numbered sections',
+    heading: 'gridIndex', cards: 'gridBox', policies: 'gridCells', logo: 'sharp',
+    hero: 'gridHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
 ];
 

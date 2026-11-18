@@ -117,6 +117,8 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   hush: { text: 'SERVICES' },
   stripes: { text: 'SERVICES' },
   bow: { text: 'The Services' },
+  pure: { text: 'Services' },
+  grid: { lead: '03', text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -169,6 +171,10 @@ function MiniProfile({
             <View style={[mini.logo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
           </View>
         );
+      case 'rounded':
+        return <View style={[mini.logo, mini.logoNoRim, mini.logoRounded, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />;
+      case 'sharp':
+        return <View style={[mini.logo, mini.logoNoRim, mini.logoSharp, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />;
       case 'mat':
         return (
           <View style={mini.matFrame}>
@@ -230,6 +236,15 @@ function MiniProfile({
         return <Text style={[mini.serifTitle, { color: ink }]}>{heading.text}</Text>;
       case 'condensed':
         return <Text style={[mini.condensed, { color: ink }]}>{heading.text}</Text>;
+      case 'appBold':
+        return <Text style={[mini.appBold, { color: ink }]}>{heading.text}</Text>;
+      case 'gridIndex':
+        return (
+          <View style={mini.indexRow}>
+            <Text style={[mini.gridNumber, { color: accent }]}>{heading.lead}</Text>
+            <Text style={[mini.appBold, { color: ink }]}>{heading.text}</Text>
+          </View>
+        );
       case 'indexed':
         return (
           <View style={mini.indexRow}>
@@ -383,6 +398,10 @@ function MiniProfile({
           </View>
         );
       }
+      case 'grouped':
+        return <View key={key} style={[mini.card, mini.groupedCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
+      case 'gridBox':
+        return <View key={key} style={[mini.card, mini.gridCard, { backgroundColor: cardColour, borderColor: withAlpha(ink, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'soft':
       case 'bow':
         return <View key={key} style={[mini.card, mini.roundCard, { backgroundColor: cardColour }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
@@ -429,6 +448,26 @@ function MiniProfile({
             <View style={mini.sideLines}>
               <Text style={mini.sideName} numberOfLines={1}>Name</Text>
               <View style={mini.heroBar} />
+              <View style={[mini.heroBar, mini.heroBarShort]} />
+            </View>
+          </View>
+        ) : style.hero === 'appHeader' ? (
+          // Pure: the logo left, the name and a line beside it.
+          <View style={[mini.sideRow, mini.appRow]}>
+            <View style={mini.smallLogo}>{logo}</View>
+            <View style={mini.sideLinesLeft}>
+              <Text style={mini.appName} numberOfLines={1}>Name</Text>
+              <View style={[mini.heroBar, mini.heroBarShort]} />
+            </View>
+          </View>
+        ) : style.hero === 'gridHeader' ? (
+          // Grid: the logo and name in a box of fine lines, a ruled cell under it.
+          <View style={mini.gridHero}>
+            <View style={[mini.sideRow, mini.gridHeroTop]}>
+              <View style={mini.smallLogo}>{logo}</View>
+              <Text style={mini.appName} numberOfLines={1}>Name</Text>
+            </View>
+            <View style={mini.gridHeroFoot}>
               <View style={[mini.heroBar, mini.heroBarShort]} />
             </View>
           </View>
@@ -745,6 +784,17 @@ const mini = StyleSheet.create({
   mastName: { fontFamily: 'Prata-Regular', fontSize: 15, color: '#FFFFFF', marginBottom: 2 },
   sideRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
   smallLogo: { transform: [{ scale: 0.75 }] },
+  logoRounded: { borderRadius: 8 },
+  logoSharp: { borderRadius: 1 },
+  appRow: { alignSelf: 'stretch' },
+  appName: { fontFamily: 'Manrope-Bold', fontSize: 12, color: '#FFFFFF' },
+  appBold: { fontFamily: 'Manrope-Bold', fontSize: 11 },
+  gridNumber: { fontFamily: 'Manrope-Bold', fontSize: 7 },
+  gridHero: { alignSelf: 'stretch', marginHorizontal: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)' },
+  gridHeroTop: { paddingHorizontal: 4, paddingVertical: 3 },
+  gridHeroFoot: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.8)', paddingHorizontal: 6, paddingVertical: 4 },
+  groupedCard: { borderRadius: 7 },
+  gridCard: { borderRadius: 0, borderWidth: 1 },
   sideLines: { flex: 1, gap: 4, alignItems: 'center' },
   sideName: { fontFamily: 'Prata-Regular', fontSize: 12, color: '#FFFFFF' },
   heroBar: { height: 4, width: '90%', borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.7)' },

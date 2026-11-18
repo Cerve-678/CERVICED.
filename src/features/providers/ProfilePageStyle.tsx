@@ -437,6 +437,21 @@ export function PageSectionHeading({
           <Text style={[headingStyles.bowTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
         </View>
       );
+    case "appBold":
+      // Pure: a bold sans title on the left, like an app's section.
+      return (
+        <Text {...a11y} style={[headingStyles.appBold, { color: ink }]}>
+          {title}
+        </Text>
+      );
+    case "gridIndex":
+      // Grid: "03  Services", the number in the accent.
+      return (
+        <View {...a11y} accessible style={headingStyles.gridRow}>
+          <Text style={[headingStyles.gridNumber, { color: accent }]}>{SECTION_NUMBERS[section]}</Text>
+          <Text style={[headingStyles.appBold, headingStyles.gridTitle, { color: ink }]} numberOfLines={1}>{title}</Text>
+        </View>
+      );
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
@@ -582,6 +597,25 @@ export function PageSection({
     // Soft Focus: the heading sits inside its own soft card, in the card's ink.
     return (
       <View style={[surfaceStyles.solid, surfaceStyles.softCard, { backgroundColor: palette.cardBackground }, square && surfaceStyles.square, style]}>
+        <HeadingLine headingRight={headingRight}>
+          <PageSectionHeading section={section} palette={palette} color={palette.text} />
+        </HeadingLine>
+        {children}
+      </View>
+    );
+  }
+
+  if (pageStyle.cards === "gridBox" && !bare) {
+    // Grid: a square card in a fine ink outline, its numbered heading inside.
+    return (
+      <View
+        style={[
+          surfaceStyles.solid,
+          surfaceStyles.gridBox,
+          { backgroundColor: palette.cardBackground, borderColor: withAlpha(outlineInk(palette.cardBackground), 0.3) },
+          style,
+        ]}
+      >
         <HeadingLine headingRight={headingRight}>
           <PageSectionHeading section={section} palette={palette} color={palette.text} />
         </HeadingLine>
@@ -1013,6 +1047,12 @@ export function serviceCardSurface(
       return { backgroundColor: colours.card, borderWidth: 1, borderColor: stripeColours(colours.accent).line, borderRadius: 16, shadowOpacity: 0 };
     case "bow":
       return { ...flat, backgroundColor: colours.card, borderRadius: 22 };
+    case "grouped":
+      // Pure: a plain solid card, round corners, no shadow.
+      return { ...flat, backgroundColor: colours.card, borderRadius: 18 };
+    case "gridBox":
+      // Grid: square, in the same fine ink outline as the section boxes.
+      return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 1, borderColor: withAlpha(outlineInk(colours.card), 0.3) };
     case "pages":
       // A page: square, a fine edge, a little lift off the paper under it.
       return {
@@ -1525,6 +1565,58 @@ export function StyledPolicyList({
     return <AccordionPolicies rows={rows} ink={ink} separator={page.separator} />;
   }
 
+  if (layout === "settingsRows") {
+    // Pure: like a phone's settings list, the label on the left and the
+    // policy on the right, a fine line between rows.
+    const line = withAlpha(ink.text, 0.12);
+    return (
+      <View>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[policyStyles.settingsRow, index > 0 && [policyStyles.settingsRule, { borderTopColor: line }]]}
+          >
+            <Text style={[policyStyles.settingsLabel, { color: ink.sub }]}>{row.label}</Text>
+            <View style={[policyStyles.hairValueCol, policyStyles.settingsValueCol]}>
+              <Text style={[policyStyles.settingsValue, { color: ink.text }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, policyStyles.alignRight, { color: ink.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? <Text style={[policyStyles.settingsTag, { color: ink.text }]}>{row.tag}</Text> : null}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "gridCells") {
+    // Grid: two-up cells split by fine lines, a small caps label over each policy.
+    const line = withAlpha(ink.text, 0.22);
+    return (
+      <View style={policyStyles.gridCells}>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[
+              policyStyles.gridCell,
+              { borderColor: line },
+              index % 2 === 0 ? policyStyles.gridCellLeft : policyStyles.gridCellRight,
+              index >= 2 && policyStyles.gridCellBelow,
+            ]}
+          >
+            <Text style={[policyStyles.gridLabel, { color: ink.sub }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.smallValue, { color: ink.text }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+            ))}
+            {row.tag ? <Text style={[policyStyles.gridLabel, policyStyles.gridTag, { color: ink.text }]}>{row.tag.toUpperCase()}</Text> : null}
+          </View>
+        ))}
+      </View>
+    );
+  }
+
   if (layout === "hairline" || layout === "rows") {
     return (
       <View>
@@ -1828,6 +1920,10 @@ const headingStyles = StyleSheet.create({
   // Hanken Grotesk (Hush), Castoro (Stripes), Sorts Mill Goudy (Bow).
   loungeKicker: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.4, textAlign: "center", marginBottom: 2 },
   loungeCaps: { fontFamily: "LeagueGothic-Regular", fontSize: 32, lineHeight: 41, letterSpacing: 0.6, textAlign: "center" },
+  appBold: { fontFamily: "Manrope-Bold", fontSize: 19, lineHeight: 26, letterSpacing: -0.2, marginBottom: 12 },
+  gridRow: { flexDirection: "row", alignItems: "baseline", gap: 10, marginBottom: 12 },
+  gridNumber: { fontFamily: "Manrope-Bold", fontSize: 12, letterSpacing: 0.4 },
+  gridTitle: { marginBottom: 0, flexShrink: 1 },
   softCaps: { fontFamily: "Archivo-ExtraBold", fontSize: 15, lineHeight: 20, letterSpacing: -0.1, marginBottom: 12 },
   hushRule: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.2, flexShrink: 1 },
   stripeCaps: { fontFamily: "Castoro-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 4, textAlign: "center" },
@@ -1901,6 +1997,7 @@ const surfaceStyles = StyleSheet.create({
   stripeTinted: { borderTopWidth: 1, borderBottomWidth: 1, marginVertical: -0.5 },
   stripeBox: { borderWidth: 1, borderRadius: 16, padding: 16 },
   softCard: { borderRadius: 26, padding: 18, marginBottom: 16 },
+  gridBox: { borderRadius: 0, borderWidth: 1, padding: 18, marginBottom: 16 },
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
@@ -1987,6 +2084,19 @@ const policyStyles = StyleSheet.create({
   recessedLabel: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 11, lineHeight: 15, letterSpacing: 1.8, width: 104, paddingTop: 2 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
+  settingsRow: { flexDirection: "row", gap: 16, paddingVertical: 13 },
+  settingsRule: { borderTopWidth: StyleSheet.hairlineWidth },
+  settingsLabel: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, flexShrink: 0, maxWidth: "45%" },
+  settingsValueCol: { alignItems: "flex-end" },
+  settingsValue: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, textAlign: "right" },
+  settingsTag: { fontFamily: "Manrope-Bold", fontSize: 11, marginTop: 4, textAlign: "right" },
+  gridCells: { flexDirection: "row", flexWrap: "wrap" },
+  gridCell: { width: "50%", paddingVertical: 12, gap: 2 },
+  gridCellLeft: { borderRightWidth: 1, paddingRight: 12 },
+  gridCellRight: { paddingLeft: 12 },
+  gridCellBelow: { borderTopWidth: 1 },
+  gridLabel: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 1.4 },
+  gridTag: { marginTop: 4 },
   hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },
   columnsGrid: { flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderLeftWidth: 1 },
   columnCell: { width: "50%", borderRightWidth: 1, borderBottomWidth: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },
