@@ -108,6 +108,11 @@ const GAZETTE_HEADLINES: Record<PageSectionKey, string> = {
   portfolio: "My Portfolio",
   specialities: "My Specialities",
   policyPages: "Before You Book",
+  keyInfo: "Key Information",
+  faq: "Questions Answered",
+  aftercare: "Aftercare",
+  houseRules: "House Rules",
+  disclaimer: "Disclaimer",
 };
 
 /** Studio's card tabs: a short label on the tab above each section's card. */
@@ -122,6 +127,11 @@ const STUDIO_TABS: Record<PageSectionKey, string> = {
   portfolio: "My work",
   specialities: "What I love",
   policyPages: "Before you book",
+  keyInfo: "Key info",
+  faq: "Q&A",
+  aftercare: "Aftercare",
+  houseRules: "House rules",
+  disclaimer: "Disclaimer",
 };
 
 /** A section heading in the page style's voice. Classic's heading lives inside
@@ -467,6 +477,11 @@ const STRIPE_TINT: Record<PageSectionKey, "soft" | "strong" | null> = {
   contact: "soft",
   info: null,
   specialities: null,
+  keyInfo: "soft",
+  faq: null,
+  aftercare: "soft",
+  houseRules: null,
+  disclaimer: "soft",
 };
 
 export function PageSection({

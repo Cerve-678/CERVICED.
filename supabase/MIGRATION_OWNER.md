@@ -68,6 +68,12 @@ OWNER:  (none)
 |---|---|---|
 | 20261118130000 | `form_deadline` | **APPLIED 2026-11-18** on the user's go-ahead ("yes" to apply both, then merge), via `supabase db query --linked -f` from the main folder. Right before: live max `20261118120000`, lock `(none)`, no open branch above it except `20261118140000` (applied straight after). Verified live: version recorded; both columns; trigger present; SECURITY DEFINER; anon and authenticated can't execute the trigger function. As written: on `feat/forms-send-many-and-deadline`. `provider_form_library.deadline_hours int` (0–336, NULL = none), `booking_intake_forms.due_at timestamptz`, and a BEFORE INSERT trigger `stamp_intake_form_due_at` that sets due_at = booking start (UK time) − deadline_hours. No existing function changed, so all three senders (app, `handle_auto_send_intake_form`, `apply_hold_claimed_side_effects`) get it untouched. Live max `20261118120000` when written; no open branch holds a higher number. Apply before merging the app change (the app writes `deadline_hours`). |
 
+### Applied 2026-11-18 (provider's own profile sections)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118120000 | `provider_profile_sections` | **APPLIED 2026-11-18** on the user's go-ahead (Policies & Info part 3, "yes u should"), via `supabase db query --linked -f` from the main folder. Right before: live max `20261117130000`, lock taken by `feat/policies-own-sections`, no open PR with a higher version (`fix/booking-times-uk-time`'s `20261113140000` is below the frontier). Forced-rollback dry run passed on live (22 providers default, `[]` refused, 40 KB refused; live unchanged after). Verified live: version recorded (live max); `providers.profile_sections jsonb NOT NULL DEFAULT '{}'`; `providers_profile_sections_shape` check present; 0 non-default rows; RLS still on. As written: one additive column plus a shape/size check; no policy or grant change (`providers` uses table-level grants). Applied before the app change merged (the public profile select names the column). Written on `feat/policies-own-sections` (#597). |
+
 ### Applied 2026-11-17 (Beauty Profile style questions)
 
 | Authored version | Name | Status |

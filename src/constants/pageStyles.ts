@@ -460,7 +460,9 @@ export function getPageStyle(key: string | null | undefined): PageStyle {
 /** Which section a heading belongs to, so a two-part heading can say something better than the bare title. */
 export type PageSectionKey =
   | 'about' | 'policies' | 'services' | 'reviews' | 'hours' | 'contact'
-  | 'info' | 'portfolio' | 'specialities' | 'policyPages';
+  | 'info' | 'portfolio' | 'specialities' | 'policyPages'
+  // The provider's own sections (features/providers/ownSections.ts), under Additional Information.
+  | 'keyInfo' | 'faq' | 'aftercare' | 'houseRules' | 'disclaimer';
 
 /** The plain title of each section — what Classic shows, and what screen readers hear in every style. */
 export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
@@ -474,6 +476,11 @@ export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
   portfolio: 'Portfolio',
   specialities: 'Specialities',
   policyPages: 'Full Policy',
+  keyInfo: 'Key Information',
+  faq: 'FAQs',
+  aftercare: 'Aftercare',
+  houseRules: 'House Rules',
+  disclaimer: 'Disclaimer',
 };
 
 /** The two halves of a script-and-serif or caps-and-script heading: a short
@@ -489,6 +496,11 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
   portfolio: ['My', 'Portfolio'],
   specialities: ['My', 'Specialities'],
   policyPages: ['Before', 'You Book'],
+  keyInfo: ['Key', 'Information'],
+  faq: ['Common', 'Questions'],
+  aftercare: ['Your', 'Aftercare'],
+  houseRules: ['House', 'Rules'],
+  disclaimer: ['The', 'Disclaimer'],
 };
 
 export function headingPair(section: PageSectionKey): [string, string] {
@@ -507,6 +519,11 @@ export const HUSH_TITLES: Record<PageSectionKey, string> = {
   portfolio: 'my work',
   specialities: 'what I love',
   policyPages: 'before you book',
+  keyInfo: 'key information',
+  faq: 'questions',
+  aftercare: 'aftercare',
+  houseRules: 'house rules',
+  disclaimer: 'disclaimer',
 };
 
 /** Signature's section numbers, in the order the profile shows its sections. */
@@ -521,6 +538,11 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   contact: '08',
   info: '09',
   specialities: '10',
+  keyInfo: '11',
+  faq: '12',
+  aftercare: '13',
+  houseRules: '14',
+  disclaimer: '15',
 };
 
 /** Novel's chapter titles: plain section names under each "Chapter" line. */
@@ -535,6 +557,11 @@ const CHAPTER_TITLES: Record<PageSectionKey, string> = {
   contact: 'Get in Touch',
   info: 'Good to Know',
   specialities: 'My Specialities',
+  keyInfo: 'Key Information',
+  faq: 'Common Questions',
+  aftercare: 'Your Aftercare',
+  houseRules: 'House Rules',
+  disclaimer: 'Disclaimer',
 };
 
 /** Novel's heading for a section: ["Chapter III", "The Services"], numbered in page order. */
@@ -544,7 +571,7 @@ export function chapterHeading(section: PageSectionKey): [string, string] {
 
 /** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
 export function romanNumeral(index: number, lower = false): string {
-  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
   const value = numerals[index] ?? String(index + 1);
   return lower ? `${value.toLowerCase()}.` : value;
 }
