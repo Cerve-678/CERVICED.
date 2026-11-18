@@ -90,6 +90,10 @@ export function HeroLogo({
         ? styles.polaroidPhoto
         : pageStyle.logo === "tilted"
           ? [styles.tilted, { borderRadius: Math.round(size * 0.16) }]
+          : pageStyle.logo === "rounded"
+            ? { borderRadius: Math.round(size * 0.26) }
+          : pageStyle.logo === "sharp"
+            ? { borderRadius: Math.round(size * 0.04) }
           : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
             || pageStyle.logo === "accentRing"
             ? styles.thinRim
@@ -889,6 +893,55 @@ export function ProfileHeroLayout({
         />
       );
 
+    case "appHeader": {
+      // Pure: the logo on the left, the name beside it with what they do and
+      // their area under it, then the stars and slots pill, all left-aligned.
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.appWrap}>
+          <View style={layout.appRow}>
+            {renderLogo(76)}
+            <View style={layout.appText} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <View style={layout.tickRow}>
+                <Text style={[layout.appName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
+                </Text>
+                {tick}
+              </View>
+              {phrase ? <Text style={[layout.appPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "gridHeader": {
+      // Grid: a box of fine lines with the logo and name in it, and the
+      // stars and slots pill in a ruled cell along its foot.
+      const line = withAlpha(heroText, 0.35);
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.gridWrap}>
+          <View style={[layout.gridBox, { borderColor: line }]}>
+            <View style={layout.gridTop}>
+              {renderLogo(64)}
+              <View style={layout.appText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <View style={layout.tickRow}>
+                  <Text style={[layout.gridName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {name}
+                  </Text>
+                  {tick}
+                </View>
+                {phrase ? <Text style={[layout.appPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+              </View>
+            </View>
+            <View style={[layout.gridFoot, { borderTopColor: line }]}>{details}</View>
+          </View>
+        </View>
+      );
+    }
+
     case "stripes":
       return (
         <StripesHero
@@ -1043,6 +1096,16 @@ const TEXT_FIRST_DROP = 48;
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
+  appWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  appRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  appText: { flex: 1, minWidth: 0 },
+  appName: { fontFamily: "Manrope-Bold", fontSize: 26, lineHeight: 32, letterSpacing: -0.3, flexShrink: 1 },
+  appPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, marginTop: 3 },
+  gridWrap: { paddingHorizontal: 16, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  gridBox: { borderWidth: 1 },
+  gridTop: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
+  gridName: { fontFamily: "Manrope-Bold", fontSize: 24, lineHeight: 30, letterSpacing: -0.4, flexShrink: 1 },
+  gridFoot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "flex-start" },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
   labelWrap: { alignSelf: "stretch", paddingHorizontal: 28, marginBottom: 14 },
   labelCard: { borderWidth: 1, paddingHorizontal: 22, paddingVertical: 20 },
