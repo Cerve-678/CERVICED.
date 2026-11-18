@@ -15,6 +15,7 @@ import Svg, { Path } from "react-native-svg";
 
 import {
   chapterHeading,
+  customHeadingPair,
   headingPair,
   HUSH_TITLES,
   PAGE_SECTION_TITLES,
@@ -69,6 +70,14 @@ export function onAccentInk(accent: string): { text: string; sub: string } {
     : { text: "#1F1A18", sub: "rgba(31,26,24,0.78)" };
 }
 
+/** Custom's text font as a style to lay over a line of body text, or null on
+ *  every other page style (they keep the app's text font). The weight goes
+ *  back to regular: the bold set for Jura would make a phone fake a bold, or
+ *  fall back to the system font, for a face that only comes in one weight. */
+export function customTextStyle(style: PageStyle | undefined): { fontFamily: string; fontWeight: "400" } | null {
+  return style?.custom ? { fontFamily: style.custom.textFont, fontWeight: "400" } : null;
+}
+
 /** True when the style draws a section straight on the page (no card behind it). */
 export function sectionsSitOnPage(style: PageStyle | undefined): boolean {
   return style?.cards === "none" || style?.cards === "outline" || style?.cards === "open" || style?.cards === "sheer" || style?.cards === "ruled";
@@ -108,6 +117,11 @@ const GAZETTE_HEADLINES: Record<PageSectionKey, string> = {
   portfolio: "My Portfolio",
   specialities: "My Specialities",
   policyPages: "Before You Book",
+  keyInfo: "Key Information",
+  faq: "Questions Answered",
+  aftercare: "Aftercare",
+  custom: "More Information",
+  disclaimer: "Disclaimer",
 };
 
 /** Studio's card tabs: a short label on the tab above each section's card. */
@@ -122,6 +136,11 @@ const STUDIO_TABS: Record<PageSectionKey, string> = {
   portfolio: "My work",
   specialities: "What I love",
   policyPages: "Before you book",
+  keyInfo: "Key info",
+  faq: "Q&A",
+  aftercare: "Aftercare",
+  custom: "More info",
+  disclaimer: "Disclaimer",
 };
 
 /** A section heading in the page style's voice. Classic's heading lives inside
@@ -132,6 +151,7 @@ export function PageSectionHeading({
   color,
   accentColor,
   align,
+  title: ownTitle,
 }: {
   section: PageSectionKey;
   palette: PageStylePalette;
@@ -139,9 +159,16 @@ export function PageSectionHeading({
   color?: string;
   accentColor?: string;
   align?: "left" | "center";
+  /** A Custom section's own name, drawn in place of the style's wording. */
+  title?: string | undefined;
 }) {
   const style = palette.pageStyle;
-  const title = PAGE_SECTION_TITLES[section];
+  const custom = ownTitle?.trim() || null;
+  const title = custom ?? PAGE_SECTION_TITLES[section];
+  // Two-part headings: a lead-in, then the name. A one-word Custom name has
+  // no lead-in, so each style below draws the lead only when there is one.
+  const pair: [string, string] = custom ? customHeadingPair(custom) : headingPair(section);
+  const words = pair.filter(Boolean).join(" ");
   const ink = color ?? sheetInk(palette.background).text;
   const accent = accentColor ?? palette.accent;
   const a11y = { accessibilityRole: "header" as const, accessibilityLabel: title };
@@ -154,23 +181,23 @@ export function PageSectionHeading({
         </Text>
       );
     case "scriptPair": {
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.pairRow}>
-          <Text style={[headingStyles.script, { color: ink }]}>{lead}</Text>
+          {lead ? <Text style={[headingStyles.script, { color: ink }]}>{lead}</Text> : null}
           <Text style={[headingStyles.serif, { color: ink }]}>{rest}</Text>
         </View>
       );
     }
     case "capsScript": {
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View
           {...a11y}
           accessible
           style={[headingStyles.capsRow, align === "center" && headingStyles.centerRow]}
         >
-          <Text style={[headingStyles.caps, { color: color ?? accent }]}>{lead.toUpperCase()}</Text>
+          {lead ? <Text style={[headingStyles.caps, { color: color ?? accent }]}>{lead.toUpperCase()}</Text> : null}
           <Text style={[headingStyles.capsScript, { color: color ?? accent }]}>{rest.toLowerCase()}</Text>
         </View>
       );
@@ -195,13 +222,13 @@ export function PageSectionHeading({
       );
     case "dotCaps": {
       // Editorial: "The .SERVICES" between hairlines.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       const line = color ? withAlpha(color, 0.35) : sheetInk(palette.background).border;
       return (
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.dotLight, { color: ink }]} numberOfLines={1}>
-            {lead}{" "}
+            {lead ? `${lead} ` : ""}
             <Text style={headingStyles.dotBold}>
               <Text style={{ color: accent }}>.</Text>
               {rest.toUpperCase()}
@@ -213,24 +240,26 @@ export function PageSectionHeading({
     }
     case "italicCaps": {
       // Heritage: an italic word between short rules, engraved caps under it.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
-          <View style={headingStyles.shortRuleRow}>
-            <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
-            <Text style={[headingStyles.heritageScript, { color: accent }]}>{lead}</Text>
-            <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
-          </View>
+          {lead ? (
+            <View style={headingStyles.shortRuleRow}>
+              <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
+              <Text style={[headingStyles.heritageScript, { color: accent }]}>{lead}</Text>
+              <View style={[headingStyles.shortRule, { backgroundColor: accent }]} />
+            </View>
+          ) : null}
           <Text style={[headingStyles.heritageCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
     }
     case "layered": {
       // Duet: a big script word with heavy caps over its foot.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
-          <Text style={[headingStyles.layeredScript, { color: accent }]}>{lead}</Text>
+          {lead ? <Text style={[headingStyles.layeredScript, { color: accent }]}>{lead}</Text> : null}
           <Text style={[headingStyles.layeredCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
@@ -238,14 +267,14 @@ export function PageSectionHeading({
     case "groovy":
       return (
         <View {...a11y} accessible style={headingStyles.groovyWrap}>
-          <Text style={[headingStyles.groovy, { color: ink }]}>{headingPair(section).join(" ").toLowerCase()}</Text>
+          <Text style={[headingStyles.groovy, { color: ink }]}>{words.toLowerCase()}</Text>
           <Squiggle color={accent} />
         </View>
       );
     case "serifTitle":
       return (
         <Text {...a11y} style={[headingStyles.serifTitle, { color: ink }]}>
-          {headingPair(section).join(" ")}
+          {words}
         </Text>
       );
     case "indexed":
@@ -254,7 +283,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.indexRow}>
           <Text style={[headingStyles.indexNumber, { color: accent }]}>{SECTION_NUMBERS[section]}</Text>
           <View style={[headingStyles.indexRule, { backgroundColor: accent }]} />
-          <Text style={[headingStyles.indexTitle, { color: ink }]} numberOfLines={1}>{headingPair(section).join(" ")}</Text>
+          <Text style={[headingStyles.indexTitle, { color: ink }]} numberOfLines={1}>{words}</Text>
         </View>
       );
     case "condensed":
@@ -262,7 +291,7 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.condensedWrap}>
           <Text style={[headingStyles.condensed, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.condensedBar, { backgroundColor: accent }]} />
         </View>
@@ -273,7 +302,7 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <Text style={[headingStyles.quietCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -286,7 +315,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <WaxSeal size={26} wax={waxColour(accent)} />
           <Text style={[headingStyles.sealCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -296,7 +325,7 @@ export function PageSectionHeading({
       // Sheer: thin Bellefair caps, widely spaced, centred.
       return (
         <Text {...a11y} style={[headingStyles.sheerCaps, { color: ink }]}>
-          {headingPair(section).join(" ").toUpperCase()}
+          {words.toUpperCase()}
         </Text>
       );
     case "embossCaps":
@@ -304,7 +333,7 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.embossWrap}>
           <EmbossedText paper={palette.background} style={headingStyles.embossCaps} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </EmbossedText>
         </View>
       );
@@ -315,7 +344,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.engravedCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -326,18 +355,18 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={[headingStyles.newsRule, { borderColor: ink }]}>
           <Text style={[headingStyles.newsTitle, { color: ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-            {GAZETTE_HEADLINES[section].toUpperCase()}
+            {(custom ?? GAZETTE_HEADLINES[section]).toUpperCase()}
           </Text>
         </View>
       );
     case "chunkyCaps": {
       // Studio: a lowercase script word in the accent, then the title in
       // big Young Serif caps, on one centred line where it fits.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
           <Text style={[headingStyles.chunkyCaps, { color: ink }]}>
-            <Text style={[headingStyles.chunkyScript, { color: accent }]}>{lead.toLowerCase()} </Text>
+            {lead ? <Text style={[headingStyles.chunkyScript, { color: accent }]}>{lead.toLowerCase()} </Text> : null}
             {rest.toUpperCase()}
           </Text>
         </View>
@@ -346,7 +375,8 @@ export function PageSectionHeading({
     case "chapter": {
       // Novel: "CHAPTER III" in small caps, the title in italic, a foil-style
       // ornament under it (rule, diamond, rule) in the accent.
-      const [number, chapterTitle] = chapterHeading(section);
+      const [number, defaultChapterTitle] = chapterHeading(section);
+      const chapterTitle = custom ?? defaultChapterTitle;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
           <Text style={[headingStyles.chapterNumber, { color: color ?? sheetInk(palette.background).sub }]}>
@@ -366,7 +396,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.labelCaps, { color: ink }]} numberOfLines={1}>
-            {headingPair(section).join(" ").toUpperCase()}
+            {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -374,10 +404,10 @@ export function PageSectionHeading({
     }
     case "lacePair": {
       // Lace: a lowercase script word in the accent, spaced display caps tucked under it.
-      const [lead, rest] = headingPair(section);
+      const [lead, rest] = pair;
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
-          <Text style={[headingStyles.laceScript, { color: accent }]}>{lead.toLowerCase()}</Text>
+          {lead ? <Text style={[headingStyles.laceScript, { color: accent }]}>{lead.toLowerCase()}</Text> : null}
           <Text style={[headingStyles.laceCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
@@ -389,14 +419,14 @@ export function PageSectionHeading({
           {section === "policies" ? (
             <Text style={[headingStyles.loungeKicker, { color: color ?? sheetInk(palette.background).sub }]}>PLEASE REVIEW MY</Text>
           ) : null}
-          <Text style={[headingStyles.loungeCaps, { color: ink }]}>{headingPair(section).join(" ").toUpperCase()}</Text>
+          <Text style={[headingStyles.loungeCaps, { color: ink }]}>{words.toUpperCase()}</Text>
         </View>
       );
     case "softCaps":
       // Soft Focus: heavy grotesk caps at the top left of the section's own card.
       return (
         <Text {...a11y} style={[headingStyles.softCaps, { color: ink }]}>
-          {headingPair(section).join(" ").toUpperCase()}
+          {words.toUpperCase()}
         </Text>
       );
     case "hushRule": {
@@ -406,7 +436,7 @@ export function PageSectionHeading({
         <View {...a11y} accessible style={headingStyles.ruledRow}>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
           <Text style={[headingStyles.hushRule, { color: color ?? sheetInk(palette.background).sub }]} numberOfLines={1}>
-            {HUSH_TITLES[section].toUpperCase()}
+            {(custom ?? HUSH_TITLES[section]).toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
         </View>
@@ -424,24 +454,67 @@ export function PageSectionHeading({
       return (
         <View {...a11y} accessible style={headingStyles.stack}>
           <BowGlyph width={34} accent={accent} />
-          <Text style={[headingStyles.bowTitle, { color: ink }]}>{headingPair(section).join(" ")}</Text>
+          <Text style={[headingStyles.bowTitle, { color: ink }]}>{words}</Text>
         </View>
       );
+    case "appBold":
+      // Pure: a bold sans title on the left, like an app's section.
+      return (
+        <Text {...a11y} style={[headingStyles.appBold, { color: ink }]}>
+          {title}
+        </Text>
+      );
+    case "gridIndex":
+      // Grid: "03  Services", the number in the accent.
+      return (
+        <View {...a11y} accessible style={headingStyles.gridRow}>
+          <Text style={[headingStyles.gridNumber, { color: accent }]}>{SECTION_NUMBERS[section]}</Text>
+          <Text style={[headingStyles.appBold, headingStyles.gridTitle, { color: ink }]} numberOfLines={1}>{title}</Text>
+        </View>
+      );
+    case "custom": {
+      // Custom: the title in the font the provider picked, as typed or in
+      // small spaced caps. On Banner's outlined boxes it sits in the top line,
+      // so it carries the page colour behind it to break the line.
+      const picks = style.custom;
+      if (!picks) break;
+      const size = picks.caps ? 13 : Math.round(22 * picks.headingScale);
+      return (
+        <Text
+          {...a11y}
+          style={[
+            headingStyles.custom,
+            {
+              color: ink,
+              fontFamily: picks.headingFont,
+              fontSize: size,
+              lineHeight: Math.round(size * 1.4),
+              letterSpacing: picks.caps ? 3.5 : 0,
+            },
+            picks.layout === "plain" && headingStyles.customCentred,
+            style.cards === "outline" && [headingStyles.customLegend, { backgroundColor: palette.background }],
+          ]}
+        >
+          {picks.caps ? title.toUpperCase() : title}
+        </Text>
+      );
+    }
     case "shopSerif":
       // Boutique: a big serif title on the left, like a shop's department.
       return (
         <Text {...a11y} style={[headingStyles.shopSerif, { color: ink }]}>
-          {headingPair(section).join(" ")}
+          {words}
         </Text>
       );
     default:
-      return (
+      break;
+  }
+  return (
         // Only ever drawn on the page: Classic's in-card title is PageSection's own Text.
         <Text {...a11y} style={[headingStyles.plain, { color: ink }]}>
           {title}
         </Text>
-      );
-  }
+  );
 }
 
 // ── Section surface ───────────────────────────────────────────────────────────
@@ -467,6 +540,11 @@ const STRIPE_TINT: Record<PageSectionKey, "soft" | "strong" | null> = {
   contact: "soft",
   info: null,
   specialities: null,
+  keyInfo: "soft",
+  faq: null,
+  aftercare: "soft",
+  custom: null,
+  disclaimer: "soft",
 };
 
 export function PageSection({
@@ -476,6 +554,7 @@ export function PageSection({
   bare = false,
   headingRight,
   style,
+  title,
 }: {
   section: PageSectionKey;
   palette: PageStylePalette;
@@ -483,6 +562,8 @@ export function PageSection({
   bare?: boolean;
   /** Something on the heading's line, at the right (Portfolio's "See all"). */
   headingRight?: React.ReactNode;
+  /** A Custom section's own name, used for its heading in every style. */
+  title?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const pageStyle = palette.pageStyle;
@@ -503,7 +584,7 @@ export function PageSection({
         <LinearGradient colors={palette.highlightColors} style={StyleSheet.absoluteFill} />
         <HeadingLine headingRight={headingRight}>
           <Text accessibilityRole="header" style={[headingStyles.plain, { color: palette.text }]}>
-            {PAGE_SECTION_TITLES[section]}
+            {title?.trim() || PAGE_SECTION_TITLES[section]}
           </Text>
         </HeadingLine>
         {children}
@@ -522,7 +603,7 @@ export function PageSection({
         ]}
       >
         <View style={surfaceStyles.legendWrap} pointerEvents="box-none">
-          <PageSectionHeading section={section} palette={palette} />
+          <PageSectionHeading section={section} palette={palette} title={title} />
         </View>
         {headingRight ? <View style={surfaceStyles.legendRight}>{headingRight}</View> : null}
         {children}
@@ -532,7 +613,7 @@ export function PageSection({
 
   const heading = (
     <HeadingLine headingRight={headingRight} centered={isCentredHeading(pageStyle)}>
-      <PageSectionHeading section={section} palette={palette} />
+      <PageSectionHeading section={section} palette={palette} title={title} />
     </HeadingLine>
   );
 
@@ -552,7 +633,7 @@ export function PageSection({
         ]}
       >
         <HeadingLine headingRight={headingRight} centered>
-          <PageSectionHeading section={section} palette={palette} color={sheetInk(strip ?? palette.background).text} />
+          <PageSectionHeading section={section} palette={palette} title={title} color={sheetInk(strip ?? palette.background).text} />
         </HeadingLine>
         {bare ? children : (
           <View style={[surfaceStyles.solid, surfaceStyles.stripeBox, { backgroundColor: palette.cardBackground, borderColor: colours.line }]}>
@@ -567,6 +648,25 @@ export function PageSection({
     // Soft Focus: the heading sits inside its own soft card, in the card's ink.
     return (
       <View style={[surfaceStyles.solid, surfaceStyles.softCard, { backgroundColor: palette.cardBackground }, square && surfaceStyles.square, style]}>
+        <HeadingLine headingRight={headingRight}>
+          <PageSectionHeading section={section} palette={palette} title={title} color={palette.text} />
+        </HeadingLine>
+        {children}
+      </View>
+    );
+  }
+
+  if (pageStyle.cards === "gridBox" && !bare) {
+    // Grid: a square card in a fine ink outline, its numbered heading inside.
+    return (
+      <View
+        style={[
+          surfaceStyles.solid,
+          surfaceStyles.gridBox,
+          { backgroundColor: palette.cardBackground, borderColor: withAlpha(outlineInk(palette.cardBackground), 0.3) },
+          style,
+        ]}
+      >
         <HeadingLine headingRight={headingRight}>
           <PageSectionHeading section={section} palette={palette} color={palette.text} />
         </HeadingLine>
@@ -623,7 +723,7 @@ export function PageSection({
         {heading}
         <View style={[surfaceStyles.tab, { backgroundColor: palette.cardBackground }]}>
           <Text style={[surfaceStyles.tabText, { color: palette.text }]} numberOfLines={1}>
-            {STUDIO_TABS[section].toUpperCase()}
+            {(title?.trim() || STUDIO_TABS[section]).toUpperCase()}
           </Text>
         </View>
         <View style={[surfaceStyles.solid, surfaceStyles.tabbedCard, { backgroundColor: palette.cardBackground }]}>
@@ -746,6 +846,7 @@ function isCentredHeading(style: PageStyle): boolean {
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
     || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "stripeCaps"
     || style.heading === "bowSerif"
+    || (style.heading === "custom" && style.custom?.layout === "plain")
   );
 }
 
@@ -998,6 +1099,12 @@ export function serviceCardSurface(
       return { backgroundColor: colours.card, borderWidth: 1, borderColor: stripeColours(colours.accent).line, borderRadius: 16, shadowOpacity: 0 };
     case "bow":
       return { ...flat, backgroundColor: colours.card, borderRadius: 22 };
+    case "grouped":
+      // Pure: a plain solid card, round corners, no shadow.
+      return { ...flat, backgroundColor: colours.card, borderRadius: 18 };
+    case "gridBox":
+      // Grid: square, in the same fine ink outline as the section boxes.
+      return { ...flat, backgroundColor: colours.card, borderRadius: 0, borderWidth: 1, borderColor: withAlpha(outlineInk(colours.card), 0.3) };
     case "pages":
       // A page: square, a fine edge, a little lift off the paper under it.
       return {
@@ -1143,6 +1250,8 @@ export function StyledPolicyList({
   const layout = palette.pageStyle?.policies ?? "hairline";
   const square = !!palette.squareCards;
   const page = sheetInk(palette.background);
+  // Custom's text font, on the four policy layouts Custom uses.
+  const tf = customTextStyle(palette.pageStyle);
 
   if (layout === "numerals") {
     // Heritage's House Rules (I, II…) and Apothecary's "Before your visit" (i., ii.).
@@ -1354,11 +1463,11 @@ export function StyledPolicyList({
             key={row.label}
             style={[policyStyles.defRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
           >
-            <Text style={[policyStyles.defLabel, { color: ink.sub }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.defLabel, { color: ink.sub }, tf]}>{row.label.toUpperCase()}</Text>
             <View style={policyStyles.hairValueCol}>
-              <Text style={[policyStyles.defValue, { color: ink.text }]}>{row.value}</Text>
+              <Text style={[policyStyles.defValue, { color: ink.text }, tf]}>{row.value}</Text>
               {row.notes?.map(note => (
-                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+                <Text key={note} style={[policyStyles.note, { color: ink.sub }, tf]}>{note}</Text>
               ))}
             </View>
           </View>
@@ -1510,6 +1619,58 @@ export function StyledPolicyList({
     return <AccordionPolicies rows={rows} ink={ink} separator={page.separator} />;
   }
 
+  if (layout === "settingsRows") {
+    // Pure: like a phone's settings list, the label on the left and the
+    // policy on the right, a fine line between rows.
+    const line = withAlpha(ink.text, 0.12);
+    return (
+      <View>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[policyStyles.settingsRow, index > 0 && [policyStyles.settingsRule, { borderTopColor: line }]]}
+          >
+            <Text style={[policyStyles.settingsLabel, { color: ink.sub }]}>{row.label}</Text>
+            <View style={[policyStyles.hairValueCol, policyStyles.settingsValueCol]}>
+              <Text style={[policyStyles.settingsValue, { color: ink.text }]}>{row.value}</Text>
+              {row.notes?.map(note => (
+                <Text key={note} style={[policyStyles.note, policyStyles.alignRight, { color: ink.sub }]}>{note}</Text>
+              ))}
+              {row.tag ? <Text style={[policyStyles.settingsTag, { color: ink.text }]}>{row.tag}</Text> : null}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  if (layout === "gridCells") {
+    // Grid: two-up cells split by fine lines, a small caps label over each policy.
+    const line = withAlpha(ink.text, 0.22);
+    return (
+      <View style={policyStyles.gridCells}>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[
+              policyStyles.gridCell,
+              { borderColor: line },
+              index % 2 === 0 ? policyStyles.gridCellLeft : policyStyles.gridCellRight,
+              index >= 2 && policyStyles.gridCellBelow,
+            ]}
+          >
+            <Text style={[policyStyles.gridLabel, { color: ink.sub }]}>{row.label.toUpperCase()}</Text>
+            <Text style={[policyStyles.smallValue, { color: ink.text }]}>{row.value}</Text>
+            {row.notes?.map(note => (
+              <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
+            ))}
+            {row.tag ? <Text style={[policyStyles.gridLabel, policyStyles.gridTag, { color: ink.text }]}>{row.tag.toUpperCase()}</Text> : null}
+          </View>
+        ))}
+      </View>
+    );
+  }
+
   if (layout === "hairline" || layout === "rows") {
     return (
       <View>
@@ -1518,11 +1679,11 @@ export function StyledPolicyList({
             key={row.label}
             style={[policyStyles.hairRow, { borderTopColor: page.separator }, index === 0 && policyStyles.hairFirst]}
           >
-            <Text style={[policyStyles.hairLabel, { color: ink.text }]}>{row.label}</Text>
+            <Text style={[policyStyles.hairLabel, { color: ink.text }, tf]}>{row.label}</Text>
             <View style={policyStyles.hairValueCol}>
-              <Text style={[policyStyles.hairValue, { color: ink.sub }]}>{row.value}</Text>
+              <Text style={[policyStyles.hairValue, { color: ink.sub }, tf]}>{row.value}</Text>
               {row.notes?.map(note => (
-                <Text key={note} style={[policyStyles.note, policyStyles.alignRight, { color: ink.sub }]}>{note}</Text>
+                <Text key={note} style={[policyStyles.note, policyStyles.alignRight, { color: ink.sub }, tf]}>{note}</Text>
               ))}
             </View>
           </View>
@@ -1540,7 +1701,7 @@ export function StyledPolicyList({
           </View>
         ) : null;
         const notes = row.notes?.map(note => (
-          <Text key={note} style={[policyStyles.note, { color: ink.sub }, layout !== "boxes" && policyStyles.centreText]}>{note}</Text>
+          <Text key={note} style={[policyStyles.note, { color: ink.sub }, layout !== "boxes" && policyStyles.centreText, tf]}>{note}</Text>
         ));
 
         if (layout === "boxes") {
@@ -1550,10 +1711,10 @@ export function StyledPolicyList({
               style={[policyStyles.cell, policyStyles.box, { borderColor: page.border }, square && policyStyles.square]}
             >
               <View style={policyStyles.boxLabelRow}>
-                <Text style={[policyStyles.capsLabel, { color: ink.sub }]}>{row.label.toUpperCase()}</Text>
+                <Text style={[policyStyles.capsLabel, { color: ink.sub }, tf]}>{row.label.toUpperCase()}</Text>
                 {tag}
               </View>
-              <Text style={[policyStyles.value, { color: ink.text }]}>{row.value}</Text>
+              <Text style={[policyStyles.value, { color: ink.text }, tf]}>{row.value}</Text>
               {notes}
             </View>
           );
@@ -1758,6 +1919,9 @@ function AccordionPolicies({
 
 const headingStyles = StyleSheet.create({
   plain: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
+  custom: { marginBottom: 12 },
+  customCentred: { textAlign: "center" },
+  customLegend: { paddingHorizontal: 12, marginBottom: 0 },
   bigLower: { fontFamily: "Syne_700Bold", fontSize: 38, lineHeight: 49, letterSpacing: -1.2, marginBottom: 14 },
   pairRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: 6, marginBottom: 14 },
   script: { fontFamily: "PinyonScript_400Regular", fontSize: 32, lineHeight: 47, paddingHorizontal: 6 },
@@ -1813,6 +1977,10 @@ const headingStyles = StyleSheet.create({
   // Hanken Grotesk (Hush), Castoro (Stripes), Sorts Mill Goudy (Bow).
   loungeKicker: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.4, textAlign: "center", marginBottom: 2 },
   loungeCaps: { fontFamily: "LeagueGothic-Regular", fontSize: 32, lineHeight: 41, letterSpacing: 0.6, textAlign: "center" },
+  appBold: { fontFamily: "Manrope-Bold", fontSize: 19, lineHeight: 26, letterSpacing: -0.2, marginBottom: 12 },
+  gridRow: { flexDirection: "row", alignItems: "baseline", gap: 10, marginBottom: 12 },
+  gridNumber: { fontFamily: "Manrope-Bold", fontSize: 12, letterSpacing: 0.4 },
+  gridTitle: { marginBottom: 0, flexShrink: 1 },
   softCaps: { fontFamily: "Archivo-ExtraBold", fontSize: 15, lineHeight: 20, letterSpacing: -0.1, marginBottom: 12 },
   hushRule: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 3.2, flexShrink: 1 },
   stripeCaps: { fontFamily: "Castoro-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 4, textAlign: "center" },
@@ -1886,6 +2054,7 @@ const surfaceStyles = StyleSheet.create({
   stripeTinted: { borderTopWidth: 1, borderBottomWidth: 1, marginVertical: -0.5 },
   stripeBox: { borderWidth: 1, borderRadius: 16, padding: 16 },
   softCard: { borderRadius: 26, padding: 18, marginBottom: 16 },
+  gridBox: { borderRadius: 0, borderWidth: 1, padding: 18, marginBottom: 16 },
   hardShadow: { position: "absolute", top: 5, left: 4, right: -4, bottom: -5 },
   hardShadowChunky: { top: 6, left: 5, right: -5, bottom: -6 },
   innerRule: { position: "absolute", top: 6, left: 6, right: 6, bottom: 6, borderWidth: 1 },
@@ -1972,6 +2141,19 @@ const policyStyles = StyleSheet.create({
   recessedLabel: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 11, lineHeight: 15, letterSpacing: 1.8, width: 104, paddingTop: 2 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },
   hairValueCol: { flex: 1 },
+  settingsRow: { flexDirection: "row", gap: 16, paddingVertical: 13 },
+  settingsRule: { borderTopWidth: StyleSheet.hairlineWidth },
+  settingsLabel: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, flexShrink: 0, maxWidth: "45%" },
+  settingsValueCol: { alignItems: "flex-end" },
+  settingsValue: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, textAlign: "right" },
+  settingsTag: { fontFamily: "Manrope-Bold", fontSize: 11, marginTop: 4, textAlign: "right" },
+  gridCells: { flexDirection: "row", flexWrap: "wrap" },
+  gridCell: { width: "50%", paddingVertical: 12, gap: 2 },
+  gridCellLeft: { borderRightWidth: 1, paddingRight: 12 },
+  gridCellRight: { paddingLeft: 12 },
+  gridCellBelow: { borderTopWidth: 1 },
+  gridLabel: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 1.4 },
+  gridTag: { marginTop: 4 },
   hairValue: { fontSize: 13, lineHeight: 18, textAlign: "right" },
   columnsGrid: { flexDirection: "row", flexWrap: "wrap", borderTopWidth: 1, borderLeftWidth: 1 },
   columnCell: { width: "50%", borderRightWidth: 1, borderBottomWidth: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 4 },

@@ -1,4 +1,4 @@
-import { feeChargeWindow, feeDisputeOpen, isChargeableLateCancel, liveFee } from '../features/bookings/bookingFeeRules';
+import { bookingFeeButtons, feeChargeWindow, feeDisputeOpen, feesToChargeNow, isChargeableLateCancel, liveFee } from '../features/bookings/bookingFeeRules';
 import type { BookingFeeCharge, BookingFeeTerms } from '../services/databaseService';
 
 const terms: BookingFeeTerms = {
@@ -54,4 +54,52 @@ test('no late cancellation fee for an early cancel, a provider cancel, a full pa
   expect(isChargeableLateCancel({ ...lateCancelled, cancelNoticeHours: 0 })).toBe(false);
   // Moved after the window started: late however early the cancel.
   expect(isChargeableLateCancel({ ...lateCancelled, cancelledAt: new Date('2026-06-28T08:00:00').toISOString(), lateRescheduleFrom: '2026-06-27' })).toBe(true);
+});
+
+test('lists what can be charged now in Payments & payouts, skipping anything already charged', () => {
+  const cand = (id: string, t: BookingFeeTerms, charges: { status: BookingFeeCharge['status'] }[] = []) =>
+    ({ bookingId: id, customerName: 'Sam', serviceName: 'Gel nails', terms: t, charges });
+  const list = feesToChargeNow([
+    cand('late', terms),
+    cand('noShow', { ...terms, status: 'no_show' }),
+    cand('charged', terms, [{ status: 'succeeded' }]),
+    cand('retry', terms, [{ status: 'failed' }]),
+    cand('none', { ...terms, lateFeePence: null, noShowFeePence: null }),
+  ], end);
+  expect(list.map(f => f.bookingId)).toEqual(['late', 'noShow', 'retry']);
+  expect(list[0]!.kinds).toEqual(['late']);
+  expect(list[1]!.kinds).toEqual(['no_show']);
+  expect(feesToChargeNow([cand('late', terms)], end + 24 * 3600e3 + 1)).toEqual([]);
+});
+
+describe('fee buttons on the booking page', () => {
+  const start = new Date('2026-07-01T14:00:00').getTime();
+  const confirmed: BookingFeeTerms = { ...terms, status: 'confirmed' };
+  const state = (b: ReturnType<typeof bookingFeeButtons>) => b.map(x => `${x.kind}:${x.enabled ? 'on' : 'off'}`);
+
+  test('both are greyed out before the appointment starts, saying when they open', () => {
+    const buttons = bookingFeeButtons(confirmed, start - 60_000);
+    expect(state(buttons)).toEqual(['late:off', 'no_show:off']);
+    expect(buttons[0]!.note).toMatch(/^From 2:00\s?pm, once the appointment starts$/);
+    expect(buttons[1]!.note).toMatch(/if they don't come$/);
+  });
+
+  test('the late fee goes live at the start; the no-show fee waits to be marked', () => {
+    const buttons = bookingFeeButtons(confirmed, start);
+    expect(state(buttons)).toEqual(['late:on', 'no_show:off']);
+    expect(buttons[1]!.note).toBe('Mark them as a no-show first');
+    expect(state(bookingFeeButtons({ ...terms, status: 'no_show' }, start + 60_000))).toEqual(['no_show:on']);
+  });
+
+  test('a client who came has no no-show button, and everything goes when the window closes', () => {
+    expect(state(bookingFeeButtons(terms, end))).toEqual(['late:on']);
+    expect(bookingFeeButtons(terms, end + 24 * 3600e3 + 1)).toEqual([]);
+  });
+
+  test('only the fees on their policy, and none on a booking that did not go ahead', () => {
+    expect(state(bookingFeeButtons({ ...confirmed, noShowFeePence: null }, start))).toEqual(['late:on']);
+    expect(bookingFeeButtons({ ...confirmed, lateFeePence: null, noShowFeePence: null }, start)).toEqual([]);
+    expect(bookingFeeButtons({ ...terms, status: 'cancelled' }, start)).toEqual([]);
+    expect(bookingFeeButtons({ ...terms, status: 'pending' }, start)).toEqual([]);
+  });
 });

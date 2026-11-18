@@ -5,14 +5,16 @@ import { PaymentRequestError } from '../utils/paymentRequestError';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
-import { PaySection, ProcessingLabel, StatusChip } from '../features/payments/PaymentsCardKit';
+import { PayCard, PaySection, ProcessingLabel, StatusChip } from '../features/payments/PaymentsCardKit';
 import BookingPaymentTimeline from './BookingPaymentTimeline';
 import { onRefundHold, payoutNeedsAttention, payoutStatusLabel, tipPence, tipStatusLabel } from '../features/payments/bookingPaymentTimeline';
 import { useAppDialog } from './AppDialog';
 import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
+import BookingFeeSheet, { type BookingFeeSheetTarget } from './BookingFeeSheet';
+import { feeKindLabel, feesToChargeNow } from '../features/bookings/bookingFeeRules';
 import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
-import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
+import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getFeeChargeCandidates, type FeeChargeCandidate, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
 import {
   PAYOUT_INTERVALS, PAYOUT_MONTH_DAYS, PAYOUT_RELEASE_HOURS, PAYOUT_WEEKDAYS, payoutIntervalLabel, payoutMonthDayLabel,
   payoutScheduleSentence, payoutWeekdayLabel, type PayoutInterval, type PayoutMonthDay, type PayoutSchedule,
@@ -28,7 +30,13 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from '../constants/featureFlags';
  *  passes these in rather than this component reading them a second time. */
 export interface PaymentSetupSummary { deposit: string; inPerson: string }
 
-export default function ProviderStripePayments({ stripeReturn, setup, children }: { stripeReturn?: StripeConnectReturn; setup?: PaymentSetupSummary | undefined; children?: React.ReactNode }) {
+export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor, children }: {
+  stripeReturn?: StripeConnectReturn;
+  setup?: PaymentSetupSummary | undefined;
+  /** Opened from a booking's "Late & no-show fees" line: show that booking's fee. */
+  openFeeFor?: string | undefined;
+  children?: React.ReactNode;
+}) {
   const C = useBusinessPalette();
   const { isDarkMode } = useTheme();
   const [section, setSection] = useState<'overview' | 'bookings' | 'payouts' | 'settings'>('overview');
@@ -39,6 +47,10 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
   const [payouts, setPayouts] = useState<ProviderPayout[]>([]);
   const [feeEarnings, setFeeEarnings] = useState<ProviderFeeEarning[]>([]);
   const [tipEarnings, setTipEarnings] = useState<ProviderTipEarning[]>([]);
+  // Late, no-show and late-cancel fees the provider can still charge, and the
+  // one whose fee sheet is open.
+  const [feeCandidates, setFeeCandidates] = useState<FeeChargeCandidate[]>([]);
+  const [feeSheet, setFeeSheet] = useState<BookingFeeSheetTarget | null>(null);
   // A tip shows inside its booking's payment card, so the two read as one.
   const tipGroups = useMemo(() => groupTipsByBooking(payouts.map(row => row.booking_id), tipEarnings), [payouts, tipEarnings]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +97,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       // replacing the booking payments error above.
       getProviderFeeEarnings().then(rows => {
         if (sequence === loadSequence.current) setFeeEarnings(rows);
+      }).catch(() => {}),
+      getFeeChargeCandidates().then(rows => {
+        if (sequence === loadSequence.current) setFeeCandidates(rows);
       }).catch(() => {}),
       // Tips too: secondary, so a failed read just leaves the list hidden.
       getProviderTipEarnings().then(rows => {
@@ -196,6 +211,23 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
     void load();
     showAlert(title, message);
   }, [load, showAlert]);
+  const feesToCharge = useMemo(() => feesToChargeNow(feeCandidates, Date.now()), [feeCandidates]);
+  const openFeeSheet = (target: BookingFeeSheetTarget) => { void Haptics.selectionAsync().catch(() => {}); setFeeSheet(target); };
+  const closeFeeSheet = () => { setFeeSheet(null); void load(); };
+  // From a booking page: straight to that booking's fee, once.
+  const openedFeeFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!openFeeFor || openedFeeFor.current === openFeeFor) return;
+    openedFeeFor.current = openFeeFor;
+    setSection('bookings');
+    const known = feeCandidates.find(c => c.bookingId === openFeeFor) ?? feeEarnings.find(f => f.bookingId === openFeeFor);
+    setFeeSheet({
+      bookingId: openFeeFor,
+      customerName: known?.customerName ?? null,
+      serviceName: known?.serviceName ?? null,
+      bookingDate: known && 'terms' in known ? known.terms.bookingDate : null,
+    });
+  }, [openFeeFor, feeCandidates, feeEarnings]);
   const tabs = [
     { key: 'overview', label: 'Overview' },
     { key: 'bookings', label: 'Bookings' },
@@ -283,6 +315,13 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
             </View>
           </View>
         </View>
+        {feesToCharge.length > 0 && <TouchableOpacity accessibilityRole="button" onPress={() => pick('bookings')} activeOpacity={0.75} style={styles.plainRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: C.text }]}>{feesToCharge.length === 1 ? '1 fee you can charge' : `${feesToCharge.length} fees you can charge`}</Text>
+            <Text style={[styles.caption, { color: C.sub }]}>Late, no-show or late cancellation. Charge within 24 hours of the appointment.</Text>
+          </View>
+          <Text style={[styles.link, { color: C.accentText }]}>Fees</Text>
+        </TouchableOpacity>}
         <TouchableOpacity accessibilityRole="button" onPress={() => pick('payouts')} activeOpacity={0.75} style={styles.plainRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: C.text }]}>{nextPayout ? `Next payday · ${money(nextPayout.amount, nextPayout.currency)}` : 'Next payday'}</Text>
@@ -292,23 +331,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           <Text style={[styles.link, { color: C.accentText }]}>Payouts</Text>
         </TouchableOpacity>
 
-        {account && <PaySection>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? 'Manage payout account' : 'Continue with Stripe'}`}
-            disabled={busy} onPress={() => void openStripe(manageAccount ? 'dashboard' : 'onboard')} activeOpacity={0.75} style={styles.plainRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: C.text }]}>{accountTitle}</Text>
-              <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? 'Finish with Stripe to receive online booking payments'
-                : account.bankAccount ? `Paid to ${account.bankAccount.bankName ?? 'your bank'} ••${account.bankAccount.last4}. Tap Manage to change it.`
-                : 'Bank details managed securely by Stripe'}</Text>
-            </View>
-            {busy ? <ActivityIndicator size="small" color={C.accentText} />
-              : <Text style={[styles.link, { color: C.accentText }]}>{manageAccount ? 'Manage' : 'Continue'}</Text>}
-          </TouchableOpacity>
-          {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
-        </PaySection>}
 
         <PaySection>
-          <View style={styles.headRow}>
+          <View style={[styles.headRow, styles.headRowSpaced]}>
             <Text style={[styles.sectionTitle, { color: C.text }]}>Recent booking payments</Text>
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="See all booking payments" onPress={() => pick('bookings')} hitSlop={12}>
               <Text style={[styles.link, { color: C.accentText }]}>See all</Text>
@@ -319,18 +344,6 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           {payouts.slice(0, 3).map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
 
-        {setup && <PaySection>
-          <Text style={[styles.eyebrow, { color: C.accentText, marginBottom: 6 }]}>YOUR SETUP</Text>
-          <View style={styles.setupGrid}>
-            {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
-              <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
-                onPress={() => pick('settings')} activeOpacity={0.75}
-                style={[styles.setupTile, { backgroundColor: C.bg, borderColor: C.border }]}>
-                <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
-                <Text style={[styles.label, { color: C.text }]}>{value}</Text>
-              </TouchableOpacity>)}
-          </View>
-        </PaySection>}
       </>}
 
       {shownSection === 'bookings' && <>
@@ -339,17 +352,30 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
           {!loading && !payoutError && payouts.length === 0 && <EmptyState title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
           {payouts.map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
-        {feeEarnings.length > 0 && <PaySection title="Late & no-show fees" sub="Your share after Stripe's card fee. Refund or answer a dispute from the booking itself.">
-          {feeEarnings.map((fee, i) => <View key={fee.id} style={[styles.listRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
+        {(feesToCharge.length > 0 || feeEarnings.length > 0) && <PaySection title="Late & no-show fees"
+          sub="Charge a late, no-show or late cancellation fee within 24 hours of the appointment. Tap a fee to refund it or answer a dispute.">
+          {feesToCharge.map((fee, i) => <TouchableOpacity key={`charge-${fee.bookingId}`} accessibilityRole="button"
+            accessibilityLabel={`Charge ${fee.customerName || 'client'}, ${fee.serviceName ?? 'booking'}`}
+            onPress={() => openFeeSheet(fee)} activeOpacity={0.75}
+            style={[styles.listRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: C.text }]}>{fee.kind === 'late' ? 'Late arrival fee' : 'No-show fee'}{fee.serviceName ? ` · ${fee.serviceName}` : ''}</Text>
+              <Text style={[styles.label, { color: C.text }]}>{[fee.customerName || 'Client', fee.serviceName].filter(Boolean).join(' · ')}</Text>
+              <Text style={[styles.caption, { color: C.sub }]}>{`Can charge a ${fee.kinds.map(feeKindLabel).join(' or ')} until ${fee.closesAtLabel}`}</Text>
+            </View>
+            <Text style={[styles.link, { color: C.accentText }]}>Charge</Text>
+          </TouchableOpacity>)}
+          {feeEarnings.map((fee, i) => <TouchableOpacity key={fee.id} accessibilityRole="button"
+            onPress={() => openFeeSheet({ bookingId: fee.bookingId, customerName: fee.customerName, serviceName: fee.serviceName })} activeOpacity={0.75}
+            style={[styles.listRow, (i > 0 || feesToCharge.length > 0) && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: C.text }]}>{fee.kind === 'late' ? 'Late arrival fee' : fee.kind === 'no_show' ? 'No-show fee' : 'Late cancellation fee'}{fee.serviceName ? ` · ${fee.serviceName}` : ''}</Text>
               <Text style={[styles.caption, { color: C.sub }]}>{[fee.customerName || 'Client', fee.chargedAt && `Charged ${date(new Date(fee.chargedAt).getTime())}`].filter(Boolean).join(' · ')}</Text>
             </View>
             <View style={styles.rowRight}>
               <Text style={[styles.amountSmall, { color: C.text }]}>{fee.payoutPence != null ? money(fee.payoutPence, 'gbp') : money(fee.amountPence, 'gbp')}</Text>
               <StatusChip label={feeStatusLabel(fee)} attention={fee.openDispute || fee.payoutStatus === 'failed'} />
             </View>
-          </View>)}
+          </TouchableOpacity>)}
         </PaySection>}
         {/* Only tips whose booking payment isn't in the list above; the rest are on their booking. */}
         {tipGroups.unmatched.length > 0 && <PaySection title={tipGroups.byBooking.size > 0 ? 'Earlier tips' : 'Tips'}
@@ -396,7 +422,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
       </>}
 
       {shownSection === 'settings' && <>
-        <PaySection first title="When you get paid" sub={`Each payment is processing for ${PAYOUT_RELEASE_HOURS} hours after its appointment. Stripe then pays it into your bank on the schedule you choose here.`}>
+        {/* Each part of Settings is its own card; the rest come from PaymentsScreen. */}
+        <PayCard title="When you get paid" sub={`Each payment is processing for ${PAYOUT_RELEASE_HOURS} hours after its appointment. Stripe then pays it into your bank on the schedule you choose here.`}>
           {!!scheduleError && <Notice text={scheduleError} />}
           {scheduleLoaded && !schedule
             ? <Notice text="Set up your Stripe account to choose when you get paid." />
@@ -424,10 +451,43 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
               </>}
               {!!schedule && <Text style={[styles.caption, { color: C.sub, marginTop: 10 }]}>{payoutScheduleSentence(schedule)} Stripe can only send money once it has cleared, usually about 3 working days after the client pays.</Text>}
             </>}
-        </PaySection>
+        </PayCard>
         {children}
       </>}
     </View>
+
+    {/* Your setup: its own card too (user, 2026-11-18). */}
+    {shownSection === 'overview' && dashboardReady && setup && <View style={[styles.card, styles.setupCard, { backgroundColor: C.card, borderColor: C.border }]}>
+      <Text style={[styles.eyebrow, { color: C.accentText, marginBottom: 6 }]}>YOUR SETUP</Text>
+      <View style={styles.setupGrid}>
+        {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
+          <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
+            onPress={() => pick('settings')} activeOpacity={0.75}
+            style={[styles.setupTile, { backgroundColor: C.bg, borderColor: C.border }]}>
+            <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
+            <Text style={[styles.label, { color: C.text }]}>{value}</Text>
+          </TouchableOpacity>)}
+      </View>
+    </View>}
+
+    {/* The payout account: its own card, outside the tabbed card and only
+        with Overview (user, 2026-11-18: "on a single card, not together"),
+        and the last card on the page (user, same day). */}
+    {shownSection === 'overview' && dashboardReady && account && <View style={[styles.card, styles.accountCard, { backgroundColor: C.card, borderColor: C.border }]}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${accountTitle}. ${manageAccount ? 'Manage payout account' : 'Continue with Stripe'}`}
+            disabled={busy} onPress={() => void openStripe(manageAccount ? 'dashboard' : 'onboard')} activeOpacity={0.75} style={styles.plainRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: C.text }]}>{accountTitle}</Text>
+              <Text style={[styles.caption, { color: C.sub }]}>{!setupReady ? 'Finish with Stripe to receive online booking payments'
+                : account.bankAccount ? `Paid to ${account.bankAccount.bankName ?? 'your bank'} ••${account.bankAccount.last4}. Tap Manage to change it.`
+                : 'Bank details managed securely by Stripe'}</Text>
+            </View>
+            {busy ? <ActivityIndicator size="small" color={C.accentText} />
+              : <Text style={[styles.link, { color: C.accentText }]}>{manageAccount ? 'Manage' : 'Continue'}</Text>}
+          </TouchableOpacity>
+          {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
+    </View>}
+
 
     {timelineRow && <BookingPaymentTimeline
       row={timelineRow}
@@ -442,6 +502,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, children }
         setTimeout(() => setRefundRow(row), 450);
       } : undefined}
     />}
+    {feeSheet && <BookingFeeSheet target={feeSheet} onClose={closeFeeSheet} />}
     {refundRow && <IssueRefundSheet
       booking={{ id: refundRow.booking_id, customerName: refundRow.booking?.customer_name, serviceName: refundRow.booking?.service_name_snapshot }}
       palette={{ ...C, iconBg: `${C.accent}1F` }}
@@ -525,6 +586,8 @@ function PaymentAction({ label, onPress, disabled, secondary = false }: { label:
 const styles = StyleSheet.create({
   intro: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingTop: 8, paddingBottom: 14 },
   card: { borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
+  accountCard: { marginTop: 14, paddingTop: 4, paddingBottom: 4 },
+  setupCard: { marginTop: 14, paddingTop: 16 },
   tabs: { flexDirection: 'row', gap: 4, borderRadius: 20, padding: 4, marginHorizontal: -8 },
   tab: { flex: 1, minHeight: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   tabLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
@@ -548,6 +611,8 @@ const styles = StyleSheet.create({
   heroTileAmount: { fontFamily: 'BakbakOne-Regular', fontSize: 17 },
   plainRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 56 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  /** A little room between "Recent booking payments" and its first payment. */
+  headRowSpaced: { marginBottom: 8 },
   sectionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
   listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 13 },
   rowRight: { alignItems: 'flex-end' },

@@ -39,7 +39,7 @@ test('a full provider still sees every row', () => {
 
 test('every profile surface passes the link-only flag', () => {
   const read = (...p: string[]) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
-  expect(read('screens', 'client', 'ProviderProfileScreen.tsx')).toContain('{ linkOnly: isLinkOnly }');
+  expect(read('features', 'providers', 'page', 'ProviderPageSheet.tsx')).toContain('{ linkOnly: isLinkOnly }');
   expect(read('features', 'providers', 'profilePresentation.ts')).toContain('{ linkOnly: provider.isLinkOnly }');
   expect(read('screens', 'provider', 'LinkOnlyHomeScreen.tsx')).toContain('{ linkOnly: true }');
   expect(read('screens', 'provider', 'ProviderMyProfileScreen.tsx')).toContain("{ linkOnly: myBookingMode === 'external', showNoDeposit: true }");

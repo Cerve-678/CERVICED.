@@ -134,7 +134,9 @@ export type NotificationType =
   /** Provider: a daily count of the people who saved them. Never names. */
   | "provider_saved"
   /** Client: someone asked to follow their private account. metadata.follower_id says who. */
-  | "follow_request";
+  | "follow_request"
+  /** Provider: a client joined their waitlist. metadata.waitlist_id says which entry. */
+  | "waitlist_joined";
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -263,6 +265,10 @@ export interface DbProvider {
    *  landmarks. Never door codes: those are provider_private_details
    *  .how_to_get_there, released with the address. */
   public_directions: string | null;
+  /** The provider's own profile sections (Key Information, FAQs, Aftercare,
+   *  Disclaimer, Custom sections) from Policies & Info. Public. Read through
+   *  normalizeOwnSections in features/providers/ownSections.ts. */
+  profile_sections: Record<string, unknown> | null;
   latitude: number | null;
   longitude: number | null;
   about_text: string | null;
@@ -1016,6 +1022,7 @@ export type ProviderWithServices = Pick<
   | "custom_service_type"
   | "location_text"
   | "public_directions"
+  | "profile_sections"
   | "about_text"
   | "logo_url"
   | "logo_framing"

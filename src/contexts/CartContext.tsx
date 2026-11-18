@@ -122,7 +122,7 @@ export interface CartItem {
    *  the time it was accepted for, never to the item. */
   emergencyRequest?: EmergencyRequest;
   /** Set when this item pays for a waitlist slot held for the client. Its
-   *  date and time can't change, the hold's own 15 minutes keep running, and
+   *  date and time can't change, the hold's own clock keeps running, and
    *  checkout sends the hold's booking id so the server reuses that row (see
    *  features/bookings/waitlist.ts). */
   waitlistHold?: WaitlistHoldRef;

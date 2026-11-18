@@ -90,6 +90,10 @@ export function HeroLogo({
         ? styles.polaroidPhoto
         : pageStyle.logo === "tilted"
           ? [styles.tilted, { borderRadius: Math.round(size * 0.16) }]
+          : pageStyle.logo === "rounded"
+            ? { borderRadius: Math.round(size * 0.26) }
+          : pageStyle.logo === "sharp"
+            ? { borderRadius: Math.round(size * 0.04) }
           : pageStyle.logo === "doubleRing" || pageStyle.logo === "glossRing"
             || pageStyle.logo === "accentRing"
             ? styles.thinRim
@@ -889,6 +893,55 @@ export function ProfileHeroLayout({
         />
       );
 
+    case "appHeader": {
+      // Pure: the logo on the left, the name beside it with what they do and
+      // their area under it, then the stars and slots pill, all left-aligned.
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.appWrap}>
+          <View style={layout.appRow}>
+            {renderLogo(76)}
+            <View style={layout.appText} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <View style={layout.tickRow}>
+                <Text style={[layout.appName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
+                </Text>
+                {tick}
+              </View>
+              {phrase ? <Text style={[layout.appPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "gridHeader": {
+      // Grid: a box of fine lines with the logo and name in it, and the
+      // stars and slots pill in a ruled cell along its foot.
+      const line = withAlpha(heroText, 0.35);
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.gridWrap}>
+          <View style={[layout.gridBox, { borderColor: line }]}>
+            <View style={layout.gridTop}>
+              {renderLogo(64)}
+              <View style={layout.appText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <View style={layout.tickRow}>
+                  <Text style={[layout.gridName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {name}
+                  </Text>
+                  {tick}
+                </View>
+                {phrase ? <Text style={[layout.appPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+              </View>
+            </View>
+            <View style={[layout.gridFoot, { borderTopColor: line }]}>{details}</View>
+          </View>
+        </View>
+      );
+    }
+
     case "stripes":
       return (
         <StripesHero
@@ -933,6 +986,32 @@ export function ProfileHeroLayout({
           details={details}
           tick={tick}
         />
+      );
+
+    case "customLeft":
+      // Custom · Cards: the logo on the left, the name and what they do beside it.
+      return (
+        <>
+          <View style={layout.customLeftRow}>
+            {renderLogo(84)}
+            <View style={layout.customLeftText}>
+              {renderName({ scale: 0.9 })}
+              {meta}
+            </View>
+          </View>
+          <View style={layout.customLeftDetails}>{details}</View>
+        </>
+      );
+
+    case "customBig":
+      // Custom · Big Name: no logo, what they do in small caps, then the name large.
+      return (
+        <View style={layout.customBig}>
+          {kicker ? <Text style={[layout.kicker, { color: heroSub }, shadow]}>{kicker}</Text> : null}
+          {renderName({ scale: 1.6 })}
+          {location ? <Text style={[layout.customBigPlace, { color: heroSub }, shadow]}>{location}</Text> : null}
+          <View style={layout.customBigDetails}>{details}</View>
+        </View>
       );
 
     default:
@@ -1006,7 +1085,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return BRAND_FONT_HEROES.includes(pageStyle.hero);
@@ -1043,6 +1122,23 @@ const TEXT_FIRST_DROP = 48;
 const layout = StyleSheet.create({
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
+  appWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  appRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  appText: { flex: 1, minWidth: 0 },
+  appName: { fontFamily: "Manrope-Bold", fontSize: 26, lineHeight: 32, letterSpacing: -0.3, flexShrink: 1 },
+  appPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, marginTop: 3 },
+  gridWrap: { paddingHorizontal: 16, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  gridBox: { borderWidth: 1 },
+  gridTop: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
+  gridName: { fontFamily: "Manrope-Bold", fontSize: 24, lineHeight: 30, letterSpacing: -0.4, flexShrink: 1 },
+  gridFoot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "flex-start" },
+  // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
+  customLeftRow: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP },
+  customLeftText: { flex: 1, alignItems: "flex-start" },
+  customLeftDetails: { alignItems: "flex-start", paddingHorizontal: 20, marginTop: 10, marginBottom: 26 },
+  customBig: { alignItems: "flex-start", paddingHorizontal: 22, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  customBigPlace: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 13, marginTop: 2 },
+  customBigDetails: { alignItems: "flex-start", marginTop: 10 },
   infoCenterTight: { alignItems: "center", paddingHorizontal: 20 },
   labelWrap: { alignSelf: "stretch", paddingHorizontal: 28, marginBottom: 14 },
   labelCard: { borderWidth: 1, paddingHorizontal: 22, paddingVertical: 20 },

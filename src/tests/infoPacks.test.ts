@@ -184,3 +184,12 @@ describe('example packs', () => {
     expect(servicesForTemplate(hair.find(t => t.id === 'hair-bring')!, services)).toEqual([]);
   });
 });
+
+describe('an info pack is never sent empty', () => {
+  const { packHasContent } = require('../features/info-packs/infoPackLogic') as typeof import('../features/info-packs/infoPackLogic');
+  it('needs something written, not just headings', () => {
+    expect(packHasContent('')).toBe(false);
+    expect(packHasContent('AFTERCARE\n\nBEFORE YOU COME\n  ')).toBe(false);
+    expect(packHasContent('AFTERCARE\nKeep lashes dry for 24 hours.')).toBe(true);
+  });
+});

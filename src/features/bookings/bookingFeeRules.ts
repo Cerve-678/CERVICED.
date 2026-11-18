@@ -64,3 +64,89 @@ export function feeDisputeOpen(charge: BookingFeeCharge, nowMs: number): boolean
   if (charge.status !== 'succeeded' || !charge.chargedAt) return false;
   return nowMs <= new Date(charge.chargedAt).getTime() + FEE_DISPUTE_MS;
 }
+
+export interface FeeToCharge {
+  bookingId: string;
+  customerName: string | null;
+  serviceName: string | null;
+  bookingDate: string;
+  /** The fees open on it right now, e.g. ['late arrival fee']. */
+  kinds: BookingFeeKind[];
+  closesAtLabel: string;
+}
+
+/** Bookings with a fee the provider can still charge, soonest-closing first:
+ *  inside the window, nothing already charged or in progress (a failed
+ *  attempt can be tried again). Payments & payouts lists these. */
+export function feesToChargeNow(
+  candidates: readonly { bookingId: string; customerName: string | null; serviceName: string | null; terms: BookingFeeTerms; charges: readonly Pick<BookingFeeCharge, 'status'>[] }[],
+  nowMs: number,
+): FeeToCharge[] {
+  const out: (FeeToCharge & { closes: number })[] = [];
+  for (const c of candidates) {
+    if (c.charges.some(ch => ch.status !== 'failed')) continue;
+    const window = feeChargeWindow(c.terms, nowMs);
+    if (!window.open) continue;
+    const kinds = (['late', 'no_show', 'late_cancel'] as const).filter(k => window.canCharge[k]);
+    if (kinds.length === 0) continue;
+    const end = new Date(`${c.terms.bookingDate}T${c.terms.endTime ?? c.terms.bookingTime}`).getTime();
+    out.push({
+      bookingId: c.bookingId,
+      customerName: c.customerName,
+      serviceName: c.serviceName,
+      bookingDate: c.terms.bookingDate,
+      kinds,
+      closesAtLabel: window.closesAtLabel,
+      closes: end,
+    });
+  }
+  return out.sort((a, b) => a.closes - b.closes).map(({ closes: _closes, ...rest }) => rest);
+}
+
+/** One fee button on the provider's booking page. */
+export interface FeeButton {
+  kind: 'late' | 'no_show';
+  pence: number;
+  /** Pressable now; otherwise shown greyed out with `note` saying when. */
+  enabled: boolean;
+  note: string;
+}
+
+/**
+ * The late and no-show fee buttons for a booking, from the fees on the policy
+ * frozen on it (user, 2026-11-18: "a button that is inactive then becomes
+ * active when it's time, if it's required"). Greyed out until it can be
+ * charged, live inside feeChargeWindow, and gone once that window closes.
+ * Only fees the policy has; nothing on a booking that didn't go ahead.
+ */
+export function bookingFeeButtons(terms: BookingFeeTerms, nowMs: number): FeeButton[] {
+  const status = terms.status;
+  if (![...WENT_AHEAD, 'no_show'].includes(status)) return [];
+  const start = new Date(`${terms.bookingDate}T${terms.bookingTime}`).getTime();
+  const end = new Date(`${terms.bookingDate}T${terms.endTime ?? terms.bookingTime}`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || nowMs > end + FEE_WINDOW_MS) return [];
+
+  const window = feeChargeWindow(terms, nowMs);
+  const started = nowMs >= start;
+  const startLabel = new Date(start).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const until = `Until ${window.closesAtLabel}`;
+  const buttons: FeeButton[] = [];
+
+  // A client who didn't come wasn't late.
+  if (terms.lateFeePence && status !== 'no_show') {
+    buttons.push(started
+      ? { kind: 'late', pence: terms.lateFeePence, enabled: window.canCharge.late, note: until }
+      : { kind: 'late', pence: terms.lateFeePence, enabled: false, note: `From ${startLabel}, once the appointment starts` });
+  }
+  // Nothing to charge once they've turned up.
+  if (terms.noShowFeePence && status !== 'in_progress' && status !== 'completed') {
+    buttons.push(
+      !started
+        ? { kind: 'no_show', pence: terms.noShowFeePence, enabled: false, note: `From ${startLabel}, if they don't come` }
+        : status === 'no_show'
+          ? { kind: 'no_show', pence: terms.noShowFeePence, enabled: window.canCharge.no_show, note: until }
+          : { kind: 'no_show', pence: terms.noShowFeePence, enabled: false, note: 'Mark them as a no-show first' },
+    );
+  }
+  return buttons;
+}

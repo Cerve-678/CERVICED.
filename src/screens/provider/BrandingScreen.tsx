@@ -16,7 +16,8 @@ import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { SafeAreaView } from '../../components/SafeArea';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProfileStylePreview, type PreviewContent } from '../../features/providers/ProfileStylePreview';
-import { BUSINESS_TYPE_LABEL } from '../../features/providers/profilePresentation';
+import { heroLabelsFrom, previewContentFrom } from '../../features/providers/previewContent';
+import { policyImageEdges, policyImageUrls, type PolicyImageEdge } from '../../features/providers/policyImages';
 import type { LogoFraming } from '../../types/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -59,10 +60,12 @@ import {
 } from '../../constants/pageStyles';
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { heroUsesBrandFont } from '../../features/providers/ProfileHero';
-import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding, serviceDurationToMinutes } from '../../services/providerRegistrationService';
+import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
 import { getMyProviderBranding, getProviderPortfolio, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 import { HeroPhotoPicker } from '../../features/providers/HeroPhotoPicker';
+import { CustomPageMaker } from '../../features/providers/CustomPageMaker';
+import { DEFAULT_CUSTOM_CHOICES, type CustomChoices } from '../../constants/customPageStyle';
 import { HERO_PHOTO_LIMIT, heroPhotos } from '../../features/providers/heroPhotos';
 import { toUserMessage } from '../../utils/userFacingError';
 import { FullCervicedLockedSheet } from '../../features/providers/FullCervicedLockedSheet';
@@ -81,13 +84,15 @@ const DARK = {
   border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
 };
 
-// Branding is split into three parts, so a provider sees one group of related
-// settings at a time instead of every section in one long page.
-type BrandingPart = 'layout' | 'colours' | 'name';
+// Branding is split into parts, so a provider sees one group of related
+// settings at a time instead of every section in one long page. Custom is
+// where they make a plain page of their own (features/providers/CustomPageMaker).
+type BrandingPart = 'layout' | 'colours' | 'name' | 'custom';
 const BRANDING_PARTS: { key: BrandingPart; label: string }[] = [
   { key: 'layout', label: 'Layout' },
   { key: 'colours', label: 'Colours' },
   { key: 'name', label: 'Name' },
+  { key: 'custom', label: 'Custom' },
 ];
 
 // Background gradients are derived from the Colour Theme's backdrop colour
@@ -138,6 +143,8 @@ export default function BrandingScreen({ navigation }: any) {
   const [cardShape, setCardShape]             = useState<CardShape>(DEFAULT_CARD_SHAPE);
   const [pageStyle, setPageStyle]             = useState<PageStyleKey>(DEFAULT_PAGE_STYLE);
   const [policyLook, setPolicyLook]           = useState<PolicyPictureLook>(DEFAULT_POLICY_PICTURE_LOOK);
+  // Branding → Custom's picks; they only show while the page style is Custom.
+  const [customChoices, setCustomChoices]     = useState<CustomChoices>(DEFAULT_CUSTOM_CHOICES);
   // What the full preview needs that Branding doesn't edit: the name, the
   // logo's framing and the line under the name. From the saved profile cache.
   const [previewOpen, setPreviewOpen]         = useState(false);
@@ -164,8 +171,11 @@ export default function BrandingScreen({ navigation }: any) {
   // Branding → Your Photos (Hush): their work photos and the ones picked for
   // its hero, saved with everything else.
   const [portfolioItems, setPortfolioItems]   = useState<DbPortfolioItem[]>([]);
-  // Their About, categories and first services, so Preview reads like their page.
+  // Their About and categories, so Preview reads like their page (services stay outlines).
   const [previewContent, setPreviewContent]   = useState<PreviewContent | undefined>(undefined);
+  const [previewPolicyPages, setPreviewPolicyPages] = useState<string[]>([]);
+  const [previewPolicyEdges, setPreviewPolicyEdges] = useState<Record<string, PolicyImageEdge>>({});
+  const [previewRating, setPreviewRating] = useState<string | undefined>(undefined);
   const [heroPicked, setHeroPicked]             = useState<string[]>([]);
   const savedHeroPicked = useRef<string[]>([]);
   const [part, setPart]                       = useState<BrandingPart>('layout');
@@ -188,35 +198,22 @@ export default function BrandingScreen({ navigation }: any) {
         setLogoFraming(cached.logoFraming ?? null);
         {
           // The same line the profile prints under the name (and Cover's pills).
-          const types = (cached.serviceCategories?.length ? cached.serviceCategories : [cached.providerService])
-            .filter(Boolean)
-            .map(type => (type === 'OTHER' ? cached.customServiceType || 'SERVICE' : type).toUpperCase());
-          const where = cached.location ? [cached.location.toUpperCase()] : [];
-          const how = cached.businessType ? [BUSINESS_TYPE_LABEL[cached.businessType].toUpperCase()] : [];
-          setMetaLabels([...new Set([...types, ...where])]);
-          // Cover's pills leave out what they do, as the profile does.
-          setPillLabels([...new Set([...where, ...how])]);
-          setHeroKicker([...new Set(types)].join(' · '));
-          setHeroLocation(cached.location ?? '');
+          const labels = heroLabelsFrom(cached);
+          setMetaLabels(labels.metaLabels);
+          setPillLabels(labels.pillLabels);
+          setHeroKicker(labels.kicker);
+          setHeroLocation(labels.location);
         }
-        // Their own words and menu for the preview: the first two categories
-        // and the first two services in the first one.
-        {
-          const categoryNames = Object.keys(cached.categories ?? {}).filter(name => (cached.categories[name]?.length ?? 0) > 0);
-          const firstServices = (categoryNames[0] ? cached.categories[categoryNames[0]] : []) ?? [];
-          setPreviewContent({
-            about: cached.aboutText ?? '',
-            categories: categoryNames,
-            services: firstServices
-              .filter(service => service.name.trim())
-              .slice(0, 2)
-              .map(service => ({ name: service.name.trim(), minutes: serviceDurationToMinutes(service.duration), price: service.price })),
-          });
-        }
-        const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook } = parseThemeKey(cached.profileTheme);
+        // Their own words, categories, policy pictures and rating for the preview.
+        setPreviewContent(previewContentFrom(cached));
+        setPreviewPolicyPages(policyImageUrls(cached.bookingPolicies));
+        setPreviewPolicyEdges(policyImageEdges(cached.bookingPolicies));
+        setPreviewRating(String(Number(cached.rating) || 0));
+        const { base, sheet, finish, shape, pageStyle: cachedPageStyle, policyLook: cachedPolicyLook, custom: cachedCustom } = parseThemeKey(cached.profileTheme);
         setCardShape(shape);
         setPageStyle(cachedPageStyle);
         setPolicyLook(cachedPolicyLook);
+        setCustomChoices(cachedCustom);
         setSheetColor(sheet);
         setHeroFinish(finish);
         const custom = decodeCustomTheme(base);
@@ -243,10 +240,11 @@ export default function BrandingScreen({ navigation }: any) {
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
           if (data.logo_url) setLogoUrl(data.logo_url);
           if (data.brand_font) setBrandFont(data.brand_font);
-          const { base, sheet, finish, shape, pageStyle: savedPageStyle, policyLook: savedPolicyLook } = parseThemeKey(data.profile_theme);
+          const { base, sheet, finish, shape, pageStyle: savedPageStyle, policyLook: savedPolicyLook, custom: savedCustom } = parseThemeKey(data.profile_theme);
           setCardShape(shape);
           setPageStyle(savedPageStyle);
           setPolicyLook(savedPolicyLook);
+          setCustomChoices(savedCustom);
           setSheetColor(sheet);
           setHeroFinish(finish);
           const custom = decodeCustomTheme(base);
@@ -376,9 +374,9 @@ export default function BrandingScreen({ navigation }: any) {
   }, [providerId]);
 
   // The picked font only shows on styles whose hero draws the name in it.
-  const fontShows = heroUsesBrandFont(getPageStyle(pageStyle));
+  const fontShows = heroUsesBrandFont(getPageStyle(pageStyle, customChoices));
   // Editorial shows one picked photo, Snapshot and Hush three.
-  const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle));
+  const heroPickLimit = heroPhotoPickLimit(getPageStyle(pageStyle, customChoices));
   const picksHeroPhotos = heroPickLimit > 0;
   // Moving to a style that shows fewer (Snapshot's 3 → Editorial's 1) keeps
   // the picks that style shows, so the count never reads "3 of 1".
@@ -410,7 +408,7 @@ export default function BrandingScreen({ navigation }: any) {
         : preset?.tokens.gradient ?? [preset?.tokens.hero ?? SHEET_BG, sheetColor];
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape, pageStyle, policyLook);
+      const resolvedProfileTheme = encodeThemeKey(baseKey, sheetColor, heroFinish, cardShape, pageStyle, policyLook, customChoices);
 
       await updateProviderBranding(providerId, {
         gradient: resolvedGradient,
@@ -447,7 +445,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, brandFont, heroPicked, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, customChoices, brandFont, heroPicked, navigation]);
 
   // The profile_theme the on-screen choices would save, for the preview.
   const liveThemeKey = encodeThemeKey(
@@ -457,6 +455,7 @@ export default function BrandingScreen({ navigation }: any) {
     cardShape,
     pageStyle,
     policyLook,
+    customChoices,
   );
 
   // Both stacks that open Branding for a link-only pro (Home, Settings) have
@@ -538,6 +537,9 @@ export default function BrandingScreen({ navigation }: any) {
               location={heroLocation}
               photoUris={previewPhotoUris}
               content={previewContent}
+              policyPages={previewPolicyPages}
+              policyEdges={previewPolicyEdges}
+              rating={previewRating}
             />
           </ProfilePreviewScreen>
         </SafeAreaProvider>
@@ -871,6 +873,24 @@ export default function BrandingScreen({ navigation }: any) {
             </>
           )}
 
+          {part === 'custom' && (
+            <CustomPageMaker
+              choices={customChoices}
+              onChange={setCustomChoices}
+              active={pageStyle === 'custom'}
+              onUse={() => setPageStyle('custom')}
+              brandFont={brandFont}
+              onBrandFontChange={setBrandFont}
+              cardShape={cardShape}
+              onCardShapeChange={setCardShape}
+              onOpenColours={() => setPart('colours')}
+              locked={limited}
+              onLockedPress={showLocked}
+              accent={accentColor}
+              P={P}
+            />
+          )}
+
           {part === 'name' && (
             <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
               <Text style={[styles.sectionTitle, { color: P.text }]}>Business Name Font</Text>
@@ -991,7 +1011,8 @@ function PolicyLookSmallPreview({ look, pageColour, sheet }: { look: Exclude<Pol
 
 /** The styles the picked font shows on, for the note when it doesn't. */
 const BRAND_FONT_STYLE_NAMES = (() => {
-  const names = PAGE_STYLES.filter(heroUsesBrandFont).map(style => style.name);
+  // Custom isn't in PAGE_STYLES (it has no fixed design) but draws the name in this font too.
+  const names = [...PAGE_STYLES.filter(heroUsesBrandFont).map(style => style.name), 'Custom'];
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
 })();
 

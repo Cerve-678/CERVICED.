@@ -16,6 +16,8 @@
 // Each style is a small set of switches the profile reads, not a layout of its
 // own: the profile keeps one structure, and these decide how each part looks.
 
+import { customPageStyle, DEFAULT_CUSTOM_CHOICES, type CustomChoices } from './customPageStyle';
+
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
@@ -33,7 +35,10 @@ export type PageStyleKey =
   | 'softFocus'
   | 'hush'
   | 'stripes'
-  | 'bow';
+  | 'bow'
+  | 'pure'
+  | 'grid'
+  | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
 export type PageHeading =
@@ -66,7 +71,10 @@ export type PageHeading =
   | 'softCaps'   // heavy grotesk caps at the top left of its own card (Soft Focus)
   | 'hushRule'   // tiny spaced caps between hairlines, in the style's own quiet words (Hush)
   | 'stripeCaps' // spaced serif caps, centred, at the top of the section's colour strip (Stripes)
-  | 'bowSerif';  // a small satin bow over an italic serif title, centred (Bow)
+  | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
+  | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
+  | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
+  | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
 export type PageCards =
@@ -94,7 +102,9 @@ export type PageCards =
   | 'outlineRound' // a card with a fine dark outline and big round corners (Lounge)
   | 'soft'    // a soft solid card with big round corners, its heading inside (Soft Focus)
   | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
-  | 'bow';    // a solid card with round corners (Bow)
+  | 'bow'     // a solid card with round corners (Bow)
+  | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
+  | 'gridBox'; // a square card in a fine ink outline, its heading inside (Grid)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
@@ -123,7 +133,9 @@ export type PagePolicies =
   | 'softTiles'   // two-up round tiles tinted with the accent, inside the section's card (Soft Focus)
   | 'gentleNotes' // centred notes: a small caps label, then the policy in a light italic (Hush)
   | 'pearlNotes'  // rows in the outlined box, each beside a single pearl (Stripes)
-  | 'ribbonBand'; // one card with a satin ribbon across its top, two-up italic titles (Bow)
+  | 'ribbonBand' // one card with a satin ribbon across its top, two-up italic titles (Bow)
+  | 'settingsRows' // the label on the left, the policy on the right, a fine line between rows (Pure)
+  | 'gridCells';   // two-up cells split by fine lines, a small caps label over each policy (Grid)
 
 /**
  * How the hero (the top of the profile, over the photo or colours) is laid
@@ -161,6 +173,10 @@ export type PageHero =
   | 'hushFan'  // quiet: what they do in tiny caps, a ringed logo, the name in light italic, three of their chosen photos in separate boxes
   | 'stripes'  // a full-width strip of their colour: the logo in a ring of pearls, the name in spaced serif caps, no photo
   | 'bow'      // their photo with a ribbon down it and a bow on top, the logo on its foot, the name in italic serif
+  | 'appHeader' // the logo on the left, the name and what they do beside it, like an app's profile top (Pure)
+  | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
+  | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
+  | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -170,7 +186,9 @@ export type PageLogoFrame =
   | 'accentRing' // a ring of the accent with a gap round the logo (Duet)
   | 'mat'        // square, in a white mat and a thin dark frame (Gallery)
   | 'square'     // a square with barely rounded corners (Snapshot)
-  | 'stamped';   // a ring pressed into the paper round it (Embossed)
+  | 'stamped'    // a ring pressed into the paper round it (Embossed)
+  | 'rounded'    // a square with soft, round corners, like an app icon (Pure)
+  | 'sharp';     // a square with barely any rounding (Grid)
 
 export interface PageStyle {
   key: PageStyleKey;
@@ -216,6 +234,14 @@ export interface PageStyle {
   veilPage?: boolean;
   /** Portfolio photos with big round corners (Lounge, Soft Focus, Bow). */
   roundedPhotos?: boolean;
+  /** Custom only: the provider's own picks (constants/customPageStyle). */
+  custom?: {
+    layout: 'plain' | 'cards' | 'bigName' | 'banner';
+    headingFont: string;
+    headingScale: number;
+    textFont: string;
+    caps: boolean;
+  };
 }
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -431,6 +457,21 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'bow', aboutInHero: false, roundedPhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
   },
+  // 2026-11-18: two simple, clean templates the owner picked (2 and 6) from
+  // https://claude.ai/artifact/CouRMrARqSAzAiqF73dtYe. No ornaments: the
+  // provider's colours do the work.
+  {
+    key: 'pure', name: 'Pure', description: 'Clean and modern: your logo beside your name, tidy grouped rows',
+    heading: 'appBold', cards: 'grouped', policies: 'settingsRows', logo: 'rounded',
+    hero: 'appHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+  },
+  {
+    key: 'grid', name: 'Grid', description: 'Neat and graphic: fine lines box everything in, numbered sections',
+    heading: 'gridIndex', cards: 'gridBox', policies: 'gridCells', logo: 'sharp',
+    hero: 'gridHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
 ];
 
 /** How many portfolio photos this style's hero shows, from the ones the
@@ -449,18 +490,23 @@ export function heroPhotoPickLimit(style: PageStyle): number {
 }
 
 export function isPageStyleKey(value: string | null | undefined): value is PageStyleKey {
-  return PAGE_STYLES.some(style => style.key === value);
+  return value === 'custom' || PAGE_STYLES.some(style => style.key === value);
 }
 
-/** The style for a stored key; anything unknown is Classic. */
-export function getPageStyle(key: string | null | undefined): PageStyle {
+/** The style for a stored key; anything unknown is Classic. Custom isn't in
+ *  PAGE_STYLES (it has no fixed design): pass the provider's picks, or it
+ *  shows with the default ones. */
+export function getPageStyle(key: string | null | undefined, custom?: CustomChoices): PageStyle {
+  if (key === 'custom') return customPageStyle(custom ?? DEFAULT_CUSTOM_CHOICES);
   return PAGE_STYLES.find(style => style.key === key) ?? PAGE_STYLES[0]!;
 }
 
 /** Which section a heading belongs to, so a two-part heading can say something better than the bare title. */
 export type PageSectionKey =
   | 'about' | 'policies' | 'services' | 'reviews' | 'hours' | 'contact'
-  | 'info' | 'portfolio' | 'specialities' | 'policyPages';
+  | 'info' | 'portfolio' | 'specialities' | 'policyPages'
+  // The provider's own sections (features/providers/ownSections.ts), under Additional Information.
+  | 'keyInfo' | 'faq' | 'aftercare' | 'custom' | 'disclaimer';
 
 /** The plain title of each section — what Classic shows, and what screen readers hear in every style. */
 export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
@@ -474,6 +520,12 @@ export const PAGE_SECTION_TITLES: Record<PageSectionKey, string> = {
   portfolio: 'Portfolio',
   specialities: 'Specialities',
   policyPages: 'Full Policy',
+  keyInfo: 'Key Information',
+  faq: 'FAQs',
+  aftercare: 'Aftercare',
+  // Only a fallback: a Custom section is headed with its own name (customHeading).
+  custom: 'More Information',
+  disclaimer: 'Disclaimer',
 };
 
 /** The two halves of a script-and-serif or caps-and-script heading: a short
@@ -489,10 +541,23 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
   portfolio: ['My', 'Portfolio'],
   specialities: ['My', 'Specialities'],
   policyPages: ['Before', 'You Book'],
+  keyInfo: ['Key', 'Information'],
+  faq: ['Common', 'Questions'],
+  aftercare: ['Your', 'Aftercare'],
+  custom: ['More', 'Information'],
+  disclaimer: ['The', 'Disclaimer'],
 };
 
 export function headingPair(section: PageSectionKey): [string, string] {
   return HEADING_PAIRS[section];
+}
+
+/** A Custom section's name split the way the two-part headings need it: the
+ *  first word as the lead-in, the rest as the name ("Before" / "you arrive").
+ *  A one-word name is all name, with no lead-in. */
+export function customHeadingPair(title: string): [string, string] {
+  const words = title.trim().split(/\s+/);
+  return words.length > 1 ? [words[0]!, words.slice(1).join(' ')] : ['', words[0] ?? ''];
 }
 
 /** Hush's section titles: small quiet words, drawn in spaced caps between hairlines. */
@@ -507,6 +572,11 @@ export const HUSH_TITLES: Record<PageSectionKey, string> = {
   portfolio: 'my work',
   specialities: 'what I love',
   policyPages: 'before you book',
+  keyInfo: 'key information',
+  faq: 'questions',
+  aftercare: 'aftercare',
+  custom: 'more information',
+  disclaimer: 'disclaimer',
 };
 
 /** Signature's section numbers, in the order the profile shows its sections. */
@@ -521,6 +591,11 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   contact: '08',
   info: '09',
   specialities: '10',
+  keyInfo: '11',
+  faq: '12',
+  aftercare: '13',
+  disclaimer: '14',
+  custom: '15',
 };
 
 /** Novel's chapter titles: plain section names under each "Chapter" line. */
@@ -535,6 +610,11 @@ const CHAPTER_TITLES: Record<PageSectionKey, string> = {
   contact: 'Get in Touch',
   info: 'Good to Know',
   specialities: 'My Specialities',
+  keyInfo: 'Key Information',
+  faq: 'Common Questions',
+  aftercare: 'Your Aftercare',
+  custom: 'More Information',
+  disclaimer: 'Disclaimer',
 };
 
 /** Novel's heading for a section: ["Chapter III", "The Services"], numbered in page order. */
@@ -544,7 +624,7 @@ export function chapterHeading(section: PageSectionKey): [string, string] {
 
 /** Roman numerals for the numbered policy rows (Heritage, Apothecary). */
 export function romanNumeral(index: number, lower = false): string {
-  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+  const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
   const value = numerals[index] ?? String(index + 1);
   return lower ? `${value.toLowerCase()}.` : value;
 }

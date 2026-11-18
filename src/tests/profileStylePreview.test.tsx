@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
+import { CUSTOM_LAYOUTS, DEFAULT_CUSTOM_CHOICES } from '../constants/customPageStyle';
 import { PAGE_STYLES } from '../constants/pageStyles';
 import { encodeThemeKey, SHEET_BG } from '../constants/providerThemes';
 import { ProfileStylePreview } from '../features/providers/ProfileStylePreview';
@@ -20,6 +21,7 @@ function renderPreview(
   styleKey: (typeof PAGE_STYLES)[number]['key'],
   brandFont = 'default',
   content?: React.ComponentProps<typeof ProfileStylePreview>['content'],
+  full = false,
 ) {
   return render(
     <ProfileStylePreview
@@ -36,12 +38,14 @@ function renderPreview(
       kicker="LASHES"
       location="Peckham"
       content={content}
+      rating="5.0"
+      full={full}
     />,
   );
 }
 
 describe('Branding preview', () => {
-  it('shows their own About, categories and services instead of grey bars', () => {
+  it('shows their own About and categories, with outline cards instead of their services', () => {
     renderPreview('stripes', 'default', {
       about: 'Soft lash sets from a quiet studio.',
       categories: ['Lash extensions', 'Brows'],
@@ -49,9 +53,8 @@ describe('Branding preview', () => {
     });
     expect(screen.getByText('Soft lash sets from a quiet studio.')).toBeTruthy();
     expect(screen.getByText('Lash extensions')).toBeTruthy();
-    expect(screen.getByText('Classic full set')).toBeTruthy();
-    expect(screen.getByText('2h · £65')).toBeTruthy();
-    expect(screen.getByText('45m · £40.50')).toBeTruthy();
+    expect(screen.queryByText('Classic full set')).toBeNull();
+    expect(screen.queryByText('2h · £65')).toBeNull();
   });
 
   it.each(PAGE_STYLES.map(style => style.key))('draws the %s profile with the name and every key heading', key => {
@@ -146,6 +149,35 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.getByText('PECKHAM')).toBeTruthy();
   });
 
+  it('shows a new provider no rating sticker rather than a made-up one', () => {
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'groovy')}
+        gradient={['#4A2C20', '#F5F1EC']} accent="#4A2C1E" backgroundImage={null} brandFont="default"
+        name="Amara Lashes" logoUri={null} logoFraming={null} metaLabels={[]} pillLabels={[]} kicker="LASHES" location="Peckham"
+        rating="0"
+      />,
+    );
+    expect(screen.queryByLabelText(/^Rated /)).toBeNull();
+  });
+
+  it('in Info Reg, shows every category as the profile\'s pills, and switches services on tap', () => {
+    renderPreview('stripes', 'default', {
+      about: '',
+      categories: ['Lashes', 'Brows', 'Lash lifts and tints'],
+      services: [{ name: 'Classic set', minutes: 90, price: 45 }],
+      servicesByCategory: {
+        Lashes: [{ name: 'Classic set', minutes: 90, price: 45 }],
+        Brows: [{ name: 'Brow lamination', minutes: 45, price: 35 }],
+        'Lash lifts and tints': [{ name: 'Lift', minutes: 60, price: 40 }],
+      },
+    }, true);
+    expect(screen.getByText('Lash lifts and tints')).toBeTruthy();
+    expect(screen.getByText('Classic set')).toBeTruthy();
+    fireEvent(screen.getByText('Brows'), 'pressOut');
+    expect(screen.getByText('Brow lamination')).toBeTruthy();
+  });
+
   it('leaves Gallery without a placard or wall labels', () => {
     renderPreview('gallery');
     expect(screen.queryByText('NO. 01 · THE ARTIST')).toBeNull();
@@ -193,5 +225,34 @@ describe('the 2026-11-15 templates', () => {
     renderPreview('quiet');
     expect(screen.getByText('AMARA LASHES')).toBeTruthy();
     expect(screen.getByText('PECKHAM')).toBeTruthy();
+  });
+
+  it.each(CUSTOM_LAYOUTS.map(layout => layout.key))('draws a Custom %s page in the picked fonts', layout => {
+    const caps = layout === 'banner';
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'custom', 'melt', { ...DEFAULT_CUSTOM_CHOICES, layout, heading: 'gilda', text: 'castoro', caps })}
+        gradient={['#4A2C20', '#F5F1EC']}
+        accent="#4A2C1E"
+        backgroundImage={null}
+        brandFont="italiana"
+        name="Amara Lashes"
+        logoUri={null}
+        logoFraming={null}
+        metaLabels={['LASHES', 'PECKHAM']}
+        pillLabels={['LASHES', 'PECKHAM']}
+        kicker="LASHES"
+        location="Peckham"
+        content={{ about: 'Soft lash sets.', categories: ['Lashes'], services: [{ name: 'Classic set', minutes: 120, price: 65 }] }}
+        rating="5.0"
+        // Services only list in the full preview (Info Reg's); Branding's shows outline cards.
+        full
+      />,
+    );
+    expect(StyleSheet.flatten(screen.getByText('Amara Lashes').props["style"]).fontFamily).toBe('Italiana_400Regular');
+    const heading = screen.getByText(caps ? 'SERVICES' : 'Services');
+    expect(StyleSheet.flatten(heading.props["style"]).fontFamily).toBe('GildaDisplay-Regular');
+    expect(StyleSheet.flatten(screen.getByText('Soft lash sets.').props["style"]).fontFamily).toBe('Castoro-Regular');
+    expect(StyleSheet.flatten(screen.getByText('Classic set').props["style"]).fontFamily).toBe('Castoro-Regular');
   });
 });

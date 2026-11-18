@@ -326,16 +326,18 @@ received" sends now. `reconcile-checkouts`, `finalize-payment-intent` and
 "Confirming your payment…" screen needs a new app build.*
 
 **Waitlist slots** are paid for through this same checkout. When a slot
-opens, the next client in line gets it held for 15 minutes (an `on_hold`
-booking). "Confirm & pay" puts that slot in the cart at its fixed time;
+opens and the provider has **Auto** on, the next client in line gets it held
+for 10 minutes (an `on_hold` booking); with Auto off the provider is told and
+offers it from Bookings (since 18 November, `20261118150000`). "Confirm & pay" puts that slot in the cart at its fixed time;
 `prepare_checkout` reuses the held row (`waitlist_hold_id`), prices it from the
-database like any item, and the checkout can't outlast the hold: the 15
+database like any item, and the checkout can't outlast the hold: the 10
 minutes keep running while the client pays. Nothing is booked until
 `finalize_checkout` captures the payment. If the time runs out or the client
 passes, the hold row is deleted (never a cancelled booking), they come off that
-waitlist, and the slot goes to the next person (provider's "offer automatically"
-setting on) or opens to everyone and back to the provider to offer (off). A
-provider offering a time by hand also creates a 15-minute hold, never an unpaid
+waitlist, and the slot goes to the next person (provider's Auto setting on) or
+opens to everyone and back to the provider to offer (off). A schedule closed
+because it filled lets only the waitlist have a freed slot. A
+provider offering a time by hand also creates a 10-minute hold, never an unpaid
 booking. *Live since 16 November (`20261113210000`); the app part needs a new
 build. Before that the old path booked waitlist slots with £0 paid, though none
 ever was.*
@@ -720,6 +722,7 @@ stops a no-show being marked until it has passed.
 | The provider receives | The fee **minus Stripe's actual card fee**, held 24 hours, then sent, less any money they owe (section 2.8) |
 | CERVICED | Takes nothing |
 | Saved card | The client can't remove it until 24 hours after the appointment |
+| Where the provider charges it | **Payments & payouts → Bookings → Late & no-show fees** (since 18 November; it was on the booking page). Every fee that can still be charged is listed there, with the charged ones underneath; tapping one opens it to charge, refund or answer a dispute. The booking page also has a button for each late or no-show fee on the booking's policy (merged 18 November, #615; reaches providers with the next app build): greyed out until it can be charged (late fee from the start time; no-show fee once the client is marked a no-show), live for the 24 hours after the appointment, then gone. Once a fee is charged, the booking page shows a one-line status that links to Payments for refunds and disputes. Same rules and server checks either way |
 
 **If the card is declined** (or the bank wants the client to approve the
 payment):
@@ -1188,7 +1191,8 @@ Keep the list short and review it monthly.
   `providers.stripe_payouts_enabled` gates checkout and tips.
 - **Money is server-owned.** Every money action is a Supabase Edge Function
   or a `SECURITY DEFINER` database function. The app reaches them only
-  through `src/services/databaseService.ts` (CLAUDE.md).
+  through the database layer, `src/services/databaseService.ts` and the
+  topic files it re-exports from `src/services/database/` (CLAUDE.md).
 - **Idempotency everywhere.** Booking payout transfers use the
   `payout_transfer_<id>` key (`cancelpay_transfer_<id>` when a client
   cancellation settles it) and carry `payout_id` in their metadata, which is
@@ -1242,7 +1246,7 @@ Keep the list short and review it monthly.
 | Name | Kind | What it does |
 |---|---|---|
 | `prepare_checkout` | RPC | Validates the basket and places 5-minute holds. A waitlist item (`waitlist_hold_id`) reuses its held row and caps the checkout at the hold's own end |
-| `offer_waitlist_slot`, `invite_next_waitlist_entry`, `end_waitlist_hold`, `expire_waitlist_holds` | Functions / cron (every minute) | Offer a 15-minute waitlist hold; end one that wasn't paid for and offer it on or hand it back to the provider |
+| `offer_waitlist_slot`, `invite_next_waitlist_entry`, `end_waitlist_hold`, `expire_waitlist_holds` | Functions / cron (every minute) | Offer a 10-minute waitlist hold; end one that wasn't paid for and offer it on or hand it back to the provider |
 | `record_checkout_outcome` | RPC (service role) | Records how a checkout ended without bookings, once (a real outcome can replace `abandoned`), and tells the client unless nothing was taken |
 | `notify_client_payment_received` | Trigger on `checkout_batches` | "Payment received" when a checkout is finalised |
 | `apply_checkout_platform_fee` / `calculate_platform_fee` | Trigger / function | The fee in section 1.3 |
@@ -1407,6 +1411,7 @@ Why things are the way they are. Add a row whenever a money decision is made.
 | 2 Nov | A provider has 24 hours, not 48, to answer a booking request. Still fully refunded if they don't | The user's call, 2 November 2026 |
 | 3 Nov | Providers can require a non-refundable deposit: kept whenever the client cancels, frozen per booking, still refunded if the provider cancels, declines or doesn't answer. CERVICED refunds its fee when the deposit is the only thing kept | The user's call (2 and 3 Nov), including not waiting for a solicitor. **Not lawyer-reviewed** |
 | 10 Nov | A waitlist slot is paid for at checkout like any booking: 15-minute hold, the clock keeps running while paying, missing it or passing takes the client off that waitlist. "Offer automatically" rolls a lapsed slot to the next person; off, it opens to everyone and the provider can offer it. A provider's own offer is a hold too | Confirming used to book with £0 paid: no deposit, fee, saved card or policy agreement. The user's call, 10 November 2026 |
+| 18 Nov | Waitlist **Auto** decides the first hold as well as the roll-on: with it off, a freed slot goes back to the provider to offer. Holds are 10 minutes, not 15. Closing when full works with the waitlist on, and the waitlist alone gets a slot freed while closed | The owner's call, 18 November 2026: "Enable waitlist" is the manual waitlist and Auto the automatic hold |
 | Standing | Off-app payments are never tracked | A liability boundary (Terms, "Deposits & Remaining Balances") |
 | Standing | CERVICED's fee is never taken from the provider and never shown to them | Clear, simple provider earnings |
 | 10 Nov | Booking payout transfers stop naming a transfer group and are found by their `payout_id` metadata instead. Fix only: no change to who is paid what or when. On branch `fix/payout-transfer-group` until merged and `release-payouts` + `apply-cancellation-refund` are deployed | Every payout after the first from a multi-booking checkout was refused by Stripe, so those providers were never paid |

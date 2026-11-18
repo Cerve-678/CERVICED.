@@ -50,8 +50,9 @@ automations (auto-accept, buffers, waitlist, reminders, deposits).
   `ThemeContext`, `RegistrationContext`) + Zustand stores (bookmarks, planner,
   app state)
 - **Backend:** Supabase (Postgres + Auth + Storage + Edge Functions +
-  Realtime). `src/services/databaseService.ts` is the **only** file allowed
-  to import the Supabase client directly.
+  Realtime). The database layer is the **only** code allowed to import the
+  Supabase client: topic files in `src/services/database/`, re-exported
+  through `src/services/databaseService.ts`, which everything else imports.
 - **Payments:** Stripe, mid-migration (see Payments section below) —
   `@stripe/stripe-react-native`, `src/services/stripeService.ts`
 - **Session storage:** envelope-encrypted (`largeSecureStore.ts`), not
@@ -73,7 +74,7 @@ src/
 │   ├── client/             Client-only screens
 │   ├── provider/           Provider-only screens
 │   └── shared/              Used by both hats (NotificationsScreen, BeccaScreen, DevSettingsScreen, etc.)
-├── services/             Supabase-backed logic (databaseService.ts boundary)
+├── services/             Supabase-backed logic (database/ topic files, behind databaseService.ts)
 ├── stores/                Zustand stores
 ├── theme/                  Enterprise theme tokens (mostly unused — see below)
 ├── types/                  Shared TS types
@@ -372,10 +373,11 @@ before next month opens isn't full).
   most once a week.
 Both go under the provider's Fully Booked switch, and tapping opens My Profile.
 A closed schedule, a link-only provider and one with nothing set
-up never count. There is no closed state and no setting for it:
-when a slot frees up, the waitlist gets it first if the provider has the waitlist
-on (15-minute holds, next person, then anyone), otherwise anyone can book it
-straight away. `WAITLIST.md` has that path, which has barely run live.
+up never count. When a slot frees up and the provider has the waitlist on,
+Auto holds it for the next person (10 minutes, then the next), or with Auto off
+the provider offers it from Bookings; otherwise anyone can book it straight
+away. With "Close my schedule when fully booked" on as well, a slot freed while
+closed goes to the waitlist only. `WAITLIST.md` has that path, which has barely run live.
 
 **Closed by hand** (`provider_schedule_closures`, migration
 `20261101190000_close_schedule_by_hand.sql`, UI in

@@ -56,6 +56,42 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-18 (provider told when someone joins their waitlist)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261118220000 | `waitlist_joined_notification` | **APPLIED 2026-11-18** on the user's go-ahead ("apply merge"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. md5 guard on the live `notifications_type_check` matched. Two forced-rollback dry runs passed first (one alert, rejoin within a day sends none, title "<Service> · 1st in line"). Verified live: version recorded (live max); CHECK has `waitlist_joined` **and `provider_no_show` again** (live had lost it, unrecorded, while `handle_booking_status_change` still inserts it); `trg_waitlist_joined_notify` AFTER INSERT on `provider_waitlist`; `notify_provider_waitlist_joined` SECURITY DEFINER, not executable by anon/authenticated. `send-push-notification` redeployed (v31) with `waitlist_joined: 'providerWaitlist'`. PR #636. |
+
+### Applied 2026-11-18 (Clientele sheet: client Beauty Profile + private notes)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261118205332 | `clientele_notes_and_beauty_profile` (written as 20261118160000, renamed to the MCP's version) | Forced-rollback dry run first, then applied. `provider_client_notes` RLS on, `authenticated` has no SELECT; `get_client_beauty_profile_for_provider` not executable by anon; `get_my_client_note` / `save_my_client_note` executable by authenticated; `my_provider_id_for_client` executable by neither. 0 rows. PR #630. |
+
+### Applied 2026-11-18 (waitlist Auto, 10-minute holds, closing when full with the waitlist)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118150000 | `waitlist_auto_and_close_together` | **APPLIED 2026-11-18** on the user's go-ahead ("apply it"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. md5 guards over the six rebuilt functions matched. Rolled-back dry run passed first. Verified live: version recorded (live max); `waitlist_hold_duration()` = 10 minutes; `waitlist_slot_freed()` and `provider_schedule_closed_to_waitlist()` exist, executable only by postgres/service_role; `handle_booking_status_change` calls `waitlist_slot_freed`; `process_provider_fully_booked_alerts` no longer needs the waitlist off; `waitlist_released_slots.reason` accepts `cancelled`. PR #624. |
+
+### Applied 2026-11-18 (announcements reach savers and bell followers)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118140000 | `announce_to_savers_and_bell` | **APPLIED 2026-11-18** on the user's go-ahead ("yes" to apply both, then merge), via `supabase db query --linked -f` from the main folder, straight after `20261118130000`. md5 guards matched. Verified live: version recorded (live max); `get_my_announcement_followers` SECURITY DEFINER, authenticated executes, anon doesn't; `send_provider_client_notifications` and `queue_scheduled_announcement` carry the saver rule, grants unchanged (authenticated yes, anon no). As written: on `feat/clientele-history-and-follower-announcements`. New `get_my_announcement_followers()` (ids + saved/bell flags only, 5000 cap; authenticated yes, anon no). `send_provider_client_notifications` lets a saver (bookmarks) count as related **only when p_type = 'announcement'**; `queue_scheduled_announcement` (announcements only) accepts savers. Both redefined from live with md5 guards (`feba3ffc…`, `5d606b50…`). Reverses the 2026-10-29 "saving sends nothing" rule for announcements only, on the user's request. Forced-rollback dry run passed 2026-11-18 (announcement to a saver sent 1; promotion to the same saver still refused; grants right). |
+
+### Applied 2026-11-18 (form deadline)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118130000 | `form_deadline` | **APPLIED 2026-11-18** on the user's go-ahead ("yes" to apply both, then merge), via `supabase db query --linked -f` from the main folder. Right before: live max `20261118120000`, lock `(none)`, no open branch above it except `20261118140000` (applied straight after). Verified live: version recorded; both columns; trigger present; SECURITY DEFINER; anon and authenticated can't execute the trigger function. As written: on `feat/forms-send-many-and-deadline`. `provider_form_library.deadline_hours int` (0–336, NULL = none), `booking_intake_forms.due_at timestamptz`, and a BEFORE INSERT trigger `stamp_intake_form_due_at` that sets due_at = booking start (UK time) − deadline_hours. No existing function changed, so all three senders (app, `handle_auto_send_intake_form`, `apply_hold_claimed_side_effects`) get it untouched. Live max `20261118120000` when written; no open branch holds a higher number. Apply before merging the app change (the app writes `deadline_hours`). |
+
+### Applied 2026-11-18 (provider's own profile sections)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118120000 | `provider_profile_sections` | **APPLIED 2026-11-18** on the user's go-ahead (Policies & Info part 3, "yes u should"), via `supabase db query --linked -f` from the main folder. Right before: live max `20261117130000`, lock taken by `feat/policies-own-sections`, no open PR with a higher version (`fix/booking-times-uk-time`'s `20261113140000` is below the frontier). Forced-rollback dry run passed on live (22 providers default, `[]` refused, 40 KB refused; live unchanged after). Verified live: version recorded (live max); `providers.profile_sections jsonb NOT NULL DEFAULT '{}'`; `providers_profile_sections_shape` check present; 0 non-default rows; RLS still on. As written: one additive column plus a shape/size check; no policy or grant change (`providers` uses table-level grants). Applied before the app change merged (the public profile select names the column). Written on `feat/policies-own-sections` (#597). |
+
 ### Applied 2026-11-17 (Beauty Profile style questions)
 
 | Authored version | Name | Status |

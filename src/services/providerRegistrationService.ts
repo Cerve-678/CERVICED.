@@ -123,6 +123,9 @@ export interface ProviderRegistrationData {
   hasCustomGradient: boolean;
   accentColor: string;
   profileTheme: string; // encoded colour-theme key (see src/constants/providerThemes.ts)
+  /** Branding → Business Name Font (providers.brand_font), read only so
+   *  previews letter the name as the profile does. Branding saves it. */
+  brandFont?: string | null;
   logo: string | null;
   /** How the logo sits in each Home card. Null = fill and centre. Cleared
    *  whenever a new logo is picked, since it describes the old image. */
@@ -1084,6 +1087,7 @@ export function providerRowToRegistrationData(
     // NULL round-trips as null — see the field's note on ProviderRegistrationData.
     addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
     backgroundImage: provider.background_image_url ?? null,
+    brandFont: provider.brand_font ?? null,
     isVerified: provider.is_verified ?? false,
     rating: Number(provider.rating) || 0,
     whatsapp: provider.whatsapp_number ?? '',

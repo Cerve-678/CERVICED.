@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readDatabaseLayer } from "./databaseLayerSource";
 
 /**
  * A user should own exactly one provider row, but duplicates have crept in
@@ -15,10 +16,7 @@ import { join } from "node:path";
  * about which row is the real profile.
  */
 describe("owned-provider-row resolution", () => {
-  const source = readFileSync(
-    join(__dirname, "../services/databaseService.ts"),
-    "utf8",
-  );
+  const source = readDatabaseLayer();
   const lines = source.split("\n");
 
   /** Every single-row `providers` query in databaseService, with its filters. */

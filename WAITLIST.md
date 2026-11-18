@@ -3,31 +3,45 @@
 How the in-app waitlist works: a client joins a fully booked service, a freed
 slot is held for them, and they pay for it at checkout. Rewritten for
 `supabase/migrations/20261113210000_waitlist_pays_at_confirm.sql` (10 Nov 2026),
-which replaced the earlier free "claim". The money side is also in
+which replaced the earlier free "claim", and changed by
+`20261118150000_waitlist_auto_and_close_together.sql` (18 Nov: Auto decides the
+first hold too, 10-minute holds, closing when full works with the waitlist). The money side is also in
 `docs/PAYMENTS_AND_LOGIC.md` §2.1. See `BOOKINGS.md` for the booking lifecycle.
 
 ---
 
-## 1. The rules (decided 2026-11-10)
+## 1. The rules (decided 2026-11-10, changed 2026-11-18)
 
-1. A freed slot is **held** for the next matching client for **15 minutes**
-   (`waitlist_hold_duration()`), as an `on_hold` booking.
-2. They **confirm and pay** through the normal checkout. The 15 minutes keep
+1. When a booking is cancelled or a request declined, the provider's
+   **Auto** setting (`automation_settings.autoAcceptWaitlist`) decides what
+   happens (`waitlist_slot_freed()`):
+   - **Auto on:** the slot is **held** for the next matching client for
+     **10 minutes** (`waitlist_hold_duration()`), as an `on_hold` booking.
+   - **Auto off** ("Enable waitlist" alone is the manual waitlist): the
+     provider is told, and the slot comes back to them
+     (`waitlist_released_slots`, reason `cancelled`) to offer from Bookings.
+     It's open to everyone meanwhile, unless the schedule is closed.
+2. They **confirm and pay** through the normal checkout. The 10 minutes keep
    running while they pay; a failed payment can be retried until time is up.
    Nothing is booked until `finalize_checkout()` captures the payment.
-3. **Missing the 15 minutes, or passing, takes them off that waitlist.** They
+3. **Missing the 10 minutes, or passing, takes them off that waitlist.** They
    can rejoin (back of the line).
-4. What happens next is the provider's **"Offer it to the next person
-   automatically"** setting (`automation_settings.autoAcceptWaitlist`):
+4. What happens next is the provider's **Auto** setting again:
    - **On:** the slot is held for the next person in line.
    - **Off:** the slot opens to everyone straight away and comes back to the
      provider (`waitlist_released_slots`), who can offer it to the next in
      line or pick someone.
 5. A provider's own offer ("Offer a time", or offering a released slot) is a
-   15-minute hold too, never an unpaid booking.
+   10-minute hold too, never an unpaid booking.
 6. **Queue order** decides who's first. "Any day" and a date range are equal;
    the dates only decide whether someone matches.
 7. A place lasts until the client leaves, books, or the provider removes them.
+8. **"Close my schedule when fully booked"** can be on with the waitlist. While
+   a schedule is closed because it filled (closure reason `fully_booked`), a
+   freed slot goes to the waitlist only; nobody else can book it
+   (`provider_schedule_closed_to_waitlist()`, and the booking gate lets a
+   waitlist hold through). Any other closure keeps the waitlist out too.
+   Clients can join the waitlist while a schedule is closed.
 
 ## 2. Data
 
@@ -101,4 +115,4 @@ off), with who didn't take them and why (`missed` / `passed`).
   mode after applying the migration: hold, pay, fail and retry, pass, time
   running out, Auto-fill on and off, provider offer.
 - Dates only: no "weekdays" or "evenings" preference.
-- The hold length is fixed at 15 minutes for every provider.
+- The hold length is fixed at 10 minutes for every provider.

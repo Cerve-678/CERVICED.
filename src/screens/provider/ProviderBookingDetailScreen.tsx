@@ -32,6 +32,7 @@ import { composePassOnReason, PASS_ON_REASONS, passRefundRequestOn, type PassOnR
 import { isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
+import { dueByLabel, isOverdue } from '../../features/intake-forms/formDeadline';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
@@ -90,13 +91,12 @@ import IssueRefundSheet, { REFUND_GREEN, REFUND_KEEP, type RefundIssued } from '
 import { formatBookingRef } from '../../features/bookings/presentation';
 import { formsNotYetSent, packsNotYetSent } from '../../features/info-packs/infoPackLogic';
 import { A4_PRINT_SIZE, buildProviderInvoiceHTML } from '../../features/bookings/receipt';
-import { formatPickList } from '../../features/beauty-profile/pickList';
 import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
 import { RESCHEDULE_REPLY_MINUTES } from '../../constants/reschedule';
 import { rescheduleReplyBy } from '../../utils/rescheduleReplyBy';
 import { closeWithinTab } from '../../navigation/closeWithinTab';
-import { hairTreatmentHistory } from '../../features/beauty-profile/options';
+import { ClientBeautyProfileDetails } from '../../features/beauty-profile/ClientBeautyProfileDetails';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -1823,153 +1823,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           color={P.sub}
                         />
                       </TouchableOpacity>
-                      {profileExpanded && (() => {
-                        const catLabel = (label: string) => (
-                          <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 1.2, color: P.sub, opacity: 0.6, marginTop: 14, marginBottom: 6, textTransform: 'uppercase' }}>
-                            {label}
-                          </Text>
-                        );
-                        const chipRow = (items: string[], color?: string) => (
-                          <View style={styles.profileChips}>
-                            {items.map((item, i) => (
-                              <View key={i} style={[styles.profileChip, {
-                                backgroundColor: color ? color + '18' : P.surface,
-                                borderColor: color ? color + '44' : isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.10)',
-                              }]}>
-                                <Text style={[styles.profileChipText, { color: color ?? P.text }]}>{item}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        );
-
-                        const CR = (items: string[], color?: string) => chipRow(items, color);
-                        const hairHistory = hairTreatmentHistory(clientProfile.treatmentHistory);
-
-                        const hasSkin = (clientProfile.skinType.length > 0) || (clientProfile.skinTone) || (clientProfile.skinConcerns.length > 0) || (clientProfile.sensitiveAreas.length > 0);
-                        const hasHair = (clientProfile.hairType.length > 0) || (clientProfile.scalpCondition.length > 0) || (clientProfile.hairGoals.length > 0) || (hairHistory.length > 0);
-                        const hasNails = (clientProfile.nailLength.length > 0) || (clientProfile.nailShape.length > 0)
-                          || (clientProfile.nailCondition.length > 0) || (clientProfile.nailService.length > 0)
-                          || (clientProfile.nailStyle.length > 0) || (clientProfile.nailColours.length > 0);
-                        const hasLashesBrows = (clientProfile.lashStyle.length > 0) || (clientProfile.lashStatus) || (clientProfile.browStyle.length > 0) || (clientProfile.browCondition.length > 0);
-                        const hasMakeup = (clientProfile.makeupCoverage.length > 0) || (clientProfile.makeupFinish.length > 0) || (clientProfile.makeupEyes.length > 0) || (clientProfile.makeupLips.length > 0);
-                        const hasStyle = clientProfile.styleVibe.length > 0;
-                        const hasAlerts = (clientProfile.allergies.length > 0) || (clientProfile.medicalNotes);
-
-                        return (
-                          <>
-                            {/* ── HEALTH & ALERTS (always first) ── */}
-                            {hasAlerts && catLabel('Health & Alerts')}
-                            {clientProfile.allergies.length > 0 && (
-                              <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                <Text style={[styles.rowLabel, { color: '#FF9500' }]}>⚠ Allergies</Text>
-                                {CR(clientProfile.allergies, '#FF9500')}
-                              </View>
-                            )}
-                            {clientProfile.medicalNotes ? (
-                              <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                <Text style={[styles.rowLabel, { color: '#FF3B30' }]}>⚕ Medical notes</Text>
-                                <Text style={[styles.rowValue, { color: P.text, flex: 1, textAlign: 'left', marginLeft: 8 }]}>{clientProfile.medicalNotes}</Text>
-                              </View>
-                            ) : null}
-
-                            {/* ── SKIN ── */}
-                            {hasSkin && (
-                              <>
-                                {catLabel('Skin')}
-                                {clientProfile.skinType.length > 0 ? <Row label="Skin type" value={formatPickList(clientProfile.skinType)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.skinTone ? <Row label="Skin tone" value={clientProfile.skinTone} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.skinConcerns.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Skin concerns</Text>
-                                    {CR(clientProfile.skinConcerns)}
-                                  </View>
-                                )}
-                                {clientProfile.sensitiveAreas.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Sensitive areas</Text>
-                                    {CR(clientProfile.sensitiveAreas)}
-                                  </View>
-                                )}
-                              </>
-                            )}
-
-                            {/* ── HAIR ── */}
-                            {hasHair && (
-                              <>
-                                {catLabel('Hair')}
-                                {clientProfile.hairType.length > 0 ? <Row label="Hair type" value={formatPickList(clientProfile.hairType)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.scalpCondition.length > 0 ? <Row label="Scalp condition" value={formatPickList(clientProfile.scalpCondition)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {hairHistory.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Treatment history</Text>
-                                    {CR(hairHistory)}
-                                  </View>
-                                )}
-                                {clientProfile.hairGoals.length > 0 && (
-                                  <View style={[styles.profileChipRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: rowDiv }]}>
-                                    <Text style={[styles.rowLabel, { color: P.text }]}>Hair goals</Text>
-                                    {CR(clientProfile.hairGoals)}
-                                  </View>
-                                )}
-                              </>
-                            )}
-
-                            {/* ── NAILS ── */}
-                            {hasNails && (
-                              <>
-                                {catLabel('Nails')}
-                                {clientProfile.nailCondition.length > 0 ? <Row label="Natural nails" value={formatPickList(clientProfile.nailCondition)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.nailService.length > 0 ? <Row label="Usually gets" value={formatPickList(clientProfile.nailService)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.nailLength.length > 0 ? <Row label="Preferred length" value={formatPickList(clientProfile.nailLength)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.nailShape.length > 0 ? <Row label="Preferred shape" value={formatPickList(clientProfile.nailShape)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.nailStyle.length > 0 ? <Row label="Looks" value={formatPickList(clientProfile.nailStyle)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.nailColours.length > 0 ? <Row label="Colours" value={formatPickList(clientProfile.nailColours)} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── LASHES & BROWS ── */}
-                            {hasLashesBrows && (
-                              <>
-                                {catLabel('Lashes & Brows')}
-                                {clientProfile.lashStyle.length > 0 ? <Row label="Lash style" value={formatPickList(clientProfile.lashStyle)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.lashStatus ? <Row label="Lash status" value={clientProfile.lashStatus} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.browStyle.length > 0 ? <Row label="Brow style" value={formatPickList(clientProfile.browStyle)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.browCondition.length > 0 ? <Row label="Brow condition" value={formatPickList(clientProfile.browCondition)} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── MAKEUP ── */}
-                            {hasMakeup && (
-                              <>
-                                {catLabel('Makeup')}
-                                {clientProfile.makeupCoverage.length > 0 ? <Row label="Coverage" value={formatPickList(clientProfile.makeupCoverage)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupFinish.length > 0 ? <Row label="Finish" value={formatPickList(clientProfile.makeupFinish)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupEyes.length > 0 ? <Row label="Eye style" value={formatPickList(clientProfile.makeupEyes)} textColor={P.text} divColor={rowDiv} /> : null}
-                                {clientProfile.makeupLips.length > 0 ? <Row label="Lip preference" value={formatPickList(clientProfile.makeupLips)} textColor={P.text} divColor={rowDiv} /> : null}
-                              </>
-                            )}
-
-                            {/* ── STYLE ── */}
-                            {hasStyle && (
-                              <>
-                                {catLabel('Style')}
-                                <Row label="Style vibe" value={formatPickList(clientProfile.styleVibe)} textColor={P.text} divColor={rowDiv} />
-                              </>
-                            )}
-
-                            {/* ── CONSENT ── */}
-                            {catLabel('Consent')}
-                            {(
-                              <Row
-                                label="Photography consent"
-                                value={clientProfile.photographyConsent ? 'Yes' : 'No'}
-                                textColor={P.text} divColor={rowDiv} last
-                                valueColor={clientProfile.photographyConsent ? '#34C759' : '#FF3B30'}
-                              />
-                            )}
-                          </>
-                        );
-                      })()}
+                      {profileExpanded && (
+                        <ClientBeautyProfileDetails
+                          profile={clientProfile}
+                          text={P.text}
+                          sub={P.sub}
+                          surface={P.surface}
+                          divider={rowDiv}
+                          isDark={isDarkMode}
+                        />
+                      )}
                     </View>
                     <Perf color={perf} notch={P.bg} edge={cardBorder} />
                   </>
@@ -2050,7 +1913,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           <Text style={[styles.intakeFormSub, { color: P.sub }]}>
                             {done
                               ? `Answered${form.completedAt ? ` ${formatShortDayDate(new Date(form.completedAt))}` : ''} · tap to see the answers`
-                              : `Sent ${formatShortDayDate(new Date(form.sentAt))} · not answered yet`}
+                              : isOverdue(form.dueAt, form.status, Date.now())
+                                ? `Sent ${formatShortDayDate(new Date(form.sentAt))} · was due ${dueByLabel(form.dueAt)}`
+                                : `Sent ${formatShortDayDate(new Date(form.sentAt))} · ${form.dueAt ? `due ${dueByLabel(form.dueAt)}` : 'not answered yet'}`}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -2396,6 +2261,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             colors={{ card: P.card, text: P.text, sub: P.sub, border: P.border, accent: P.accent, onAccent: P.ice }}
             showConfirm={showConfirm}
             showAlert={showAlert}
+            // Charging, refunds and disputes live in Payments & payouts; the
+            // booking just says where things stand and links there.
+            onOpenPayments={() => navigation.navigate('Payments', { feeBookingId: booking.id || bookingId })}
           />
         )}
 
@@ -4257,31 +4125,6 @@ const styles = StyleSheet.create({
   dialogBtnText: {
     fontSize: 17,
     fontWeight: '400',
-  },
-
-  // ── Client profile chips ──
-  profileChipRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 10,
-    gap: 8,
-  },
-  profileChips: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'flex-end',
-  },
-  profileChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  profileChipText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
 
   // ── Notes section ──

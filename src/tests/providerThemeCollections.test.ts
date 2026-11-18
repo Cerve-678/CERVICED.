@@ -1,6 +1,7 @@
 // Pins the colour collections and the hero finish added to Branding & Style
 // on 2026-11-03: every set sits in a listed collection, the finish survives a
 // save and reload inside profile_theme, and keys saved before it still read.
+import { DEFAULT_CUSTOM_CHOICES } from '../constants/customPageStyle';
 import {
   DEFAULT_PROVIDER_THEME,
   NEUTRAL_CARD,
@@ -88,14 +89,14 @@ describe('hero finish in profile_theme', () => {
       finish: 'split',
       shape: 'rounded',
       pageStyle: 'classic',
-      policyLook: 'melt',
+      policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES,
     });
   });
 
   it('reads keys saved before the finish existed as a blend', () => {
-    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
-    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
-    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
+    expect(parseThemeKey('clay|#F8ECF0')).toEqual({ base: 'clay', sheet: '#F8ECF0', finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
+    expect(parseThemeKey('app')).toEqual({ base: 'app', sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
+    expect(parseThemeKey(null)).toEqual({ base: null, sheet: SHEET_BG, finish: 'blend', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
   });
 
   it('round-trips Sheen, which builds before it read as a blend', () => {
@@ -105,7 +106,7 @@ describe('hero finish in profile_theme', () => {
       finish: 'sheen',
       shape: 'rounded',
       pageStyle: 'classic',
-      policyLook: 'melt',
+      policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES,
     });
   });
 
@@ -116,7 +117,7 @@ describe('hero finish in profile_theme', () => {
   it('keeps a custom set readable with a finish on the end', () => {
     const base = encodeCustomTheme('#1D4A3C', '#FCFBFA', '#A98235');
     const key = encodeThemeKey(base, '#FBF6EC', 'solid');
-    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt' });
+    expect(parseThemeKey(key)).toEqual({ base, sheet: '#FBF6EC', finish: 'solid', shape: 'rounded', pageStyle: 'classic', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES });
     expect(resolveProviderTheme(key).accent).toBe('#A98235');
   });
 
@@ -192,7 +193,7 @@ describe('card shape in profile_theme', () => {
       finish: 'glow',
       shape: 'square',
       pageStyle: 'classic',
-      policyLook: 'melt',
+      policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES,
     });
   });
 

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 const readScreen = (name: string): string =>
   fs.readFileSync(
@@ -34,10 +35,7 @@ describe('client screen performance contracts', () => {
 
   it('uses a lean public projection for Explore portfolio cards', () => {
     const source = readScreen('ExploreScreen');
-    const database = fs.readFileSync(
-      path.join(__dirname, '..', 'services', 'databaseService.ts'),
-      'utf8',
-    );
+    const database = readDatabaseLayer();
 
     expect(source).toContain('getExplorePortfolioItems(category, DISCOVER_FIRST_PORTFOLIO_POOL)');
     expect(database).toContain('const EXPLORE_PORTFOLIO_SELECT');
@@ -125,10 +123,7 @@ describe('client screen performance contracts', () => {
   });
 
   it('uses an explicit public projection for provider discovery lists', () => {
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'services', 'databaseService.ts'),
-      'utf8',
-    );
+    const source = readDatabaseLayer();
     const providerListSection = source.slice(
       source.indexOf('const PUBLIC_PROVIDER_SUMMARY_SELECT'),
       source.indexOf('export async function getProviderPriceRanges'),
