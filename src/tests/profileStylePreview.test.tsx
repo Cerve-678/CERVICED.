@@ -20,6 +20,7 @@ function renderPreview(
   styleKey: (typeof PAGE_STYLES)[number]['key'],
   brandFont = 'default',
   content?: React.ComponentProps<typeof ProfileStylePreview>['content'],
+  full = false,
 ) {
   return render(
     <ProfileStylePreview
@@ -37,12 +38,13 @@ function renderPreview(
       location="Peckham"
       content={content}
       rating="5.0"
+      full={full}
     />,
   );
 }
 
 describe('Branding preview', () => {
-  it('shows their own About, categories and services instead of grey bars', () => {
+  it('shows their own About and categories, with outline cards instead of their services', () => {
     renderPreview('stripes', 'default', {
       about: 'Soft lash sets from a quiet studio.',
       categories: ['Lash extensions', 'Brows'],
@@ -50,9 +52,8 @@ describe('Branding preview', () => {
     });
     expect(screen.getByText('Soft lash sets from a quiet studio.')).toBeTruthy();
     expect(screen.getByText('Lash extensions')).toBeTruthy();
-    expect(screen.getByText('Classic full set')).toBeTruthy();
-    expect(screen.getByText('2h · £65')).toBeTruthy();
-    expect(screen.getByText('45m · £40.50')).toBeTruthy();
+    expect(screen.queryByText('Classic full set')).toBeNull();
+    expect(screen.queryByText('2h · £65')).toBeNull();
   });
 
   it.each(PAGE_STYLES.map(style => style.key))('draws the %s profile with the name and every key heading', key => {
@@ -159,7 +160,7 @@ describe('the 2026-11-14 heroes', () => {
     expect(screen.queryByLabelText(/^Rated /)).toBeNull();
   });
 
-  it('shows every category as the profile\'s pills, and switches services on tap', () => {
+  it('in Info Reg, shows every category as the profile\'s pills, and switches services on tap', () => {
     renderPreview('stripes', 'default', {
       about: '',
       categories: ['Lashes', 'Brows', 'Lash lifts and tints'],
@@ -169,7 +170,7 @@ describe('the 2026-11-14 heroes', () => {
         Brows: [{ name: 'Brow lamination', minutes: 45, price: 35 }],
         'Lash lifts and tints': [{ name: 'Lift', minutes: 60, price: 40 }],
       },
-    });
+    }, true);
     expect(screen.getByText('Lash lifts and tints')).toBeTruthy();
     expect(screen.getByText('Classic set')).toBeTruthy();
     fireEvent(screen.getByText('Brows'), 'pressOut');
