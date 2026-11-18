@@ -321,7 +321,7 @@ export const TodayBookingCards = React.memo(function TodayBookingCards({
               style={[
                 styles.bookingCard,
                 lead
-                  ? [styles.bookingCardLead, { backgroundColor: palette.accent, borderColor: palette.accent }]
+                  ? { backgroundColor: palette.accent, borderColor: palette.accent }
                   : { backgroundColor: palette.card, borderColor: palette.border },
               ]}
               onPress={() => { tap(); onOpenBooking(slot.booking); }}
@@ -561,18 +561,15 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 16,
     paddingHorizontal: 14,
+    // A light shadow that ends inside the track's 14pt bottom padding: a
+    // bigger one is cut off by the scroller and shows as a hard dark band
+    // (owner, 2026-11-18: remove the excess shadow). The first card stands
+    // out by its accent fill, not a heavier shadow.
     shadowColor: '#B87E92',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  bookingCardLead: {
-    shadowColor: '#26201E',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardTag: {
     fontFamily: 'Jura-VariableFont_wght',
