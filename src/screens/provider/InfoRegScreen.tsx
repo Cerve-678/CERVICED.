@@ -41,6 +41,12 @@ import * as Haptics from 'expo-haptics';
 // Icon imports
 import { BellIcon } from '../../components/IconLibrary';
 import CategoryTabPill from '../../components/CategoryTabPill';
+import { ProfileStylePreview } from '../../features/providers/ProfileStylePreview';
+import { heroLabelsFrom, previewContentFrom } from '../../features/providers/previewContent';
+import { policyImageEdges, policyImageUrls } from '../../features/providers/policyImages';
+import { heroPhotos } from '../../features/providers/heroPhotos';
+import { getPageStyle, heroPhotoPickLimit } from '../../constants/pageStyles';
+import { DEFAULT_PROVIDER_FONT } from '../../constants/providerFonts';
 import AddressPicker from '../../components/AddressPicker';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -2225,12 +2231,11 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     }
   }, [categoryNames, selectedPreviewCategory]);
 
-  // Mock rating for preview — this is a template/showcase view, not a live
-  // reflection of the provider's real current reviews, so the hero rating
-  // row stays a mock 5.0 rather than `providerData.rating`, and the Reviews
-  // card below always renders (matching ProviderProfileScreen) but
-  // deliberately shows no review data.
-  const mockRating = 5.0;
+  // Their real rating (providers.rating), exactly as the profile prints it —
+  // a made-up 5.0 here showed a new provider stars they don't have yet. The
+  // Reviews card below still always renders (matching ProviderProfileScreen)
+  // but shows no review data.
+  const previewRating = Number(providerData.rating) || 0;
   const PP = resolveProviderTheme(providerData.profileTheme);
   const cardBg = withAlpha(PP.card, PP.isDark ? 0.5 : 0.9);
   const cardBlurTint = PP.isDark ? ('dark' as const) : ('light' as const);
@@ -2262,6 +2267,196 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     });
     return cols;
   }, [portfolio, PREVIEW_PORTFOLIO_COL_W]);
+
+  // Contact, Portfolio and Venue: the same in both previews below.
+  const extraSections = (
+    <>
+              {/* Contact Section */}
+              <BlurView
+                intensity={cardBlurIntensity}
+                tint={cardBlurTint}
+                style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+              >
+                <LinearGradient
+                  colors={cardHighlightColors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.previewCardHighlight}
+                />
+                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
+                {/* Mirrors get_public_provider_address: a salon/studio on
+                    "Always visible" shows its full address to anyone signed in, so the
+                    preview does too. Everyone else shows the area. */}
+                {(() => {
+                  const publicAddress =
+                    providerData.addressReleasePolicy === 'always'
+                    && (providerData.businessType === 'salon' || providerData.businessType === 'studio')
+                      ? providerData.fullAddress.trim()
+                      : '';
+                  const shown = publicAddress || providerData.location;
+                  return shown ? (
+                    <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                      <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
+                      <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={publicAddress ? 2 : 1}>{publicAddress ? `${shown} ›` : shown}</Text>
+                    </View>
+                  ) : null;
+                })()}
+                {providerData.phone ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Message ›</Text>
+                  </View>
+                ) : null}
+                {providerData.whatsapp ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>WhatsApp</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Open ›</Text>
+                  </View>
+                ) : null}
+                {providerData.email ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Email</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Send ›</Text>
+                  </View>
+                ) : null}
+                {providerData.instagram ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Instagram</Text>
+                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram} ›</Text>
+                  </View>
+                ) : null}
+                {providerData.website ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Website</Text>
+                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Visit ›</Text>
+                  </View>
+                ) : null}
+                {providerData.tiktok ? (
+                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>TikTok</Text>
+                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.tiktok} ›</Text>
+                  </View>
+                ) : null}
+                {providerData.externalBookingUrl ? (
+                  <View style={styles.previewContactRow}>
+                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Booking Link</Text>
+                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.externalBookingUrl}</Text>
+                  </View>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.previewContactButton, { backgroundColor: accentColor }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.previewContactButtonText}>Get In Touch</Text>
+                </TouchableOpacity>
+              </BlurView>
+
+              {/* Portfolio Section — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
+              {portfolio.length > 0 && (
+                <View style={styles.previewPortfolioSection}>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Portfolio</Text>
+                  <View style={styles.previewPortfolioColumns}>
+                    {portfolioColumns.map((column, colIdx) => (
+                      <View key={`preview-pcol-${colIdx}`} style={styles.previewPortfolioColumn}>
+                        {column.map(item => (
+                          <View key={item.id} style={styles.previewPortfolioTile}>
+                            <Image
+                              source={{ uri: item.image_url }}
+                              style={{ width: '100%', height: item.tileHeight }}
+                              resizeMode="cover"
+                              fadeDuration={0}
+                            />
+                            {item.caption ? (
+                              <View style={styles.previewPortfolioCaptionWrap}>
+                                <Text style={styles.previewPortfolioCaption} numberOfLines={1}>{item.caption}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Venue — a horizontal strip under its own label, matching
+                  ProviderAdditionalInfoSection's "Venue" block on the real
+                  profile. Kept out of the masonry above so the preview shows
+                  the provider where these photos actually land. */}
+              {venuePhotos.length > 0 && (
+                <View style={styles.previewPortfolioSection}>
+                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Venue</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.previewVenueStrip}
+                  >
+                    {venuePhotos.map(item => (
+                      <View key={item.id} style={styles.previewVenueTile}>
+                        <Image
+                          source={{ uri: item.image_url }}
+                          style={styles.previewVenueImage}
+                          resizeMode="cover"
+                          fadeDuration={0}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+    </>
+  );
+
+  // Everyone but a link-only provider (whose page is different) sees their
+  // profile in the page style Branding picked, with everything they've filled
+  // in — the same pieces the profile itself is drawn from.
+  if (!isLinkOnly) {
+    const pageStyleKey = parseThemeKey(providerData.profileTheme).pageStyle;
+    const pickLimit = heroPhotoPickLimit(getPageStyle(pageStyleKey));
+    const heroUris = (pickLimit > 0 ? heroPhotos(portfolio, pickLimit) : portfolio.slice(0, 3)).map(item => item.image_url);
+    const labels = heroLabelsFrom(providerData);
+    return (
+      <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
+        <SafeAreaProvider>
+        <WindowControlsInsetProvider>
+        <FocusAwareStatusBar barStyle={heroIsDark ? 'light-content' : 'dark-content'} />
+        <View style={{ flex: 1, backgroundColor: PP.bg }}>
+          <ProfileStylePreview
+            full
+            themeKey={providerData.profileTheme}
+            gradient={providerData.hasCustomGradient ? providerData.gradient : [PP.hero, PP.bg]}
+            accent={accentColor}
+            backgroundImage={providerData.backgroundImage}
+            brandFont={providerData.brandFont ?? DEFAULT_PROVIDER_FONT}
+            name={providerData.providerName || 'Your business'}
+            logoUri={providerData.logo || null}
+            logoFraming={providerData.logoFraming ?? null}
+            metaLabels={labels.metaLabels}
+            pillLabels={labels.pillLabels}
+            kicker={labels.kicker}
+            location={labels.location}
+            photoUris={heroUris}
+            content={previewContentFrom(providerData)}
+            policyPages={policyImageUrls(providerData.bookingPolicies)}
+            policyEdges={policyImageEdges(providerData.bookingPolicies)}
+            rating={String(previewRating)}
+          >
+            {extraSections}
+          </ProfileStylePreview>
+          <View style={[styles.previewHeader, styles.previewHeaderFloating, { paddingTop: previewTopPad + 8 }]} pointerEvents="box-none">
+            <TouchableOpacity style={styles.previewBackButton} onPress={() => { tapLight(); onClose(); }}>
+              <Text style={styles.previewBackText}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.previewBadge}>
+              <Text style={styles.previewBadgeText}>PREVIEW</Text>
+            </View>
+          </View>
+        </View>
+        </WindowControlsInsetProvider>
+        </SafeAreaProvider>
+      </Modal>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -2368,7 +2563,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     <Text key={star} style={styles.previewStar}>★</Text>
                   ))}
                 </View>
-                <Text style={[styles.previewRatingText, { color: heroText }, heroIsDark && styles.previewHeroTextShadow]}>{mockRating}</Text>
+                <Text style={[styles.previewRatingText, { color: heroText }, heroIsDark && styles.previewHeroTextShadow]}>{previewRating}</Text>
               </View>
               )}
 
@@ -2454,7 +2649,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   />
                   <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
                   <ExpandableAboutText
-                    text={providerData.aboutText || 'Your business description will appear here...'}
+                    text={providerData.aboutText || 'A short summary of your business will appear here.'}
                     textStyle={[styles.previewAboutText, { color: PP.sub }]}
                     linkStyle={styles.previewMoreButton}
                     linkTextStyle={[styles.previewMoreButtonText, { color: PP.text }]}
@@ -2605,139 +2800,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               </BlurView>
               )}
 
-              {/* Contact Section */}
-              <BlurView
-                intensity={cardBlurIntensity}
-                tint={cardBlurTint}
-                style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-              >
-                <LinearGradient
-                  colors={cardHighlightColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.previewCardHighlight}
-                />
-                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
-                {/* Mirrors get_public_provider_address: a salon/studio on
-                    "Always visible" shows its full address to anyone signed in, so the
-                    preview does too. Everyone else shows the area. */}
-                {(() => {
-                  const publicAddress =
-                    providerData.addressReleasePolicy === 'always'
-                    && (providerData.businessType === 'salon' || providerData.businessType === 'studio')
-                      ? providerData.fullAddress.trim()
-                      : '';
-                  const shown = publicAddress || providerData.location;
-                  return shown ? (
-                    <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                      <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
-                      <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={publicAddress ? 2 : 1}>{publicAddress ? `${shown} ›` : shown}</Text>
-                    </View>
-                  ) : null;
-                })()}
-                {providerData.phone ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Message ›</Text>
-                  </View>
-                ) : null}
-                {providerData.whatsapp ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>WhatsApp</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Open ›</Text>
-                  </View>
-                ) : null}
-                {providerData.email ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Email</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Send ›</Text>
-                  </View>
-                ) : null}
-                {providerData.instagram ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Instagram</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram} ›</Text>
-                  </View>
-                ) : null}
-                {providerData.website ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Website</Text>
-                    <Text style={[styles.previewContactAction, { color: PP.text }]}>Visit ›</Text>
-                  </View>
-                ) : null}
-                {providerData.tiktok ? (
-                  <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>TikTok</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.tiktok} ›</Text>
-                  </View>
-                ) : null}
-                {providerData.externalBookingUrl ? (
-                  <View style={styles.previewContactRow}>
-                    <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Booking Link</Text>
-                    <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.externalBookingUrl}</Text>
-                  </View>
-                ) : null}
-                <TouchableOpacity
-                  style={[styles.previewContactButton, { backgroundColor: accentColor }]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.previewContactButtonText}>Get In Touch</Text>
-                </TouchableOpacity>
-              </BlurView>
-
-              {/* Portfolio Section — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
-              {portfolio.length > 0 && (
-                <View style={styles.previewPortfolioSection}>
-                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Portfolio</Text>
-                  <View style={styles.previewPortfolioColumns}>
-                    {portfolioColumns.map((column, colIdx) => (
-                      <View key={`preview-pcol-${colIdx}`} style={styles.previewPortfolioColumn}>
-                        {column.map(item => (
-                          <View key={item.id} style={styles.previewPortfolioTile}>
-                            <Image
-                              source={{ uri: item.image_url }}
-                              style={{ width: '100%', height: item.tileHeight }}
-                              resizeMode="cover"
-                              fadeDuration={0}
-                            />
-                            {item.caption ? (
-                              <View style={styles.previewPortfolioCaptionWrap}>
-                                <Text style={styles.previewPortfolioCaption} numberOfLines={1}>{item.caption}</Text>
-                              </View>
-                            ) : null}
-                          </View>
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Venue — a horizontal strip under its own label, matching
-                  ProviderAdditionalInfoSection's "Venue" block on the real
-                  profile. Kept out of the masonry above so the preview shows
-                  the provider where these photos actually land. */}
-              {venuePhotos.length > 0 && (
-                <View style={styles.previewPortfolioSection}>
-                  <Text style={[styles.previewSectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>Venue</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.previewVenueStrip}
-                  >
-                    {venuePhotos.map(item => (
-                      <View key={item.id} style={styles.previewVenueTile}>
-                        <Image
-                          source={{ uri: item.image_url }}
-                          style={styles.previewVenueImage}
-                          resizeMode="cover"
-                          fadeDuration={0}
-                        />
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              {extraSections}
             </View>
             </View>
           </ScrollView>
@@ -4941,7 +5004,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 ref={registerField('about')}
               >
-                <Text style={styles.inputLabel}>Description</Text>
+                <Text style={styles.inputLabel}>About your business</Text>
+                <Text style={styles.inputHint}>A short summary clients read first on your profile.</Text>
                 <View style={[styles.inputBlurMultiline, styles.profileInputBox]}>
                   {/* Opens the keyboard on a real tap only, not when a scroll
                       down the page happens to start on top of it. */}
@@ -4951,7 +5015,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     onChangeText={(text) =>
                       setProviderData({ ...providerData, aboutText: text })
                     }
-                    placeholder="Tell clients about your services, policies, deposit requirements..."
+                    placeholder="Who you are, what you're known for and what clients can expect when they book with you."
                     placeholderTextColor={chrome.fg(0.4)}
                     multiline
                     numberOfLines={6}
@@ -5307,7 +5371,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View style={styles.servicesSection}>
                 <View style={styles.servicesSectionHeader}>
-                  <Text style={styles.sectionTitleNoCard}>Your Services</Text>
+                  <Text style={styles.sectionTitleNoCard}>Your Categories</Text>
                   <View style={styles.servicesHeaderButtons}>
                     {/* New add-ons start here, beside + Add Category. Hidden
                         when the add-on list didn't load (a save mustn't
@@ -5343,9 +5407,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <View style={[styles.serviceTypeSwitch, { borderBottomColor: chrome.fg(0.15) }]}>
                       {serviceTypes.map(serviceType => {
                         const active = !addOnsView && serviceType === selectedServiceType;
-                        const count = Object.entries(providerData.categories)
-                          .filter(([name]) => typeOfCategory(name) === serviceType)
-                          .reduce((total, [, list]) => total + list.length, 0);
+                        // One type: the tab is the categories you add, so it
+                        // says Categories and counts them. Several types: each
+                        // tab counts the services under it, as before.
+                        const ofType = Object.entries(providerData.categories)
+                          .filter(([name]) => typeOfCategory(name) === serviceType);
+                        const count = serviceTypes.length > 1
+                          ? ofType.reduce((total, [, list]) => total + list.length, 0)
+                          : ofType.length;
                         return (
                           <TouchableOpacity
                             key={serviceType}
@@ -5365,7 +5434,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 },
                               ]}
                             >
-                              {serviceTypes.length > 1 ? serviceType : 'Services'}
+                              {serviceTypes.length > 1 ? serviceType : 'Categories'}
                               {count > 0 ? `  ${count}` : ''}
                             </Text>
                           </TouchableOpacity>
@@ -8076,6 +8145,7 @@ const makeStyles = (P: InfoRegChromeTheme, screenWidth: number, screenHeight: nu
     right: 0,
     bottom: 0,
   },
+  previewHeaderFloating: { position: 'absolute', top: 0, left: 0, right: 0 },
   previewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

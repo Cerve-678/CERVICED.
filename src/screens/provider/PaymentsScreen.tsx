@@ -261,7 +261,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
         >
           {toast && <Toast message={toast.message} type={toast.type} />}
 
-          <ProviderStripePayments stripeReturn={route?.params?.stripeReturn} setup={setupSummary}>
+          <ProviderStripePayments stripeReturn={route?.params?.stripeReturn} setup={setupSummary} openFeeFor={route?.params?.feeBookingId}>
           {loading ? <ActivityIndicator color={C.accent} size="large" /> : <>
           {loadFailed && <Toast message="Payment settings could not load. Reopen this screen before saving." type="error" />}
 

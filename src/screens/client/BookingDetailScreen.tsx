@@ -27,6 +27,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { canDisputeNoShow, hasDirectionsDestination, isAddressPending, isMobileBooking, PaymentStatus, type RefundRequest } from '../../types/booking';
 import { directionsUrlFor } from '../../utils/mapsLink';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
+import { dueByLabel } from '../../features/intake-forms/formDeadline';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import { isDeclinedRequest } from '../../features/bookings/statusPresentation';
 import { AnonymousReviewToggle } from '../../features/bookings/AnonymousReviewToggle';
@@ -1065,7 +1066,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{form.title}</Text>
                       <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>
-                        {completed ? 'Submitted — tap to review your answers' : 'Your provider needs this before your appointment'}
+                        {completed ? 'Submitted — tap to review your answers'
+                          : dueByLabel(form.dueAt) ? `Please fill in by ${dueByLabel(form.dueAt)}` : 'Your provider needs this before your appointment'}
                       </Text>
                     </View>
                     <View style={[st.todoBadge, { backgroundColor: completed ? '#34C759' : C.accent }]}>
