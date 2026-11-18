@@ -42,6 +42,7 @@ import {
   Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  type ViewInstance,
 } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 // Gesture-handler's TouchableOpacity rather than react-native's, for the same
@@ -56,7 +57,7 @@ import ProfileHeroBackdrop from '../../components/ProfileHeroBackdrop';
 import { LogoCircle } from '../../components/FramedLogo';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -108,6 +109,10 @@ import type { BookingWithAddOns } from '../../types/database';
 import { ProviderProfileQrSheet } from '../../components/ProviderProfileQrSheet';
 import { STRIPE_CONNECT_PAYOUTS_ENABLED } from '../../constants/featureFlags';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { CoachMarkTour, type CoachMarkStep } from '../../components/CoachMarkTour';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
+import { resolveTourForUser, recordTourSeen } from '../../services/tourService';
+import { myProfileTourSteps, type MyProfileTourKey } from '../../features/providers/myProfileTour';
 import { useDarkTopArea } from '../../contexts/StatusBarTintContext';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -1220,6 +1225,63 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
   }, [navigation, providerSlug, goLive?.isLive]);
 
+  // ── First-visit spotlight tour ─────────────────────────────────────────
+  // Rings what's at the top of My Profile when it opens. A target that isn't
+  // drawn, or is off screen (the go-live card once it has moved down the
+  // page), is skipped by CoachMarkTour itself. My Profile stays mounted as a
+  // tab and the tour is a full-screen Modal, so it waits for focus, the same
+  // as Home's tour.
+  const isFocused = useIsFocused();
+  const [showTour, setShowTour] = useState(false);
+  const [tourStepKeys, setTourStepKeys] = useState<string[] | null>(null);
+  const tourCheckedRef = useRef(false);
+  const tourTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tourLogoRef = useRef<ViewInstance>(null);
+  const tourEditRef = useRef<ViewInstance>(null);
+  const tourShortcutsRef = useRef<ViewInstance>(null);
+  const tourTabsRef = useRef<ViewInstance>(null);
+  const tourStatusRef = useRef<ViewInstance>(null);
+  const tourIsLive = goLive?.isLive === true;
+  const tourHasQr = !!providerId;
+  const tourSteps = useMemo<CoachMarkStep[]>(() => {
+    const refs: Record<MyProfileTourKey, React.RefObject<ViewInstance | null>> = {
+      logo: tourLogoRef,
+      edit: tourEditRef,
+      shortcuts: tourShortcutsRef,
+      tabs: tourTabsRef,
+      status: tourStatusRef,
+    };
+    return myProfileTourSteps({ isLive: tourIsLive, hasQrButton: tourHasQr }).map(step => ({
+      ...step,
+      target: { ref: refs[step.key] },
+    }));
+  }, [tourIsLive, tourHasQr]);
+  const profileReady = !!providerData && !isLoading;
+  useEffect(() => {
+    // Only once the page itself is drawn: before that there is nothing to
+    // ring, and the loading shell would be what got spotlighted.
+    if (tourCheckedRef.current || !user?.id || !profileReady) return;
+    tourCheckedRef.current = true;
+    const userId = user.id;
+    void (async () => {
+      const decision = await resolveTourForUser(TOUR_KEYS.PROVIDER_MY_PROFILE, tourSteps, userId);
+      if (!decision.show) return;
+      setTourStepKeys(decision.steps.map(step => step.key));
+      // Recorded on show, not on finish — see tourService.
+      void recordTourSeen(TOUR_KEYS.PROVIDER_MY_PROFILE, userId, decision.stampVersion);
+      // Lets the header and the go-live card finish laying out first.
+      tourTimerRef.current = setTimeout(() => setShowTour(true), 700);
+    })();
+  }, [user?.id, profileReady, tourSteps]);
+  useEffect(() => () => {
+    if (tourTimerRef.current) clearTimeout(tourTimerRef.current);
+  }, []);
+  const visibleTourSteps = useMemo(
+    () => (tourStepKeys ? tourSteps.filter(step => tourStepKeys.includes(step.key)) : []),
+    [tourSteps, tourStepKeys],
+  );
+  const finishTour = useCallback(() => setShowTour(false), []);
+
   // Today's two cards. They haptick on their own presses, so these only
   // navigate.
   const todaySchedule = useTodaySchedule(providerId);
@@ -1678,7 +1740,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           steps stay one tap away rather than always occupying the
           top of the screen for a provider who's already live. */}
       {headline && goLiveWithHealth ? (
-        <View style={styles.dashCardShadow}>
+        <View ref={tourStatusRef} collapsable={false} style={styles.dashCardShadow}>
           <BlurView
             intensity={cardBlurIntensity}
             tint={cardBlurTint}
@@ -1889,6 +1951,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               </View>
 
               <TouchableOpacity
+                ref={tourLogoRef}
                 onPress={handleOpenClientView}
                 disabled={!providerSlug}
                 activeOpacity={0.8}
@@ -1949,6 +2012,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               {/* Ink pill, like every CTA in the reference — and it has to
                   invert over a dark hero photo to stay the loud one. */}
               <TouchableOpacity
+                ref={tourEditRef}
                 style={[styles.primaryAction, { backgroundColor: heroIsDark ? '#FFFFFF' : '#101010' }]}
                 onPress={handleEditProfile}
                 activeOpacity={0.85}
@@ -1959,6 +2023,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   EDIT PROFILE
                 </Text>
               </TouchableOpacity>
+              {/* Grouped only so the tour can ring all three at once; same
+                  gap as the row, so nothing moves. */}
+              <View ref={tourShortcutsRef} collapsable={false} style={styles.circleGroup}>
               <TouchableOpacity
                 style={[styles.circleAction, { backgroundColor: withAlpha(PP.card, 0.9), borderColor: PP.border }]}
                 onPress={handleEditSchedule}
@@ -1988,6 +2055,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   <Ionicons name="qr-code-outline" size={19} color={PP.text} />
                 </TouchableOpacity>
               ) : null}
+              </View>
             </View>
           </View>
 
@@ -1998,6 +2066,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   tab rather than one scroll that buries the services under
                   status cards. */}
               <View
+                ref={tourTabsRef}
+                collapsable={false}
                 style={[
                   styles.tabBar,
                   { backgroundColor: withAlpha(PP.card, PP.isDark ? 0.6 : 0.75), borderColor: PP.border },
@@ -2544,6 +2614,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             onClose={() => setProfileQrVisible(false)}
           />
         ) : null}
+        {/* Waits behind the Fully Booked certificate rather than stacking a
+            second full-screen Modal on top of it. */}
+        <CoachMarkTour
+          visible={showTour && isFocused && !certificate}
+          steps={visibleTourSteps}
+          onFinish={finishTour}
+        />
         {certificate ? (
           <FullyBookedCertificate
             visible
@@ -2803,6 +2880,11 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 0.4,
+  },
+  circleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   circleAction: {
     width: 48,
