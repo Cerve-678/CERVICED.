@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
+import { CUSTOM_LAYOUTS, DEFAULT_CUSTOM_CHOICES } from '../constants/customPageStyle';
 import { PAGE_STYLES } from '../constants/pageStyles';
 import { encodeThemeKey, SHEET_BG } from '../constants/providerThemes';
 import { ProfileStylePreview } from '../features/providers/ProfileStylePreview';
@@ -224,5 +225,34 @@ describe('the 2026-11-15 templates', () => {
     renderPreview('quiet');
     expect(screen.getByText('AMARA LASHES')).toBeTruthy();
     expect(screen.getByText('PECKHAM')).toBeTruthy();
+  });
+
+  it.each(CUSTOM_LAYOUTS.map(layout => layout.key))('draws a Custom %s page in the picked fonts', layout => {
+    const caps = layout === 'banner';
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'custom', 'melt', { ...DEFAULT_CUSTOM_CHOICES, layout, heading: 'gilda', text: 'castoro', caps })}
+        gradient={['#4A2C20', '#F5F1EC']}
+        accent="#4A2C1E"
+        backgroundImage={null}
+        brandFont="italiana"
+        name="Amara Lashes"
+        logoUri={null}
+        logoFraming={null}
+        metaLabels={['LASHES', 'PECKHAM']}
+        pillLabels={['LASHES', 'PECKHAM']}
+        kicker="LASHES"
+        location="Peckham"
+        content={{ about: 'Soft lash sets.', categories: ['Lashes'], services: [{ name: 'Classic set', minutes: 120, price: 65 }] }}
+        rating="5.0"
+        // Services only list in the full preview (Info Reg's); Branding's shows outline cards.
+        full
+      />,
+    );
+    expect(StyleSheet.flatten(screen.getByText('Amara Lashes').props["style"]).fontFamily).toBe('Italiana_400Regular');
+    const heading = screen.getByText(caps ? 'SERVICES' : 'Services');
+    expect(StyleSheet.flatten(heading.props["style"]).fontFamily).toBe('GildaDisplay-Regular');
+    expect(StyleSheet.flatten(screen.getByText('Soft lash sets.').props["style"]).fontFamily).toBe('Castoro-Regular');
+    expect(StyleSheet.flatten(screen.getByText('Classic set').props["style"]).fontFamily).toBe('Castoro-Regular');
   });
 });

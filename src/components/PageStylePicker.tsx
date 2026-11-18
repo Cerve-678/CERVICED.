@@ -119,6 +119,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   bow: { text: 'The Services' },
   pure: { text: 'Services' },
   grid: { lead: '03', text: 'Services' },
+  custom: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
