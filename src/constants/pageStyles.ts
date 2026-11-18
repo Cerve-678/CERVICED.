@@ -16,7 +16,7 @@
 // Each style is a small set of switches the profile reads, not a layout of its
 // own: the profile keeps one structure, and these decide how each part looks.
 
-import { customPageStyle, DEFAULT_CUSTOM_CHOICES, type CustomChoices } from './customPageStyle';
+import { customPageStyle, DEFAULT_CUSTOM_CHOICES, type CustomChoices, type CustomLayout } from './customPageStyle';
 
 export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
@@ -236,7 +236,7 @@ export interface PageStyle {
   roundedPhotos?: boolean;
   /** Custom only: the provider's own picks (constants/customPageStyle). */
   custom?: {
-    layout: 'plain' | 'cards' | 'bigName' | 'banner';
+    layout: CustomLayout;
     headingFont: string;
     headingScale: number;
     textFont: string;
