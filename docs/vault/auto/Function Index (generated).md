@@ -5,7 +5,7 @@
 
 #generated
 
-**4102 functions** across **570 files**.
+**4105 functions** across **571 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -527,6 +527,9 @@
 ### `src/stores/` (2)
 - `useCircleStore.ts` — **useCircleEnabledSync** · **useCircleFor**
 - `useCollectionsStore.ts` — **useFolderPhotos**
+
+### `src/tests/` (1)
+- `databaseLayerSource.ts` — **databaseLayerFiles** · **isDatabaseLayerFile** · **readDatabaseLayer**
 
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles

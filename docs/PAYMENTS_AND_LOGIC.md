@@ -1191,7 +1191,8 @@ Keep the list short and review it monthly.
   `providers.stripe_payouts_enabled` gates checkout and tips.
 - **Money is server-owned.** Every money action is a Supabase Edge Function
   or a `SECURITY DEFINER` database function. The app reaches them only
-  through `src/services/databaseService.ts` (CLAUDE.md).
+  through the database layer, `src/services/databaseService.ts` and the
+  topic files it re-exports from `src/services/database/` (CLAUDE.md).
 - **Idempotency everywhere.** Booking payout transfers use the
   `payout_transfer_<id>` key (`cancelpay_transfer_<id>` when a client
   cancellation settles it) and carry `payout_id` in their metadata, which is

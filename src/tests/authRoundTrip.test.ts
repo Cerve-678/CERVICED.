@@ -1,10 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
-const source = fs.readFileSync(
-  path.join(__dirname, '..', 'services', 'databaseService.ts'),
-  'utf8',
-);
+const source = readDatabaseLayer();
 
 // Payout reads re-confirm the account with the Auth server so a just-banned or
 // deleted account is refused on the money screen immediately.
