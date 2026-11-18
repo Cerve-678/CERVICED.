@@ -50,8 +50,9 @@ automations (auto-accept, buffers, waitlist, reminders, deposits).
   `ThemeContext`, `RegistrationContext`) + Zustand stores (bookmarks, planner,
   app state)
 - **Backend:** Supabase (Postgres + Auth + Storage + Edge Functions +
-  Realtime). `src/services/databaseService.ts` is the **only** file allowed
-  to import the Supabase client directly.
+  Realtime). The database layer is the **only** code allowed to import the
+  Supabase client: topic files in `src/services/database/`, re-exported
+  through `src/services/databaseService.ts`, which everything else imports.
 - **Payments:** Stripe, mid-migration (see Payments section below) —
   `@stripe/stripe-react-native`, `src/services/stripeService.ts`
 - **Session storage:** envelope-encrypted (`largeSecureStore.ts`), not
@@ -73,7 +74,7 @@ src/
 │   ├── client/             Client-only screens
 │   ├── provider/           Provider-only screens
 │   └── shared/              Used by both hats (NotificationsScreen, BeccaScreen, DevSettingsScreen, etc.)
-├── services/             Supabase-backed logic (databaseService.ts boundary)
+├── services/             Supabase-backed logic (database/ topic files, behind databaseService.ts)
 ├── stores/                Zustand stores
 ├── theme/                  Enterprise theme tokens (mostly unused — see below)
 ├── types/                  Shared TS types
