@@ -106,3 +106,16 @@ export function ownSectionByline(kind: OwnSectionKind, providerName: string): st
 export function ownSectionsChanged(draft: unknown, loaded: unknown): boolean {
   return JSON.stringify(normalizeOwnSections(draft)) !== JSON.stringify(normalizeOwnSections(loaded));
 }
+
+/** The one line under a section's name in the Your Sections list: "3
+ *  questions", or the start of what's written. Empty when there's nothing. */
+export function ownSectionSummary(
+  kind: OwnSectionKind,
+  sections: { faq?: readonly FaqItem[] | undefined } & Partial<Record<TextSectionKind, string>>,
+): string {
+  if (kind === 'faq') {
+    const count = (sections.faq ?? []).filter(item => item.question.trim() || item.answer.trim()).length;
+    return count === 0 ? '' : count === 1 ? '1 question' : `${count} questions`;
+  }
+  return (sections[kind] ?? '').trim().split('\n')[0]!.trim();
+}

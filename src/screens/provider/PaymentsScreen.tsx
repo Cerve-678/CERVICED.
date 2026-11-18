@@ -40,6 +40,11 @@
  * So: no balance-collected toggles, no amount-received fields, no
  * payout/earnings surface here without that going through the real processor.
  *
+ * LAYOUT (2026-11-18): under the Settings tab each part is its own PayCard.
+ * "When you get paid" comes from ProviderStripePayments; this screen adds one
+ * "How you take payments" card holding the deposit, the payment types shown
+ * on the profile, and the in-person note (once three separate sections).
+ *
  * Payouts are that sanctioned exception, and they live in
  * ProviderStripePayments (the Overview/Booking payments/Payouts tabs this
  * screen's settings sit under): money moving through Stripe Connect, the real
@@ -53,7 +58,7 @@
 import ProviderStripePayments from '../../components/ProviderStripePayments';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { PaySection } from '../../features/payments/PaymentsCardKit';
+import { PayCard } from '../../features/payments/PaymentsCardKit';
 import { FocusAwareStatusBar } from '../../components/FocusAwareStatusBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeAreaView } from '../../components/SafeArea';
@@ -265,7 +270,12 @@ export default function PaymentsScreen({ navigation, route }: any) {
           {loading ? <ActivityIndicator color={C.accent} size="large" /> : <>
           {loadFailed && <Toast message="Payment settings could not load. Reopen this screen before saving." type="error" />}
 
-          <PaySection title="Deposits" sub="Whether clients pay something up front to hold their slot.">
+          {/* One card for how clients pay: the deposit, then the payment types
+              shown on the profile (user, 2026-11-18: these were three
+              sections, "Deposits", "How you take payment" and "Getting paid
+              in person"). */}
+          <PayCard title="How you take payments" sub="Whether clients pay something up front to hold their slot, and how they can pay you.">
+            <SectionLabel text="Deposit" />
             <View style={st.modeRow}>
               {DEPOSIT_MODE_OPTS.map(o => {
                 const on = depositMode === o.value;
@@ -350,7 +360,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
               <Text style={[st.eyebrow, { color: C.accentText }]}>CLIENTS WILL SEE</Text>
               <View style={st.previewRow}>
                 {CLIENT_SEES[depositMode].map(label => (
-                  <View key={label} style={[st.previewBtn, { backgroundColor: C.bg }]}>
+                  <View key={label} style={[st.previewBtn, { backgroundColor: C.surface }]}>
                     <Text style={[st.previewLabel, { color: C.text }]}>{label}</Text>
                   </View>
                 ))}
@@ -359,13 +369,10 @@ export default function PaymentsScreen({ navigation, route }: any) {
                 <Text style={[st.footnote, { color: C.sub }]}>The balance is due at their appointment.</Text>
               )}
             </View>
-          </PaySection>
 
-          <PaySection
-            title="How you take payment"
-            sub="Shown on your profile so clients know what to expect."
-          >
-            <SectionLabel text="Preferred payment types" />
+            <View style={[st.divider, { backgroundColor: C.border }]} />
+            <SectionLabel text="Payment types" />
+            <Text style={[st.footnote, { color: C.sub, marginBottom: 8 }]}>Shown on your profile so clients know what to expect.</Text>
             <ChipGroup
               options={PAYMENT_OPTS.map(o => o.label)}
               selected={acceptedLabels}
@@ -380,7 +387,7 @@ export default function PaymentsScreen({ navigation, route }: any) {
             <Text style={[st.footnote, { color: C.sub, marginTop: 6 }]}>
               Cerviced doesn't process payments you take in person — these are shown to clients as a heads-up, nothing more.
             </Text>
-            <View style={[st.toldPanel, { backgroundColor: C.bg }]}>
+            <View style={[st.toldPanel, { backgroundColor: C.surface }]}>
               <Text style={[st.eyebrow, { color: C.accentText }]}>WHAT CLIENTS ARE TOLD</Text>
               <Text style={[st.body, { color: C.text }]}>
                 {acceptedLabels.length === 0
@@ -388,13 +395,10 @@ export default function PaymentsScreen({ navigation, route }: any) {
                   : `Accepts ${acceptedLabels.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`}
               </Text>
             </View>
-          </PaySection>
-
-          <PaySection title="Getting paid in person">
-            <Text style={[st.footnote, { color: C.sub }]}>
+            <Text style={[st.footnote, { color: C.sub, marginTop: 12 }]}>
               Anything a client pays in person — the balance after a deposit included — is between you and them. Cerviced doesn’t collect, hold, verify or record those payments, so keep your own receipts.
             </Text>
-          </PaySection>
+          </PayCard>
 
           {!loadFailed && <SaveButton saving={saving} onPress={handleSave} />}
 
@@ -441,6 +445,7 @@ const st = StyleSheet.create({
   body:         { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, marginTop: 4 },
   footnote:     { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
   toldPanel:    { borderRadius: 12, padding: 12, marginTop: 12 },
+  divider:      { height: StyleSheet.hairlineWidth, marginVertical: 16 },
   policiesRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, marginTop: 18, minHeight: 56, borderTopWidth: StyleSheet.hairlineWidth },
   doneBtn:      { minHeight: 44, minWidth: 44, paddingHorizontal: 6, alignItems: 'flex-end', justifyContent: 'center' },
   rowTitle:     { fontFamily: 'BakbakOne-Regular', fontSize: 14 },

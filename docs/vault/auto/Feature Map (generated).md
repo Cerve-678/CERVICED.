@@ -77,12 +77,12 @@ Curated: [[Availability & Slots]] · **215 files**
 Curated: [[Payments]] · **182 files**
 - `src/screens/client/CartScreen.tsx` _(534)_
 - `src/services/databaseService.ts` _(255)_
-- `src/screens/provider/PaymentsScreen.tsx` _(193)_
+- `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/components/BookingSheet.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/screens/client/BookingDetailScreen.tsx` _(109)_
+- `src/components/ProviderStripePayments.tsx` _(108)_
 - `src/contexts/BookingContext.tsx` _(108)_
-- `src/components/ProviderStripePayments.tsx` _(107)_
 - `src/services/bookingService.ts` _(103)_
 - `src/features/bookings/receipt.ts` _(98)_
 - `src/components/MultiBookingSheet.tsx` _(92)_
@@ -92,9 +92,9 @@ Curated: [[Payments]] · **182 files**
 - `src/features/providers/goLiveStatus.ts` _(54)_
 - `src/screens/client/BookingsScreen.tsx` _(47)_
 - `src/services/becca/capabilities/client.ts` _(46)_
-- `src/screens/provider/PoliciesScreen.tsx` _(44)_
 - `src/features/bookings/BookingFeeCard.tsx` _(42)_
 - `src/features/bookings/bookingSupportRequest.ts` _(42)_
+- `src/screens/provider/PoliciesScreen.tsx` _(42)_
 - `src/utils/policyDisplay.ts` _(42)_
 - `src/screens/client/PaymentMethodsScreen.tsx` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
@@ -312,7 +312,7 @@ Curated: [[Contexts]] · **223 files**
 - … +193 more
 
 ## Becca / AI
-Curated: [[Services]] · **57 files**
+Curated: [[Services]] · **56 files**
 - `src/screens/shared/BeccaScreen.tsx` _(110)_
 - `src/services/becca/engine.ts` _(61)_
 - `src/services/becca/capabilities/client.ts` _(53)_
@@ -343,7 +343,7 @@ Curated: [[Services]] · **57 files**
 - `src/services/becca/capabilities/shared.ts` _(6)_
 - `src/i18n/catalogs/fr.ts` _(5)_
 - `src/i18n/catalogs/es.ts` _(4)_
-- … +27 more
+- … +26 more
 
 ## Cart & checkout
 Curated: [[Payments]] · **92 files**
