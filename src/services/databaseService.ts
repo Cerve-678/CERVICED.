@@ -20,6 +20,7 @@ import type { MissRecord as BeccaMissRecord } from './becca/missLog';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
 import { clearCachedReads, supabase } from "../lib/supabase";
 import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
+import { normalizeOwnSections, type OwnSections } from "../features/providers/ownSections";
 import { toPickList } from "../features/beauty-profile/pickList";
 import type { AuthChangeEvent, AuthError, Session, User } from "@supabase/supabase-js";
 import type {
@@ -1432,6 +1433,7 @@ const PROVIDER_PROFILE_PUBLIC_FIELDS = `
   custom_service_type,
   location_text,
   public_directions,
+  profile_sections,
   about_text,
   logo_url,
   logo_framing,
@@ -6451,6 +6453,19 @@ export async function updateProviderCancellationPolicy(
   const { error } = await supabase
     .from("providers")
     .update({ cancellation_notice_hours: noticeHours })
+    .eq("id", providerId);
+  if (error) throw error;
+}
+
+/** Saves the provider's own profile sections (Policies & Info). Cleaned
+ *  first, so only what the profile would show is stored. */
+export async function updateProviderProfileSections(
+  providerId: string,
+  sections: OwnSections,
+): Promise<void> {
+  const { error } = await supabase
+    .from("providers")
+    .update({ profile_sections: normalizeOwnSections(sections) })
     .eq("id", providerId);
   if (error) throw error;
 }

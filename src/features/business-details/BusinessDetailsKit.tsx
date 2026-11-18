@@ -78,10 +78,11 @@ export function Card({ title, sub, children }: { title: string; sub?: string; ch
 
 // ─── Field ────────────────────────────────────────────────────────────────────
 
-export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline }: {
+export function Field({ label, value, onChange, placeholder, readOnly, note, keyboardType, multiline, maxLength }: {
   label: string; value: string; onChange?: (v: string) => void;
   placeholder?: string; readOnly?: boolean; note?: string;
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'decimal-pad'; multiline?: boolean;
+  maxLength?: number;
 }) {
   const C = useBusinessPalette();
   return (
@@ -102,6 +103,7 @@ export function Field({ label, value, onChange, placeholder, readOnly, note, key
           editable={!readOnly}
           multiline={multiline}
           numberOfLines={multiline ? 3 : 1}
+          maxLength={maxLength}
         />
         {readOnly && <Ionicons name="lock-closed-outline" size={14} color={C.sub} style={{ marginRight: 12 }} />}
       </View>

@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  feat/policies-own-sections (20261118120000_provider_profile_sections), taken 2026-11-18
 ```
 
 ### Applied 2026-11-17 (Beauty Profile style questions)

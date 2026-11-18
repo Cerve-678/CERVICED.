@@ -59,10 +59,15 @@ import { edgeColoursFromPhoto } from '../../features/provider-registration/photo
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMyProviderProfile, getProviderSpecialties, updateProviderCancellationPolicy } from '../../services/databaseService';
+import { getMyProviderProfile, getProviderSpecialties, updateProviderCancellationPolicy, updateProviderProfileSections } from '../../services/databaseService';
 import type { DbProvider } from '../../types/database';
 import { mapProviderProfileData } from '../../features/providers/profileMapper';
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from '../../features/providers/additionalInfo';
+import {
+  OWN_SECTION_KINDS, OWN_SECTION_LABELS, OWN_SECTION_LIMITS,
+  hasHalfFilledFaq, normalizeOwnSections,
+  type FaqItem, type OwnSectionKind, type TextSectionKind,
+} from '../../features/providers/ownSections';
 import type { ChipGroup as InfoGroup } from '../../features/providers/workWith';
 import { getPageStyle } from '../../constants/pageStyles';
 import { parseThemeKey } from '../../constants/providerThemes';
@@ -225,6 +230,40 @@ const INFO_SOURCES: { route: string; label: string }[] = [
   { route: 'EditProfile', label: 'Edit Profile' },
 ];
 
+// The provider's own sections, as edited here: text boxes stay as typed
+// (trimmed only on save), so the cursor doesn't jump.
+interface OwnDraft {
+  keyInfo: string;
+  faq: FaqItem[];
+  aftercare: string;
+  houseRules: string;
+  disclaimer: string;
+}
+
+function toOwnDraft(raw: unknown): OwnDraft {
+  const clean = normalizeOwnSections(raw);
+  return {
+    keyInfo: clean.keyInfo ?? '',
+    faq: clean.faq ?? [],
+    aftercare: clean.aftercare ?? '',
+    houseRules: clean.houseRules ?? '',
+    disclaimer: clean.disclaimer ?? '',
+  };
+}
+
+function ownHasContent(draft: OwnDraft, kind: OwnSectionKind): boolean {
+  return kind === 'faq'
+    ? draft.faq.some(item => item.question.trim() || item.answer.trim())
+    : draft[kind].trim() !== '';
+}
+
+const OWN_PLACEHOLDERS: Record<TextSectionKind, string> = {
+  keyInfo: 'e.g. I work from home and have a small dog. Street parking is free.',
+  aftercare: 'e.g. Keep your lashes dry for 24 hours and avoid oil-based products.',
+  houseRules: 'e.g. Please come on your own. Arrive with clean, product-free hair.',
+  disclaimer: 'e.g. Results vary from person to person.',
+};
+
 async function buildInfoPreview(profile: DbProvider): Promise<InfoPreview> {
   const specialties = await getProviderSpecialties(profile.id);
   const data = mapProviderProfileData({
@@ -303,6 +342,24 @@ export default function PoliciesScreen({ navigation }: any) {
   const open = useCallback((key: string) => setOpened(prev => ({ ...prev, [key]: true })), []);
   const toggle = useCallback((key: string) => setOpened(prev => ({ ...prev, [key]: !prev[key] })), []);
   const shows = (key: keyof PolicyState) => opened[key] || String(policies[key] ?? '').trim() !== '';
+  // Your Sections: what's being edited, and the cleaned copy last loaded,
+  // so Save only writes them when something changed.
+  const [ownDraft, setOwnDraft] = useState<OwnDraft>(() => toOwnDraft(null));
+  const [loadedOwn, setLoadedOwn] = useState('{}');
+  const ownShows = (kind: OwnSectionKind) => !!opened[`own:${kind}`] || ownHasContent(ownDraft, kind);
+  const addOwn = useCallback((kind: OwnSectionKind) => {
+    Haptics.selectionAsync().catch(() => {});
+    open(`own:${kind}`);
+    if (kind === 'faq') setOwnDraft(prev => prev.faq.length > 0 ? prev : { ...prev, faq: [{ question: '', answer: '' }] });
+  }, [open]);
+  // TextLink already gives the tap its haptic.
+  const removeOwn = useCallback((kind: OwnSectionKind) => {
+    setOpened(prev => ({ ...prev, [`own:${kind}`]: false }));
+    setOwnDraft(prev => kind === 'faq' ? { ...prev, faq: [] } : { ...prev, [kind]: '' });
+  }, []);
+  const setFaq = useCallback((index: number, field: keyof FaqItem, value: string) => {
+    setOwnDraft(prev => ({ ...prev, faq: prev.faq.map((item, i) => i === index ? { ...item, [field]: value } : item) }));
+  }, []);
   // null until loaded, and if it can't load: the card is just left out.
   const [infoPreview, setInfoPreview] = useState<InfoPreview | null>(null);
 
@@ -344,6 +401,9 @@ export default function PoliciesScreen({ navigation }: any) {
         if (!profile?.user_id) { setLoadFailed(true); setLoading(false); return; }
         setUserId(profile.user_id);
         setProviderId(profile.id);
+        const own = toOwnDraft(profile.profile_sections);
+        setOwnDraft(own);
+        setLoadedOwn(JSON.stringify(normalizeOwnSections(own)));
         // Not awaited: the preview loads beside the policies, not before them.
         if (profile.booking_mode !== 'external') refreshInfoPreview(profile);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
@@ -455,6 +515,10 @@ export default function PoliciesScreen({ navigation }: any) {
       flash('Enter fees as pounds, like 10 or 12.50', 'error');
       return;
     }
+    if (hasHalfFilledFaq(ownDraft.faq)) {
+      flash('Each question needs an answer, or remove it', 'error');
+      return;
+    }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -474,6 +538,9 @@ export default function PoliciesScreen({ navigation }: any) {
       if (providerId && noticeHours !== null) {
         await updateProviderCancellationPolicy(providerId, noticeHours);
       }
+      if (providerId && JSON.stringify(normalizeOwnSections(ownDraft)) !== loadedOwn) {
+        await updateProviderProfileSections(providerId, ownDraft);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
@@ -482,7 +549,7 @@ export default function PoliciesScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [userId, providerId, policies, imageEdges, loadedNotice, carriedPolicies, loadFailed, navigation, isLinkOnly]);
+  }, [userId, providerId, policies, imageEdges, loadedNotice, carriedPolicies, loadFailed, navigation, isLinkOnly, ownDraft, loadedOwn]);
 
   if (loading) {
     return (
@@ -864,6 +931,79 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             )}
 
+            {/* The provider's own sections. Separate from Additional
+                Information: each shows as its own section under it on the
+                profile (features/providers/ownSections.ts). */}
+            <Card title="Your Sections" sub="Extra sections for your profile, each shown under Additional Information. Add only what you need (optional).">
+              {OWN_SECTION_KINDS.filter(ownShows).map(kind => (
+                <View key={kind} style={ownSt.section}>
+                  <View style={ownSt.head}>
+                    <Text style={[ownSt.title, { color: C.text }]}>{OWN_SECTION_LABELS[kind]}</Text>
+                    <TextLink label="Remove" onPress={() => removeOwn(kind)} />
+                  </View>
+                  {kind === 'faq' ? (
+                    <>
+                      {ownDraft.faq.map((item, index) => (
+                        <View key={index} style={[ownSt.faq, index > 0 && { borderTopColor: C.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14 }]}>
+                          <Field
+                            label={`Question ${index + 1}`}
+                            value={item.question}
+                            onChange={v => setFaq(index, 'question', v)}
+                            placeholder={index === 0 ? 'e.g. Do you do children\'s hair?' : ''}
+                            maxLength={OWN_SECTION_LIMITS.question}
+                          />
+                          <Field
+                            label="Answer"
+                            value={item.answer}
+                            onChange={v => setFaq(index, 'answer', v)}
+                            placeholder={index === 0 ? 'e.g. Yes, from age 8 with a parent there.' : ''}
+                            maxLength={OWN_SECTION_LIMITS.answer}
+                            multiline
+                          />
+                          {ownDraft.faq.length > 1 && (
+                            <TextLink
+                              label="Remove this question"
+                              onPress={() => setOwnDraft(prev => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }))}
+                            />
+                          )}
+                        </View>
+                      ))}
+                      {ownDraft.faq.length < OWN_SECTION_LIMITS.faqItems && (
+                        <TextLink
+                          label="+ Add a question"
+                          onPress={() => setOwnDraft(prev => ({ ...prev, faq: [...prev.faq, { question: '', answer: '' }] }))}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <Field
+                      label={OWN_SECTION_LABELS[kind]}
+                      value={ownDraft[kind]}
+                      onChange={v => setOwnDraft(prev => ({ ...prev, [kind]: v }))}
+                      placeholder={OWN_PLACEHOLDERS[kind]}
+                      maxLength={OWN_SECTION_LIMITS.text}
+                      multiline
+                    />
+                  )}
+                </View>
+              ))}
+              {OWN_SECTION_KINDS.some(kind => !ownShows(kind)) && (
+                <View style={addSt.row}>
+                  {OWN_SECTION_KINDS.filter(kind => !ownShows(kind)).map(kind => (
+                    <TouchableOpacity
+                      key={kind}
+                      style={[addSt.chip, { borderColor: C.border }]}
+                      onPress={() => addOwn(kind)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[addSt.chipText, { color: C.accentText }]}>+ {OWN_SECTION_LABELS[kind]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </Card>
+
             {/* Re-affirmation, not a gate — first-publish acceptance in
                 InfoRegScreen is what actually blocks Publish. This is shown
                 here too since a provider can come back and change their
@@ -919,6 +1059,13 @@ const infoSt = StyleSheet.create({
   text:       { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13, lineHeight: 19 },
   go:         { borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
   goText:     { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
+});
+
+const ownSt = StyleSheet.create({
+  section: { marginTop: 6, marginBottom: 14 },
+  head:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  title:   { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
+  faq:     { marginBottom: 6 },
 });
 
 const capSt = StyleSheet.create({

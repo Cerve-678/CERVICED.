@@ -27,6 +27,7 @@ import {
   type PageStylePalette,
 } from "./ProfilePageStyle";
 import { plateMarkEdges } from "./heroes/EmbossedHero";
+import { filledOwnSections, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -313,6 +314,40 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   );
 });
 
+/** The provider's own sections (Key Information, FAQs, Aftercare, House
+ *  Rules, Disclaimer), each its own section under Additional Information,
+ *  in a fixed order. Written on Policies & Info. */
+export const ProviderOwnSections = React.memo(function ProviderOwnSections({
+  sections,
+  palette,
+}: {
+  sections: OwnSections;
+  palette: SectionPalette;
+}) {
+  const ink = sectionInk(palette);
+  return (
+    <>
+      {filledOwnSections(sections).map(kind => (
+        <PageSection key={kind} section={kind} palette={palette}>
+          {kind === "faq" ? (
+            (sections.faq ?? []).map((item, index) => (
+              <View
+                key={`${index}-${item.question}`}
+                style={[styles.faqItem, index > 0 && [styles.faqItemNext, { borderTopColor: ink.separator }]]}
+              >
+                <Text style={[styles.faqQuestion, { color: ink.text }]}>{item.question}</Text>
+                <Text style={[styles.infoText, { color: ink.sub }]}>{item.answer}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={[styles.infoText, { color: ink.text }]}>{sections[kind]}</Text>
+          )}
+        </PageSection>
+      ))}
+    </>
+  );
+});
+
 type PortfolioTile = DbPortfolioItem & { tileHeight: number; globalIndex: number };
 
 function tileHeight(item: DbPortfolioItem, width: number): number {
@@ -560,6 +595,9 @@ const styles = StyleSheet.create({
   infoBlockFirst: { marginTop: 0 },
   infoLabel: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, marginBottom: 7, textTransform: "uppercase", letterSpacing: 0.5 },
   infoText: { fontFamily: "Jura-VariableFont_wght", fontSize: 13, lineHeight: 19 },
+  faqItem: { paddingVertical: 2 },
+  faqItemNext: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  faqQuestion: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 13, lineHeight: 19, marginBottom: 4 },
   venueStrip: { gap: 10, paddingRight: 8 },
   venueTile: { width: 150, height: 105, borderRadius: 14, overflow: "hidden" },
   venueImage: { width: "100%", height: "100%" },

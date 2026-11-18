@@ -263,6 +263,10 @@ export interface DbProvider {
    *  landmarks. Never door codes: those are provider_private_details
    *  .how_to_get_there, released with the address. */
   public_directions: string | null;
+  /** The provider's own profile sections (Key Information, FAQs, Aftercare,
+   *  House Rules, Disclaimer) from Policies & Info. Public. Read through
+   *  normalizeOwnSections in features/providers/ownSections.ts. */
+  profile_sections: Record<string, unknown> | null;
   latitude: number | null;
   longitude: number | null;
   about_text: string | null;
@@ -1016,6 +1020,7 @@ export type ProviderWithServices = Pick<
   | "custom_service_type"
   | "location_text"
   | "public_directions"
+  | "profile_sections"
   | "about_text"
   | "logo_url"
   | "logo_framing"

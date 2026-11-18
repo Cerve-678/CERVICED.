@@ -160,6 +160,7 @@ import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../feature
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 import {
   ProviderAdditionalInfoSection,
+  ProviderOwnSections,
   ProviderContactSection,
   ProviderOpeningHoursSection,
   ProviderPortfolioSection,
@@ -5975,6 +5976,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 palette={sectionPalette}
                 onOpenImage={openImageViewer}
               />
+
+              <ProviderOwnSections sections={provider.ownSections} palette={sectionPalette} />
             </View>
           </ScrollView>
         </SafeAreaView>
