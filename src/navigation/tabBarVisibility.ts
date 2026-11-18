@@ -30,9 +30,11 @@ export const QUICK_ACCESS_ROUTES: readonly string[] = [
  * Screens that never show the bottom nav, whichever tab opened them, and
  * nor does anything opened from them. Branding is reached from Settings, the
  * provider Home and My Services; its Save bar sits at the foot of the screen
- * (owner, 2026-11-17: hide the bottom nav in Branding).
+ * (owner, 2026-11-17: hide the bottom nav in Branding). Payments & payouts
+ * too, including from My Profile's Payouts card (owner, 2026-11-18); it has
+ * its own Done button.
  */
-export const ROUTES_WITHOUT_TAB_BAR: readonly string[] = ['Branding'];
+export const ROUTES_WITHOUT_TAB_BAR: readonly string[] = ['Branding', 'Payments'];
 
 /**
  * Whether the bottom nav is hidden on `tab` when its stack holds `stack`

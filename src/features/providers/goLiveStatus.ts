@@ -269,6 +269,17 @@ export interface GoLiveHeadline {
   detail: string | null;
 }
 
+/** Setup percent at which the Profile dashboard's go-live card stops leading
+ *  and drops to the bottom (user, 2026-11-18). */
+export const GO_LIVE_CARD_DROPS_AT_PERCENT = 80;
+
+/** Whether the Profile dashboard's go-live card leads the page. It leads
+ *  until setup is at least 80%, and always while clients can't book the
+ *  provider yet: then it's the only place that says what's stopping them. */
+export function goLiveCardLeads(percent: number, isLive: boolean): boolean {
+  return !isLive || percent < GO_LIVE_CARD_DROPS_AT_PERCENT;
+}
+
 export function buildGoLiveHeadline(status: GoLiveStatus): GoLiveHeadline {
   const steps = buildGoLiveSteps(status);
   const blockingOutstanding = steps.filter(step => step.blocking && !step.done);

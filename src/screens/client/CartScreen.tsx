@@ -1441,7 +1441,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 )}
               </View>
 
-              {/* A held waitlist slot: the client's 15 minutes keep running
+              {/* A held waitlist slot: the client's hold keeps running
                   while they pay, so the time left stays on the card. */}
               {item.waitlistHold && !issue && (
                 <View style={[styles.nodeBanner, { backgroundColor: P.accentDim }]}>

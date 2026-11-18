@@ -59,9 +59,11 @@ import { edgeColoursFromPhoto } from '../../features/provider-registration/photo
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { PackFormHintLines, PackFormTipCard, usePackFormTip, type PackFormKind } from '../../features/info-packs/PackFormHint';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
 import { getMyProviderProfile, updateProviderCancellationPolicy, updateProviderProfileSections } from '../../services/databaseService';
 import {
-  hasHalfFilledFaq, normalizeOwnSections, ownSectionsChanged,
+  hasHalfFilledCustom, hasHalfFilledFaq, normalizeOwnSections, ownSectionsChanged,
   type OwnSections,
 } from '../../features/providers/ownSections';
 import { OwnSectionsCard, toOwnDraft, type OwnDraft } from '../../features/business-details/OwnSectionsCard';
@@ -228,6 +230,11 @@ export default function PoliciesScreen({ navigation }: any) {
   const C = useBusinessPalette();
   const { myBookingMode } = useAuth();
   const isLinkOnly = myBookingMode === 'external';
+  const packTip = usePackFormTip(TOUR_KEYS.PROVIDER_POLICIES_PACK_TIP);
+  const openPackOrForm = useCallback(
+    (kind: PackFormKind) => navigation.navigate(kind === 'packs' ? 'InfoPacks' : 'ProviderIntakeForm'),
+    [navigation],
+  );
 
   const [userId, setUserId] = useState<string | null>(null);
   const [policies, setPolicies] = useState<PolicyState>(DEFAULT_POLICIES);
@@ -408,6 +415,10 @@ export default function PoliciesScreen({ navigation }: any) {
     }
     if (hasHalfFilledFaq(ownDraft.faq)) {
       flash('Each question needs an answer, or remove it', 'error');
+      return;
+    }
+    if (hasHalfFilledCustom(ownDraft.custom)) {
+      flash('Each custom section needs a name and some words, or remove it', 'error');
       return;
     }
     if (ownChanged && !termsAcknowledged) {
@@ -671,7 +682,19 @@ export default function PoliciesScreen({ navigation }: any) {
               />
             </Card>
 
-            {/* Shown on CERVICED bookings, which link-only pros don't have. */}
+            {/* Shown on CERVICED bookings, which link-only pros don't have.
+                So are Info Packs and Forms: the tip sits by the instructions,
+                where aftercare and what-to-bring get written. Opening one
+                pushes on top, so nothing typed here is lost. */}
+            {!isLinkOnly && packTip.mode === 'card' && (
+              <PackFormTipCard
+                title="Want clients to actually read it?"
+                body="An Info Pack lands on their phone with their booking. A Form gets their answers, and a signature if you want one, before they come."
+                palette={C}
+                onOpen={kind => { packTip.dismiss(); openPackOrForm(kind); }}
+                onClose={packTip.dismiss}
+              />
+            )}
             {!isLinkOnly && (
               <Card title="Your Instructions" sub="Shown in their booking details and in the reminder the day before, like arriving early or what to bring (optional). Directions and door codes go beside your address. Changes apply to new bookings.">
                 <Field
@@ -686,6 +709,7 @@ export default function PoliciesScreen({ navigation }: any) {
                   selected={selectedBookingInstructions(policies.bookingInstructions)}
                   onToggle={line => setPolicy('bookingInstructions', toggleBookingInstruction(policies.bookingInstructions, line))}
                 />
+                {packTip.mode === 'lines' && <PackFormHintLines palette={C} onOpen={openPackOrForm} />}
               </Card>
             )}
 

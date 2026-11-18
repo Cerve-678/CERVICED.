@@ -91,7 +91,8 @@ import {
 } from '../../constants/providerThemes';
 
 // Navigation types
-import { ProfileStackParamList } from '../../navigation/types';
+import { ProfileStackParamList, type ProviderServicesStackParamList } from '../../navigation/types';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { logger } from '../../utils/logger';
 import { openLegalPage } from '../../utils/legalPage';
 import { reorderCategoriesWithinType } from '../../utils/reorderCategories';
@@ -157,6 +158,8 @@ import {
   type InfoRegSectionKey as EditorSectionKey,
 } from '../../features/provider-registration/infoRegSections';
 import { toUserMessage } from '../../utils/userFacingError';
+import { PackFormHint, type PackFormKind } from '../../features/info-packs/PackFormHint';
+import { TOUR_KEYS } from '../../utils/coachMarkTours';
 
 import {
   ADDRESS_RELEASE_OPTS,
@@ -943,6 +946,9 @@ interface ServiceModalProps {
   /** Business-level service type, used when a category name can't be resolved. */
   fallbackKind?: string;
   accentColor?: string;
+  /** Opens Info Packs or Forms once this service is saved. When given, the
+   *  sheet shows the Info Pack / Form tip under the description. */
+  onOpenPackOrForm?: (kind: PackFormKind) => void;
 }
 
 /** A ServiceData's tags in the shared group shape (serviceTags.ts). */
@@ -965,6 +971,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   isEditing = false,
   fallbackKind,
   accentColor = '#AF9197',
+  onOpenPackOrForm,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -1258,7 +1265,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     }
   };
 
-  const handleSave = async () => {
+  /** Why this service can't be saved yet, shown and returned; null when it can. */
+  const saveProblem = (): string | null => {
     const tagsNow: ServiceTagGroups = {
       styleTags: selectedTags,
       techniqueTags: selectedTechniques,
@@ -1285,9 +1293,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       // The presets are collapsed by default, so pointing at a missing
       // duration without opening them names a control that isn't on screen.
       if (!duration.trim()) setDurationOpen(true);
-      return;
+      return problem;
     }
     setError(null);
+    return null;
+  };
+
+  /** `then`: from the Info Pack / Form tip — once saved, open that screen. */
+  const handleSave = async (then?: PackFormKind) => {
+    if (saveProblem()) return;
     setSavingDraft(true);
     try {
       await onSave({
@@ -1317,6 +1331,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
         audience,
       }, pendingAddOns);
       onClose();
+      if (then) onOpenPackOrForm?.(then);
     } catch (cause) {
       logger.error('[ServiceModal] service draft backup failed:', cause);
       setError('Could not back up this description. Please try again.');
@@ -1507,6 +1522,33 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <Text style={styles.serviceSheetHint}>Others offering this often mention {descriptionTopics.join(', ')}.</Text>
                 ) : null}
                 {descriptionHint ? <Text style={styles.serviceSheetHint}>{descriptionHint}</Text> : null}
+                {onOpenPackOrForm ? (
+                  <PackFormHint
+                    tour={TOUR_KEYS.PROVIDER_SERVICE_PACK_TIP}
+                    title="Aftercare or questions before they come?"
+                    body="Put them in an Info Pack or a Form. Clients get it with their booking, without you sending a thing."
+                    // Packs and Forms list live services, and a new one
+                    // here isn't live until Save & Publish.
+                    note={isEditing
+                      ? 'Saves this service first.'
+                      : "Saves this service first. It shows in Info Packs and Forms once you've published your profile."}
+                    palette={{
+                      card: fieldBox.backgroundColor,
+                      text: chrome.fg(0.9),
+                      sub: chrome.fg(0.55),
+                      border: fieldBox.borderColor,
+                      accent: accentColor,
+                    }}
+                    // Opening Info Packs or Forms closes this sheet, so it
+                    // saves first rather than throw away what's been typed.
+                    // False (the reason shown, the tip kept) when it can't.
+                    onOpen={kind => {
+                      if (savingDraft || saveProblem()) return false;
+                      void handleSave(kind);
+                      return true;
+                    }}
+                  />
+                ) : null}
               </View>
 
               {/* Buffer time before/after — overrides the account-wide default
@@ -4537,6 +4579,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           isEditing={isEditingService}
           fallbackKind={selectedServiceType || providerData.providerService}
           accentColor={adaptiveAccentColor}
+          // Same tip as My Profile's service editor. Edit mode only: during
+          // first registration there are no bookings to send packs with yet,
+          // and link-only providers don't take CERVICED bookings at all.
+          // Pushed on top, so this screen and its unpublished edits stay put.
+          // Edit mode runs as EditProfile on the provider stacks, which all
+          // register InfoPacks and ProviderIntakeForm; this screen's props are
+          // typed by the client Profile stack, hence the narrow cast.
+          {...(isEditMode && !isLinkOnly
+            ? {
+                onOpenPackOrForm: (kind: PackFormKind) =>
+                  (navigation as unknown as NativeStackNavigationProp<ProviderServicesStackParamList>)
+                    .navigate(kind === 'packs' ? 'InfoPacks' : 'ProviderIntakeForm'),
+              }
+            : {})}
         />
 
         {/* Add-on editor — opened from "Your add-ons" on the services page */}

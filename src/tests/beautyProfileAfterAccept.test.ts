@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { readDatabaseLayer } from './databaseLayerSource';
 
 /**
  * A provider sees a client's Beauty Profile only once they have accepted the
@@ -12,7 +13,7 @@ const root = path.join(__dirname, '..', '..');
 const read = (...p: string[]) => fs.readFileSync(path.join(root, ...p), 'utf8');
 const sql = read('supabase', 'migrations', '20261110131224_beauty_profile_after_accept.sql');
 const screen = read('src', 'screens', 'provider', 'ProviderBookingDetailScreen.tsx');
-const service = read('src', 'services', 'databaseService.ts');
+const service = readDatabaseLayer();
 
 describe('beauty profile is shared only after the provider accepts', () => {
   it('returns a row only for accepted bookings', () => {

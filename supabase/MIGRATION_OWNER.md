@@ -56,6 +56,24 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-18 (provider told when someone joins their waitlist)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261118220000 | `waitlist_joined_notification` | **APPLIED 2026-11-18** on the user's go-ahead ("apply merge"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. md5 guard on the live `notifications_type_check` matched. Two forced-rollback dry runs passed first (one alert, rejoin within a day sends none, title "<Service> · 1st in line"). Verified live: version recorded (live max); CHECK has `waitlist_joined` **and `provider_no_show` again** (live had lost it, unrecorded, while `handle_booking_status_change` still inserts it); `trg_waitlist_joined_notify` AFTER INSERT on `provider_waitlist`; `notify_provider_waitlist_joined` SECURITY DEFINER, not executable by anon/authenticated. `send-push-notification` redeployed (v31) with `waitlist_joined: 'providerWaitlist'`. PR #636. |
+
+### Applied 2026-11-18 (Clientele sheet: client Beauty Profile + private notes)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261118205332 | `clientele_notes_and_beauty_profile` (written as 20261118160000, renamed to the MCP's version) | Forced-rollback dry run first, then applied. `provider_client_notes` RLS on, `authenticated` has no SELECT; `get_client_beauty_profile_for_provider` not executable by anon; `get_my_client_note` / `save_my_client_note` executable by authenticated; `my_provider_id_for_client` executable by neither. 0 rows. PR #630. |
+
+### Applied 2026-11-18 (waitlist Auto, 10-minute holds, closing when full with the waitlist)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118150000 | `waitlist_auto_and_close_together` | **APPLIED 2026-11-18** on the user's go-ahead ("apply it"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. md5 guards over the six rebuilt functions matched. Rolled-back dry run passed first. Verified live: version recorded (live max); `waitlist_hold_duration()` = 10 minutes; `waitlist_slot_freed()` and `provider_schedule_closed_to_waitlist()` exist, executable only by postgres/service_role; `handle_booking_status_change` calls `waitlist_slot_freed`; `process_provider_fully_booked_alerts` no longer needs the waitlist off; `waitlist_released_slots.reason` accepts `cancelled`. PR #624. |
+
 ### Applied 2026-11-18 (announcements reach savers and bell followers)
 
 | Authored version | Name | Status |

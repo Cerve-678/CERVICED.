@@ -18,6 +18,7 @@ import BrandingScreen from '../../../screens/provider/BrandingScreen';
 import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
+import ProviderProfileScreen from '../../../screens/client/ProviderProfileScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
 import { ProviderServicesStackParamList } from '../../types';
 
@@ -35,6 +36,23 @@ export default function ProviderServicesNavigator() {
         name="ProviderServicesMain"
         component={ProviderMyProfileScreen}
         options={{ headerShown: false }}
+      />
+
+      {/* Tapping the logo on My Profile. ProviderProfileScreen already knows
+          when its owner is looking (no Book for yourself), so nothing here
+          leads into a client-only flow. It appears instantly (no slide in
+          from the side, no fade) with no header buttons — the screen hides
+          its header for `asPreview` — and a swipe from anywhere on the screen
+          closes it (the swipe keeps the usual slide). */}
+      <ProviderServicesStack.Screen
+        name="MyPublicProfile"
+        component={ProviderProfileScreen as React.ComponentType<any>}
+        options={{
+          headerShown: false,
+          animation: 'none',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
+        }}
       />
 
       <ProviderServicesStack.Screen

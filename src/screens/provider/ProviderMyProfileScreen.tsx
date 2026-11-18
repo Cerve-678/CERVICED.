@@ -72,6 +72,7 @@ import {
   addPortfolioItem,
   createMyService,
   deletePortfolioItem,
+  forgetCachedProviderProfile,
   getMyBookmarkCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
@@ -120,6 +121,7 @@ import { ManageScheduleRows } from '../../features/providers/ManageScheduleRows'
 import { RecentBookingRow } from '../../features/providers/RecentBookingRow';
 import { RECENT_ACTIVITY_PREVIEW } from '../../features/providers/recentBookingActivity';
 import { useCalendarViewPreference } from '../../features/provider-bookings/calendarViewPreference';
+import type { PackFormKind } from '../../features/info-packs/PackFormHint';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
   toEditorValue,
@@ -132,6 +134,7 @@ import {
   deriveAutomationsSet,
   buildGoLiveSteps,
   buildGoLiveHeadline,
+  goLiveCardLeads,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
@@ -1185,6 +1188,25 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('Branding');
   }, [navigation]);
 
+  // Tapping the logo shows the profile exactly as clients see it. Clients
+  // can't open it at all before go-live, so say that rather than open a
+  // "Provider not found" page. Unknown status (load failed) still opens it,
+  // same as the QR sheet.
+  const handleOpenClientView = useCallback(() => {
+    if (!providerSlug) return;
+    Haptics.selectionAsync().catch(() => {});
+    if (goLive?.isLive === false) {
+      Alert.alert(
+        'Not live yet',
+        'Clients will see your profile once you go live. Finish the steps on this page to get there.',
+      );
+      return;
+    }
+    // Fresh, so anything just changed in Edit Profile shows.
+    forgetCachedProviderProfile(providerSlug);
+    navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
+  }, [navigation, providerSlug, goLive?.isLive]);
+
   // Today's two cards. They haptick on their own presses, so these only
   // navigate.
   const todaySchedule = useTodaySchedule(providerId);
@@ -1298,7 +1320,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const closeEditor = useCallback(() => setEditorOpen(false), []);
 
   const handleSaveService = useCallback(
-    async (draft: MyServiceDraft) => {
+    async (draft: MyServiceDraft, then?: PackFormKind) => {
       if (!providerId) return;
       setSaving(true);
       try {
@@ -1311,6 +1333,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         }
         setEditorOpen(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        // From the editor's Info Pack / Form tip: saved, now open it.
+        if (then) navigation.navigate(then === 'packs' ? 'InfoPacks' : 'ProviderIntakeForm');
       } catch (e) {
         logger.error('[MyServices] save service failed:', e);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -1322,7 +1346,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         setSaving(false);
       }
     },
-    [providerId, editingId, editingCategory],
+    [providerId, editingId, editingCategory, navigation],
   );
 
   const handleToggleActive = useCallback(async (service: DbService) => {
@@ -1611,9 +1635,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       ? TONE_COLOR[headline.tone]
       : accentColor;
 
-  /* The go-live card. It leads the dashboard while anything is still
-     outstanding and drops to the bottom once the profile is finished —
-     at that point it's a receipt, not an instruction. */
+  /* The go-live card. It leads the dashboard until setup is 80% done and
+     clients can book, then drops to the bottom: at that point it's a
+     receipt, not an instruction. While the profile is still loading it
+     stays on top, where it always used to be. */
+  const statusLeads = goLiveCardLeads(setup.percent, goLive?.isLive ?? false);
   const todaySummaryCard = todaySchedule ? (
     <TodaySummaryCard
       schedule={todaySchedule}
@@ -1849,20 +1875,28 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </Text>
               </View>
 
-              {providerData.logo ? (
-                <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
-                  <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
-                    {providerData.providerName
-                      .split(' ')
-                      .map(w => w[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <TouchableOpacity
+                onPress={handleOpenClientView}
+                disabled={!providerSlug}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="See your profile as clients see it"
+              >
+                {providerData.logo ? (
+                  <LogoCircle uri={providerData.logo} framing={providerData.logoFraming} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
+                    <Text style={[styles.avatarInitials, { color: isDarkColor(accentColor) ? '#FFFFFF' : '#1B2740' }]}>
+                      {providerData.providerName
+                        .split(' ')
+                        .map(w => w[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Counts live here rather than in a sentence under the Services
@@ -1983,7 +2017,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
               {tab === 'dashboard' ? (
                 <>
-                  {setup.percent === 100 ? null : statusSection}
+                  {statusLeads ? statusSection : null}
 
                   {/* ── Today ──────────────────────────────────────────────────
                       Two cards around the rest of the dashboard: the summary
@@ -2419,7 +2453,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
-                  {setup.percent === 100 ? statusSection : null}
+                  {statusLeads ? null : statusSection}
                 </>
               ) : (
                 <>
@@ -2519,6 +2553,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         saving={saving}
         palette={editorPalette}
         onSave={handleSaveService}
+        // Info Packs and Forms go with CERVICED bookings, which link-only
+        // providers don't take.
+        {...(myBookingMode === 'external' ? {} : { onSaveAndOpen: handleSaveService })}
         onClose={closeEditor}
       />
     </View>

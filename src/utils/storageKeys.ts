@@ -71,6 +71,10 @@ export const TOUR_SEEN_PREFIXES = {
   PROVIDER_FORMS: '@provider_forms_welcome_seen_',
   /** Beauty Profile → Maintenance — "How Maintenance works" */
   CLIENT_MAINTENANCE_HOWTO: '@client_maintenance_howto_seen_',
+  /** Service editor — the Info Pack / Form tip card, closed or used */
+  PROVIDER_SERVICE_PACK_TIP: '@provider_service_pack_tip_seen_',
+  /** Policies — the Info Pack / Form tip card, closed or used */
+  PROVIDER_POLICIES_PACK_TIP: '@provider_policies_pack_tip_seen_',
 } as const;
 
 export type TourSeenPrefix = typeof TOUR_SEEN_PREFIXES[keyof typeof TOUR_SEEN_PREFIXES];

@@ -12,6 +12,7 @@ tags: [screen, provider]
 - [[SchedulingScreen\|Scheduling]]
 - [[ProviderScheduleScreen\|ProviderSchedule]]
 - [[BrandingScreen\|Branding]]
+- [[ProviderProfileScreen\|MyPublicProfile]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 - `ProviderHome` _(navigator / dynamic)_
 - [[ProviderBookingHistoryScreen\|BookingHistory]]
