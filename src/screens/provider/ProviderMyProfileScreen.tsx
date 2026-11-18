@@ -72,7 +72,7 @@ import {
   addPortfolioItem,
   createMyService,
   deletePortfolioItem,
-  forgetCachedProviderProfile,
+  refreshCachedProviderProfile,
   getMyBookmarkCount,
   getMyProviderProfile,
   getMyServiceBookingRows,
@@ -1192,8 +1192,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // can't open it at all before go-live, so say that rather than open a
   // "Provider not found" page. Unknown status (load failed) still opens it,
   // same as the QR sheet.
-  const handleOpenClientView = useCallback(() => {
-    if (!providerSlug) return;
+  const openingClientViewRef = useRef(false);
+  const handleOpenClientView = useCallback(async () => {
+    if (!providerSlug || openingClientViewRef.current) return;
     Haptics.selectionAsync().catch(() => {});
     if (goLive?.isLive === false) {
       Alert.alert(
@@ -1202,8 +1203,18 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       );
       return;
     }
-    // Fresh, so anything just changed in Edit Profile shows.
-    forgetCachedProviderProfile(providerSlug);
+    // Read it fresh first, so anything just changed in Edit Profile shows, and
+    // the page then draws whole on its first frame. Opening first and loading
+    // after flashed a grey skeleton, since this screen opens with no slide to
+    // hide it. If the read fails the page still opens and tries again itself.
+    openingClientViewRef.current = true;
+    try {
+      await refreshCachedProviderProfile(providerSlug);
+    } catch (error) {
+      logger.warn('Could not refresh own profile before preview:', error);
+    } finally {
+      openingClientViewRef.current = false;
+    }
     navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
   }, [navigation, providerSlug, goLive?.isLive]);
 
