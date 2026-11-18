@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-18 (waitlist Auto, 10-minute holds, closing when full with the waitlist)
+
+| Authored version | Name | Status |
+|---|---|---|
+| 20261118150000 | `waitlist_auto_and_close_together` | **APPLIED 2026-11-18** on the user's go-ahead ("apply it"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. md5 guards over the six rebuilt functions matched. Rolled-back dry run passed first. Verified live: version recorded (live max); `waitlist_hold_duration()` = 10 minutes; `waitlist_slot_freed()` and `provider_schedule_closed_to_waitlist()` exist, executable only by postgres/service_role; `handle_booking_status_change` calls `waitlist_slot_freed`; `process_provider_fully_booked_alerts` no longer needs the waitlist off; `waitlist_released_slots.reason` accepts `cancelled`. PR #624. |
+
 ### Applied 2026-11-18 (announcements reach savers and bell followers)
 
 | Authored version | Name | Status |

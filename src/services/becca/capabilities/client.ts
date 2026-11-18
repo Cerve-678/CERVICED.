@@ -71,6 +71,7 @@ import { matchesAnySpeciality } from "../../../utils/fuzzyMatch";
 import { formatPickList, toPickList } from "../../../features/beauty-profile/pickList";
 import { beautyDataFromRow } from "../../../features/beauty-profile/profileRow";
 import { allSuitedIdeas, type SuitedIdea } from "../../../features/beauty-profile/suitedIdeas";
+import { WAITLIST_HOLD_MINUTES } from "../../../constants/waitlist";
 import {
   chip,
   navChip,
@@ -2358,8 +2359,8 @@ const waitlist: Capability = {
     }
     return {
       text: held > 0
-        ? `A slot is **held for you** right now. Confirm and pay for it in Bookings before its 15 minutes run out.`
-        : `You're on **${entries.length} waitlist${entries.length !== 1 ? "s" : ""}**. If a slot that suits you opens, it's held for you for 15 minutes.`,
+        ? `A slot is **held for you** right now. Confirm and pay for it in Bookings before its ${WAITLIST_HOLD_MINUTES} minutes run out.`
+        : `You're on **${entries.length} waitlist${entries.length !== 1 ? "s" : ""}**. If a slot that suits you is offered to you, it's held for ${WAITLIST_HOLD_MINUTES} minutes.`,
       suggestions: [
         navChip("bookings", "Open Bookings", "Bookings"),
         askChip("free", "Anyone free sooner?", "Who's free this week?"),
@@ -3676,7 +3677,7 @@ const joinWaitlistAction: Capability = {
     return {
       text:
         `Join **${provider.displayName}**'s waitlist for ${serviceLabel}? ` +
-        `If a time that suits you frees up, it's held for you for 15 minutes to confirm and pay.`,
+        `If a time that suits you frees up and it's offered to you, it's held for you for ${WAITLIST_HOLD_MINUTES} minutes to confirm and pay.`,
       pendingAction: {
         id: `waitlist-${dbId}`,
         describe: `Join ${provider.displayName}'s waitlist`,
@@ -3692,7 +3693,7 @@ const joinWaitlistAction: Capability = {
             serviceNameSnapshot: serviceLabel,
             providerNameSnapshot: provider.displayName,
           });
-          return `You're on ${provider.displayName}'s waitlist. When a slot opens it's held for you for 15 minutes, and I'll tell you straight away.`;
+          return `You're on ${provider.displayName}'s waitlist. When a slot is offered to you it's held for ${WAITLIST_HOLD_MINUTES} minutes, and I'll tell you straight away.`;
         },
       },
     };
