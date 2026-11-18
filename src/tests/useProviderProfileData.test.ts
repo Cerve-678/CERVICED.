@@ -9,6 +9,7 @@ import {
   isProviderTakingBookings,
   getProviderProfileViewerContext,
   getProviderReviews,
+  peekCachedProviderProfile,
   trackUserInteraction,
 } from "../services/databaseService";
 import { getUnclaimedProviderDetail } from "../services/providerClaimService";
@@ -24,6 +25,7 @@ jest.mock("../services/databaseService", () => ({
   isProviderTakingBookings: jest.fn(),
   getProviderProfileViewerContext: jest.fn(),
   getProviderReviews: jest.fn(),
+  peekCachedProviderProfile: jest.fn(),
   trackUserInteraction: jest.fn(),
 }));
 
@@ -62,6 +64,7 @@ describe("useProviderProfileData", () => {
       (slug: string) => getProviderBySlug(slug),
     );
     (getUnclaimedProviderDetail as jest.Mock).mockResolvedValue(null);
+    (peekCachedProviderProfile as jest.Mock).mockReturnValue(undefined);
     (userLearningService.trackInteraction as jest.Mock).mockResolvedValue(
       undefined,
     );
@@ -74,6 +77,24 @@ describe("useProviderProfileData", () => {
       pending(),
     );
     (isProviderTakingBookings as jest.Mock).mockReturnValue(pending());
+  });
+
+  it("draws a cached profile on its first frame, with no loading skeleton", () => {
+    const mappedProfile = { id: "studio-a", profileTheme: "app" };
+    (peekCachedProviderProfile as jest.Mock).mockReturnValue({
+      id: "provider-1",
+      slug: "studio-a",
+      display_name: "Studio A",
+      service_category: "HAIR",
+    });
+    (getProviderBySlug as jest.Mock).mockReturnValue(pending());
+    (mapProviderProfileData as jest.Mock).mockReturnValue(mappedProfile);
+
+    const { result } = renderHook(() => useProviderProfileData("studio-a"));
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.provider).toBe(mappedProfile);
+    expect(result.current.providerDbId).toBe("provider-1");
   });
 
   it("renders the profile shell without waiting for secondary requests", async () => {

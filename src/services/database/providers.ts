@@ -1061,19 +1061,26 @@ export async function getProviderBySlug(
 }
 
 /**
- * Drop a profile's cached copy so the next open reads it fresh. A provider
- * previewing their own profile right after an edit would otherwise see the
- * version from up to a minute ago. Also stops the next open joining a request
- * that was already in flight before the edit.
+ * The profile already cached for this slug, read synchronously, so a screen
+ * can draw it on its very first frame rather than a loading skeleton that is
+ * swapped out a moment later. Undefined when nothing usable is cached (a
+ * cached "not found" counts as nothing: the screen loads and says so itself).
  */
-export function forgetCachedProviderProfile(slug: string): void {
+export function peekCachedProviderProfile(slug: string): ProviderWithServices | undefined {
   const normalizedSlug = slug.trim();
-  if (!normalizedSlug) return;
-  providerProfileCache.delete(normalizedSlug);
-  providerProfilePreviewCache.delete(normalizedSlug);
-  providerProfileRequests.delete(normalizedSlug);
-  providerProfilePreviewRequests.delete(normalizedSlug);
-  providerProfileRequestTokens.delete(normalizedSlug);
+  if (!normalizedSlug) return undefined;
+  return providerProfileCache.get(normalizedSlug) ?? providerProfilePreviewCache.get(normalizedSlug) ?? undefined;
+}
+
+/**
+ * Read a profile fresh and keep it cached, for a provider previewing their own
+ * profile (the cached copy can be up to a minute old, from before an edit).
+ * My Profile runs it on focus, so the logo tap opens straight onto the fresh
+ * copy with no wait and no skeleton. A request already in flight from before
+ * the edit can't overwrite it (providerProfileRequestTokens).
+ */
+export async function refreshCachedProviderProfile(slug: string): Promise<void> {
+  await getProviderBySlug(slug, { forceRefresh: true });
 }
 
 /** Warm the fast first-paint cache before a navigation transition completes. */

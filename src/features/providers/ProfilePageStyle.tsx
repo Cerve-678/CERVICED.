@@ -25,7 +25,6 @@ import {
   type PageStyle,
 } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
-import { LaceRosette, LaceTrim } from "./heroes/LaceHero";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { BulldogClip } from "./heroes/CallingCardHero";
 import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
@@ -399,16 +398,6 @@ export function PageSectionHeading({
             {words.toUpperCase()}
           </Text>
           <View style={[headingStyles.rule, { backgroundColor: line }]} />
-        </View>
-      );
-    }
-    case "lacePair": {
-      // Lace: a lowercase script word in the accent, spaced display caps tucked under it.
-      const [lead, rest] = pair;
-      return (
-        <View {...a11y} accessible style={headingStyles.stack}>
-          {lead ? <Text style={[headingStyles.laceScript, { color: accent }]}>{lead.toLowerCase()}</Text> : null}
-          <Text style={[headingStyles.laceCaps, { color: ink }]}>{rest.toUpperCase()}</Text>
         </View>
       );
     }
@@ -791,21 +780,6 @@ export function PageSection({
     );
   }
 
-  if (pageStyle.cards === "lace") {
-    return (
-      <View style={[surfaceStyles.block, style]}>
-        {heading}
-        <LaceTrimmedCard
-          background={palette.cardBackground}
-          border={withAlpha(palette.accent, 0.3)}
-          radius={square ? 0 : 4}
-        >
-          {children}
-        </LaceTrimmedCard>
-      </View>
-    );
-  }
-
   return (
     <View style={[surfaceStyles.block, style]}>
       {heading}
@@ -842,43 +816,11 @@ export function PageSection({
 function isCentredHeading(style: PageStyle): boolean {
   return (
     style.heading === "scriptPair" || style.heading === "spacedCaps" || style.heading === "bubbly"
-    || style.heading === "italicCaps" || style.heading === "layered" || style.heading === "lacePair"
+    || style.heading === "italicCaps" || style.heading === "layered"
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
     || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "stripeCaps"
     || style.heading === "bowSerif"
     || (style.heading === "custom" && style.custom?.layout === "plain")
-  );
-}
-
-/** Lace: a fine-lined card with a scalloped trim of its own colour hanging
- *  from its foot. The trim is drawn to the card's measured width. */
-function LaceTrimmedCard({
-  background,
-  border,
-  radius,
-  children,
-}: {
-  background: string;
-  border: string;
-  radius: number;
-  children: React.ReactNode;
-}) {
-  const [width, setWidth] = useState(0);
-  return (
-    <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
-      <View
-        style={[
-          surfaceStyles.solid,
-          surfaceStyles.laceCard,
-          { backgroundColor: background, borderColor: border, borderRadius: radius, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
-        ]}
-      >
-        {children}
-      </View>
-      <View style={surfaceStyles.laceTrim} pointerEvents="none">
-        <LaceTrim width={width} color={background} />
-      </View>
-    </View>
   );
 }
 
@@ -1037,8 +979,6 @@ export function serviceCardSurface(
         shadowOpacity: 0.1,
         shadowRadius: 10,
       };
-    case "lace":
-      return { ...flat, backgroundColor: colours.card, borderRadius: 4, borderWidth: 1, borderColor: withAlpha(colours.accent, 0.3) };
     case "sheer":
       return { ...flat, ...sheerBox(colours.sheet), borderWidth: 1, borderRadius: 0 };
     case "raised":
@@ -1557,29 +1497,6 @@ export function StyledPolicyList({
     );
   }
 
-  if (layout === "rosettes") {
-    // Lace: each policy beside a small lace rosette, between hairlines, on the lace card.
-    return (
-      <View>
-        {rows.map((row, index) => (
-          <View
-            key={row.label}
-            style={[policyStyles.rosetteRow, { borderTopColor: palette.separator }, index === 0 && policyStyles.hairFirst]}
-          >
-            <LaceRosette size={30} color={palette.accent} hole={palette.cardBackground} />
-            <View style={policyStyles.numeralBody}>
-              <Text style={[policyStyles.rosetteLabel, { color: ink.text }]}>{row.label.toUpperCase()}</Text>
-              <Text style={[policyStyles.value, { color: ink.sub }]}>{row.value}</Text>
-              {row.notes?.map(note => (
-                <Text key={note} style={[policyStyles.note, { color: ink.sub }]}>{note}</Text>
-              ))}
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  }
-
   if (layout === "ribbon") {
     // Calling Card: every policy on one card, two-up, with a ribbon in the
     // accent across its top corner. The card brings its own colours.
@@ -1998,9 +1915,6 @@ const headingStyles = StyleSheet.create({
   indexNumber: { fontFamily: "Gloock-Regular", fontSize: 15 },
   indexRule: { width: 22, height: 1.5 },
   indexTitle: { fontFamily: "Gloock-Regular", fontSize: 28, lineHeight: 36, flexShrink: 1 },
-  // Lace: Allura over Gilda Display. The script's swashes need the padding.
-  laceScript: { fontFamily: "Allura-Regular", fontSize: 40, lineHeight: 60, paddingHorizontal: 12 },
-  laceCaps: { fontFamily: "GildaDisplay-Regular", fontSize: 15, lineHeight: 20, letterSpacing: 5, marginTop: -14, textAlign: "center" },
   // Sheer (round 4): Bellefair, thin and widely spaced.
   sheerCaps: { fontFamily: "Bellefair-Regular", fontSize: 26, lineHeight: 34, letterSpacing: 3.2, textAlign: "center", marginBottom: 16 },
 });
@@ -2067,9 +1981,6 @@ const surfaceStyles = StyleSheet.create({
   pageCard: { borderRadius: 2, borderWidth: StyleSheet.hairlineWidth },
   pageEdge: { position: "absolute", top: 3, left: 3, right: -3, bottom: -3, borderRadius: 2, borderWidth: StyleSheet.hairlineWidth },
   pageEdgeBack: { top: 6, left: 6, right: -6, bottom: -6 },
-  laceCard: { borderWidth: 1 },
-  // Overlaps the card's foot by a hair so no seam shows between card and trim.
-  laceTrim: { marginTop: -1 },
   sheer: { borderWidth: 1, padding: 18 },
   raised: {
     borderWidth: 1,
@@ -2135,8 +2046,6 @@ const policyStyles = StyleSheet.create({
   noteFold: { position: "absolute", top: 0, left: 0, right: 0, height: 50, borderBottomWidth: 1, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
   noteSeal: { position: "absolute", top: 28, alignSelf: "center" },
   noteLabel: { fontFamily: "EBGaramond-SemiBold", fontSize: 13, lineHeight: 18, letterSpacing: 2, textAlign: "center" },
-  rosetteRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  rosetteLabel: { fontFamily: "GildaDisplay-Regular", fontSize: 13, lineHeight: 18, letterSpacing: 2.6 },
   recessed: { borderWidth: 1.5, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 6 },
   recessedLabel: { fontFamily: "LibreCaslonDisplay-Regular", fontSize: 11, lineHeight: 15, letterSpacing: 1.8, width: 104, paddingTop: 2 },
   hairLabel: { fontFamily: "TenorSans_400Regular", fontSize: 14, flexShrink: 0, maxWidth: "45%" },

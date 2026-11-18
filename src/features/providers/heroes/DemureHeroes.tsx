@@ -205,7 +205,8 @@ export function SoftFocusHero({
 }
 
 const soft = StyleSheet.create({
-  wrap: { alignSelf: "stretch", paddingHorizontal: 14, marginBottom: 26 },
+  // Sits a little below the header buttons rather than tucked up under them (owner, 2026-11-18).
+  wrap: { alignSelf: "stretch", paddingHorizontal: 14, marginTop: 22, marginBottom: 26 },
   card: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 30, padding: 16, overflow: "hidden" },
   wave: { position: "absolute", right: -10, bottom: -6 },
   // HeroLogo keeps 20pt under itself; the card spaces it already.
