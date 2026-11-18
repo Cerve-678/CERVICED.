@@ -150,6 +150,7 @@ import {
   RuledJumpBar,
   policiesBringOwnSurface,
   sectionInk,
+  customTextStyle,
   sectionsSitOnPage,
   serviceCardSurface,
   sheetInk,
@@ -1238,18 +1239,21 @@ function ServiceDescription({
   onToggle,
   textColor,
   linkColor,
+  fontStyle,
 }: {
   text: string;
   expanded: boolean;
   onToggle: () => void;
   textColor: string;
   linkColor: string;
+  /** Branding → Custom's text font; null keeps the app's. */
+  fontStyle?: { fontFamily: string; fontWeight: "400" } | null;
 }) {
   const [overflows, setOverflows] = useState(false);
   return (
     <View>
       <Text
-        style={[styles.serviceDescription, { color: textColor }]}
+        style={[styles.serviceDescription, { color: textColor }, fontStyle]}
         numberOfLines={expanded ? undefined : 2}
       >
         {text}
@@ -1257,7 +1261,7 @@ function ServiceDescription({
       {/* Invisible, unclamped copy at the same width, only to count the
           lines the whole description takes. */}
       <Text
-        style={[styles.serviceDescription, styles.serviceDescriptionMeasure]}
+        style={[styles.serviceDescription, styles.serviceDescriptionMeasure, fontStyle]}
         onTextLayout={(e) => setOverflows(e.nativeEvent.lines.length > 2)}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
@@ -1513,7 +1517,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Branding → Page Style (constants/pageStyles): headings, card treatment,
   // the policy layout and the logo frame, on top of the colours. Classic is
   // the profile exactly as it was.
-  const pageStyle = getPageStyle(parseThemeKey(provider?.profileTheme).pageStyle);
+  const themeParts = parseThemeKey(provider?.profileTheme);
+  const pageStyle = getPageStyle(themeParts.pageStyle, themeParts.custom);
+  // Branding → Custom's text font, laid over the page's body text; null on
+  // every other style, which keeps Jura.
+  const bodyFont = customTextStyle(pageStyle);
   // A veil page (Sheer) keeps the theme's hero and accent but puts the
   // content on see-through dark glass, so every section inks itself white.
   const baseTheme = resolveProviderTheme(provider?.profileTheme);
@@ -3833,7 +3841,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
       {/* Selected category's description — what it includes, benefits, etc. */}
       {provider.categoryDescriptions[selectedCategory] ? (
-        <Text style={[styles.categoryDescriptionText, { color: SV.sub }]}>
+        <Text style={[styles.categoryDescriptionText, { color: SV.sub }, bodyFont]}>
           {provider.categoryDescriptions[selectedCategory]}
         </Text>
       ) : null}
@@ -3958,7 +3966,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 })()}
 
                 <View style={styles.serviceInfo}>
-                  <Text style={[styles.serviceName, { color: SV.text }]}>
+                  <Text style={[styles.serviceName, { color: SV.text }, bodyFont]}>
                     {service.name}
                   </Text>
                   {service.serviceType === "consultation" &&
@@ -3973,6 +3981,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       </Text>
                     )}
                   <ServiceDescription
+                    fontStyle={bodyFont}
                     text={service.description ?? ""}
                     expanded={expandedServices.has(service.id)}
                     onToggle={() =>
@@ -4035,10 +4044,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     </View>
                   )}
                   <View style={styles.serviceDetails}>
-                    <Text style={[styles.serviceDuration, { color: SV.sub }]}>
+                    <Text style={[styles.serviceDuration, { color: SV.sub }, bodyFont]}>
                       {service.duration}
                     </Text>
-                    <Text style={[styles.servicePrice, { color: SV.text }]}>
+                    <Text style={[styles.servicePrice, { color: SV.text }, bodyFont]}>
                       £{service.price}
                     </Text>
                   </View>
@@ -5503,7 +5512,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <ExpandableAboutText
                         text={provider.aboutText}
                         translate
-                        textStyle={[styles.heroAboutText, { color: heroText }, heroIsDark && styles.heroTextShadow]}
+                        textStyle={[styles.heroAboutText, { color: heroText }, heroIsDark && styles.heroTextShadow, bodyFont]}
                         linkStyle={styles.moreButton}
                         linkTextStyle={[styles.moreButtonText, { color: heroText }]}
                         onCollapse={handleAboutCollapse}
@@ -5683,7 +5692,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <ExpandableAboutText
                           text={provider.aboutText}
                           translate
-                          textStyle={[styles.aboutText, { color: OP.sub }]}
+                          textStyle={[styles.aboutText, { color: OP.sub }, bodyFont]}
                           linkStyle={styles.moreButton}
                           linkTextStyle={[styles.moreButtonText, { color: OP.text }]}
                           onCollapse={handleAboutCollapse}
@@ -5738,14 +5747,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                     )}
                                   </View>
                                   <Text
-                                    style={[styles.policyValue, { color: OP.text }]}
+                                    style={[styles.policyValue, { color: OP.text }, bodyFont]}
                                   >
                                     {row.value}
                                   </Text>
                                   {row.notes?.map((note) => (
                                     <Text
                                       key={note}
-                                      style={[styles.policyNote, { color: OP.sub }]}
+                                      style={[styles.policyNote, { color: OP.sub }, bodyFont]}
                                     >
                                       {note}
                                     </Text>
@@ -5802,7 +5811,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <ExpandableAboutText
                           text={provider.aboutText}
                           translate
-                          textStyle={[styles.aboutText, { color: onAccentInk(adaptiveAccentColor).sub }]}
+                          textStyle={[styles.aboutText, { color: onAccentInk(adaptiveAccentColor).sub }, bodyFont]}
                           linkStyle={styles.moreButton}
                           linkTextStyle={[styles.moreButtonText, { color: onAccentInk(adaptiveAccentColor).text }]}
                           onCollapse={handleAboutCollapse}
@@ -5815,7 +5824,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <ExpandableAboutText
                           text={provider.aboutText}
                           translate
-                          textStyle={[styles.aboutText, { color: sectionInk(sectionPalette).sub }]}
+                          textStyle={[styles.aboutText, { color: sectionInk(sectionPalette).sub }, bodyFont]}
                           linkStyle={styles.moreButton}
                           linkTextStyle={[styles.moreButtonText, { color: sectionInk(sectionPalette).text }]}
                           onCollapse={handleAboutCollapse}

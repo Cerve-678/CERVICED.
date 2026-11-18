@@ -24,6 +24,7 @@ import {
   type PageStyleKey,
   type PolicyPictureLook,
 } from './pageStyles';
+import { DEFAULT_CUSTOM_CHOICES, encodeCustomChoices, parseCustomChoices, type CustomChoices } from './customPageStyle';
 // Default beige content backdrop — matches the app background.
 export const SHEET_BG = '#F5F1EC';
 
@@ -398,7 +399,12 @@ export function encodeThemeKey(
   shape: CardShape = DEFAULT_CARD_SHAPE,
   pageStyle: PageStyleKey = DEFAULT_PAGE_STYLE,
   policyLook: PolicyPictureLook = DEFAULT_POLICY_PICTURE_LOOK,
+  /** Branding → Custom's picks, written only while the page style is Custom. */
+  custom: CustomChoices = DEFAULT_CUSTOM_CHOICES,
 ): string {
+  if (pageStyle === 'custom') {
+    return `${base}|${sheet || SHEET_BG}|${finish}|${shape}|${pageStyle}|${policyLook}|${encodeCustomChoices(custom)}`;
+  }
   if (policyLook !== DEFAULT_POLICY_PICTURE_LOOK) {
     return `${base}|${sheet || SHEET_BG}|${finish}|${shape}|${pageStyle}|${policyLook}`;
   }
@@ -408,8 +414,8 @@ export function encodeThemeKey(
   return sheet && sheet !== SHEET_BG ? `${base}|${sheet}` : base;
 }
 
-/** Split a stored profile_theme value into base key, sheet colour, hero finish
- *  and card shape. Anything unreadable falls back to the default for that part. */
+/** Split a stored profile_theme value into base key, sheet colour, hero finish,
+ *  card shape, page style, policy pictures and Custom's picks. Anything unreadable falls back to the default for that part. */
 export function parseThemeKey(key: string | null | undefined): {
   base: string | null;
   sheet: string;
@@ -417,14 +423,15 @@ export function parseThemeKey(key: string | null | undefined): {
   shape: CardShape;
   pageStyle: PageStyleKey;
   policyLook: PolicyPictureLook;
+  custom: CustomChoices;
 } {
   if (!key) {
     return {
       base: null, sheet: SHEET_BG, finish: DEFAULT_HERO_FINISH, shape: DEFAULT_CARD_SHAPE,
-      pageStyle: DEFAULT_PAGE_STYLE, policyLook: DEFAULT_POLICY_PICTURE_LOOK,
+      pageStyle: DEFAULT_PAGE_STYLE, policyLook: DEFAULT_POLICY_PICTURE_LOOK, custom: DEFAULT_CUSTOM_CHOICES,
     };
   }
-  const [base, sheet, finish, shape, pageStyle, policyLook] = key.split('|');
+  const [base, sheet, finish, shape, pageStyle, policyLook, custom] = key.split('|');
   const validSheet = /^#[0-9a-fA-F]{6}$/.test(sheet ?? '') ? sheet! : SHEET_BG;
   return {
     base: base ?? null,
@@ -433,6 +440,7 @@ export function parseThemeKey(key: string | null | undefined): {
     shape: isCardShape(shape) ? shape : DEFAULT_CARD_SHAPE,
     pageStyle: isPageStyleKey(pageStyle) ? pageStyle : DEFAULT_PAGE_STYLE,
     policyLook: isPolicyPictureLook(policyLook) ? policyLook : DEFAULT_POLICY_PICTURE_LOOK,
+    custom: parseCustomChoices(custom),
   };
 }
 

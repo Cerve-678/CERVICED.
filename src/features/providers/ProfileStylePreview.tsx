@@ -37,6 +37,7 @@ import {
   RuledJumpBar,
   policiesBringOwnSurface,
   sectionInk,
+  customTextStyle,
   sectionsSitOnPage,
   serviceCardSurface,
   sheetInk,
@@ -145,8 +146,9 @@ export function ProfileStylePreview({
   full = false,
   children,
 }: ProfileStylePreviewProps) {
-  const { finish, shape, pageStyle: styleKey } = parseThemeKey(themeKey);
-  const pageStyle = getPageStyle(styleKey);
+  const { finish, shape, pageStyle: styleKey, custom } = parseThemeKey(themeKey);
+  const pageStyle = getPageStyle(styleKey, custom);
+  const bodyFont = customTextStyle(pageStyle);
   const baseTheme = resolveProviderTheme(themeKey);
   // As on the profile: a veil page (Sheer) puts the content on dark glass.
   const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
@@ -199,8 +201,8 @@ export function ProfileStylePreview({
   // Their About in the section's ink, or the bars when they haven't written one.
   const aboutBody = (ink: string, barColour: string, widths?: number[]) => (about
     ? full
-      ? <ExpandableAboutText text={about} textStyle={[styles.aboutText, { color: ink }]} linkStyle={styles.aboutMoreRow} linkTextStyle={[styles.aboutMore, { color: ink }]} />
-      : <Text style={[styles.aboutText, { color: ink }]} numberOfLines={4}>{about}</Text>
+      ? <ExpandableAboutText text={about} textStyle={[styles.aboutText, { color: ink }, bodyFont]} linkStyle={styles.aboutMoreRow} linkTextStyle={[styles.aboutMore, { color: ink }]} />
+      : <Text style={[styles.aboutText, { color: ink }, bodyFont]} numberOfLines={4}>{about}</Text>
     : lines(barColour, widths));
   const categories = content?.categories ?? [];
   const [selectedCategory, setSelectedCategory] = useState(categories[0] ?? "");
@@ -464,8 +466,8 @@ export function ProfileStylePreview({
                 </View>
                 {services[index] ? (
                   <View style={styles.serviceText}>
-                    <Text style={[styles.serviceName, { color: serviceInk.text }]} numberOfLines={1}>{services[index].name}</Text>
-                    <Text style={[styles.serviceMeta, { color: serviceInk.sub }]} numberOfLines={1}>
+                    <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]} numberOfLines={1}>{services[index].name}</Text>
+                    <Text style={[styles.serviceMeta, { color: serviceInk.sub }, bodyFont]} numberOfLines={1}>
                       {[formatDurationMinutes(services[index].minutes), previewPrice(services[index].price)].filter(Boolean).join(" · ")}
                     </Text>
                   </View>

@@ -1,3 +1,4 @@
+import { DEFAULT_CUSTOM_CHOICES } from '../constants/customPageStyle';
 import {
   DEFAULT_PAGE_STYLE,
   romanNumeral,
@@ -36,7 +37,7 @@ describe('page style in the stored theme key', () => {
     const key = encodeThemeKey('blush', '#F8ECF0', 'glow', 'square', 'arch');
     expect(key).toBe('blush|#F8ECF0|glow|square|arch');
     expect(parseThemeKey(key)).toEqual({
-      base: 'blush', sheet: '#F8ECF0', finish: 'glow', shape: 'square', pageStyle: 'arch', policyLook: 'melt',
+      base: 'blush', sheet: '#F8ECF0', finish: 'glow', shape: 'square', pageStyle: 'arch', policyLook: 'melt', custom: DEFAULT_CUSTOM_CHOICES,
     });
   });
 
@@ -93,7 +94,7 @@ describe('page styles', () => {
   });
 
   it('gives each of the 2026-11-14 styles a hero and heading of its own', () => {
-    const added = ['editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary'].map(getPageStyle);
+    const added = ['editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary'].map(key => getPageStyle(key));
     expect(new Set(added.map(s => s.hero)).size).toBe(6);
     expect(new Set(added.map(s => s.heading)).size).toBe(6);
   });
@@ -294,7 +295,7 @@ describe('Calling Card', () => {
 
 describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   const keys = ['lounge', 'softFocus', 'hush', 'stripes', 'bow'] as const;
-  const styles = keys.map(getPageStyle);
+  const styles = keys.map(key => getPageStyle(key));
   const colours = { card: '#FFFFFF', accent: '#A58CCB', sheet: SHEET_BG };
 
   it('gives each a hero and a heading of its own', () => {
