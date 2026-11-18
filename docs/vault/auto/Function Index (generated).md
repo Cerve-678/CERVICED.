@@ -5,7 +5,7 @@
 
 #generated
 
-**4020 functions** across **563 files**.
+**4024 functions** across **563 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -288,7 +288,7 @@
 - `linkOnlyDashboard.ts` — **buildProfileStrength** · **busiestBookTapLine** · **compactTime** · **compareWeeks** · **greetingFor** · **joinNudgeBarCount** · **remainingStepsLine** · **todayHoursLabel** · **trendLabel**
 - `linkOnlySearch.ts` — **filtersAllowLinkOnly**
 - `ManageScheduleRows.tsx` — **ManageScheduleRows**
-- `ownSections.ts` — cleanText · **filledOwnSections** · **hasHalfFilledFaq** · **normalizeOwnSections**
+- `ownSections.ts` — cleanText · **filledOwnSections** · **hasHalfFilledFaq** · **normalizeOwnSections** · **ownSectionByline** · **ownSectionsChanged**
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
 - `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
@@ -439,7 +439,7 @@
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · joinNudgeTotal · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · curatedSpecialtyOptions · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · styles
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
-- `PoliciesScreen.tsx` — addOwn · buildInfoPreview · flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · open · openSetting · ownHasContent · ownShows · Pills · PoliciesScreen · refreshInfoPreview · removeOwn · setFaq · setPolicy · shows · TextLink · toggle · toOwnDraft
+- `PoliciesScreen.tsx` — addOwn · buildInfoPreview · flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · MinusButton · open · openSetting · ownHasContent · ownShows · Pills · PoliciesScreen · refreshInfoPreview · removeOwn · removeText · setFaq · setPolicy · shows · TextLink · toggle · toOwnDraft
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view

@@ -27,7 +27,7 @@ import {
   type PageStylePalette,
 } from "./ProfilePageStyle";
 import { plateMarkEdges } from "./heroes/EmbossedHero";
-import { filledOwnSections, type OwnSections } from "./ownSections";
+import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
 const COLUMN_GAP = 12;
@@ -320,9 +320,12 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
 export const ProviderOwnSections = React.memo(function ProviderOwnSections({
   sections,
   palette,
+  providerName,
 }: {
   sections: OwnSections;
   palette: SectionPalette;
+  /** For the "Written by" line under Aftercare and Disclaimer. */
+  providerName: string;
 }) {
   const ink = sectionInk(palette);
   return (
@@ -342,6 +345,9 @@ export const ProviderOwnSections = React.memo(function ProviderOwnSections({
           ) : (
             <Text style={[styles.infoText, { color: ink.text }]}>{sections[kind]}</Text>
           )}
+          {ownSectionByline(kind, providerName) ? (
+            <Text style={[styles.ownByline, { color: ink.sub }]}>{ownSectionByline(kind, providerName)}</Text>
+          ) : null}
         </PageSection>
       ))}
     </>
@@ -595,6 +601,7 @@ const styles = StyleSheet.create({
   infoBlockFirst: { marginTop: 0 },
   infoLabel: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 11, marginBottom: 7, textTransform: "uppercase", letterSpacing: 0.5 },
   infoText: { fontFamily: "Jura-VariableFont_wght", fontSize: 13, lineHeight: 19 },
+  ownByline: { fontFamily: "Jura-VariableFont_wght", fontSize: 12, fontWeight: "600", marginTop: 10 },
   faqItem: { paddingVertical: 2 },
   faqItemNext: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   faqQuestion: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 13, lineHeight: 19, marginBottom: 4 },

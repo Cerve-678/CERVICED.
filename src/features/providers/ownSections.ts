@@ -88,3 +88,21 @@ export function filledOwnSections(sections: OwnSections): OwnSectionKind[] {
 export function hasHalfFilledFaq(faq: readonly FaqItem[] | undefined): boolean {
   return (faq ?? []).some(item => !item.question.trim() !== !item.answer.trim());
 }
+
+/** Sections that carry a "Written by" line on the profile, so clients can see
+ *  the wording is the provider's own and not CERVICED's (user decision,
+ *  2026-11-18: Aftercare and Disclaimer are the provider's own words). */
+export const ATTRIBUTED_SECTION_KINDS: readonly OwnSectionKind[] = ['aftercare', 'disclaimer'];
+
+/** "Written by Glow Studio", or null for sections that don't carry one. */
+export function ownSectionByline(kind: OwnSectionKind, providerName: string): string | null {
+  const name = providerName.trim();
+  if (!ATTRIBUTED_SECTION_KINDS.includes(kind)) return null;
+  return name ? `Written by ${name}` : 'Written by the provider';
+}
+
+/** True when what would be shown has really changed, not just spacing. The
+ *  provider re-agrees at the bottom of Policies & Info only then. */
+export function ownSectionsChanged(draft: unknown, loaded: unknown): boolean {
+  return JSON.stringify(normalizeOwnSections(draft)) !== JSON.stringify(normalizeOwnSections(loaded));
+}

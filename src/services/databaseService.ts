@@ -6462,10 +6462,14 @@ export async function updateProviderCancellationPolicy(
 export async function updateProviderProfileSections(
   providerId: string,
   sections: OwnSections,
+  /** When the provider ticked the agreement at the bottom of Policies & Info
+   *  for this change (ISO). Kept beside the sections as a record; the profile
+   *  ignores it (normalizeOwnSections drops unknown keys). */
+  agreedAt: string,
 ): Promise<void> {
   const { error } = await supabase
     .from("providers")
-    .update({ profile_sections: normalizeOwnSections(sections) })
+    .update({ profile_sections: { ...normalizeOwnSections(sections), agreedAt } })
     .eq("id", providerId);
   if (error) throw error;
 }

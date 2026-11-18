@@ -5977,7 +5977,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 onOpenImage={openImageViewer}
               />
 
-              <ProviderOwnSections sections={provider.ownSections} palette={sectionPalette} />
+              <ProviderOwnSections sections={provider.ownSections} palette={sectionPalette} providerName={provider.displayName} />
             </View>
           </ScrollView>
         </SafeAreaView>

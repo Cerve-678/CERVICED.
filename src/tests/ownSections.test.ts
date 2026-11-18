@@ -6,6 +6,8 @@ import {
   filledOwnSections,
   hasHalfFilledFaq,
   normalizeOwnSections,
+  ownSectionByline,
+  ownSectionsChanged,
 } from '../features/providers/ownSections';
 import { PAGE_SECTION_TITLES, chapterHeading, headingPair } from '../constants/pageStyles';
 import { mapProviderProfileData } from '../features/providers/profileMapper';
@@ -82,8 +84,37 @@ describe('own sections on the profile', () => {
     expect(screen.indexOf('<ProviderOwnSections')).toBeGreaterThan(screen.indexOf('<ProviderAdditionalInfoSection'));
   });
 
-  it('is saved cleaned, and only when it changed', () => {
-    expect(read('services/databaseService.ts')).toMatch(/update\(\{ profile_sections: normalizeOwnSections\(sections\) \}\)/);
-    expect(read('screens/provider/PoliciesScreen.tsx')).toMatch(/JSON\.stringify\(normalizeOwnSections\(ownDraft\)\) !== loadedOwn/);
+  it('is saved cleaned with the agreement time, only when it changed, and only once agreed', () => {
+    expect(read('services/databaseService.ts')).toMatch(/update\(\{ profile_sections: \{ \.\.\.normalizeOwnSections\(sections\), agreedAt \} \}\)/);
+    const screen = read('screens/provider/PoliciesScreen.tsx');
+    expect(screen).toMatch(/const ownChanged = ownSectionsChanged\(ownDraft, loadedOwn\)/);
+    expect(screen).toMatch(/if \(ownChanged && !termsAcknowledged\) \{/);
+    expect(screen).toMatch(/if \(providerId && ownChanged\) \{\s*await updateProviderProfileSections\(providerId, ownDraft, new Date\(\)\.toISOString\(\)\)/);
+  });
+});
+
+describe('provider-written sections are attributed', () => {
+  it('puts a Written by line on Aftercare and Disclaimer only', () => {
+    expect(ownSectionByline('aftercare', 'Glow Studio')).toBe('Written by Glow Studio');
+    expect(ownSectionByline('disclaimer', '  Glow Studio ')).toBe('Written by Glow Studio');
+    expect(ownSectionByline('disclaimer', '')).toBe('Written by the provider');
+    expect(ownSectionByline('keyInfo', 'Glow Studio')).toBeNull();
+    expect(ownSectionByline('faq', 'Glow Studio')).toBeNull();
+    expect(ownSectionByline('houseRules', 'Glow Studio')).toBeNull();
+  });
+});
+
+describe('when the provider has to agree again', () => {
+  const loaded = { disclaimer: 'Results vary.' };
+  it('is not asked for spacing-only edits or an empty FAQ row', () => {
+    expect(ownSectionsChanged({ disclaimer: '  Results vary.  ', faq: [{ question: '', answer: '' }] }, loaded)).toBe(false);
+  });
+  it('is asked for new wording, a removed section or a new one', () => {
+    expect(ownSectionsChanged({ disclaimer: 'Results may vary.' }, loaded)).toBe(true);
+    expect(ownSectionsChanged({}, loaded)).toBe(true);
+    expect(ownSectionsChanged({ ...loaded, aftercare: 'Keep dry.' }, loaded)).toBe(true);
+  });
+  it('ignores the saved agreement time', () => {
+    expect(ownSectionsChanged(loaded, { ...loaded, agreedAt: '2026-11-18T12:00:00Z' })).toBe(false);
   });
 });

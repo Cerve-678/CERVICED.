@@ -65,8 +65,8 @@ import { mapProviderProfileData } from '../../features/providers/profileMapper';
 import { additionalInfoGroups, goodToKnowText, howToGetThere } from '../../features/providers/additionalInfo';
 import {
   OWN_SECTION_KINDS, OWN_SECTION_LABELS, OWN_SECTION_LIMITS,
-  hasHalfFilledFaq, normalizeOwnSections,
-  type FaqItem, type OwnSectionKind, type TextSectionKind,
+  hasHalfFilledFaq, normalizeOwnSections, ownSectionsChanged,
+  type FaqItem, type OwnSections, type OwnSectionKind, type TextSectionKind,
 } from '../../features/providers/ownSections';
 import type { ChipGroup as InfoGroup } from '../../features/providers/workWith';
 import { getPageStyle } from '../../constants/pageStyles';
@@ -295,6 +295,24 @@ function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
+/** The round "−" that takes away something added with "+": a note, Travel,
+ *  Emergency appointments, one of Your Sections, or one FAQ question. */
+function MinusButton({ label, onPress, style }: { label: string; onPress: () => void; style?: object }) {
+  const C = useBusinessPalette();
+  return (
+    <TouchableOpacity
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+      activeOpacity={0.6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={10}
+      style={[minusSt.btn, { borderColor: C.border, backgroundColor: C.surface }, style]}
+    >
+      <Text style={[minusSt.text, { color: C.sub }]}>−</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function PoliciesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
@@ -342,17 +360,26 @@ export default function PoliciesScreen({ navigation }: any) {
   const open = useCallback((key: string) => setOpened(prev => ({ ...prev, [key]: true })), []);
   const toggle = useCallback((key: string) => setOpened(prev => ({ ...prev, [key]: !prev[key] })), []);
   const shows = (key: keyof PolicyState) => opened[key] || String(policies[key] ?? '').trim() !== '';
+  // The "−" on a note, Travel or Emergency appointments: clears it and folds
+  // it back to its "+". Saved as empty, so it leaves the profile on Save.
+  const removeText = useCallback((key: 'cancelNote' | 'rescheduleNote' | 'noShowNote' | 'travelPolicy' | 'emergencyBookingPolicy') => {
+    setOpened(prev => ({ ...prev, [key]: false }));
+    setPolicies(prev => ({ ...prev, [key]: '' }));
+  }, []);
   // Your Sections: what's being edited, and the cleaned copy last loaded,
   // so Save only writes them when something changed.
   const [ownDraft, setOwnDraft] = useState<OwnDraft>(() => toOwnDraft(null));
-  const [loadedOwn, setLoadedOwn] = useState('{}');
+  const [loadedOwn, setLoadedOwn] = useState<OwnSections>({});
+  // A real change to Your Sections (not just spacing) needs the box at the
+  // bottom ticked before Save, every time.
+  const ownChanged = ownSectionsChanged(ownDraft, loadedOwn);
   const ownShows = (kind: OwnSectionKind) => !!opened[`own:${kind}`] || ownHasContent(ownDraft, kind);
   const addOwn = useCallback((kind: OwnSectionKind) => {
     Haptics.selectionAsync().catch(() => {});
     open(`own:${kind}`);
     if (kind === 'faq') setOwnDraft(prev => prev.faq.length > 0 ? prev : { ...prev, faq: [{ question: '', answer: '' }] });
   }, [open]);
-  // TextLink already gives the tap its haptic.
+  // MinusButton already gives the tap its haptic.
   const removeOwn = useCallback((kind: OwnSectionKind) => {
     setOpened(prev => ({ ...prev, [`own:${kind}`]: false }));
     setOwnDraft(prev => kind === 'faq' ? { ...prev, faq: [] } : { ...prev, [kind]: '' });
@@ -403,7 +430,7 @@ export default function PoliciesScreen({ navigation }: any) {
         setProviderId(profile.id);
         const own = toOwnDraft(profile.profile_sections);
         setOwnDraft(own);
-        setLoadedOwn(JSON.stringify(normalizeOwnSections(own)));
+        setLoadedOwn(normalizeOwnSections(own));
         // Not awaited: the preview loads beside the policies, not before them.
         if (profile.booking_mode !== 'external') refreshInfoPreview(profile);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
@@ -519,6 +546,10 @@ export default function PoliciesScreen({ navigation }: any) {
       flash('Each question needs an answer, or remove it', 'error');
       return;
     }
+    if (ownChanged && !termsAcknowledged) {
+      flash('Tick the box at the bottom to save your sections', 'error');
+      return;
+    }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -538,8 +569,8 @@ export default function PoliciesScreen({ navigation }: any) {
       if (providerId && noticeHours !== null) {
         await updateProviderCancellationPolicy(providerId, noticeHours);
       }
-      if (providerId && JSON.stringify(normalizeOwnSections(ownDraft)) !== loadedOwn) {
-        await updateProviderProfileSections(providerId, ownDraft);
+      if (providerId && ownChanged) {
+        await updateProviderProfileSections(providerId, ownDraft, new Date().toISOString());
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
@@ -549,7 +580,7 @@ export default function PoliciesScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [userId, providerId, policies, imageEdges, loadedNotice, carriedPolicies, loadFailed, navigation, isLinkOnly, ownDraft, loadedOwn]);
+  }, [userId, providerId, policies, imageEdges, loadedNotice, carriedPolicies, loadFailed, navigation, isLinkOnly, ownDraft, ownChanged, termsAcknowledged]);
 
   if (loading) {
     return (
@@ -635,7 +666,10 @@ export default function PoliciesScreen({ navigation }: any) {
                 )}
               </>)}
               {shows('cancelNote') && (
-                <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
+                <View>
+                  <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
+                  <MinusButton label="Remove note" onPress={() => removeText('cancelNote')} style={minusSt.onField} />
+                </View>
               )}
               <View style={linkSt.row}>
                 {!isLinkOnly && <TextLink label={opened['cancelHow'] ? 'Hide' : 'How this works ›'} onPress={() => toggle('cancelHow')} />}
@@ -666,7 +700,12 @@ export default function PoliciesScreen({ navigation }: any) {
                 <Text style={[s.cardSub, { color: C.sub, marginTop: 6, marginBottom: 0 }]}>Clients can only move it to another day in the same calendar month. A booking on the 14th can move up to the last day of that month.</Text>
               )}
               {shows('rescheduleNote')
-                ? <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
+                ? (
+                  <View>
+                    <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
+                    <MinusButton label="Remove note" onPress={() => removeText('rescheduleNote')} style={minusSt.onField} />
+                  </View>
+                )
                 : <View style={linkSt.row}><TextLink label="+ Add a note" onPress={() => open('rescheduleNote')} /></View>}
             </Card>
 
@@ -726,7 +765,10 @@ export default function PoliciesScreen({ navigation }: any) {
                   </>
                 )}
                 {shows('noShowNote') && (
-                  <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+                  <View>
+                    <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
+                    <MinusButton label="Remove note" onPress={() => removeText('noShowNote')} style={minusSt.onField} />
+                  </View>
                 )}
                 <View style={linkSt.row}>
                   {policies.noShowAction === 'half' && <TextLink label={opened['noShowHow'] ? 'Hide' : 'How this works ›'} onPress={() => toggle('noShowHow')} />}
@@ -793,7 +835,11 @@ export default function PoliciesScreen({ navigation }: any) {
                 "How far you travel" / providers.travel_radius was removed so
                 the distance is stated once). */}
             {shows('travelPolicy') && (
-              <Card title="Travel" sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional).">
+              <Card
+                title="Travel"
+                sub="If you travel to clients: how far you go and anything they should know first. Shown on your profile (optional)."
+                action={<MinusButton label="Remove travel" onPress={() => removeText('travelPolicy')} />}
+              >
                 <Field
                   label="Your travel policy"
                   value={policies.travelPolicy}
@@ -804,8 +850,11 @@ export default function PoliciesScreen({ navigation }: any) {
               </Card>
             )}
             {shows('emergencyBookingPolicy') && (
-
-              <Card title="Emergency Appointments" sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly.">
+              <Card
+                title="Emergency Appointments"
+                sub="Whether you take emergency appointments and how a client should ask. Shown on your profile (optional). Clients contact you to arrange one, it can't be booked directly."
+                action={<MinusButton label="Remove emergency appointments" onPress={() => removeText('emergencyBookingPolicy')} />}
+              >
                 <Field
                   label="Your emergency appointment policy"
                   value={policies.emergencyBookingPolicy}
@@ -939,12 +988,19 @@ export default function PoliciesScreen({ navigation }: any) {
                 <View key={kind} style={ownSt.section}>
                   <View style={ownSt.head}>
                     <Text style={[ownSt.title, { color: C.text }]}>{OWN_SECTION_LABELS[kind]}</Text>
-                    <TextLink label="Remove" onPress={() => removeOwn(kind)} />
+                    <MinusButton label={`Remove ${OWN_SECTION_LABELS[kind]}`} onPress={() => removeOwn(kind)} />
                   </View>
                   {kind === 'faq' ? (
                     <>
                       {ownDraft.faq.map((item, index) => (
                         <View key={index} style={[ownSt.faq, index > 0 && { borderTopColor: C.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14 }]}>
+                          {ownDraft.faq.length > 1 && (
+                            <MinusButton
+                              label={`Remove question ${index + 1}`}
+                              onPress={() => setOwnDraft(prev => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }))}
+                              style={[minusSt.onField, index > 0 && { top: 8 }]}
+                            />
+                          )}
                           <Field
                             label={`Question ${index + 1}`}
                             value={item.question}
@@ -960,12 +1016,6 @@ export default function PoliciesScreen({ navigation }: any) {
                             maxLength={OWN_SECTION_LIMITS.answer}
                             multiline
                           />
-                          {ownDraft.faq.length > 1 && (
-                            <TextLink
-                              label="Remove this question"
-                              onPress={() => setOwnDraft(prev => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }))}
-                            />
-                          )}
                         </View>
                       ))}
                       {ownDraft.faq.length < OWN_SECTION_LIMITS.faqItems && (
@@ -1004,12 +1054,11 @@ export default function PoliciesScreen({ navigation }: any) {
               )}
             </Card>
 
-            {/* Re-affirmation, not a gate — first-publish acceptance in
-                InfoRegScreen is what actually blocks Publish. This is shown
-                here too since a provider can come back and change their
-                policies long after first publish without ever revisiting
-                InfoRegScreen, but Save works regardless of whether it's
-                checked. */}
+            {/* First-publish acceptance in InfoRegScreen is what blocks
+                Publish. Here it's a re-affirmation, and Save works without it,
+                EXCEPT when Your Sections really changed: those are the
+                provider's own public words, so they tick it for every change
+                (user decision, 2026-11-18). The time is saved beside them. */}
             <TouchableOpacity
               style={[termsSt.box, { backgroundColor: C.surface, borderColor: C.border }]}
               activeOpacity={0.75}
@@ -1023,8 +1072,12 @@ export default function PoliciesScreen({ navigation }: any) {
                 <Text style={[termsSt.link, { color: C.accent }]} onPress={() => openLegalPage('provider-terms')}>
                   Terms &amp; Conditions
                 </Text>
+                {ownChanged ? '. Your Sections are in my own words, shown publicly on my profile, and I\'m responsible for what they say.' : ''}
               </Text>
             </TouchableOpacity>
+            {ownChanged && !termsAcknowledged && (
+              <Text style={[termsSt.needed, { color: C.sub }]}>You changed Your Sections, so tick this to save.</Text>
+            )}
 
             <SaveButton saving={saving} onPress={handleSave} />
           </ScrollView>
@@ -1077,6 +1130,14 @@ const termsSt = StyleSheet.create({
   checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   text:     { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600' },
   link:     { fontWeight: '800', textDecorationLine: 'underline' },
+  needed:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', marginTop: -6, marginBottom: 14, paddingHorizontal: 4 },
+});
+
+const minusSt = StyleSheet.create({
+  btn:     { width: 26, height: 26, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  text:    { fontSize: 18, lineHeight: 20, fontWeight: '500' },
+  // Over a Field, level with its label.
+  onField: { position: 'absolute', top: -6, right: 0, zIndex: 1 },
 });
 
 const imgSt = StyleSheet.create({

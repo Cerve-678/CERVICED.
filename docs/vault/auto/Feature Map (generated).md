@@ -254,7 +254,7 @@ Curated: [[Booking Flow]] · **220 files**
 - `src/screens/client/RescheduleScreen.tsx` _(164)_
 - `src/screens/client/CartScreen.tsx` _(157)_
 - `src/services/becca/capabilities/client.ts` _(149)_
-- `src/screens/provider/PoliciesScreen.tsx` _(86)_
+- `src/screens/provider/PoliciesScreen.tsx` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_
 - `supabase/fix_group_reschedule_notification_dedup.sql` _(72)_
 - `src/utils/policyDisplay.ts` _(71)_
