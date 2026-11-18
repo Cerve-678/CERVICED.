@@ -15,6 +15,7 @@ import type {
 } from '../types/maintenance';
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
+import { formProblem } from "../features/intake-forms/sendForms";
 import type { SavedCard } from '../features/payments/savedCards';
 import type { MissRecord as BeccaMissRecord } from './becca/missLog';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
@@ -6983,6 +6984,10 @@ export async function sendLibraryFormToBookings(
   ]);
   const lf = libraryRead.data;
   if (libraryRead.error || !lf) throw new Error("Library form not found");
+  // Never send a client an empty form (formProblem gives the screen the
+  // reason; this is the last stop).
+  const problem = formProblem((lf.questions ?? []) as IntakeFormQuestion[]);
+  if (problem) throw new Error(problem);
   if (existingRead.error) throw existingRead.error;
   const already = new Set((existingRead.data ?? []).map((r: { booking_id: string }) => r.booking_id));
 
@@ -7022,6 +7027,23 @@ export async function sendLibraryFormToBookings(
   )));
 
   return (data ?? []).map(mapIntakeForm);
+}
+
+/** Which of these bookings already have this saved form, so the picker can
+ *  say so instead of offering to send it again. */
+export async function getBookingIdsWithLibraryForm(
+  libraryFormId: string,
+  bookingIds: string[],
+): Promise<string[]> {
+  if (bookingIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("booking_intake_forms")
+    .select("booking_id")
+    .eq("library_form_id", libraryFormId)
+    .in("booking_id", bookingIds)
+    .limit(bookingIds.length);
+  if (error) throw error;
+  return (data ?? []).map((row: { booking_id: string }) => row.booking_id);
 }
 
 /** Tell the client (in-app + push via DB trigger) that a form is waiting for them.

@@ -28,3 +28,18 @@ describe('sending a form to several appointments', () => {
     expect(sentFormsMessage(0, 2)).toBe('They all already have this form.');
   });
 });
+
+describe('a form is never sent empty', () => {
+  const { formProblem } = require('../features/intake-forms/sendForms') as typeof import('../features/intake-forms/sendForms');
+  it('needs a question, wording, policy text and real choices', () => {
+    expect(formProblem([])).toBe('Add at least one question.');
+    expect(formProblem([{ type: 'text', label: ' ' }])).toBe('Question 1 needs wording.');
+    expect(formProblem([{ type: 'policy', label: 'Cancellation', body: '  ' }])).toBe('Add the policy text to "Cancellation".');
+    expect(formProblem([{ type: 'choice', label: 'Skin type', options: ['Oily', ''] }])).toBe('Give "Skin type" at least two options.');
+    expect(formProblem([
+      { type: 'text', label: 'Allergies?' },
+      { type: 'policy', label: 'Policy', body: 'No refunds.' },
+      { type: 'choice', label: 'Skin', options: ['Oily', 'Dry'] },
+    ])).toBeNull();
+  });
+});

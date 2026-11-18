@@ -109,7 +109,7 @@ Curated: [[Payments]] · **181 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **385 files**
-- `src/services/databaseService.ts` _(1206)_
+- `src/services/databaseService.ts` _(1216)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(842)_
 - `src/screens/client/CartScreen.tsx` _(726)_
 - `src/contexts/BookingContext.tsx` _(701)_

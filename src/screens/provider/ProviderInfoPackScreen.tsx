@@ -52,6 +52,7 @@ import {
   clientPreviewNames,
   countClients,
   hasPlaceholder,
+  packHasContent,
   hasSection,
   insertSection,
   isHeadingLine,
@@ -340,7 +341,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
   const handleSave = useCallback(async () => {
     if (!editing || !user?.id || saving) return;
-    if (!title.trim() || !content.trim()) { showToast('Add a title and some content first.', 'warning'); return; }
+    if (!title.trim() || !packHasContent(content)) { showToast('Add a title and write something under your headings first.', 'warning'); return; }
     const fields = {
       title: title.trim(),
       // Legacy display label; matching runs on service_names.
@@ -507,7 +508,12 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                   <PackCard
                     pack={item} P={P} index={index} sent={r.sent} opened={r.opened}
                     onEdit={() => openEdit(item)}
-                    onSend={() => { setSending(item); if (upcomingState === 'error') void loadUpcoming(); }}
+                    onSend={() => {
+                      // Never send an empty pack (one saved before this check).
+                      if (!packHasContent(item.content)) { showToast('This pack is empty. Edit it and add something first.', 'warning'); return; }
+                      setSending(item);
+                      if (upcomingState === 'error') void loadUpcoming();
+                    }}
                     onDelete={() => handleDelete(item)}
                   />
                 );

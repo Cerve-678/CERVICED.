@@ -38,3 +38,24 @@ export function sentFormsMessage(sent: number, picked: number): string {
   const base = `Form sent to ${sent} ${sent === 1 ? 'client' : 'clients'}.`;
   return skipped > 0 ? `${base} ${skipped} already had it.` : base;
 }
+
+interface CheckableQuestion {
+  type: string;
+  label: string;
+  body?: string;
+  options?: string[];
+}
+
+/** Why a form can't be saved or sent yet, or null when it's ready. A client
+ *  is never sent an empty form, an unworded question, a policy with no text,
+ *  or a choice with nothing to choose. */
+export function formProblem(questions: readonly CheckableQuestion[]): string | null {
+  if (questions.length === 0) return 'Add at least one question.';
+  for (const [i, q] of questions.entries()) {
+    const name = q.label.trim() ? `"${q.label.trim()}"` : `Question ${i + 1}`;
+    if (!q.label.trim()) return `${name} needs wording.`;
+    if (q.type === 'policy' && !(q.body ?? '').trim()) return `Add the policy text to ${name}.`;
+    if (q.type === 'choice' && (q.options ?? []).filter(o => o.trim()).length < 2) return `Give ${name} at least two options.`;
+  }
+  return null;
+}
