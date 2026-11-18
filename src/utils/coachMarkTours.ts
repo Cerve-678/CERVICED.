@@ -38,6 +38,11 @@ export const TOUR_KEYS = {
   /** "How Maintenance works", shown on the first visit to Maintenance and
    *  replayed from its "How this works" link. */
   CLIENT_MAINTENANCE_HOWTO: 'client_maintenance_howto',
+  /** The Info Pack / Form tip card in the service editor. Recorded when the
+   *  provider closes it or uses it; after that only the one-line links show. */
+  PROVIDER_SERVICE_PACK_TIP: 'provider_service_pack_tip',
+  /** The same tip card on Policies, remembered separately. */
+  PROVIDER_POLICIES_PACK_TIP: 'provider_policies_pack_tip',
 } as const;
 
 export type TourKey = (typeof TOUR_KEYS)[keyof typeof TOUR_KEYS];
@@ -58,6 +63,8 @@ export const TOUR_CURRENT_VERSION: Record<TourKey, number> = {
   provider_info_packs: 1,
   provider_forms: 1,
   client_maintenance_howto: 1,
+  provider_service_pack_tip: 1,
+  provider_policies_pack_tip: 1,
 };
 
 /** A step's shape as far as this module cares — the real CoachMarkStep adds

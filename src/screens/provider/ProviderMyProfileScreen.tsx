@@ -120,6 +120,7 @@ import { ManageScheduleRows } from '../../features/providers/ManageScheduleRows'
 import { RecentBookingRow } from '../../features/providers/RecentBookingRow';
 import { RECENT_ACTIVITY_PREVIEW } from '../../features/providers/recentBookingActivity';
 import { useCalendarViewPreference } from '../../features/provider-bookings/calendarViewPreference';
+import type { PackFormKind } from '../../features/info-packs/PackFormHint';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
   toEditorValue,
@@ -1299,7 +1300,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const closeEditor = useCallback(() => setEditorOpen(false), []);
 
   const handleSaveService = useCallback(
-    async (draft: MyServiceDraft) => {
+    async (draft: MyServiceDraft, then?: PackFormKind) => {
       if (!providerId) return;
       setSaving(true);
       try {
@@ -1312,6 +1313,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         }
         setEditorOpen(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        // From the editor's Info Pack / Form tip: saved, now open it.
+        if (then) navigation.navigate(then === 'packs' ? 'InfoPacks' : 'ProviderIntakeForm');
       } catch (e) {
         logger.error('[MyServices] save service failed:', e);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -1323,7 +1326,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         setSaving(false);
       }
     },
-    [providerId, editingId, editingCategory],
+    [providerId, editingId, editingCategory, navigation],
   );
 
   const handleToggleActive = useCallback(async (service: DbService) => {
@@ -2522,6 +2525,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         saving={saving}
         palette={editorPalette}
         onSave={handleSaveService}
+        // Info Packs and Forms go with CERVICED bookings, which link-only
+        // providers don't take.
+        {...(myBookingMode === 'external' ? {} : { onSaveAndOpen: handleSaveService })}
         onClose={closeEditor}
       />
     </View>
