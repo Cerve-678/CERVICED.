@@ -1447,3 +1447,32 @@ Decide whether access should end when a booking is cancelled or declined, and
 whether it should lapse after a set time (for example, some months after the
 appointment). Parked by the user on 2026-11-08: "leave for now but put in to
 do review future". Raised by the security review of #342.
+
+## 33. To do — make a second copy of the same form impossible in the database (2026-11-18)
+
+A client should never get the same form twice for one booking. Today the app
+makes sure of it (PRs #598, #607):
+
+- the Forms client list shows "Already has this form" and won't let you tick it;
+- sending skips any booking that already has the form, or one with the same name;
+- the booking page only offers forms that booking doesn't have;
+- auto-send never adds a form to a booking that already has one.
+
+What's missing is a database rule, like info packs already have
+(`booking_info_packs` is unique on `booking_id, info_pack_id`). Without it, two
+phones sending the same form to the same appointment at the same instant could
+both get through. Live had no duplicates on 2026-11-18.
+
+The fix:
+
+1. A unique index on `booking_intake_forms (booking_id, library_form_id)`.
+   Rows with no library form (NULL) aren't affected.
+2. `ON CONFLICT DO NOTHING` on the two auto-send inserts
+   (`handle_auto_send_intake_form`, `apply_hold_claimed_side_effects`), so the
+   rule can never make a booking fail to confirm. Redefine both from live with
+   md5 guards.
+3. `sendLibraryFormToBookings` switches to an upsert that ignores duplicates,
+   and only notifies the clients whose form was really added.
+
+Parked by the user on 2026-11-18: "put it in to do". Needs a migration (check
+`supabase/MIGRATION_OWNER.md`) and a forced-rollback dry run before applying.
