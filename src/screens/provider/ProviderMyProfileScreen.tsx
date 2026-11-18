@@ -133,6 +133,7 @@ import {
   deriveAutomationsSet,
   buildGoLiveSteps,
   buildGoLiveHeadline,
+  goLiveCardLeads,
   type GoLiveStatus,
   type GoLiveStepKey,
 } from '../../features/providers/goLiveStatus';
@@ -1614,9 +1615,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       ? TONE_COLOR[headline.tone]
       : accentColor;
 
-  /* The go-live card. It leads the dashboard while anything is still
-     outstanding and drops to the bottom once the profile is finished —
-     at that point it's a receipt, not an instruction. */
+  /* The go-live card. It leads the dashboard until setup is 80% done and
+     clients can book, then drops to the bottom: at that point it's a
+     receipt, not an instruction. While the profile is still loading it
+     stays on top, where it always used to be. */
+  const statusLeads = goLiveCardLeads(setup.percent, goLive?.isLive ?? false);
   const todaySummaryCard = todaySchedule ? (
     <TodaySummaryCard
       schedule={todaySchedule}
@@ -1986,7 +1989,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
               {tab === 'dashboard' ? (
                 <>
-                  {setup.percent === 100 ? null : statusSection}
+                  {statusLeads ? statusSection : null}
 
                   {/* ── Today ──────────────────────────────────────────────────
                       Two cards around the rest of the dashboard: the summary
@@ -2422,7 +2425,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     </>
                   )}
 
-                  {setup.percent === 100 ? statusSection : null}
+                  {statusLeads ? null : statusSection}
                 </>
               ) : (
                 <>

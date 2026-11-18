@@ -5,7 +5,7 @@
 
 #generated
 
-**4097 functions** across **570 files**.
+**4098 functions** across **570 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -286,7 +286,7 @@
 - `externalBookingLink.ts` — **displayExternalBookingUrl** · **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
 - `FullCervicedLockedSheet.tsx` — **FullCervicedLockedSheet** · seeMore
 - `FullMemberConversion.tsx` — createStyles · **FullMemberConversion** · MockTab · run · steps · styles
-- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
+- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus** · **goLiveCardLeads**
 - `HeroPhotoPicker.tsx` — **HeroPhotoPicker** · slotOf
 - `heroPhotos.ts` — **heroPhotos** · **toggleHeroPhotoPick**
 - `inboxFilters.ts` — **filterInboxConversations** · **hasInboxFilters** · matchesDate · startOfDay
