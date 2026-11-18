@@ -356,12 +356,12 @@ export function CategoryEditor({ category, draft, editing, setDraft, P }: Props)
           {sub(suitedAesthetics.size > 0 ? 'The ones that go with your vibe are first. Pick any you love.' : 'Pick any you love.')}
           {renderCards(aesthetics, o => draft.styleAesthetics.includes(o), o => toggleMulti('styleAesthetics', o), 2)}
 
-          {sectionHead('WHAT YOU GET READY FOR', { selected: draft.styleOccasions.length, total: STYLE_OCCASIONS.length }, { optional: true })}
-          {sub('Where your look is usually going. Pick all that apply.')}
+          {sectionHead('OCCASIONS YOU BOOK FOR', { selected: draft.styleOccasions.length, total: STYLE_OCCASIONS.length }, { optional: true })}
+          {sub('When do you usually get your hair, nails or makeup done? Pick all that apply.')}
           {renderChips(withSaved(STYLE_OCCASIONS, draft.styleOccasions), o => draft.styleOccasions.includes(o), o => toggleMulti('styleOccasions', o))}
 
-          {sectionHead('HOW MUCH TIME YOU GIVE IT', { selected: draft.styleRoutine ? 1 : 0, total: 1 }, { optional: true })}
-          {sub('So providers and ideas match your routine.')}
+          {sectionHead('TIME SPENT GETTING READY', { selected: draft.styleRoutine ? 1 : 0, total: 1 }, { optional: true })}
+          {sub('On a normal day, how long do your hair and makeup take? It helps providers suggest looks you can keep up.')}
           {renderCards(STYLE_ROUTINES, o => draft.styleRoutine === o, o => setSingle('styleRoutine', o), 1)}
         </>
       );
