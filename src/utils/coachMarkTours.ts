@@ -43,6 +43,9 @@ export const TOUR_KEYS = {
   PROVIDER_SERVICE_PACK_TIP: 'provider_service_pack_tip',
   /** The same tip card on Policies, remembered separately. */
   PROVIDER_POLICIES_PACK_TIP: 'provider_policies_pack_tip',
+  /** The spotlight tour on My Profile, shown on the first visit once the
+   *  profile has loaded. */
+  PROVIDER_MY_PROFILE: 'provider_my_profile',
 } as const;
 
 export type TourKey = (typeof TOUR_KEYS)[keyof typeof TOUR_KEYS];
@@ -65,6 +68,7 @@ export const TOUR_CURRENT_VERSION: Record<TourKey, number> = {
   client_maintenance_howto: 1,
   provider_service_pack_tip: 1,
   provider_policies_pack_tip: 1,
+  provider_my_profile: 1,
 };
 
 /** A step's shape as far as this module cares — the real CoachMarkStep adds

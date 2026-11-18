@@ -93,6 +93,7 @@ describe('the tours', () => {
       CLIENT_MAINTENANCE_HOWTO: 'client_maintenance_howto',
       PROVIDER_SERVICE_PACK_TIP: 'provider_service_pack_tip',
       PROVIDER_POLICIES_PACK_TIP: 'provider_policies_pack_tip',
+      PROVIDER_MY_PROFILE: 'provider_my_profile',
     });
   });
 
