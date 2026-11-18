@@ -53,7 +53,7 @@ Run through this right before applying, not just when writing:
 ## Current owner
 
 ```
-OWNER:  (none)
+OWNER:  waitlist-auto session (20261118150000_waitlist_auto_and_close_together), 2026-11-18
 ```
 
 ### Applied 2026-11-18 (announcements reach savers and bell followers)

@@ -44,6 +44,7 @@ import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
 import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { placeInLineLabel, holdEndLabel } from '../../features/bookings/waitlist';
+import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -658,7 +659,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   }, [inviteDate, inviteTime]);
 
   // The provider picks a time for a waiting client. It's offered as a
-  // 15-minute hold the client confirms and pays for (decided 2026-11-10),
+  // 10-minute hold the client confirms and pays for (decided 2026-11-10),
   // never booked in with nothing paid.
   const handleConfirmInvite = useCallback(async () => {
     if (!inviteModal.entry || !inviteDate || !inviteTime) return;
@@ -812,17 +813,22 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                 {(waitlist.length > 0 || releasedSlots.length > 0) && (
                   <>
                     <Text style={[wl.popupLabel, { color: P.sub, marginTop: (unreadMessages > 0 || rescheduleRequestRows.length > 0) ? 8 : 0 }]}>WAITLIST</Text>
-                    {/* Auto-fill off: a client's hold ended unpaid, the time is
-                        open to everyone, and the provider can still offer it. */}
+                    {/* Auto off: a booking was cancelled, or a client's hold
+                        ended unpaid, and the provider offers the time from here.
+                        While the schedule is closed only the waitlist can have it. */}
                     {releasedSlots.map(slot => {
                       const busy = waitlistBusyId === slot.id;
                       return (
                         <View key={slot.id} style={[wl.card, { backgroundColor: P.card, marginBottom: 10, borderWidth: 1.5, borderColor: P.accent }, !dark && bc.shadow]}>
                           <Text style={[wl.clientName, { color: P.text }]}>
-                            {slot.releasedByName ?? 'Your waitlist client'} didn't take {formatShortDate(slot.bookingDate)}, {formatTime12(slot.bookingTime)}
+                            {slot.reason === 'cancelled'
+                              ? `${formatShortDate(slot.bookingDate)}, ${formatTime12(slot.bookingTime)} is free`
+                              : `${slot.releasedByName ?? 'Your waitlist client'} didn't take ${formatShortDate(slot.bookingDate)}, ${formatTime12(slot.bookingTime)}`}
                           </Text>
                           <Text style={[wl.serviceName, { color: P.sub }]}>
-                            {slot.serviceName} · {slot.reason === 'missed' ? 'Their 15 minutes ran out.' : 'They passed on it.'} It's open to everyone now.
+                            {slot.serviceName} · {slot.reason === 'cancelled'
+                              ? `${slot.releasedByName ?? 'A client'} cancelled.`
+                              : slot.reason === 'missed' ? `Their ${WAITLIST_HOLD_MINUTES} minutes ran out.` : 'They passed on it.'} You can offer it to someone on your waitlist.
                           </Text>
                           <TouchableOpacity style={[wl.inviteBtn, { backgroundColor: P.accent, marginTop: 10, alignSelf: 'stretch', alignItems: 'center' }]} activeOpacity={0.8}
                             disabled={busy} onPress={() => { void handleOfferReleasedSlot(slot); }}>

@@ -1614,7 +1614,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 springSpeed={14}
               />
             </Animated.View>
-            {/* A held waitlist slot is on a 15-minute clock, so it sits above
+            {/* A held waitlist slot is on a 10-minute clock, so it sits above
                 everything else until it's paid for, passed on, or gone. */}
             {heldWaitlistPlaces.length > 0 && (
               <View style={styles.heldSection}>

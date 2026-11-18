@@ -14,22 +14,3 @@ export type ClosureReason = (typeof CLOSURE_REASONS)[number]['value'];
 export function closureReasonForClient(reason: string | null | undefined): string | null {
   return CLOSURE_REASONS.find(r => r.value === reason)?.clientLabel ?? null;
 }
-
-/** Closing when full is only for a provider with the waitlist off: a closed
- *  schedule doesn't offer freed slots to the waitlist. Missing means on. */
-export function canAutoCloseWhenFull(waitlistEnabled: boolean | null | undefined): boolean {
-  return waitlistEnabled === false;
-}
-
-/** The two fully-booked responses share a slot, so choosing either one turns
- * the other off. Keep both controls visible in Automations while editing. */
-export function chooseFullyBookedResponse<T extends { waitlistEnabled: boolean; autoCloseWhenFull: boolean }>(
-  current: T,
-  choice: 'waitlistEnabled' | 'autoCloseWhenFull',
-  enabled: boolean,
-): T {
-  if (choice === 'waitlistEnabled') {
-    return { ...current, waitlistEnabled: enabled, autoCloseWhenFull: enabled ? false : current.autoCloseWhenFull };
-  }
-  return { ...current, autoCloseWhenFull: enabled, waitlistEnabled: enabled ? false : current.waitlistEnabled };
-}

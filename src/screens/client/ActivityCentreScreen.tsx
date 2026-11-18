@@ -37,6 +37,7 @@ import {
   useReduceMotion,
 } from '../../features/bookings/ActivityLive';
 import type { HomeStackParamList } from '../../navigation/types';
+import { WAITLIST_HOLD_MINUTES } from '../../constants/waitlist';
 
 const ALL_CLEAR = 'Nothing waiting. All quiet.';
 const PILL_MAX_MESSAGES = 6;
@@ -94,7 +95,7 @@ export default function ActivityCentreScreen({ navigation }: Props) {
         if (direct?.status === 'on_hold') {
           navigation.navigate('Bookings', { openBookingId: target.bookingId }, { pop: true });
         } else {
-          showAlert('This slot has gone', "Its 15 minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from Bookings.");
+          showAlert('This slot has gone', `Its ${WAITLIST_HOLD_MINUTES} minutes ran out before it was paid for, so you've come off this waitlist. You can rejoin from Bookings.`);
           void refresh();
         }
       })
