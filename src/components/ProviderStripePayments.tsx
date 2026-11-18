@@ -344,18 +344,6 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
           {payouts.slice(0, 3).map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
 
-        {setup && <PaySection>
-          <Text style={[styles.eyebrow, { color: C.accentText, marginBottom: 6 }]}>YOUR SETUP</Text>
-          <View style={styles.setupGrid}>
-            {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
-              <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
-                onPress={() => pick('settings')} activeOpacity={0.75}
-                style={[styles.setupTile, { backgroundColor: C.bg, borderColor: C.border }]}>
-                <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
-                <Text style={[styles.label, { color: C.text }]}>{value}</Text>
-              </TouchableOpacity>)}
-          </View>
-        </PaySection>}
       </>}
 
       {shownSection === 'bookings' && <>
@@ -485,6 +473,20 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
           {!!account.requirementsDue && <PaymentAction disabled={busy} label="Update required details" onPress={() => void openStripe('onboard')} secondary />}
     </View>}
 
+    {/* Your setup: its own card too, under the payout account (user, 2026-11-18). */}
+    {shownSection === 'overview' && dashboardReady && setup && <View style={[styles.card, styles.setupCard, { backgroundColor: C.card, borderColor: C.border }]}>
+      <Text style={[styles.eyebrow, { color: C.accentText, marginBottom: 6 }]}>YOUR SETUP</Text>
+      <View style={styles.setupGrid}>
+        {([['Deposits', setup.deposit], ['In person', setup.inPerson]] as const).map(([label, value]) =>
+          <TouchableOpacity key={label} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. Open payment settings`}
+            onPress={() => pick('settings')} activeOpacity={0.75}
+            style={[styles.setupTile, { backgroundColor: C.bg, borderColor: C.border }]}>
+            <Text style={[styles.caption, { color: C.sub }]}>{label}</Text>
+            <Text style={[styles.label, { color: C.text }]}>{value}</Text>
+          </TouchableOpacity>)}
+      </View>
+    </View>}
+
     {timelineRow && <BookingPaymentTimeline
       row={timelineRow}
       tips={tipGroups.byBooking.get(timelineRow.booking_id) ?? []}
@@ -583,6 +585,7 @@ const styles = StyleSheet.create({
   intro: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingTop: 8, paddingBottom: 14 },
   card: { borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
   accountCard: { marginTop: 14, paddingTop: 4, paddingBottom: 4 },
+  setupCard: { marginTop: 14, paddingTop: 16 },
   tabs: { flexDirection: 'row', gap: 4, borderRadius: 20, padding: 4, marginHorizontal: -8 },
   tab: { flex: 1, minHeight: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   tabLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
