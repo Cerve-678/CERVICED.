@@ -5,7 +5,7 @@
 
 #generated
 
-**3999 functions** across **561 files**.
+**4008 functions** across **562 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -261,8 +261,9 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (53)
+### `src/features/providers/` (54)
 - `aboutPreview.ts` — **aboutPreview**
+- `additionalInfo.ts` — **additionalInfoGroups** · **goodToKnowText** · **howToGetThere**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
 - `bookingCtaVisibility.ts` — **shouldShowBookingCta**
 - `calendarBusyBlocks.ts` — **addDaysYmd** · pad · timeFromMinutes · **toUkBusyBlocks** · **ukTodayYmd** · ukWallMs · ymdFromWallMs
@@ -418,7 +419,7 @@
 - `PointsScreen.tsx` — load · PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · leave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · measureKeyboardArea · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
-- `ProviderProfileScreen.tsx` — additionalInfoGroups · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · footer · formatDate · goodToKnowText · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroKicker · heroPhotoUris · heroPillLabels · hideSuccessMessage · jumpTargets · jumpToServices · loadWaitlistMap · notificationColors · notificationMessage · openBookingSheet · openHeroPhoto · openImageViewer · openLinkOnlyBooking · openOffersPanel · openSheets · policyPages · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · ServiceDescription · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
+- `ProviderProfileScreen.tsx` — additionalInfo · averageRating · bookingSheetInitial · cardHighlightColors · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · dotWindow · footer · formatDate · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroKicker · heroPhotoUris · heroPillLabels · hideSuccessMessage · jumpTargets · jumpToServices · loadWaitlistMap · notificationColors · notificationMessage · openBookingSheet · openHeroPhoto · openImageViewer · openLinkOnlyBooking · openOffersPanel · openSheets · policyPages · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · sectionPalette · selectedServicesFlat · selectedTotal · serviceCountsByType · ServiceDescription · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · socialButton · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · maxPickerDate · minPickerDate · monthLabel · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen · shownDateOptions
 - `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
 - `SubscriptionScreen.tsx` — SubscriptionScreen
@@ -437,7 +438,7 @@
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · joinNudgeTotal · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · curatedSpecialtyOptions · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · styles
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
-- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · Pills · PoliciesScreen · setPolicy
+- `PoliciesScreen.tsx` — buildInfoPreview · flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · open · openSetting · Pills · PoliciesScreen · refreshInfoPreview · setPolicy · shows · TextLink · toggle
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view

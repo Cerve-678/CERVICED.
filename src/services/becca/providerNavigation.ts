@@ -28,7 +28,7 @@ const destinations: { topic: RegExp; destination: ProviderDestination }[] = [
   },
   {
     topic: /\b(?:cancellation (?:policy|notice|window)|reschedul(?:e|ing) policy|no[ -]?show policy|address release|(?:my |booking )?polic(?:y|ies))\b/i,
-    destination: { title: "Policies", path: "Business Profile → Business Details → Policies", screen: "policies", detail: "Set your cancellation notice, rescheduling and no-show rules there.", fullBookingOnly: true },
+    destination: { title: "Policies & Info", path: "Business Profile → Business Details → Policies & Info", screen: "policies", detail: "Set your cancellation notice, rescheduling and no-show rules there.", fullBookingOnly: true },
   },
   {
     topic: /\bdeposits?\b/i,
