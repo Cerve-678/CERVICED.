@@ -1,7 +1,8 @@
 // src/screens/client/CircleScreen.tsx
 //
 // Your circle: find people from your contacts (the only way to find anyone:
-// there is no name search), answer follow requests, follow back the people
+// the search box filters your own contacts, never everyone on CERVICED),
+// answer follow requests, follow back the people
 // who follow you, and the three sharing switches (Private account, Show
 // where I go, Findable by phone number). Reached from Beauty Profile.
 // Contacts are only read after a tap on "Allow contacts" — see
@@ -20,6 +21,7 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -58,6 +60,8 @@ import {
   isContactsLimitError,
   rememberContacts,
   requestContactsAccess,
+  savedNameLine,
+  searchContacts,
   type ContactMatchResult,
   type InviteContact,
 } from '../../features/social/contacts';
@@ -82,7 +86,7 @@ const FACE = 42;
 const INVITES_PAGE = 25;
 
 type Row =
-  | { kind: 'result'; key: string; person: PersonSummary }
+  | { kind: 'result'; key: string; person: ContactMatchResult }
   | { kind: 'contacts'; key: string }
   | { kind: 'invite'; key: string; contact: InviteContact }
   | { kind: 'moreInvites'; key: string; left: number }
@@ -152,6 +156,14 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
   const [contactInvites, setContactInvites] = useState<InviteContact[]>(cachedContactsResult?.invites ?? []);
   const [invitesShown, setInvitesShown] = useState(INVITES_PAGE);
   const [contactsError, setContactsError] = useState<string | null>(null);
+  // Filters the contacts already on this phone; nothing is sent anywhere.
+  const [query, setQuery] = useState('');
+  const trimmedQuery = query.trim();
+  const searching = contactsState === 'done' && trimmedQuery.length > 0;
+  const shownContacts = useMemo(
+    () => searchContacts({ matches: contactMatches, invites: contactInvites }, trimmedQuery),
+    [contactMatches, contactInvites, trimmedQuery],
+  );
   // Set the instant the button is tapped, so a double tap can't run two checks.
   const contactsInFlight = useRef(false);
   const userIdRef = useRef(userId);
@@ -511,6 +523,32 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
 
   const sections = useMemo<Section[]>(() => {
     const out: Section[] = [];
+    // While searching, only your contacts show: the matches and the invites.
+    if (searching) {
+      const { matches, invites } = shownContacts;
+      if (matches.length === 0 && invites.length === 0) {
+        out.push({
+          key: 'contacts',
+          title: 'CONTACTS',
+          data: [{ kind: 'note', key: 's-empty', text: `None of your contacts match "${trimmedQuery}".` }],
+        });
+        return out;
+      }
+      if (matches.length > 0) {
+        out.push({
+          key: 'contacts',
+          title: `ON CERVICED · ${matches.length}`,
+          data: matches.map((person) => ({ kind: 'result', key: `c-${person.userId}`, person })),
+        });
+      }
+      if (invites.length > 0) {
+        const shown = invites.slice(0, invitesShown);
+        const data: Row[] = shown.map((contact) => ({ kind: 'invite', key: `i-${contact.key}`, contact }));
+        if (invites.length > shown.length) data.push({ kind: 'moreInvites', key: 'i-more', left: invites.length - shown.length });
+        out.push({ key: 'invites', title: `INVITE · ${invites.length}`, data });
+      }
+      return out;
+    }
     if (requests.length > 0) {
       out.push({
         key: 'requests',
@@ -571,7 +609,7 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
       });
     }
     return out;
-  }, [requests, contactsState, contactMatches, contactInvites, invitesShown, listsState, following, followers, blocked]);
+  }, [searching, shownContacts, trimmedQuery, requests, contactsState, contactMatches, contactInvites, invitesShown, listsState, following, followers, blocked]);
 
   // ── Rendering ─────────────────────────────────────────────────────────────
 
@@ -794,11 +832,15 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
               accessibilityLabel={`${label} ${p.name}. Double tap to change.`}
             />
           );
+        // "Sis in your contacts · Follows you": the saved name stays on the phone.
+        const sub = [savedNameLine(p), p.followsMe === 'accepted' ? 'Follows you' : null]
+          .filter(Boolean)
+          .join(' · ');
         return personRow(
           p.userId,
           p.name,
           p.avatarUrl,
-          p.followsMe === 'accepted' ? 'Follows you' : null,
+          sub || null,
           <>{button}{moreButton(p.userId, p.name)}</>,
         );
       }
@@ -891,9 +933,28 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
 
   const header = (
     <View style={styles.header}>
-      <Text style={[ui.body, { color: P.sub }]}>
-        Faces of people you follow show on the providers they recommend or have booked.
-      </Text>
+      {contactsState === 'done' ? (
+        <View style={[styles.search, { backgroundColor: P.card, borderColor: P.border }]}>
+          <Ionicons name="search" size={17} color={P.sub} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search your contacts"
+            placeholderTextColor={P.sub}
+            style={[styles.searchInput, { color: P.text }]}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+            accessibilityLabel="Search your contacts"
+          />
+        </View>
+      ) : null}
+      {searching ? null : (
+        <Text style={[ui.body, { color: P.sub }]}>
+          Faces of people you follow show on the providers they recommend or have booked.
+        </Text>
+      )}
     </View>
   );
 
@@ -911,6 +972,8 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
           listsState === 'loading' ? <ActivityIndicator color={P.sub} style={styles.footerSpinner} /> : undefined
         }
         stickySectionHeadersEnabled={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       />
@@ -922,6 +985,16 @@ export default function CircleScreen(_props: ProfileScreenProps<'Circle'>) {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 48 },
   header: { gap: 10, paddingTop: 12, paddingBottom: 6 },
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  searchInput: { flex: 1, fontFamily: FONT_BODY, fontSize: 15, paddingVertical: 10 },
   sectionLabel: { marginTop: 22, marginBottom: 6 },
   sharingCard: { padding: 14, gap: 12 },
   sharingRetry: { flexDirection: 'row', alignItems: 'center', gap: 12 },
