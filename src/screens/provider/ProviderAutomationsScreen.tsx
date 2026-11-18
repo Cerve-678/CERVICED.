@@ -357,6 +357,11 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           onToggle={v => set('waitlistEnabled', v)}
           C={C}
         />
+        {d.waitlistEnabled && (
+          <Text style={[st.sectionSub, { color: C.sub, marginBottom: 8 }]}>
+            This applies when your schedule is closed too: clients can still join your waitlist.
+          </Text>
+        )}
 
         {d.waitlistEnabled && (
           <AutoCard

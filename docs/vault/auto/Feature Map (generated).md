@@ -218,7 +218,7 @@ Curated: [[Booking Flow]] · **79 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(67)_
 - `src/services/database/waitlist.ts` _(55)_
 - `src/services/becca/capabilities/client.ts` _(52)_
-- `src/screens/provider/ProviderAutomationsScreen.tsx` _(35)_
+- `src/screens/provider/ProviderAutomationsScreen.tsx` _(37)_
 - `src/services/becca/capabilities/provider.ts` _(35)_
 - `supabase/fix_waitlist_selection_method_hook.sql` _(35)_
 - `supabase/waitlist_automation_settings.sql` _(32)_
