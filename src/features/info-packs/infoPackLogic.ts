@@ -154,6 +154,12 @@ export function isHeadingLine(line: string): boolean {
   return t.length >= 3 && t.length <= 40 && t === t.toUpperCase() && /[A-Z]/.test(t) && !/[.!?]$/.test(t);
 }
 
+/** True when there's something to read: a line that isn't just a section
+ *  heading. A pack of empty headings is never saved or sent. */
+export function packHasContent(content: string): boolean {
+  return content.split('\n').some(line => line.trim() !== '' && !isHeadingLine(line));
+}
+
 /** True while the provider still has an example's [placeholder] left in. */
 export function hasPlaceholder(text: string): boolean {
   return /\[[^\]]+\]/.test(text);
@@ -165,6 +171,8 @@ export interface LibraryFormLike {
   id: string;
   title: string;
   serviceNames: string[];
+  /** When given, a form with none is never offered (never sent empty). */
+  questions?: readonly unknown[];
 }
 
 export interface SentFormLike {
@@ -184,6 +192,7 @@ export function formsNotYetSent<F extends LibraryFormLike>(
   const sentTitles = new Set(sent.map(s => s.title.trim().toLowerCase()));
   return library.filter(f =>
     packCoversService(f.serviceNames, serviceName)
+    && (f.questions === undefined || f.questions.length > 0)
     && !sentIds.has(f.id)
     && !sentTitles.has(f.title.trim().toLowerCase()),
   );
@@ -193,6 +202,8 @@ export interface ProviderPackLike {
   id: string;
   title: string;
   service_names: string[];
+  /** When given, an empty pack is never offered (never sent empty). */
+  content?: string;
 }
 
 /** The provider's packs that cover this booking's service but aren't on it. */
@@ -202,5 +213,8 @@ export function packsNotYetSent<P extends ProviderPackLike>(
   serviceName: string | null | undefined,
 ): P[] {
   const sent = new Set(sentPackIds);
-  return packs.filter(p => packCoversService(p.service_names, serviceName) && !sent.has(p.id));
+  return packs.filter(p =>
+    packCoversService(p.service_names, serviceName)
+    && (p.content === undefined || packHasContent(p.content))
+    && !sent.has(p.id));
 }

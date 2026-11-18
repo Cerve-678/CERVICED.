@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHideTabBar } from '../../navigation/useHideTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { dueByLabel } from '../../features/intake-forms/formDeadline';
 
 type Props = HomeScreenProps<'ClientIntakeForm'>;
 
@@ -201,6 +202,11 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
               <Text style={[styles.introSub, { color: P.sub }]}>
                 Your provider needs this info before your appointment to give you the best possible service.
               </Text>
+              {!submitted && !!dueByLabel(form.dueAt) && (
+                <Text style={[styles.introSub, { color: P.text, fontWeight: '700', marginTop: 6 }]}>
+                  Please fill in by {dueByLabel(form.dueAt)}
+                </Text>
+              )}
             </View>
 
             {/* Questions */}

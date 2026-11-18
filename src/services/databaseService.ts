@@ -15,6 +15,7 @@ import type {
 } from '../types/maintenance';
 import { getMaintenanceServiceType, type MaintenanceTypeKey } from '../constants/maintenanceServiceTypes';
 import { dateToYMD } from '../utils/dateUtils';
+import { formProblem } from "../features/intake-forms/sendForms";
 import type { SavedCard } from '../features/payments/savedCards';
 import type { MissRecord as BeccaMissRecord } from './becca/missLog';
 import type { ServiceAudienceValue, ServiceTagGroups } from '../features/providers/serviceTags';
@@ -6768,6 +6769,9 @@ export interface IntakeForm {
   requiresSignature: boolean;
   clientSignature: string | null;
   libraryFormId: string | null;
+  /** When the client should have it filled in by (null = no deadline).
+   *  Stamped server-side from the saved form's deadlineHours. */
+  dueAt: string | null;
 }
 
 // ── Library forms (saved to provider's form library, not yet sent) ───────────
@@ -6784,6 +6788,9 @@ export interface LibraryForm {
    *  read from the booking sheet before booking. At most one per provider
    *  (enforced by a partial unique index, not just here). */
   isTerms: boolean;
+  /** Hours before the appointment the client should fill it in by
+   *  (null = no deadline). See features/intake-forms/formDeadline.ts. */
+  deadlineHours: number | null;
   sentCount: number;
   createdAt: string;
 }
@@ -6902,6 +6909,7 @@ export async function saveFormToLibrary(params: {
   autoSend: boolean;
   requiresSignature: boolean;
   isTerms?: boolean;
+  deadlineHours?: number | null;
 }): Promise<LibraryForm> {
   const provider = await getMyProviderProfile();
   if (!provider) throw new Error("No provider profile");
@@ -6915,6 +6923,7 @@ export async function saveFormToLibrary(params: {
       auto_send: params.autoSend,
       requires_signature: params.requiresSignature,
       is_terms: params.isTerms ?? false,
+      deadline_hours: params.deadlineHours ?? null,
     })
     .select()
     .single();
@@ -6931,6 +6940,7 @@ export async function updateLibraryForm(
     autoSend: boolean;
     requiresSignature: boolean;
     isTerms: boolean;
+    deadlineHours: number | null;
   }>,
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
@@ -6942,6 +6952,8 @@ export async function updateLibraryForm(
   if (params.requiresSignature !== undefined)
     patch["requires_signature"] = params.requiresSignature;
   if (params.isTerms !== undefined) patch["is_terms"] = params.isTerms;
+  if (params.deadlineHours !== undefined)
+    patch["deadline_hours"] = params.deadlineHours;
   patch["updated_at"] = new Date().toISOString();
   const { error } = await supabase
     .from("provider_form_library")
@@ -6963,48 +6975,96 @@ export async function sendLibraryFormToClient(
   bookingId: string,
   clientUserId: string,
 ): Promise<IntakeForm> {
+  const [sent] = await sendLibraryFormToBookings(libraryFormId, [{ bookingId, clientUserId }]);
+  if (!sent) throw new Error("Form not sent");
+  return sent;
+}
+
+/** Send one saved form to several upcoming appointments at once: one read of
+ *  the form, one insert for every copy, one sent_count update. Each client is
+ *  told about their own booking (the notification is tied to it). A booking
+ *  that already has this form is skipped, so tapping Send twice never gives a
+ *  client the same form twice. */
+export async function sendLibraryFormToBookings(
+  libraryFormId: string,
+  targets: { bookingId: string; clientUserId: string }[],
+): Promise<IntakeForm[]> {
+  if (targets.length === 0) return [];
   const provider = await getMyProviderProfile();
   if (!provider) throw new Error("No provider profile");
 
-  // Fetch the library form to copy its content
-  const { data: lf, error: lfErr } = await supabase
-    .from("provider_form_library")
-    .select("*")
-    .eq("id", libraryFormId)
-    .single();
-  if (lfErr || !lf) throw new Error("Library form not found");
+  const bookingIds = [...new Set(targets.map(t => t.bookingId))];
+  const [libraryRead, existingRead] = await Promise.all([
+    supabase.from("provider_form_library").select("*").eq("id", libraryFormId).single(),
+    supabase
+      .from("booking_intake_forms")
+      .select("booking_id")
+      .eq("library_form_id", libraryFormId)
+      .in("booking_id", bookingIds)
+      .limit(bookingIds.length),
+  ]);
+  const lf = libraryRead.data;
+  if (libraryRead.error || !lf) throw new Error("Library form not found");
+  // Never send a client an empty form (formProblem gives the screen the
+  // reason; this is the last stop).
+  const problem = formProblem((lf.questions ?? []) as IntakeFormQuestion[]);
+  if (problem) throw new Error(problem);
+  if (existingRead.error) throw existingRead.error;
+  const already = new Set((existingRead.data ?? []).map((r: { booking_id: string }) => r.booking_id));
 
-  // Create the sent instance
+  const seen = new Set<string>();
+  const fresh = targets.filter(t => {
+    if (already.has(t.bookingId) || seen.has(t.bookingId)) return false;
+    seen.add(t.bookingId);
+    return true;
+  });
+  if (fresh.length === 0) return [];
+
   const { data, error } = await supabase
     .from("booking_intake_forms")
-    .insert({
-      booking_id: bookingId,
+    .insert(fresh.map(t => ({
+      booking_id: t.bookingId,
       provider_id: provider.id,
-      client_user_id: clientUserId,
+      client_user_id: t.clientUserId,
       title: lf.title,
       questions: lf.questions,
       requires_signature: lf.requires_signature,
       library_form_id: libraryFormId,
-    })
-    .select()
-    .single();
+    })))
+    .select();
   if (error) throw error;
 
-  // Increment sent_count on the library form
   await supabase
     .from("provider_form_library")
-    .update({ sent_count: (lf.sent_count ?? 0) + 1 })
+    .update({ sent_count: (lf.sent_count ?? 0) + fresh.length })
     .eq("id", libraryFormId);
 
-  await notifyClientIntakeFormSent(
-    clientUserId,
-    bookingId,
+  await Promise.allSettled(fresh.map(t => notifyClientIntakeFormSent(
+    t.clientUserId,
+    t.bookingId,
     provider.id,
     lf.title,
     provider.display_name,
-  );
+  )));
 
-  return mapIntakeForm(data);
+  return (data ?? []).map(mapIntakeForm);
+}
+
+/** Which of these bookings already have this saved form, so the picker can
+ *  say so instead of offering to send it again. */
+export async function getBookingIdsWithLibraryForm(
+  libraryFormId: string,
+  bookingIds: string[],
+): Promise<string[]> {
+  if (bookingIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("booking_intake_forms")
+    .select("booking_id")
+    .eq("library_form_id", libraryFormId)
+    .in("booking_id", bookingIds)
+    .limit(bookingIds.length);
+  if (error) throw error;
+  return (data ?? []).map((row: { booking_id: string }) => row.booking_id);
 }
 
 /** Tell the client (in-app + push via DB trigger) that a form is waiting for them.
@@ -7050,6 +7110,7 @@ function mapLibraryForm(d: any): LibraryForm {
     autoSend: d.auto_send ?? false,
     requiresSignature: d.requires_signature ?? false,
     isTerms: d.is_terms ?? false,
+    deadlineHours: d.deadline_hours ?? null,
     sentCount: d.sent_count ?? 0,
     createdAt: d.created_at,
   };
@@ -7800,6 +7861,7 @@ function mapIntakeForm(d: any): IntakeForm {
     requiresSignature: d.requires_signature ?? false,
     clientSignature: d.client_signature ?? null,
     libraryFormId: d.library_form_id ?? null,
+    dueAt: d.due_at ?? null,
   };
 }
 
@@ -12119,13 +12181,9 @@ interface BookingFeeTermsRow {
   policy_snapshot: Record<string, unknown> | null;
 }
 
-export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
-  const { data, error } = await supabase.from('bookings')
-    .select('status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, deposit_amount, payment_status, cancelled_by, cancelled_at, confirmed_at, cancel_notice_hours, late_reschedule_from, policy_snapshot')
-    .eq('id', bookingId)
-    .single();
-  if (error) throw error;
-  const row = data as BookingFeeTermsRow;
+const BOOKING_FEE_TERMS_COLUMNS = 'status, booking_date, booking_time, end_time, late_fee_pence, no_show_fee_pence, late_cancel_fee_pence, deposit_amount, payment_status, cancelled_by, cancelled_at, confirmed_at, cancel_notice_hours, late_reschedule_from, policy_snapshot';
+
+function mapBookingFeeTerms(row: BookingFeeTermsRow): BookingFeeTerms {
   return {
     status: row.status,
     bookingDate: row.booking_date,
@@ -12143,6 +12201,67 @@ export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeT
     lateRescheduleFrom: row.late_reschedule_from,
     cancelPenalty: typeof row.policy_snapshot?.['cancelPenalty'] === 'string' ? row.policy_snapshot['cancelPenalty'] as string : null,
   };
+}
+
+export async function getBookingFeeTerms(bookingId: string): Promise<BookingFeeTerms> {
+  const { data, error } = await supabase.from('bookings')
+    .select(BOOKING_FEE_TERMS_COLUMNS)
+    .eq('id', bookingId)
+    .single();
+  if (error) throw error;
+  return mapBookingFeeTerms(data as BookingFeeTermsRow);
+}
+
+/** A recent booking of the provider's own that has a late, no-show or
+ *  late-cancel fee on it, with the fee attempts made so far — Payments &
+ *  payouts decides which can be charged now (bookingFeeRules.feesToChargeNow). */
+export interface FeeChargeCandidate {
+  bookingId: string;
+  customerName: string | null;
+  serviceName: string | null;
+  terms: BookingFeeTerms;
+  charges: Pick<BookingFeeCharge, 'status'>[];
+}
+
+/** Fees can be charged until 24 hours after the appointment ends, and a late
+ *  cancel can come up to the notice period before it, so this reads a short
+ *  window either side of today. Two queries, however many bookings. */
+export async function getFeeChargeCandidates(): Promise<FeeChargeCandidate[]> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return [];
+  const day = (offset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  // Own bookings only — RLS plus this provider_id filter.
+  const { data, error } = await supabase.from('bookings')
+    .select(`id, customer_name, service_name_snapshot, ${BOOKING_FEE_TERMS_COLUMNS}`)
+    .eq('provider_id', provider.id)
+    .gte('booking_date', day(-2))
+    .lte('booking_date', day(30))
+    .or('late_fee_pence.gt.0,no_show_fee_pence.gt.0,late_cancel_fee_pence.gt.0')
+    .order('booking_date', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  const rows = (data ?? []) as (BookingFeeTermsRow & { id: string; customer_name: string | null; service_name_snapshot: string | null })[];
+  if (rows.length === 0) return [];
+  const { data: charges, error: chargesError } = await supabase.from('booking_fee_charges')
+    .select('booking_id, status')
+    .in('booking_id', rows.map(r => r.id))
+    .limit(500);
+  if (chargesError) throw chargesError;
+  const byBooking = new Map<string, Pick<BookingFeeCharge, 'status'>[]>();
+  for (const c of (charges ?? []) as { booking_id: string; status: BookingFeeCharge['status'] }[]) {
+    byBooking.set(c.booking_id, [...(byBooking.get(c.booking_id) ?? []), { status: c.status }]);
+  }
+  return rows.map(r => ({
+    bookingId: r.id,
+    customerName: r.customer_name,
+    serviceName: r.service_name_snapshot,
+    terms: mapBookingFeeTerms(r),
+    charges: byBooking.get(r.id) ?? [],
+  }));
 }
 
 /** The client's own booking: what the provider could charge on top of the
