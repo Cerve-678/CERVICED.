@@ -47,7 +47,7 @@ Curated: [[Availability & Slots]] · **234 files**
 - `src/screens/provider/AddBookingScreen.tsx` _(161)_
 - `src/screens/client/SearchScreen.tsx` _(110)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
-- `src/screens/provider/InfoRegScreen.tsx` _(98)_
+- `src/screens/provider/InfoRegScreen.tsx` _(97)_
 - `src/services/becca/capabilities/client.ts` _(92)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(83)_
 - `src/contexts/BookingContext.tsx` _(81)_
