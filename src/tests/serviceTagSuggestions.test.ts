@@ -1,6 +1,7 @@
 import {
   descriptionProblem,
   hasNoTags,
+  inferCategoryKind,
   MAX_TAG_LENGTH,
   mergeTagGroups,
   normalizeTag,
@@ -169,5 +170,31 @@ describe('typed tags', () => {
 
   it('shows hyphenated tags as words', () => {
     expect(tagLabel('date-night')).toBe('date night');
+  });
+});
+
+describe('inferCategoryKind', () => {
+  it('reads a shared word as the provider’s own business', () => {
+    // "Waxing" at a brow bar is brow waxing; anywhere else it's body waxing.
+    expect(inferCategoryKind('Waxing', 'BROWS')).toBe('BROWS');
+    expect(inferCategoryKind('Waxing', 'AESTHETICS')).toBe('AESTHETICS');
+    expect(inferCategoryKind('Waxing', 'HAIR')).toBe('AESTHETICS');
+    expect(inferCategoryKind('Waxing')).toBe('AESTHETICS');
+    expect(inferCategoryKind('Tint', 'LASHES')).toBe('LASHES');
+    // "Extensions" is a hair word too, but not at a nail or lash business.
+    expect(inferCategoryKind('Gel Extensions', 'NAILS')).toBe('NAILS');
+  });
+
+  it('lets a word that names a kind win over the business', () => {
+    expect(inferCategoryKind('Brow Lift', 'LASHES')).toBe('BROWS');
+    expect(inferCategoryKind('Brow Waxing', 'AESTHETICS')).toBe('BROWS');
+    expect(inferCategoryKind('Lash Lift', 'BROWS')).toBe('LASHES');
+  });
+
+  it('suggests brow tags for a waxing service at a brow bar', () => {
+    const s = suggest('Waxing', 'Waxing', 'BROWS');
+    expect(s.kind).toBe('BROWS');
+    expect(s.techniqueTags).toContain('waxing');
+    expect(s.techniqueTags).not.toContain('brazilian-wax');
   });
 });
