@@ -217,13 +217,21 @@ export function BeautyProfileLanding({
           <Ionicons name="sparkles" size={26} color={C.deep} style={styles.sparkle} />
         </View>
 
-        {/* Your look, and how complete the profile is: the card that leads the page. */}
-        <View style={[styles.lookCard, { backgroundColor: C.lookBg }]}>
+        {/* Your look, and how complete the profile is: the card that leads the page.
+            The whole card opens Style & vibe (owner, 2026-11-18); the ring
+            inside it still opens the whole profile. */}
+        <TouchableOpacity
+          style={[styles.lookCard, { backgroundColor: C.lookBg }]}
+          onPress={go(() => onEditCategory('general'))}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={[t('beautyProfile.hello.look'), title, line, t('beautyProfile.hello.lookSub')].filter(Boolean).join('. ')}
+        >
           <View style={styles.lookTop}>
-            <TouchableOpacity style={styles.lookText} onPress={go(() => onEditCategory('general'))} activeOpacity={0.6} accessibilityRole="button">
+            <View style={styles.lookText}>
               <Text style={[styles.cap, { color: C.lookSoft }]}>{t('beautyProfile.hello.look').toUpperCase()}</Text>
               {headline(title, styles.lookLead, C.lookInk, C.lookInk)}
-            </TouchableOpacity>
+            </View>
             <TouchableOpacity
               onPress={go(onOpenAllProfile)}
               activeOpacity={0.6}
@@ -258,7 +266,7 @@ export function BeautyProfileLanding({
             <Text style={[styles.cap, { color: C.lookSoft }]}>{`${t('beautyProfile.hello.routine')} · ${profile.styleRoutine}`.toUpperCase()}</Text>
           ) : null}
           <Text style={[styles.small, { color: C.lookSoft }]}>{t('beautyProfile.hello.lookSub')}</Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.sectionHead}>
           <Text style={[styles.h2, { color: C.ink }]} accessibilityRole="header">{t('profile.forYou.beauty.title').toUpperCase()}</Text>
