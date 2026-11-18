@@ -1188,13 +1188,27 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('Branding');
   }, [navigation]);
 
+  // Keep a fresh copy of the profile as clients see it ready while My Profile
+  // is open, so the logo tap below opens it instantly and fully drawn: no
+  // wait on tap, and no grey loading frame (the preview opens with no slide
+  // to hide one). Refreshed on every focus, so coming back from Edit Profile
+  // picks the edit up. Not before go-live: clients can't see it yet.
+  const isLiveForPreview = goLive?.isLive !== false;
+  useFocusEffect(
+    useCallback(() => {
+      if (!providerSlug || !isLiveForPreview) return;
+      refreshCachedProviderProfile(providerSlug).catch((error: unknown) => {
+        logger.warn('Could not warm own profile for the logo preview:', error);
+      });
+    }, [providerSlug, isLiveForPreview]),
+  );
+
   // Tapping the logo shows the profile exactly as clients see it. Clients
   // can't open it at all before go-live, so say that rather than open a
   // "Provider not found" page. Unknown status (load failed) still opens it,
   // same as the QR sheet.
-  const openingClientViewRef = useRef(false);
-  const handleOpenClientView = useCallback(async () => {
-    if (!providerSlug || openingClientViewRef.current) return;
+  const handleOpenClientView = useCallback(() => {
+    if (!providerSlug) return;
     Haptics.selectionAsync().catch(() => {});
     if (goLive?.isLive === false) {
       Alert.alert(
@@ -1202,18 +1216,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         'Clients will see your profile once you go live. Finish the steps on this page to get there.',
       );
       return;
-    }
-    // Read it fresh first, so anything just changed in Edit Profile shows, and
-    // the page then draws whole on its first frame. Opening first and loading
-    // after flashed a grey skeleton, since this screen opens with no slide to
-    // hide it. If the read fails the page still opens and tries again itself.
-    openingClientViewRef.current = true;
-    try {
-      await refreshCachedProviderProfile(providerSlug);
-    } catch (error) {
-      logger.warn('Could not refresh own profile before preview:', error);
-    } finally {
-      openingClientViewRef.current = false;
     }
     navigation.navigate('MyPublicProfile', { providerId: providerSlug, asPreview: true });
   }, [navigation, providerSlug, goLive?.isLive]);

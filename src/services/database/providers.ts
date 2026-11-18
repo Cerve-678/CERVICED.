@@ -1074,10 +1074,10 @@ export function peekCachedProviderProfile(slug: string): ProviderWithServices | 
 
 /**
  * Read a profile fresh and keep it cached, for a provider previewing their own
- * profile right after an edit (the cached copy can be up to a minute old).
- * Awaited before the preview opens, so the page draws straight away from the
- * fresh copy instead of flashing a skeleton. A request already in flight from
- * before the edit can't overwrite it (providerProfileRequestTokens).
+ * profile (the cached copy can be up to a minute old, from before an edit).
+ * My Profile runs it on focus, so the logo tap opens straight onto the fresh
+ * copy with no wait and no skeleton. A request already in flight from before
+ * the edit can't overwrite it (providerProfileRequestTokens).
  */
 export async function refreshCachedProviderProfile(slug: string): Promise<void> {
   await getProviderBySlug(slug, { forceRefresh: true });
