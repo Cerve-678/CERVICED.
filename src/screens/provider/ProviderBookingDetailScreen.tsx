@@ -32,6 +32,7 @@ import { composePassOnReason, PASS_ON_REASONS, passRefundRequestOn, type PassOnR
 import { isRefundRequestOpen } from '../../features/bookings/refundRequestTimeline';
 import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
 import BookingFeeCard from '../../features/bookings/BookingFeeCard';
+import { dueByLabel, isOverdue } from '../../features/intake-forms/formDeadline';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
@@ -2050,7 +2051,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           <Text style={[styles.intakeFormSub, { color: P.sub }]}>
                             {done
                               ? `Answered${form.completedAt ? ` ${formatShortDayDate(new Date(form.completedAt))}` : ''} · tap to see the answers`
-                              : `Sent ${formatShortDayDate(new Date(form.sentAt))} · not answered yet`}
+                              : isOverdue(form.dueAt, form.status, Date.now())
+                                ? `Sent ${formatShortDayDate(new Date(form.sentAt))} · was due ${dueByLabel(form.dueAt)}`
+                                : `Sent ${formatShortDayDate(new Date(form.sentAt))} · ${form.dueAt ? `due ${dueByLabel(form.dueAt)}` : 'not answered yet'}`}
                           </Text>
                         </TouchableOpacity>
                       );
