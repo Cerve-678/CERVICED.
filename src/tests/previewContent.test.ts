@@ -33,4 +33,25 @@ describe('preview content from a provider menu', () => {
   it('is empty for a provider with no services yet', () => {
     expect(previewContentFrom({})).toMatchObject({ about: '', categories: [], services: [] });
   });
+
+  it('lists the add-ons ticked on each service that clients can pick, hiding paused ones', () => {
+    const c = previewContentFrom({
+      categories: {
+        Lashes: [
+          { name: 'Classic set', price: 45, duration: '1 hr', addOnKeys: ['a', 'b', 'c'] },
+          { name: 'Infill', price: 30, duration: '1 hr' },
+        ],
+      },
+      addOnLibrary: [
+        { key: 'a', name: 'Lash bath', price: 5, extraMinutes: 10, isActive: true },
+        { key: 'b', name: 'Bottom lashes', price: 10, extraMinutes: 0, isActive: false },
+        { key: 'c', name: 'Tint', price: 8, extraMinutes: 15, isActive: true },
+      ],
+    });
+    expect(c.servicesByCategory?.['Lashes']?.[0]?.addOns).toEqual([
+      { key: 'a', name: 'Lash bath', price: 5, extraMinutes: 10 },
+      { key: 'c', name: 'Tint', price: 8, extraMinutes: 15 },
+    ]);
+    expect(c.servicesByCategory?.['Lashes']?.[1]?.addOns).toEqual([]);
+  });
 });

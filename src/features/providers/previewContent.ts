@@ -11,17 +11,30 @@ interface DraftService {
   price: number;
   duration: string;
   images?: readonly { uri?: string | null }[] | null;
+  /** The add-ons ticked on this service (keys into addOnLibrary). */
+  addOnKeys?: readonly string[] | null;
+}
+
+interface DraftAddOn {
+  key: string;
+  name: string;
+  price: number;
+  extraMinutes: number;
+  /** false = paused, so clients can't pick it. */
+  isActive: boolean;
 }
 
 export interface DraftMenu {
   aboutText?: string | null;
   categories?: Readonly<Record<string, readonly DraftService[]>> | null;
   categoryDescriptions?: Readonly<Record<string, string>> | null;
+  addOnLibrary?: readonly DraftAddOn[] | null;
 }
 
 /** Categories with at least one named service (an empty one isn't shown on
  *  the profile), each with its services in order. */
 export function previewContentFrom(menu: DraftMenu): PreviewContent {
+  const activeAddOns = (menu.addOnLibrary ?? []).filter(addOn => addOn.isActive);
   const servicesByCategory: Record<string, PreviewService[]> = {};
   for (const [category, list] of Object.entries(menu.categories ?? {})) {
     const services = (list ?? [])
@@ -31,6 +44,10 @@ export function previewContentFrom(menu: DraftMenu): PreviewContent {
         minutes: serviceDurationToMinutes(service.duration),
         price: service.price,
         imageUri: service.images?.find(image => !!image?.uri)?.uri ?? null,
+        // The add-ons ticked on it that clients can pick (paused ones hidden).
+        addOns: activeAddOns
+          .filter(addOn => service.addOnKeys?.includes(addOn.key))
+          .map(addOn => ({ key: addOn.key, name: addOn.name, price: addOn.price, extraMinutes: addOn.extraMinutes })),
       }));
     if (services.length > 0) servicesByCategory[category] = services;
   }

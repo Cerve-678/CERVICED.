@@ -26,6 +26,7 @@ import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../
 import type { LogoFraming } from "../../types/database";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { formatDurationMinutes } from "../../utils/dateUtils";
+import { formatAddOnExtraTime } from "../bookings/addOnTime";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
 import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle } from "./ProfileHero";
 import {
@@ -107,6 +108,15 @@ export interface PreviewService {
   price: number;
   /** Its first photo, when it has one. */
   imageUri?: string | null;
+  /** The add-ons ticked on it that clients can pick, for Info Reg's preview. */
+  addOns?: readonly PreviewAddOn[];
+}
+
+export interface PreviewAddOn {
+  key: string;
+  name: string;
+  price: number;
+  extraMinutes: number;
 }
 
 /** What Branding / Info Reg have of the provider's page, for the preview. */
@@ -481,6 +491,19 @@ export function ProfileStylePreview({
                   <Text style={[styles.bookText, { color: onAccentInk(accent).text }]}>Book</Text>
                 </View>
               </View>
+              {services[index]?.addOns?.length ? (
+                <View style={[styles.addOns, { borderTopColor: OP.border }]}>
+                  <Text style={[styles.addOnsLabel, { color: serviceInk.sub }, bodyFont]}>Add-ons available:</Text>
+                  {services[index]!.addOns!.map(addOn => (
+                    <View key={addOn.key} style={styles.addOnRow}>
+                      <Text style={[styles.addOnName, { color: serviceInk.sub }, bodyFont]} numberOfLines={1}>
+                        + {addOn.name}{addOn.extraMinutes > 0 ? ` (${formatAddOnExtraTime(addOn.extraMinutes)})` : ""}
+                      </Text>
+                      <Text style={[styles.addOnPrice, { color: accent }]}>+{previewPrice(addOn.price)}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </BlurView>
           ))}
 
@@ -575,6 +598,11 @@ const styles = StyleSheet.create({
   serviceText: { flex: 1, gap: 8 },
   serviceName: { fontSize: 15, fontWeight: "600" },
   serviceMeta: { fontSize: 13, marginTop: -4 },
+  addOns: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 12, paddingTop: 8 },
+  addOnsLabel: { fontSize: 11, fontWeight: "600", marginBottom: 4 },
+  addOnRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, paddingVertical: 3 },
+  addOnName: { flex: 1, fontSize: 12, fontWeight: "600" },
+  addOnPrice: { fontFamily: "BakbakOne-Regular", fontSize: 12 },
   aboutText: { fontSize: 14, lineHeight: 21 },
   aboutMore: { fontFamily: "BakbakOne-Regular", fontSize: 12 },
   aboutMoreRow: { marginTop: 8, alignSelf: "flex-start" },
