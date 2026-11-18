@@ -79,9 +79,9 @@ Curated: [[Payments]] · **183 files**
 - `src/services/databaseService.ts` _(255)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/components/BookingSheet.tsx` _(111)_
+- `src/components/ProviderStripePayments.tsx` _(110)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/screens/client/BookingDetailScreen.tsx` _(109)_
-- `src/components/ProviderStripePayments.tsx` _(108)_
 - `src/contexts/BookingContext.tsx` _(108)_
 - `src/services/bookingService.ts` _(103)_
 - `src/features/bookings/receipt.ts` _(98)_
@@ -178,8 +178,8 @@ Curated: [[Notifications]] · **193 files**
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **89 files**
 - `src/services/databaseService.ts` _(96)_
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(67)_
 - `src/features/providers/goLiveStatus.ts` _(64)_
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(63)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(51)_
 - `src/services/providerRegistrationService.ts` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(36)_
