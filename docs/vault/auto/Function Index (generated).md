@@ -5,7 +5,7 @@
 
 #generated
 
-**4073 functions** across **568 files**.
+**4100 functions** across **570 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -54,7 +54,7 @@
 - `ProfileHeroBackdrop.tsx` — **finishHeightShare** · onLayout · ProfileHeroBackdrop · secondColourIsContentArea · **sheenColors**
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow** · runShake
 - `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
-- `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · ProviderPayoutSummaryCard
+- `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · paydays · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
 - `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chooseInterval · chooseSchedule · closeFeeSheet · date · EmptyState · feeStatusLabel · feesToCharge · handleRefunded · load · loadMore · money · Notice · openFeeSheet · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
@@ -154,8 +154,8 @@
 - `beforeYouBook.ts` — **accountStillLoading** · **missingBookingDetails**
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
-- `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · load · payFee · pounds · providerFeeSummary · run
-- `bookingFeeRules.ts` — **feeChargeWindow** · **feeDisputeOpen** · **feesToChargeNow** · **isChargeableLateCancel** · **liveFee**
+- `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · feeButtons · load · payFee · pounds · providerFeeSummary · run
+- `bookingFeeRules.ts` — **bookingFeeButtons** · **feeChargeWindow** · **feeDisputeOpen** · **feesToChargeNow** · **isChargeableLateCancel** · **liveFee**
 - `bookingForms.ts` — **formsToDoFirst**
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · hasReadableDate · **hasRefundRequestDeadline** · **isRefundRequestWindowOpen** · **isSupportRequestReady** · money · **passRefundRequestOn** · **refundRequestLastDay** · ticket
@@ -203,10 +203,11 @@
 - `SkeletonSection.tsx` — **SkeletonSection**
 - `useRevealTogether.ts` — **allPartsDone** · markDone · **useRevealTogether**
 
-### `src/features/info-packs/` (4)
+### `src/features/info-packs/` (5)
 - `infoPackLogic.ts` — **clientPreviewNames** · **countClients** · **formsNotYetSent** · **hasPlaceholder** · **hasSection** · **insertSection** · **isHeadingLine** · **isUpcomingOpenBooking** · **packCoversService** · **packHasContent** · **packServiceLabel** · **packsNotYetSent** · **splitUpcomingForPack** · **summarizeDeliveries**
 - `InfoPackSendSheet.tsx` — hint · **InfoPackSendSheet**
 - `InfoPackWelcome.tsx` — **InfoPackWelcome** · renderStage · writeLine
+- `PackFormHint.tsx` — dismiss · line · open · **PackFormHint** · **PackFormHintLines** · **PackFormTipCard** · **usePackFormTip**
 - `packTemplates.ts` — **allPackTemplates** · mentions · **packTemplatesFor** · **rankPackTemplates** · **servicesForTemplate** · t · words
 
 ### `src/features/intake-forms/` (4)
@@ -231,9 +232,10 @@
 ### `src/features/notifications/` (1)
 - `notificationPresentation.ts` — **isCertificateNotification** · **isScheduleAutoClosedNotification** · **notificationAmount** · **notificationDayHeadings** · **notificationDayLabel** · **notificationKindLabel** · startOfDay
 
-### `src/features/payments/` (6)
+### `src/features/payments/` (7)
 - `bankDisputeStatus.ts` — **bankDisputeStates** · **bookingDisputeLabel** · **feeDisputeLabel** · stageOf
 - `bookingPaymentTimeline.ts` — appointmentWhen · **bookingPaymentTimeline** · dayAndTime · parseDay · **payoutNeedsAttention** · **payoutStatusLabel** · **shortDay** · **tipStatusLabel**
+- `paydayForecast.ts` — addDays · **addWorkingDays** · **clearsOn** · isWeekend · lastDayOfMonth · **nextPayday** · onItsWay · **paydayLabel** · place · startOfDay · **upcomingPaydays** · validDate · ymd
 - `PaymentsCardKit.tsx` — **InfoLabel** · **PayCard** · **PaySection** · **ProcessingLabel** · **StatusChip**
 - `paymentSheetAppearance.ts` — **buildPaymentSheetAppearance**
 - `savedCards.ts` — **formatSavedCardExpiry** · **savedCardBadge** · **savedCardBrandName** · **savedCardExpiryLabel** · **savedCardExpiryState**
@@ -284,7 +286,7 @@
 - `externalBookingLink.ts` — **displayExternalBookingUrl** · **normalizeExternalBookingUrl** · **openExternalBookingPage** · **waitUntilBackFromBrowser**
 - `FullCervicedLockedSheet.tsx` — **FullCervicedLockedSheet** · seeMore
 - `FullMemberConversion.tsx` — createStyles · **FullMemberConversion** · MockTab · run · steps · styles
-- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus**
+- `goLiveStatus.ts` — **buildGoLiveHeadline** · **buildGoLiveSteps** · **buildLinkOnlyGoLiveSteps** · **deriveAutomationsSet** · **deriveRecommendedGoLiveFields** · **deriveStripeGoLiveField** · **fetchGoLiveStatus** · **fetchLinkOnlyGoLiveStatus** · **goLiveCardLeads**
 - `HeroPhotoPicker.tsx` — **HeroPhotoPicker** · slotOf
 - `heroPhotos.ts` — **heroPhotos** · **toggleHeroPhotoPick**
 - `inboxFilters.ts` — **filterInboxConversations** · **hasInboxFilters** · matchesDate · startOfDay
@@ -311,7 +313,7 @@
 - `searchResultsLayout.ts` — **highlightSearchTerms** · isWordChar · pushServices · **scatterServicesBetweenProviders**
 - `ServiceBookingCharts.tsx` — MostBookedCard · onLayout · ServiceBookingCharts · ticks · TrendCard · xFor · yFor
 - `serviceBookingSummary.ts` — busiestFirst · **chartTicks** · **summariseServiceBookings**
-- `ServiceEditorSheet.tsx` — addOwnTags · descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · latestStartChoices · push · ServiceEditorSheet · **splitDuration** · suggestion · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
+- `ServiceEditorSheet.tsx` — addOwnTags · descriptionHint · **editorDurationMinutes** · findabilityProblem · handleSave · latestStartChoices · push · readyDraft · saveAndOpen · ServiceEditorSheet · **splitDuration** · suggestion · tags · toDraft · **toEditorValue** · toggleChip · validateServiceValue
 - `serviceTags.ts` — add · descriptionIdeasFor · **descriptionProblem** · **emptyTagGroups** · **hasNoTags** · hasWord · isKeyboardMash · **mergeTagGroups** · nearestTemplate · **normalizeTag** · optionsFor · **parseTypedTags** · readWords · sameWord · **suggestServiceDetails** · **tagLabel** · words
 - `todaySchedule.ts` — **bookingCardsLead** · **buildTodaySchedule** · dayRows · lengthOf · **minutesOfDay** · needsPatchTest · **shortClientName** · todosFrom
 - `TodayScheduleCards.tsx` — handleScrollEnd · money · plural · shortDayLabel · slotTag · tap · timeOf · **TodayBookingCards** · **TodaySummaryCard** · todoLine · todoText
@@ -444,7 +446,7 @@
 - `LinkOnlyHomeScreen.tsx` — createStyles · dismissNudgeBar · goToStep · joinNudgeTotal · LinkOnlyHomeScreen · nudgeBarCount · openBecca · openFullMemberSheet · openMessages · P · Shortcut · StatTile · strength · StrengthRow · styles · testBookingLink
 - `LinkOnlyPortfolioScreen.tsx` — createStyles · curatedSpecialtyOptions · handleAdd · handleRemove · handleSaveSpecialties · LinkOnlyPortfolioScreen · styles
 - `PaymentsScreen.tsx` — flash · handleSave · paymentLabel · PaymentsScreen
-- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · open · Pills · PoliciesScreen · removeText · setPolicy · shows · TextLink · toggle
+- `PoliciesScreen.tsx` — flash · HalfPriceCap · handlePickPolicyImage · handlePolicyImageCropCancelled · handlePolicyImageCropped · handleRemovePolicyImage · handleSave · isCustomAmount · isFeeAmount · open · openPackOrForm · Pills · PoliciesScreen · removeText · setPolicy · shows · TextLink · toggle
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen · showAchievementsLocked
 - `ProviderAchievementsScreen.tsx` — load · open · ProviderAchievementsScreen · view

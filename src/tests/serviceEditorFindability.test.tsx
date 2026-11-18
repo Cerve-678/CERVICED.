@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import ServiceEditorSheet, {
   EMPTY_SERVICE_VALUE,
   editorDurationMinutes,
@@ -14,6 +14,12 @@ jest.mock('expo-haptics', () => ({
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../utils/bottomSafeGap', () => ({ useSystemBottomInset: () => 0 }));
+// Only the Info Pack / Form tip reads these; the sheet without onSaveAndOpen never does.
+jest.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
+jest.mock('../services/tourService', () => ({
+  resolveTourForUser: jest.fn().mockResolvedValue({ show: true, steps: [{ key: 'tip' }], stampVersion: 1 }),
+  recordTourSeen: jest.fn().mockResolvedValue(undefined),
+}));
 
 const palette = { bg: '#fff', card: '#fafafa', text: '#111', sub: '#888', border: '#eee', accent: '#AF9197' };
 
@@ -181,5 +187,27 @@ describe('service editor duration boxes', () => {
   it('rejects anything that is not a whole number', () => {
     expect(editorDurationMinutes({ hours: '1.5', minutes: '' })).toBeNull();
     expect(editorDurationMinutes({ hours: '', minutes: 'abc' })).toBeNull();
+  });
+});
+
+describe('ServiceEditorSheet Info Pack / Form tip', () => {
+  it('saves the service before opening Info Packs, and only once it can be saved', async () => {
+    const onSaveAndOpen = jest.fn();
+    const onSave = open({ isNew: false, initial: { ...EMPTY_SERVICE_VALUE, name: '', price: '35', hours: '1', minutes: '0' }, onSaveAndOpen });
+    await waitFor(() => expect(screen.getByText('Aftercare or questions before they come?')).toBeTruthy());
+    // No name yet: the same message Save would give, and nothing opens.
+    fireEvent.press(screen.getByText('INFO PACK'));
+    expect(screen.getByText('Give the service a name.')).toBeTruthy();
+    expect(onSaveAndOpen).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByPlaceholderText('e.g. Gel Overlay'), 'Lash Lift');
+    fireEvent.press(screen.getByText('INFO PACK'));
+    expect(onSaveAndOpen).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lash Lift', price: 35 }), 'packs');
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("doesn't show the tip unless the screen can open Info Packs", () => {
+    open();
+    expect(screen.queryByText('Aftercare or questions before they come?')).toBeNull();
   });
 });
