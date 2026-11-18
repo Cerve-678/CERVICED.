@@ -41,7 +41,7 @@ export function myProfileTourSteps({ isLive, hasQrButton }: MyProfileTourContext
     {
       key: 'edit',
       title: 'Edit your page',
-      body: 'Change your name, your description and the other details clients read about you.',
+      body: 'Add your business name and description, create your services, set your address and add your portfolio.',
       icon: 'create-outline',
       radius: 999,
     },
