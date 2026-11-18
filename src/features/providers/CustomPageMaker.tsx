@@ -15,6 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   CUSTOM_HEADING_FONTS,
   CUSTOM_LAYOUTS,
+  CUSTOM_PARTS,
+  LAYOUT_PARTS,
+  matchingLook,
+  partsOf,
+  withPart,
+  type CustomPartKey,
   CUSTOM_TEXT_FONTS,
   FONT_SET_COLLECTIONS,
   FONT_SETS,
@@ -47,6 +53,8 @@ interface Props {
   onCardShapeChange: (shape: CardShape) => void;
   /** Opens Branding → Colours, where the page's colours are set. */
   onOpenColours: () => void;
+  /** Opens the full preview, where tapping a part of the page changes it. */
+  onOpenTapEdit: () => void;
   /** Link-only providers get Classic only, so Custom shows locked. */
   locked: boolean;
   onLockedPress: () => void;
@@ -70,6 +78,7 @@ export function CustomPageMaker({
   cardShape,
   onCardShapeChange,
   onOpenColours,
+  onOpenTapEdit,
   locked,
   onLockedPress,
   accent,
@@ -88,6 +97,7 @@ export function CustomPageMaker({
     if (!active) onUse();
   };
   const set = (patch: Partial<CustomChoices>) => guard(() => onChange({ ...choices, ...patch }));
+  const look = matchingLook(partsOf(choices));
 
   const sectionStyle = [styles.section, { backgroundColor: P.card, borderColor: P.border }];
 
@@ -118,18 +128,19 @@ export function CustomPageMaker({
         )}
       </View>
 
-      {/* 1 · Layout */}
+      {/* 1 · A look to start from: each sets every part below at once. */}
       <View style={sectionStyle}>
-        <Text style={[styles.sectionTitle, { color: P.text }]}>Layout</Text>
-        <Text style={[styles.sectionSub, { color: P.sub }]}>Six plain ways to lay out your page.</Text>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>Start From a Look</Text>
+        <Text style={[styles.sectionSub, { color: P.sub }]}>Each one sets your whole page. Then change any part below.</Text>
         <View style={styles.layoutGrid}>
           {CUSTOM_LAYOUTS.map(layout => {
-            const selected = active && choices.layout === layout.key;
+            const selected = active && look === layout.key;
             return (
               <TouchableOpacity
                 key={layout.key}
                 style={[styles.layoutOption, { borderColor: selected ? P.text : P.border }, selected && styles.selectedBorder]}
-                onPress={set({ layout: layout.key })}
+                // Keeps their headings: those are theirs, not the look's.
+                onPress={set({ layout: layout.key, ...LAYOUT_PARTS[layout.key], headingStyle: choices.headingStyle })}
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
@@ -144,7 +155,39 @@ export function CustomPageMaker({
         </View>
       </View>
 
-      {/* 2 · Fonts */}
+      {/* 2 · Every part on its own */}
+      <View style={sectionStyle}>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>Part by Part</Text>
+        <Text style={[styles.sectionSub, { color: P.sub }]}>Change one part of your page at a time.</Text>
+        <TouchableOpacity
+          style={[styles.tapEditBtn, { borderColor: P.border, backgroundColor: P.surface }]}
+          onPress={guard(onOpenTapEdit)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Tap your page: change a part by tapping it on your page"
+        >
+          <Ionicons name="hand-left-outline" size={18} color={P.text} />
+          <View style={styles.coloursText}>
+            <Text style={[styles.tapEditTitle, { color: P.text }]}>Tap Your Page</Text>
+            <Text style={[styles.sectionSubFlat, { color: P.sub }]}>See your page and tap the part you want to change.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={P.sub} />
+        </TouchableOpacity>
+        {CUSTOM_PARTS.map(part => (
+          <View key={part.key} style={styles.group}>
+            <Text style={[styles.groupLabel, { color: P.sub }]}>{part.label}</Text>
+            <CustomPartPicker
+              part={part.key}
+              choices={choices}
+              active={active}
+              onPick={(key, value) => guard(() => onChange(withPart(choices, key, value)))()}
+              P={P}
+            />
+          </View>
+        ))}
+      </View>
+
+      {/* 3 · Fonts */}
       <View style={sectionStyle}>
         <Text style={[styles.sectionTitle, { color: P.text }]}>Fonts</Text>
         <Text style={[styles.sectionSub, { color: P.sub }]}>Your name, your headings and your text.</Text>
@@ -234,27 +277,9 @@ export function CustomPageMaker({
         )}
       </View>
 
-      {/* 3 · Headings and corners */}
+      {/* 4 · Corners */}
       <View style={sectionStyle}>
         <Text style={[styles.sectionTitle, { color: P.text }]}>Finishing Touches</Text>
-        <Text style={[styles.groupLabel, styles.touchLabel, { color: P.sub }]}>HEADINGS</Text>
-        <View style={[styles.segment, { backgroundColor: P.surface }]}>
-          {([false, true] as const).map(caps => {
-            const selected = active && choices.caps === caps;
-            return (
-              <TouchableOpacity
-                key={String(caps)}
-                style={[styles.segmentOption, selected && { backgroundColor: P.card }]}
-                onPress={set({ caps })}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-              >
-                <Text style={[styles.segmentLabel, { color: selected ? P.text : P.sub }]}>{caps ? 'SPACED CAPS' : 'As Typed'}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
         <Text style={[styles.groupLabel, styles.touchLabel, { color: P.sub }]}>CORNERS</Text>
         <View style={[styles.segment, { backgroundColor: P.surface }]}>
           {CARD_SHAPES.map(shape => {
@@ -290,6 +315,56 @@ export function CustomPageMaker({
         <Ionicons name="chevron-forward" size={18} color={P.sub} />
       </TouchableOpacity>
     </View>
+  );
+}
+
+/**
+ * One part's choices in a row you swipe through. Used in the Custom tab and
+ * in the preview's Tap Your Page panel, so both offer the same choices.
+ * `bleed` is the padding of whatever it sits in, so the row runs edge to edge.
+ */
+export function CustomPartPicker({
+  part,
+  choices,
+  active,
+  onPick,
+  P,
+  bleed = 18,
+}: {
+  part: CustomPartKey;
+  choices: CustomChoices;
+  active: boolean;
+  onPick: (part: CustomPartKey, value: string) => void;
+  P: CustomPageMakerPalette;
+  bleed?: number;
+}) {
+  const config = CUSTOM_PARTS.find(p => p.key === part);
+  if (!config) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ marginHorizontal: -bleed }}
+      contentContainerStyle={[styles.setRow, { paddingHorizontal: bleed }]}
+    >
+      {config.options.map(option => {
+        const selected = active && choices[part] === option.key;
+        return (
+          <TouchableOpacity
+            key={option.key}
+            style={[styles.partChip, { backgroundColor: P.surface, borderColor: selected ? P.text : P.border }, selected && styles.selectedBorder]}
+            onPress={() => { tap(); onPick(part, option.key); }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            accessibilityLabel={`${config.name}: ${option.name}. ${option.description}`}
+          >
+            <Text style={[styles.optionName, { color: P.text }]} numberOfLines={1}>{option.name}</Text>
+            <Text style={[styles.optionDesc, { color: P.sub }]} numberOfLines={2}>{option.description}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
   );
 }
 

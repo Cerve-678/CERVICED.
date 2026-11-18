@@ -462,29 +462,59 @@ export function PageSectionHeading({
         </View>
       );
     case "custom": {
-      // Custom: the title in the font the provider picked, as typed or in
-      // small spaced caps. On Banner's outlined boxes it sits in the top line,
-      // so it carries the page colour behind it to break the line.
+      // Custom: the title in the font the provider picked, drawn the way they
+      // chose: as typed, in small spaced caps, after its number, over a short
+      // bar of their colour, or under a handwritten word. On outlined boxes it
+      // sits in the top line, so it carries the page colour behind it to break
+      // the line.
       const picks = style.custom;
       if (!picks) break;
-      const size = picks.caps ? 13 : Math.round(22 * picks.headingScale);
+      const caps = picks.headingStyle === "caps";
+      const size = caps ? 13 : Math.round((picks.headingStyle === "script" ? 18 : 22) * picks.headingScale);
+      const centred = picks.centred || align === "center";
+      const legend = style.cards === "outline" && [headingStyles.customLegend, { backgroundColor: palette.background }];
+      const fontStyle = {
+        color: ink,
+        fontFamily: picks.headingFont,
+        fontSize: size,
+        lineHeight: Math.round(size * 1.4),
+        letterSpacing: caps ? 3.5 : 0,
+      };
+      const text = () => (
+        <Text style={[headingStyles.customText, fontStyle, centred && headingStyles.customCentred]}>
+          {caps ? title.toUpperCase() : title}
+        </Text>
+      );
+      if (picks.headingStyle === "numbered") {
+        return (
+          <View {...a11y} accessible style={[headingStyles.custom, headingStyles.customRow, centred && headingStyles.centerRow, legend]}>
+            <Text style={[headingStyles.customNumber, { color: accent }]}>{SECTION_NUMBERS[section]}</Text>
+            <View style={[headingStyles.customRule, { backgroundColor: accent }]} />
+            {text()}
+          </View>
+        );
+      }
+      if (picks.headingStyle === "underlined") {
+        return (
+          <View {...a11y} accessible style={[headingStyles.custom, centred && headingStyles.customStackCentred, legend]}>
+            {text()}
+            <View style={[headingStyles.customBar, { backgroundColor: accent }]} />
+          </View>
+        );
+      }
+      if (picks.headingStyle === "script") {
+        // The lead-in ("Meet", "The") handwritten in the accent, the rest in their font.
+        const [lead, rest] = pair;
+        return (
+          <View {...a11y} accessible style={[headingStyles.custom, headingStyles.customStackCentred, legend]}>
+            {lead ? <Text style={[headingStyles.customScript, { color: accent }]}>{lead.toLowerCase()}</Text> : null}
+            <Text style={[headingStyles.customText, fontStyle, headingStyles.customCentred, { letterSpacing: 2 }]}>{(rest || title).toUpperCase()}</Text>
+          </View>
+        );
+      }
       return (
-        <Text
-          {...a11y}
-          style={[
-            headingStyles.custom,
-            {
-              color: ink,
-              fontFamily: picks.headingFont,
-              fontSize: size,
-              lineHeight: Math.round(size * 1.4),
-              letterSpacing: picks.caps ? 3.5 : 0,
-            },
-            picks.layout === "plain" && headingStyles.customCentred,
-            style.cards === "outline" && [headingStyles.customLegend, { backgroundColor: palette.background }],
-          ]}
-        >
-          {picks.caps ? title.toUpperCase() : title}
+        <Text {...a11y} style={[headingStyles.custom, fontStyle, centred && headingStyles.customCentred, legend]}>
+          {caps ? title.toUpperCase() : title}
         </Text>
       );
     }
@@ -820,7 +850,7 @@ function isCentredHeading(style: PageStyle): boolean {
     || style.heading === "sheerCaps" || style.heading === "embossCaps" || style.heading === "chapter"
     || style.heading === "chunkyCaps" || style.heading === "loungeCaps" || style.heading === "stripeCaps"
     || style.heading === "bowSerif"
-    || (style.heading === "custom" && style.custom?.layout === "plain")
+    || (style.heading === "custom" && !!style.custom?.centred)
   );
 }
 
@@ -1838,6 +1868,13 @@ const headingStyles = StyleSheet.create({
   plain: { fontFamily: "BakbakOne-Regular", fontSize: 20, marginBottom: 16 },
   custom: { marginBottom: 12 },
   customCentred: { textAlign: "center" },
+  customText: { marginBottom: 0 },
+  customRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  customNumber: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 13, letterSpacing: 1 },
+  customRule: { width: 22, height: 1 },
+  customBar: { width: 30, height: 3, borderRadius: 2, marginTop: 8 },
+  customStackCentred: { alignItems: "center" },
+  customScript: { fontFamily: "PinyonScript_400Regular", fontSize: 28, lineHeight: 40, paddingHorizontal: 6, marginBottom: -6 },
   customLegend: { paddingHorizontal: 12, marginBottom: 0 },
   bigLower: { fontFamily: "Syne_700Bold", fontSize: 38, lineHeight: 49, letterSpacing: -1.2, marginBottom: 14 },
   pairRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: 6, marginBottom: 14 },
