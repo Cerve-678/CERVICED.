@@ -550,8 +550,8 @@ export const SECTION_NUMBERS: Record<PageSectionKey, string> = {
   keyInfo: '11',
   faq: '12',
   aftercare: '13',
-  custom: '14',
-  disclaimer: '15',
+  disclaimer: '14',
+  custom: '15',
 };
 
 /** Novel's chapter titles: plain section names under each "Chapter" line. */

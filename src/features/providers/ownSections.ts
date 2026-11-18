@@ -1,6 +1,6 @@
 /**
  * A provider's own profile sections (providers.profile_sections): Key
- * Information, FAQs, Aftercare, Custom sections and a Disclaimer, written on
+ * Information, FAQs, Aftercare, a Disclaimer and Custom sections, written on
  * Policies & Info. Each one shows as its own section under Additional
  * Information on the profile, in the fixed order below.
  *
@@ -30,7 +30,8 @@ export interface OwnSections {
 }
 
 /** Profile order, and the order of the "+" chips on Policies & Info. */
-export const OWN_SECTION_KINDS: readonly OwnSectionKind[] = ['keyInfo', 'faq', 'aftercare', 'custom', 'disclaimer'];
+export const OWN_SECTION_KINDS: readonly OwnSectionKind[] = ['keyInfo', 'faq', 'aftercare', 'disclaimer', 'custom'];
+// Custom last, after the Disclaimer (owner, 2026-11-18).
 
 export const OWN_SECTION_LABELS: Record<OwnSectionKind, string> = {
   keyInfo: 'Key Information',

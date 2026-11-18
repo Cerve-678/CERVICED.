@@ -314,8 +314,8 @@ export const ProviderAdditionalInfoSection = React.memo(function ProviderAdditio
   );
 });
 
-/** The provider's own sections (Key Information, FAQs, Aftercare, Custom
- *  sections, Disclaimer), each its own section under Additional Information,
+/** The provider's own sections (Key Information, FAQs, Aftercare,
+ *  Disclaimer, Custom sections), each its own section under Additional Information,
  *  in a fixed order. A Custom section is headed with the name the provider
  *  gave it. Written on Policies & Info. */
 export const ProviderOwnSections = React.memo(function ProviderOwnSections({

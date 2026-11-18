@@ -264,7 +264,7 @@ export interface DbProvider {
    *  .how_to_get_there, released with the address. */
   public_directions: string | null;
   /** The provider's own profile sections (Key Information, FAQs, Aftercare,
-   *  Custom sections, Disclaimer) from Policies & Info. Public. Read through
+   *  Disclaimer, Custom sections) from Policies & Info. Public. Read through
    *  normalizeOwnSections in features/providers/ownSections.ts. */
   profile_sections: Record<string, unknown> | null;
   latitude: number | null;

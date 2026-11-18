@@ -79,9 +79,9 @@ describe('filledOwnSections / hasHalfFilledFaq', () => {
     expect(hasHalfFilledFaq(undefined)).toBe(false);
   });
 
-  it('places custom sections after Aftercare and before the Disclaimer', () => {
+  it('places custom sections last, after the Disclaimer', () => {
     expect(filledOwnSections({ disclaimer: 'd', custom: [{ title: 'Parking', body: 'Free' }], aftercare: 'a' }))
-      .toEqual(['aftercare', 'custom', 'disclaimer']);
+      .toEqual(['aftercare', 'disclaimer', 'custom']);
   });
 
   it('spots a custom section with a name and no words, or words and no name', () => {
