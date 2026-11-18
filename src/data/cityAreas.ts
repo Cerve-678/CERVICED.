@@ -17,23 +17,23 @@ export const CITY_AREAS: CityAreaData[] = [
     regions: [
       {
         region: 'North London',
-        areas: ['Archway', 'Barnet', 'Barnsbury', 'Bounds Green', 'Camden', 'Camden Town', 'Canonbury', 'Crouch End', 'Dalston', 'De Beauvoir', 'East Finchley', 'Edmonton', 'Enfield', 'Finchley', 'Finsbury Park', 'Golders Green', 'Hackney', 'Hampstead', 'Haringey', 'Harringay', 'Highbury', 'Highgate', 'Holloway', 'Hornsey', 'Islington', 'Kentish Town', 'Muswell Hill', 'Palmers Green', 'Southgate', 'Stamford Hill', 'Stoke Newington', 'Tottenham', 'Turnpike Lane', 'Wood Green'],
+        areas: ['Angel', 'Archway', 'Arnos Grove', 'Barnet', 'Barnsbury', 'Belsize Park', 'Bounds Green', 'Bowes Park', 'Camden', 'Camden Town', 'Canonbury', 'Chalk Farm', 'Colindale', 'Cricklewood', 'Crouch End', 'Dalston', 'De Beauvoir', 'East Finchley', 'Edgware', 'Edmonton', 'Enfield', 'Finchley', 'Finsbury Park', 'Golders Green', 'Hackney', 'Hampstead', 'Haringey', 'Harringay', 'Hendon', 'Highbury', 'Highgate', 'Holloway', 'Hornsey', 'Islington', 'Kentish Town', 'Kingsland', 'Manor House', 'Mill Hill', 'Muswell Hill', 'New Southgate', 'Newington Green', 'Palmers Green', 'Ponders End', 'Primrose Hill', 'Seven Sisters', 'Southgate', 'Stamford Hill', 'Stoke Newington', 'Stroud Green', 'Swiss Cottage', 'Tottenham', 'Totteridge', 'Tufnell Park', 'Turnpike Lane', 'Upper Holloway', 'West Hampstead', 'Whetstone', 'Winchmore Hill', 'Wood Green'],
       },
       {
         region: 'South London',
-        areas: ['Balham', 'Battersea', 'Beckenham', 'Bermondsey', 'Bexley', 'Bexleyheath', 'Blackheath', 'Brixton', 'Bromley', 'Camberwell', 'Catford', 'Clapham', 'Croydon', 'Crystal Palace', 'Deptford', 'Dulwich', 'Elephant and Castle', 'Eltham', 'Forest Hill', 'Greenwich', 'Herne Hill', 'Kennington', 'Kingston upon Thames', 'Lambeth', 'Lewisham', 'Merton', 'Mitcham', 'Morden', 'New Cross', 'Norbury', 'Nunhead', 'Orpington', 'Peckham', 'Penge', 'Purley', 'Putney', 'Sidcup', 'Southwark', 'Streatham', 'Surbiton', 'Sutton', 'Sydenham', 'Thamesmead', 'Thornton Heath', 'Tooting', 'Vauxhall', 'Walworth', 'Wandsworth', 'Wimbledon', 'Woolwich'],
+        areas: ['Abbey Wood', 'Addiscombe', 'Anerley', 'Balham', 'Battersea', 'Beckenham', 'Beddington', 'Bermondsey', 'Bexley', 'Bexleyheath', 'Blackheath', 'Borough', 'Brixton', 'Brockley', 'Bromley', 'Camberwell', 'Canada Water', 'Carshalton', 'Catford', 'Charlton', 'Cheam', 'Chislehurst', 'Clapham', 'Clapham Junction', 'Colliers Wood', 'Coulsdon', 'Crayford', 'Croydon', 'Crystal Palace', 'Deptford', 'Dulwich', 'Earlsfield', 'Elephant and Castle', 'Eltham', 'Erith', 'Forest Hill', 'Gipsy Hill', 'Greenwich', 'Grove Park', 'Herne Hill', 'Hither Green', 'Honor Oak', 'Kennington', 'Kidbrooke', 'Kingston upon Thames', 'Ladywell', 'Lambeth', 'Lee', 'Lewisham', 'London Bridge', 'Merton', 'Mitcham', 'Morden', 'Mottingham', 'New Cross', 'New Malden', 'Nine Elms', 'Norbury', 'Nunhead', 'Orpington', 'Oval', 'Peckham', 'Penge', 'Plumstead', 'Purley', 'Putney', 'Raynes Park', 'Rotherhithe', 'Sanderstead', 'Selhurst', 'Sidcup', 'South Norwood', 'Southfields', 'Southwark', 'Stockwell', 'Streatham', 'Surbiton', 'Surrey Quays', 'Sutton', 'Sydenham', 'Thamesmead', 'Thornton Heath', 'Tolworth', 'Tooting', 'Tulse Hill', 'Vauxhall', 'Wallington', 'Walworth', 'Wandsworth', 'Welling', 'West Norwood', 'West Wickham', 'Wimbledon', 'Woolwich'],
       },
       {
         region: 'East London',
-        areas: ['Barking', 'Barking and Dagenham', 'Bethnal Green', 'Bow', 'Canary Wharf', 'Canning Town', 'Chingford', 'Clapton', 'Dagenham', 'East Ham', 'Forest Gate', 'Hackney Wick', 'Haggerston', 'Havering', 'Homerton', 'Hornchurch', 'Hoxton', 'Ilford', 'Leyton', 'Leytonstone', 'London Fields', 'Mile End', 'Newham', 'Plaistow', 'Poplar', 'Redbridge', 'Romford', 'Shoreditch', 'Stepney', 'Stratford', 'Tower Hamlets', 'Upton Park', 'Waltham Forest', 'Walthamstow', 'Wanstead', 'Whitechapel', 'Woodford'],
+        areas: ['Barking', 'Barking and Dagenham', 'Barkingside', 'Beckton', 'Bethnal Green', 'Bow', 'Bromley-by-Bow', 'Canary Wharf', 'Canning Town', 'Chadwell Heath', 'Chingford', 'Clapton', 'Custom House', 'Dagenham', 'East Ham', 'Forest Gate', 'Gants Hill', 'Goodmayes', 'Hackney Central', 'Hackney Wick', 'Haggerston', 'Havering', 'Highams Park', 'Homerton', 'Hornchurch', 'Hoxton', 'Ilford', 'Isle of Dogs', 'Leyton', 'Leytonstone', 'Limehouse', 'London Fields', 'Manor Park', 'Mile End', 'Newham', 'Plaistow', 'Poplar', 'Rainham', 'Redbridge', 'Romford', 'Seven Kings', 'Shadwell', 'Shoreditch', 'Silvertown', 'Snaresbrook', 'South Woodford', 'Spitalfields', 'Stepney', 'Stratford', 'Tower Hamlets', 'Upminster', 'Upper Clapton', 'Upton Park', 'Victoria Park', 'Waltham Forest', 'Walthamstow', 'Wanstead', 'Wapping', 'West Ham', 'Whitechapel', 'Woodford', 'Woodford Green'],
       },
       {
         region: 'West London',
-        areas: ['Acton', 'Brent', 'Brentford', 'Chiswick', 'Ealing', 'Ealing Broadway', 'Feltham', 'Fulham', 'Greenford', 'Hammersmith', 'Hammersmith and Fulham', 'Hanwell', 'Harlesden', 'Harrow', 'Hayes', 'Hillingdon', 'Hounslow', 'Isleworth', 'Kilburn', 'Northolt', 'Notting Hill', "Queen's Park", 'Richmond upon Thames', 'Ruislip', "Shepherd's Bush", 'Southall', 'Stanmore', 'Twickenham', 'Uxbridge', 'Wembley', 'Willesden'],
+        areas: ['Acton', 'Alperton', 'Barnes', 'Brent', 'Brentford', 'Chiswick', 'Dollis Hill', 'Ealing', 'Ealing Broadway', 'Earls Court', 'East Acton', 'East Sheen', 'Eastcote', 'Feltham', 'Fulham', 'Greenford', 'Hammersmith', 'Hammersmith and Fulham', 'Hampton', 'Hanwell', 'Harlesden', 'Harrow', 'Hayes', 'Hillingdon', 'Holland Park', 'Hounslow', 'Ickenham', 'Isleworth', 'Kensal Green', 'Kensal Rise', 'Kenton', 'Kew', 'Kilburn', 'Kingsbury', 'Ladbroke Grove', 'Maida Vale', 'Mortlake', 'Neasden', 'Northfields', 'Northolt', 'Northwood', 'Notting Hill', 'Park Royal', 'Parsons Green', 'Perivale', 'Pinner', "Queen's Park", 'Richmond', 'Richmond upon Thames', 'Ruislip', "Shepherd's Bush", 'South Ealing', 'Southall', 'Stanmore', 'Teddington', 'Twickenham', 'Uxbridge', 'Wealdstone', 'Wembley', 'Wembley Park', 'West Drayton', 'West Ealing', 'West Kensington', 'Westbourne Park', 'White City', 'Whitton', 'Willesden'],
       },
       {
         region: 'Central London',
-        areas: ['Barbican', 'Bloomsbury', 'Chelsea', 'City of London', 'Clerkenwell', 'Covent Garden', 'Fitzrovia', 'Holborn', 'Kensington', 'Kensington and Chelsea', "King's Cross", 'Knightsbridge', 'Marylebone', 'Mayfair', 'Paddington', 'Pimlico', 'Soho', "St John's Wood", 'Victoria', 'Waterloo', 'Westminster'],
+        areas: ['Aldgate', 'Barbican', 'Bayswater', 'Belgravia', 'Bloomsbury', 'Chelsea', 'City of London', 'Clerkenwell', 'Covent Garden', 'Euston', 'Farringdon', 'Fitzrovia', 'Holborn', 'Kensington', 'Kensington and Chelsea', "King's Cross", 'Knightsbridge', 'Marylebone', 'Mayfair', 'Moorgate', 'Old Street', 'Paddington', 'Pimlico', "Regent's Park", 'Soho', 'South Bank', "St James's", "St John's Wood", 'Tower Hill', 'Victoria', 'Waterloo', 'Westminster'],
       },
     ],
   },
@@ -3500,34 +3500,73 @@ export const COUNTY_TOWNS: Record<string, string[]> = {
 export type PlaceMatch =
   | { kind: 'county'; name: string }
   | { kind: 'town'; name: string }
-  | { kind: 'area'; name: string; town: string };
+  /** `region` is where it sits in the picker ("East London"), so a search
+   *  result can say so without anyone stepping through the lists. */
+  | { kind: 'area'; name: string; town: string; region: string };
 
 const normalizePlace = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Edits needed to turn one string into the other (insert, delete, swap a letter). */
+function editDistance(a: string, b: string, cap: number): number {
+  if (Math.abs(a.length - b.length) > cap) return cap + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const v = Math.min(
+        (prev[j] ?? 0) + 1,
+        (row[j - 1] ?? 0) + 1,
+        (prev[j - 1] ?? 0) + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1),
+      );
+      row.push(v);
+      if (v < best) best = v;
+    }
+    if (best > cap) return cap + 1;
+    prev = row;
+  }
+  return prev[b.length] ?? cap + 1;
+}
+
+/** How many slips a typed name may have and still count: none for short
+ *  text, where one wrong letter already names somewhere else. */
+const allowedSlips = (length: number) => (length >= 9 ? 2 : length >= 5 ? 1 : 0);
 
 /**
  * Every place the pickers know that matches what was typed, at any level, so
  * nobody has to know that Stoke Newington sits under North London or that Kent
  * is a list of towns. Names starting with the text come before ones containing
  * it, and bigger places before smaller. Capped so the list stays readable.
+ *
+ * When nothing starts with or contains the text, a name a slip or two away
+ * still counts ("leyetonstone" finds Leytonstone), closest first.
  */
 export function searchPlaces(query: string, limit = 40): PlaceMatch[] {
   const q = normalizePlace(query);
   if (!q) return [];
   const starts: PlaceMatch[] = [];
   const contains: PlaceMatch[] = [];
+  const near: { match: PlaceMatch; slips: number }[] = [];
+  const cap = allowedSlips(q.length);
   const consider = (name: string, match: PlaceMatch) => {
     const key = normalizePlace(name);
     if (key.startsWith(q)) starts.push(match);
     else if (q.length >= 2 && key.includes(q)) contains.push(match);
+    else if (cap > 0) {
+      const slips = editDistance(q, key, cap);
+      if (slips <= cap) near.push({ match, slips });
+    }
   };
   for (const name of Object.keys(COUNTY_TOWNS)) consider(name, { kind: 'county', name });
   for (const { city } of CITY_AREAS) consider(city, { kind: 'town', name: city });
   for (const { city, regions } of CITY_AREAS) {
-    for (const { areas } of regions) {
-      for (const name of areas) consider(name, { kind: 'area', name, town: city });
+    for (const { region, areas } of regions) {
+      for (const name of areas) consider(name, { kind: 'area', name, town: city, region });
     }
   }
-  return [...starts, ...contains].slice(0, limit);
+  const direct = [...starts, ...contains];
+  if (direct.length) return direct.slice(0, limit);
+  return near.sort((a, b) => a.slips - b.slips).map(n => n.match).slice(0, limit);
 }
 
 export const getCityAreaData = (city: string): CityAreaData | undefined =>
