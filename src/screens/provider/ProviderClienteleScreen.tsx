@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
-  ScrollView,
   Switch,
   Platform,
 } from 'react-native';
@@ -24,6 +23,8 @@ import {
   sendAnnouncement,
   queueScheduledAnnouncement,
   getClientBookingHistory,
+  getMyAnnouncementFollowers,
+  type AnnouncementFollower,
   getMyProviderProfile,
   getClientReliabilityStatsBatch,
   ClientReliabilityStats,
@@ -33,7 +34,7 @@ import type { ClienteleMember, DbBooking } from '../../types/database';
 import { useAppDialog } from '../../components/AppDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { formatTime12 } from '../../utils/dateUtils';
+import { formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
 import { toUserMessage } from '../../utils/userFacingError';
 import { useSystemBottomInset } from '../../utils/bottomSafeGap';
@@ -117,88 +118,59 @@ const tbSt = StyleSheet.create({
   wrap: { flexDirection: 'row', height: 48, marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
 });
 
-// ── Client History Sheet ───────────────────────────────────────────────────────
+// ── Client history dropdown ──────────────────────────────────────────────────
+// Opens under the client's header on their card — every booking they've had
+// with you, newest first.
 
-function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: {
-  visible: boolean; member: ClienteleMember | null; bookings: DbBooking[];
-  loading: boolean; onClose: () => void; P: typeof LIGHT;
+function ClientHistoryList({ bookings, loading, failed, P }: {
+  bookings: DbBooking[] | undefined; loading: boolean; failed: boolean; P: typeof LIGHT;
 }) {
-  // Inside a <Modal>, so the live inset, not SafeAreaView (inert here).
-  const bottomInset = useSystemBottomInset();
+  if (loading && !bookings) {
+    return <View style={chSt.center}><ActivityIndicator color={P.accent} /></View>;
+  }
+  if (failed && !bookings) {
+    return <View style={chSt.center}><Text style={[chSt.emptySub, { color: P.sub }]}>Couldn't load their history. Tap to try again.</Text></View>;
+  }
+  if (!bookings || bookings.length === 0) {
+    return <View style={chSt.center}><Text style={[chSt.emptySub, { color: P.sub }]}>No booking history</Text></View>;
+  }
   return (
-    <Modal visible={visible} transparent statusBarTranslucent navigationBarTranslucent animationType="fade" onRequestClose={onClose}>
-      {/* The dim fills the whole window BEHIND the sheet. It used to be a
-          strip stacked above the sheet, so it stopped in a straight line at
-          the sheet's top edge and the two rounded corners showed the
-          undimmed screen through their cut-outs. */}
-      <View style={chSt.overlay}>
-      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
-      <View style={[chSt.sheet, { backgroundColor: P.surface, paddingBottom: bottomInset }]}>
-        <View style={[chSt.handle, { backgroundColor: P.border }]} />
-        <View style={chSt.header}>
-          {member && (
-            <View style={[chSt.avatar, { backgroundColor: avatarColor(member.customer_name) + '22', borderColor: avatarColor(member.customer_name) + '44' }]}>
-              <Text style={[chSt.avatarText, { color: avatarColor(member.customer_name) }]}>{initials(member.customer_name)}</Text>
+    <View style={[chSt.list, { borderTopColor: P.border }]}>
+      {bookings.map((b, i) => {
+        const statusColor = b.status === 'completed' ? GREEN
+          : b.status === 'cancelled' ? DANGER : P.sub;
+        return (
+          <View key={b.id} style={[chSt.bookingRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: P.border }]}>
+            <View style={[chSt.dateBadge, { backgroundColor: P.card }]}>
+              <Text style={[chSt.dateDay, { color: P.text }]}>{new Date(b.booking_date).getDate()}</Text>
+              <Text style={[chSt.dateMon, { color: P.sub }]}>{new Date(b.booking_date).toLocaleString('en-GB', { month: 'short' })}</Text>
             </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[chSt.title, { color: P.text }]}>{member?.customer_name ?? ''}</Text>
-            <Text style={[chSt.sub, { color: P.sub }]}>{bookings.length} booking{bookings.length !== 1 ? 's' : ''} with you</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[chSt.svcName, { color: P.text }]} numberOfLines={1}>{b.service_name_snapshot}</Text>
+              <Text style={[chSt.timeText, { color: P.sub }]}>
+                {[new Date(b.booking_date).getFullYear() !== new Date().getFullYear() ? String(new Date(b.booking_date).getFullYear()) : null,
+                  b.booking_time ? formatTime12Safe(b.booking_time) : null].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 3 }}>
+              <Text style={[chSt.amount, { color: P.text }]}>£{(b.base_price + b.add_ons_total).toFixed(0)}</Text>
+              <View style={[chSt.statusPill, { backgroundColor: statusColor + '22' }]}>
+                <Text style={[chSt.statusText, { color: statusColor }]}>{b.status.replace(/_/g, ' ')}</Text>
+              </View>
+            </View>
           </View>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-            <Ionicons name="close" size={22} color={P.sub} />
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <View style={chSt.center}><ActivityIndicator color={P.accent} /></View>
-        ) : bookings.length === 0 ? (
-          <View style={chSt.center}><Text style={[chSt.emptySub, { color: P.sub }]}>No booking history</Text></View>
-        ) : (
-          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 504 }} contentContainerStyle={{ paddingBottom: 16 }}>
-            {bookings.map(b => {
-              const statusColor = b.status === 'completed' ? GREEN
-                : b.status === 'cancelled' ? DANGER : P.sub;
-              return (
-                <View key={b.id} style={[chSt.bookingRow, { borderBottomColor: P.border }]}>
-                  <View style={[chSt.dateBadge, { backgroundColor: P.card }]}>
-                    <Text style={[chSt.dateDay, { color: P.text }]}>{new Date(b.booking_date).getDate()}</Text>
-                    <Text style={[chSt.dateMon, { color: P.sub }]}>{new Date(b.booking_date).toLocaleString('en-GB', { month: 'short' })}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[chSt.svcName, { color: P.text }]} numberOfLines={1}>{b.service_name_snapshot}</Text>
-                    <Text style={[chSt.timeText, { color: P.sub }]}>{b.booking_time ? formatTime12(b.booking_time) : ''}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                    <Text style={[chSt.amount, { color: P.text }]}>£{(b.base_price + b.add_ons_total).toFixed(0)}</Text>
-                    <View style={[chSt.statusPill, { backgroundColor: statusColor + '22' }]}>
-                      <Text style={[chSt.statusText, { color: statusColor }]}>{b.status}</Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
-      </View>
-    </Modal>
+        );
+      })}
+    </View>
   );
 }
 const chSt = StyleSheet.create({
-  overlay:     { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet:       { borderTopLeftRadius: 32, borderTopRightRadius: 32, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 12, maxHeight: '75%' },
-  handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  header:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  avatar:      { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  avatarText:  { fontSize: 15, fontWeight: '700' },
-  title:       { fontSize: 18, fontWeight: '700' },
-  sub:         { fontSize: 12, marginTop: 2 },
-  center:      { paddingVertical: 32, alignItems: 'center' },
-  emptySub:    { fontSize: 14 },
-  bookingRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  dateBadge:   { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  dateDay:     { fontSize: 16, fontWeight: '800', lineHeight: 18 },
+  list:        { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 12 },
+  center:      { paddingVertical: 18, alignItems: 'center' },
+  emptySub:    { fontSize: 13 },
+  bookingRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  dateBadge:   { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  dateDay:     { fontSize: 15, fontWeight: '800', lineHeight: 17 },
   dateMon:     { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
   svcName:     { fontSize: 14, fontWeight: '600' },
   timeText:    { fontSize: 12, marginTop: 2 },
@@ -209,7 +181,10 @@ const chSt = StyleSheet.create({
 
 // ── Announcement Sheet ────────────────────────────────────────────────────────
 
-type AudienceKey = 'all' | 'repeat' | 'new' | 'lapsed';
+type AudienceKey = 'all' | 'repeat' | 'new' | 'lapsed' | 'followers';
+
+const clientCount = (n: number) => `${n} client${n !== 1 ? 's' : ''}`;
+const peopleCount = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
 function tomorrow9am() {
   const d = new Date();
@@ -218,17 +193,19 @@ function tomorrow9am() {
   return d;
 }
 
-function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onScheduled, onError, P }: {
+function AnnouncementSheet({ visible, counts, clients, followers, onClose, onSent, onScheduled, onError, P }: {
   visible: boolean;
   counts: Record<AudienceKey, number>;
   clients: ClienteleMember[];
+  /** People who saved you or have your bell on (ids only). */
+  followers: AnnouncementFollower[];
   onClose: () => void;
-  onSent: (count: number) => void;
+  onSent: (who: string) => void;
   onScheduled: (when: Date) => void;
   onError: (msg: string) => void;
   P: typeof LIGHT;
 }) {
-  const [audience, setAudience] = useState<AudienceKey>('all');
+  const [audience, setAudience] = useState<AudienceKey>(clients.length > 0 ? 'all' : 'followers');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -245,16 +222,19 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
     { key: 'repeat', label: 'Repeat clients', icon: 'repeat-outline' },
     { key: 'new',    label: 'New clients',    icon: 'sparkles-outline' },
     { key: 'lapsed', label: 'Lapsed (60d+)',  icon: 'time-outline' },
+    { key: 'followers', label: 'Saved you or bell on', icon: 'notifications-outline' },
   ];
 
   const recipientIds = (): string[] => {
     if (audience === 'all')    return clients.map(c => c.user_id);
     if (audience === 'repeat') return clients.filter(c => c.booking_count >= 2).map(c => c.user_id);
     if (audience === 'new')    return clients.filter(c => c.booking_count === 1).map(c => c.user_id);
+    if (audience === 'followers') return followers.map(f => f.userId);
     return clients.filter(c => daysSince(c.last_booking_date) > 60).map(c => c.user_id);
   };
 
   const recipientCount = counts[audience];
+  const recipients = audience === 'followers' ? peopleCount(recipientCount) : clientCount(recipientCount);
   const canSend = title.trim().length > 0 && body.trim().length > 0 && recipientCount > 0 && !sending;
 
   const sheetRef = useRef<BottomSheet>(null);
@@ -268,7 +248,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
   useEffect(() => {
     if (visible) {
       setEverOpened(true);
-      setAudience('all');
+      setAudience(clients.length > 0 ? 'all' : 'followers');
       setTitle('');
       setBody('');
       setErrorMsg('');
@@ -312,11 +292,11 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
         onScheduled(schedAt);
       } else {
         const { sent } = await sendAnnouncement(title.trim(), body.trim(), ids);
-        onSent(sent);
+        onSent(audience === 'followers' ? peopleCount(sent) : clientCount(sent));
       }
       setTitle('');
       setBody('');
-      setAudience('all');
+      setAudience(clients.length > 0 ? 'all' : 'followers');
     } catch {
       setErrorMsg('Something went wrong. Please try again.');
     } finally {
@@ -360,7 +340,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
         <View>
           <Text style={[anSt.title, { color: P.text }]}>New Announcement</Text>
           <Text style={[anSt.sub, { color: P.sub }]}>
-            {recipientCount} client{recipientCount !== 1 ? 's' : ''} will receive this
+            {recipients} will receive this
           </Text>
         </View>
         <TouchableOpacity onPress={() => sheetRef.current?.close()} activeOpacity={0.7}>
@@ -553,8 +533,8 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onSchedu
               <Ionicons name={scheduleMode ? 'alarm-outline' : 'megaphone-outline'} size={16} color={canSend ? P.onAccent : P.text} />
               <Text style={[anSt.sendBtnText, { color: canSend ? P.onAccent : P.text }]}>
                 {scheduleMode
-                  ? `Schedule for ${recipientCount} client${recipientCount !== 1 ? 's' : ''}`
-                  : `Send to ${recipientCount} client${recipientCount !== 1 ? 's' : ''}`}
+                  ? `Schedule for ${recipients}`
+                  : `Send to ${recipients}`}
               </Text>
             </>
           )}
@@ -603,11 +583,16 @@ const anSt = StyleSheet.create({
 
 // ── Client Card ───────────────────────────────────────────────────────────────
 
-function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliability, P }: {
+function ClientCard({ member, onMessage, onRebook, onToggleHistory, expanded, history, historyLoading, historyFailed, lapsed, reliability, P }: {
   member: ClienteleMember;
   onMessage: (m: ClienteleMember) => void;
   onRebook: (m: ClienteleMember) => void;
-  onViewHistory: (m: ClienteleMember) => void;
+  /** Tapping the client's header opens or closes their history under it. */
+  onToggleHistory: (m: ClienteleMember) => void;
+  expanded: boolean;
+  history: DbBooking[] | undefined;
+  historyLoading: boolean;
+  historyFailed: boolean;
   lapsed?: boolean;
   // No-show / late-cancel history this client has with THIS provider
   // (client_provider_reliability, batch-fetched once for the whole list —
@@ -620,13 +605,22 @@ function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliab
   const hasReliabilityFlag = !!reliability && (reliability.noShowCount > 0 || reliability.lateCancelCount > 0);
 
   return (
-    <TouchableOpacity style={[ccSt.wrap, { backgroundColor: P.surface }]} onPress={() => onViewHistory(member)} activeOpacity={0.8}>
+    <View style={[ccSt.card, { backgroundColor: P.surface }]}>
+    <TouchableOpacity
+      style={ccSt.wrap}
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggleHistory(member); }}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityHint={expanded ? 'Hides their booking history' : 'Shows their booking history'}
+    >
       <View style={[ccSt.avatar, { backgroundColor: color + '22', borderColor: color + '44' }]}>
         <Text style={[ccSt.avatarText, { color }]}>{initials(member.customer_name)}</Text>
       </View>
       <View style={ccSt.info}>
         <View style={ccSt.nameRow}>
           <Text style={[ccSt.name, { color: P.text }]} numberOfLines={1}>{member.customer_name}</Text>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={P.sub} />
           {lapsed && (
             <View style={ccSt.lapsedBadge}>
               <Text style={[ccSt.lapsedText, { color: DANGER }]}>{days}d ago</Text>
@@ -669,10 +663,17 @@ function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliab
         </View>
       </View>
     </TouchableOpacity>
+    {expanded && (
+      <TouchableOpacity activeOpacity={1} disabled={!historyFailed} onPress={() => onToggleHistory(member)}>
+        <ClientHistoryList bookings={history} loading={historyLoading} failed={historyFailed} P={P} />
+      </TouchableOpacity>
+    )}
+    </View>
   );
 }
 const ccSt = StyleSheet.create({
-  wrap:        { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8, gap: 12 },
+  card:        { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
+  wrap:        { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar:      { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   avatarText:  { fontSize: 15, fontWeight: '700' },
   info:        { flex: 1 },
@@ -702,9 +703,13 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('all');
   const [announcementOpen, setAnnouncementOpen] = useState(false);
-  const [historyFor, setHistoryFor] = useState<ClienteleMember | null>(null);
-  const [historyBookings, setHistoryBookings] = useState<DbBooking[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [followers, setFollowers] = useState<AnnouncementFollower[]>([]);
+  // Whose history is open under their card, and each client's history once
+  // loaded (kept, so closing and reopening doesn't fetch it again).
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [historyById, setHistoryById] = useState<Record<string, DbBooking[]>>({});
+  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null);
+  const [historyFailedId, setHistoryFailedId] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showToast, DialogHost } = useAppDialog();
 
@@ -728,6 +733,11 @@ export default function ProviderClienteleScreen({ navigation }: any) {
           .then(setReliabilityByClient)
           .catch(() => {});
       }
+      // Who else an announcement can reach. Best-effort too: without it the
+      // "Saved you or bell on" audience just shows 0.
+      getMyAnnouncementFollowers()
+        .then(setFollowers)
+        .catch(() => setFollowers([]));
     } catch (e: any) {
       showToast(toUserMessage(e, 'Could not load your clientele.', 'ProviderClienteleScreen.load'), 'error');
     } finally {
@@ -745,10 +755,11 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const lapsedClients = clients.filter(c => daysSince(c.last_booking_date) > 60);
   const displayed = tab === 'all' ? clients : tab === 'repeat' ? repeatClients : tab === 'new' ? newClients : lapsedClients;
   const counts = { all: clients.length, repeat: repeatClients.length, new: newClients.length, lapsed: lapsedClients.length };
+  const audienceCounts = { ...counts, followers: followers.length };
 
-  const handleAnnouncementSent = (count: number) => {
+  const handleAnnouncementSent = (who: string) => {
     setAnnouncementOpen(false);
-    showToast(`Announcement sent to ${count} client${count !== 1 ? 's' : ''}`);
+    showToast(`Announcement sent to ${who}`);
   };
 
   const handleAnnouncementScheduled = (when: Date) => {
@@ -782,17 +793,21 @@ export default function ProviderClienteleScreen({ navigation }: any) {
     }
   };
 
-  const handleViewHistory = async (member: ClienteleMember) => {
-    setHistoryFor(member);
-    setHistoryBookings([]);
-    setHistoryLoading(true);
+  const handleToggleHistory = async (member: ClienteleMember) => {
+    const id = member.user_id;
+    if (expandedId === id && historyFailedId !== id) { setExpandedId(null); return; }
+    setExpandedId(id);
+    if (historyById[id]) return;
+    setHistoryFailedId(null);
+    setHistoryLoadingId(id);
     try {
-      const data = await getClientBookingHistory(member.user_id);
-      setHistoryBookings(data);
+      const data = await getClientBookingHistory(id);
+      setHistoryById(prev => ({ ...prev, [id]: data }));
     } catch (e: any) {
+      setHistoryFailedId(id);
       showToast(toUserMessage(e, 'Could not load that history.', 'ProviderClienteleScreen.history'), 'error');
     } finally {
-      setHistoryLoading(false);
+      setHistoryLoadingId(prev => (prev === id ? null : prev));
     }
   };
 
@@ -815,7 +830,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
             <Text style={[s.headerSub, { color: P.sub }]}>{clients.length} client{clients.length !== 1 ? 's' : ''} · {repeatClients.length} repeat</Text>
           </View>
           <View style={s.headerActions}>
-            {clients.length > 0 && (
+            {(clients.length > 0 || followers.length > 0) && (
               <TouchableOpacity
                 style={[s.announceBtn, { backgroundColor: P.accent + '18', borderColor: P.accent + '44' }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setAnnouncementOpen(true); }}
@@ -860,6 +875,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
           ) : (
             <FlatList
               data={displayed}
+              extraData={[expandedId, historyById, historyLoadingId, historyFailedId]}
               keyExtractor={item => item.user_id}
               renderItem={({ item }) => (
                 <ClientCard
@@ -868,7 +884,11 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                   reliability={reliabilityByClient[item.user_id]}
                   onMessage={handleMessage}
                   onRebook={handleRebook}
-                  onViewHistory={handleViewHistory}
+                  onToggleHistory={handleToggleHistory}
+                  expanded={expandedId === item.user_id}
+                  history={historyById[item.user_id]}
+                  historyLoading={historyLoadingId === item.user_id}
+                  historyFailed={historyFailedId === item.user_id}
                   P={P}
                 />
               )}
@@ -881,21 +901,13 @@ export default function ProviderClienteleScreen({ navigation }: any) {
 
       <AnnouncementSheet
         visible={announcementOpen}
-        counts={counts}
+        counts={audienceCounts}
         clients={clients}
+        followers={followers}
         onClose={() => setAnnouncementOpen(false)}
         onSent={handleAnnouncementSent}
         onScheduled={handleAnnouncementScheduled}
         onError={msg => showToast(msg, 'error')}
-        P={P}
-      />
-
-      <ClientHistorySheet
-        visible={historyFor !== null}
-        member={historyFor}
-        bookings={historyBookings}
-        loading={historyLoading}
-        onClose={() => setHistoryFor(null)}
         P={P}
       />
 

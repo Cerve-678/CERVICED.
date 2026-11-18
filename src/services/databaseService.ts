@@ -3437,6 +3437,27 @@ export async function sendAnnouncement(
   return { sent };
 }
 
+export interface AnnouncementFollower {
+  userId: string;
+  /** Saved you to their Your Providers list. */
+  saved: boolean;
+  /** Has your bell on. */
+  bell: boolean;
+}
+
+/** People who saved you or have your bell on — ids only, no names. They can
+ *  be sent announcements (not promotions) alongside past clients
+ *  (get_my_announcement_followers, 20261118140000). */
+export async function getMyAnnouncementFollowers(): Promise<AnnouncementFollower[]> {
+  const { data, error } = await supabase.rpc("get_my_announcement_followers");
+  if (error) throw error;
+  return ((data ?? []) as { user_id: string; saved: boolean; bell: boolean }[]).map(row => ({
+    userId: row.user_id,
+    saved: !!row.saved,
+    bell: !!row.bell,
+  }));
+}
+
 /** Queues an announcement to send at a future date/time. Delivered by the
  * process_scheduled_announcements() cron job (supabase/migrations/
  * 20260815101138_scheduled_announcements.sql), not by this app, so it still
