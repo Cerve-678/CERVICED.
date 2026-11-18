@@ -59,18 +59,12 @@ import { edgeColoursFromPhoto } from '../../features/provider-registration/photo
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMyProviderProfile, getProviderSpecialties, updateProviderCancellationPolicy, updateProviderProfileSections } from '../../services/databaseService';
-import type { DbProvider } from '../../types/database';
-import { mapProviderProfileData } from '../../features/providers/profileMapper';
-import { additionalInfoGroups, goodToKnowText, howToGetThere } from '../../features/providers/additionalInfo';
+import { getMyProviderProfile, updateProviderCancellationPolicy, updateProviderProfileSections } from '../../services/databaseService';
 import {
-  OWN_SECTION_KINDS, OWN_SECTION_LABELS, OWN_SECTION_LIMITS,
   hasHalfFilledFaq, normalizeOwnSections, ownSectionsChanged,
-  type FaqItem, type OwnSections, type OwnSectionKind, type TextSectionKind,
+  type OwnSections,
 } from '../../features/providers/ownSections';
-import type { ChipGroup as InfoGroup } from '../../features/providers/workWith';
-import { getPageStyle } from '../../constants/pageStyles';
-import { parseThemeKey } from '../../constants/providerThemes';
+import { OwnSectionsCard, toOwnDraft, type OwnDraft } from '../../features/business-details/OwnSectionsCard';
 import { logger } from '../../utils/logger';
 import { noticeChoiceForHours, noticeHoursToSave, type NoticeChoice } from '../../utils/policyDisplay';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -81,7 +75,7 @@ import {
   uploadToStorage,
 } from '../../services/providerRegistrationService';
 import {
-  Card, ChipGroup, Field, SectionLabel, Toast, SaveButton, ToggleRow,
+  Card, ChipGroup, Field, MINUS_ON_FIELD, MinusButton, SectionLabel, Toast, SaveButton, ToggleRow,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 import {
@@ -212,73 +206,6 @@ const pSt = StyleSheet.create({
   pillText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
 });
 
-/** Additional Information exactly as clients see it on the profile. */
-interface InfoPreview {
-  groups: InfoGroup[];
-  qualifications: string;
-  goodToKnow: string;
-  directions: string;
-}
-
-// Where each part of Additional Information is set. All live under the
-// Profile tab; some tabs' stacks register them too (see openSetting).
-const INFO_SOURCES: { route: string; label: string }[] = [
-  { route: 'AboutYou', label: 'About You' },
-  { route: 'ServicesPricing', label: 'Services & Pricing' },
-  { route: 'Scheduling', label: 'Scheduling' },
-  { route: 'Payments', label: 'Payments' },
-  { route: 'EditProfile', label: 'Edit Profile' },
-];
-
-// The provider's own sections, as edited here: text boxes stay as typed
-// (trimmed only on save), so the cursor doesn't jump.
-interface OwnDraft {
-  keyInfo: string;
-  faq: FaqItem[];
-  aftercare: string;
-  houseRules: string;
-  disclaimer: string;
-}
-
-function toOwnDraft(raw: unknown): OwnDraft {
-  const clean = normalizeOwnSections(raw);
-  return {
-    keyInfo: clean.keyInfo ?? '',
-    faq: clean.faq ?? [],
-    aftercare: clean.aftercare ?? '',
-    houseRules: clean.houseRules ?? '',
-    disclaimer: clean.disclaimer ?? '',
-  };
-}
-
-function ownHasContent(draft: OwnDraft, kind: OwnSectionKind): boolean {
-  return kind === 'faq'
-    ? draft.faq.some(item => item.question.trim() || item.answer.trim())
-    : draft[kind].trim() !== '';
-}
-
-const OWN_PLACEHOLDERS: Record<TextSectionKind, string> = {
-  keyInfo: 'e.g. I work from home and have a small dog. Street parking is free.',
-  aftercare: 'e.g. Keep your lashes dry for 24 hours and avoid oil-based products.',
-  houseRules: 'e.g. Please come on your own. Arrive with clean, product-free hair.',
-  disclaimer: 'e.g. Results vary from person to person.',
-};
-
-async function buildInfoPreview(profile: DbProvider): Promise<InfoPreview> {
-  const specialties = await getProviderSpecialties(profile.id);
-  const data = mapProviderProfileData({
-    ...profile,
-    services: [],
-    specialties: specialties.map(specialty => ({ specialty })),
-  });
-  return {
-    groups: additionalInfoGroups(data, getPageStyle(parseThemeKey(data.profileTheme).pageStyle)),
-    qualifications: data.qualifications.trim(),
-    goodToKnow: goodToKnowText(data),
-    directions: howToGetThere(data),
-  };
-}
-
 /** A quiet text link: "+ Add a note", "How this works ›". */
 function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
   const C = useBusinessPalette();
@@ -291,24 +218,6 @@ function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
       style={linkSt.wrap}
     >
       <Text style={[linkSt.text, { color: C.accentText }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-/** The round "−" that takes away something added with "+": a note, Travel,
- *  Emergency appointments, one of Your Sections, or one FAQ question. */
-function MinusButton({ label, onPress, style }: { label: string; onPress: () => void; style?: object }) {
-  const C = useBusinessPalette();
-  return (
-    <TouchableOpacity
-      onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
-      activeOpacity={0.6}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      hitSlop={10}
-      style={[minusSt.btn, { borderColor: C.border, backgroundColor: C.surface }, style]}
-    >
-      <Text style={[minusSt.text, { color: C.sub }]}>−</Text>
     </TouchableOpacity>
   );
 }
@@ -373,49 +282,6 @@ export default function PoliciesScreen({ navigation }: any) {
   // A real change to Your Sections (not just spacing) needs the box at the
   // bottom ticked before Save, every time.
   const ownChanged = ownSectionsChanged(ownDraft, loadedOwn);
-  const ownShows = (kind: OwnSectionKind) => !!opened[`own:${kind}`] || ownHasContent(ownDraft, kind);
-  const addOwn = useCallback((kind: OwnSectionKind) => {
-    Haptics.selectionAsync().catch(() => {});
-    open(`own:${kind}`);
-    if (kind === 'faq') setOwnDraft(prev => prev.faq.length > 0 ? prev : { ...prev, faq: [{ question: '', answer: '' }] });
-  }, [open]);
-  // MinusButton already gives the tap its haptic.
-  const removeOwn = useCallback((kind: OwnSectionKind) => {
-    setOpened(prev => ({ ...prev, [`own:${kind}`]: false }));
-    setOwnDraft(prev => kind === 'faq' ? { ...prev, faq: [] } : { ...prev, [kind]: '' });
-  }, []);
-  const setFaq = useCallback((index: number, field: keyof FaqItem, value: string) => {
-    setOwnDraft(prev => ({ ...prev, faq: prev.faq.map((item, i) => i === index ? { ...item, [field]: value } : item) }));
-  }, []);
-  // null until loaded, and if it can't load: the card is just left out.
-  const [infoPreview, setInfoPreview] = useState<InfoPreview | null>(null);
-
-  const refreshInfoPreview = useCallback((profile: DbProvider) => {
-    buildInfoPreview(profile)
-      .then(setInfoPreview)
-      .catch(e => { logger.error('PoliciesScreen.infoPreview', e); setInfoPreview(null); });
-  }, []);
-
-  // Coming back from About You and the rest, show what was just changed there.
-  useEffect(() => {
-    let first = true;
-    return navigation.addListener('focus', () => {
-      if (first) { first = false; return; }
-      getMyProviderProfile()
-        .then(profile => { if (profile) refreshInfoPreview(profile); })
-        .catch(e => logger.error('PoliciesScreen.infoPreview', e));
-    });
-  }, [navigation, refreshInfoPreview]);
-
-  // Opens a screen in this tab's stack when it has one, or under the Profile
-  // tab (which has them all) otherwise — the same jump Becca makes.
-  const openSetting = useCallback((route: string) => {
-    Haptics.selectionAsync().catch(() => {});
-    const here: string[] = navigation.getState?.()?.routeNames ?? [];
-    if (here.includes(route)) navigation.navigate(route);
-    else navigation.getParent()?.navigate('Profile', { screen: route });
-  }, [navigation]);
-
   function flash(message: string, type: 'success' | 'error') {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
@@ -431,8 +297,6 @@ export default function PoliciesScreen({ navigation }: any) {
         const own = toOwnDraft(profile.profile_sections);
         setOwnDraft(own);
         setLoadedOwn(normalizeOwnSections(own));
-        // Not awaited: the preview loads beside the policies, not before them.
-        if (profile.booking_mode !== 'external') refreshInfoPreview(profile);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) };
         // Reads the old single image too, so a provider's existing page stays.
@@ -472,7 +336,7 @@ export default function PoliciesScreen({ navigation }: any) {
         setLoading(false);
       }
     })();
-  }, [refreshInfoPreview]);
+  }, []);
 
   const setPolicy = useCallback(<K extends keyof PolicyState>(key: K, value: PolicyState[K]) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
@@ -668,7 +532,7 @@ export default function PoliciesScreen({ navigation }: any) {
               {shows('cancelNote') && (
                 <View>
                   <Field label="Note (optional)" value={policies.cancelNote} onChange={v => setPolicy('cancelNote', v)} placeholder="e.g. cancellations via message only" />
-                  <MinusButton label="Remove note" onPress={() => removeText('cancelNote')} style={minusSt.onField} />
+                  <MinusButton label="Remove note" onPress={() => removeText('cancelNote')} style={MINUS_ON_FIELD} />
                 </View>
               )}
               <View style={linkSt.row}>
@@ -703,7 +567,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 ? (
                   <View>
                     <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
-                    <MinusButton label="Remove note" onPress={() => removeText('rescheduleNote')} style={minusSt.onField} />
+                    <MinusButton label="Remove note" onPress={() => removeText('rescheduleNote')} style={MINUS_ON_FIELD} />
                   </View>
                 )
                 : <View style={linkSt.row}><TextLink label="+ Add a note" onPress={() => open('rescheduleNote')} /></View>}
@@ -767,7 +631,7 @@ export default function PoliciesScreen({ navigation }: any) {
                 {shows('noShowNote') && (
                   <View>
                     <Field label="Note (optional)" value={policies.noShowNote} onChange={v => setPolicy('noShowNote', v)} />
-                    <MinusButton label="Remove note" onPress={() => removeText('noShowNote')} style={minusSt.onField} />
+                    <MinusButton label="Remove note" onPress={() => removeText('noShowNote')} style={MINUS_ON_FIELD} />
                   </View>
                 )}
                 <View style={linkSt.row}>
@@ -926,133 +790,9 @@ export default function PoliciesScreen({ navigation }: any) {
               )}
             </Card>
 
-            {/* Additional Information, read-only: a preview of the profile
-                section, built by the same helper the profile uses. Each part
-                is set on another screen, so this only points there. */}
-            {!isLinkOnly && infoPreview && (
-              <Card title="Additional Information">
-                <View style={[infoSt.preview, { backgroundColor: C.surface }]}>
-                  <View style={infoSt.eyebrowRow}>
-                    <Ionicons name="eye-outline" size={13} color={C.sub} />
-                    <Text style={[infoSt.eyebrow, { color: C.sub }]}>AS CLIENTS SEE IT</Text>
-                  </View>
-                  {infoPreview.groups.map(group => (
-                    <View key={group.label}>
-                      <Text style={[infoSt.label, { color: C.sub }]}>{group.label}</Text>
-                      <View style={infoSt.chips}>
-                        {group.chips.map(chip => (
-                          <View key={chip} style={[infoSt.chip, { borderColor: `${C.accent}40`, backgroundColor: `${C.accent}14` }]}>
-                            <Text style={[infoSt.chipText, { color: C.text }]}>{chip}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  ))}
-                  {([
-                    ['Qualifications', infoPreview.qualifications],
-                    ['Good to know', infoPreview.goodToKnow],
-                    ['How to get there', infoPreview.directions],
-                  ] as const).filter(([, text]) => text).map(([label, text]) => (
-                    <View key={label}>
-                      <Text style={[infoSt.label, { color: C.sub }]}>{label}</Text>
-                      <Text style={[infoSt.text, { color: C.text }]}>{text}</Text>
-                    </View>
-                  ))}
-                  {infoPreview.groups.length === 0 && !infoPreview.qualifications && !infoPreview.goodToKnow && !infoPreview.directions && (
-                    <Text style={[infoSt.text, { color: C.sub, marginTop: 8 }]}>Nothing here yet. Add details in the places below and they'll show on your profile.</Text>
-                  )}
-                </View>
-                <Text style={[s.cardSub, { color: C.sub, marginTop: 12, marginBottom: 8 }]}>To change any of this, go to:</Text>
-                <View style={infoSt.chips}>
-                  {INFO_SOURCES.map(({ route, label }) => (
-                    <TouchableOpacity
-                      key={route}
-                      style={[infoSt.go, { backgroundColor: C.surface, borderColor: C.border }]}
-                      onPress={() => openSetting(route)}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Change in ${label}`}
-                    >
-                      <Text style={[infoSt.goText, { color: C.accentText }]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </Card>
-            )}
-
-            {/* The provider's own sections. Separate from Additional
-                Information: each shows as its own section under it on the
-                profile (features/providers/ownSections.ts). */}
-            <Card title="Your Sections" sub="Extra sections for your profile, each shown under Additional Information. Add only what you need (optional).">
-              {OWN_SECTION_KINDS.filter(ownShows).map(kind => (
-                <View key={kind} style={ownSt.section}>
-                  <View style={ownSt.head}>
-                    <Text style={[ownSt.title, { color: C.text }]}>{OWN_SECTION_LABELS[kind]}</Text>
-                    <MinusButton label={`Remove ${OWN_SECTION_LABELS[kind]}`} onPress={() => removeOwn(kind)} />
-                  </View>
-                  {kind === 'faq' ? (
-                    <>
-                      {ownDraft.faq.map((item, index) => (
-                        <View key={index} style={[ownSt.faq, index > 0 && { borderTopColor: C.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14 }]}>
-                          {ownDraft.faq.length > 1 && (
-                            <MinusButton
-                              label={`Remove question ${index + 1}`}
-                              onPress={() => setOwnDraft(prev => ({ ...prev, faq: prev.faq.filter((_, i) => i !== index) }))}
-                              style={[minusSt.onField, index > 0 && { top: 8 }]}
-                            />
-                          )}
-                          <Field
-                            label={`Question ${index + 1}`}
-                            value={item.question}
-                            onChange={v => setFaq(index, 'question', v)}
-                            placeholder={index === 0 ? 'e.g. Do you do children\'s hair?' : ''}
-                            maxLength={OWN_SECTION_LIMITS.question}
-                          />
-                          <Field
-                            label="Answer"
-                            value={item.answer}
-                            onChange={v => setFaq(index, 'answer', v)}
-                            placeholder={index === 0 ? 'e.g. Yes, from age 8 with a parent there.' : ''}
-                            maxLength={OWN_SECTION_LIMITS.answer}
-                            multiline
-                          />
-                        </View>
-                      ))}
-                      {ownDraft.faq.length < OWN_SECTION_LIMITS.faqItems && (
-                        <TextLink
-                          label="+ Add a question"
-                          onPress={() => setOwnDraft(prev => ({ ...prev, faq: [...prev.faq, { question: '', answer: '' }] }))}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <Field
-                      label={OWN_SECTION_LABELS[kind]}
-                      value={ownDraft[kind]}
-                      onChange={v => setOwnDraft(prev => ({ ...prev, [kind]: v }))}
-                      placeholder={OWN_PLACEHOLDERS[kind]}
-                      maxLength={OWN_SECTION_LIMITS.text}
-                      multiline
-                    />
-                  )}
-                </View>
-              ))}
-              {OWN_SECTION_KINDS.some(kind => !ownShows(kind)) && (
-                <View style={addSt.row}>
-                  {OWN_SECTION_KINDS.filter(kind => !ownShows(kind)).map(kind => (
-                    <TouchableOpacity
-                      key={kind}
-                      style={[addSt.chip, { borderColor: C.border }]}
-                      onPress={() => addOwn(kind)}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                    >
-                      <Text style={[addSt.chipText, { color: C.accentText }]}>+ {OWN_SECTION_LABELS[kind]}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </Card>
+            {/* The provider's own sections, each its own section under
+                Additional Information on the profile. */}
+            <OwnSectionsCard draft={ownDraft} onChange={setOwnDraft} />
 
             {/* First-publish acceptance in InfoRegScreen is what blocks
                 Publish. Here it's a re-affirmation, and Save works without it,
@@ -1101,26 +841,6 @@ const addSt = StyleSheet.create({
   chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 12.5 },
 });
 
-const infoSt = StyleSheet.create({
-  preview:    { borderRadius: 14, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 14, marginTop: 8 },
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 10 },
-  eyebrow:    { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1 },
-  label:      { fontFamily: 'BakbakOne-Regular', fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 12, marginBottom: 6 },
-  chips:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip:       { borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
-  chipText:   { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12 },
-  text:       { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13, lineHeight: 19 },
-  go:         { borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
-  goText:     { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
-});
-
-const ownSt = StyleSheet.create({
-  section: { marginTop: 6, marginBottom: 14 },
-  head:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  title:   { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
-  faq:     { marginBottom: 6 },
-});
-
 const capSt = StyleSheet.create({
   note: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 13, lineHeight: 18, marginTop: 8 },
 });
@@ -1133,12 +853,6 @@ const termsSt = StyleSheet.create({
   needed:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600', marginTop: -6, marginBottom: 14, paddingHorizontal: 4 },
 });
 
-const minusSt = StyleSheet.create({
-  btn:     { width: 26, height: 26, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  text:    { fontSize: 18, lineHeight: 20, fontWeight: '500' },
-  // Over a Field, level with its label.
-  onField: { position: 'absolute', top: -6, right: 0, zIndex: 1 },
-});
 
 const imgSt = StyleSheet.create({
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
