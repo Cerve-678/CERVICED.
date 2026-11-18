@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **119 files**
 - … +89 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **232 files**
+Curated: [[Availability & Slots]] · **233 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
@@ -51,7 +51,7 @@ Curated: [[Availability & Slots]] · **232 files**
 - `src/services/becca/capabilities/client.ts` _(92)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(83)_
 - `src/contexts/BookingContext.tsx` _(81)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(76)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(75)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(68)_
 - `src/services/database/providers.ts` _(67)_
 - `src/features/providers/TodayScheduleCards.tsx` _(58)_
@@ -71,10 +71,10 @@ Curated: [[Availability & Slots]] · **232 files**
 - `src/types/database.ts` _(25)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
-- … +202 more
+- … +203 more
 
 ## Payments
-Curated: [[Payments]] · **198 files**
+Curated: [[Payments]] · **199 files**
 - `src/screens/client/CartScreen.tsx` _(534)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/components/BookingSheet.tsx` _(111)_
@@ -105,7 +105,7 @@ Curated: [[Payments]] · **198 files**
 - `src/types/booking.ts` _(33)_
 - `src/screens/shared/NotificationsScreen.tsx` _(30)_
 - `src/services/database/adminMoney.ts` _(28)_
-- … +168 more
+- … +169 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **412 files**

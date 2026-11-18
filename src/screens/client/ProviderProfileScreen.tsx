@@ -9,7 +9,6 @@ import { useBookmarkStore } from "../../stores/useBookmarkStore";
 import {
   ProviderRecommendLayer,
   RecommendBadge,
-  type RecommendBadgeTheme,
   useProviderRecommend,
 } from "../../features/social/ProviderRecommend";
 import {
@@ -42,19 +41,14 @@ import type { ScrollViewInstance } from 'react-native';
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
 import {
-  DETAILS_ON_CARD_INK,
   DETAILS_OWN_LINE,
   HERO_NAME_LINE_HEIGHT,
   HERO_NAME_SIZE,
   HeroLogo,
   HeroPills,
   ProfileHeroLayout,
-  detailsSitOnCard,
-  heroIsDarkForStyle,
 } from "../../features/providers/ProfileHero";
-import { cardInk } from "../../features/providers/heroes/BoutiqueHero";
-import { stripesHeroColour } from "../../features/providers/heroes/DemureHeroes";
-import { VeilBackdrop, veilAccent, veilPageTheme } from "../../features/providers/heroes/SheerHero";
+import { VeilBackdrop } from "../../features/providers/heroes/SheerHero";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaView, WindowControlsInsetProvider } from "../../components/SafeArea";
@@ -138,8 +132,9 @@ import { slotsPillText } from "../../utils/slotsRowText";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import type { ProviderProfileService } from "../../features/providers/profileTypes";
 import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
+import { useProviderPagePalette } from "../../features/providers/page/providerPagePalette";
 import { ExpandableAboutText, revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
-import { getPageStyle, heroPhotoPickLimit, menuNumber, PAGE_SECTION_TITLES, policyPicturePlacement, type PageSectionKey } from "../../constants/pageStyles";
+import { heroPhotoPickLimit, menuNumber, PAGE_SECTION_TITLES, type PageSectionKey } from "../../constants/pageStyles";
 import { heroPhotos } from "../../features/providers/heroPhotos";
 import {
   GlossShine,
@@ -150,10 +145,7 @@ import {
   RuledJumpBar,
   policiesBringOwnSurface,
   sectionInk,
-  customTextStyle,
-  sectionsSitOnPage,
   serviceCardSurface,
-  sheetInk,
   StyledPolicyList,
 } from "../../features/providers/ProfilePageStyle";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
@@ -1512,32 +1504,40 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     recordStat("profile_view");
   }, [isLinkOnly, viewerChecked, isOwnProvider, providerDbId, recordStat]);
 
-  // Palette follows the provider's chosen profile theme (preset key or custom set).
-  // Until the provider loads this resolves to the 'app' preset.
-  // Branding → Page Style (constants/pageStyles): headings, card treatment,
-  // the policy layout and the logo frame, on top of the colours. Classic is
-  // the profile exactly as it was.
-  const themeParts = parseThemeKey(provider?.profileTheme);
-  const pageStyle = getPageStyle(themeParts.pageStyle, themeParts.custom);
-  // Branding → Custom's text font, laid over the page's body text; null on
-  // every other style, which keeps Jura.
-  const bodyFont = customTextStyle(pageStyle);
-  // A veil page (Sheer) keeps the theme's hero and accent but puts the
-  // content on see-through dark glass, so every section inks itself white.
-  const baseTheme = resolveProviderTheme(provider?.profileTheme);
-  const veilTheme = pageStyle.veilPage ? veilPageTheme(baseTheme) : null;
-  const OP = veilTheme ?? baseTheme;
-  // Branding → Card Shape: square corners on the profile's cards (the service
-  // cards and category pills, About/Policies, the sharing card, Reviews,
-  // Contact, Opening hours, Additional info), or the rounded look it has
-  // always had. The availability pill and Instagram button beside it stay
-  // rounded, and so do photos (owner's call, 2026-11-09).
-  const squareCards = parseThemeKey(provider?.profileTheme).shape === 'square';
-  // Branding → Policy Pictures: story circles near the top, or one of the
-  // designs (full size, framed, swipe, fanned, peek, thumbnails, a button)
-  // after the services.
-  const policyLook = parseThemeKey(provider?.profileTheme).policyLook;
-  const policyPlacement = policyPicturePlacement(policyLook);
+  // How the page looks, all of it derived from the provider's saved branding
+  // (page style, theme colours, card surfaces, hero ink). Shared with the
+  // website through features/providers/page/providerPagePalette.
+  const {
+    pageStyle,
+    bodyFont,
+    baseTheme,
+    veilTheme,
+    OP,
+    squareCards,
+    policyLook,
+    policyPlacement,
+    adaptiveAccentColor,
+    recommendBadgeTheme,
+    cardBg,
+    cardBlurTint,
+    cardBlurIntensity,
+    cardHighlightColors,
+    sectionPalette,
+    pageInk,
+    SV,
+    serviceSurfaceStyle,
+    heroBgColor,
+    heroIsDark,
+    heroText,
+    heroSub,
+    detailsOnCard,
+    sheetColour,
+    detailsText,
+    detailsSub,
+    detailsShadow,
+    heroKicker,
+    heroPillLabels,
+  } = useProviderPagePalette(provider);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1767,74 +1767,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     new Animated.Value(sidePanelWidth(screenWidth)),
   ).current;
 
-  // The saved accent_color, else the provider's own theme accent (the app's
-  // brown for the default theme). There used to be a middle step that guessed
-  // an accent from the gradient's first colour through a table of old
-  // placeholder presets, falling back to purple for anything else.
-  const rawAccentColor = provider?.accentColor ?? OP.accent;
-  // On a veil page's dark glass a dark accent is lifted so it still reads.
-  const adaptiveAccentColor = veilTheme ? veilAccent(rawAccentColor) : rawAccentColor;
-  // Recommend's badge on the logo wears this page's colours.
-  const recommendBadgeTheme = useMemo<RecommendBadgeTheme>(() => ({
-    card: OP.card,
-    text: OP.text,
-    accent: adaptiveAccentColor,
-    onAccent: onAccentInk(adaptiveAccentColor).text,
-  }), [OP.card, OP.text, adaptiveAccentColor]);
-
-  // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat
-  // opaque fill — derived from the provider theme's card colour so every preset matches.
-  const cardBg = withAlpha(OP.card, OP.isDark ? 0.5 : 0.9);
-  const cardBlurTint = OP.isDark ? ("dark" as const) : ("light" as const);
-  const cardBlurIntensity = OP.isDark ? 35 : 25;
-  const cardHighlightColors = useMemo(
-    () => (OP.isDark
-      ? ["rgba(255,255,255,0.08)", "transparent"]
-      : ["rgba(255,255,255,0.3)", "transparent"]
-    ) as [string, string],
-    [OP.isDark],
-  );
-  const sectionPalette = useMemo(() => ({
-    text: OP.text,
-    sub: OP.sub,
-    border: OP.border,
-    separator: OP.sep,
-    background: OP.bg,
-    cardBackground: cardBg,
-    accent: adaptiveAccentColor,
-    blurTint: cardBlurTint,
-    blurIntensity: cardBlurIntensity,
-    highlightColors: cardHighlightColors,
-    squareCards,
-    pageStyle,
-  }), [
-    OP.text,
-    OP.sub,
-    OP.border,
-    OP.sep,
-    OP.bg,
-    cardBg,
-    adaptiveAccentColor,
-    cardBlurTint,
-    cardBlurIntensity,
-    cardHighlightColors,
-    squareCards,
-    pageStyle,
-  ]);
-
-  // A style that draws sections straight on the page (Cover, Spa, Framed)
-  // takes its text colours from the content area, not the card — the
-  // theme's own text colours follow the card's brightness. SV is what the
-  // service list reads; every other style keeps OP.
-  const pageInk = sheetInk(OP.bg);
-  const SV = sectionsSitOnPage(pageStyle)
-    ? { ...OP, text: pageInk.text, sub: pageInk.sub, border: pageInk.border, sep: pageInk.separator }
-    : OP;
-  const serviceSurfaceStyle = serviceCardSurface(pageStyle, {
-    card: OP.card,
-    accent: adaptiveAccentColor,
-    sheet: OP.bg,
-  });
 
   // Venue/workspace shots are stamped with their own category by
   // InfoRegScreen's "Address & venue photos" uploader. They're a picture of
@@ -1902,57 +1834,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // pageStyle is rebuilt each render; only its key and hero change the groups.
   [provider, pageStyle.key, pageStyle.hero]);
 
-  // Hero info floats over the photo/gradient. Every theme always carries a
-  // gradient now (saved as [backdrop, sheetColor]), so "is there a gradient"
-  // can't decide text colour any more — some backdrops (Cream, Sky, Blush…)
-  // are pale, and white text on them is close to invisible. Decide from the
-  // actual rendered colour's brightness instead; a photo always gets the
-  // dark-overlay treatment so white text is safe there.
-  const heroBgColor = provider?.hasCustomGradient
-    ? provider?.gradient[0]
-    : OP.hero;
-  const heroIsDark =
-    heroIsDarkForStyle(pageStyle) ||
-    !!provider?.backgroundImage ||
-    (heroBgColor ? isDarkColor(heroBgColor) : true);
-  const heroText = heroIsDark ? "#FFFFFF" : "#26201E";
-  const heroSub = heroIsDark ? "rgba(255,255,255,0.96)" : "rgba(38,32,30,0.78)";
-  // Duet and Calling Card draw the stars, years and link-only caption on a
-  // card, so they take that card's ink whatever is behind the hero.
-  const detailsOnCard = detailsSitOnCard(pageStyle);
-  // Boutique's panel and Duet's welcome card are their card colour, so their
-  // ink follows that colour; Calling Card's cream card is always inked dark.
-  // Lounge's sit on a strip of the page colour under its panel, Stripes' on
-  // its strip of the accent.
-  const sheetColour = veilTheme ? veilTheme.sheetFill : OP.bg;
-  const cardDetailsInk = pageStyle.hero === "productPage" || pageStyle.hero === "duet"
-    ? cardInk(OP.card)
-    : pageStyle.hero === "stripes"
-      ? cardInk(stripesHeroColour(adaptiveAccentColor))
-    : pageStyle.hero === "lounge"
-      ? cardInk(sheetColour)
-      : DETAILS_ON_CARD_INK;
-  const detailsText = detailsOnCard ? cardDetailsInk.text : heroText;
-  const detailsSub = detailsOnCard ? cardDetailsInk.sub : heroSub;
-  const detailsShadow = heroIsDark && !detailsOnCard;
-
-  // What they do, for Arch's curved caption, Spa's top line and the like.
-  const heroKicker = useMemo(() => {
-    if (!provider) return "";
-    const types = provider.serviceTypes.length ? provider.serviceTypes : [provider.providerService];
-    return [...new Set(types.map((type) => (type === "OTHER" ? provider.customServiceType || "SERVICE" : type).toUpperCase()))].join(" · ");
-  }, [provider]);
-
-  // Cover's pills under the name: their area and how they work. What they do
-  // isn't repeated here: Additional Information lists it as Category
-  // (owner, 2026-11-15).
-  const heroPillLabels = useMemo(() => {
-    if (!provider || !pageStyle.heroPills) return [];
-    const labels: string[] = [];
-    if (provider.location) labels.push(provider.location.toUpperCase());
-    if (provider.businessType) labels.push(BUSINESS_TYPE_LABEL[provider.businessType].toUpperCase());
-    return [...new Set(labels)];
-  }, [provider, pageStyle.heroPills]);
 
   // Slide in the offers tab from the right when promotions are available
   useEffect(() => {
