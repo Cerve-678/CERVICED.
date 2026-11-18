@@ -145,6 +145,13 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   // take…" and "Waitlist exhausted" (provider): the hold row is deleted when it
   // ends, so there's no booking to open. Each side's waitlist is where the
   // next step is: Rejoin in Bookings, or offer the slot from the to-do list.
+  // A client joined the provider's waitlist: it's on their To Do tab.
+  if (type === 'waitlist_joined') {
+    if (isProvider) navigateNested('ProviderHome', 'BookingHistory', { initialTab: 'todo' });
+    else openNotifications();
+    return;
+  }
+
   if (type === 'waitlist_slot_available' && !booking_id) {
     if (isProvider) navigateNested('ProviderHome', 'BookingHistory', { initialTab: 'todo' });
     else navigateNested('Home', 'Bookings', {});
