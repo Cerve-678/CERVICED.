@@ -553,6 +553,9 @@ export default function BrandingScreen({ navigation }: any) {
               kicker={heroKicker}
               location={heroLocation}
               photoUris={previewPhotoUris}
+              portfolio={portfolioItems}
+              // Clears the row of page styles along the preview's foot.
+              pinnedBarBottom={120}
               content={previewContent}
               policyPages={previewPolicyPages}
               policyEdges={previewPolicyEdges}
@@ -658,6 +661,7 @@ export default function BrandingScreen({ navigation }: any) {
                   accent={accentColor}
                   sheet={sheetColor}
                   cardColour={resolveProviderTheme(liveThemeKey).card}
+                  backgroundImage={backgroundImage}
                   textColor={P.text}
                   subColor={P.sub}
                   borderColor={P.border}

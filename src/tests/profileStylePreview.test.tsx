@@ -310,3 +310,38 @@ describe('the 2026-11-15 templates', () => {
     expect(onPress).toHaveBeenCalledWith('policies');
   });
 });
+
+describe('the portfolio and pinned bar, as on the profile', () => {
+  const at = (label: string) => JSON.stringify(screen.toJSON()).indexOf(`"accessibilityLabel":"${label}"`);
+
+  it('puts Posy\'s portfolio first, before About, as its "work first" page does', () => {
+    renderPreview('posy');
+    expect(at('Portfolio')).toBeGreaterThan(-1);
+    expect(at('Portfolio')).toBeLessThan(at('About'));
+  });
+
+  it('keeps every other style\'s portfolio after Reviews', () => {
+    renderPreview('pure');
+    expect(at('Portfolio')).toBeGreaterThan(at('Reviews'));
+  });
+
+  it('shows grey photo shapes in Branding before any photo is uploaded, and none in a full preview', () => {
+    renderPreview('posy');
+    expect(screen.getAllByLabelText(/^Portfolio photo/).length).toBeGreaterThan(0);
+    screen.unmount();
+    renderPreview('posy', 'default', undefined, true);
+    expect(screen.queryAllByLabelText(/^Portfolio photo/)).toHaveLength(0);
+  });
+
+  it('pins Riviera\'s Book bar with their lowest price', () => {
+    renderPreview('riviera', 'default', {
+      about: '',
+      categories: ['Lashes'],
+      services: [{ name: 'Full set', minutes: 120, price: 65 }, { name: 'Infill', minutes: 45, price: 40.5 }],
+    });
+    expect(screen.getByText('From £40.50')).toBeTruthy();
+    screen.unmount();
+    renderPreview('pure');
+    expect(screen.queryByText(/^From £/)).toBeNull();
+  });
+});
