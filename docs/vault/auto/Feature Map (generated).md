@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **120 files**
 - … +90 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **234 files**
+Curated: [[Availability & Slots]] · **237 files**
 - `src/services/AvailabilityService.ts` _(312)_
 - `src/components/ModernBeautyCalendar.tsx` _(190)_
 - `src/services/database/availability.ts` _(179)_
@@ -67,11 +67,11 @@ Curated: [[Availability & Slots]] · **234 files**
 - `supabase/add_providers_availability_rpc.sql` _(31)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(29)_
 - `src/components/MultiBookingSheet.tsx` _(28)_
+- `src/types/database.ts` _(28)_
 - `src/features/providers/SearchGuideSheet.tsx` _(25)_
-- `src/types/database.ts` _(25)_
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
-- … +204 more
+- … +207 more
 
 ## Payments
 Curated: [[Payments]] · **201 files**
@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **415 files**
 - … +385 more
 
 ## Notifications
-Curated: [[Notifications]] · **213 files**
+Curated: [[Notifications]] · **214 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(364)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **213 files**
 - `src/services/databaseService.ts` _(26)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(25)_
 - `supabase/chat_two_way_fix.sql` _(25)_
-- … +183 more
+- … +184 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **107 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **82 files**
 - … +52 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **240 files**
+Curated: [[Booking Flow]] · **241 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/screens/client/BookingDetailScreen.tsx` _(243)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **240 files**
 - `src/types/booking.ts` _(41)_
 - `src/types/database.ts` _(39)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
-- … +210 more
+- … +211 more
 
 ## Auth
 Curated: [[Contexts]] · **248 files**

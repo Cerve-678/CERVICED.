@@ -46,6 +46,7 @@ import { heroLabelsFrom, previewContentFrom } from '../../features/providers/pre
 import { policyImageEdges, policyImageUrls } from '../../features/providers/policyImages';
 import { heroPhotos } from '../../features/providers/heroPhotos';
 import { getPageStyle, heroPhotoPickLimit } from '../../constants/pageStyles';
+import { heroPhotoFramesOf } from '../../features/providers/HeroPhoto';
 import { DEFAULT_PROVIDER_FONT } from '../../constants/providerFonts';
 import AddressPicker from '../../components/AddressPicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -2462,7 +2463,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   if (!isLinkOnly) {
     const pageStyleKey = parseThemeKey(providerData.profileTheme).pageStyle;
     const pickLimit = heroPhotoPickLimit(getPageStyle(pageStyleKey));
-    const heroUris = (pickLimit > 0 ? heroPhotos(portfolio, pickLimit) : portfolio.slice(0, 3)).map(item => item.image_url);
+    const heroItems = pickLimit > 0 ? heroPhotos(portfolio, pickLimit) : portfolio.slice(0, 3);
+    const heroUris = heroItems.map(item => item.image_url);
+    // A full-screen preview drawn once per open, so not memoized (this sits below an early return).
+    const heroFrames = heroPhotoFramesOf(heroItems);
     const labels = heroLabelsFrom(providerData);
     return (
       <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -2485,6 +2489,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             kicker={labels.kicker}
             location={labels.location}
             photoUris={heroUris}
+            photoFrames={heroFrames}
             content={previewContentFrom(providerData)}
             policyPages={policyImageUrls(providerData.bookingPolicies)}
             policyEdges={policyImageEdges(providerData.bookingPolicies)}
@@ -3443,6 +3448,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         price: null,
         aspect_ratio: asset.width && asset.height ? asset.width / asset.height : 1,
         is_featured: false,
+        hero_frame: null,
         created_at: new Date().toISOString(),
         vibe_tags: null,
         occasion_tags: null,

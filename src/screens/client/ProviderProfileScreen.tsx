@@ -118,6 +118,7 @@ import { ProviderPageSheet } from "../../features/providers/page/ProviderPageShe
 import { ProviderPageServices } from "../../features/providers/page/ProviderPageServices";
 import { revealIfScrolledPast } from "../../features/providers/ExpandableAboutText";
 import { heroPhotoPickLimit, type PageSectionKey } from "../../constants/pageStyles";
+import { heroPhotoFramesOf } from "../../features/providers/HeroPhoto";
 import { heroPhotos } from "../../features/providers/heroPhotos";
 import { shouldShowBookingCta } from "../../features/providers/bookingCtaVisibility";
 import { openExternalBookingPage, waitUntilBackFromBrowser } from "../../features/providers/externalBookingLink";
@@ -1614,12 +1615,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // on the ones picked in Branding → Your Photos, topped up with the newest.
   // Bow, which has nothing to pick, keeps its newest photo.
   const heroPickLimit = heroPhotoPickLimit(pageStyle);
-  const heroPhotoUris = useMemo(
-    () => (heroPickLimit > 0 ? heroPhotos(workPortfolio, heroPickLimit) : workPortfolio.slice(0, 3))
-      .map((item) => item.image_url)
-      .filter(Boolean),
+  const heroPhotoItems = useMemo(
+    () => (heroPickLimit > 0 ? heroPhotos(workPortfolio, heroPickLimit) : workPortfolio.slice(0, 3)).filter((item) => !!item.image_url),
     [heroPickLimit, workPortfolio],
   );
+  const heroPhotoUris = useMemo(() => heroPhotoItems.map((item) => item.image_url), [heroPhotoItems]);
+  // How the provider framed each of them in Branding → Your Photos.
+  const heroPhotoFrames = useMemo(() => heroPhotoFramesOf(heroPhotoItems), [heroPhotoItems]);
   // A salon/studio on "Always visible" shows its full address in Contact
   // instead of the area. The server decides who qualifies and returns null for
   // everyone else, so the area stays the default and a failed fetch just
@@ -4468,6 +4470,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               provider={provider}
               palette={palette}
               heroPhotoUris={heroPhotoUris}
+              heroPhotoFrames={heroPhotoFrames}
               isLinkOnly={isLinkOnly}
               recommendHeart={recommendHeart}
               bell={heroBell}

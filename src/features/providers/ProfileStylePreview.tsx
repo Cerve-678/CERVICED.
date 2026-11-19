@@ -48,6 +48,7 @@ import {
   StyledPolicyList,
   type PageStylePalette,
 } from "./ProfilePageStyle";
+import type { HeroPhotoFrames } from "./HeroPhoto";
 
 const noop = () => {};
 
@@ -73,6 +74,7 @@ const PLACEHOLDER_PORTFOLIO: DbPortfolioItem[] = [0.8, 1.1, 1, 0.75, 1.2, 0.9].m
   price: null,
   aspect_ratio,
   is_featured: false,
+  hero_frame: null,
   created_at: "",
   vibe_tags: null,
   occasion_tags: null,
@@ -109,6 +111,8 @@ export interface ProfileStylePreviewProps {
   /** The photos the hero shows, as Branding → Your Photos has them right now
    *  (Editorial, Snapshot, Hush), or their newest (Bow). */
   photoUris?: readonly string[];
+  /** How each of those photos is framed, by URL (Your Photos → Adjust). Memoized by the caller. */
+  photoFrames?: HeroPhotoFrames;
   /** Their own About, menu categories and first services, so the preview
    *  reads like their page rather than grey bars (owner, 2026-11-17: "make
    *  preview more accurate"). Anything missing falls back to the bars. */
@@ -188,6 +192,7 @@ export function ProfileStylePreview({
   kicker,
   location,
   photoUris,
+  photoFrames,
   content,
   policyPages,
   policyEdges,
@@ -361,6 +366,7 @@ export function ProfileStylePreview({
             cardColour={OP.card}
             sheetColour={veilTheme ? veilTheme.sheetFill : OP.bg}
             photoUris={photoUris ?? []}
+            {...(photoFrames ? { photoFrames } : {})}
             rating={rating && Number(rating) > 0 ? rating : null}
             // The preview has no Services to jump to, but Studio's Book now
             // still shows, so the provider sees the hero as clients will.

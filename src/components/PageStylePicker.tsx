@@ -603,14 +603,12 @@ function MiniProfile({
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
         {style.hero === 'pinboardHeader' ? (
-          // Pinboard: a short board of rounded pins, then the logo beside the name.
+          // Pinboard: three rounded pins side by side at uneven heights, then the logo beside the name.
           <View style={mini.pinHero}>
             <View style={mini.pinBoard}>
-              <View style={[mini.pinTall, { backgroundColor: photoFill }]} />
-              <View style={mini.pinColumn}>
-                <View style={[mini.pinShort, { backgroundColor: photoFill }]} />
-                <View style={[mini.pinMid, { backgroundColor: photoFill }]} />
-              </View>
+              {[44, 34, 39].map((height, i) => (
+                <View key={i} style={[mini.pin, { height, backgroundColor: photoFill }]} />
+              ))}
             </View>
             <View style={mini.pinIdentity}>
               <View style={mini.pinLogo}>{logo}</View>
@@ -1212,11 +1210,8 @@ const mini = StyleSheet.create({
   productPanel: { paddingHorizontal: 8, paddingVertical: 5, gap: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
   productTitle: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 12, lineHeight: 15 },
   pinHero: { alignSelf: 'stretch', flex: 1, paddingHorizontal: 6, paddingTop: 5 },
-  pinBoard: { flexDirection: 'row', gap: 3, height: 44 },
-  pinColumn: { flex: 1, gap: 3 },
-  pinTall: { flex: 1, borderRadius: 6 },
-  pinShort: { height: 18, borderRadius: 6 },
-  pinMid: { flex: 1, borderRadius: 6 },
+  pinBoard: { flexDirection: 'row', alignItems: 'flex-start', gap: 3, height: 44 },
+  pin: { flex: 1, borderRadius: 6 },
   pinIdentity: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
   pinLogo: { transform: [{ scale: 0.6 }], marginHorizontal: -6, marginVertical: -6 },
   pinName: { fontFamily: 'Manrope-Bold', fontSize: 11, flex: 1 },

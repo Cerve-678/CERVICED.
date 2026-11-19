@@ -158,6 +158,19 @@ export type TransactionType =
   | "tip"
   | "refund";
 
+// ── Hero photo framing ───────────────────────────────────
+
+/** How a portfolio photo sits in a page style's hero
+ *  (`portfolio_items.hero_frame`). `zoom` multiplies the size at which the
+ *  photo just covers its slot (1 to 3). `x`/`y` move it as a fraction of how far
+ *  it can move in that slot (-1 to 1, 0 centred), so one frame shows the same
+ *  part of the photo in every style's slot, whatever its shape. */
+export interface HeroPhotoFrame {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
 // ── Logo framing ─────────────────────────────────────────
 
 /** How the logo sits in one Home card: `zoom` multiplies the size at which
@@ -674,6 +687,8 @@ export interface DbPortfolioItem {
   price: number | null;
   aspect_ratio: number;
   is_featured: boolean;
+  /** How it sits in the hero; null = centred, unzoomed. */
+  hero_frame: HeroPhotoFrame | null;
   created_at: string;
   // Enriched discovery tags — personalised Explore feed
   vibe_tags: string[] | null;

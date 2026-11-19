@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -61,9 +61,11 @@ import {
 import { DEFAULT_PROVIDER_FONT, LINK_ONLY_FONTS, resolveProviderFontFamily, resolveProviderFontScale } from '../../constants/providerFonts';
 import { heroUsesBrandFont } from '../../features/providers/ProfileHero';
 import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } from '../../services/providerRegistrationService';
-import { getMyProviderBranding, getProviderPortfolio, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
-import type { DbPortfolioItem } from '../../types/database';
+import { getMyProviderBranding, getProviderPortfolio, setHeroPhotoFrames, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
+import type { DbPortfolioItem, HeroPhotoFrame } from '../../types/database';
 import { HeroPhotoPicker } from '../../features/providers/HeroPhotoPicker';
+import { HeroPhotoAdjustRow } from '../../features/providers/HeroPhotoAdjust';
+import { heroPhotoFramesOf } from '../../features/providers/HeroPhoto';
 import { CustomPageMaker, CustomTapPanel } from '../../features/providers/CustomPageMaker';
 import { withPart, type CustomPartKey } from '../../constants/customPageStyle';
 import { DEFAULT_CUSTOM_CHOICES, type CustomChoices } from '../../constants/customPageStyle';
@@ -182,6 +184,9 @@ export default function BrandingScreen({ navigation }: any) {
   const [previewRating, setPreviewRating] = useState<string | undefined>(undefined);
   const [heroPicked, setHeroPicked]             = useState<string[]>([]);
   const savedHeroPicked = useRef<string[]>([]);
+  // How each hero photo is framed, by portfolio item id (null = centred).
+  const [heroFrames, setHeroFrames]             = useState<Record<string, HeroPhotoFrame | null>>({});
+  const savedHeroFrames = useRef<Record<string, HeroPhotoFrame | null>>({});
   const [part, setPart]                       = useState<BrandingPart>('layout');
 
   useEffect(() => {
@@ -371,6 +376,9 @@ export default function BrandingScreen({ navigation }: any) {
         setPortfolioItems(work);
         setHeroPicked(picks);
         savedHeroPicked.current = picks;
+        const frames = Object.fromEntries(work.filter(item => item.hero_frame).map(item => [item.id, item.hero_frame]));
+        setHeroFrames(frames);
+        savedHeroFrames.current = frames;
       })
       // The photo picker and the preview's photos just stay empty; the rest of Branding works.
       .catch(e => logger.warn('[Branding] could not load the portfolio for Your Photos:', e));
@@ -390,10 +398,22 @@ export default function BrandingScreen({ navigation }: any) {
       setHeroPicked(heroPhotos(marked, heroPickLimit).filter(item => item.is_featured).map(item => item.id));
     }
   }, [heroPickLimit, heroPicked, portfolioItems]);
-  // The preview's hero, as the profile will show it with these picks.
-  const previewPhotoUris = picksHeroPhotos
-    ? heroPhotos(portfolioItems.map(item => ({ ...item, is_featured: heroPicked.includes(item.id) })), heroPickLimit).map(item => item.image_url)
-    : portfolioItems.slice(0, 3).map(item => item.image_url);
+  // The photos the hero shows with these picks, in its order.
+  const shownHeroPhotos = useMemo(
+    () => (picksHeroPhotos
+      ? heroPhotos(portfolioItems.map(item => ({ ...item, is_featured: heroPicked.includes(item.id) })), heroPickLimit)
+      : portfolioItems.slice(0, 3)),
+    [picksHeroPhotos, portfolioItems, heroPicked, heroPickLimit],
+  );
+  // The preview's hero, as the profile will show it with these picks and frames.
+  const previewPhotoUris = useMemo(() => shownHeroPhotos.map(item => item.image_url), [shownHeroPhotos]);
+  const previewPhotoFrames = useMemo(
+    () => heroPhotoFramesOf(shownHeroPhotos.map(item => ({ ...item, hero_frame: heroFrames[item.id] ?? null }))),
+    [shownHeroPhotos, heroFrames],
+  );
+  const setHeroFrame = useCallback((itemId: string, frame: HeroPhotoFrame | null) => {
+    setHeroFrames(prev => ({ ...prev, [itemId]: frame }));
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (!providerId) return;
@@ -429,6 +449,15 @@ export default function BrandingScreen({ navigation }: any) {
         await setHeroPortfolioPhotos(providerId, heroPicked);
         savedHeroPicked.current = heroPicked;
       }
+      // Each moved photo's frame lives on its own portfolio row too.
+      const changedFrames = Object.fromEntries(
+        Object.entries(heroFrames).filter(([id, frame]) =>
+          JSON.stringify(frame ?? null) !== JSON.stringify(savedHeroFrames.current[id] ?? null)),
+      );
+      if (Object.keys(changedFrames).length > 0) {
+        await setHeroPhotoFrames(providerId, changedFrames);
+        savedHeroFrames.current = heroFrames;
+      }
 
       // Keep My Profile's render cache in step with the DB so returning to it
       // doesn't flash the previous colours/photo for a frame before the live
@@ -449,7 +478,7 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, customChoices, brandFont, heroPicked, navigation]);
+  }, [providerId, userId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, heroFinish, cardShape, pageStyle, policyLook, customChoices, brandFont, heroPicked, heroFrames, navigation]);
 
   // The profile_theme the on-screen choices would save, for the preview.
   const liveThemeKey = encodeThemeKey(
@@ -553,6 +582,7 @@ export default function BrandingScreen({ navigation }: any) {
               kicker={heroKicker}
               location={heroLocation}
               photoUris={previewPhotoUris}
+              photoFrames={previewPhotoFrames}
               portfolio={portfolioItems}
               // Clears the row of page styles along the preview's foot.
               pinnedBarBottom={120}
@@ -684,6 +714,16 @@ export default function BrandingScreen({ navigation }: any) {
                   limit={heroPickLimit}
                   accent={accentColor}
                   subColor={P.sub}
+                />
+                <HeroPhotoAdjustRow
+                  photos={shownHeroPhotos}
+                  frames={heroFrames}
+                  onChange={setHeroFrame}
+                  hero={getPageStyle(pageStyle, customChoices).hero}
+                  accent={accentColor}
+                  textColor={P.text}
+                  subColor={P.sub}
+                  borderColor={P.border}
                 />
               </View>
               )}

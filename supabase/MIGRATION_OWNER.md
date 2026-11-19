@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-19 (providers move and zoom their hero photos)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261119200000 | `portfolio_hero_frame` | **APPLIED 2026-11-19** on the user's go-ahead ("go on"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. Lock `(none)`, live max `20261119100000`, no open PR above `20261113140000`. Forced-rollback dry run first: extra key, zoom 5 and string zoom refused by `portfolio_items_hero_frame_check`; a valid frame saved; column absent and live max unchanged afterwards. Verified live: version recorded (live max); `hero_frame jsonb` + CHECK present; 195 rows, 0 framed; the 3 existing RLS policies unchanged (owner writes via `portfolio_owner_all`, clients read under `portfolio_public_read`). Additive and nullable. PR #680. |
+
 ### Applied 2026-11-19 (Mark All Read clears only the hat on screen)
 
 | Recorded version | Name | Verified live |

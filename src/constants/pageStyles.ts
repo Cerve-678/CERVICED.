@@ -186,7 +186,7 @@ export type PageHero =
   | 'colourBlock' // a block of the accent: what they do, the name huge in a fat italic, the logo over its corner (Riviera)
   | 'split'    // their chosen photo down the left half, the logo, name and details on the right (Posy)
   | 'portfolioFront' // a chosen work photo above a compact provider identity and booking details
-  | 'pinboardHeader' // a short board of up to three rounded photo pins, then the logo beside the name
+  | 'pinboardHeader' // up to three rounded photo pins side by side at uneven heights, then the logo beside the name
   | 'atelierLetterhead' // a tall noncursive wordmark, fine rules and a small provider image
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
@@ -676,6 +676,28 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'portfolioFront': return 1; // Portfolio's cover image
     case 'pinboardHeader': return 3; // Pinboard's board of pins
     default: return 0;
+  }
+}
+
+/** The shape (width ÷ height) of the hero's slot for its `index`th photo of
+ *  `count`, roughly as drawn on a phone. Branding's adjust sheet frames the
+ *  photo in this shape, so what the provider lines up is what the hero shows. */
+export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number): number {
+  switch (hero) {
+    case 'editorial': return 84 / 118;      // the tilted back card
+    case 'blockName': return 130 / 220;     // a third of Snapshot's strip
+    case 'hushFan': return 0.72;            // inside Hush's matted box
+    case 'bow': return 1.15;                // under the ribbon
+    case 'split': return 0.62;              // Posy's left half
+    case 'archWindow': return 196 / 236;    // Retreat's window
+    case 'portfolioFront': return 358 / 230; // Portfolio's cover
+    case 'pinboardHeader': {
+      // Side by side at uneven heights (150, 124, 138); one photo is 156 across.
+      if (count <= 1) return 358 / 156;
+      const width = count === 2 ? 175 : 114;
+      return width / ([150, 124, 138][index] ?? 150);
+    }
+    default: return 0.8;
   }
 }
 
