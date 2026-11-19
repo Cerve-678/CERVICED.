@@ -143,8 +143,7 @@ export type ProviderBeccaStackParamList = {
   Analytics: undefined;
   BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Automations: undefined;
-  /** feeBookingId: opened from a booking's fee line, to show that fee. */
-  Payments: { feeBookingId?: string } | undefined;
+  Payments: undefined;
   Policies: undefined;
 };
 
@@ -268,8 +267,7 @@ export type ProviderHomeStackParamList = {
   EditProfile: { transferProviderId?: string } | undefined;
   Branding: undefined;
   Policies: undefined;
-  /** feeBookingId: opened from a booking's fee line, to show that fee. */
-  Payments: { feeBookingId?: string } | undefined;
+  Payments: undefined;
   Automations: undefined;
   // Pushed from the link-only Dashboard's Profile strength rows (Instagram,
   // accessibility, payment methods), same reasoning as EditProfile above.
@@ -349,8 +347,7 @@ export type ProviderServicesStackParamList = {
   // same reason ProviderSchedule is registered here rather than jumped to on
   // the Account tab.
   Policies: undefined;
-  /** feeBookingId: opened from a booking's fee line, to show that fee. */
-  Payments: { feeBookingId?: string } | undefined;
+  Payments: undefined;
   Branding: undefined;
   // Pushed from the Profile Health checklist's automations step.
   Automations: undefined;
@@ -407,8 +404,7 @@ export type ProviderAccountStackParamList = {
   ServicesPricing: undefined;
   AboutYou: undefined;
   Scheduling: undefined;
-  /** feeBookingId: opened from a booking's fee line, to show that fee. */
-  Payments: { feeBookingId?: string } | undefined;
+  Payments: undefined;
   Policies: undefined;
   Communications: undefined;
   Automations: undefined;

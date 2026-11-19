@@ -111,7 +111,7 @@ export function feesToChargeNow(
 
 /** One fee button on the provider's booking page. */
 export interface FeeButton {
-  kind: 'late' | 'no_show';
+  kind: BookingFeeKind;
   pence: number;
   /** Pressable now; otherwise shown greyed out with `note` saying when. */
   enabled: boolean;
@@ -123,10 +123,17 @@ export interface FeeButton {
  * frozen on it (user, 2026-11-18: "a button that is inactive then becomes
  * active when it's time, if it's required"). Greyed out until it can be
  * charged, live inside feeChargeWindow, and gone once that window closes.
- * Only fees the policy has; nothing on a booking that didn't go ahead.
+ * Only fees the policy has; nothing on a booking that didn't go ahead, except
+ * a late cancellation fee while it can be charged.
  */
 export function bookingFeeButtons(terms: BookingFeeTerms, nowMs: number): FeeButton[] {
   const status = terms.status;
+  if (status === 'cancelled') {
+    const window = feeChargeWindow(terms, nowMs);
+    return window.canCharge.late_cancel && terms.lateCancelFeePence
+      ? [{ kind: 'late_cancel', pence: terms.lateCancelFeePence, enabled: true, note: `Until ${window.closesAtLabel}` }]
+      : [];
+  }
   if (![...WENT_AHEAD, 'no_show'].includes(status)) return [];
   const start = new Date(`${terms.bookingDate}T${terms.bookingTime}`).getTime();
   const end = new Date(`${terms.bookingDate}T${terms.endTime ?? terms.bookingTime}`).getTime();

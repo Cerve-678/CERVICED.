@@ -12,9 +12,9 @@ jest.mock('../services/providerPaymentService', () => ({
   getConnectLink: jest.fn(), refundProviderBooking: jest.fn(), getProviderRefundState: jest.fn(),
   getPayoutSchedule: jest.fn(), setPayoutSchedule: jest.fn(),
 }));
+// The fee actions in the payment sheet pull in the Stripe SDK, which has no native module in Jest.
+jest.mock('../features/bookings/BookingFeeCard', () => () => null);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-// The fee sheet pulls in the Stripe SDK, which has no native module in Jest.
-jest.mock('../components/BookingFeeSheet', () => () => null);
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../contexts/ThemeContext', () => ({
   useTheme: () => ({ isDarkMode: false, palette: { accent: '#5C4033', onAccent: '#FFFFFF', text: '#1C1A18', secondaryText: '#8A8680', card: '#FFFFFF', border: '#eeeeee' } }),
@@ -167,18 +167,20 @@ test('a schedule set in Stripe that the app does not offer is shown as it is, wi
   expect(ui.queryByRole('radio', { selected: true })).toBeNull();
 });
 
-test('lists late and no-show fees with the provider\'s share and where the money is', async () => {
+test('shows a charged fee on its booking payment and in its sheet, not in a list of its own', async () => {
   (getProviderFeeEarnings as jest.Mock).mockResolvedValue([{
     id: 'fee', bookingId: 'booking', kind: 'no_show', amountPence: 2000, payoutPence: 1950, status: 'succeeded',
     payoutStatus: 'transferred', releaseAfter: null, chargedAt: '2026-10-01T10:00:00Z', openDispute: false,
-    serviceName: 'Hair appointment', customerName: 'Test client',
+    bankDispute: null, serviceName: 'Hair appointment', customerName: 'Test client',
   }]);
   const ui = render(<ProviderStripePayments><Text>Deposit settings</Text></ProviderStripePayments>);
   await waitFor(() => expect(ui.getByText('£20.00')).toBeTruthy());
   fireEvent.press(ui.getByRole('tab', { name: 'Bookings' }));
-  expect(ui.getByText('No-show fee · Hair appointment')).toBeTruthy();
-  expect(ui.getByText('£19.50')).toBeTruthy();
-  expect(ui.getByText('Sent for payday')).toBeTruthy();
+  await waitFor(() => expect(ui.getByText('+ £19.50 fee')).toBeTruthy());
+  expect(ui.queryByText('Late & no-show fees')).toBeNull();
+  fireEvent.press(ui.getAllByText('Hair appointment')[0]!);
+  expect(ui.getByText('No-show fee')).toBeTruthy();
+  expect(ui.getByText('to you, with fee')).toBeTruthy();
 });
 
 test('shows a tip on its booking, and on that booking\'s timeline, not in a list of its own', async () => {
