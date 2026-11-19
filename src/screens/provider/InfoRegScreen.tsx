@@ -2309,8 +2309,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     return cols;
   }, [portfolio, PREVIEW_PORTFOLIO_COL_W]);
 
-  // Contact, Portfolio and Venue: the same in both previews below.
-  const extraSections = (
+  // Contact, Portfolio and Venue. The link-only preview draws all three; the
+  // styled preview draws its portfolio itself, in the page style's own photo
+  // layout, so it takes Contact before it and Venue after.
+  const contactSection = (
     <>
               {/* Contact Section */}
               <BlurView
@@ -2391,7 +2393,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   <Text style={styles.previewContactButtonText}>Get In Touch</Text>
                 </TouchableOpacity>
               </BlurView>
-
+    </>
+  );
+  const portfolioMasonry = (
+    <>
               {/* Portfolio Section — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
               {portfolio.length > 0 && (
                 <View style={styles.previewPortfolioSection}>
@@ -2419,7 +2424,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   </View>
                 </View>
               )}
-
+    </>
+  );
+  const venueSection = (
+    <>
               {/* Venue — a horizontal strip under its own label, matching
                   ProviderAdditionalInfoSection's "Venue" block on the real
                   profile. Kept out of the masonry above so the preview shows
@@ -2481,8 +2489,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             policyPages={policyImageUrls(providerData.bookingPolicies)}
             policyEdges={policyImageEdges(providerData.bookingPolicies)}
             rating={String(previewRating)}
+            portfolio={portfolio}
+            afterPortfolio={venueSection}
           >
-            {extraSections}
+            {contactSection}
           </ProfileStylePreview>
           <View style={[styles.previewHeader, styles.previewHeaderFloating, { paddingTop: previewTopPad + 8 }]} pointerEvents="box-none">
             <TouchableOpacity style={styles.previewBackButton} onPress={() => { tapLight(); onClose(); }}>
@@ -2818,7 +2828,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               </BlurView>
               )}
 
-              {extraSections}
+              {contactSection}
+              {portfolioMasonry}
+              {venueSection}
             </View>
             </View>
           </ScrollView>

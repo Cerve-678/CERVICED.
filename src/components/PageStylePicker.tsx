@@ -6,12 +6,12 @@
 // than a screenshot, so it stays right for every colour set.
 
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Path, Polygon } from 'react-native-svg';
 import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pageStyles';
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
@@ -33,6 +33,9 @@ interface Props {
   textColor: string;
   subColor: string;
   borderColor: string;
+  /** Their background photo: on the profile it fills the page behind the
+   *  inset sheet, so every thumbnail shows it there too. */
+  backgroundImage?: string | null;
 }
 
 export default function PageStylePicker({
@@ -47,6 +50,7 @@ export default function PageStylePicker({
   textColor,
   subColor,
   borderColor,
+  backgroundImage = null,
 }: Props) {
   return (
     <ScrollView
@@ -72,7 +76,7 @@ export default function PageStylePicker({
             accessibilityLabel={`${style.name}: ${style.description}${locked ? ', locked' : ''}`}
           >
             <View style={[styles.frame, { borderColor: selected ? textColor : borderColor }, selected && styles.frameOn]}>
-              <MiniProfile style={style} gradient={gradient} accent={accent} sheet={sheet} cardColour={cardColour} />
+              <MiniProfile style={style} gradient={gradient} accent={accent} sheet={sheet} cardColour={cardColour} backgroundImage={backgroundImage} />
               {locked ? (
                 <View style={styles.lock}>
                   <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
@@ -140,12 +144,14 @@ function MiniProfile({
   accent,
   sheet,
   cardColour,
+  backgroundImage,
 }: {
   style: PageStyle;
   gradient: readonly string[];
   accent: string;
   sheet: string;
   cardColour: string;
+  backgroundImage: string | null;
 }) {
   // Sheer: on the profile the veil runs down the whole page and every section
   // sits on dark glass (veilPageTheme), so the thumbnail draws it that way too,
@@ -156,6 +162,107 @@ function MiniProfile({
   const line = withAlpha(ink, 0.18);
   const heroColours = (gradient.length >= 2 ? [gradient[0], gradient[1]] : [accent, sheet]) as [string, string];
   const heading = MINI_HEADING[style.key];
+  const photoFill = blend(accent, '#FFFFFF', 0.55);
+
+  // The divider the profile draws above a section heading.
+  const dividerNode = (() => {
+    switch (style.divider) {
+      case 'wave':
+        return (
+          <Svg width={34} height={5} viewBox="0 0 34 5" style={mini.divider}>
+            <Path d="M0 2.5 Q4.25 0 8.5 2.5 T17 2.5 T25.5 2.5 T34 2.5" stroke={accent} strokeWidth={1.2} fill="none" />
+          </Svg>
+        );
+      case 'line':
+        return <View style={[mini.divider, mini.dividerLine, { backgroundColor: withAlpha(accent, 0.7) }]} />;
+      case 'stars':
+        return <Text style={[mini.divider, mini.dividerGlyph, { color: accent }]}>✦ ✦ ✦</Text>;
+      case 'dots':
+        return (
+          <View style={[mini.divider, mini.dividerDots]}>
+            {[0, 1, 2].map(i => <View key={i} style={[mini.dividerDot, { backgroundColor: accent }]} />)}
+          </View>
+        );
+      default:
+        return null;
+    }
+  })();
+
+  // Work first (Posy, Noir): a row of their photos in the style's own layout.
+  const photoRow = (() => {
+    switch (style.photoLayout) {
+      case 'arches':
+        return (
+          <View style={mini.photoRow}>
+            {[0, 1, 2].map(i => <View key={i} style={[mini.archPhoto, { backgroundColor: photoFill }]} />)}
+          </View>
+        );
+      case 'polaroids':
+        return (
+          <View style={mini.photoRow}>
+            {[-4, 3, -2].map((tilt, i) => (
+              <View key={i} style={[mini.polaroidPrint, { transform: [{ rotate: `${tilt}deg` }] }]}>
+                <View style={[mini.polaroidPrintPhoto, { backgroundColor: photoFill }]} />
+              </View>
+            ))}
+          </View>
+        );
+      case 'feature':
+        return (
+          <View style={mini.photoRow}>
+            <View style={[mini.featureBig, { backgroundColor: photoFill }]} />
+            <View style={mini.featureSide}>
+              <View style={[mini.featureSmall, { backgroundColor: photoFill }]} />
+              <View style={[mini.featureSmall, { backgroundColor: photoFill }]} />
+            </View>
+          </View>
+        );
+      case 'swipe':
+        return (
+          <View style={[mini.photoRow, mini.swipeRow]}>
+            {[0, 1, 2, 3].map(i => <View key={i} style={[mini.swipePhoto, { backgroundColor: photoFill }]} />)}
+          </View>
+        );
+      default:
+        return (
+          <View style={mini.photoRow}>
+            <View style={[mini.masonryPhoto, mini.masonryTall, { backgroundColor: photoFill }]} />
+            <View style={[mini.masonryPhoto, { backgroundColor: photoFill }]} />
+          </View>
+        );
+    }
+  })();
+
+  // A service card's inside in the style's service layout: Posy's tiles (the
+  // photo on top), Riviera's wide photo cards, Muse's printed menu line.
+  const serviceInside = (() => {
+    switch (style.serviceLayout) {
+      case 'tiles':
+        return (
+          <>
+            <View style={[mini.tilePhoto, { backgroundColor: photoFill }]} />
+            <View style={[mini.bar, { backgroundColor: line }]} />
+          </>
+        );
+      case 'photoCards':
+        return (
+          <>
+            <View style={[mini.photoCardPhoto, { backgroundColor: photoFill }]} />
+            <View style={[mini.bar, { backgroundColor: line }]} />
+          </>
+        );
+      case 'menu':
+        return (
+          <View style={mini.menuLine}>
+            <View style={[mini.bar, mini.menuName, { backgroundColor: line }]} />
+            <View style={[mini.menuLeader, { borderBottomColor: withAlpha(ink, 0.35) }]} />
+            <View style={[mini.bar, mini.menuPrice, { backgroundColor: line }]} />
+          </View>
+        );
+      default:
+        return null;
+    }
+  })();
 
   const logo = (() => {
     switch (style.logo) {
@@ -459,15 +566,35 @@ function MiniProfile({
     }
   };
 
+  // A service card with the style's service layout inside it.
+  const serviceCard = (key: number) => {
+    const el = card(key);
+    if (!serviceInside || !React.isValidElement<{ style?: unknown; children?: React.ReactNode }>(el)) return el;
+    return React.cloneElement(el, {
+      style: [el.props.style, mini.layoutCard, style.serviceLayout === 'tiles' && mini.tileCard],
+      children: serviceInside,
+    });
+  };
+  const pinnedInk = withAlpha(isDarkColor(cardColour) ? '#FFFFFF' : '#26201E', 0.25);
+
   return (
     <View style={[mini.root, { backgroundColor: sheet }]}>
-      {veilPage ? (
+      {/* As on the profile: their background photo fills the page behind the
+          hero and down the sides of the inset sheet. */}
+      {backgroundImage ? (
         <>
-          <LinearGradient colors={heroColours} style={StyleSheet.absoluteFill} />
-          <VeilBackdrop />
+          <Image source={{ uri: backgroundImage }} style={[StyleSheet.absoluteFill, mini.backgroundPhoto]} resizeMode="cover" fadeDuration={0} />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.38)', 'rgba(0,0,0,0.18)', 'transparent']}
+            locations={[0, 0.35, 0.62]}
+            style={StyleSheet.absoluteFill}
+          />
         </>
+      ) : veilPage ? (
+        <LinearGradient colors={heroColours} style={StyleSheet.absoluteFill} />
       ) : null}
-      <LinearGradient colors={veilPage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
+      {veilPage ? <VeilBackdrop /> : null}
+      <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
         {style.hero === 'cover' ? (
           <>
             <View style={[mini.coverLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
@@ -739,7 +866,7 @@ function MiniProfile({
           </>
         ) : logo}
       </LinearGradient>
-      <View style={[mini.body, veilPage && mini.veilGlass]}>
+      <View style={[mini.body, veilPage ? mini.veilGlass : backgroundImage ? [mini.floatingBody, { backgroundColor: sheet }] : null]}>
         {style.pagePattern ? <PagePattern pattern={style.pagePattern} accent={accent} onDark={isDarkColor(sheet)} /> : null}
         {style.policies === 'band' ? (
           <View style={[mini.band, { backgroundColor: accent }]} />
@@ -752,12 +879,30 @@ function MiniProfile({
           </View>
         ) : (
           <>
+            {style.portfolioFirst ? photoRow : null}
+            {dividerNode}
             {headingNode}
-            {card(0)}
-            {card(1)}
+            {style.serviceLayout === 'tiles' ? (
+              <View style={mini.tileRow}>
+                {serviceCard(0)}
+                {serviceCard(1)}
+              </View>
+            ) : (
+              <>
+                {serviceCard(0)}
+                {serviceCard(1)}
+              </>
+            )}
           </>
         )}
       </View>
+      {/* Riviera, Noir, Clinic: the Book bar pinned over the foot of the page. */}
+      {style.pinnedBookBar ? (
+        <View style={[mini.pinnedBar, style.buttonShape === 'square' && mini.pinnedBarSquare, { backgroundColor: cardColour }]}>
+          <View style={[mini.bar, mini.pinnedBarText, { backgroundColor: pinnedInk }]} />
+          <View style={[mini.pinnedBarButton, style.buttonShape === 'square' && mini.pinnedBarSquare, { backgroundColor: accent }]} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -840,6 +985,42 @@ const mini = StyleSheet.create({
   envelopeSeal: { position: 'absolute', left: 24, top: 18 },
   hero: { height: 76, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: 9, paddingTop: 7, gap: 5 },
+  // Over a background photo the sheet is inset, as on the profile.
+  backgroundPhoto: { opacity: 0.88 },
+  floatingBody: { marginHorizontal: 5, borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden' },
+  divider: { alignSelf: 'center' },
+  dividerLine: { width: 30, height: 1 },
+  dividerGlyph: { fontSize: 5, lineHeight: 7, letterSpacing: 1 },
+  dividerDots: { flexDirection: 'row', gap: 3 },
+  dividerDot: { width: 2, height: 2, borderRadius: 1 },
+  photoRow: { flexDirection: 'row', gap: 4, justifyContent: 'space-between' },
+  archPhoto: { flex: 1, height: 26, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
+  polaroidPrint: { flex: 1, backgroundColor: '#FFFFFF', padding: 2, paddingBottom: 5, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 1.5, shadowOffset: { width: 0, height: 1 } },
+  polaroidPrintPhoto: { height: 16 },
+  featureBig: { flex: 2, height: 30 },
+  featureSide: { flex: 1, gap: 2 },
+  featureSmall: { flex: 1 },
+  swipeRow: { justifyContent: 'flex-start', overflow: 'hidden' },
+  swipePhoto: { width: 26, height: 32, borderRadius: 3 },
+  masonryPhoto: { flex: 1, height: 18, borderRadius: 4 },
+  masonryTall: { height: 26 },
+  layoutCard: { height: undefined, paddingVertical: 4, gap: 3, justifyContent: 'flex-start' },
+  tileRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  tileCard: { width: '48%', paddingHorizontal: 4 },
+  tilePhoto: { height: 16, borderRadius: 5 },
+  photoCardPhoto: { height: 12, borderRadius: 3 },
+  menuLine: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  menuName: { width: '40%' },
+  menuLeader: { flex: 1, borderBottomWidth: 1, borderStyle: 'dotted', marginTop: 2 },
+  menuPrice: { width: 10 },
+  pinnedBar: {
+    position: 'absolute', left: 6, right: 6, bottom: 6, height: 16, borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 7, paddingRight: 2,
+    shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 3, shadowOffset: { width: 0, height: 1 },
+  },
+  pinnedBarSquare: { borderRadius: 2 },
+  pinnedBarText: { width: '45%' },
+  pinnedBarButton: { width: 22, height: 12, borderRadius: 6 },
   logo: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)' },
   logoNoRim: { borderWidth: 0 },
   logoArch: { borderRadius: 3, borderTopLeftRadius: 15, borderTopRightRadius: 15, height: 34 },
