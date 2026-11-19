@@ -166,7 +166,7 @@ export function PageSectionHeading({
   const title = custom ?? PAGE_SECTION_TITLES[section];
   // Two-part headings: a lead-in, then the name. A one-word Custom name has
   // no lead-in, so each style below draws the lead only when there is one.
-  const pair: [string, string] = custom ? customHeadingPair(custom) : headingPair(section);
+  const pair: [string, string] = custom ? customHeadingPair(custom) : headingPair(section, style?.key);
   const words = pair.filter(Boolean).join(" ");
   const ink = color ?? sheetInk(palette.background).text;
   const accent = accentColor ?? palette.accent;

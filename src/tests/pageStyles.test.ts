@@ -183,6 +183,18 @@ describe('two-part headings say what the section is', () => {
   });
 });
 
+describe('the About heading', () => {
+  it('says About, or Meet the Provider, in the styles that asked for it, and Meet the Artist elsewhere', () => {
+    (['sheer', 'signature', 'snapshot', 'softFocus', 'bow'] as const).forEach(style => {
+      expect(headingPair('about', style).filter(Boolean).join(' ')).toBe('About');
+    });
+    expect(headingPair('about', 'quiet')).toEqual(['Meet', 'the Provider']);
+    expect(headingPair('about', 'boutique')).toEqual(['Meet', 'the Provider']);
+    expect(headingPair('about', 'arch')).toEqual(['Meet', 'the Artist']);
+    expect(headingPair('services', 'sheer')).toEqual(['The', 'Services']);
+  });
+});
+
 describe('the services heading', () => {
   it('says "The Services", not "The Menu"', () => {
     expect(headingPair('services')).toEqual(['The', 'Services']);

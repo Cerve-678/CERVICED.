@@ -538,7 +538,20 @@ const HEADING_PAIRS: Record<PageSectionKey, [string, string]> = {
   disclaimer: ['The', 'Disclaimer'],
 };
 
-export function headingPair(section: PageSectionKey): [string, string] {
+/** Styles whose About heading isn't "Meet the Artist" (owner, 2026-11-19).
+ *  A one-word heading has no lead-in. */
+const ABOUT_HEADING_BY_STYLE: Partial<Record<PageStyleKey, [string, string]>> = {
+  sheer: ['', 'About'],
+  signature: ['', 'About'],
+  snapshot: ['', 'About'],
+  softFocus: ['', 'About'],
+  bow: ['', 'About'],
+  quiet: ['Meet', 'the Provider'],
+  boutique: ['Meet', 'the Provider'],
+};
+
+export function headingPair(section: PageSectionKey, styleKey?: PageStyleKey): [string, string] {
+  if (section === 'about' && styleKey) return ABOUT_HEADING_BY_STYLE[styleKey] ?? HEADING_PAIRS.about;
   return HEADING_PAIRS[section];
 }
 
