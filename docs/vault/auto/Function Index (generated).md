@@ -5,7 +5,7 @@
 
 #generated
 
-**4168 functions** across **607 files**.
+**4166 functions** across **605 files**.
 
 ### `src/components/` (68)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -269,7 +269,7 @@
 - `signupAnswers.ts` — **fillProfileFromSignup** · **signupPricing**
 - `useVerticalDragReorder.ts` — applyPosition · clearHold · endDrag · getItemStyle · makeResponder · of · onItemLayout · responders · **swapOrderForDrag** · **useVerticalDragReorder**
 
-### `src/features/providers/` (59)
+### `src/features/providers/` (58)
 - `aboutPreview.ts` — **aboutPreview**
 - `additionalInfo.ts` — **additionalInfoGroups** · **goodToKnowText** · **howToGetThere**
 - `BecomeFullMemberSheet.tsx` — **BecomeFullMemberSheet** · close · confirm · onPhaseChange · onRequestClose
@@ -303,7 +303,7 @@
 - `policyImages.ts` — band · channelMedian · **edgeColoursFromPixels** · hex · **policyImageEdges** · **policyImageFields** · **policyImageUrls** · **prunePolicyImageEdges**
 - `PolicyPages.tsx` — bottom · edgeOf · go · InlinePage · label · pageLabel · **PolicyPagesCompact** · **PolicyPagesInline** · **PolicyPagesShowcase** · **PolicyStoryRings** · **PolicyStoryViewer** · SizedPage · StoryBody · top · **usePolicyEdgeColours** · withAlphaHex
 - `previewContent.ts` — **heroLabelsFrom** · **previewContentFrom**
-- `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **heroNameFontStyle** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
+- `ProfileHero.tsx` — CurvedCaption · **detailsSitOnCard** · **heroIsDarkForStyle** · **HeroLogo** · **heroNameFontStyle** · **HeroPills** · **heroUsesBrandFont** · **kickerPhrase** · **logoInitials** · **pickedNameFont** · **pickedNameFontStyle** · **ProfileHeroLayout** · ringOut · SealRing · splitFirst · splitLast · Starburst
 - `profileMapper.ts` — **mapProviderProfileData**
 - `ProfilePageStyle.tsx` — **AccentBandSection** · AccordionPolicies · **customTextStyle** · **GlossShine** · HeadingLine · isCentredHeading · **onAccentInk** · **outlineInk** · **PageSection** · **PageSectionHeading** · PageSectionSurface · **policiesBringOwnSurface** · raisedEdges · **RuledJumpBar** · **sectionInk** · **sectionsSitOnPage** · **serviceCardSurface** · sheerBox · **sheetInk** · **showsDividerAbove** · Squiggle · **StyledPolicyList** · text · **WaveEdge**
 - `profilePresentation.ts` — **formatServiceDuration** · **hasProviderPolicyInfo**
@@ -327,10 +327,9 @@
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 - `useTodaySchedule.ts` — load · tomorrowYmd · **useTodaySchedule**
 - `venuePhotos.ts` — **isVenuePhoto** · **splitPortfolioByKind**
-- `WaxSeal.tsx` — **sealLetter** · **waxColour** · **WaxSeal**
 - `workWith.ts` — inOrder · **productsGroup** · **workWithGroups**
 
-### `src/features/providers/heroes/` (10)
+### `src/features/providers/heroes/` (9)
 - `BoutiqueHero.tsx` — **BoutiqueHero** · **cardInk**
 - `CallingCardHero.tsx` — **BulldogClip** · **CallingCardHero** · **callingCardInk** · clipMetal · **SatinBackdrop**
 - `DemureHeroes.tsx` — **BowHero** · **HushBoxes** · **HushHero** · **LoungeHero** · **SoftFocusHero** · **StripesHero** · **stripesHeroColour**
@@ -338,7 +337,6 @@
 - `EmbossedHero.tsx` — **EmbossedText** · heroPress · **plateMarkEdges** · **pressEdges** · **PressedHero**
 - `GazetteHero.tsx` — dateline · **gazetteDate** · **GazetteHero** · **HalftoneScreen**
 - `NovelHero.tsx` — **NovelHero** · subtitle
-- `SealedHero.tsx` — Postmark · **SealedEnvelope**
 - `SheerHero.tsx` — **SheerHero** · **veilAccent** · **VeilBackdrop** · **veilPageTheme**
 - `StudioHero.tsx` — push · **studioHeadline** · **StudioHero** · **studioWordmark**
 
@@ -437,7 +435,7 @@
 - `PointsScreen.tsx` — load · PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · leave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · measureKeyboardArea · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
-- `ProviderProfileScreen.tsx` — additionalInfo · averageRating · bookingSheetInitial · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · formatDate · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroBell · heroPhotoUris · hideSuccessMessage · jumpTargets · jumpToServices · loadWaitlistMap · notificationColors · notificationMessage · openBookings · openBookingSheet · openFullLogo · openHeroPhoto · openImageViewer · openLinkOnlyBooking · openOffersPanel · openPolicyImage · openSheets · openWaitlistJoin · policyPages · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderInlineServices · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · selectedServicesFlat · selectedTotal · serviceCountsByType · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · toggleSelectMode · toggleServiceExpanded · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
+- `ProviderProfileScreen.tsx` — additionalInfo · averageRating · bookingSheetInitial · closeImageViewer · closeOffersPanel · closeWaitlistModal · contactDetails · contactOptions · continueToLinkOnlyBooking · formatDate · handleAboutCollapse · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleContactLink · handleCopyCode · handleDidYouBookSubmit · handleGetInTouch · handleJoinNudge · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleOpenReviews · handlePublicContactLink · handleQuickBook · handleScroll · handleShare · handleViewCart · heroBell · heroPhotoUris · hideSuccessMessage · jumpTargets · jumpToServices · loadWaitlistMap · notificationColors · notificationMessage · openBookings · openBookingSheet · openFullLogo · openHeroPhoto · openImageViewer · openLinkOnlyBooking · openOffersPanel · openPolicyImage · openSheets · openWaitlistJoin · policyPages · pressPinnedBook · ProfileStatusBar · ProviderProfileScreen · ProviderProfileSkeleton · recordStat · refuseBookingAsProvider · renderImageViewerOverlay · renderInlineServices · renderSelectionBar · renderServiceCategoryBlock · savedPolicyEdges · scaleStyle · scrollToSection · selectedServicesFlat · selectedTotal · serviceCountsByType · showRightNotification · showSuccessMessageWithAnimation · sidePanelWidth · slideStyle · toggleSelectMode · toggleServiceExpanded · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
 - `RescheduleScreen.tsx` — booking · customPickerSeed · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · maxPickerDate · minPickerDate · monthLabel · openCustomDatePicker · probeWindowLabel · providerRespondedDates · RescheduleScreen · shownDateOptions
 - `SearchScreen.tsx` — activeFilterChips · add · clearFilter · description · filteredProviders · formatPriceRange · handleEndReached · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · handleServicePress · handleServiceProviderPress · keyOf · mapDbToCardData · providerRatings · providersWithAvailability · providersWithDistance · providersWithPriceRange · providersWithSpecialties · queryMatchedServiceIds · renderHeader · resetFilters · resultRows · run · SearchScreen · serviceFacetById · serviceIdsKey · serviceMatchByProviderId · specialityMatchIds · specialityOptions · titleCaseSpeciality · updateCityFilter · updateFilter · updateSpecialtyFilter · visibleRows · visibleServices
 - `SubscriptionScreen.tsx` — SubscriptionScreen

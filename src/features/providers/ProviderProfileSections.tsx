@@ -32,7 +32,7 @@ import { SectionDivider } from "./pageParts";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
-/** Noir's feature grid holds five: one big, four small. */
+/** The feature grid (Ledger) holds five: one big, four small. */
 const FEATURE_PHOTO_LIMIT = 5;
 const PORTFOLIO_WALL_LIMIT = 3;
 /** Riviera's prints lean a little each way, as if dropped on a table. */
@@ -424,7 +424,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   if (items.length === 0) return null;
 
-  // Sealed: each photo a perforated postage stamp.
+  // Custom's Stamps: each photo a perforated postage stamp.
   const stamps = !!palette.pageStyle?.stampPhotos;
   // Embossed: each photo sits in a plate mark pressed into the page, like a print.
   const plate = palette.pageStyle?.plateMarkPhotos ? plateMarkEdges(palette.background) : null;
@@ -439,12 +439,12 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const arches = palette.pageStyle?.photoLayout === "arches";
   // Riviera: three across as white-bordered prints, each tilted a little.
   const polaroids = palette.pageStyle?.photoLayout === "polaroids";
-  // Noir: one big photo beside two small ones, then two more under them.
+  // Feature (Ledger): one big photo beside two small ones, then two more under them.
   const feature = palette.pageStyle?.photoLayout === "feature";
   const portfolioWall = palette.pageStyle?.photoLayout === "portfolioWall";
   // Muse: one row of tall photos that scrolls sideways, every photo in it.
   const swipe = palette.pageStyle?.photoLayout === "swipe";
-  const ticketStrip = palette.pageStyle?.photoLayout === "ticketStrip";
+  // Custom's Mosaic: two across, each in a soft frame, the accent and the card colour in turn.
   const prismMosaic = palette.pageStyle?.photoLayout === "prismMosaic";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
     <TouchableOpacity
@@ -499,14 +499,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
               style={[styles.portfolioWallTile, index === 1 && styles.portfolioWallMiddle, { backgroundColor: palette.cardBackground }]}
             >
               <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : ticketStrip ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
-            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ width: "48.5%", height: 135, borderRadius: 8, overflow: "hidden", backgroundColor: palette.cardBackground, padding: 4 }}>
-              <Image source={{ uri: item.image_url }} style={{ flex: 1, borderRadius: 5 }} contentFit="cover" transition={0} recyclingKey={item.id} />
             </TouchableOpacity>
           ))}
         </View>
@@ -779,7 +771,7 @@ const styles = StyleSheet.create({
   swipeContent: { gap: 8, paddingRight: 20 },
   swipeTile: { width: 140, height: 188, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(0,0,0,0.06)" },
   swipeHint: { fontSize: 11, marginTop: 8, textAlign: "center" },
-  // Noir: a big photo two rows tall, then square-ish small ones beside and under it.
+  // Feature (Ledger): a big photo two rows tall, then square-ish small ones beside and under it.
   featureGrid: { gap: 6 },
   featureRow: { flexDirection: "row", gap: 6 },
   featureSide: { flex: 1, gap: 6 },

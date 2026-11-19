@@ -22,7 +22,6 @@ export type PageStyleKey =
   | 'classic' | 'cover' | 'arch' | 'framed' | 'scrapbook' | 'spa' | 'glossy'
   | 'editorial' | 'heritage' | 'duet' | 'groovy' | 'gallery' | 'apothecary'
   | 'snapshot' | 'signature' | 'quiet'
-  | 'sealed'
   | 'sheer'
   | 'embossed'
   | 'callingCard'
@@ -39,15 +38,12 @@ export type PageStyleKey =
   | 'grid'
   | 'slate'
   | 'halo'
-  | 'ticket'
-  | 'prism'
   | 'posy'
   | 'riviera'
   | 'noir'
   | 'muse'
   | 'retreat'
   | 'bonbon'
-  | 'clinic'
   | 'ledger'
   | 'portfolio'
   | 'atelier'
@@ -71,7 +67,6 @@ export type PageHeading =
   | 'indexed'    // a section number in the accent, a short rule, then the title (Signature)
   | 'condensed'  // huge condensed caps over a short accent bar (Snapshot)
   | 'quietCaps'  // spaced sans caps on the left, a hairline running out to the right (Quiet)
-  | 'sealCaps'  // a small wax seal, spaced serif caps, a hairline running out to the right (Sealed)
   | 'sheerCaps' // thin, widely spaced serif caps, centred (Sheer)
   | 'embossCaps' // display caps pressed up out of the page, in the page's own colour (Embossed)
   | 'engravedCaps' // engraved serif caps, centred between hairlines (Calling Card)
@@ -86,8 +81,6 @@ export type PageHeading =
   | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
   | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
-  | 'ticketPunch' // compact uppercase pass label
-  | 'prismFacet' // strong title with a subtle colour accent
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
@@ -104,7 +97,6 @@ export type PageCards =
   | 'label'    // a square card with a fine outline and an inner accent rule
   | 'topRule'  // a square card with a heavy rule along its top edge
   | 'block'    // a square card with a thick dark outline
-  | 'stationery' // a near-square card with a fine inner rule, like good writing paper (Sealed)
   | 'sheer'   // a square hairline outline over a faint wash, see-through (Sheer)
   | 'raised'  // a card pressed up out of the page: a lit top edge and a soft drop shadow (Embossed)
   | 'clipped' // a near-square card with an inner rule, held at the top by a clip in the accent (Calling Card)
@@ -118,12 +110,12 @@ export type PageCards =
   | 'bow'     // a solid card with round corners (Bow)
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
   | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
-  | 'ticketPass' // a pass with a coloured spine and perforated edge
-  | 'prismPlane'; // layered angular colour planes
+  | 'prismPlane'; // layered angular colour planes (Custom's Colour Planes)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
   | 'rows'      // icon, label and value in a list (as it has always been)
+  | 'prismFacets' // staggered angular information panes (Custom's Facets)
   | 'boxes'     // two-up bordered boxes
   | 'discTiles' // two-up flat tiles, each with its icon in a filled disc
   | 'circles'   // two-up, each under an outlined circle icon
@@ -135,9 +127,6 @@ export type PagePolicies =
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
   | 'definition' // a small caps label beside each value, between hairlines
-  | 'ticketRules' // compact pass conditions without numbering
-  | 'prismFacets' // staggered angular information panes
-  | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
   | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
   | 'recessed'  // label-and-value rows inside a panel pressed down into the page (Embossed)
   | 'ribbon'    // two-up on one card with a ribbon across its corner (Calling Card)
@@ -175,7 +164,6 @@ export type PageHero =
   | 'blockName'  // photos edge to edge, the name huge in condensed caps on an accent block, the logo beside it
   | 'signed'     // a big ringed logo with the whole name signed across its foot
   | 'quietBand'  // their photo left clear, the name and logo on a pale band across it
-  | 'envelope'  // an envelope sealed with wax (their initial), the logo on a card tucked in its corner
   | 'veil'      // their photo under a see-through black veil: an oval monogram, spaced caps
   | 'quietBand' // their photo left clear, the name and logo on a pale band across it
   | 'pressed'  // pressed straight into the theme backdrop, no card: the logo in a blind-stamped ring, the name raised out of it
@@ -192,8 +180,7 @@ export type PageHero =
   | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
   | 'slateHeader' // a large name and compact logo above one accent rule (Slate)
   | 'haloHeader' // a centred logo in a fine ring, name and details beneath (Halo)
-  | 'ticketHeader' // logo, name and booking details in a two-part perforated card (Ticket)
-  | 'prismHeader' // angled translucent colour planes frame the logo and name (Prism)
+  | 'prismHeader' // angled translucent colour planes frame the logo and name (Custom's Prism top)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
   | 'archWindow' // their chosen photo in a tall arched window, the logo on its foot, the name centred under it (Retreat)
@@ -239,7 +226,7 @@ export interface PageStyle {
   aboutOnBand?: boolean;
   /** Policy numerals in lower case ("i.", "ii.") rather than capitals. */
   numeralsLower?: boolean;
-  /** Portfolio photos as perforated postage stamps, each tilted a little (Sealed). */
+  /** Portfolio photos as perforated postage stamps, each tilted a little (Custom's Stamps). */
   stampPhotos?: boolean;
   /** Portfolio photos sit in a plate mark pressed into the page, like prints (Embossed). */
   plateMarkPhotos?: boolean;
@@ -277,6 +264,10 @@ export interface PageStyle {
    *  Branding name font (Cover, Big Name, Centred, Side by Side), so the parts
    *  styles can reuse those tops in their own type. */
   heroNameFont?: HeroNameFont;
+  /** The name is in the style's own lettering until the provider picks a
+   *  Business Name Font other than Classic; then it's in that font, keeping
+   *  the style's size, capitals and spacing (owner, 2026-11-19). */
+  nameFontPickable?: boolean;
   /** The shape of the Book buttons, when not the usual round pill. */
   buttonShape?: ButtonShape;
   /** The heading and text fonts and the heading treatment. Custom fills it
@@ -307,10 +298,9 @@ export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
   | 'portfolioWall' // three airy cover images with the middle print set higher
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
-  | 'feature'    // one big photo beside two small, then two more under them (Noir)
-  | 'swipe'     // one row of tall photos that scrolls sideways (Muse)
-  | 'ticketStrip' // quiet two-column photo gallery
-  | 'prismMosaic'; // soft colour-framed photo gallery
+  | 'feature'    // one big photo beside two small, then two more under them (Ledger)
+  | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir)
+  | 'prismMosaic'; // soft colour-framed photo gallery (Custom's Mosaic)
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
@@ -449,20 +439,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'indexed', cards: 'topRule', policies: 'boxes', logo: 'accentRing',
     hero: 'signed', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
   },
   {
     key: 'quiet', name: 'Quiet', description: 'Your photo left clear, your name on a calm band',
     heading: 'quietCaps', cards: 'none', policies: 'definition', logo: 'circle',
     hero: 'quietBand', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
-  },
-  // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
-  // the elements of correspondence — wax seal, envelope, stamps — not a letter.
-  {
-    key: 'sealed', name: 'Sealed', description: 'Your initial in a wax seal, your logo tucked in an envelope, stamped photos',
-    heading: 'sealCaps', cards: 'stationery', policies: 'sealedNotes', logo: 'circle',
-    hero: 'envelope', aboutInHero: false, stampPhotos: true,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
   },
   // 2026-11-15, round 4 (https://claude.ai/artifact/68xp8mxLLTCV6pVuiQHJZS):
   // a see-through black veil over their photo, like the owner's sheer-black reference.
@@ -547,6 +531,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'hushRule', cards: 'open', policies: 'gentleNotes', logo: 'doubleRing',
     hero: 'hushFan', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
   },
   {
     key: 'stripes', name: 'Stripes', description: 'Each section on a strip of your colour, everything in fine outlined boxes',
@@ -591,22 +576,6 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     buttonShape: 'outline', divider: 'dots',
   },
-  // Graphic concepts that still use only the provider's own name, categories
-  // and colours, so the same layout works for every kind of service.
-  {
-    key: 'ticket', name: 'Ticket', description: 'A crisp appointment pass with clean sections and a quiet photo gallery',
-    heading: 'ticketPunch', cards: 'ticketPass', policies: 'ticketRules', logo: 'rounded',
-    hero: 'ticketHeader', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    photoLayout: 'ticketStrip', buttonShape: 'square',
-  },
-  {
-    key: 'prism', name: 'Prism', description: 'Layered colour planes with a clean, soft-framed photo gallery',
-    heading: 'prismFacet', cards: 'prismPlane', policies: 'prismFacets', logo: 'sharp',
-    hero: 'prismHeader', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    photoLayout: 'prismMosaic', divider: 'dots', buttonShape: 'outline',
-  },
   // 2026-11-19: styles built from Custom's parts, each its own fixed mix
   // (owner picked all eight on https://claude.ai/artifact/3kCvU1EuLzUqpUaH9jBsCd).
   {
@@ -633,8 +602,10 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'custom', cards: 'outline', policies: 'accordion', logo: 'circle',
     hero: 'cover', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+    nameFontPickable: true,
     heroNameFont: { fontFamily: 'Gloock-Regular' },
-    photoLayout: 'feature', divider: 'line', buttonShape: 'square', pinnedBookBar: true, portfolioFirst: true,
+    // No pinned Book bar, and the portfolio scrolls sideways (user, 2026-11-19).
+    photoLayout: 'swipe', divider: 'line', buttonShape: 'square', portfolioFirst: true,
     custom: { headingFont: 'Gloock-Regular', headingScale: 1, textFont: 'HankenGrotesk-Medium', headingStyle: 'underlined', centred: false },
   },
   {
@@ -642,6 +613,7 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'custom', cards: 'paper', policies: 'gentleNotes', logo: 'circle',
     hero: 'customBig', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
     heroNameFont: { fontFamily: 'Italiana_400Regular', scale: 1.05 },
     serviceLayout: 'menu', photoLayout: 'swipe', divider: 'stars', buttonShape: 'textLink',
     custom: {
@@ -667,19 +639,11 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     custom: { headingFont: 'Fredoka_600SemiBold', headingScale: 1, textFont: 'VarelaRound_400Regular', headingStyle: 'typed', centred: false },
   },
   {
-    key: 'clinic', name: 'Clinic', description: 'Clean and clinical: your name in lowercase beside your logo, numbered sections and treatments',
-    heading: 'custom', cards: 'flat', policies: 'accordion', logo: 'circle',
-    hero: 'customLeft', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
-    heroNameFont: { fontFamily: 'LeagueSpartan-Light', scale: 1.05, transform: 'lowercase' },
-    buttonShape: 'outline', pinnedBookBar: true,
-    custom: { headingFont: 'LeagueSpartan-ExtraBold', headingScale: 0.85, textFont: 'Jura-VariableFont_wght', headingStyle: 'numbered', centred: false },
-  },
-  {
     key: 'ledger', name: 'Ledger', description: 'An old shop ledger: your name in engraved capitals, a ruled page, a dotted price list',
     heading: 'custom', cards: 'paper', policies: 'hairline', logo: 'circle',
     hero: 'stacked', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    nameFontPickable: true,
     heroNameFont: { fontFamily: 'LibreCaslonDisplay-Regular', scale: 0.8, transform: 'uppercase', letterSpacing: 2 },
     serviceLayout: 'menu', photoLayout: 'feature', divider: 'line', buttonShape: 'square', pagePattern: 'lined',
     custom: { headingFont: 'Oswald-Medium', headingScale: 1, textFont: 'OldStandardTT-Regular', headingStyle: 'caps', centred: true },
