@@ -3520,7 +3520,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       onJoinWaitlist={openWaitlistJoin}
     />
   );
-  // Noir's pinned Book bar uses the square buttons too.
+  // A pinned Book bar uses the square buttons too, on a style that has both.
   const squareButtons = pageStyle.buttonShape === "square";
 
   // The price list as it sits on the page; "See all" opens the full sheet.

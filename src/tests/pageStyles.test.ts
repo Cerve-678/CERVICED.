@@ -461,11 +461,12 @@ describe('Riviera', () => {
 describe('Noir', () => {
   const noir = getPageStyle('noir');
 
-  it('has its photo cover in Gloock, outlined boxes, a feature grid and square Book buttons', () => {
+  it('has its photo cover in Gloock, outlined boxes, a sideways portfolio and square Book buttons, with no pinned Book bar', () => {
     expect(noir).toMatchObject({
       hero: 'cover', cards: 'outline', policies: 'accordion', numberedServices: true,
-      photoLayout: 'feature', divider: 'line', buttonShape: 'square', pinnedBookBar: true, portfolioFirst: true,
+      photoLayout: 'swipe', divider: 'line', buttonShape: 'square', portfolioFirst: true,
     });
+    expect(noir.pinnedBookBar).toBeFalsy();
     expect(noir.heroNameFont).toEqual({ fontFamily: 'Gloock-Regular' });
     expect(noir.custom).toMatchObject({ headingFont: 'Gloock-Regular', textFont: 'HankenGrotesk-Medium', headingStyle: 'underlined' });
   });
