@@ -171,38 +171,34 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
 
   if (!charges) return null;
 
+  // Just the button (user, 2026-11-19: "charge late should just be the charge
+  // late button, nothing else"). Once charged, the fee shows on this booking's
+  // payment in Payments & payouts.
   if (role === 'provider' && onOpenPayments && hasFeeButtons) {
     return (
-      <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
-        <Text style={[st.heading, { color: C.sub }]}>LATE & NO-SHOW FEES</Text>
-        {lastFailed && <Text style={[st.sub, { color: C.sub }]}>Your last attempt couldn't be collected — the client's bank declined it.</Text>}
+      <View style={st.buttonsOnly}>
         {feeButtons.map(b => {
           const label = `Charge ${b.kind === 'late' ? 'late fee' : 'no-show fee'} · ${pounds(b.pence)}`;
           const off = !b.enabled || busy;
           return (
-            <View key={b.kind} style={{ gap: 4 }}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`${label}. ${b.note}`}
-                accessibilityState={{ disabled: off }}
-                disabled={off}
-                onPress={() => confirmCharge(b.kind, b.pence)}
-                activeOpacity={0.75}
-                style={[st.button, b.enabled
-                  ? { backgroundColor: C.accent }
-                  : { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}
-              >
-                {busy && b.enabled
-                  ? <ActivityIndicator color={C.onAccent} size="small" />
-                  : <Text style={[st.buttonText, { color: b.enabled ? C.onAccent : C.sub }]}>{label}</Text>}
-              </TouchableOpacity>
-              <Text style={[st.sub, { color: C.sub, textAlign: 'center' }]}>{b.note}</Text>
-            </View>
+            <TouchableOpacity
+              key={b.kind}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}. ${b.note}`}
+              accessibilityState={{ disabled: off }}
+              disabled={off}
+              onPress={() => confirmCharge(b.kind, b.pence)}
+              activeOpacity={0.75}
+              style={[st.button, b.enabled
+                ? { backgroundColor: C.accent }
+                : { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}
+            >
+              {busy && b.enabled
+                ? <ActivityIndicator color={C.onAccent} size="small" />
+                : <Text style={[st.buttonText, { color: b.enabled ? C.onAccent : C.sub }]}>{label}</Text>}
+            </TouchableOpacity>
           );
         })}
-        <TouchableOpacity accessibilityRole="button" onPress={onOpenPayments} activeOpacity={0.7} hitSlop={8} style={{ alignSelf: 'center', marginTop: 4 }}>
-          <Text style={[st.link, { color: C.accent }]}>Refunds and disputes are in Payments ›</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -374,5 +370,6 @@ const st = StyleSheet.create({
   button: { borderRadius: 20, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
   compact: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  buttonsOnly: { marginHorizontal: 16, marginTop: 12, gap: 8 },
   link: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
 });

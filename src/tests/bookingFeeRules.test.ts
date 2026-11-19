@@ -1,4 +1,4 @@
-import { bookingFeeButtons, feeChargeWindow, feeDisputeOpen, feesToChargeNow, isChargeableLateCancel, liveFee } from '../features/bookings/bookingFeeRules';
+import { bookingFeeButtons, feeChargeWindow, feeCountsToYou, feeDisputeOpen, feesToChargeNow, isChargeableLateCancel, liveFee } from '../features/bookings/bookingFeeRules';
 import type { BookingFeeCharge, BookingFeeTerms } from '../services/databaseService';
 
 const terms: BookingFeeTerms = {
@@ -101,5 +101,14 @@ describe('fee buttons on the booking page', () => {
     expect(bookingFeeButtons({ ...confirmed, lateFeePence: null, noShowFeePence: null }, start)).toEqual([]);
     expect(bookingFeeButtons({ ...terms, status: 'cancelled' }, start)).toEqual([]);
     expect(bookingFeeButtons({ ...terms, status: 'pending' }, start)).toEqual([]);
+  });
+});
+
+describe('feeCountsToYou', () => {
+  it('adds a charged fee to the booking payment, not a refunded or taken-back one', () => {
+    expect(feeCountsToYou({ status: 'succeeded', payoutStatus: 'held' })).toBe(true);
+    expect(feeCountsToYou({ status: 'succeeded', payoutStatus: 'transferred' })).toBe(true);
+    expect(feeCountsToYou({ status: 'refunded', payoutStatus: 'cancelled' })).toBe(false);
+    expect(feeCountsToYou({ status: 'succeeded', payoutStatus: 'reversed' })).toBe(false);
   });
 });

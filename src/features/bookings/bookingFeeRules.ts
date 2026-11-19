@@ -1,4 +1,4 @@
-import type { BookingFeeCharge, BookingFeeKind, BookingFeeTerms } from '../../services/databaseService';
+import type { BookingFeeCharge, BookingFeeKind, BookingFeeTerms, ProviderFeeEarning } from '../../services/databaseService';
 
 // Display-side mirror of supabase/functions/_shared/bookingFeePlan.ts, so the
 // booking screen only offers what the server would accept. The server is the
@@ -57,6 +57,12 @@ export function feeChargeWindow(terms: BookingFeeTerms, nowMs: number): FeeCharg
     },
     closesAtLabel: new Date(closes).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
   };
+}
+
+/** Whether a charged fee adds to what the provider gets on that booking's
+ *  payment: not once it's refunded or taken back after a bank dispute. */
+export function feeCountsToYou(fee: Pick<ProviderFeeEarning, 'status' | 'payoutStatus'>): boolean {
+  return fee.status === 'succeeded' && fee.payoutStatus !== 'reversed' && fee.payoutStatus !== 'cancelled';
 }
 
 /** A client can dispute a charged fee for 7 days. */

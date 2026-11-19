@@ -11,7 +11,7 @@ import { onRefundHold, payoutNeedsAttention, payoutStatusLabel, tipPence, tipSta
 import { useAppDialog } from './AppDialog';
 import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
 import BookingFeeSheet, { type BookingFeeSheetTarget } from './BookingFeeSheet';
-import { feeKindLabel, feesToChargeNow } from '../features/bookings/bookingFeeRules';
+import { feeCountsToYou, feeKindLabel, feesToChargeNow } from '../features/bookings/bookingFeeRules';
 import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
 import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getFeeChargeCandidates, type FeeChargeCandidate, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
@@ -212,6 +212,12 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
     showAlert(title, message);
   }, [load, showAlert]);
   const feesToCharge = useMemo(() => feesToChargeNow(feeCandidates, Date.now()), [feeCandidates]);
+  // Fees already charged, shown on their booking's payment too.
+  const feesByBooking = useMemo(() => {
+    const map = new Map<string, ProviderFeeEarning[]>();
+    for (const fee of feeEarnings) map.set(fee.bookingId, [...(map.get(fee.bookingId) ?? []), fee]);
+    return map;
+  }, [feeEarnings]);
   const openFeeSheet = (target: BookingFeeSheetTarget) => { void Haptics.selectionAsync().catch(() => {}); setFeeSheet(target); };
   const closeFeeSheet = () => { setFeeSheet(null); void load(); };
   // From a booking page: straight to that booking's fee, once.
@@ -341,7 +347,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
           </View>
           {!!payoutError && <Notice text={payoutError} />}
           {!loading && !payoutError && payouts.length === 0 && <EmptyState title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
-          {payouts.slice(0, 3).map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
+          {payouts.slice(0, 3).map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
 
       </>}
@@ -350,7 +356,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
         <PaySection first title="Booking payments" sub="Your latest 50 online payments. Tap one to follow it from booking to bank.">
           {!!payoutError && <Notice text={payoutError} />}
           {!loading && !payoutError && payouts.length === 0 && <EmptyState title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
-          {payouts.map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
+          {payouts.map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
         {(feesToCharge.length > 0 || feeEarnings.length > 0) && <PaySection title="Late & no-show fees"
           sub="Charge a late, no-show or late cancellation fee within 24 hours of the appointment. Tap a fee to refund it or answer a dispute.">
@@ -492,6 +498,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
     {timelineRow && <BookingPaymentTimeline
       row={timelineRow}
       tips={tipGroups.byBooking.get(timelineRow.booking_id) ?? []}
+      fees={feesByBooking.get(timelineRow.booking_id) ?? []}
       scheduleSentence={scheduleText}
       onClose={() => setTimelineRow(null)}
       onRefund={refundable(timelineRow) ? () => {
@@ -527,14 +534,15 @@ function ScheduleOption({ label, selected, disabled, onPress, colors }: {
 }
 
 /** One booking payment in a list. Tapping it opens its timeline. */
-function PaymentRow({ row, tips, first, onPress }: { row: ProviderPayout; tips?: ProviderTipEarning[] | undefined; first: boolean; onPress: () => void }) {
+function PaymentRow({ row, tips, fees, first, onPress }: { row: ProviderPayout; tips?: ProviderTipEarning[] | undefined; fees?: ProviderFeeEarning[] | undefined; first: boolean; onPress: () => void }) {
   const C = useBusinessPalette();
   const tipTotal = (tips ?? []).reduce((sum, tip) => sum + tipPence(tip), 0);
+  const feeTotal = (fees ?? []).filter(feeCountsToYou).reduce((sum, fee) => sum + (fee.payoutPence ?? fee.amountPence), 0);
   const service = row.booking?.service_name_snapshot || 'Booking payment';
   const status = payoutStatusLabel(row);
   const when = row.booking?.booking_date ? date(new Date(`${row.booking.booking_date.slice(0, 10)}T12:00:00`).getTime()) : null;
   return <TouchableOpacity accessibilityRole="button" accessibilityHint="Opens this payment's timeline"
-    accessibilityLabel={`${service}, ${row.booking?.customer_name || 'Client'}, ${money(row.payout_amount, row.currency)}${tipTotal ? ` plus ${money(tipTotal, 'gbp')} tip` : ''}, ${status}`}
+    accessibilityLabel={`${service}, ${row.booking?.customer_name || 'Client'}, ${money(row.payout_amount, row.currency)}${tipTotal ? ` plus ${money(tipTotal, 'gbp')} tip` : ''}${feeTotal ? ` plus ${money(feeTotal, 'gbp')} fee` : ''}, ${status}`}
     onPress={onPress} activeOpacity={0.7}
     style={[styles.listRow, !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
     <View style={{ flex: 1 }}>
@@ -544,6 +552,7 @@ function PaymentRow({ row, tips, first, onPress }: { row: ProviderPayout; tips?:
     <View style={styles.rowRight}>
       <Text style={[styles.amountSmall, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text>
       {tipTotal > 0 && <Text style={[styles.caption, { color: C.sub }]}>+ {money(tipTotal, 'gbp')} tip</Text>}
+      {feeTotal > 0 && <Text style={[styles.caption, { color: C.sub }]}>+ {money(feeTotal, 'gbp')} fee</Text>}
       <StatusChip label={status} attention={payoutNeedsAttention(row)} />
     </View>
   </TouchableOpacity>;

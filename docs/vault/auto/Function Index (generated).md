@@ -5,7 +5,7 @@
 
 #generated
 
-**4167 functions** across **608 files**.
+**4170 functions** across **608 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -18,7 +18,7 @@
 - `AreasYouCoverPicker.tsx` — add · addSuggestion · AreasYouCoverPicker · remove
 - `AvailabilityCard.tsx` — animatedStyle · handlePress · handlePressIn · handlePressOut · highlightColors
 - `BookingFeeSheet.tsx` — BookingFeeSheet
-- `BookingPaymentTimeline.tsx` — BookingPaymentTimeline · Line · money · Step · steps
+- `BookingPaymentTimeline.tsx` — BookingPaymentTimeline · feePence · Line · money · Step · steps
 - `BookingSheet.tsx` — appointmentDuration · **BookingSheet** · cancelEmergency · confirmEmergency · depositPolicyArg · goToStep · handleBack · handleLocalApplyPromo · handleLocalRemovePromo · handleNext · handleSelectDate · handleSelectTime · handleSubmit · localPromoDiscount · nudgeNotesAboveKeyboard · onAccentColor · policyPages · stepBlocker · summaryRemaining · toggleAddOn · tokens · totalAddOnsPrice
 - `CartTabBadge.tsx` — **useCartBadge**
 - `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
@@ -56,7 +56,7 @@
 - `ProviderFontPicker.tsx` — isUnlocked · ProviderFontPicker · unlockedFirst
 - `ProviderPayoutSummaryCard.tsx` — arrival · handlePress · money · paydays · ProviderPayoutSummaryCard
 - `ProviderProfileQrSheet.tsx` — **ProviderProfileQrSheet** · share
-- `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chooseInterval · chooseSchedule · closeFeeSheet · date · EmptyState · feeStatusLabel · feesToCharge · handleRefunded · load · loadMore · money · Notice · openFeeSheet · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
+- `ProviderStripePayments.tsx` — balances · cancelRefundBooking · chooseInterval · chooseSchedule · closeFeeSheet · date · EmptyState · feesByBooking · feeStatusLabel · feesToCharge · handleRefunded · load · loadMore · money · Notice · openFeeSheet · openStripe · openTimeline · PaymentAction · PaymentRow · pick · ProviderStripePayments · refundable · ScheduleOption · tipGroups
 - `ProviderThemePicker.tsx` — isUnlocked · pressLocked · ProviderThemePicker · select · setPart · ThemeSwatch · unlockedFirst
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
 - `RefundRequestTimeline.tsx` — RefundRequestTimeline
@@ -157,7 +157,7 @@
 - `BeforeYouBookSheet.tsx` — beforeYouBookSheet · **BeforeYouBookSheet** · ChecklistRow · detailError · errorFor · handleContinue · holdForDetails · missing · **useBeforeYouBook** · visibleError
 - `BookingCard.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `BookingFeeCard.tsx` — Action · BookingFeeCard · confirmCancelRequest · confirmCharge · confirmRefund · errorMessage · fee · feeButtons · load · payFee · pounds · providerFeeSummary · run
-- `bookingFeeRules.ts` — **bookingFeeButtons** · **feeChargeWindow** · **feeDisputeOpen** · **feesToChargeNow** · **isChargeableLateCancel** · **liveFee**
+- `bookingFeeRules.ts` — **bookingFeeButtons** · **feeChargeWindow** · **feeCountsToYou** · **feeDisputeOpen** · **feesToChargeNow** · **isChargeableLateCancel** · **liveFee**
 - `bookingForms.ts` — **formsToDoFirst**
 - `BookingListRow.tsx` — badgeColor · badgeText · createStyles · handlePress · styles
 - `bookingSupportRequest.ts` — **buildBookingSupportDescription** · **composePassOnReason** · **describeRefundScope** · **fileBookingSupportRequest** · **getRefundRequestScope** · hasReadableDate · **hasRefundRequestDeadline** · **isRefundRequestWindowOpen** · **isSupportRequestReady** · money · **passRefundRequestOn** · **refundRequestLastDay** · ticket

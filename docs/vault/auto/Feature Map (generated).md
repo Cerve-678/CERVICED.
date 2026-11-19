@@ -78,7 +78,7 @@ Curated: [[Payments]] · **202 files**
 - `src/screens/client/CartScreen.tsx` _(534)_
 - `src/screens/provider/PaymentsScreen.tsx` _(202)_
 - `src/components/BookingSheet.tsx` _(111)_
-- `src/components/ProviderStripePayments.tsx` _(110)_
+- `src/components/ProviderStripePayments.tsx` _(111)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
 - `src/screens/client/BookingDetailScreen.tsx` _(109)_
 - `src/contexts/BookingContext.tsx` _(108)_
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **82 files**
 - … +52 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **241 files**
+Curated: [[Booking Flow]] · **242 files**
 - `src/contexts/BookingContext.tsx` _(351)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(342)_
 - `src/screens/client/BookingDetailScreen.tsx` _(243)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **241 files**
 - `src/types/booking.ts` _(41)_
 - `src/types/database.ts` _(39)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
-- … +211 more
+- … +212 more
 
 ## Auth
 Curated: [[Contexts]] · **248 files**
