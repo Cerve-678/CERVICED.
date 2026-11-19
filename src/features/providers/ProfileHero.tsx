@@ -968,6 +968,39 @@ export function ProfileHeroLayout({
         />
       );
 
+    case "split": {
+      // Posy: their chosen photo down the left half with a soft corner, the
+      // logo, the name in Young Serif and what they do on the right, then the
+      // stars and slots across the foot. No photo: that half is their colour
+      // with the logo on it, and the right side goes without a second logo.
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.splitWrap}>
+          <View style={layout.splitRow}>
+            <View style={[layout.splitPhoto, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
+              {photo ? (
+                <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+              ) : (
+                <View style={layout.logoNoGap}>{renderLogo(96)}</View>
+              )}
+            </View>
+            <View style={layout.splitText}>
+              {photo ? <View style={layout.logoNoGap}>{renderLogo(52)}</View> : null}
+              <View style={layout.splitNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <Text style={[layout.splitName, { color: heroText }, shadow]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.6}>
+                  {name}
+                </Text>
+                {tick}
+              </View>
+              {kicker ? <Text style={[layout.splitKicker, { color: heroSub }, shadow]} numberOfLines={3}>{kicker}</Text> : null}
+              {location ? <Text style={[layout.splitPlace, { color: heroSub }, shadow]} numberOfLines={2}>{location}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.splitDetails}>{details}</View>
+        </View>
+      );
+    }
+
     case "customLeft":
       // Custom · Cards: the logo on the left, the name and what they do beside it.
       return (
@@ -1113,6 +1146,18 @@ const layout = StyleSheet.create({
   gridName: { fontFamily: "Manrope-Bold", fontSize: 24, lineHeight: 30, letterSpacing: -0.4, flexShrink: 1 },
   gridFoot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "flex-start" },
   // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
+  // Posy: the photo half runs from the very top (under the header buttons, as
+  // Snapshot's strip does); the text half starts below them.
+  splitWrap: { marginBottom: 26 },
+  splitRow: { flexDirection: "row", minHeight: 300 },
+  splitPhoto: { flex: 1, borderBottomRightRadius: 26, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  splitText: { flex: 1, justifyContent: "flex-end", gap: 8, paddingLeft: 16, paddingRight: 18, paddingTop: TEXT_FIRST_DROP + 8 },
+  splitNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  // Young Serif's caps need 1.3× or their tops crop.
+  splitName: { fontFamily: "YoungSerif-Regular", fontSize: 26, lineHeight: 34, flexShrink: 1 },
+  splitKicker: { fontFamily: "Figtree-SemiBold", fontSize: 9.5, lineHeight: 14, letterSpacing: 1.8 },
+  splitPlace: { fontFamily: "Figtree-SemiBold", fontSize: 12, lineHeight: 16 },
+  splitDetails: { alignItems: "flex-start", paddingHorizontal: 20, marginTop: 14 },
   customLeftRow: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP },
   customLeftText: { flex: 1, alignItems: "flex-start" },
   customLeftDetails: { alignItems: "flex-start", paddingHorizontal: 20, marginTop: 10, marginBottom: 26 },

@@ -29,6 +29,7 @@ import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { formatDurationMinutes } from "../../utils/dateUtils";
 import { formatAddOnExtraTime } from "../bookings/addOnTime";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
+import { PagePattern, SectionDivider } from "./pageParts";
 import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle } from "./ProfileHero";
 import {
   GlossShine,
@@ -225,6 +226,7 @@ export function ProfileStylePreview({
   const page = sheetInk(OP.bg);
   const cardInk = sectionInk(palette);
   const surface = serviceCardSurface(pageStyle, { card: OP.card, accent, sheet: OP.bg });
+  const tiles = pageStyle.serviceLayout === "tiles";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -368,6 +370,9 @@ export function ProfileStylePreview({
         </View>
 
         <View style={[styles.sheet, { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg }, veilTheme && styles.sheetGlass]}>
+          {pageStyle.pagePattern ? (
+            <PagePattern pattern={pageStyle.pagePattern} accent={accent} onDark={isDarkColor(OP.bg)} style={styles.sheetPattern} />
+          ) : null}
           {pageStyle.jumpBar && pageStyle.jumpBarRuled ? (
             <RuledJumpBar sections={jumpKeys} sheet={veilTheme ? veilTheme.sheetFill : OP.bg} />
           ) : pageStyle.jumpBar ? (
@@ -438,6 +443,7 @@ export function ProfileStylePreview({
             <Text style={[styles.servicesTitle, { color: OP.text }]}>Services</Text>
           ) : zone("headingStyle", "Headings", (
             <View style={pageStyle.cards === "none" ? [styles.servicesRule, { borderTopColor: page.separator }] : undefined}>
+              {pageStyle.divider ? <SectionDivider divider={pageStyle.divider} accent={accent} /> : null}
               <PageSectionHeading section="services" palette={palette} />
             </View>
           ))}
@@ -487,19 +493,19 @@ export function ProfileStylePreview({
           {categoryDescription ? (
             <Text style={[styles.categoryDescription, { color: OP.sub }]}>{categoryDescription}</Text>
           ) : null}
-          {zone("services", "Services", <View>{(services.length > 0 ? services.map((_, index) => index) : [0, 1]).map(index => (
+          {zone("services", "Services", <View style={tiles ? styles.tilesGrid : undefined}>{(services.length > 0 ? services.map((_, index) => index) : [0, 1]).map(index => (
             <BlurView
               key={index}
               intensity={surface ? 0 : blurIntensity}
               tint={blurTint}
-              style={[styles.serviceCard, { backgroundColor: cardBg, borderColor: OP.border }, surface, squareCards && styles.square]}
+              style={[styles.serviceCard, { backgroundColor: cardBg, borderColor: OP.border }, surface, squareCards && styles.square, tiles && styles.tile]}
             >
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
-              <View style={styles.serviceRow}>
-                <View style={[styles.serviceThumb, { backgroundColor: withAlpha(accent, 0.11) }]}>
+              <View style={[styles.serviceRow, tiles && styles.tileColumn]}>
+                <View style={[styles.serviceThumb, tiles && styles.tileThumb, { backgroundColor: withAlpha(accent, 0.11) }]}>
                   {services[index]?.imageUri && !pageStyle.numberedServices ? (
-                    <Image source={{ uri: services[index]!.imageUri! }} style={styles.serviceThumbImage} fadeDuration={0} />
+                    <Image source={{ uri: services[index]!.imageUri! }} style={tiles ? StyleSheet.absoluteFill : styles.serviceThumbImage} fadeDuration={0} />
                   ) : (
                     <Text style={[styles.serviceThumbText, { color: accent }]}>
                       {pageStyle.numberedServices ? `${index + 1 < 10 ? "0" : ""}${index + 1}` : (services[index]?.name.trim().charAt(0).toUpperCase() || "S")}
@@ -621,6 +627,12 @@ const styles = StyleSheet.create({
   pillScrollContent: { gap: 12, paddingVertical: 8, paddingHorizontal: 20 },
   categoryDescription: { fontFamily: "Jura-VariableFont_wght", fontSize: 13, lineHeight: 19, marginBottom: 12 },
   serviceThumbImage: { width: 64, height: 64, borderRadius: 14 },
+  // Posy: two tiles across, the photo on top, as on the profile.
+  tilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  tile: { width: "48.5%", padding: 8 },
+  tileColumn: { flexDirection: "column", alignItems: "stretch", gap: 8 },
+  tileThumb: { width: "100%", height: undefined, aspectRatio: 1.2, overflow: "hidden" },
+  sheetPattern: { borderTopLeftRadius: 36, borderTopRightRadius: 36, overflow: "hidden" },
   categoryPill: { height: 34, width: 96, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   pillBar: { height: 7, width: 48, borderRadius: 4 },
   serviceCard: { borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden", marginBottom: 12, padding: 14 },

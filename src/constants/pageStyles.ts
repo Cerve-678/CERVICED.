@@ -37,6 +37,7 @@ export type PageStyleKey =
   | 'bow'
   | 'pure'
   | 'grid'
+  | 'posy'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -172,6 +173,7 @@ export type PageHero =
   | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
+  | 'split'    // their chosen photo down the left half, the logo, name and details on the right (Posy)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
 /** The frame round the logo in the hero. */
@@ -229,17 +231,47 @@ export interface PageStyle {
   veilPage?: boolean;
   /** Portfolio photos with big round corners (Lounge, Soft Focus, Bow). */
   roundedPhotos?: boolean;
-  /** Custom only: the provider's own picks (constants/customPageStyle). */
+  /** How each service on the price list is laid out, when not as the usual
+   *  row (photo left, details, Book on the right). */
+  serviceLayout?: ServiceLayout;
+  /** How the portfolio's photos are laid out, when not as the usual columns. */
+  photoLayout?: PhotoLayout;
+  /** A small mark drawn between sections. */
+  divider?: SectionDivider;
+  /** A fine pattern printed across the content sheet, under everything. */
+  pagePattern?: PagePattern;
+  /** The portfolio comes straight after the top of the page, before the About ("work first"). */
+  portfolioFirst?: boolean;
+  /** The heading and text fonts and the heading treatment. Custom fills it
+   *  from the provider's picks (constants/customPageStyle); the styles built
+   *  from Custom's parts (Posy on, owner 2026-11-19) set their own. */
   custom?: {
-    layout: CustomLayout;
+    /** Custom only: the look its parts started from. */
+    layout?: CustomLayout;
     headingFont: string;
     headingScale: number;
     textFont: string;
     headingStyle: CustomHeadingStyle;
     /** Headings sit in the middle of the page (a centred top on an open page, or Script Word). */
     centred: boolean;
+    /** The handwritten face for Script Word's lead-in (Custom: Pinyon Script). */
+    scriptFont?: string;
   };
 }
+
+/** Service layouts beyond the usual row (owner, 2026-11-19, the parts canvas). */
+export type ServiceLayout =
+  | 'tiles'; // two across: the photo on top, then the name, length and price, Book under them (Posy)
+
+/** Portfolio layouts beyond the usual columns. */
+export type PhotoLayout =
+  | 'arches'; // three across, each photo with a round arched top (Posy)
+
+export type SectionDivider =
+  | 'wave'; // a fine wavy line in the accent (Posy)
+
+export type PagePattern =
+  | 'gingham'; // a soft check of the accent (Posy)
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
 
@@ -461,6 +493,19 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'gridHeader', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
   },
+  // 2026-11-19: styles built from Custom's parts, each its own fixed mix
+  // (owner picked all eight on https://claude.ai/artifact/3kCvU1EuLzUqpUaH9jBsCd).
+  {
+    key: 'posy', name: 'Posy', description: 'Fresh and garden-sweet: your photo beside your name, services as tiles on gingham',
+    heading: 'custom', cards: 'flat', policies: 'softTiles', logo: 'circle',
+    hero: 'split', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    serviceLayout: 'tiles', photoLayout: 'arches', divider: 'wave', pagePattern: 'gingham', portfolioFirst: true,
+    custom: {
+      headingFont: 'YoungSerif-Regular', headingScale: 0.95, textFont: 'Figtree-SemiBold',
+      headingStyle: 'script', centred: true, scriptFont: 'Ephesis-Regular',
+    },
+  },
 ];
 
 /** How many portfolio photos this style's hero shows, from the ones the
@@ -475,6 +520,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     // The photo under the ribbon. Owner, 2026-11-19: every template that
     // needs a photo lets the provider pick it (the design itself is unchanged).
     case 'bow': return 1;
+    case 'split': return 1;    // Posy's left half
     default: return 0;
   }
 }

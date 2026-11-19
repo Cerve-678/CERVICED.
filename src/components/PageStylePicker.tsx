@@ -17,6 +17,7 @@ import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
 import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
+import { PagePattern } from '../features/providers/pageParts';
 
 interface Props {
   value: PageStyleKey;
@@ -120,6 +121,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   pure: { text: 'Services' },
   grid: { lead: '03', text: 'Services' },
   custom: { text: 'Services' },
+  posy: { lead: 'the', text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -322,6 +324,40 @@ function MiniProfile({
             <Text style={[mini.chapterTitle, { color: ink }]}>{heading.text}</Text>
           </View>
         );
+      case 'custom': {
+        // The styles built from Custom's parts: the heading in their own font,
+        // drawn the way their style draws it.
+        const c = style.custom;
+        if (!c) return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
+        const font = { fontFamily: c.headingFont, color: ink };
+        switch (c.headingStyle) {
+          case 'script':
+            return (
+              <View style={mini.stack}>
+                <Text style={[mini.script, { fontFamily: c.scriptFont ?? 'PinyonScript_400Regular', color: accent }]}>{heading.lead}</Text>
+                <Text style={[mini.customCaps, font]}>{heading.text.toUpperCase()}</Text>
+              </View>
+            );
+          case 'caps':
+            return <Text style={[mini.customCaps, font]}>{heading.text.toUpperCase()}</Text>;
+          case 'numbered':
+            return (
+              <View style={mini.customRow}>
+                <Text style={[mini.customNumber, { color: accent }]}>01</Text>
+                <Text style={[mini.customTitle, font]}>{heading.text}</Text>
+              </View>
+            );
+          case 'underlined':
+            return (
+              <View>
+                <Text style={[mini.customTitle, font]}>{heading.text}</Text>
+                <View style={[mini.customBar, { backgroundColor: accent }]} />
+              </View>
+            );
+          default:
+            return <Text style={[mini.customTitle, font]}>{heading.text}</Text>;
+        }
+      }
       default:
         return <Text style={[mini.plain, { color: ink }]}>{heading.text}</Text>;
     }
@@ -456,6 +492,15 @@ function MiniProfile({
             <View style={mini.sideLinesLeft}>
               <Text style={mini.appName} numberOfLines={1}>Name</Text>
               <View style={[mini.heroBar, mini.heroBarShort]} />
+            </View>
+          </View>
+        ) : style.hero === 'split' ? (
+          // Posy: their photo down the left half, the logo and name on the right.
+          <View style={mini.splitHero}>
+            <View style={[mini.splitPhoto, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]} />
+            <View style={mini.splitSide}>
+              <View style={mini.smallLogo}>{logo}</View>
+              <Text style={mini.splitName} numberOfLines={1}>Name</Text>
             </View>
           </View>
         ) : style.hero === 'gridHeader' ? (
@@ -655,6 +700,7 @@ function MiniProfile({
         ) : logo}
       </LinearGradient>
       <View style={[mini.body, veilPage && mini.veilGlass]}>
+        {style.pagePattern ? <PagePattern pattern={style.pagePattern} accent={accent} onDark={isDarkColor(sheet)} /> : null}
         {style.policies === 'band' ? (
           <View style={[mini.band, { backgroundColor: accent }]} />
         ) : null}
@@ -779,6 +825,17 @@ const mini = StyleSheet.create({
   sideName: { fontFamily: 'Prata-Regular', fontSize: 12, color: '#FFFFFF' },
   heroBar: { height: 4, width: '90%', borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.7)' },
   heroBarShort: { width: '60%' },
+  // Posy
+  splitHero: { alignSelf: 'stretch', flex: 1, flexDirection: 'row' },
+  splitPhoto: { flex: 1, borderBottomRightRadius: 10 },
+  splitSide: { flex: 1, alignItems: 'flex-start', justifyContent: 'flex-end', paddingLeft: 6, paddingBottom: 8, gap: 2 },
+  splitName: { fontFamily: 'YoungSerif-Regular', fontSize: 11, lineHeight: 15, color: '#FFFFFF' },
+  // The styles built from Custom's parts.
+  customCaps: { fontSize: 8, lineHeight: 11, letterSpacing: 1.6, textAlign: 'center' },
+  customTitle: { fontSize: 12, lineHeight: 16 },
+  customRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  customNumber: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 8 },
+  customBar: { width: 14, height: 2, borderRadius: 1, marginTop: 2 },
   spaName: { fontFamily: 'TenorSans_400Regular', fontSize: 9, letterSpacing: 2, color: '#FFFFFF', marginBottom: 3 },
   posterName: { fontFamily: 'Prata-Regular', fontSize: 14, color: '#FFFFFF', marginTop: 2 },
   coverName: { fontFamily: 'Syne_700Bold', fontSize: 22, color: '#FFFFFF', letterSpacing: -0.5 },

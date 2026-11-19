@@ -24,9 +24,11 @@ import {
   PageSection,
   PageSectionHeading,
   sectionInk,
+  showsDividerAbove,
   type PageStylePalette,
 } from "./ProfilePageStyle";
 import { plateMarkEdges } from "./heroes/EmbossedHero";
+import { SectionDivider } from "./pageParts";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
@@ -428,6 +430,9 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   // Novel sets each photo on a page with its caption in italic under it.
   const plates = !!palette.pageStyle?.pagePhotos;
+  // Posy: three across, each with a round arched top.
+  const arches = palette.pageStyle?.photoLayout === "arches";
+  const divider = palette.pageStyle?.divider && showsDividerAbove(palette.pageStyle, "portfolio") ? palette.pageStyle.divider : null;
 
   const openFromModal = (index: number) => {
     setShowAll(false);
@@ -436,6 +441,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
 
   return (
     <View style={styles.portfolioSection}>
+      {divider ? <SectionDivider divider={divider} accent={palette.accent} /> : null}
       <View style={styles.portfolioHeading}>
         {/* Classic's Portfolio title has always sat on the page in Bakbak, not
             inside a card, so it keeps its own Text; a page style draws its
@@ -453,6 +459,23 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
           </TouchableOpacity>
         ) : null}
       </View>
+      {arches ? (
+        <View style={styles.archGrid}>
+          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              style={styles.archTile}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+            >
+              <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
       <View style={[styles.columns, clipped && styles.clippedColumns]}>
         {columns.map((column, columnIndex) => (
           <View key={columnIndex} style={[styles.column, clipped && styles.clippedColumn]}>
@@ -509,6 +532,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
           </View>
         ))}
       </View>
+      )}
 
       <Modal visible={showAll} animationType="slide" onRequestClose={() => setShowAll(false)}>
         {/* Own provider: a Modal is its own native surface, so the app root's provider can't measure it and SafeAreaView in here would get zero insets. */}
@@ -625,6 +649,10 @@ const styles = StyleSheet.create({
   portfolioStyledHeading: { flexShrink: 1, paddingTop: 16 },
   portfolioSeeAll: { fontFamily: "Jura-VariableFont_wght", fontWeight: "800", fontSize: 12 },
   columns: { flexDirection: "row", gap: COLUMN_GAP },
+  // Posy: three arched photos to a row. A corner radius past half the side is
+  // drawn at half, so 999 gives a full round top whatever the tile's width.
+  archGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 },
+  archTile: { width: "31.5%", aspectRatio: 0.68, overflow: "hidden", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
   // Lounge, Soft Focus and Bow: rounder, softer photos.

@@ -23,6 +23,7 @@ import {
   sectionsSitOnPage,
   serviceCardSurface,
   sheetInk,
+  showsDividerAbove,
   STRIPE_TINT,
 } from '../features/providers/ProfilePageStyle';
 import { heroUsesBrandFont, kickerPhrase } from '../features/providers/ProfileHero';
@@ -59,13 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty picked styles plus Classic, each once', () => {
+  it('has the thirty-one picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
+      'posy',
     ]);
   });
 
@@ -318,7 +320,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -390,5 +392,40 @@ describe('which styles show the picked name font', () => {
     ['lounge', 'softFocus', 'hush', 'stripes', 'bow'].forEach(key => {
       expect(heroUsesBrandFont(getPageStyle(key))).toBe(false);
     });
+  });
+});
+
+describe('the styles built from Custom\'s parts', () => {
+  it('gives Posy its split top, tiles, arched photos, wave lines and gingham', () => {
+    const posy = getPageStyle('posy');
+    expect(posy.key).toBe('posy');
+    expect(posy).toMatchObject({
+      hero: 'split', cards: 'flat', policies: 'softTiles', heading: 'custom',
+      serviceLayout: 'tiles', photoLayout: 'arches', divider: 'wave', pagePattern: 'gingham', portfolioFirst: true,
+    });
+    expect(posy.custom).toMatchObject({ headingFont: 'YoungSerif-Regular', textFont: 'Figtree-SemiBold', headingStyle: 'script', scriptFont: 'Ephesis-Regular' });
+    // Its own fonts, not the Branding name font.
+    expect(heroUsesBrandFont(posy)).toBe(false);
+  });
+
+  it('lets Posy pick the photo for its left half', () => {
+    expect(heroPhotoPickLimit(getPageStyle('posy'))).toBe(1);
+  });
+
+  it('draws the divider above every section but the one that opens the page', () => {
+    const posy = getPageStyle('posy');
+    // Work first: the portfolio opens the page, so About gets the line and the portfolio doesn't.
+    expect(showsDividerAbove(posy, 'portfolio')).toBe(false);
+    expect(showsDividerAbove(posy, 'about')).toBe(true);
+    expect(showsDividerAbove(posy, 'policies')).toBe(true);
+    const plain = { ...posy, portfolioFirst: false };
+    expect(showsDividerAbove(plain, 'about')).toBe(false);
+    expect(showsDividerAbove(plain, 'portfolio')).toBe(true);
+    // No divider set, none drawn.
+    expect(showsDividerAbove(getPageStyle('pure'), 'policies')).toBe(false);
+  });
+
+  it('round-trips in the stored theme key', () => {
+    expect(parseThemeKey(encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'posy')).pageStyle).toBe('posy');
   });
 });
