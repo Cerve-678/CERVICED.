@@ -11,6 +11,7 @@ import {
   THEME_COLLECTIONS,
   encodeCustomTheme,
   encodeThemeKey,
+  isDarkColor,
   parseThemeKey,
   resolveProviderTheme,
 } from '../constants/providerThemes';
@@ -42,13 +43,17 @@ describe('theme collections', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('carries the owner’s fifteen picks, plus the eight Clean Girl and Gilded ones', () => {
+  it('carries the existing picks and the six new chic, clean and bold sets', () => {
     const picked = PROVIDER_THEMES.filter(t => t.collection !== 'classics').map(t => t.name);
-    expect(picked).toHaveLength(23);
-    expect(picked).toEqual(expect.arrayContaining(['Tangerine & Navy', 'Emerald & Gold', 'Oat Milk', 'Desert Rose']));
+    expect(picked).toHaveLength(29);
+    expect(picked).toEqual(expect.arrayContaining([
+      'Tangerine & Navy', 'Emerald & Gold', 'Oat Milk', 'Desert Rose',
+      'Ivory & Oxblood', 'Cocoa & Cream', 'Sage & Milk', 'Blue & Linen',
+      'Royal Blue & Yellow', 'Violet & Lime',
+    ]));
     const second = PROVIDER_THEMES.filter(t => t.collection === 'clean' || t.collection === 'gilded').map(t => t.name);
     expect(second).toEqual([
-      'Milk Glaze', 'Glazed Rose', 'Coconut & Ink', 'Almond Silk', 'Cloud',
+      'Milk Glaze', 'Glazed Rose', 'Coconut & Ink', 'Almond Silk', 'Cloud', 'Sage & Milk', 'Blue & Linen',
       'White & Gold', 'Black & Gold', 'Antique Bronze',
     ]);
   });
@@ -59,6 +64,18 @@ describe('theme collections', () => {
     for (const theme of PROVIDER_THEMES.filter(t => t.collection === 'clean' || t.collection === 'gilded')) {
       const sheet = SHEET_OPTIONS.find(o => o.key === theme.suggestedSheet)!.color;
       expect({ theme: theme.key, ok: contrast(theme.tokens.accent, sheet) >= 3 }).toEqual({ theme: theme.key, ok: true });
+    }
+  });
+
+  it('keeps the six new combinations readable on their hero and content area', () => {
+    const keys = ['ivoryoxblood', 'cocoacream', 'sagemilk', 'bluelinen', 'royalyellow', 'violetlime'];
+    for (const key of keys) {
+      const theme = PROVIDER_THEMES.find(t => t.key === key)!;
+      const sheet = SHEET_OPTIONS.find(o => o.key === theme.suggestedSheet)!.color;
+      const heroInk = isDarkColor(theme.tokens.gradient[0]) ? '#FFFFFF' : '#26201E';
+      expect(contrast(theme.tokens.accent, sheet)).toBeGreaterThanOrEqual(3);
+      expect(contrast(heroInk, theme.tokens.gradient[0])).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(heroInk, theme.tokens.gradient[1])).toBeGreaterThanOrEqual(4.5);
     }
   });
 
