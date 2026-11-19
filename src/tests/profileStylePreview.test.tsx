@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import { CUSTOM_LAYOUTS, DEFAULT_CUSTOM_CHOICES } from '../constants/customPageStyle';
+import { CUSTOM_LAYOUTS, CUSTOM_PARTS, DEFAULT_CUSTOM_CHOICES, LAYOUT_PARTS, withPart } from '../constants/customPageStyle';
 import { PAGE_STYLES } from '../constants/pageStyles';
 import { encodeThemeKey, SHEET_BG } from '../constants/providerThemes';
 import { ProfileStylePreview } from '../features/providers/ProfileStylePreview';
@@ -231,7 +231,7 @@ describe('the 2026-11-15 templates', () => {
     const caps = layout === 'banner';
     render(
       <ProfileStylePreview
-        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'custom', 'melt', { ...DEFAULT_CUSTOM_CHOICES, layout, heading: 'gilda', text: 'castoro', caps })}
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'custom', 'melt', { ...DEFAULT_CUSTOM_CHOICES, ...LAYOUT_PARTS[layout], layout, heading: 'gilda', text: 'castoro', headingStyle: caps ? 'caps' : 'typed' })}
         gradient={['#4A2C20', '#F5F1EC']}
         accent="#4A2C1E"
         backgroundImage={null}
@@ -254,5 +254,59 @@ describe('the 2026-11-15 templates', () => {
     expect(StyleSheet.flatten(heading.props["style"]).fontFamily).toBe('GildaDisplay-Regular');
     expect(StyleSheet.flatten(screen.getByText('Soft lash sets.').props["style"]).fontFamily).toBe('Castoro-Regular');
     expect(StyleSheet.flatten(screen.getByText('Classic set').props["style"]).fontFamily).toBe('Castoro-Regular');
+  });
+
+  it.each(CUSTOM_PARTS.flatMap(part => part.options.map(option => [part.key, option.key] as const)))(
+    'draws a Custom page with %s set to %s',
+    (part, value) => {
+      render(
+        <ProfileStylePreview
+          themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'custom', 'melt', withPart(DEFAULT_CUSTOM_CHOICES, part, value))}
+          gradient={['#4A2C20', '#F5F1EC']}
+          accent="#4A2C1E"
+          backgroundImage={null}
+          brandFont="italiana"
+          name="Amara Lashes"
+          logoUri={null}
+          logoFraming={null}
+          metaLabels={['LASHES', 'PECKHAM']}
+          pillLabels={['LASHES', 'PECKHAM']}
+          kicker="LASHES"
+          location="Peckham"
+          content={{ about: 'Soft lash sets.', categories: ['Lashes'], services: [{ name: 'Classic set', minutes: 120, price: 65 }] }}
+          rating="5.0"
+          full
+        />,
+      );
+      expect(screen.getAllByText('Amara Lashes').length).toBeGreaterThan(0);
+      expect(screen.getByText('Soft lash sets.')).toBeTruthy();
+    },
+  );
+
+  it('outlines each part on Tap Your Page and says which one was tapped', () => {
+    const onPress = jest.fn();
+    render(
+      <ProfileStylePreview
+        themeKey={encodeThemeKey('app', SHEET_BG, 'blend', 'rounded', 'custom', 'melt', DEFAULT_CUSTOM_CHOICES)}
+        gradient={['#4A2C20', '#F5F1EC']}
+        accent="#4A2C1E"
+        backgroundImage={null}
+        brandFont="italiana"
+        name="Amara Lashes"
+        logoUri={null}
+        logoFraming={null}
+        metaLabels={['LASHES', 'PECKHAM']}
+        pillLabels={['LASHES', 'PECKHAM']}
+        kicker="LASHES"
+        location="Peckham"
+        rating="5.0"
+        editParts={{ active: 'top', onPress, accent: '#4A2C1E' }}
+      />,
+    );
+    for (const label of ['Top', 'Sections', 'Policies', 'Headings', 'Services']) {
+      expect(screen.getByLabelText(`${label}. Tap to change`)).toBeTruthy();
+    }
+    fireEvent.press(screen.getByLabelText('Policies. Tap to change'));
+    expect(onPress).toHaveBeenCalledWith('policies');
   });
 });

@@ -203,8 +203,8 @@ export const en = {
   'providerAccount.businessProfile.sub': 'Profile, details & communications',
 
   'providerAccount.section.myBusiness': 'MY BUSINESS',
-  'providerAccount.myBusiness.schedule.title': 'Schedule',
-  'providerAccount.myBusiness.schedule.sub': 'Set your hours & block dates',
+  'providerAccount.myBusiness.payouts.title': 'Payouts',
+  'providerAccount.myBusiness.payouts.sub': 'Your payments and payout dates',
   'providerAccount.myBusiness.inbox.title': 'Inbox',
   'providerAccount.myBusiness.inbox.sub': 'Enquiries and client messages',
   'providerAccount.myBusiness.history.title': 'Booking History',

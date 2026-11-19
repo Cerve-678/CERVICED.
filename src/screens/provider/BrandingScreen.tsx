@@ -64,7 +64,8 @@ import { getCachedProviderData, uploadToStorage, patchCachedProviderBranding } f
 import { getMyProviderBranding, getProviderPortfolio, setHeroPortfolioPhotos, updateProviderBranding } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 import { HeroPhotoPicker } from '../../features/providers/HeroPhotoPicker';
-import { CustomPageMaker } from '../../features/providers/CustomPageMaker';
+import { CustomPageMaker, CustomTapPanel } from '../../features/providers/CustomPageMaker';
+import { withPart, type CustomPartKey } from '../../constants/customPageStyle';
 import { DEFAULT_CUSTOM_CHOICES, type CustomChoices } from '../../constants/customPageStyle';
 import { HERO_PHOTO_LIMIT, heroPhotos } from '../../features/providers/heroPhotos';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -148,6 +149,9 @@ export default function BrandingScreen({ navigation }: any) {
   // What the full preview needs that Branding doesn't edit: the name, the
   // logo's framing and the line under the name. From the saved profile cache.
   const [previewOpen, setPreviewOpen]         = useState(false);
+  // Custom's Tap Your Page: the full preview with each part tappable, and
+  // the part they're changing (null is the usual preview).
+  const [tapPart, setTapPart]                 = useState<CustomPartKey | null>(null);
   const [profileName, setProfileName]         = useState('Your Business');
   const [logoFraming, setLogoFraming]         = useState<LogoFraming | null>(null);
   const [metaLabels, setMetaLabels]           = useState<string[]>([]);
@@ -507,12 +511,12 @@ export default function BrandingScreen({ navigation }: any) {
         visible={previewOpen}
         animationType="slide"
         presentationStyle="fullScreen"
-        onRequestClose={() => setPreviewOpen(false)}
+        onRequestClose={() => { setPreviewOpen(false); setTapPart(null); }}
       >
         {/* A Modal is its own native surface, so it needs its own safe-area provider. */}
         <SafeAreaProvider>
           <ProfilePreviewScreen
-            onClose={() => setPreviewOpen(false)}
+            onClose={() => { setPreviewOpen(false); setTapPart(null); }}
             pageStyle={pageStyle}
             onPickStyle={setPageStyle}
             isLocked={key => limited && key !== DEFAULT_PAGE_STYLE}
@@ -521,6 +525,19 @@ export default function BrandingScreen({ navigation }: any) {
               showLocked();
             }}
             accent={accentColor}
+            renderBar={tapPart ? bottomInset => (
+              <CustomTapPanel
+                part={tapPart}
+                onPartChange={setTapPart}
+                choices={customChoices}
+                onPick={(key, value) => {
+                  setCustomChoices(prev => withPart(prev, key, value));
+                  setPageStyle('custom');
+                }}
+                accent={accentColor}
+                bottomInset={bottomInset}
+              />
+            ) : undefined}
           >
             <ProfileStylePreview
               themeKey={liveThemeKey}
@@ -540,7 +557,11 @@ export default function BrandingScreen({ navigation }: any) {
               policyPages={previewPolicyPages}
               policyEdges={previewPolicyEdges}
               rating={previewRating}
-            />
+              editParts={tapPart ? { active: tapPart, onPress: setTapPart, accent: accentColor } : undefined}
+            >
+              {/* Room for the taller Tap Your Page panel. */}
+              {tapPart ? <View style={{ height: 150 }} /> : null}
+            </ProfileStylePreview>
           </ProfilePreviewScreen>
         </SafeAreaProvider>
       </Modal>
@@ -884,6 +905,7 @@ export default function BrandingScreen({ navigation }: any) {
               cardShape={cardShape}
               onCardShapeChange={setCardShape}
               onOpenColours={() => setPart('colours')}
+              onOpenTapEdit={() => { setTapPart('top'); setPreviewOpen(true); }}
               locked={limited}
               onLockedPress={showLocked}
               accent={accentColor}
@@ -1255,9 +1277,12 @@ function ProfilePreviewScreen({
   isLocked,
   onLockedPress,
   accent,
+  renderBar,
 }: {
   children: React.ReactNode;
   onClose: () => void;
+  /** Replaces the page styles along the bottom (Custom's Tap Your Page panel). */
+  renderBar?: ((bottomInset: number) => React.ReactNode) | undefined;
   pageStyle: PageStyleKey;
   onPickStyle: (key: PageStyleKey) => void;
   isLocked: (key: PageStyleKey) => boolean;
@@ -1298,6 +1323,7 @@ function ProfilePreviewScreen({
       {/* The page styles along the bottom: a tap swaps the style in place.
           Picking one here is the same as picking it in Page Style; nothing
           saves until Save. */}
+      {renderBar ? renderBar(insets.bottom) : (
       <View style={[previewStyles.bar, { paddingBottom: insets.bottom + 12 }]}>
         <ScrollView ref={chipsRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={previewStyles.chips}>
           {PAGE_STYLES.map(style => {
@@ -1333,6 +1359,7 @@ function ProfilePreviewScreen({
           })}
         </ScrollView>
       </View>
+      )}
     </View>
   );
 }
