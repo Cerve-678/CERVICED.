@@ -37,6 +37,8 @@ export type PageStyleKey =
   | 'bow'
   | 'pure'
   | 'grid'
+  | 'slate'
+  | 'halo'
   | 'posy'
   | 'riviera'
   | 'noir'
@@ -178,6 +180,8 @@ export type PageHero =
   | 'bow'      // their photo with a ribbon down it and a bow on top, the logo on its foot, the name in italic serif
   | 'appHeader' // the logo on the left, the name and what they do beside it, like an app's profile top (Pure)
   | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
+  | 'slateHeader' // a large name and compact logo above one accent rule (Slate)
+  | 'haloHeader' // a centred logo in a fine ring, name and details beneath (Halo)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
   | 'archWindow' // their chosen photo in a tall arched window, the logo on its foot, the name centred under it (Retreat)
@@ -536,6 +540,22 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heading: 'gridIndex', cards: 'gridBox', policies: 'gridCells', logo: 'sharp',
     hero: 'gridHeader', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+  },
+  // Clean, category-neutral looks. Both use the provider's colours, name font
+  // and category labels rather than beauty-service-specific artwork or copy.
+  {
+    key: 'slate', name: 'Slate', description: 'A bold name, fine accent line and clean service cards',
+    heading: 'quietCaps', cards: 'flat', policies: 'settingsRows', logo: 'rounded',
+    hero: 'slateHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    buttonShape: 'outline', photoLayout: 'swipe', divider: 'line',
+  },
+  {
+    key: 'halo', name: 'Halo', description: 'A centred logo and name with soft framing and airy sections',
+    heading: 'spacedCaps', cards: 'sheer', policies: 'outlined', logo: 'circle',
+    hero: 'haloHeader', aboutInHero: false, roundedPhotos: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    buttonShape: 'outline', divider: 'dots',
   },
   // 2026-11-19: styles built from Custom's parts, each its own fixed mix
   // (owner picked all eight on https://claude.ai/artifact/3kCvU1EuLzUqpUaH9jBsCd).

@@ -60,13 +60,13 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-eight picked styles plus Classic, each once', () => {
+  it('has every fixed style once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
-      'pure', 'grid',
+      'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic', 'ledger',
     ]);
   });
@@ -388,6 +388,7 @@ describe('which styles show the picked name font', () => {
   it('is only the styles whose hero draws the name in it', () => {
     expect(PAGE_STYLES.filter(heroUsesBrandFont).map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
+      'slate', 'halo',
     ]);
   });
 
