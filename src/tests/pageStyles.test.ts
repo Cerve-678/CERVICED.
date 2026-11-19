@@ -61,13 +61,29 @@ describe('page style in the stored theme key', () => {
 describe('page styles', () => {
   it('has every fixed style once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
-      'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
+      'classic', 'portfolio', 'atelier', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid', 'slate', 'halo',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
     ]);
+  });
+
+  it('gives Portfolio its own cover and quiet work gallery', () => {
+    const portfolio = getPageStyle('portfolio');
+    expect(portfolio.hero).toBe('portfolioFront');
+    expect(portfolio.photoLayout).toBe('portfolioWall');
+    expect(portfolio.portfolioFirst).toBe(true);
+    expect(portfolio.heroNameFont?.fontFamily).toBe('GildaDisplay-Regular');
+    expect(heroPhotoPickLimit(portfolio)).toBe(1);
+  });
+
+  it('keeps Atelier type led without a script face', () => {
+    const atelier = getPageStyle('atelier');
+    expect(atelier.hero).toBe('atelierLetterhead');
+    expect(atelier.custom?.headingFont).toBe('Bellefair-Regular');
+    expect(atelier.portfolioFirst).toBeFalsy();
   });
 
   it('presses Embossed into the page: raised cards, a recessed policy panel, photos in plate marks', () => {
@@ -310,7 +326,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['portfolio', 'editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
