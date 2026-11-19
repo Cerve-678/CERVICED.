@@ -315,7 +315,6 @@ export interface HeroNameFont {
 export type PagePattern =
   | 'gingham' // a soft check of the accent (Posy)
   | 'glow'    // a soft wash of the accent from the top left corner (Retreat)
-  | 'dots'    // a fine grid of small dots in the accent (Bonbon)
   | 'lined';  // ruled lines across the page, like a ledger (Ledger)
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
@@ -541,8 +540,8 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // 2026-11-19: styles built from Custom's parts, each its own fixed mix
   // (owner picked all eight on https://claude.ai/artifact/3kCvU1EuLzUqpUaH9jBsCd).
   {
-    key: 'posy', name: 'Posy', description: 'Fresh and garden-sweet: your photo beside your name, services as tiles on gingham',
-    heading: 'custom', cards: 'flat', policies: 'softTiles', logo: 'circle',
+    key: 'posy', name: 'Posy', description: 'Fresh and garden-sweet: your photo beside your name, soft round cards on gingham',
+    heading: 'custom', cards: 'soft', policies: 'softTiles', logo: 'circle',
     hero: 'split', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     serviceLayout: 'tiles', photoLayout: 'arches', divider: 'wave', pagePattern: 'gingham', portfolioFirst: true,
@@ -589,12 +588,12 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     custom: { headingFont: 'Marcellus-Regular', headingScale: 1, textFont: 'DidactGothic-Regular', headingStyle: 'typed', centred: true },
   },
   {
-    key: 'bonbon', name: 'Bonbon', description: 'Sweet and playful: chunky rounded type, soft cards on a dotted page, tilted polaroids',
+    key: 'bonbon', name: 'Bonbon', description: 'Sweet and playful: chunky rounded type, soft cards, tilted polaroids',
     heading: 'custom', cards: 'soft', policies: 'softTiles', logo: 'circle',
     hero: 'stacked', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     heroNameFont: { fontFamily: 'Sniglet_800ExtraBold', scale: 0.95, lineRatio: 1.4 },
-    serviceLayout: 'tiles', photoLayout: 'polaroids', divider: 'wave', pagePattern: 'dots',
+    serviceLayout: 'tiles', photoLayout: 'polaroids', divider: 'wave',
     custom: { headingFont: 'Fredoka_600SemiBold', headingScale: 1, textFont: 'VarelaRound_400Regular', headingStyle: 'typed', centred: false },
   },
   {
