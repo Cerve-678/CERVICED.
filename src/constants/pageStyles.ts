@@ -48,6 +48,7 @@ export type PageStyleKey =
   | 'pinboard'
   | 'portfolio'
   | 'atelier'
+  | 'shopEdit' | 'shopGallery' | 'shopRitual'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -188,7 +189,8 @@ export type PageHero =
   | 'portfolioFront' // a chosen work photo above a compact provider identity and booking details
   | 'pinboardHeader' // up to three rounded photo pins side by side at uneven heights, then the logo beside the name
   | 'atelierLetterhead' // a tall noncursive wordmark, fine rules and a small provider image
-  | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
+  | 'titlePage' // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
+  | 'shopEdit' | 'shopGallery' | 'shopRitual';
 
 /** The frame round the logo in the hero. */
 export type PageLogoFrame =
@@ -657,6 +659,27 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     divider: 'line',
     custom: { headingFont: 'Bellefair-Regular', headingScale: 1.2, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
   },
+  {
+    key: 'shopEdit', name: 'The Edit', description: 'An editorial cover, chosen hero photo and a clean service collection',
+    heading: 'serifTitle', cards: 'open', policies: 'hairline', logo: 'circle',
+    hero: 'shopEdit', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'feature', serviceLayout: 'photoCards', divider: 'line', buttonShape: 'outline',
+  },
+  {
+    key: 'shopGallery', name: 'The Gallery', description: 'A visual storefront with a three-photo window and service tiles',
+    heading: 'shopSerif', cards: 'product', policies: 'accordion', logo: 'circle',
+    hero: 'shopGallery', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'portfolioWall', serviceLayout: 'tiles', portfolioFirst: true, buttonShape: 'square',
+  },
+  {
+    key: 'shopRitual', name: 'The Ritual', description: 'A quiet luxury page with a framed feature image and fine typography',
+    heading: 'spacedCaps', cards: 'paper', policies: 'definition', logo: 'circle',
+    hero: 'shopRitual', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'arches', serviceLayout: 'menu', divider: 'dots', buttonShape: 'textLink',
+  },
 ];
 
 /** How many portfolio photos this style's hero shows, from the ones the
@@ -675,6 +698,9 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'archWindow': return 1; // Retreat's window
     case 'portfolioFront': return 1; // Portfolio's cover image
     case 'pinboardHeader': return 3; // Pinboard's board of pins
+    case 'shopEdit': return 1;
+    case 'shopGallery': return 3;
+    case 'shopRitual': return 1;
     default: return 0;
   }
 }
@@ -691,6 +717,9 @@ export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number
     case 'split': return 0.62;              // Posy's left half
     case 'archWindow': return 196 / 236;    // Retreat's window
     case 'portfolioFront': return 358 / 230; // Portfolio's cover
+    case 'shopEdit': return 1.55;
+    case 'shopGallery': return 0.78;
+    case 'shopRitual': return 1.2;
     case 'pinboardHeader': {
       // Side by side at uneven heights (150, 124, 138); one photo is 156 across.
       if (count <= 1) return 358 / 156;
