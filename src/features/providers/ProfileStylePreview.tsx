@@ -24,7 +24,8 @@ import { PolicyPagesCompact, PolicyPagesInline, PolicyPagesShowcase, PolicyStory
 import type { PolicyImageEdge } from "./policyImages";
 import { resolveProviderFontFamily, resolveProviderFontScale, resolveProviderNameLineHeight } from "../../constants/providerFonts";
 import { isDarkColor, parseThemeKey, resolveProviderTheme, withAlpha } from "../../constants/providerThemes";
-import type { LogoFraming } from "../../types/database";
+import type { DbPortfolioItem, LogoFraming } from "../../types/database";
+import { ProviderPortfolioSection } from "./ProviderProfileSections";
 import type { PolicyDisplayRow } from "../../utils/policyDisplay";
 import { formatDurationMinutes } from "../../utils/dateUtils";
 import { formatAddOnExtraTime } from "../bookings/addOnTime";
@@ -57,6 +58,28 @@ const PLACEHOLDER_POLICY_PAGES = [
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAoCAIAAABmcd1FAAAALElEQVR42u3MMQ0AAAgDsPm3xsuJGFRwkDTp3UzXkajVarVarVar1Wq1+n+9tdqhNg89zK8AAAAASUVORK5CYII=",
 ];
 const NO_EDGES: Record<string, PolicyImageEdge> = {};
+
+/** A see-through grey square: Branding draws the portfolio's shapes in it
+ *  before any work photo has been uploaded, as it does the policy pages. */
+const PLACEHOLDER_PHOTO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOor693AAAEvAG+rzf9wwAAAABJRU5ErkJggg==";
+const PLACEHOLDER_PORTFOLIO: DbPortfolioItem[] = [0.8, 1.1, 1, 0.75, 1.2, 0.9].map((aspect_ratio, index) => ({
+  id: `preview-photo-${index}`,
+  provider_id: "",
+  service_id: null,
+  image_url: PLACEHOLDER_PHOTO,
+  caption: null,
+  category: null,
+  tags: null,
+  price: null,
+  aspect_ratio,
+  is_featured: false,
+  created_at: "",
+  vibe_tags: null,
+  occasion_tags: null,
+  trend_names: null,
+  hair_type_shown: null,
+  skin_tone_shown: null,
+}));
 
 /** The policy headings an empty profile shows: the titles, no values. */
 const PREVIEW_POLICY_ROWS: PolicyDisplayRow[] = [
@@ -100,8 +123,19 @@ export interface ProfileStylePreviewProps {
   /** Info Reg's preview: every category and service and the whole About,
    *  rather than Branding's outline of the first few. */
   full?: boolean;
-  /** More of the page after Reviews (Info Reg adds Contact, Portfolio, Venue). */
+  /** Their work photos. Drawn by the profile's own Portfolio section, so each
+   *  style's photo layout looks as it does there: first on the work-first
+   *  styles (Posy, Noir), otherwise after the sections above. With none,
+   *  Branding shows grey shapes so the layout can still be seen; a full
+   *  preview shows none, as the profile. */
+  portfolio?: readonly DbPortfolioItem[] | undefined;
+  /** More of the page after Reviews, before the portfolio (Info Reg adds Contact). */
   children?: React.ReactNode;
+  /** After the portfolio (Info Reg adds Venue). */
+  afterPortfolio?: React.ReactNode;
+  /** How far above the screen's foot Riviera's pinned Book bar sits, so it
+   *  clears whatever the screen puts along the bottom (Branding's styles row). */
+  pinnedBarBottom?: number;
   /** Branding → Custom's Tap Your Page: each part of the page is outlined,
    *  and tapping one picks that part to change. */
   editParts?: { active: CustomPartKey; onPress: (part: CustomPartKey) => void; accent: string } | undefined;
@@ -159,7 +193,10 @@ export function ProfileStylePreview({
   policyEdges,
   rating,
   full = false,
+  portfolio,
   children,
+  afterPortfolio,
+  pinnedBarBottom = 40,
   editParts,
 }: ProfileStylePreviewProps) {
   // Tap Your Page: a part of the page in a dashed outline with its name on
@@ -272,28 +309,43 @@ export function ProfileStylePreview({
   const edges = usePolicyEdgeColours(realPages.length > 0 ? realPages : [], policyEdges ?? NO_EDGES);
   const showPolicyPages = pageStyle.key !== "classic" && pages.length > 0;
 
-  return (
-    <ScrollView style={{ backgroundColor: OP.bg }} showsVerticalScrollIndicator={false}>
-      <View>
-        {/* The hero: the backdrop runs behind the logo and name, and the
-            content sheet rises over its foot, as on the profile. On a veil
-            page it runs behind the whole page, under the veil. */}
-        <View style={[styles.backdrop, veilTheme && styles.backdropFull]}>
-          {backgroundImage ? (
-            <>
-              <Image source={{ uri: backgroundImage }} style={StyleSheet.absoluteFill} resizeMode="cover" fadeDuration={0} />
-              <LinearGradient
-                colors={["rgba(0,0,0,0.38)", "rgba(0,0,0,0.18)", "transparent"]}
-                locations={[0, 0.35, 0.62]}
-                style={StyleSheet.absoluteFill}
-              />
-            </>
-          ) : (
-            <ProfileHeroBackdrop colors={gradient} finish={finish} style={StyleSheet.absoluteFill} />
-          )}
-          {veilTheme ? <VeilBackdrop /> : null}
-        </View>
+  // The portfolio, in the style's own photo layout and heading.
+  const portfolioItems = portfolio && portfolio.length > 0
+    ? (portfolio as DbPortfolioItem[])
+    : full ? [] : PLACEHOLDER_PORTFOLIO;
+  const portfolioSection = (
+    <ProviderPortfolioSection items={portfolioItems} palette={palette} onOpenImage={noop} interactiveImages={false} />
+  );
+  // Riviera's pinned Book bar: their lowest price, as on the profile.
+  const lowestPrice = (content?.services ?? []).reduce<number | null>(
+    (low, service) => (service.price > 0 && (low === null || service.price < low) ? service.price : low),
+    null,
+  );
+  const squareButtons = pageStyle.buttonShape === "square";
 
+  return (
+    <View style={[styles.root, { backgroundColor: OP.bg }]}>
+      {/* The backdrop fills the screen and stays put while the page scrolls,
+          as on the profile: the photo (at the profile's 88%) or the colours
+          behind the hero, down the sides of the inset sheet, and under a
+          veil page's glass. */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {backgroundImage ? (
+          <>
+            <Image source={{ uri: backgroundImage }} style={[StyleSheet.absoluteFill, styles.backgroundPhoto]} resizeMode="cover" fadeDuration={0} />
+            <LinearGradient
+              colors={["rgba(0,0,0,0.38)", "rgba(0,0,0,0.18)", "transparent"]}
+              locations={[0, 0.35, 0.62]}
+              style={StyleSheet.absoluteFill}
+            />
+          </>
+        ) : (
+          <ProfileHeroBackdrop colors={gradient} finish={finish} style={StyleSheet.absoluteFill} />
+        )}
+        {veilTheme ? <VeilBackdrop /> : null}
+      </View>
+    <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <View>
         <View style={styles.heroInfo}>
           {zone("top", "Top", <ProfileHeroLayout
             pageStyle={pageStyle}
@@ -360,7 +412,11 @@ export function ProfileStylePreview({
                     <Ionicons key={star} name="star" size={12} color="#FFD700" />
                   ))}
                   {rating !== undefined ? (
-                    <Text style={[styles.ratingText, { color: heroText }, heroIsDark && styles.textShadow]}>{rating}</Text>
+                    <Text style={[
+                      styles.ratingText,
+                      { color: pageStyle.hero === 'ticketHeader' ? (isDarkColor(OP.card) ? '#FFFFFF' : '#1F1A1C') : heroText },
+                      heroIsDark && pageStyle.hero !== 'ticketHeader' && styles.textShadow,
+                    ]}>{rating}</Text>
                   ) : null}
                 </View>
                 <View style={detailsSitOnCard(pageStyle) ? DETAILS_OWN_LINE : undefined}>
@@ -375,7 +431,17 @@ export function ProfileStylePreview({
           />, true)}
         </View>
 
-        <View style={[styles.sheet, { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg }, veilTheme && styles.sheetGlass]}>
+        <View
+          style={[
+            styles.sheet,
+            { backgroundColor: veilTheme ? veilTheme.sheetFill : OP.bg },
+            // As on the profile: over a background photo the sheet is pulled
+            // in so the photo shows down its sides.
+            backgroundImage || veilTheme ? styles.sheetFloating : null,
+            veilTheme && styles.sheetGlass,
+            pageStyle.pinnedBookBar && styles.sheetPinnedBar,
+          ]}
+        >
           {pageStyle.pagePattern ? (
             <PagePattern pattern={pageStyle.pagePattern} accent={accent} onDark={isDarkColor(OP.bg)} style={styles.sheetPattern} />
           ) : null}
@@ -417,6 +483,8 @@ export function ProfileStylePreview({
             </BlurView>
           ) : (
             <>
+              {/* Work first (Posy, Noir): the portfolio straight after the top. */}
+              {pageStyle.portfolioFirst ? portfolioSection : null}
               {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
                 <AccentBandSection section="about" palette={palette} waves={false}>
                   {aboutBody(onAccentInk(accent).text, withAlpha(onAccentInk(accent).text, 0.35))}
@@ -448,9 +516,17 @@ export function ProfileStylePreview({
           {pageStyle.heading === "plain" ? (
             <Text style={[styles.servicesTitle, { color: OP.text }]}>Services</Text>
           ) : zone("headingStyle", "Headings", (
-            <View style={pageStyle.cards === "none" ? [styles.servicesRule, { borderTopColor: page.separator }] : undefined}>
+            <View>
               {pageStyle.divider ? <SectionDivider divider={pageStyle.divider} accent={accent} /> : null}
-              <PageSectionHeading section="services" palette={palette} />
+              <View
+                style={[
+                  pageStyle.cards === "none" && [styles.servicesRule, { borderTopColor: page.separator }],
+                  // Stripes: the title sits lower on its strip, as on the profile.
+                  pageStyle.cards === "stripes" && styles.stripesServicesHeading,
+                ]}
+              >
+                <PageSectionHeading section="services" palette={palette} />
+              </View>
             </View>
           ))}
           {categories.length > 0 ? (
@@ -578,15 +654,37 @@ export function ProfileStylePreview({
             {lines(cardInk.separator, [100, 76])}
           </PageSection>
           {children}
+          {/* Every other style keeps its portfolio further down the page. */}
+          {pageStyle.portfolioFirst && pageStyle.separateAboutAndPolicies ? null : portfolioSection}
+          {afterPortfolio}
         </View>
       </View>
     </ScrollView>
+      {/* Riviera: the Book bar pinned over the foot of the page. */}
+      {pageStyle.pinnedBookBar ? (
+        <View pointerEvents="none" style={[styles.pinnedBar, squareButtons && styles.pinnedBarSquare, { bottom: pinnedBarBottom, backgroundColor: OP.card, borderColor: OP.border }]}>
+          <View style={styles.pinnedText}>
+            <Text style={[styles.pinnedName, { color: OP.text }, bodyFont]} numberOfLines={1}>{name}</Text>
+            {lowestPrice !== null ? (
+              <Text style={[styles.pinnedPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>From {previewPrice(lowestPrice)}</Text>
+            ) : (
+              <View style={[styles.line, styles.pinnedPriceBar, { backgroundColor: withAlpha(OP.text, 0.14) }]} />
+            )}
+          </View>
+          <View style={[styles.pinnedButton, squareButtons && styles.bookSquare, { backgroundColor: accent }]}>
+            <Text style={[styles.pinnedButtonText, squareButtons && styles.bookSquareText]}>Book</Text>
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { position: "absolute", top: 0, left: 0, right: 0, height: 640 },
-  backdropFull: { height: undefined, bottom: 0 },
+  root: { flex: 1 },
+  scroll: { backgroundColor: "transparent" },
+  // As ProviderProfileScreen's background photo.
+  backgroundPhoto: { opacity: 0.88 },
   heroInfo: { paddingTop: 100 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   name: { textAlign: "center", marginBottom: 4 },
@@ -620,15 +718,52 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
     minHeight: 900,
+    // The profile's sheet shadow (ProviderPageSheet contentSheet).
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
   },
   square: { borderRadius: 0 },
-  // Sheer: see-through glass over the veil, inset so the photo shows down its sides.
+  // Over a background photo, or a veil page: inset so the photo shows down its sides.
+  sheetFloating: { marginHorizontal: 10 },
+  // Riviera: room at the foot for the pinned Book bar.
+  sheetPinnedBar: { paddingBottom: 210 },
+  // Sheer: see-through glass over the veil, edged in a hairline.
   sheetGlass: {
-    marginHorizontal: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     borderColor: "rgba(255,255,255,0.22)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
+  stripesServicesHeading: { paddingTop: 18 },
+  // Riviera's pinned bar, as ProviderProfileScreen's pinnedBookBar.
+  pinnedBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingLeft: 20,
+    paddingRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+  },
+  pinnedBarSquare: { borderRadius: 6 },
+  pinnedText: { flex: 1, minWidth: 0 },
+  pinnedName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
+  pinnedPrice: { fontSize: 12, marginTop: 2 },
+  pinnedPriceBar: { width: 60, height: 7, marginTop: 6 },
+  pinnedButton: { height: 46, paddingHorizontal: 24, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  pinnedButtonText: { fontFamily: "BakbakOne-Regular", fontSize: 14, color: "#FFFFFF" },
   jumpBar: { flexDirection: "row", borderRadius: 100, marginBottom: 22, paddingHorizontal: 6 },
   jumpItem: { flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center" },
   jumpText: { fontFamily: "BakbakOne-Regular", fontSize: 10, letterSpacing: 1.6 },

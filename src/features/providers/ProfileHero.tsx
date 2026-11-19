@@ -953,6 +953,53 @@ export function ProfileHeroLayout({
       );
     }
 
+    case "ticketHeader": {
+      const ink = cardInk(cardColour);
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.ticketWrap}>
+          <View style={[layout.ticketCard, { backgroundColor: cardColour, borderColor: ink.rule }]}>
+            <View style={[layout.ticketAccent, { backgroundColor: accent }]} pointerEvents="none" />
+            <View style={layout.ticketTop}>
+              <View style={layout.logoNoGap}>{renderLogo(62)}</View>
+              <View style={layout.ticketText} accessible accessibilityRole="header" accessibilityLabel={name}>
+                <View style={layout.tickRow}>
+                  <Text style={[layout.ticketName, { color: ink.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
+                  {isVerified ? <Ionicons name="checkmark-circle" size={18} color={isDarkColor(cardColour) ? "#FFFFFF" : "#007AFF"} accessibilityLabel="Verified" /> : null}
+                </View>
+                {phrase ? <Text style={[layout.ticketPhrase, { color: ink.sub }]} numberOfLines={2}>{phrase}</Text> : null}
+              </View>
+            </View>
+            <View style={[layout.ticketFoot, { borderTopColor: ink.rule }]}>{details}</View>
+          </View>
+        </View>
+      );
+    }
+
+    case "prismHeader": {
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.prismWrap}>
+          <View style={[layout.prismStage, { borderColor: withAlpha(heroText, 0.35), backgroundColor: withAlpha(accent, 0.16) }]}>
+            <Svg width="100%" height="100%" viewBox="0 0 320 230" style={StyleSheet.absoluteFill} pointerEvents="none" preserveAspectRatio="xMidYMid slice">
+              <Polygon points="0,0 196,0 92,230 0,230" fill={accent} opacity={0.38} />
+              <Polygon points="242,0 320,0 320,230 150,230" fill={heroText} opacity={0.12} />
+              <Path d="M202 0 L99 230 M248 0 L152 230" stroke={heroText} strokeOpacity={0.28} strokeWidth={1.5} />
+            </Svg>
+            <View style={[layout.prismLogo, layout.logoNoGap]}>{renderLogo(62)}</View>
+            <View style={layout.prismText} accessible accessibilityRole="header" accessibilityLabel={name}>
+              <View style={layout.tickRow}>
+                <Text style={[layout.prismName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
+                {tick}
+              </View>
+              {phrase ? <Text style={[layout.prismPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.prismDetails}>{details}</View>
+        </View>
+      );
+    }
+
     case "stripes":
       return (
         <StripesHero
@@ -1201,13 +1248,13 @@ export function heroNameFontStyle(font: HeroNameFont, size: number): TextStyle {
 }
 
 /**
- * Whether this style draws the stars, years and slots pill on a pale card
- * (Duet's welcome card, the Calling Card) rather than straight on the hero,
- * so the profile inks them dark.
+ * Whether this style draws the stars, years and slots pill on a separate
+ * surface rather than straight on the hero, so the profile uses that
+ * surface's ink.
  */
 export function detailsSitOnCard(pageStyle: PageStyle): boolean {
   return pageStyle.hero === "duet" || pageStyle.hero === "callingCard" || pageStyle.hero === "productPage"
-    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes";
+    || pageStyle.hero === "lounge" || pageStyle.hero === "stripes" || pageStyle.hero === "ticketHeader";
 }
 
 /**
@@ -1252,6 +1299,21 @@ const layout = StyleSheet.create({
   haloPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 6 },
   haloRule: { width: 34, height: 2, borderRadius: 1, marginTop: 18, marginBottom: 4 },
   haloDetails: { alignItems: "center", marginTop: 12 },
+  ticketWrap: { paddingHorizontal: 16, marginTop: 28, marginBottom: 28 },
+  ticketCard: { borderWidth: 1, borderRadius: 22, overflow: "hidden" },
+  ticketAccent: { position: "absolute", top: 0, bottom: 0, left: 0, width: 6 },
+  ticketTop: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 22, paddingTop: 20, paddingBottom: 18 },
+  ticketText: { flex: 1, minWidth: 0 },
+  ticketName: { fontFamily: "Manrope-Bold", fontSize: 23, lineHeight: 29, flexShrink: 1 },
+  ticketPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 13, lineHeight: 18, marginTop: 4 },
+  ticketFoot: { borderTopWidth: 1, borderStyle: "dashed", paddingHorizontal: 22, paddingVertical: 14, alignItems: "flex-start" },
+  prismWrap: { paddingHorizontal: 16, marginTop: 28, marginBottom: 28 },
+  prismStage: { height: 230, borderRadius: 24, borderWidth: 1, overflow: "hidden" },
+  prismLogo: { position: "absolute", top: 18, right: 18 },
+  prismText: { position: "absolute", left: 20, right: 20, bottom: 18 },
+  prismName: { fontFamily: "Manrope-Bold", fontSize: 29, lineHeight: 35, flexShrink: 1 },
+  prismPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 13, lineHeight: 18, marginTop: 5 },
+  prismDetails: { alignItems: "flex-start", paddingHorizontal: 6, marginTop: 16 },
   // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
   // Retreat: the window starts below the header buttons, centred.
   archWrap: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
