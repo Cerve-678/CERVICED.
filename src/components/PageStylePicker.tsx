@@ -128,6 +128,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   retreat: { text: 'Services' },
   bonbon: { text: 'Services' },
   clinic: { text: 'Services' },
+  ledger: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */

@@ -44,6 +44,7 @@ export type PageStyleKey =
   | 'retreat'
   | 'bonbon'
   | 'clinic'
+  | 'ledger'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -314,7 +315,8 @@ export interface HeroNameFont {
 export type PagePattern =
   | 'gingham' // a soft check of the accent (Posy)
   | 'glow'    // a soft wash of the accent from the top left corner (Retreat)
-  | 'dots';   // a fine grid of small dots in the accent (Bonbon)
+  | 'dots'    // a fine grid of small dots in the accent (Bonbon)
+  | 'lined';  // ruled lines across the page, like a ledger (Ledger)
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
 
@@ -603,6 +605,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroNameFont: { fontFamily: 'LeagueSpartan-Light', scale: 1.05, transform: 'lowercase' },
     buttonShape: 'outline', pinnedBookBar: true,
     custom: { headingFont: 'LeagueSpartan-ExtraBold', headingScale: 0.85, textFont: 'Jura-VariableFont_wght', headingStyle: 'numbered', centred: false },
+  },
+  {
+    key: 'ledger', name: 'Ledger', description: 'An old shop ledger: your name in engraved capitals, a ruled page, a dotted price list',
+    heading: 'custom', cards: 'paper', policies: 'hairline', logo: 'circle',
+    hero: 'stacked', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    heroNameFont: { fontFamily: 'LibreCaslonDisplay-Regular', scale: 0.8, transform: 'uppercase', letterSpacing: 2 },
+    serviceLayout: 'menu', photoLayout: 'feature', divider: 'line', buttonShape: 'square', pagePattern: 'lined',
+    custom: { headingFont: 'Oswald-Medium', headingScale: 1, textFont: 'OldStandardTT-Regular', headingStyle: 'caps', centred: true },
   },
 ];
 
