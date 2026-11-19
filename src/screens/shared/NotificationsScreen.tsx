@@ -545,7 +545,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     setOlderUnread(0);
 
     try {
-      await markAllNotificationsRead();
+      await markAllNotificationsRead(isProvider ? 'provider' : 'client');
     } catch (error) {
       if (!isMountedRef.current) {
         reportError(error, '[NotificationsScreen] mark all read failed');
@@ -564,7 +564,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         ),
       );
     }
-  }, [olderUnread]);
+  }, [olderUnread, isProvider]);
 
   // ✅ Delete notification (no confirmation for swipe)
   //

@@ -135,9 +135,15 @@ export async function markNotificationRead(
   if (error) throw error;
 }
 
-/** Mark all notifications as read */
-export async function markAllNotificationsRead(): Promise<void> {
-  const { error } = await supabase.rpc("mark_all_notifications_read");
+/** Mark every unread notification for ONE hat as read. The screen only shows
+ *  the active hat, so clearing both would silently read the other hat's
+ *  notifications the user never saw. */
+export async function markAllNotificationsRead(
+  role: "provider" | "client",
+): Promise<void> {
+  const { error } = await supabase.rpc("mark_all_notifications_read", {
+    p_role: role,
+  });
   if (error) throw error;
 }
 
