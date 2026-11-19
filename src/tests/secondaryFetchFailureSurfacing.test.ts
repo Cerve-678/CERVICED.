@@ -104,7 +104,7 @@ describe('secondary fetch and write failures are surfaced, not swallowed', () =>
       expect(source).not.toContain('dbDeleteNotification(notificationId).catch(() => {})');
 
       expect(source).toContain('await markNotificationRead(notificationId)');
-      expect(source).toContain('await markAllNotificationsRead()');
+      expect(source).toContain('await markAllNotificationsRead(');
       expect(source).toContain('await dbDeleteNotification(notificationId)');
 
       // Rollback: read flag restored, deleted row re-inserted at its position.

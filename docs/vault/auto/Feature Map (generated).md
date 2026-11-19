@@ -146,7 +146,7 @@ Curated: [[Notifications]] · **213 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(364)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
-- `src/services/database/notifications.ts` _(117)_
+- `src/services/database/notifications.ts` _(118)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(103)_
 - `supabase/notification_recipient_role.sql` _(91)_
 - `supabase/provider_reminder_jobs.sql` _(86)_

@@ -56,6 +56,12 @@ Run through this right before applying, not just when writing:
 OWNER:  (none)
 ```
 
+### Applied 2026-11-19 (Mark All Read clears only the hat on screen)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20261119100000 | `mark_all_read_per_hat` | **APPLIED 2026-11-19** on the user's go-ahead ("fix and merge"), via `supabase db query --linked -f` from the main folder, in one transaction with its `schema_migrations` row. Lock `(none)`, live max `20261118220000`, no open PR above it. md5 guard on live `mark_all_notifications_read()` matched (`6abdd8cf…`). Forced-rollback dry run first, on a two-hat account: `('client')` cleared client unread, provider unread 4 → 4; unknown role refused; no-arg still clears all; anon can't execute. Verified live: version recorded (live max); only `mark_all_notifications_read(text)` exists (zero-arg dropped — `p_role DEFAULT NULL` keeps old builds' no-arg call working, confirmed via REST); authenticated executes, anon doesn't. |
+
 ### Applied 2026-11-18 (provider told when someone joins their waitlist)
 
 | Recorded version | Name | Verified live |

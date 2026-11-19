@@ -175,7 +175,8 @@ test('the unread number counts notifications further back than the first page, l
 
   // Mark All Read clears the older ones on the server too, so the number goes.
   fireEvent.press(ui.getByText('Mark All Read'));
-  await waitFor(() => expect(markAllNotificationsRead).toHaveBeenCalled());
+  // Only the hat on screen — the other hat's unread stay for when you switch.
+  await waitFor(() => expect(markAllNotificationsRead).toHaveBeenCalledWith('provider'));
   expect(ui.queryByText('60')).toBeNull();
   expect(ui.queryByText('Mark All Read')).toBeNull();
 });
