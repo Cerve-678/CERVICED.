@@ -107,11 +107,13 @@ export type PageCards =
   | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
   | 'bow'     // a solid card with round corners (Bow)
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
-  | 'gridBox'; // a square card in a fine ink outline, its heading inside (Grid)
+  | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
+  | 'prismPlane'; // layered angular colour planes (Custom's Colour Planes)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
   | 'rows'      // icon, label and value in a list (as it has always been)
+  | 'prismFacets' // staggered angular information panes (Custom's Facets)
   | 'boxes'     // two-up bordered boxes
   | 'discTiles' // two-up flat tiles, each with its icon in a filled disc
   | 'circles'   // two-up, each under an outlined circle icon
@@ -176,6 +178,7 @@ export type PageHero =
   | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
   | 'slateHeader' // a large name and compact logo above one accent rule (Slate)
   | 'haloHeader' // a centred logo in a fine ring, name and details beneath (Halo)
+  | 'prismHeader' // angled translucent colour planes frame the logo and name (Custom's Prism top)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
   | 'archWindow' // their chosen photo in a tall arched window, the logo on its foot, the name centred under it (Retreat)
@@ -287,7 +290,8 @@ export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
-  | 'swipe';    // one row of tall photos that scrolls sideways (Muse, Noir)
+  | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir)
+  | 'prismMosaic'; // soft colour-framed photo gallery (Custom's Mosaic)
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)

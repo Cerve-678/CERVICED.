@@ -918,6 +918,29 @@ export function ProfileHeroLayout({
       );
     }
 
+    case "prismHeader": {
+      // Custom's Prism top: angled planes of the accent behind the logo and
+      // the name, which is in their Business Name Font like every Custom top.
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.prismWrap}>
+          <View style={[layout.prismStage, { borderColor: withAlpha(heroText, 0.35), backgroundColor: withAlpha(accent, 0.16) }]}>
+            <Svg width="100%" height="100%" viewBox="0 0 320 230" style={StyleSheet.absoluteFill} pointerEvents="none" preserveAspectRatio="xMidYMid slice">
+              <Polygon points="0,0 196,0 92,230 0,230" fill={accent} opacity={0.38} />
+              <Polygon points="242,0 320,0 320,230 150,230" fill={heroText} opacity={0.12} />
+              <Path d="M202 0 L99 230 M248 0 L152 230" stroke={heroText} strokeOpacity={0.28} strokeWidth={1.5} />
+            </Svg>
+            <View style={[layout.prismLogo, layout.logoNoGap]}>{renderLogo(62)}</View>
+            <View style={layout.prismText}>
+              <View style={layout.prismName}>{renderName({ scale: 0.97 })}</View>
+              {phrase ? <Text style={[layout.prismPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+            </View>
+          </View>
+          <View style={layout.prismDetails}>{details}</View>
+        </View>
+      );
+    }
+
     case "stripes":
       return (
         <StripesHero
@@ -1146,7 +1169,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont;
@@ -1296,6 +1319,13 @@ const layout = StyleSheet.create({
   edWrap: { paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
   edTop: { flexDirection: "row", alignItems: "flex-end", gap: 10, marginBottom: 14 },
   edNameCol: { flex: 1, minWidth: 0 },
+  prismWrap: { paddingHorizontal: 16, marginTop: 28, marginBottom: 28 },
+  prismStage: { height: 230, borderRadius: 24, borderWidth: 1, overflow: "hidden" },
+  prismLogo: { position: "absolute", top: 18, right: 18 },
+  prismText: { position: "absolute", left: 20, right: 20, bottom: 18 },
+  prismName: { alignItems: "flex-start" },
+  prismPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 13, lineHeight: 18, marginTop: 5 },
+  prismDetails: { alignItems: "flex-start", paddingHorizontal: 6, marginTop: 16 },
   edLight: { fontFamily: "LeagueSpartan-Light", fontSize: 50, lineHeight: 64, letterSpacing: -1 },
   edBold: { fontFamily: "LeagueSpartan-ExtraBold", fontSize: 44, lineHeight: 57, letterSpacing: -1.2, flexShrink: 1 },
   edCards: { width: 132, height: 146 },
