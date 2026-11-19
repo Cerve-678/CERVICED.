@@ -39,6 +39,7 @@ export type PageStyleKey =
   | 'grid'
   | 'posy'
   | 'riviera'
+  | 'noir'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -248,6 +249,12 @@ export interface PageStyle {
   openStrips?: boolean;
   /** A bar pinned over the foot of the page: the name, the lowest price and Book, which jumps to Services. */
   pinnedBookBar?: boolean;
+  /** The style's own face for the name on a top that otherwise uses the
+   *  Branding name font (Cover, Big Name, Centred, Side by Side), so the parts
+   *  styles can reuse those tops in their own type. */
+  heroNameFont?: HeroNameFont;
+  /** The shape of the Book buttons, when not the usual round pill. */
+  buttonShape?: ButtonShape;
   /** The heading and text fonts and the heading treatment. Custom fills it
    *  from the provider's picks (constants/customPageStyle); the styles built
    *  from Custom's parts (Posy on, owner 2026-11-19) set their own. */
@@ -273,10 +280,25 @@ export type ServiceLayout =
 /** Portfolio layouts beyond the usual columns. */
 export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
-  | 'polaroids'; // three across as white-bordered prints, each tilted a little (Riviera)
+  | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
+  | 'feature';   // one big photo beside two small, then two more under them (Noir)
 
 export type SectionDivider =
-  | 'wave'; // a fine wavy line in the accent (Posy)
+  | 'wave'  // a fine wavy line in the accent (Posy)
+  | 'line'; // a hairline across the page (Noir)
+
+export type ButtonShape =
+  | 'square'; // barely rounded, the word in spaced capitals (Noir)
+
+export interface HeroNameFont {
+  fontFamily: string;
+  /** Some faces draw small for their size; this evens them out. */
+  scale?: number;
+  /** Line height as a multiple of the size; 1.35 unless the face needs more. */
+  lineRatio?: number;
+  transform?: 'uppercase' | 'lowercase';
+  letterSpacing?: number;
+}
 
 export type PagePattern =
   | 'gingham'; // a soft check of the accent (Posy)
@@ -521,6 +543,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     openStrips: true, serviceLayout: 'photoCards', photoLayout: 'polaroids', pinnedBookBar: true,
     custom: { headingFont: 'Jost-Light', headingScale: 1, textFont: 'Jost-Light', headingStyle: 'caps', centred: true },
+  },
+  {
+    key: 'noir', name: 'Noir', description: 'Moody and photo-led: your photo fills the top, sharp outlined boxes, numbered services',
+    heading: 'custom', cards: 'outline', policies: 'accordion', logo: 'circle',
+    hero: 'cover', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+    heroNameFont: { fontFamily: 'Gloock-Regular' },
+    photoLayout: 'feature', divider: 'line', buttonShape: 'square', pinnedBookBar: true, portfolioFirst: true,
+    custom: { headingFont: 'Gloock-Regular', headingScale: 1, textFont: 'HankenGrotesk-Medium', headingStyle: 'underlined', centred: false },
   },
 ];
 

@@ -30,6 +30,7 @@ import {
   HERO_NAME_SIZE,
   HeroLogo,
   HeroPills,
+  heroNameFontStyle,
   ProfileHeroLayout,
 } from "../ProfileHero";
 import { BUSINESS_TYPE_ICON, BUSINESS_TYPE_LABEL } from "../profilePresentation";
@@ -161,19 +162,22 @@ export function ProviderPageHero({
                 <Text
                   style={[
                     styles.providerDisplayName,
-                    {
-                      color: heroText,
-                      fontFamily: resolveProviderFontFamily(provider.brandFont),
-                      // Thin scripts are drawn larger so they read at the same size.
-                      // Each hero layout sets its own size (Cover's is 1.6×).
-                      fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
-                      // Scripts loop high (f, k), so their line is taller.
-                      lineHeight: resolveProviderNameLineHeight(
-                        provider.brandFont,
-                        NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
-                      ),
-                      ...(letterSpacing ? { letterSpacing } : null),
-                    },
+                    pageStyle.heroNameFont
+                      // A parts style letters the name in its own face (Noir's Gloock).
+                      ? { color: heroText, ...heroNameFontStyle(pageStyle.heroNameFont, NAME_SIZE * scale) }
+                      : {
+                          color: heroText,
+                          fontFamily: resolveProviderFontFamily(provider.brandFont),
+                          // Thin scripts are drawn larger so they read at the same size.
+                          // Each hero layout sets its own size (Cover's is 1.6×).
+                          fontSize: NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
+                          // Scripts loop high (f, k), so their line is taller.
+                          lineHeight: resolveProviderNameLineHeight(
+                            provider.brandFont,
+                            NAME_SIZE * resolveProviderFontScale(provider.brandFont) * scale,
+                          ),
+                          ...(letterSpacing ? { letterSpacing } : null),
+                        },
                     heroIsDark && styles.heroTextShadow,
                   ]}
                 >

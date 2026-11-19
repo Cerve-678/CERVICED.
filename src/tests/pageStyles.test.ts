@@ -26,7 +26,7 @@ import {
   showsDividerAbove,
   STRIPE_TINT,
 } from '../features/providers/ProfilePageStyle';
-import { heroUsesBrandFont, kickerPhrase } from '../features/providers/ProfileHero';
+import { heroNameFontStyle, heroUsesBrandFont, kickerPhrase } from '../features/providers/ProfileHero';
 
 describe('page style in the stored theme key', () => {
   it('reads keys saved before page styles existed as Classic', () => {
@@ -60,14 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-two picked styles plus Classic, each once', () => {
+  it('has the thirty-three picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
-      'posy', 'riviera',
+      'posy', 'riviera', 'noir',
     ]);
   });
 
@@ -92,7 +92,10 @@ describe('page styles', () => {
   });
 
   it('gives every style but Classic and Glossy a hero of its own', () => {
-    const heroes = PAGE_STYLES.filter(s => s.key !== 'classic' && s.key !== 'glossy').map(s => s.hero);
+    // A style built from Custom's parts may reuse a top, but only lettered in
+    // its own face (heroNameFont), so no two tops look the same.
+    const heroes = PAGE_STYLES.filter(s => s.key !== 'classic' && s.key !== 'glossy')
+      .map(s => `${s.hero}:${s.heroNameFont?.fontFamily ?? ''}`);
     expect(new Set(heroes).size).toBe(heroes.length);
   });
 
@@ -451,5 +454,30 @@ describe('Riviera', () => {
 
   it('has no photo to pick in its top', () => {
     expect(heroPhotoPickLimit(riviera)).toBe(0);
+  });
+});
+
+describe('Noir', () => {
+  const noir = getPageStyle('noir');
+
+  it('has its photo cover in Gloock, outlined boxes, a feature grid and square Book buttons', () => {
+    expect(noir).toMatchObject({
+      hero: 'cover', cards: 'outline', policies: 'accordion', numberedServices: true,
+      photoLayout: 'feature', divider: 'line', buttonShape: 'square', pinnedBookBar: true, portfolioFirst: true,
+    });
+    expect(noir.heroNameFont).toEqual({ fontFamily: 'Gloock-Regular' });
+    expect(noir.custom).toMatchObject({ headingFont: 'Gloock-Regular', textFont: 'HankenGrotesk-Medium', headingStyle: 'underlined' });
+  });
+
+  it('letters the name in its own face, so the Branding name font is not offered', () => {
+    expect(heroUsesBrandFont(noir)).toBe(false);
+    // Cover itself still uses the Branding name font.
+    expect(heroUsesBrandFont(getPageStyle('cover'))).toBe(true);
+  });
+
+  it('sizes its own name face from the hero size', () => {
+    expect(heroNameFontStyle({ fontFamily: 'Gloock-Regular' }, 40)).toEqual({ fontFamily: 'Gloock-Regular', fontSize: 40, lineHeight: 54 });
+    expect(heroNameFontStyle({ fontFamily: 'X', scale: 0.8, transform: 'uppercase', letterSpacing: 2 }, 40))
+      .toEqual({ fontFamily: 'X', fontSize: 32, lineHeight: 43, textTransform: 'uppercase', letterSpacing: 2 });
   });
 });

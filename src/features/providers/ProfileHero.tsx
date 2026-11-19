@@ -5,7 +5,7 @@
 // logo in its page-style frame, Cover's pills, and the business name's size.
 
 import React, { useId } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, type TextStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,7 +18,7 @@ import { GazetteHero } from "./heroes/GazetteHero";
 import { StudioHero } from "./heroes/StudioHero";
 import { NovelHero } from "./heroes/NovelHero";
 import { outlineInk } from "./ProfilePageStyle";
-import type { PageStyle } from "../../constants/pageStyles";
+import type { HeroNameFont, PageStyle } from "../../constants/pageStyles";
 import { blend, isDarkColor, withAlpha } from "../../constants/providerThemes";
 import type { LogoFraming } from "../../types/database";
 import { SEALED_LOGO_SIZE, SealedEnvelope } from "./heroes/SealedHero";
@@ -1126,7 +1126,20 @@ function SealRing({
 const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
-  return BRAND_FONT_HEROES.includes(pageStyle.hero);
+  return BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont;
+}
+
+/** The name's face, size and line on a top that letters it in the style's own
+ *  font (heroNameFont) instead of the Branding name font. */
+export function heroNameFontStyle(font: HeroNameFont, size: number): TextStyle {
+  const fontSize = size * (font.scale ?? 1);
+  return {
+    fontFamily: font.fontFamily,
+    fontSize,
+    lineHeight: Math.round(fontSize * (font.lineRatio ?? 1.35)),
+    ...(font.transform ? { textTransform: font.transform } : null),
+    ...(font.letterSpacing ? { letterSpacing: font.letterSpacing } : null),
+  };
 }
 
 /**

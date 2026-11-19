@@ -3611,6 +3611,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // width, so the photo's size comes from the list's measured width rather
   // than a percentage.
   const serviceTiles = pageStyle.serviceLayout === "tiles";
+  // Noir's Book buttons are barely rounded, the word in spaced capitals.
+  const squareButtons = pageStyle.buttonShape === "square";
   const servicePhotoCards = pageStyle.serviceLayout === "photoCards";
   const serviceStacked = serviceTiles || servicePhotoCards;
   const serviceTileImageWidth = serviceTileGridWidth > 0 ? Math.floor((serviceTileGridWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
@@ -4005,6 +4007,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         disabled={fullyBooked}
                         style={[
                           styles.bookButton,
+                          squareButtons && styles.squareButton,
                           {
                             backgroundColor:
                               fullyBooked
@@ -4021,6 +4024,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <Text
                           style={[
                             styles.bookButtonText,
+                            squareButtons && styles.squareButtonText,
                             fullyBooked
                               ? { color: SV.sub, fontSize: 10 }
                               : { color: "#fff" },
@@ -4113,6 +4117,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <TouchableOpacity
                         style={[
                           styles.waitlistJoinBtn,
+                          squareButtons && styles.squareButton,
                           {
                             borderColor: adaptiveAccentColor + "70",
                             backgroundColor: adaptiveAccentColor + "0D",
@@ -5026,19 +5031,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             jumps to Services. Not while selecting several (that bar takes
             this spot), and never for a link-only provider (no services here). */}
         {pageStyle.pinnedBookBar && canBookProvider && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
-          <View style={[styles.pinnedBookBar, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
+          <View style={[styles.pinnedBookBar, squareButtons && styles.pinnedBookBarSquare, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
             <View style={styles.pinnedBookText}>
               <Text style={[styles.pinnedBookName, { color: OP.text }, bodyFont]} numberOfLines={1}>{provider.displayName}</Text>
               <Text style={[styles.pinnedBookPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>From £{lowestServicePrice}</Text>
             </View>
             <TouchableOpacity
-              style={[styles.pinnedBookButton, { backgroundColor: adaptiveAccentColor }]}
+              style={[styles.pinnedBookButton, squareButtons && styles.squareButton, { backgroundColor: adaptiveAccentColor }]}
               onPress={jumpToServices}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Book with ${provider.displayName}: go to the services`}
             >
-              <Text style={styles.pinnedBookButtonText}>Book</Text>
+              <Text style={[styles.pinnedBookButtonText, squareButtons && styles.squareButtonText]}>Book</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -5434,6 +5439,9 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
   },
   pinnedBookText: { flex: 1, minWidth: 0 },
+  pinnedBookBarSquare: { borderRadius: 6 },
+  squareButton: { borderRadius: 2 },
+  squareButtonText: { textTransform: "uppercase", letterSpacing: 1.4 },
   pinnedBookName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
   pinnedBookPrice: { fontSize: 12, marginTop: 2 },
   pinnedBookButton: { height: 46, paddingHorizontal: 24, borderRadius: 23, alignItems: "center", justifyContent: "center" },

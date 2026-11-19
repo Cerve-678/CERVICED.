@@ -17,6 +17,8 @@ import { withAlpha } from "../../constants/providerThemes";
 /** The small mark between two sections, centred, in the accent. */
 export function SectionDivider({ divider, accent }: { divider: SectionDividerKey; accent: string }) {
   switch (divider) {
+    case "line":
+      return <View style={[styles.line, { backgroundColor: withAlpha(accent, 0.3) }]} accessible={false} />;
     case "wave":
       return (
         <View style={styles.divider} accessible={false} importantForAccessibility="no-hide-descendants">
@@ -76,4 +78,5 @@ export function PagePattern({
 
 const styles = StyleSheet.create({
   divider: { alignItems: "center", marginTop: 4, marginBottom: 20 },
+  line: { height: StyleSheet.hairlineWidth * 2, marginTop: 4, marginBottom: 22 },
 });
