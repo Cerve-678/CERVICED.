@@ -30,7 +30,7 @@ import { formatDurationMinutes } from "../../utils/dateUtils";
 import { formatAddOnExtraTime } from "../bookings/addOnTime";
 import { VeilBackdrop, veilAccent, veilPageTheme } from "./heroes/SheerHero";
 import { PagePattern, SectionDivider } from "./pageParts";
-import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle } from "./ProfileHero";
+import { DETAILS_OWN_LINE, HERO_NAME_SIZE, HeroLogo, HeroPills, ProfileHeroLayout, detailsSitOnCard, heroIsDarkForStyle, heroNameFontStyle } from "./ProfileHero";
 import {
   GlossShine,
   onAccentInk,
@@ -325,13 +325,15 @@ export function ProfileStylePreview({
               <Text
                 style={[
                   styles.name,
-                  {
-                    color: heroText,
-                    fontFamily: resolveProviderFontFamily(brandFont),
-                    fontSize: HERO_NAME_SIZE * fontScale * scale,
-                    lineHeight: resolveProviderNameLineHeight(brandFont, HERO_NAME_SIZE * fontScale * scale),
-                    ...(letterSpacing ? { letterSpacing } : null),
-                  },
+                  pageStyle.heroNameFont
+                    ? { color: heroText, ...heroNameFontStyle(pageStyle.heroNameFont, HERO_NAME_SIZE * scale) }
+                    : {
+                        color: heroText,
+                        fontFamily: resolveProviderFontFamily(brandFont),
+                        fontSize: HERO_NAME_SIZE * fontScale * scale,
+                        lineHeight: resolveProviderNameLineHeight(brandFont, HERO_NAME_SIZE * fontScale * scale),
+                        ...(letterSpacing ? { letterSpacing } : null),
+                      },
                   heroIsDark && styles.textShadow,
                 ]}
               >
@@ -526,8 +528,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, { backgroundColor: accent }]}>
-                  <Text style={[styles.bookText, { color: onAccentInk(accent).text }]}>Book</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: accent }]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: onAccentInk(accent).text }]}>Book</Text>
                 </View>
               </View>
               {services[index]?.addOns?.length ? (
@@ -658,6 +660,9 @@ const styles = StyleSheet.create({
   categoryText: { fontSize: 13, fontWeight: "600" },
   bookPill: { height: 32, paddingHorizontal: 14, borderRadius: 100, justifyContent: "center" },
   bookText: { fontFamily: "BakbakOne-Regular", fontSize: 12 },
+  // Noir: square Book buttons, the word in spaced capitals.
+  bookSquare: { borderRadius: 2 },
+  bookSquareText: { textTransform: "uppercase", letterSpacing: 1.4 },
   reviews: { marginTop: 12 },
   zone: { marginHorizontal: -8, paddingHorizontal: 6.5, paddingTop: 6, borderRadius: 20, marginBottom: 12 },
   zoneHero: { marginHorizontal: 8, paddingTop: 6, borderRadius: 24, marginBottom: 12 },

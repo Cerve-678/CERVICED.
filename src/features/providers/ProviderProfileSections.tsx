@@ -32,6 +32,8 @@ import { SectionDivider } from "./pageParts";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
+/** Noir's feature grid holds five: one big, four small. */
+const FEATURE_PHOTO_LIMIT = 5;
 /** Riviera's prints lean a little each way, as if dropped on a table. */
 const POLAROID_TILTS = ["-4deg", "3deg", "-2deg", "2.5deg", "-3deg", "1.5deg"] as const;
 const COLUMN_GAP = 12;
@@ -436,6 +438,21 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const arches = palette.pageStyle?.photoLayout === "arches";
   // Riviera: three across as white-bordered prints, each tilted a little.
   const polaroids = palette.pageStyle?.photoLayout === "polaroids";
+  // Noir: one big photo beside two small ones, then two more under them.
+  const feature = palette.pageStyle?.photoLayout === "feature";
+  const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
+    <TouchableOpacity
+      key={item.id}
+      activeOpacity={0.88}
+      onPress={() => onOpenImage(images, index)}
+      disabled={!interactiveImages}
+      style={[styles.featureTile, style]}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+    >
+      <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+    </TouchableOpacity>
+  );
   const divider = palette.pageStyle?.divider && showsDividerAbove(palette.pageStyle, "portfolio") ? palette.pageStyle.divider : null;
 
   const openFromModal = (index: number) => {
@@ -457,13 +474,29 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         ) : (
           <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
         )}
-        {items.length > INLINE_PORTFOLIO_LIMIT ? (
+        {items.length > (feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
             <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
-      {polaroids ? (
+      {feature ? (
+        <View style={styles.featureGrid}>
+          <View style={styles.featureRow}>
+            {items[0] ? featureTile(items[0], 0, items.length > 1 ? styles.featureBig : styles.featureOnly) : null}
+            {items.length > 1 ? (
+              <View style={styles.featureSide}>
+                {items.slice(1, 3).map((item, i) => featureTile(item, i + 1, styles.featureSmall))}
+              </View>
+            ) : null}
+          </View>
+          {items.length > 3 ? (
+            <View style={styles.featureRow}>
+              {items.slice(3, 5).map((item, i) => featureTile(item, i + 3, styles.featureSmall))}
+            </View>
+          ) : null}
+        </View>
+      ) : polaroids ? (
         <View style={styles.polaroidGrid}>
           {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
             <TouchableOpacity
@@ -673,6 +706,14 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   // Posy: three arched photos to a row. A corner radius past half the side is
   // drawn at half, so 999 gives a full round top whatever the tile's width.
+  // Noir: a big photo two rows tall, then square-ish small ones beside and under it.
+  featureGrid: { gap: 6 },
+  featureRow: { flexDirection: "row", gap: 6 },
+  featureSide: { flex: 1, gap: 6 },
+  featureTile: { overflow: "hidden", borderRadius: 2, backgroundColor: "rgba(0,0,0,0.06)" },
+  featureBig: { flex: 1, height: 236 },
+  featureOnly: { flex: 1, height: 300 },
+  featureSmall: { flex: 1, height: 115 },
   // Riviera: white prints with a deep bottom border, a soft shadow under each.
   polaroidGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 14, paddingVertical: 6 },
   polaroid: {
