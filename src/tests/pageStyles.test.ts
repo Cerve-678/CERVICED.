@@ -23,6 +23,7 @@ import {
   sectionsSitOnPage,
   serviceCardSurface,
   sheetInk,
+  STRIPE_TINT,
 } from '../features/providers/ProfilePageStyle';
 import { heroUsesBrandFont, kickerPhrase } from '../features/providers/ProfileHero';
 
@@ -318,6 +319,14 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
     const line = stripeColours(colours.accent).line;
     expect(serviceCardSurface(getPageStyle('stripes'), colours)).toMatchObject({ borderWidth: 1, borderColor: line, borderRadius: 16 });
     expect(isDarkColor(line)).toBe(true);
+  });
+
+  it('takes turns down Stripes\' page, plain then tinted, in the order the profile draws its sections', () => {
+    // ProviderPageSheet's order. Services and Portfolio never sit on a strip.
+    const order = ['about', 'policies', 'services', 'reviews', 'contact', 'hours', 'portfolio', 'info'] as const;
+    expect(order.map(key => STRIPE_TINT[key])).toEqual([null, 'soft', null, 'soft', null, 'soft', null, 'soft']);
+    // The stronger shade is the hero's alone.
+    expect(Object.values(STRIPE_TINT)).not.toContain('strong');
   });
 
   it('no longer knows Pearl (renamed Stripes before anyone used it)', () => {
