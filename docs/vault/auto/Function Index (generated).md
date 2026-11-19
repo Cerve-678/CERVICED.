@@ -5,7 +5,7 @@
 
 #generated
 
-**4159 functions** across **607 files**.
+**4162 functions** across **608 files**.
 
 ### `src/components/` (69)
 - `AchievementSeal.tsx` — AchievementSeal
@@ -231,8 +231,9 @@
 - `useMaintenance.ts` — addItems · deleteItem · reload · saveSettings · setRemindersOn · updateItem · **useMaintenance**
 - `useMaintenanceDueCount.ts` — **useMaintenanceDueCount**
 
-### `src/features/notifications/` (1)
+### `src/features/notifications/` (2)
 - `notificationPresentation.ts` — **isCertificateNotification** · **isScheduleAutoClosedNotification** · **notificationAmount** · **notificationDayHeadings** · **notificationDayLabel** · **notificationKindLabel** · startOfDay
+- `useUnreadNotificationCount.ts` — refresh · scheduleRefresh · **useUnreadNotificationCount**
 
 ### `src/features/payments/` (7)
 - `bankDisputeStatus.ts` — **bankDisputeStates** · **bookingDisputeLabel** · **feeDisputeLabel** · stageOf
@@ -429,7 +430,7 @@
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
 - `ExploreScreen.tsx` — backToTopOpacity · backToTopTranslateY · columnWidth · dedupeByImageUri · editingCollection · exploreSeenKey · filters · filterTabs · finishTour · getItemHeight · handleBackToTop · handleBookNow · handleCloseCollection · handleCloseDetail · handleCloseEditor · handleCollectionDeleted · handleDiscoverScrollSettled · handleEditCollection · handleFavouritesScrollSettled · handleFlightDone · handleImagePress · handleNewCollection · handleOpenCollection · handleOpenSearch · handleRefreshDiscover · handleSelectSimilarItem · handleViewProfile · interleaveDiscoverFeed · isNearGridEnd · load · loadDiscoverFeed · loadDiscoverTotal · loadNextDiscoverPage · mapDbPortfolioItem · mapDbServiceToCards · measuredUris · mixExploreCards · openCollection · prepareDetailItem · renderPortfolioCard · shownFavouriteItems · SkeletonMasonryGrid · tourCardId · updateBackToTop · visibleFavouriteItems · visiblePortfolioItems · visibleTourSteps
 - `ExternalBookingDetailScreen.tsx` — createStyles · ExternalBookingDetailScreen · handleAddToCalendar · handleMessage · handleOpenPage · handleRemove · load · retry
-- `HomeScreen.tsx` — allCategorizedProviders · availableThisWeekProviders · currentOffers · finishTour · handleBackPress · handleRadiusChange · handleSelectPlace · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · kidsSectionRelevant · loadSecondaryRails · loadUnreadCount · maleProvidersDisplay · maleSectionRelevant · navigateToAudienceService · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · openRecommendProvider · previouslyBookedProviders · ProviderRail · recommendationCandidates · recommendedProvidersList · renderKidsSection · renderMaleSection · resetFilters · RoundProviderRail · serviceProviders · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData · visibleTourSteps
+- `HomeScreen.tsx` — allCategorizedProviders · availableThisWeekProviders · currentOffers · finishTour · handleBackPress · handleRadiusChange · handleSelectPlace · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · kidsSectionRelevant · loadSecondaryRails · maleProvidersDisplay · maleSectionRelevant · navigateToAudienceService · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · openRecommendProvider · previouslyBookedProviders · ProviderRail · recommendationCandidates · recommendedProvidersList · renderKidsSection · renderMaleSection · resetFilters · RoundProviderRail · serviceProviders · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData · visibleTourSteps
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo
 - `NotificationsSettingsScreen.tsx` — NotificationsSettingsScreen
 - `OffersScreen.tsx` — allOffers · expDate · filteredOffers · goToProvider · handleRefresh · load · mapPromotion · OffersScreen
@@ -490,7 +491,7 @@
 - `HelpCentreScreen.tsx` — buildMoreActions · FAQItem · handleContactSupport · HelpCentreScreen · openMore · runAction
 - `InfoScreen.tsx` — ScreenNameHere
 - `LanguageRegionScreen.tsx` — LanguageRegionScreen · SelectRow
-- `NotificationsScreen.tsx` — actionLabelFor · closeMessagePopup · dayHeadings · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
+- `NotificationsScreen.tsx` — actionLabelFor · closeMessagePopup · dayHeadings · defer · deleteNotification · DeleteSwipeAction · dismissOnly · dismissThenNavigate · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · hapticLight · hapticMedium · hapticSelection · loadMore · loadNotifications · maintenanceItemIdOf · markAllAsRead · markAsRead · navigateProviderHome · NotificationsScreen · onRefresh · renderNotification · showFullMessage · SkeletonNotifRow
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TextSizingScreen.tsx` — TextSizingScreen
 

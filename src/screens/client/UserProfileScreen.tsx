@@ -29,12 +29,13 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../../services/biometricService';
-import { getCurrentRefreshToken, getUnreadNotificationCount } from '../../services/databaseService';
+import { getCurrentRefreshToken } from '../../services/databaseService';
 import { useFocusEffect } from '@react-navigation/native';
 import { dobToParts } from '../../utils/dateUtils';
 import { openLegalPage } from '../../utils/legalPage';
 import { openAboutPage } from '../../utils/aboutPage';
 import { useMaintenanceDueCount } from '../../features/maintenance/useMaintenanceDueCount';
+import { useUnreadNotificationCount } from '../../features/notifications/useUnreadNotificationCount';
 import { useBeautyProfileTodo } from '../../features/beauty-profile/useBeautyProfileTodo';
 import { TodoMark } from '../../components/TodoMark';
 import { useClientActivity } from '../../features/bookings/useClientActivity';
@@ -98,16 +99,11 @@ export default function UserProfileScreen({ navigation }: any) {
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
   // Unread notifications waiting in the *other* (provider) hat, so a dual-role
   // user sees a signal on the switch control instead of missing them silently.
-  const [providerUnread, setProviderUnread] = useState(0);
+  const providerUnread = useUnreadNotificationCount('provider', hatState.owned.provider);
   const maintenanceDue = useMaintenanceDueCount(isLoggedIn);
   const beautyTodo = useBeautyProfileTodo(isLoggedIn);
   // Same list as the Activity Centre on Bookings, so the two never disagree.
   const activityNeedsYou = useClientActivity().activity.needsYou.length;
-
-  useFocusEffect(useCallback(() => {
-    if (!hatState.owned.provider) { setProviderUnread(0); return; }
-    getUnreadNotificationCount('provider').then(setProviderUnread).catch(() => {});
-  }, [hatState.owned.provider]));
 
   // useFocusEffect (not a mount-only useEffect) — this is a persistent tab
   // screen that never unmounts, so a one-time check could get permanently
