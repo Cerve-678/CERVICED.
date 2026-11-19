@@ -60,14 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-five picked styles plus Classic, each once', () => {
+  it('has the thirty-six picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
-      'posy', 'riviera', 'noir', 'muse', 'retreat',
+      'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon',
     ]);
   });
 
@@ -516,5 +516,20 @@ describe('Retreat', () => {
 
   it('lets Retreat pick the photo in its window', () => {
     expect(heroPhotoPickLimit(retreat)).toBe(1);
+  });
+});
+
+describe('Bonbon', () => {
+  const bonbon = getPageStyle('bonbon');
+
+  it('has its centred top in Sniglet, soft cards, tiles, polaroids, a wave and a dotted page', () => {
+    expect(bonbon).toMatchObject({
+      hero: 'stacked', cards: 'soft', policies: 'softTiles',
+      serviceLayout: 'tiles', photoLayout: 'polaroids', divider: 'wave', pagePattern: 'dots',
+    });
+    expect(bonbon.heroNameFont?.fontFamily).toBe('Sniglet_800ExtraBold');
+    expect(bonbon.custom).toMatchObject({ headingFont: 'Fredoka_600SemiBold', textFont: 'VarelaRound_400Regular', headingStyle: 'typed' });
+    expect(heroUsesBrandFont(bonbon)).toBe(false);
+    expect(heroPhotoPickLimit(bonbon)).toBe(0);
   });
 });
