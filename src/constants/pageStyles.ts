@@ -42,6 +42,7 @@ export type PageStyleKey =
   | 'noir'
   | 'muse'
   | 'retreat'
+  | 'bonbon'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -311,7 +312,8 @@ export interface HeroNameFont {
 
 export type PagePattern =
   | 'gingham' // a soft check of the accent (Posy)
-  | 'glow';   // a soft wash of the accent from the top left corner (Retreat)
+  | 'glow'    // a soft wash of the accent from the top left corner (Retreat)
+  | 'dots';   // a fine grid of small dots in the accent (Bonbon)
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
 
@@ -582,6 +584,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     divider: 'dots', buttonShape: 'outline', pagePattern: 'glow',
     custom: { headingFont: 'Marcellus-Regular', headingScale: 1, textFont: 'DidactGothic-Regular', headingStyle: 'typed', centred: true },
+  },
+  {
+    key: 'bonbon', name: 'Bonbon', description: 'Sweet and playful: chunky rounded type, soft cards on a dotted page, tilted polaroids',
+    heading: 'custom', cards: 'soft', policies: 'softTiles', logo: 'circle',
+    hero: 'stacked', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    heroNameFont: { fontFamily: 'Sniglet_800ExtraBold', scale: 0.95, lineRatio: 1.4 },
+    serviceLayout: 'tiles', photoLayout: 'polaroids', divider: 'wave', pagePattern: 'dots',
+    custom: { headingFont: 'Fredoka_600SemiBold', headingScale: 1, textFont: 'VarelaRound_400Regular', headingStyle: 'typed', centred: false },
   },
 ];
 
