@@ -98,9 +98,10 @@ export function HushBoxes({
 }
 
 const boxes = StyleSheet.create({
-  row: { flexDirection: "row", gap: 10, alignSelf: "stretch", marginTop: 22, marginBottom: 12 },
+  // Smaller than the full width, centred (owner, 2026-11-19: "make images smaller in hush").
+  row: { flexDirection: "row", justifyContent: "center", gap: 10, alignSelf: "stretch", marginTop: 22, marginBottom: 12 },
   box: {
-    flex: 1, aspectRatio: 0.76, padding: 6, borderWidth: StyleSheet.hairlineWidth,
+    width: "24%", aspectRatio: 0.76, padding: 5, borderWidth: StyleSheet.hairlineWidth,
     shadowColor: "#2A2826", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2,
   },
   photo: { flex: 1 },
