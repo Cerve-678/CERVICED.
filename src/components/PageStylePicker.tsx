@@ -125,6 +125,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   riviera: { text: 'Services' },
   noir: { text: 'Services' },
   muse: { lead: 'the', text: 'Services' },
+  retreat: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -502,6 +503,12 @@ function MiniProfile({
               <View style={[mini.heroBar, mini.heroBarShort]} />
             </View>
           </View>
+        ) : style.hero === 'archWindow' ? (
+          // Retreat: their photo in an arched window, the name under it.
+          <View style={mini.archWindowHero}>
+            <View style={[mini.archWindow, { backgroundColor: blend(accent, '#FFFFFF', 0.35) }]} />
+            <Text style={mini.archWindowName} numberOfLines={1}>Name</Text>
+          </View>
         ) : style.hero === 'colourBlock' ? (
           // Riviera: the name in a fat italic on a block of the accent, the logo over its corner.
           <View style={[mini.colourBlock, { backgroundColor: accent }]}>
@@ -839,6 +846,10 @@ const mini = StyleSheet.create({
   sideName: { fontFamily: 'Prata-Regular', fontSize: 12, color: '#FFFFFF' },
   heroBar: { height: 4, width: '90%', borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.7)' },
   heroBarShort: { width: '60%' },
+  // Retreat
+  archWindowHero: { alignItems: 'center', gap: 3 },
+  archWindow: { width: 34, height: 44, borderTopLeftRadius: 17, borderTopRightRadius: 17, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
+  archWindowName: { fontFamily: 'Marcellus-Regular', fontSize: 11, lineHeight: 15, color: '#FFFFFF' },
   // Riviera
   colourBlock: { alignSelf: 'stretch', flex: 1, justifyContent: 'flex-end', paddingLeft: 10, paddingBottom: 12 },
   colourBlockName: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 17, lineHeight: 23 },

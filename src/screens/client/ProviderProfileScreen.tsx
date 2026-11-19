@@ -3615,6 +3615,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const squareButtons = pageStyle.buttonShape === "square";
   // Muse: no button, just "Book" underlined in the accent.
   const textLinkButtons = pageStyle.buttonShape === "textLink";
+  // Retreat: a round outline in the ink, no fill.
+  const outlineButtons = pageStyle.buttonShape === "outline";
   // Muse's services read as a printed menu: no photos, the name, a dotted
   // leader and the price on one line, the length under it.
   const serviceMenu = pageStyle.serviceLayout === "menu";
@@ -4030,6 +4032,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 : adaptiveAccentColor,
                           },
                           textLinkButtons && styles.textLinkButton,
+                          outlineButtons && [styles.outlineButton, { borderColor: fullyBooked ? SV.border : SV.text }],
                         ]}
                         onPress={() => {
                           runAction(() => handleBook(service));
@@ -4046,6 +4049,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                               : { color: "#fff" },
                             // After the colour above: a text link is the accent, or grey when full.
                             textLinkButtons && [styles.textLinkButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
+                            outlineButtons && !fullyBooked && { color: SV.text },
                           ]}
                         >
                           {!takingBookings
@@ -5462,6 +5466,7 @@ const styles = StyleSheet.create({
   // Muse: the Book button is just the word, underlined.
   textLinkButton: { backgroundColor: "transparent", paddingHorizontal: 4, shadowOpacity: 0, elevation: 0 },
   textLinkButtonText: { textDecorationLine: "underline", fontSize: 13 },
+  outlineButton: { backgroundColor: "transparent", borderWidth: 1.5, shadowOpacity: 0, elevation: 0 },
   // Muse's printed menu line.
   menuNameRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
   menuName: { flexShrink: 1, marginBottom: 0, fontSize: 15 },

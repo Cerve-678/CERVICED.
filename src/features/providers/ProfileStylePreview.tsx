@@ -230,6 +230,7 @@ export function ProfileStylePreview({
   const photoCards = pageStyle.serviceLayout === "photoCards";
   const menu = pageStyle.serviceLayout === "menu";
   const textLink = pageStyle.buttonShape === "textLink";
+  const outlineBook = pageStyle.buttonShape === "outline";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -543,8 +544,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink ? "transparent" : accent }]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : onAccentInk(accent).text }, textLink && styles.bookLinkText]}>Book</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink || outlineBook ? "transparent" : accent }, outlineBook && [styles.bookOutline, { borderColor: serviceInk.text }]]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : outlineBook ? serviceInk.text : onAccentInk(accent).text }, textLink && styles.bookLinkText]}>Book</Text>
                 </View>
               </View>
               {services[index]?.addOns?.length ? (
@@ -678,6 +679,7 @@ const styles = StyleSheet.create({
   // Noir: square Book buttons, the word in spaced capitals.
   bookSquare: { borderRadius: 2 },
   bookLinkText: { textDecorationLine: "underline" },
+  bookOutline: { borderWidth: 1.5 },
   // Muse's printed menu line.
   menuRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
   menuName: { flexShrink: 1 },

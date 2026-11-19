@@ -60,14 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-four picked styles plus Classic, each once', () => {
+  it('has the thirty-five picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
-      'posy', 'riviera', 'noir', 'muse',
+      'posy', 'riviera', 'noir', 'muse', 'retreat',
     ]);
   });
 
@@ -323,7 +323,7 @@ describe('the demure set (Lounge, Soft Focus, Hush, Stripes, Bow)', () => {
   });
 
   it('lets every style with a photo in its hero pick it', () => {
-    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy']);
+    expect(PAGE_STYLES.filter(s => heroPhotoPickLimit(s) > 0).map(s => s.key)).toEqual(['editorial', 'snapshot', 'hush', 'bow', 'posy', 'retreat']);
     expect(heroPhotoPickLimit(getPageStyle('editorial'))).toBe(1);
     expect(heroPhotoPickLimit(getPageStyle('snapshot'))).toBe(3);
     expect(heroPhotoPickLimit(getPageStyle('hush'))).toBe(3);
@@ -498,5 +498,23 @@ describe('Muse', () => {
   it('opens on its About, so the stars sit above every section after it', () => {
     expect(showsDividerAbove(muse, 'about')).toBe(false);
     expect(showsDividerAbove(muse, 'portfolio')).toBe(true);
+  });
+});
+
+describe('Retreat', () => {
+  const retreat = getPageStyle('retreat');
+
+  it('has its arched photo window, open sections, dots, outline buttons and a soft glow', () => {
+    expect(retreat).toMatchObject({
+      hero: 'archWindow', cards: 'open', policies: 'hairline',
+      divider: 'dots', buttonShape: 'outline', pagePattern: 'glow',
+    });
+    expect(retreat.custom).toMatchObject({ headingFont: 'Marcellus-Regular', textFont: 'DidactGothic-Regular', headingStyle: 'typed', centred: true });
+    expect(heroUsesBrandFont(retreat)).toBe(false);
+    expect(sectionsSitOnPage(retreat)).toBe(true);
+  });
+
+  it('lets Retreat pick the photo in its window', () => {
+    expect(heroPhotoPickLimit(retreat)).toBe(1);
   });
 });
