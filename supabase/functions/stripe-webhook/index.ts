@@ -14,7 +14,10 @@ import { payoutFailedSupportEmail } from '../_shared/emailTemplates.ts';
 // delivery may be repeated or out of order. A handler failure returns 500 so
 // Stripe retries; no Supabase JWT is expected from Stripe.
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
+const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY')!;
+const stripeKeyIsLive = /^(sk|rk)_live_/.test(stripeSecretKey);
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2024-12-18.acacia',
   httpClient: Stripe.createFetchHttpClient(),
 });
@@ -64,6 +67,20 @@ Deno.serve(async (req: Request) => {
     // real reason to logs only.
     console.error(`[stripe-webhook] signature verification failed: ${String(err)}`);
     return new Response('Invalid signature', { status: 400 });
+  }
+
+  // An event from the other Stripe mode (a live event while this key is test,
+  // or the reverse) is about objects this key can't read. Acknowledge it so
+  // Stripe stops retrying, and don't touch the ledger.
+  if (event.livemode !== stripeKeyIsLive) {
+    console.warn(
+      `[stripe-webhook] ignored ${event.type} ${event.id}: event is ${event.livemode ? 'live' : 'test'} mode, ` +
+      `key is ${stripeKeyIsLive ? 'live' : 'test'} mode`,
+    );
+    return new Response(JSON.stringify({ received: true, ignored: 'other_mode' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   try {
@@ -205,20 +222,23 @@ async function handleBankPayoutFailed(payout: Stripe.Payout, accountId: string):
 // the row (and doesn't needlessly re-fire the go-live trigger, which is gated
 // on stripe_charges_enabled changing).
 async function handleAccountUpdated(eventAccount: Stripe.Account): Promise<void> {
-  // Read current state: events can arrive out of order.
-  const account = await stripe.accounts.retrieve(eventAccount.id);
+  // Find the provider before asking Stripe about the account. An account we
+  // don't own (one created but never saved to a provider, or one from the other
+  // Stripe mode, which this key can't read) has nothing to sync. Calling Stripe
+  // first made those throw, so Stripe retried them with a 500.
   const { data: provider, error: readError } = await admin
     .from('providers')
     .select('id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted')
-    .eq('stripe_account_id', account.id)
+    .eq('stripe_account_id', eventAccount.id)
     .maybeSingle();
   if (readError) throw readError;
   if (!provider) {
-    // An account we don't have a provider row for (e.g. an account created but
-    // its id never persisted). Nothing to sync; log so it's visible.
-    console.warn(`[stripe-webhook] account.updated for unknown account ${account.id}`);
+    console.warn(`[stripe-webhook] account.updated for unknown account ${eventAccount.id}`);
     return;
   }
+
+  // Read current state: events can arrive out of order.
+  const account = await stripe.accounts.retrieve(eventAccount.id);
 
   const nextCharges = account.charges_enabled === true;
   const nextPayouts = account.payouts_enabled === true;
