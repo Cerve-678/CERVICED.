@@ -360,7 +360,11 @@ export function ProfileStylePreview({
                     <Ionicons key={star} name="star" size={12} color="#FFD700" />
                   ))}
                   {rating !== undefined ? (
-                    <Text style={[styles.ratingText, { color: heroText }, heroIsDark && styles.textShadow]}>{rating}</Text>
+                    <Text style={[
+                      styles.ratingText,
+                      { color: pageStyle.hero === 'ticketHeader' ? (isDarkColor(OP.card) ? '#FFFFFF' : '#1F1A1C') : heroText },
+                      heroIsDark && pageStyle.hero !== 'ticketHeader' && styles.textShadow,
+                    ]}>{rating}</Text>
                   ) : null}
                 </View>
                 <View style={detailsSitOnCard(pageStyle) ? DETAILS_OWN_LINE : undefined}>

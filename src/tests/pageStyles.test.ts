@@ -66,7 +66,7 @@ describe('page styles', () => {
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
-      'pure', 'grid', 'slate', 'halo',
+      'pure', 'grid', 'slate', 'halo', 'ticket', 'prism',
       'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic', 'ledger',
     ]);
   });
