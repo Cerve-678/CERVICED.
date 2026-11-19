@@ -521,6 +521,13 @@ function LayoutSketch({ layout, accent, surface, line, card }: { layout: CustomL
           <View style={[styles.sketchCard, styles.sketchSoft, { backgroundColor: card }]} />
         </>
       )}
+      {layout === 'prism' && (
+        <>
+          <View style={[styles.sketchPrism, { backgroundColor: accent }]} />
+          <View style={[styles.sketchCard, styles.sketchPlane, { backgroundColor: card, borderTopColor: accent }]} />
+          <View style={[styles.sketchCard, styles.sketchPlane, { backgroundColor: card, borderTopColor: accent }]} />
+        </>
+      )}
       {layout === 'bigBoxes' && (
         <>
           <View style={[styles.sketchBig, { backgroundColor: accent, width: '80%' }]} />
@@ -592,6 +599,9 @@ const styles = StyleSheet.create({
   sketchText: { width: '60%', height: 4, borderRadius: 2 },
   sketchRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   sketchCard: { height: 14, borderRadius: 4 },
+  // Prism: a block of angled colour, then cards under a band of it.
+  sketchPrism: { height: 22, borderRadius: 4, opacity: 0.55, transform: [{ skewX: '-12deg' }] },
+  sketchPlane: { borderRadius: 2, borderTopWidth: 3 },
   sketchBig: { height: 10, borderRadius: 2 },
   sketchBand: { height: 22, marginHorizontal: -8, marginTop: -8 },
   sketchBox: { height: 14, borderWidth: 1, borderRadius: 4 },

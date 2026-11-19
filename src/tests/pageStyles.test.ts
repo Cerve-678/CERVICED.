@@ -17,7 +17,6 @@ import {
 } from '../constants/pageStyles';
 import { encodeThemeKey, isDarkColor, parseThemeKey, SHEET_BG } from '../constants/providerThemes';
 import { stripeColours } from '../features/providers/heroes/demureOrnaments';
-import { sealLetter, waxColour } from '../features/providers/WaxSeal';
 import {
   policiesBringOwnSurface,
   sectionsSitOnPage,
@@ -64,23 +63,11 @@ describe('page styles', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
-      'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
+      'snapshot', 'signature', 'quiet', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
-      'pure', 'grid', 'slate', 'halo', 'ticket', 'prism',
-      'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic', 'ledger',
+      'pure', 'grid', 'slate', 'halo',
+      'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger',
     ]);
-  });
-
-  it('seals Sealed\'s envelope and policy notes with a first letter', () => {
-    expect(sealLetter('Amara Okafor')).toBe('A');
-    expect(sealLetter('  1st Class Lashes')).toBe('S');
-    expect(sealLetter('Late arrival')).toBe('L');
-    expect(sealLetter('123')).toBe('');
-  });
-
-  it('presses a pale accent darker so the wax reads as wax', () => {
-    expect(waxColour('#3F1E36')).toBe('#3F1E36');
-    expect(waxColour('#F4D6DC')).not.toBe('#F4D6DC');
   });
 
   it('presses Embossed into the page: raised cards, a recessed policy panel, photos in plate marks', () => {
@@ -537,21 +524,6 @@ describe('Bonbon', () => {
   });
 });
 
-describe('Clinic', () => {
-  const clinic = getPageStyle('clinic');
-
-  it('has its lowercase name beside the logo, numbered sections and treatments, outline buttons and the pinned bar', () => {
-    expect(clinic).toMatchObject({
-      hero: 'customLeft', cards: 'flat', policies: 'accordion', numberedServices: true,
-      buttonShape: 'outline', pinnedBookBar: true,
-    });
-    expect(clinic.heroNameFont).toMatchObject({ fontFamily: 'LeagueSpartan-Light', transform: 'lowercase' });
-    expect(clinic.custom).toMatchObject({ headingFont: 'LeagueSpartan-ExtraBold', textFont: 'Jura-VariableFont_wght', headingStyle: 'numbered' });
-    expect(heroUsesBrandFont(clinic)).toBe(false);
-    expect(clinic.divider).toBeUndefined();
-  });
-});
-
 describe('Ledger', () => {
   const ledger = getPageStyle('ledger');
 
@@ -565,8 +537,8 @@ describe('Ledger', () => {
     expect(heroUsesBrandFont(ledger)).toBe(false);
   });
 
-  it('gives each of the eight parts styles a different mix of parts', () => {
-    const keys = ['posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic', 'ledger'];
+  it('gives each of the seven parts styles a different mix of parts', () => {
+    const keys = ['posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'ledger'];
     const mixes = keys.map(key => {
       const s = getPageStyle(key);
       return [s.hero, s.heroNameFont?.fontFamily, s.cards, s.custom?.headingStyle, s.serviceLayout, s.photoLayout, s.divider, s.buttonShape, s.pagePattern].join('|');

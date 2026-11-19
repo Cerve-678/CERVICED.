@@ -138,3 +138,24 @@ describe('Custom page style', () => {
     }
   });
 });
+
+describe('Prism, kept in Custom (owner, 2026-11-19)', () => {
+  const prism = { ...DEFAULT_CUSTOM_CHOICES, layout: 'prism' as const, ...LAYOUT_PARTS.prism };
+
+  it('draws the Prism look from its own parts', () => {
+    expect(customPageStyle(prism)).toMatchObject({
+      hero: 'prismHeader', logo: 'sharp', cards: 'prismPlane', policies: 'prismFacets', photoLayout: 'prismMosaic',
+    });
+    expect(customPageStyle(prism).custom?.headingStyle).toBe('facet');
+  });
+
+  it('saves and reads back the Prism look and its Facet headings', () => {
+    expect(parseCustomChoices(encodeCustomChoices(prism))).toEqual(prism);
+    const mixed = withPart(prism, 'top', 'centred');
+    expect(parseCustomChoices(encodeCustomChoices(mixed))).toEqual(mixed);
+  });
+
+  it('is no longer a fixed page style', () => {
+    expect(PAGE_STYLES.some(style => (style.key as string) === 'prism')).toBe(false);
+  });
+});
