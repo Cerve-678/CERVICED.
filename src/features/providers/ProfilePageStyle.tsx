@@ -30,6 +30,7 @@ import { BulldogClip } from "./heroes/CallingCardHero";
 import { sealLetter, WaxSeal, waxColour } from "./WaxSeal";
 import { EmbossedText, pressEdges } from "./heroes/EmbossedHero";
 import { BowGlyph, Pearl, ribbonColours, stripeColours } from "./heroes/demureOrnaments";
+import { SectionDivider } from "./pageParts";
 
 export interface PageStylePalette {
   /** Text and lines for content on a card. */
@@ -507,7 +508,11 @@ export function PageSectionHeading({
         const [lead, rest] = pair;
         return (
           <View {...a11y} accessible style={[headingStyles.custom, headingStyles.customStackCentred, legend]}>
-            {lead ? <Text style={[headingStyles.customScript, { color: accent }]}>{lead.toLowerCase()}</Text> : null}
+            {lead ? (
+              <Text style={[headingStyles.customScript, picks.scriptFont ? { fontFamily: picks.scriptFont } : null, { color: accent }]}>
+                {lead.toLowerCase()}
+              </Text>
+            ) : null}
             <Text style={[headingStyles.customText, fontStyle, headingStyles.customCentred, { letterSpacing: 2 }]}>{(rest || title).toUpperCase()}</Text>
           </View>
         );
@@ -571,15 +576,7 @@ export const STRIPE_TINT: Record<PageSectionKey, "soft" | null> = {
   custom: null,
 };
 
-export function PageSection({
-  section,
-  palette,
-  children,
-  bare = false,
-  headingRight,
-  style,
-  title,
-}: {
+interface PageSectionProps {
   section: PageSectionKey;
   palette: PageStylePalette;
   children: React.ReactNode;
@@ -589,7 +586,37 @@ export function PageSection({
   /** A Custom section's own name, used for its heading in every style. */
   title?: string;
   style?: StyleProp<ViewStyle>;
-}) {
+}
+
+/** Whether this section has the style's divider above it: every section but
+ *  the one that opens the page (About, or the portfolio on a work-first page). */
+export function showsDividerAbove(pageStyle: PageStyle | undefined, section: PageSectionKey): boolean {
+  if (!pageStyle?.divider) return false;
+  if (section === "about") return !!pageStyle.portfolioFirst;
+  if (section === "portfolio") return !pageStyle.portfolioFirst;
+  return true;
+}
+
+export function PageSection(props: PageSectionProps) {
+  const pageStyle = props.palette.pageStyle;
+  if (!pageStyle?.divider || !showsDividerAbove(pageStyle, props.section)) return <PageSectionSurface {...props} />;
+  return (
+    <>
+      <SectionDivider divider={pageStyle.divider} accent={props.palette.accent} />
+      <PageSectionSurface {...props} />
+    </>
+  );
+}
+
+function PageSectionSurface({
+  section,
+  palette,
+  children,
+  bare = false,
+  headingRight,
+  style,
+  title,
+}: PageSectionProps) {
   const pageStyle = palette.pageStyle;
   const square = !!palette.squareCards;
 

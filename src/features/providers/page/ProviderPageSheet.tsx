@@ -40,6 +40,8 @@ import {
   ProviderSpecialitiesSection,
 } from "../ProviderProfileSections";
 import { hasProviderPolicyInfo } from "../profilePresentation";
+import { PagePattern, SectionDivider } from "../pageParts";
+import { isDarkColor } from "../../../constants/providerThemes";
 import type { ProviderProfileData } from "../profileTypes";
 import type { ProviderPagePalette } from "./providerPagePalette";
 
@@ -153,6 +155,15 @@ export function ProviderPageSheet({
   // Classic's About | Policy switch.
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
 
+  const portfolio = (
+    <ProviderPortfolioSection
+      items={workPortfolio}
+      loading={portfolioLoading}
+      palette={sectionPalette}
+      onOpenImage={onOpenImage}
+    />
+  );
+
   return (
     // The sheet rises over the hero with its own large top corners (see
     // contentSheet.borderTopLeftRadius/Right), like a floating card.
@@ -168,6 +179,10 @@ export function ProviderPageSheet({
         veilTheme ? styles.contentSheetGlass : null,
       ]}
     >
+      {/* Posy's gingham and the other printed pages: under everything on the sheet. */}
+      {pageStyle.pagePattern ? (
+        <PagePattern pattern={pageStyle.pagePattern} accent={adaptiveAccentColor} onDark={isDarkColor(OP.bg)} style={styles.sheetPattern} />
+      ) : null}
       {/* Cover: a bar of links to the main sections. Lounge: the
           same links between two fine rules. */}
       {pageStyle.jumpBar && pageStyle.jumpBarRuled ? (
@@ -432,6 +447,8 @@ export function ProviderPageSheet({
         </>
       ) : (
         <>
+          {/* Work first (Posy): the portfolio straight after the top of the page. */}
+          {pageStyle.portfolioFirst ? portfolio : null}
           {/* Every style but Classic gives About and Policies a
               section each, in the style's own headings and layout. */}
           {!pageStyle.aboutInHero && pageStyle.aboutOnBand ? (
@@ -520,6 +537,8 @@ export function ProviderPageSheet({
             Services
           </Text>
         ) : (
+          <>
+          {pageStyle.divider ? <SectionDivider divider={pageStyle.divider} accent={adaptiveAccentColor} /> : null}
           <View
             style={[
               styles.styledServicesHeading,
@@ -529,6 +548,7 @@ export function ProviderPageSheet({
           >
             <PageSectionHeading section="services" palette={sectionPalette} />
           </View>
+          </>
         )}
 
         {!takingBookings && closureReason ? (
@@ -601,12 +621,7 @@ export function ProviderPageSheet({
         palette={sectionPalette}
       />
 
-      <ProviderPortfolioSection
-        items={workPortfolio}
-        loading={portfolioLoading}
-        palette={sectionPalette}
-        onOpenImage={onOpenImage}
-      />
+      {pageStyle.portfolioFirst && pageStyle.key !== "classic" ? null : portfolio}
 
       <ProviderAdditionalInfoSection
         groups={additionalInfo.groups}
@@ -681,6 +696,12 @@ const styles = StyleSheet.create({
   },
   // Applied only when the provider has a background image: pulls the sheet in
   // from both edges so the photo stays visible down its sides.
+  // The printed pattern follows the sheet's round top corners.
+  sheetPattern: {
+    borderTopLeftRadius: SHEET_LIP_RADIUS,
+    borderTopRightRadius: SHEET_LIP_RADIUS,
+    overflow: "hidden",
+  },
   contentSheetFloating: {
     marginHorizontal: 10,
   },

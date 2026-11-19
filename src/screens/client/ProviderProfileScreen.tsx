@@ -150,12 +150,18 @@ type ServiceData = ProviderProfileService;
 const MAX_PILL_DOTS = 3;
 
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
+/** Posy's service tiles: the gap between the two and the padding inside each. */
+const SERVICE_TILE_GAP = 10;
+const SERVICE_TILE_PADDING = 8;
+
 const MultiImagePill: React.FC<{
   images: any[];
   onPress: (images: any[], index: number) => void;
   imageStyle: any;
   containerStyle: any;
-}> = React.memo(({ images, onPress, imageStyle, containerStyle }) => {
+  /** Drops the gap the pill keeps on its right (a tile's photo sits on its own line). */
+  noGap?: boolean;
+}> = React.memo(({ images, onPress, imageStyle, containerStyle, noGap }) => {
   const [activeIdx, setActiveIdx] = useState(0);
   const w = imageStyle.width ?? 60;
 
@@ -176,7 +182,7 @@ const MultiImagePill: React.FC<{
   }, [images.length, activeIdx]);
 
   return (
-    <View style={{ alignItems: "center", marginRight: 15 }}>
+    <View style={{ alignItems: "center", marginRight: noGap ? 0 : 15, marginBottom: noGap ? 10 : 0 }}>
       <View style={containerStyle}>
         <ScrollView
           horizontal
@@ -1381,6 +1387,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Measured per render, not captured at module load: the offers panel rests
   // one panel-width offscreen and the full-screen image modal pages by width.
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const [serviceTileGridWidth, setServiceTileGridWidth] = useState(0);
 
   const providerId = route.params?.providerId ?? "";
   // A resolved `null` is meaningful (this viewer owns no provider); an
@@ -3597,6 +3604,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // fullscreen "Show all" sheet, so the two never drift out of sync. Pass
   // `onShowAll` to get the trailing expand button (inline view); pass null
   // for the sheet, which already shows everything.
+  // Posy's services sit two across as tiles, the photo on top. MultiImagePill
+  // pages by a fixed width, so the tile photo's size comes from the list's
+  // measured width rather than a percentage.
+  const serviceTiles = pageStyle.serviceLayout === "tiles";
+  const serviceTileImageWidth = serviceTileGridWidth > 0 ? Math.floor((serviceTileGridWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
+  const serviceTileImage = { width: serviceTileImageWidth, height: Math.round(serviceTileImageWidth * 0.82), borderRadius: 14 };
+
   const renderServiceCategoryBlock = (
     services: ServiceData[],
     onShowAll: (() => void) | null,
@@ -3722,7 +3736,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       )}
 
       {/* Services List */}
-      <View style={styles.categoryServicesContainer}>
+      <View
+        style={[styles.categoryServicesContainer, serviceTiles && styles.serviceTilesGrid]}
+        onLayout={serviceTiles ? (e) => setServiceTileGridWidth(e.nativeEvent.layout.width) : undefined}
+      >
         {services.map((service, serviceIndex) => (
           <BlurView
             key={service.id}
@@ -3735,6 +3752,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               { backgroundColor: cardBg, borderColor: SV.border },
               serviceSurfaceStyle,
               squareCards && styles.squareCard,
+              serviceTiles && styles.serviceTile,
             ]}
           >
             {serviceSurfaceStyle ? null : (
@@ -3747,7 +3765,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             )}
             {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
             <View style={styles.serviceCardBlur}>
-              <View style={styles.serviceItem}>
+              <View style={[styles.serviceItem, serviceTiles && styles.serviceItemTile]}>
                 {(() => {
                   const isMulti = (service.images?.length ?? 0) > 1;
                   const hasSingle = (service.images?.length ?? 0) === 1;
@@ -3758,10 +3776,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <MultiImagePill
                         images={service.images!}
                         onPress={(imgs, idx) => openImageViewer(imgs, idx)}
-                        imageStyle={styles.serviceImage}
+                        imageStyle={serviceTiles ? serviceTileImage : styles.serviceImage}
+                        noGap={serviceTiles}
                         containerStyle={[
                           styles.serviceImageContainer,
                           { marginRight: 0 },
+                          serviceTiles && serviceTileImage,
                         ]}
                       />
                     );
@@ -3774,6 +3794,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <View
                         style={[
                           styles.serviceImageContainer,
+                          serviceTiles && [serviceTileImage, styles.serviceImageTileGap],
                           styles.serviceImagePlaceholder,
                           {
                             backgroundColor: adaptiveAccentColor + "1C",
@@ -3807,10 +3828,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         }
                       }}
                     >
-                      <View style={styles.serviceImageContainer}>
+                      <View style={[styles.serviceImageContainer, serviceTiles && [serviceTileImage, styles.serviceImageTileGap]]}>
                         <Image
                           source={imgSrc}
-                          style={styles.serviceImage}
+                          style={serviceTiles ? serviceTileImage : styles.serviceImage}
                           contentFit="cover"
                           transition={0}
                         />
@@ -3819,7 +3840,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   );
                 })()}
 
-                <View style={styles.serviceInfo}>
+                <View style={[styles.serviceInfo, serviceTiles && styles.serviceInfoTile]}>
                   <Text style={[styles.serviceName, { color: SV.text }, bodyFont]}>
                     {service.name}
                   </Text>
@@ -3910,7 +3931,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 {/* Booking controls are absent, rather than merely disabled,
                     on the provider's own profile and while ownership loads. */}
                 {canBookProvider && (
-                <View style={styles.serviceActionColumn}>
+                <View style={[styles.serviceActionColumn, serviceTiles && styles.serviceActionTile]}>
                   {(() => {
                     const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || !takingBookings || serviceFullyBooked[service.dbId] === true;
 
@@ -6442,6 +6463,13 @@ const styles = StyleSheet.create({
 
   // Waitlist — service card
   serviceActionColumn: { alignItems: "center", gap: 6 },
+  // Posy: two tiles across, each a column of photo, details and Book.
+  serviceTilesGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: SERVICE_TILE_GAP },
+  serviceTile: { width: "48.5%" },
+  serviceItemTile: { flexDirection: "column", alignItems: "stretch", padding: SERVICE_TILE_PADDING },
+  serviceImageTileGap: { marginRight: 0, marginBottom: 10 },
+  serviceInfoTile: { marginRight: 0 },
+  serviceActionTile: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", marginTop: 10 },
   waitlistJoinBtn: {
     borderRadius: 20,
     borderWidth: 1,
