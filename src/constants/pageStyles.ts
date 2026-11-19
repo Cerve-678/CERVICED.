@@ -39,6 +39,8 @@ export type PageStyleKey =
   | 'grid'
   | 'slate'
   | 'halo'
+  | 'ticket'
+  | 'prism'
   | 'posy'
   | 'riviera'
   | 'noir'
@@ -182,6 +184,8 @@ export type PageHero =
   | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
   | 'slateHeader' // a large name and compact logo above one accent rule (Slate)
   | 'haloHeader' // a centred logo in a fine ring, name and details beneath (Halo)
+  | 'ticketHeader' // logo, name and booking details in a two-part perforated card (Ticket)
+  | 'prismHeader' // angled translucent colour planes frame the logo and name (Prism)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
   | 'archWindow' // their chosen photo in a tall arched window, the logo on its foot, the name centred under it (Retreat)
@@ -556,6 +560,22 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     hero: 'haloHeader', aboutInHero: false, roundedPhotos: true,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
     buttonShape: 'outline', divider: 'dots',
+  },
+  // Graphic concepts that still use only the provider's own name, categories
+  // and colours, so the same layout works for every kind of service.
+  {
+    key: 'ticket', name: 'Ticket', description: 'Your profile as a crisp two-part pass with a perforated detail line',
+    heading: 'indexed', cards: 'stationery', policies: 'definition', logo: 'rounded',
+    hero: 'ticketHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
+    divider: 'line', buttonShape: 'square',
+  },
+  {
+    key: 'prism', name: 'Prism', description: 'Angled colour planes frame your name; glossy cards and a feature gallery',
+    heading: 'dotCaps', cards: 'gloss', policies: 'tiles', logo: 'sharp',
+    hero: 'prismHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'feature', divider: 'dots', buttonShape: 'outline',
   },
   // 2026-11-19: styles built from Custom's parts, each its own fixed mix
   // (owner picked all eight on https://claude.ai/artifact/3kCvU1EuLzUqpUaH9jBsCd).

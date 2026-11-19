@@ -126,6 +126,8 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   grid: { lead: '03', text: 'Services' },
   slate: { text: 'SERVICES' },
   halo: { text: 'SERVICES' },
+  ticket: { lead: '03', text: 'Services' },
+  prism: { lead: 'The', text: 'SERVICES' },
   custom: { text: 'Services' },
   posy: { lead: 'the', text: 'Services' },
   riviera: { text: 'Services' },
@@ -681,6 +683,26 @@ function MiniProfile({
             <View style={[mini.haloHeroRing, { borderColor: withAlpha(accent, 0.8) }]}>{logo}</View>
             <Text style={[mini.haloHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
           </View>
+        ) : style.hero === 'ticketHeader' ? (
+          <View style={[mini.ticketHero, { backgroundColor: cardColour }]}>
+            <View style={[mini.ticketAccent, { backgroundColor: accent }]} />
+            <View style={mini.ticketTop}>
+              <View style={mini.smallLogo}>{logo}</View>
+              <Text style={[mini.ticketName, { color: isDarkColor(cardColour) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
+            </View>
+            <View style={[mini.ticketFoot, { borderTopColor: withAlpha(accent, 0.5) }]}>
+              <View style={[mini.heroBar, mini.heroBarShort, { backgroundColor: withAlpha(accent, 0.55) }]} />
+            </View>
+          </View>
+        ) : style.hero === 'prismHeader' ? (
+          <View style={mini.prismHero}>
+            <Svg width="100%" height="100%" viewBox="0 0 100 70" style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Polygon points="0,0 60,0 30,70 0,70" fill={accent} opacity={0.55} />
+              <Polygon points="75,0 100,0 100,70 48,70" fill="#FFFFFF" opacity={0.2} />
+            </Svg>
+            <View style={mini.prismLogo}>{logo}</View>
+            <Text style={[mini.prismName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
+          </View>
         ) : style.hero === 'spa' ? (
           // Spa: a quiet line, the name spaced out, the ringed logo.
           <>
@@ -1047,6 +1069,14 @@ const mini = StyleSheet.create({
   haloHero: { alignItems: 'center', gap: 3 },
   haloHeroRing: { width: 39, height: 39, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   haloHeroName: { fontFamily: 'Manrope-Bold', fontSize: 10, lineHeight: 14 },
+  ticketHero: { alignSelf: 'stretch', marginHorizontal: 9, borderRadius: 8, overflow: 'hidden' },
+  ticketAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+  ticketTop: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingTop: 4, paddingBottom: 2 },
+  ticketName: { fontFamily: 'Manrope-Bold', fontSize: 9, lineHeight: 13, flexShrink: 1 },
+  ticketFoot: { borderTopWidth: 1, borderStyle: 'dashed', paddingHorizontal: 8, paddingVertical: 4 },
+  prismHero: { alignSelf: 'stretch', height: 65, marginHorizontal: 8, borderRadius: 9, overflow: 'hidden', justifyContent: 'flex-end', paddingHorizontal: 8, paddingBottom: 7 },
+  prismLogo: { position: 'absolute', right: 5, top: 4, transform: [{ scale: 0.6 }] },
+  prismName: { fontFamily: 'Manrope-Bold', fontSize: 15, lineHeight: 20 },
   groupedCard: { borderRadius: 7 },
   gridCard: { borderRadius: 0, borderWidth: 1 },
   sideLines: { flex: 1, gap: 4, alignItems: 'center' },

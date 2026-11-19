@@ -13,7 +13,7 @@ jest.mock('expo-blur', () => {
   return { BlurView: View };
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('react-native-svg', () => ({ __esModule: true, default: () => null, Path: () => null, Defs: () => null, Text: () => null, TextPath: () => null }));
+jest.mock('react-native-svg', () => ({ __esModule: true, default: () => null, Path: () => null, Polygon: () => null, Defs: () => null, Text: () => null, TextPath: () => null }));
 jest.mock('../components/ProfileHeroBackdrop', () => () => null);
 jest.mock('../components/FramedLogo', () => ({ LogoCircle: () => null }));
 
