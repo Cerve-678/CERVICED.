@@ -442,6 +442,7 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   // Feature (Ledger): one big photo beside two small ones, then two more under them.
   const feature = palette.pageStyle?.photoLayout === "feature";
   const portfolioWall = palette.pageStyle?.photoLayout === "portfolioWall";
+  const pins = palette.pageStyle?.photoLayout === "pins";
   // Muse: one row of tall photos that scrolls sideways, every photo in it.
   const swipe = palette.pageStyle?.photoLayout === "swipe";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
@@ -609,6 +610,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                             // A slight, alternating tilt, as if pinned by hand.
                             { transform: [{ rotate: (columnIndex + rowIndex) % 2 === 0 ? "-1.5deg" : "1.5deg" }] },
                           ]
+                        : pins
+                          ? [styles.pinTile, { backgroundColor: palette.cardBackground }]
                         : palette.pageStyle?.roundedPhotos
                           ? [styles.portfolioTile, styles.roundedTile]
                           : styles.portfolioTile
@@ -626,6 +629,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
                   item.caption ? (
                     <Text style={[styles.plateCaption, { color: palette.sub }]} numberOfLines={2}>{item.caption}</Text>
                   ) : null
+                ) : pins && item.caption ? (
+                  <Text style={[styles.pinCaption, { color: palette.text }]} numberOfLines={2}>{item.caption}</Text>
                 ) : item.caption ? (
                   <View style={[styles.captionWrap, clipped && styles.clippedCaption]}>
                     <Text style={styles.caption} numberOfLines={1}>{item.caption}</Text>
@@ -784,6 +789,11 @@ const styles = StyleSheet.create({
   archTile: { width: "31.5%", aspectRatio: 0.68, overflow: "hidden", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
   column: { flex: 1, gap: COLUMN_GAP },
   portfolioTile: { borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.08)" },
+  pinTile: {
+    borderRadius: 20, overflow: "hidden",
+    shadowColor: "#26201E", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
+  },
+  pinCaption: { fontFamily: "HankenGrotesk-Medium", fontSize: 12, lineHeight: 17, paddingHorizontal: 11, paddingVertical: 10 },
   // Lounge, Soft Focus and Bow: rounder, softer photos.
   roundedTile: { borderRadius: 24 },
   halftoneTile: { borderRadius: 0, borderWidth: 1, padding: 3, overflow: "hidden" },

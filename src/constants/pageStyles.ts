@@ -45,6 +45,7 @@ export type PageStyleKey =
   | 'retreat'
   | 'bonbon'
   | 'ledger'
+  | 'pinboard'
   | 'portfolio'
   | 'atelier'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
@@ -185,6 +186,7 @@ export type PageHero =
   | 'colourBlock' // a block of the accent: what they do, the name huge in a fat italic, the logo over its corner (Riviera)
   | 'split'    // their chosen photo down the left half, the logo, name and details on the right (Posy)
   | 'portfolioFront' // a chosen work photo above a compact provider identity and booking details
+  | 'pinboardHeader' // a short board of up to three rounded photo pins, then the logo beside the name
   | 'atelierLetterhead' // a tall noncursive wordmark, fine rules and a small provider image
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
 
@@ -295,6 +297,7 @@ export type ServiceLayout =
 export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
   | 'portfolioWall' // three airy cover images with the middle print set higher
+  | 'pins'      // two staggered columns of rounded photos with captions
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
   | 'swipe';    // one row of tall photos that scrolls sideways (Muse, Noir)
@@ -645,6 +648,15 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     serviceLayout: 'menu', photoLayout: 'feature', divider: 'line', buttonShape: 'square', pagePattern: 'lined',
     custom: { headingFont: 'Oswald-Medium', headingScale: 1, textFont: 'OldStandardTT-Regular', headingStyle: 'caps', centred: true },
   },
+  {
+    key: 'pinboard', name: 'Pinboard', description: 'Your work as a board of rounded pins, with bold headings and soft cards',
+    heading: 'custom', cards: 'soft', policies: 'softTiles', logo: 'circle',
+    hero: 'pinboardHeader', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    serviceLayout: 'tiles', photoLayout: 'pins', portfolioFirst: true, roundedPhotos: true,
+    nameFontPickable: true,
+    custom: { headingFont: 'Manrope-Bold', headingScale: 1, textFont: 'HankenGrotesk-Medium', headingStyle: 'typed', centred: false },
+  },
 ];
 
 /** How many portfolio photos this style's hero shows, from the ones the
@@ -662,6 +674,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'split': return 1;    // Posy's left half
     case 'archWindow': return 1; // Retreat's window
     case 'portfolioFront': return 1; // Portfolio's cover image
+    case 'pinboardHeader': return 3; // Pinboard's board of pins
     default: return 0;
   }
 }

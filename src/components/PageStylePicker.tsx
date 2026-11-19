@@ -134,6 +134,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   ledger: { text: 'Services' },
   portfolio: { text: 'Services' },
   atelier: { text: 'Services' },
+  pinboard: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -190,6 +191,14 @@ function MiniProfile({
   // Work first (Posy, Noir): a row of their photos in the style's own layout.
   const photoRow = (() => {
     switch (style.photoLayout) {
+      case 'pins':
+        return (
+          <View style={[mini.photoRow, { alignItems: 'flex-start', gap: 4, paddingVertical: 3 }]}>
+            {[25, 18, 28].map((height, i) => (
+              <View key={i} style={{ flex: 1, height, borderRadius: 7, backgroundColor: photoFill }} />
+            ))}
+          </View>
+        );
       case 'portfolioWall':
         return (
           <View style={[mini.photoRow, { alignItems: 'center', gap: 3, paddingVertical: 3 }]}>
@@ -593,7 +602,22 @@ function MiniProfile({
       ) : null}
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
-        {style.hero === 'atelierLetterhead' ? (
+        {style.hero === 'pinboardHeader' ? (
+          // Pinboard: a short board of rounded pins, then the logo beside the name.
+          <View style={mini.pinHero}>
+            <View style={mini.pinBoard}>
+              <View style={[mini.pinTall, { backgroundColor: photoFill }]} />
+              <View style={mini.pinColumn}>
+                <View style={[mini.pinShort, { backgroundColor: photoFill }]} />
+                <View style={[mini.pinMid, { backgroundColor: photoFill }]} />
+              </View>
+            </View>
+            <View style={mini.pinIdentity}>
+              <View style={mini.pinLogo}>{logo}</View>
+              <Text style={[mini.pinName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E' }]} numberOfLines={1}>Name</Text>
+            </View>
+          </View>
+        ) : style.hero === 'atelierLetterhead' ? (
           <View style={{ paddingHorizontal: 8, paddingTop: 9 }}>
             <View style={{ height: 1, backgroundColor: withAlpha(isDarkColor(heroColours[0]) ? '#FFFFFF' : '#26201E', 0.6) }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>
@@ -1187,6 +1211,15 @@ const mini = StyleSheet.create({
   productPhoto: { flex: 1, minHeight: 30, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: 'hidden' },
   productPanel: { paddingHorizontal: 8, paddingVertical: 5, gap: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
   productTitle: { fontFamily: 'DMSerifDisplay-Regular', fontSize: 12, lineHeight: 15 },
+  pinHero: { alignSelf: 'stretch', flex: 1, paddingHorizontal: 6, paddingTop: 5 },
+  pinBoard: { flexDirection: 'row', gap: 3, height: 44 },
+  pinColumn: { flex: 1, gap: 3 },
+  pinTall: { flex: 1, borderRadius: 6 },
+  pinShort: { height: 18, borderRadius: 6 },
+  pinMid: { flex: 1, borderRadius: 6 },
+  pinIdentity: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
+  pinLogo: { transform: [{ scale: 0.6 }], marginHorizontal: -6, marginVertical: -6 },
+  pinName: { fontFamily: 'Manrope-Bold', fontSize: 11, flex: 1 },
   blockHero: { alignSelf: 'stretch', flex: 1 },
   blockPhotos: { flexDirection: 'row', height: 48 },
   blockPhoto: { flex: 1, backgroundColor: 'rgba(255,255,255,0.55)' },
