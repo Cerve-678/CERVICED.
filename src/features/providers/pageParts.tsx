@@ -9,7 +9,7 @@
 
 import React, { useId } from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import Svg, { Circle, Defs, Path, Pattern, RadialGradient, Rect, Stop } from "react-native-svg";
+import Svg, { Defs, Path, Pattern, RadialGradient, Rect, Stop } from "react-native-svg";
 
 import type { PagePattern as PagePatternKey, SectionDivider as SectionDividerKey } from "../../constants/pageStyles";
 import { withAlpha } from "../../constants/providerThemes";
@@ -53,7 +53,6 @@ export function SectionDivider({ divider, accent }: { divider: SectionDividerKey
 const PATTERN_ALPHA: Record<PagePatternKey, { pale: number; dark: number }> = {
   gingham: { pale: 0.06, dark: 0.08 },
   glow: { pale: 0.16, dark: 0.22 },
-  dots: { pale: 0.22, dark: 0.3 },
   lined: { pale: 0.12, dark: 0.14 },
 };
 
@@ -90,10 +89,6 @@ export function PagePattern({
             // A rule every 30pt, the full width of the page.
             <Pattern id={id} patternUnits="userSpaceOnUse" width={30} height={30}>
               <Rect x={0} y={29} width={30} height={1} fill={ink} />
-            </Pattern>
-          ) : pattern === "dots" ? (
-            <Pattern id={id} patternUnits="userSpaceOnUse" width={16} height={16}>
-              <Circle cx={8} cy={8} r={1.3} fill={ink} />
             </Pattern>
           ) : pattern === "glow" ? (
             // One soft wash from the top left, gone a screen or so down: sized

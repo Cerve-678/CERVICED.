@@ -399,11 +399,11 @@ describe('which styles show the picked name font', () => {
 });
 
 describe('the styles built from Custom\'s parts', () => {
-  it('gives Posy its split top, tiles, arched photos, wave lines and gingham', () => {
+  it('gives Posy its split top, soft round cards, tiles, arched photos, wave lines and gingham', () => {
     const posy = getPageStyle('posy');
     expect(posy.key).toBe('posy');
     expect(posy).toMatchObject({
-      hero: 'split', cards: 'flat', policies: 'softTiles', heading: 'custom',
+      hero: 'split', cards: 'soft', policies: 'softTiles', heading: 'custom',
       serviceLayout: 'tiles', photoLayout: 'arches', divider: 'wave', pagePattern: 'gingham', portfolioFirst: true,
     });
     expect(posy.custom).toMatchObject({ headingFont: 'YoungSerif-Regular', textFont: 'Figtree-SemiBold', headingStyle: 'script', scriptFont: 'Ephesis-Regular' });
@@ -522,11 +522,12 @@ describe('Retreat', () => {
 describe('Bonbon', () => {
   const bonbon = getPageStyle('bonbon');
 
-  it('has its centred top in Sniglet, soft cards, tiles, polaroids, a wave and a dotted page', () => {
+  it('has its centred top in Sniglet, soft cards, tiles, polaroids, a wave and a plain page', () => {
     expect(bonbon).toMatchObject({
       hero: 'stacked', cards: 'soft', policies: 'softTiles',
-      serviceLayout: 'tiles', photoLayout: 'polaroids', divider: 'wave', pagePattern: 'dots',
+      serviceLayout: 'tiles', photoLayout: 'polaroids', divider: 'wave',
     });
+    expect(bonbon.pagePattern).toBeUndefined();
     expect(bonbon.heroNameFont?.fontFamily).toBe('Sniglet_800ExtraBold');
     expect(bonbon.custom).toMatchObject({ headingFont: 'Fredoka_600SemiBold', textFont: 'VarelaRound_400Regular', headingStyle: 'typed' });
     expect(heroUsesBrandFont(bonbon)).toBe(false);
