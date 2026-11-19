@@ -127,6 +127,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   muse: { lead: 'the', text: 'Services' },
   retreat: { text: 'Services' },
   bonbon: { text: 'Services' },
+  clinic: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */

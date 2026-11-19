@@ -60,14 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-six picked styles plus Classic, each once', () => {
+  it('has the thirty-seven picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
-      'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon',
+      'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic',
     ]);
   });
 
@@ -531,5 +531,20 @@ describe('Bonbon', () => {
     expect(bonbon.custom).toMatchObject({ headingFont: 'Fredoka_600SemiBold', textFont: 'VarelaRound_400Regular', headingStyle: 'typed' });
     expect(heroUsesBrandFont(bonbon)).toBe(false);
     expect(heroPhotoPickLimit(bonbon)).toBe(0);
+  });
+});
+
+describe('Clinic', () => {
+  const clinic = getPageStyle('clinic');
+
+  it('has its lowercase name beside the logo, numbered sections and treatments, outline buttons and the pinned bar', () => {
+    expect(clinic).toMatchObject({
+      hero: 'customLeft', cards: 'flat', policies: 'accordion', numberedServices: true,
+      buttonShape: 'outline', pinnedBookBar: true,
+    });
+    expect(clinic.heroNameFont).toMatchObject({ fontFamily: 'LeagueSpartan-Light', transform: 'lowercase' });
+    expect(clinic.custom).toMatchObject({ headingFont: 'LeagueSpartan-ExtraBold', textFont: 'Jura-VariableFont_wght', headingStyle: 'numbered' });
+    expect(heroUsesBrandFont(clinic)).toBe(false);
+    expect(clinic.divider).toBeUndefined();
   });
 });
