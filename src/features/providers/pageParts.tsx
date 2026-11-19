@@ -8,7 +8,7 @@
 // them rather than drawing their own.
 
 import React, { useId } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Defs, Path, Pattern, Rect } from "react-native-svg";
 
 import type { PagePattern as PagePatternKey, SectionDivider as SectionDividerKey } from "../../constants/pageStyles";
@@ -17,6 +17,14 @@ import { withAlpha } from "../../constants/providerThemes";
 /** The small mark between two sections, centred, in the accent. */
 export function SectionDivider({ divider, accent }: { divider: SectionDividerKey; accent: string }) {
   switch (divider) {
+    case "stars":
+      return (
+        <View style={styles.starsRow} accessible={false} importantForAccessibility="no-hide-descendants">
+          <View style={[styles.starsRule, { backgroundColor: withAlpha(accent, 0.3) }]} />
+          <Text style={[styles.stars, { color: accent }]}>✦ ✦ ✦</Text>
+          <View style={[styles.starsRule, { backgroundColor: withAlpha(accent, 0.3) }]} />
+        </View>
+      );
     case "line":
       return <View style={[styles.line, { backgroundColor: withAlpha(accent, 0.3) }]} accessible={false} />;
     case "wave":
@@ -79,4 +87,7 @@ export function PagePattern({
 const styles = StyleSheet.create({
   divider: { alignItems: "center", marginTop: 4, marginBottom: 20 },
   line: { height: StyleSheet.hairlineWidth * 2, marginTop: 4, marginBottom: 22 },
+  starsRow: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 24, marginTop: 4, marginBottom: 20 },
+  starsRule: { flex: 1, height: StyleSheet.hairlineWidth * 2 },
+  stars: { fontSize: 11, lineHeight: 16, letterSpacing: 5 },
 });

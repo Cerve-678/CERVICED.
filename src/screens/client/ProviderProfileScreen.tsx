@@ -3613,6 +3613,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const serviceTiles = pageStyle.serviceLayout === "tiles";
   // Noir's Book buttons are barely rounded, the word in spaced capitals.
   const squareButtons = pageStyle.buttonShape === "square";
+  // Muse: no button, just "Book" underlined in the accent.
+  const textLinkButtons = pageStyle.buttonShape === "textLink";
+  // Muse's services read as a printed menu: no photos, the name, a dotted
+  // leader and the price on one line, the length under it.
+  const serviceMenu = pageStyle.serviceLayout === "menu";
   const servicePhotoCards = pageStyle.serviceLayout === "photoCards";
   const serviceStacked = serviceTiles || servicePhotoCards;
   const serviceTileImageWidth = serviceTileGridWidth > 0 ? Math.floor((serviceTileGridWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
@@ -3776,7 +3781,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
             <View style={styles.serviceCardBlur}>
               <View style={[styles.serviceItem, serviceTiles && styles.serviceItemTile, servicePhotoCards && styles.serviceItemPhotoCard]}>
-                {(() => {
+                {serviceMenu ? null : (() => {
                   const isMulti = (service.images?.length ?? 0) > 1;
                   const hasSingle = (service.images?.length ?? 0) === 1;
                   const hasLocal = !!service.image;
@@ -3851,9 +3856,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 })()}
 
                 <View style={[styles.serviceInfo, serviceTiles && styles.serviceInfoTile]}>
+                  {serviceMenu ? (
+                    <View style={styles.menuNameRow}>
+                      <Text style={[styles.serviceName, styles.menuName, { color: SV.text }, bodyFont]}>{service.name}</Text>
+                      <View style={[styles.menuLeader, { borderBottomColor: SV.sub }]} />
+                      <Text style={[styles.servicePrice, styles.menuPrice, { color: SV.text }, bodyFont]}>£{service.price}</Text>
+                    </View>
+                  ) : (
                   <Text style={[styles.serviceName, { color: SV.text }, bodyFont]}>
                     {service.name}
                   </Text>
+                  )}
                   {service.serviceType === "consultation" &&
                     provider.onlineConsultationsAvailable && (
                       <Text
@@ -3932,9 +3945,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     <Text style={[styles.serviceDuration, { color: SV.sub }, bodyFont]}>
                       {service.duration}
                     </Text>
+                    {serviceMenu ? null : (
                     <Text style={[styles.servicePrice, { color: SV.text }, bodyFont]}>
                       £{service.price}
                     </Text>
+                    )}
                   </View>
                 </View>
 
@@ -4014,6 +4029,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 ? withAlpha(SV.sub, 0.18)
                                 : adaptiveAccentColor,
                           },
+                          textLinkButtons && styles.textLinkButton,
                         ]}
                         onPress={() => {
                           runAction(() => handleBook(service));
@@ -4028,6 +4044,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             fullyBooked
                               ? { color: SV.sub, fontSize: 10 }
                               : { color: "#fff" },
+                            // After the colour above: a text link is the accent, or grey when full.
+                            textLinkButtons && [styles.textLinkButtonText, { color: fullyBooked ? SV.sub : adaptiveAccentColor }],
                           ]}
                         >
                           {!takingBookings
@@ -5441,6 +5459,14 @@ const styles = StyleSheet.create({
   pinnedBookText: { flex: 1, minWidth: 0 },
   pinnedBookBarSquare: { borderRadius: 6 },
   squareButton: { borderRadius: 2 },
+  // Muse: the Book button is just the word, underlined.
+  textLinkButton: { backgroundColor: "transparent", paddingHorizontal: 4, shadowOpacity: 0, elevation: 0 },
+  textLinkButtonText: { textDecorationLine: "underline", fontSize: 13 },
+  // Muse's printed menu line.
+  menuNameRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  menuName: { flexShrink: 1, marginBottom: 0, fontSize: 15 },
+  menuLeader: { flex: 1, minWidth: 16, borderBottomWidth: 1, borderStyle: "dotted", marginBottom: 4 },
+  menuPrice: { fontSize: 14 },
   squareButtonText: { textTransform: "uppercase", letterSpacing: 1.4 },
   pinnedBookName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
   pinnedBookPrice: { fontSize: 12, marginTop: 2 },
