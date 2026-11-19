@@ -1529,3 +1529,22 @@ client side should stay consistent with that alert.
 
 Parked by the user on 2026-11-19: "put waitlist stuff in to do with artifact
 and all". No migration expected for the client tick alone.
+
+## 35. To do — keep the "unread in your other mode" line live (2026-11-19)
+
+When the Notifications list is empty, it can say "You're all caught up here —
+but you have 3 unread in client mode." That number is fetched once, when the
+screen opens (`otherHatUnread` in `src/screens/shared/NotificationsScreen.tsx`).
+If a notification for the other hat arrives while you're on the screen, the
+line doesn't change until you open it again.
+
+Nothing is lost and every bell is right; it's cosmetic.
+
+The fix: replace the one-off fetch with the shared hook the bells already use,
+`useUnreadNotificationCount(isProvider ? 'client' : 'provider', hasOtherHat)`
+(`src/features/notifications/useUnreadNotificationCount.ts`, #665). App only,
+no migration.
+
+Found in the 2026-11-19 sweep for gaps between the two hats (after #665 and
+#666); that sweep found nothing else. Parked by the user on 2026-11-19: "put
+in to do".
