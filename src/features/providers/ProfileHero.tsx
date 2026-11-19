@@ -968,6 +968,33 @@ export function ProfileHeroLayout({
         />
       );
 
+    case "archWindow": {
+      // Retreat: their chosen photo in a tall arched window, the logo resting
+      // on its foot, then the name in Marcellus, what they do and the details,
+      // all centred. No photo: the window is their colour with the logo in it.
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.archWrap}>
+          <View style={[layout.archWindow, { backgroundColor: blend(accent, "#FFFFFF", 0.35) }]}>
+            {photo ? (
+              <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
+            ) : (
+              <View style={layout.logoNoGap}>{renderLogo(92)}</View>
+            )}
+          </View>
+          {photo ? <View style={[layout.archLogo, layout.logoNoGap]}>{renderLogo(60)}</View> : null}
+          <View style={layout.archNameRow} accessible accessibilityRole="header" accessibilityLabel={name}>
+            <Text style={[layout.archName, { color: heroText }, shadow]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {name}
+            </Text>
+            {tick}
+          </View>
+          {kicker ? <Text style={[layout.archKicker, { color: heroSub }, shadow]} numberOfLines={2}>{kicker}</Text> : null}
+          <View style={layout.archDetails}>{details}</View>
+        </View>
+      );
+    }
+
     case "colourBlock": {
       // Riviera: a block of their colour from the very top, what they do in
       // small caps, the name huge in Fraunces' soft black italic, and the logo
@@ -1184,6 +1211,17 @@ const layout = StyleSheet.create({
   gridName: { fontFamily: "Manrope-Bold", fontSize: 24, lineHeight: 30, letterSpacing: -0.4, flexShrink: 1 },
   gridFoot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "flex-start" },
   // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
+  // Retreat: the window starts below the header buttons, centred.
+  archWrap: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
+  archWindow: {
+    width: 196, height: 236, overflow: "hidden", alignItems: "center", justifyContent: "center",
+    borderTopLeftRadius: 98, borderTopRightRadius: 98, borderBottomLeftRadius: 6, borderBottomRightRadius: 6,
+  },
+  archLogo: { marginTop: -30 },
+  archNameRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 12 },
+  archName: { fontFamily: "Marcellus-Regular", fontSize: 30, lineHeight: 40, textAlign: "center", flexShrink: 1 },
+  archKicker: { fontFamily: "DidactGothic-Regular", fontSize: 10.5, lineHeight: 15, letterSpacing: 2.4, textAlign: "center", marginTop: 4 },
+  archDetails: { alignItems: "center", alignSelf: "stretch", marginTop: 12 },
   // Riviera: the block runs from the very top, under the header buttons; its
   // words start below them. The logo hangs over the block's lower right corner.
   colourBlockWrap: { marginBottom: 26 },

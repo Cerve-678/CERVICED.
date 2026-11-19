@@ -41,6 +41,7 @@ export type PageStyleKey =
   | 'riviera'
   | 'noir'
   | 'muse'
+  | 'retreat'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -176,6 +177,7 @@ export type PageHero =
   | 'gridHeader' // the logo and name in a box of fine lines, what they do and their area in cells under it (Grid)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
+  | 'archWindow' // their chosen photo in a tall arched window, the logo on its foot, the name centred under it (Retreat)
   | 'colourBlock' // a block of the accent: what they do, the name huge in a fat italic, the logo over its corner (Riviera)
   | 'split'    // their chosen photo down the left half, the logo, name and details on the right (Posy)
   | 'titlePage'; // a book's title page set straight on the backdrop: ringed logo, the name in IM Fell, an ornament, what they do in italic
@@ -289,11 +291,13 @@ export type PhotoLayout =
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
   | 'line'  // a hairline across the page (Noir)
-  | 'stars'; // three small stars between two fine rules (Muse)
+  | 'stars'  // three small stars between two fine rules (Muse)
+  | 'dots';  // three small dots, centred (Retreat)
 
 export type ButtonShape =
   | 'square'    // barely rounded, the word in spaced capitals (Noir)
-  | 'textLink'; // no button at all: the word underlined in the accent (Muse)
+  | 'textLink'  // no button at all: the word underlined in the accent (Muse)
+  | 'outline';  // a round outline in the ink, no fill (Retreat)
 
 export interface HeroNameFont {
   fontFamily: string;
@@ -306,7 +310,8 @@ export interface HeroNameFont {
 }
 
 export type PagePattern =
-  | 'gingham'; // a soft check of the accent (Posy)
+  | 'gingham' // a soft check of the accent (Posy)
+  | 'glow';   // a soft wash of the accent from the top left corner (Retreat)
 
 export const DEFAULT_PAGE_STYLE: PageStyleKey = 'classic';
 
@@ -570,6 +575,14 @@ export const PAGE_STYLES: readonly PageStyle[] = [
       headingStyle: 'script', centred: true, scriptFont: 'Italianno-Regular',
     },
   },
+  {
+    key: 'retreat', name: 'Retreat', description: 'Calm and open: your photo in an arched window, no boxes, a soft glow',
+    heading: 'custom', cards: 'open', policies: 'hairline', logo: 'circle',
+    hero: 'archWindow', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    divider: 'dots', buttonShape: 'outline', pagePattern: 'glow',
+    custom: { headingFont: 'Marcellus-Regular', headingScale: 1, textFont: 'DidactGothic-Regular', headingStyle: 'typed', centred: true },
+  },
 ];
 
 /** How many portfolio photos this style's hero shows, from the ones the
@@ -585,6 +598,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     // needs a photo lets the provider pick it (the design itself is unchanged).
     case 'bow': return 1;
     case 'split': return 1;    // Posy's left half
+    case 'archWindow': return 1; // Retreat's window
     default: return 0;
   }
 }
