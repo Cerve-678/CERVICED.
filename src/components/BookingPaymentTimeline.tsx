@@ -1,6 +1,7 @@
 // One booking payment, opened from Payments & payouts: what it's worth to the
-// provider, any tip or late/no-show fee charged on it, and a timeline from
-// booked to their bank.
+// provider, any tip, its late/no-show/late-cancel fee (charged, refunded and
+// answered right here, not on a separate sheet), and a timeline from booked
+// to their bank.
 import React, { useMemo } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -13,12 +14,15 @@ import {
 } from '../features/payments/bookingPaymentTimeline';
 import type { ProviderFeeEarning, ProviderPayout, ProviderTipEarning } from '../services/providerPaymentService';
 import { feeCountsToYou, feeKindLabel } from '../features/bookings/bookingFeeRules';
+import { feeDisputeLabel } from '../features/payments/bankDisputeStatus';
+import BookingFeeCard from '../features/bookings/BookingFeeCard';
+import { useAppDialog } from './AppDialog';
 
 const money = (pence: number, currency = 'gbp') => new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(pence / 100);
 
 const feePence = (fee: ProviderFeeEarning) => fee.payoutPence ?? fee.amountPence;
 
-export default function BookingPaymentTimeline({ row, tips, fees = [], scheduleSentence, onClose, onRefund }: {
+export default function BookingPaymentTimeline({ row, tips, fees = [], scheduleSentence, onClose, onRefund, onFeeChanged }: {
   row: ProviderPayout;
   tips: readonly ProviderTipEarning[];
   /** Late, no-show or late-cancel fees charged on this booking. */
@@ -27,8 +31,12 @@ export default function BookingPaymentTimeline({ row, tips, fees = [], scheduleS
   onClose: () => void;
   /** Absent when this payment can't be refunded from here. */
   onRefund?: (() => void) | undefined;
+  /** A fee was charged, refunded or answered here, so the list re-reads. */
+  onFeeChanged?: (() => void) | undefined;
 }) {
   const C = useBusinessPalette();
+  // Its own dialogs: one opened from the screen behind can't show above a Modal.
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const insets = useSafeAreaInsets();
   const steps = useMemo(() => bookingPaymentTimeline(row, tips, { now: new Date(), scheduleSentence }), [row, tips, scheduleSentence]);
   const tipTotal = tips.reduce((sum, tip) => sum + tipPence(tip), 0);
@@ -67,13 +75,26 @@ export default function BookingPaymentTimeline({ row, tips, fees = [], scheduleS
           {fees.map(fee => {
             const label = feeKindLabel(fee.kind);
             const name = label.charAt(0).toUpperCase() + label.slice(1);
-            return <Line key={fee.id} label={feeCountsToYou(fee) ? name : `${name}, ${fee.status === 'refunded' ? 'refunded' : 'taken back'}`} value={money(feePence(fee))} />;
+            const state = fee.status === 'refunded' ? 'refunded' : feeDisputeLabel(fee.bankDispute ?? undefined, fee.payoutStatus)
+              ?? (feeCountsToYou(fee) ? null : 'taken back');
+            return <Line key={fee.id} label={state ? `${name}, ${state}` : name} value={money(feePence(fee))} />;
           })}
 
           <View style={[st.section, { borderTopColor: C.border }]}>
             <Text style={[st.eyebrow, { color: C.accentText }]}>WHERE IT IS</Text>
             {steps.map((step, i) => <Step key={step.key} step={step} last={i === steps.length - 1} nextDone={steps[i + 1]?.state === 'done' || steps[i + 1]?.state === 'now'} />)}
           </View>
+
+          <BookingFeeCard
+            embedded
+            bookingId={row.booking_id}
+            role="provider"
+            otherName={row.booking?.customer_name?.split(' ')[0]}
+            colors={{ card: C.card, text: C.text, sub: C.sub, border: C.border, accent: C.accent, onAccent: C.bg }}
+            showConfirm={showConfirm}
+            showAlert={showAlert}
+            onChanged={onFeeChanged}
+          />
 
           {onRefund && <View style={[st.section, { borderTopColor: C.border, paddingBottom: 0 }]}>
             <TouchableOpacity accessibilityRole="button" activeOpacity={0.75} onPress={onRefund} style={[st.action, { backgroundColor: C.surface }]}>
@@ -82,6 +103,7 @@ export default function BookingPaymentTimeline({ row, tips, fees = [], scheduleS
           </View>}
         </View>
       </ScrollView>
+      <DialogHost />
     </View>
   </Modal>;
 }

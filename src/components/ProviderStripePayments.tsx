@@ -10,8 +10,8 @@ import BookingPaymentTimeline from './BookingPaymentTimeline';
 import { onRefundHold, payoutNeedsAttention, payoutStatusLabel, tipPence, tipStatusLabel } from '../features/payments/bookingPaymentTimeline';
 import { useAppDialog } from './AppDialog';
 import IssueRefundSheet, { type RefundIssued } from './IssueRefundSheet';
-import BookingFeeSheet, { type BookingFeeSheetTarget } from './BookingFeeSheet';
 import { feeCountsToYou, feeKindLabel, feesToChargeNow } from '../features/bookings/bookingFeeRules';
+import type { BookingFeeKind } from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
 import { toUserMessageAllowingDbGuard } from '../utils/userFacingError';
 import { getProviderFinance, type ProviderFinance, getConnectLink, getConnectStatus, getProviderPayouts, getProviderFeeEarnings, getFeeChargeCandidates, type FeeChargeCandidate, getProviderTipEarnings, getPayoutSchedule, setPayoutSchedule, type ConnectStatus, type ProviderPayout, type ProviderFeeEarning, type ProviderTipEarning } from '../services/providerPaymentService';
@@ -21,7 +21,6 @@ import {
   type PayoutScheduleChoice, type PayoutWeekday,
 } from '../constants/payoutSchedule';
 import { groupTipsByBooking } from '../features/payments/tipsByBooking';
-import { feeDisputeLabel } from '../features/payments/bankDisputeStatus';
 import { providerCancelGroupBooking, providerCancelOwnBooking } from '../services/databaseService';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../constants/featureFlags';
 
@@ -30,11 +29,9 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from '../constants/featureFlags';
  *  passes these in rather than this component reading them a second time. */
 export interface PaymentSetupSummary { deposit: string; inPerson: string }
 
-export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor, children }: {
+export default function ProviderStripePayments({ stripeReturn, setup, children }: {
   stripeReturn?: StripeConnectReturn;
   setup?: PaymentSetupSummary | undefined;
-  /** Opened from a booking's "Late & no-show fees" line: show that booking's fee. */
-  openFeeFor?: string | undefined;
   children?: React.ReactNode;
 }) {
   const C = useBusinessPalette();
@@ -47,10 +44,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
   const [payouts, setPayouts] = useState<ProviderPayout[]>([]);
   const [feeEarnings, setFeeEarnings] = useState<ProviderFeeEarning[]>([]);
   const [tipEarnings, setTipEarnings] = useState<ProviderTipEarning[]>([]);
-  // Late, no-show and late-cancel fees the provider can still charge, and the
-  // one whose fee sheet is open.
+  // Late, no-show and late-cancel fees the provider can still charge. They're
+  // charged, refunded and answered inside the booking's payment sheet.
   const [feeCandidates, setFeeCandidates] = useState<FeeChargeCandidate[]>([]);
-  const [feeSheet, setFeeSheet] = useState<BookingFeeSheetTarget | null>(null);
   // A tip shows inside its booking's payment card, so the two read as one.
   const tipGroups = useMemo(() => groupTipsByBooking(payouts.map(row => row.booking_id), tipEarnings), [payouts, tipEarnings]);
   const [loading, setLoading] = useState(true);
@@ -212,28 +208,13 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
     showAlert(title, message);
   }, [load, showAlert]);
   const feesToCharge = useMemo(() => feesToChargeNow(feeCandidates, Date.now()), [feeCandidates]);
+  const chargeableByBooking = useMemo(() => new Map(feesToCharge.map(fee => [fee.bookingId, fee.kinds])), [feesToCharge]);
   // Fees already charged, shown on their booking's payment too.
   const feesByBooking = useMemo(() => {
     const map = new Map<string, ProviderFeeEarning[]>();
     for (const fee of feeEarnings) map.set(fee.bookingId, [...(map.get(fee.bookingId) ?? []), fee]);
     return map;
   }, [feeEarnings]);
-  const openFeeSheet = (target: BookingFeeSheetTarget) => { void Haptics.selectionAsync().catch(() => {}); setFeeSheet(target); };
-  const closeFeeSheet = () => { setFeeSheet(null); void load(); };
-  // From a booking page: straight to that booking's fee, once.
-  const openedFeeFor = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (!openFeeFor || openedFeeFor.current === openFeeFor) return;
-    openedFeeFor.current = openFeeFor;
-    setSection('bookings');
-    const known = feeCandidates.find(c => c.bookingId === openFeeFor) ?? feeEarnings.find(f => f.bookingId === openFeeFor);
-    setFeeSheet({
-      bookingId: openFeeFor,
-      customerName: known?.customerName ?? null,
-      serviceName: known?.serviceName ?? null,
-      bookingDate: known && 'terms' in known ? known.terms.bookingDate : null,
-    });
-  }, [openFeeFor, feeCandidates, feeEarnings]);
   const tabs = [
     { key: 'overview', label: 'Overview' },
     { key: 'bookings', label: 'Bookings' },
@@ -324,9 +305,9 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
         {feesToCharge.length > 0 && <TouchableOpacity accessibilityRole="button" onPress={() => pick('bookings')} activeOpacity={0.75} style={styles.plainRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: C.text }]}>{feesToCharge.length === 1 ? '1 fee you can charge' : `${feesToCharge.length} fees you can charge`}</Text>
-            <Text style={[styles.caption, { color: C.sub }]}>Late, no-show or late cancellation. Charge within 24 hours of the appointment.</Text>
+            <Text style={[styles.caption, { color: C.sub }]}>Open the booking payment to charge it, within 24 hours of the appointment.</Text>
           </View>
-          <Text style={[styles.link, { color: C.accentText }]}>Fees</Text>
+          <Text style={[styles.link, { color: C.accentText }]}>Bookings</Text>
         </TouchableOpacity>}
         <TouchableOpacity accessibilityRole="button" onPress={() => pick('payouts')} activeOpacity={0.75} style={styles.plainRow}>
           <View style={{ flex: 1 }}>
@@ -347,7 +328,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
           </View>
           {!!payoutError && <Notice text={payoutError} />}
           {!loading && !payoutError && payouts.length === 0 && <EmptyState title="Your first payment starts here" detail="When a client pays online, their booking payment will appear here." />}
-          {payouts.slice(0, 3).map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
+          {payouts.slice(0, 3).map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} toCharge={chargeableByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
 
       </>}
@@ -356,33 +337,8 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
         <PaySection first title="Booking payments" sub="Your latest 50 online payments. Tap one to follow it from booking to bank.">
           {!!payoutError && <Notice text={payoutError} />}
           {!loading && !payoutError && payouts.length === 0 && <EmptyState title="No booking payments yet" detail="Online payments will appear here. Payments taken in person stay between you and your client." />}
-          {payouts.map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
+          {payouts.map((row, i) => <PaymentRow key={row.id} row={row} first={i === 0} tips={tipGroups.byBooking.get(row.booking_id)} fees={feesByBooking.get(row.booking_id)} toCharge={chargeableByBooking.get(row.booking_id)} onPress={() => openTimeline(row)} />)}
         </PaySection>
-        {(feesToCharge.length > 0 || feeEarnings.length > 0) && <PaySection title="Late & no-show fees"
-          sub="Charge a late, no-show or late cancellation fee within 24 hours of the appointment. Tap a fee to refund it or answer a dispute.">
-          {feesToCharge.map((fee, i) => <TouchableOpacity key={`charge-${fee.bookingId}`} accessibilityRole="button"
-            accessibilityLabel={`Charge ${fee.customerName || 'client'}, ${fee.serviceName ?? 'booking'}`}
-            onPress={() => openFeeSheet(fee)} activeOpacity={0.75}
-            style={[styles.listRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: C.text }]}>{[fee.customerName || 'Client', fee.serviceName].filter(Boolean).join(' · ')}</Text>
-              <Text style={[styles.caption, { color: C.sub }]}>{`Can charge a ${fee.kinds.map(feeKindLabel).join(' or ')} until ${fee.closesAtLabel}`}</Text>
-            </View>
-            <Text style={[styles.link, { color: C.accentText }]}>Charge</Text>
-          </TouchableOpacity>)}
-          {feeEarnings.map((fee, i) => <TouchableOpacity key={fee.id} accessibilityRole="button"
-            onPress={() => openFeeSheet({ bookingId: fee.bookingId, customerName: fee.customerName, serviceName: fee.serviceName })} activeOpacity={0.75}
-            style={[styles.listRow, (i > 0 || feesToCharge.length > 0) && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: C.text }]}>{fee.kind === 'late' ? 'Late arrival fee' : fee.kind === 'no_show' ? 'No-show fee' : 'Late cancellation fee'}{fee.serviceName ? ` · ${fee.serviceName}` : ''}</Text>
-              <Text style={[styles.caption, { color: C.sub }]}>{[fee.customerName || 'Client', fee.chargedAt && `Charged ${date(new Date(fee.chargedAt).getTime())}`].filter(Boolean).join(' · ')}</Text>
-            </View>
-            <View style={styles.rowRight}>
-              <Text style={[styles.amountSmall, { color: C.text }]}>{fee.payoutPence != null ? money(fee.payoutPence, 'gbp') : money(fee.amountPence, 'gbp')}</Text>
-              <StatusChip label={feeStatusLabel(fee)} attention={fee.openDispute || fee.payoutStatus === 'failed'} />
-            </View>
-          </TouchableOpacity>)}
-        </PaySection>}
         {/* Only tips whose booking payment isn't in the list above; the rest are on their booking. */}
         {tipGroups.unmatched.length > 0 && <PaySection title={tipGroups.byBooking.size > 0 ? 'Earlier tips' : 'Tips'}
           sub="What clients tipped you after their appointment. It's all yours: CERVICED covers the card fee. Tips can't be refunded.">
@@ -499,6 +455,7 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
       row={timelineRow}
       tips={tipGroups.byBooking.get(timelineRow.booking_id) ?? []}
       fees={feesByBooking.get(timelineRow.booking_id) ?? []}
+      onFeeChanged={() => void load()}
       scheduleSentence={scheduleText}
       onClose={() => setTimelineRow(null)}
       onRefund={refundable(timelineRow) ? () => {
@@ -509,7 +466,6 @@ export default function ProviderStripePayments({ stripeReturn, setup, openFeeFor
         setTimeout(() => setRefundRow(row), 450);
       } : undefined}
     />}
-    {feeSheet && <BookingFeeSheet target={feeSheet} onClose={closeFeeSheet} />}
     {refundRow && <IssueRefundSheet
       booking={{ id: refundRow.booking_id, customerName: refundRow.booking?.customer_name, serviceName: refundRow.booking?.service_name_snapshot }}
       palette={{ ...C, iconBg: `${C.accent}1F` }}
@@ -534,7 +490,12 @@ function ScheduleOption({ label, selected, disabled, onPress, colors }: {
 }
 
 /** One booking payment in a list. Tapping it opens its timeline. */
-function PaymentRow({ row, tips, fees, first, onPress }: { row: ProviderPayout; tips?: ProviderTipEarning[] | undefined; fees?: ProviderFeeEarning[] | undefined; first: boolean; onPress: () => void }) {
+function PaymentRow({ row, tips, fees, toCharge, first, onPress }: {
+  row: ProviderPayout; tips?: ProviderTipEarning[] | undefined; fees?: ProviderFeeEarning[] | undefined;
+  /** Fees that can be charged on this booking right now. */
+  toCharge?: readonly BookingFeeKind[] | undefined;
+  first: boolean; onPress: () => void;
+}) {
   const C = useBusinessPalette();
   const tipTotal = (tips ?? []).reduce((sum, tip) => sum + tipPence(tip), 0);
   const feeTotal = (fees ?? []).filter(feeCountsToYou).reduce((sum, fee) => sum + (fee.payoutPence ?? fee.amountPence), 0);
@@ -548,6 +509,7 @@ function PaymentRow({ row, tips, fees, first, onPress }: { row: ProviderPayout; 
     <View style={{ flex: 1 }}>
       <Text style={[styles.label, { color: C.text }]}>{service}</Text>
       <Text style={[styles.caption, { color: C.sub }]}>{[row.booking?.customer_name || 'Client', when].filter(Boolean).join(' · ')}</Text>
+      {!!toCharge?.length && <Text style={[styles.caption, { color: C.accentText }]}>{`Can charge a ${toCharge.map(feeKindLabel).join(' or ')}`}</Text>}
     </View>
     <View style={styles.rowRight}>
       <Text style={[styles.amountSmall, { color: C.text }]}>{money(row.payout_amount, row.currency)}</Text>
@@ -558,20 +520,6 @@ function PaymentRow({ row, tips, fees, first, onPress }: { row: ProviderPayout; 
   </TouchableOpacity>;
 }
 
-function feeStatusLabel(fee: ProviderFeeEarning): string {
-  if (fee.status === 'refunded') return 'Refunded to client';
-  const bankDispute = feeDisputeLabel(fee.bankDispute ?? undefined, fee.payoutStatus);
-  if (bankDispute) return bankDispute;
-  if (fee.openDispute) return 'Disputed — waiting on your answer';
-  switch (fee.payoutStatus) {
-    case 'held': return 'Processing';
-    case 'transferred': return 'Sent for payday';
-    case 'reversed': return 'Taken back after a bank dispute';
-    case 'failed': return 'Needs attention';
-    case 'cancelled': return 'Cancelled';
-    default: return 'Processing';
-  }
-}
 const bankLabels: Record<string, string> = { pending: 'Scheduled', in_transit: 'On the way', paid: 'Paid', failed: 'Needs attention', canceled: 'Cancelled' };
 const money = (amount: number, currency: string) => new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(amount / 100);
 const balances = (rows: { amount: number; currency: string }[]) => rows.length ? rows.map(row => money(row.amount, row.currency)).join('\n') : '£0.00';

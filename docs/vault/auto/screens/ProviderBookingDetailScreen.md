@@ -10,7 +10,6 @@ tags: [screen, provider]
 - [[ProviderConversationScreen\|ProviderConversation]]
 - [[ProviderIntakeFormScreen\|ProviderIntakeForm]]
 - [[ProviderInfoPackScreen\|InfoPacks]]
-- [[PaymentsScreen\|Payments]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

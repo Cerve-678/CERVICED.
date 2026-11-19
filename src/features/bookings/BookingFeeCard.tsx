@@ -48,9 +48,14 @@ interface Props {
   refreshKey?: string;
   showConfirm: (title: string, message: string | undefined, buttons: { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }[]) => void;
   showAlert: (title: string, message?: string) => void;
-  /** Provider only: show a one-line summary that opens Payments & payouts,
-   *  where charging, refunds and disputes live, instead of the actions. */
-  onOpenPayments?: () => void;
+  /** Provider's booking page: only the charge button(s), and once a fee is
+   *  charged, that button greyed out with the result. Nothing here navigates;
+   *  refunds and disputes are on the booking's payment in Payments & payouts. */
+  bookingPage?: boolean;
+  /** Sits inside the Booking payment sheet's card as a section, not a card of its own. */
+  embedded?: boolean;
+  /** After any charge, refund, request or dispute answer, so the parent re-reads. */
+  onChanged?: (() => void) | undefined;
 }
 
 const pounds = (pence: number) => `£${(pence / 100).toFixed(2)}`;
@@ -61,7 +66,7 @@ function errorMessage(err: unknown, fallback: string, context: string): string {
   return toUserMessageAllowingDbGuard(err, fallback, context);
 }
 
-export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert, onOpenPayments }: Props) {
+export default function BookingFeeCard({ bookingId, role, colors: C, otherName, refreshKey, showConfirm, showAlert, bookingPage, embedded, onChanged }: Props) {
   const [charges, setCharges] = useState<BookingFeeCharge[] | null>(null);
   const [terms, setTerms] = useState<BookingFeeTerms | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,8 +100,8 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   // turns on (and goes) without leaving the page.
   const [nowMs, setNowMs] = useState(() => Date.now());
   const feeButtons = useMemo(
-    () => (role === 'provider' && onOpenPayments && terms && !fee ? bookingFeeButtons(terms, nowMs) : []),
-    [role, onOpenPayments, terms, fee, nowMs],
+    () => (role === 'provider' && bookingPage && terms && !fee ? bookingFeeButtons(terms, nowMs) : []),
+    [role, bookingPage, terms, fee, nowMs],
   );
   const hasFeeButtons = feeButtons.length > 0;
   useEffect(() => {
@@ -118,8 +123,9 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
     } finally {
       setBusy(false);
       await load();
+      onChanged?.();
     }
-  }, [load, showAlert]);
+  }, [load, showAlert, onChanged]);
 
   const confirmCharge = (kind: BookingFeeKind, amountPence: number) => {
     showConfirm(`Charge ${pounds(amountPence)}?`, `This charges ${otherName || 'the client'}'s saved card the ${kindLabel(kind)} they agreed to when booking. They'll be told and can dispute it with you.`, [
@@ -172,13 +178,25 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
   if (!charges) return null;
 
   // Just the button (user, 2026-11-19: "charge late should just be the charge
-  // late button, nothing else"). Once charged, the fee shows on this booking's
-  // payment in Payments & payouts.
-  if (role === 'provider' && onOpenPayments && hasFeeButtons) {
+  // late button, nothing else"). Once charged it stays, greyed out, saying
+  // what happened; it never opens Payments (user: pressing it shouldn't take
+  // you there). The fee shows on the booking's payment in Payments & payouts.
+  if (role === 'provider' && bookingPage) {
+    if (fee) {
+      const done = feeOutcomeLabel(fee, otherName);
+      return (
+        <View style={st.buttonsOnly}>
+          <View accessible accessibilityLabel={done} style={[st.button, { borderColor: C.border, borderWidth: StyleSheet.hairlineWidth, opacity: 0.6 }]}>
+            <Text style={[st.buttonText, { color: C.sub }]}>{done}</Text>
+          </View>
+        </View>
+      );
+    }
+    if (!hasFeeButtons) return null;
     return (
       <View style={st.buttonsOnly}>
         {feeButtons.map(b => {
-          const label = `Charge ${b.kind === 'late' ? 'late fee' : 'no-show fee'} · ${pounds(b.pence)}`;
+          const label = `Charge ${shortFeeName(b.kind).toLowerCase()} · ${pounds(b.pence)}`;
           const off = !b.enabled || busy;
           return (
             <TouchableOpacity
@@ -200,26 +218,6 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
           );
         })}
       </View>
-    );
-  }
-
-  if (role === 'provider' && onOpenPayments) {
-    const line = providerFeeSummary(fee, terms, window, otherName);
-    if (!line) return null;
-    return (
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel={`${line}. Open in Payments & payouts`}
-        onPress={onOpenPayments}
-        activeOpacity={0.75}
-        style={[st.card, st.compact, { backgroundColor: C.card, borderColor: C.border }]}
-      >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[st.heading, { color: C.sub }]}>LATE & NO-SHOW FEES</Text>
-          <Text style={[st.sub, { color: C.text }]}>{line}</Text>
-        </View>
-        <Text style={[st.link, { color: C.accent }]}>Payments</Text>
-      </TouchableOpacity>
     );
   }
 
@@ -316,39 +314,23 @@ export default function BookingFeeCard({ bookingId, role, colors: C, otherName, 
 
   if (body.length === 0) return null;
   return (
-    <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+    <View style={embedded ? [st.section, { borderTopColor: C.border }] : [st.card, { backgroundColor: C.card, borderColor: C.border }]}>
       <Text style={[st.heading, { color: C.sub }]}>{fee?.kind === 'late_cancel' || (window?.canCharge.late_cancel && !fee) ? 'LATE CANCELLATION' : 'LATE & NO-SHOW FEES'}</Text>
       {body}
     </View>
   );
 }
 
-/** One line for the booking page; the actions themselves are in Payments &
- *  payouts. Null when there's nothing to charge or follow up. */
-function providerFeeSummary(
-  fee: BookingFeeCharge | null,
-  terms: BookingFeeTerms | null,
-  window: ReturnType<typeof feeChargeWindow> | null,
-  otherName: string | undefined,
-): string | null {
-  const who = otherName || 'The client';
-  if (fee) {
-    const label = `${pounds(fee.amountPence)} ${kindLabel(fee.kind)}`;
-    if (fee.status === 'processing') return `${label} · charging…`;
-    if (fee.status === 'awaiting_client') return `${label} · waiting for ${otherName || 'the client'} to pay`;
-    if (fee.status === 'refunded') return `${label} · refunded`;
-    if (fee.status === 'succeeded') {
-      return fee.disputedAt && !fee.disputeResolvedAt ? `${who} disputed the ${label}` : `${label} · charged`;
-    }
-    return null;
-  }
-  if (!terms || !window?.open) return null;
-  const open = ([
-    ['late', terms.lateFeePence], ['no_show', terms.noShowFeePence], ['late_cancel', terms.lateCancelFeePence],
-  ] as const).filter(([k, p]) => window.canCharge[k] && !!p);
-  if (open.length === 0) return null;
-  const what = open.map(([k, p]) => `${kindLabel(k)} (${pounds(p!)})`).join(' or ');
-  return `You can charge a ${what} until ${window.closesAtLabel}.`;
+const shortFeeName = (kind: BookingFeeKind) => (kind === 'late' ? 'Late fee' : kind === 'no_show' ? 'No-show fee' : 'Late-cancel fee');
+
+/** What the greyed-out button on the booking page says once a fee is charged. */
+function feeOutcomeLabel(fee: BookingFeeCharge, otherName: string | undefined): string {
+  const name = shortFeeName(fee.kind);
+  if (fee.status === 'processing') return `${name} · charging…`;
+  if (fee.status === 'awaiting_client') return `${name} · waiting for ${otherName || 'the client'} to pay`;
+  if (fee.status === 'refunded') return `${name} refunded · ${pounds(fee.amountPence)}`;
+  if (fee.disputedAt && !fee.disputeResolvedAt) return `${name} disputed · ${pounds(fee.amountPence)}`;
+  return `${name} charged · ${pounds(fee.amountPence)}`;
 }
 
 function Action({ C, label, onPress, busy, ghost }: { C: BookingFeeColors; label: string; onPress: () => void; busy: boolean; ghost?: boolean }) {
@@ -369,7 +351,6 @@ const st = StyleSheet.create({
   input: { minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 10, fontSize: 14, textAlignVertical: 'top', marginBottom: 8 },
   button: { borderRadius: 20, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   buttonText: { fontFamily: 'BakbakOne-Regular', fontSize: 14 },
-  compact: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   buttonsOnly: { marginHorizontal: 16, marginTop: 12, gap: 8 },
-  link: { fontFamily: 'BakbakOne-Regular', fontSize: 12 },
+  section: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 18, marginTop: 8, gap: 8 },
 });
