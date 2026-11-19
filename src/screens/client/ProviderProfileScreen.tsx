@@ -153,6 +153,8 @@ const MAX_PILL_DOTS = 3;
 /** Posy's service tiles: the gap between the two and the padding inside each. */
 const SERVICE_TILE_GAP = 10;
 const SERVICE_TILE_PADDING = 8;
+/** The padding inside a usual service card (styles.serviceItem). */
+const SERVICE_CARD_PADDING = 15;
 
 const MultiImagePill: React.FC<{
   images: any[];
@@ -3604,12 +3606,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // fullscreen "Show all" sheet, so the two never drift out of sync. Pass
   // `onShowAll` to get the trailing expand button (inline view); pass null
   // for the sheet, which already shows everything.
-  // Posy's services sit two across as tiles, the photo on top. MultiImagePill
-  // pages by a fixed width, so the tile photo's size comes from the list's
-  // measured width rather than a percentage.
+  // Posy's services sit two across as tiles, the photo on top; Riviera's are
+  // one across with a wide photo on top. MultiImagePill pages by a fixed
+  // width, so the photo's size comes from the list's measured width rather
+  // than a percentage.
   const serviceTiles = pageStyle.serviceLayout === "tiles";
+  const servicePhotoCards = pageStyle.serviceLayout === "photoCards";
+  const serviceStacked = serviceTiles || servicePhotoCards;
   const serviceTileImageWidth = serviceTileGridWidth > 0 ? Math.floor((serviceTileGridWidth - SERVICE_TILE_GAP) / 2) - SERVICE_TILE_PADDING * 2 : 132;
-  const serviceTileImage = { width: serviceTileImageWidth, height: Math.round(serviceTileImageWidth * 0.82), borderRadius: 14 };
+  const serviceWideImageWidth = serviceTileGridWidth > 0 ? Math.floor(serviceTileGridWidth) - SERVICE_CARD_PADDING * 2 : 280;
+  const serviceTopImage = serviceTiles
+    ? { width: serviceTileImageWidth, height: Math.round(serviceTileImageWidth * 0.82), borderRadius: 14 }
+    : { width: serviceWideImageWidth, height: Math.round(serviceWideImageWidth * 0.5), borderRadius: 16 };
 
   const renderServiceCategoryBlock = (
     services: ServiceData[],
@@ -3738,7 +3746,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       {/* Services List */}
       <View
         style={[styles.categoryServicesContainer, serviceTiles && styles.serviceTilesGrid]}
-        onLayout={serviceTiles ? (e) => setServiceTileGridWidth(e.nativeEvent.layout.width) : undefined}
+        onLayout={serviceStacked ? (e) => setServiceTileGridWidth(e.nativeEvent.layout.width) : undefined}
       >
         {services.map((service, serviceIndex) => (
           <BlurView
@@ -3765,7 +3773,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             )}
             {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
             <View style={styles.serviceCardBlur}>
-              <View style={[styles.serviceItem, serviceTiles && styles.serviceItemTile]}>
+              <View style={[styles.serviceItem, serviceTiles && styles.serviceItemTile, servicePhotoCards && styles.serviceItemPhotoCard]}>
                 {(() => {
                   const isMulti = (service.images?.length ?? 0) > 1;
                   const hasSingle = (service.images?.length ?? 0) === 1;
@@ -3776,12 +3784,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <MultiImagePill
                         images={service.images!}
                         onPress={(imgs, idx) => openImageViewer(imgs, idx)}
-                        imageStyle={serviceTiles ? serviceTileImage : styles.serviceImage}
-                        noGap={serviceTiles}
+                        imageStyle={serviceStacked ? serviceTopImage : styles.serviceImage}
+                        noGap={serviceStacked}
                         containerStyle={[
                           styles.serviceImageContainer,
                           { marginRight: 0 },
-                          serviceTiles && serviceTileImage,
+                          serviceStacked && serviceTopImage,
                         ]}
                       />
                     );
@@ -3794,7 +3802,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       <View
                         style={[
                           styles.serviceImageContainer,
-                          serviceTiles && [serviceTileImage, styles.serviceImageTileGap],
+                          serviceStacked && [serviceTopImage, styles.serviceImageTileGap],
                           styles.serviceImagePlaceholder,
                           {
                             backgroundColor: adaptiveAccentColor + "1C",
@@ -3828,10 +3836,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         }
                       }}
                     >
-                      <View style={[styles.serviceImageContainer, serviceTiles && [serviceTileImage, styles.serviceImageTileGap]]}>
+                      <View style={[styles.serviceImageContainer, serviceStacked && [serviceTopImage, styles.serviceImageTileGap]]}>
                         <Image
                           source={imgSrc}
-                          style={serviceTiles ? serviceTileImage : styles.serviceImage}
+                          style={serviceStacked ? serviceTopImage : styles.serviceImage}
                           contentFit="cover"
                           transition={0}
                         />
@@ -4157,6 +4165,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   );
 
   // The price list as it sits on the page; "See all" opens the full sheet.
+  // The pinned bar's "From £…": the lowest price on the menu, as the menu shows it.
+  const lowestServicePrice = pageStyle.pinnedBookBar
+    ? Object.values(provider.categories).flat().reduce<string | null>((low, service) => {
+        const value = Number(service.price);
+        if (!Number.isFinite(value) || value <= 0) return low;
+        return low === null || value < Number(low) ? String(service.price) : low;
+      }, null)
+    : null;
+
   const renderInlineServices = () =>
     renderServiceCategoryBlock(visibleServices, () => {
       Haptics.selectionAsync().catch(() => {});
@@ -5005,6 +5022,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             "Book" becomes untappable. */}
         {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
 
+        {/* Riviera's pinned bar: the name, the lowest price and Book, which
+            jumps to Services. Not while selecting several (that bar takes
+            this spot), and never for a link-only provider (no services here). */}
+        {pageStyle.pinnedBookBar && canBookProvider && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
+          <View style={[styles.pinnedBookBar, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
+            <View style={styles.pinnedBookText}>
+              <Text style={[styles.pinnedBookName, { color: OP.text }, bodyFont]} numberOfLines={1}>{provider.displayName}</Text>
+              <Text style={[styles.pinnedBookPrice, { color: OP.sub }, bodyFont]} numberOfLines={1}>From £{lowestServicePrice}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.pinnedBookButton, { backgroundColor: adaptiveAccentColor }]}
+              onPress={jumpToServices}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Book with ${provider.displayName}: go to the services`}
+            >
+              <Text style={styles.pinnedBookButtonText}>Book</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Join nudge — a link-only provider can't be booked here, so this
             never shares the spot with the selection bar above. */}
         {isLinkOnly && viewerChecked && currentUserId && !isOwnProvider && !joinNudgeDismissed && (
@@ -5376,6 +5414,30 @@ const styles = StyleSheet.create({
   },
   // Floating "Want them on CERVICED? [Nudge] ✕" bar — same spot and shadow
   // as the selection bar, fixed near-black so it reads on every provider theme.
+  // Riviera's pinned bar, over the foot of the page above the tab bar.
+  pinnedBookBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 998,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingLeft: 20,
+    paddingRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+  },
+  pinnedBookText: { flex: 1, minWidth: 0 },
+  pinnedBookName: { fontFamily: "BakbakOne-Regular", fontSize: 14 },
+  pinnedBookPrice: { fontSize: 12, marginTop: 2 },
+  pinnedBookButton: { height: 46, paddingHorizontal: 24, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  pinnedBookButtonText: { fontFamily: "BakbakOne-Regular", fontSize: 14, color: "#FFFFFF" },
   joinNudgeBar: {
     position: "absolute",
     left: 16,
@@ -6469,6 +6531,8 @@ const styles = StyleSheet.create({
   serviceItemTile: { flexDirection: "column", alignItems: "stretch", padding: SERVICE_TILE_PADDING },
   serviceImageTileGap: { marginRight: 0, marginBottom: 10 },
   serviceInfoTile: { marginRight: 0 },
+  // Riviera: the wide photo takes the first line; the details and Book wrap under it.
+  serviceItemPhotoCard: { flexWrap: "wrap" },
   serviceActionTile: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", marginTop: 10 },
   waitlistJoinBtn: {
     borderRadius: 20,

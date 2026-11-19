@@ -177,6 +177,8 @@ export function ProviderPageSheet({
         // always floats: its sheet is a see-through glass card.
         provider.backgroundImage || veilTheme ? styles.contentSheetFloating : null,
         veilTheme ? styles.contentSheetGlass : null,
+        // Riviera's pinned Book bar sits over the foot: keep the last section clear of it.
+        pageStyle.pinnedBookBar ? styles.contentSheetPinnedBar : null,
       ]}
     >
       {/* Posy's gingham and the other printed pages: under everything on the sheet. */}
@@ -701,6 +703,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: SHEET_LIP_RADIUS,
     borderTopRightRadius: SHEET_LIP_RADIUS,
     overflow: "hidden",
+  },
+  contentSheetPinnedBar: {
+    paddingBottom: 210,
   },
   contentSheetFloating: {
     marginHorizontal: 10,

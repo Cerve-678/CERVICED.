@@ -122,6 +122,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   grid: { lead: '03', text: 'Services' },
   custom: { text: 'Services' },
   posy: { lead: 'the', text: 'Services' },
+  riviera: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
@@ -422,7 +423,12 @@ function MiniProfile({
         const stripe = stripeColours(accent);
         return (
           <View key={key} style={[mini.stripeBand, { backgroundColor: key % 2 === 0 ? stripe.soft : 'transparent', borderColor: key % 2 === 0 ? stripe.line : 'transparent' }]}>
-            <View style={[mini.card, mini.stripeBox, { backgroundColor: cardColour, borderColor: stripe.line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>
+            {style.openStrips ? (
+              // Riviera: the content straight on its strip.
+              <View style={[mini.bar, { backgroundColor: line }]} />
+            ) : (
+              <View style={[mini.card, mini.stripeBox, { backgroundColor: cardColour, borderColor: stripe.line }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>
+            )}
           </View>
         );
       }
@@ -493,6 +499,12 @@ function MiniProfile({
               <Text style={mini.appName} numberOfLines={1}>Name</Text>
               <View style={[mini.heroBar, mini.heroBarShort]} />
             </View>
+          </View>
+        ) : style.hero === 'colourBlock' ? (
+          // Riviera: the name in a fat italic on a block of the accent, the logo over its corner.
+          <View style={[mini.colourBlock, { backgroundColor: accent }]}>
+            <Text style={[mini.colourBlockName, { color: isDarkColor(accent) ? '#FFFFFF' : '#1A1512' }]} numberOfLines={1}>Name</Text>
+            <View style={mini.colourBlockLogo}>{logo}</View>
           </View>
         ) : style.hero === 'split' ? (
           // Posy: their photo down the left half, the logo and name on the right.
@@ -825,6 +837,10 @@ const mini = StyleSheet.create({
   sideName: { fontFamily: 'Prata-Regular', fontSize: 12, color: '#FFFFFF' },
   heroBar: { height: 4, width: '90%', borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.7)' },
   heroBarShort: { width: '60%' },
+  // Riviera
+  colourBlock: { alignSelf: 'stretch', flex: 1, justifyContent: 'flex-end', paddingLeft: 10, paddingBottom: 12 },
+  colourBlockName: { fontFamily: 'Fraunces-SoftBlackItalic', fontSize: 17, lineHeight: 23 },
+  colourBlockLogo: { position: 'absolute', right: 6, bottom: -6, transform: [{ scale: 0.75 }] },
   // Posy
   splitHero: { alignSelf: 'stretch', flex: 1, flexDirection: 'row' },
   splitPhoto: { flex: 1, borderBottomRightRadius: 10 },

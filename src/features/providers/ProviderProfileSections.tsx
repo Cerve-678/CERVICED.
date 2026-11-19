@@ -32,6 +32,8 @@ import { SectionDivider } from "./pageParts";
 import { filledOwnSections, ownSectionByline, type OwnSections } from "./ownSections";
 
 const INLINE_PORTFOLIO_LIMIT = 6;
+/** Riviera's prints lean a little each way, as if dropped on a table. */
+const POLAROID_TILTS = ["-4deg", "3deg", "-2deg", "2.5deg", "-3deg", "1.5deg"] as const;
 const COLUMN_GAP = 12;
 
 type SectionPalette = PageStylePalette;
@@ -432,6 +434,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const plates = !!palette.pageStyle?.pagePhotos;
   // Posy: three across, each with a round arched top.
   const arches = palette.pageStyle?.photoLayout === "arches";
+  // Riviera: three across as white-bordered prints, each tilted a little.
+  const polaroids = palette.pageStyle?.photoLayout === "polaroids";
   const divider = palette.pageStyle?.divider && showsDividerAbove(palette.pageStyle, "portfolio") ? palette.pageStyle.divider : null;
 
   const openFromModal = (index: number) => {
@@ -459,7 +463,25 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
           </TouchableOpacity>
         ) : null}
       </View>
-      {arches ? (
+      {polaroids ? (
+        <View style={styles.polaroidGrid}>
+          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.88}
+              onPress={() => onOpenImage(images, index)}
+              disabled={!interactiveImages}
+              style={[styles.polaroid, { transform: [{ rotate: POLAROID_TILTS[index % POLAROID_TILTS.length]! }] }, index % 3 === 1 && styles.polaroidRaised]}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`}
+            >
+              <View style={styles.polaroidPhoto}>
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : arches ? (
         <View style={styles.archGrid}>
           {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
             <TouchableOpacity
@@ -651,6 +673,14 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   // Posy: three arched photos to a row. A corner radius past half the side is
   // drawn at half, so 999 gives a full round top whatever the tile's width.
+  // Riviera: white prints with a deep bottom border, a soft shadow under each.
+  polaroidGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 14, paddingVertical: 6 },
+  polaroid: {
+    width: "31%", backgroundColor: "#FFFFFF", padding: 5, paddingBottom: 20,
+    shadowColor: "#000000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 3,
+  },
+  polaroidRaised: { marginTop: -6 },
+  polaroidPhoto: { width: "100%", aspectRatio: 0.88, overflow: "hidden", backgroundColor: "#EEEEEE" },
   archGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 },
   archTile: { width: "31.5%", aspectRatio: 0.68, overflow: "hidden", borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
   column: { flex: 1, gap: COLUMN_GAP },
