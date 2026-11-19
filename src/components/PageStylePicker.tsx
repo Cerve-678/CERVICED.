@@ -16,6 +16,7 @@ import { PAGE_STYLES, type PageStyle, type PageStyleKey } from '../constants/pag
 import { blend, isDarkColor, withAlpha } from '../constants/providerThemes';
 import { WaxSeal, waxColour } from '../features/providers/WaxSeal';
 import { BowGlyph, ribbonColours, stripeColours } from '../features/providers/heroes/demureOrnaments';
+import { VeilBackdrop } from '../features/providers/heroes/SheerHero';
 
 interface Props {
   value: PageStyleKey;
@@ -135,7 +136,11 @@ function MiniProfile({
   sheet: string;
   cardColour: string;
 }) {
-  const ink = isDarkColor(sheet) ? '#F2EDEA' : '#26201E';
+  // Sheer: on the profile the veil runs down the whole page and every section
+  // sits on dark glass (veilPageTheme), so the thumbnail draws it that way too,
+  // not as a dark top over a pale page.
+  const veilPage = style.veilPage === true;
+  const ink = veilPage || isDarkColor(sheet) ? '#F2EDEA' : '#26201E';
   const gazetteInk = isDarkColor(cardColour) ? '#FFFFFF' : '#1F1D1A';
   const line = withAlpha(ink, 0.18);
   const heroColours = (gradient.length >= 2 ? [gradient[0], gradient[1]] : [accent, sheet]) as [string, string];
@@ -406,7 +411,13 @@ function MiniProfile({
 
   return (
     <View style={[mini.root, { backgroundColor: sheet }]}>
-      <LinearGradient colors={heroColours} style={mini.hero}>
+      {veilPage ? (
+        <>
+          <LinearGradient colors={heroColours} style={StyleSheet.absoluteFill} />
+          <VeilBackdrop />
+        </>
+      ) : null}
+      <LinearGradient colors={veilPage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
         {style.hero === 'cover' ? (
           <>
             <View style={[mini.coverLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
@@ -536,7 +547,7 @@ function MiniProfile({
             </View>
           </View>
         ) : style.hero === 'veil' ? (
-          // Sheer: a see-through black veil over the hero, an oval round the logo, spaced caps.
+          // Sheer: an oval round the logo and spaced caps, on the page's veil.
           <View style={mini.veil}>
             <View style={mini.veilOval}>
               <View style={[mini.veilLogo, { backgroundColor: blend(accent, '#FFFFFF', 0.5) }]} />
@@ -643,7 +654,7 @@ function MiniProfile({
           </>
         ) : logo}
       </LinearGradient>
-      <View style={mini.body}>
+      <View style={[mini.body, veilPage && mini.veilGlass]}>
         {style.policies === 'band' ? (
           <View style={[mini.band, { backgroundColor: accent }]} />
         ) : null}
@@ -847,8 +858,15 @@ const mini = StyleSheet.create({
   callingName: { fontFamily: 'MonsieurLaDoulaise-Regular', fontSize: 15, lineHeight: 24, paddingHorizontal: 4, flexShrink: 1 },
   quietName: { fontFamily: 'JosefinSans_600SemiBold', fontSize: 11, letterSpacing: 2, color: '#2C3527' },
   sheerCaps: { fontFamily: 'Bellefair-Regular', fontSize: 9, lineHeight: 12, letterSpacing: 2, textAlign: 'center' },
-  sheerCard: { borderRadius: 0, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.38)' },
-  veil: { alignSelf: 'stretch', flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(8,6,6,0.6)', gap: 3 },
+  sheerCard: { borderRadius: 0, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.06)' },
+  veil: { alignSelf: 'stretch', flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  // The profile's see-through glass (veilPageTheme's sheetFill), inset so the
+  // veiled photo shows down its sides, edged in a hairline.
+  veilGlass: {
+    marginHorizontal: 5, backgroundColor: 'rgba(18,14,14,0.42)',
+    borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0, borderColor: 'rgba(255,255,255,0.3)',
+    borderTopLeftRadius: 6, borderTopRightRadius: 6,
+  },
   veilOval: { width: 24, height: 32, borderRadius: 12, borderWidth: 1, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   veilLogo: { width: 16, height: 16, borderRadius: 8 },
   veilName: { fontFamily: 'Bellefair-Regular', fontSize: 10, lineHeight: 13, letterSpacing: 1.5, color: '#FFFFFF' },
