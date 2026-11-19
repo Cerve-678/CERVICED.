@@ -287,6 +287,87 @@ function ProfileHeroLayoutBody({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "shopEdit": {
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.shopEditWrap}>
+          <View style={[layout.shopRule, { backgroundColor: withAlpha(heroText, 0.5) }]} />
+          <View style={layout.shopTopRow}>
+            <Text style={[layout.shopOverline, { color: heroSub }]}>THE SERVICE EDIT</Text>
+            {renderLogo(48)}
+          </View>
+          <View style={layout.shopEditName}>{renderName({ scale: 1.3 })}{tick}</View>
+          <Text style={[layout.shopOverline, { color: heroSub, marginBottom: 14 }]}>{kicker || "THOUGHTFULLY CURATED FOR YOU"}</Text>
+          <TouchableOpacity
+            style={[layout.shopEditPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.35) }]}
+            disabled={!photo || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={photo ? `${name} featured work` : undefined}
+            activeOpacity={0.88}
+          >
+            {photo ? <HeroPhoto uri={photo} /> : <View style={[layout.shopPhotoMark, { borderColor: withAlpha(heroText, 0.4) }]} />}
+            <View style={layout.shopPhotoLabel}><Text style={layout.shopPhotoLabelText}>FEATURED WORK</Text></View>
+          </TouchableOpacity>
+          <View style={layout.shopEditFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "shopGallery": {
+      const photos = (photoUris ?? []).slice(0, 3);
+      return (
+        <View style={layout.shopGalleryWrap}>
+          <View style={[layout.shopGalleryNav, { borderColor: withAlpha(heroText, 0.36) }]}>
+            {renderLogo(42)}
+            <Text style={[layout.shopOverline, { color: heroText }]}>EXPLORE  ·  BOOK</Text>
+          </View>
+          <View style={layout.shopGalleryName}>{renderName({ scale: 1.1 })}{tick}</View>
+          <Text style={[layout.shopOverline, { color: heroSub, marginBottom: 16 }]}>{kicker || "A COLLECTION OF OUR WORK"}</Text>
+          <View style={layout.shopGalleryPhotos}>
+            {[0, 1, 2].map(index => (
+              <TouchableOpacity
+                key={index}
+                style={[layout.shopGalleryPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", index === 1 ? 0.46 : 0.27) }]}
+                disabled={!photos[index] || !onOpenHeroPhoto}
+                onPress={() => onOpenHeroPhoto?.(index)}
+                accessibilityRole={photos[index] && onOpenHeroPhoto ? "imagebutton" : undefined}
+                accessibilityLabel={photos[index] ? `${name} work photo ${index + 1}` : undefined}
+                activeOpacity={0.88}
+              >
+                {photos[index] ? <HeroPhoto uri={photos[index]} /> : null}
+                <Text style={layout.shopGalleryNumber}>0{index + 1}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={layout.shopGalleryFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
+    case "shopRitual": {
+      const photo = photoUris?.[0];
+      return (
+        <View style={layout.shopRitualWrap}>
+          <Text style={[layout.shopRitualOverline, { color: heroSub }]}>A SPACE TO RESET</Text>
+          <View style={layout.shopRitualLogo}>{renderLogo(66)}</View>
+          <View style={layout.shopRitualName}>{renderName({ scale: 1.02 })}{tick}</View>
+          <View style={[layout.shopRitualRule, { backgroundColor: heroAccent }]} />
+          <Text style={[layout.shopRitualPhrase, { color: heroSub }]}>{kicker || "CARE IN EVERY DETAIL"}</Text>
+          <TouchableOpacity
+            style={[layout.shopRitualPhotoFrame, { borderColor: withAlpha(heroText, 0.42) }]}
+            disabled={!photo || !onOpenHeroPhoto}
+            onPress={() => onOpenHeroPhoto?.(0)}
+            accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+            accessibilityLabel={photo ? `${name} featured photo` : undefined}
+            activeOpacity={0.88}
+          >
+            <View style={[layout.shopRitualPhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.42) }]}>
+              {photo ? <HeroPhoto uri={photo} /> : null}
+            </View>
+          </TouchableOpacity>
+          <View style={layout.shopRitualFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
     case "pinboardHeader": {
       // Pinboard: up to three of their photos side by side as rounded pins of
       // uneven heights, like a Pinterest board, then the logo beside the name
@@ -1285,7 +1366,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader", "shopEdit", "shopGallery", "shopRitual"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return (BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont) || !!pageStyle.nameFontPickable;
@@ -1352,6 +1433,32 @@ export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 const TEXT_FIRST_DROP = 48;
 
 const layout = StyleSheet.create({
+  shopRule: { height: 1, marginBottom: 16 },
+  shopTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  shopOverline: { fontFamily: "Manrope-Bold", fontSize: 10, letterSpacing: 2, lineHeight: 16 },
+  shopEditWrap: { paddingHorizontal: 22, paddingTop: 26, paddingBottom: 26 },
+  shopEditName: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, marginBottom: 6 },
+  shopEditPhoto: { height: 214, overflow: "hidden", justifyContent: "flex-end" },
+  shopPhotoMark: { width: 88, height: 88, borderWidth: 1, borderRadius: 44, alignSelf: "center", position: "absolute", top: 56 },
+  shopPhotoLabel: { alignSelf: "flex-start", backgroundColor: "rgba(25,24,22,0.78)", paddingHorizontal: 13, paddingVertical: 8 },
+  shopPhotoLabelText: { fontFamily: "Manrope-Bold", color: "#FFFFFF", fontSize: 9, letterSpacing: 1.6 },
+  shopEditFoot: { alignItems: "flex-start", marginTop: 18, gap: 9 },
+  shopGalleryWrap: { paddingTop: 15, paddingBottom: 24 },
+  shopGalleryNav: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  shopGalleryName: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginTop: 20, marginBottom: 5 },
+  shopGalleryPhotos: { flexDirection: "row", gap: 4, height: 188 },
+  shopGalleryPhoto: { flex: 1, overflow: "hidden", justifyContent: "flex-end" },
+  shopGalleryNumber: { color: "#FFFFFF", fontFamily: "Manrope-Bold", fontSize: 11, letterSpacing: 1, margin: 8, textShadowColor: "#0009", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  shopGalleryFoot: { paddingHorizontal: 20, paddingTop: 18, alignItems: "flex-start", gap: 9 },
+  shopRitualWrap: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 28, alignItems: "center" },
+  shopRitualOverline: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 2.8, marginBottom: 20 },
+  shopRitualLogo: { marginBottom: 7 },
+  shopRitualName: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
+  shopRitualRule: { width: 56, height: 1, marginTop: 12, marginBottom: 12 },
+  shopRitualPhrase: { fontFamily: "TenorSans_400Regular", fontSize: 10, letterSpacing: 1.5, textAlign: "center", marginBottom: 20 },
+  shopRitualPhotoFrame: { width: "100%", height: 196, padding: 7, borderWidth: 1 },
+  shopRitualPhoto: { flex: 1, overflow: "hidden" },
+  shopRitualFoot: { marginTop: 19, alignItems: "center", gap: 8 },
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   pinboardWrap: { paddingHorizontal: 16, marginBottom: 12 },

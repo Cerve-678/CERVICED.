@@ -134,11 +134,14 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   ledger: { text: 'Services' },
   portfolio: { text: 'Services' },
   atelier: { text: 'Services' },
+  shopEdit: { text: 'The Services' },
+  shopGallery: { text: 'Explore Services' },
+  shopRitual: { text: 'THE SERVICES' },
   pinboard: { text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */
-function MiniProfile({
+export function MiniProfile({
   style,
   gradient,
   accent,
@@ -602,7 +605,28 @@ function MiniProfile({
       ) : null}
       {veilPage ? <VeilBackdrop /> : null}
       <LinearGradient colors={veilPage || backgroundImage ? ['transparent', 'transparent'] : heroColours} style={mini.hero}>
-        {style.hero === 'pinboardHeader' ? (
+        {style.hero === 'shopEdit' ? (
+          <View style={mini.shopEditHero}>
+            <View style={[mini.shopLine, { backgroundColor: withAlpha(ink, 0.5) }]} />
+            <Text style={[mini.shopLabel, { color: ink }]}>THE SERVICE EDIT</Text>
+            <Text style={[mini.shopEditName, { color: ink }]}>Name</Text>
+            <View style={[mini.shopEditPhoto, { backgroundColor: photoFill }]} />
+          </View>
+        ) : style.hero === 'shopGallery' ? (
+          <View style={mini.shopGalleryHero}>
+            <View style={[mini.shopLine, { backgroundColor: withAlpha(ink, 0.5) }]} />
+            <Text style={[mini.shopGalleryName, { color: ink }]}>Name</Text>
+            <View style={mini.shopGalleryPhotos}>
+              {[0, 1, 2].map(i => <View key={i} style={[mini.shopGalleryPhoto, { backgroundColor: blend(photoFill, accent, i * 0.1) }]} />)}
+            </View>
+          </View>
+        ) : style.hero === 'shopRitual' ? (
+          <View style={mini.shopRitualHero}>
+            <Text style={[mini.shopLabel, { color: ink }]}>A SPACE TO RESET</Text>
+            <Text style={[mini.shopRitualName, { color: ink }]}>Name</Text>
+            <View style={[mini.shopRitualPhoto, { backgroundColor: photoFill, borderColor: withAlpha(ink, 0.4) }]} />
+          </View>
+        ) : style.hero === 'pinboardHeader' ? (
           // Pinboard: three rounded pins side by side at uneven heights, then the logo beside the name.
           <View style={mini.pinHero}>
             <View style={mini.pinBoard}>
@@ -949,6 +973,18 @@ const styles = StyleSheet.create({
 });
 
 const mini = StyleSheet.create({
+  shopLine: { height: 1, alignSelf: 'stretch', marginBottom: 4 },
+  shopLabel: { fontFamily: 'Manrope-Bold', fontSize: 5, letterSpacing: 1.2 },
+  shopEditHero: { alignSelf: 'stretch', flex: 1, paddingHorizontal: 9, paddingTop: 5 },
+  shopEditName: { fontFamily: 'PlayfairDisplay_700Bold', fontSize: 15, lineHeight: 20 },
+  shopEditPhoto: { alignSelf: 'stretch', height: 30, marginTop: 3 },
+  shopGalleryHero: { alignSelf: 'stretch', flex: 1, paddingHorizontal: 6, paddingTop: 4 },
+  shopGalleryName: { fontFamily: 'Syne_700Bold', fontSize: 13, lineHeight: 17 },
+  shopGalleryPhotos: { flexDirection: 'row', gap: 2, height: 35 },
+  shopGalleryPhoto: { flex: 1 },
+  shopRitualHero: { alignSelf: 'stretch', flex: 1, alignItems: 'center', paddingHorizontal: 8, paddingTop: 5 },
+  shopRitualName: { fontFamily: 'TenorSans_400Regular', fontSize: 13, lineHeight: 18 },
+  shopRitualPhoto: { alignSelf: 'stretch', height: 29, borderWidth: 1, padding: 2, marginTop: 3 },
   // The demure set (2026-11-16).
   roundCard: { borderRadius: 10 },
   loungeCaps: { fontFamily: 'LeagueGothic-Regular', fontSize: 15, lineHeight: 20, letterSpacing: 0.4, textAlign: 'center' },
