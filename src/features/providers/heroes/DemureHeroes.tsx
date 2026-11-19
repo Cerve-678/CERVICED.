@@ -113,9 +113,10 @@ export function LoungeHero({
   name,
   accent,
   sheetColour,
+  renderLogo,
   details,
   tick,
-}: Pick<DemureHeroProps, "name" | "details" | "tick"> & {
+}: Pick<DemureHeroProps, "name" | "renderLogo" | "details" | "tick"> & {
   accent: string;
   /** The content sheet's colour: the name and the strip under the panel. */
   sheetColour: string;
@@ -129,6 +130,7 @@ export function LoungeHero({
   return (
     <View style={lounge.wrap}>
       <View style={[lounge.panel, { backgroundColor: accent }]}>
+        <View style={lounge.logo}>{renderLogo(52)}</View>
         {first ? (
           <View style={[lounge.byRow, { bottom: size * LOUNGE_BY_LIFT }]}>
             <Text style={[lounge.by, { color: cardInk(accent).text }]}>BY {first}</Text>
@@ -152,10 +154,11 @@ export function LoungeHero({
 }
 
 const lounge = StyleSheet.create({
-  // Opens on the panel, straight under the header buttons. Shorter than the
-  // photo it replaced (340), since there's no picture to show.
-  wrap: { alignSelf: "stretch", marginTop: -20, marginBottom: -LOUNGE_SHEET_OVERLAP },
+  // Starts below the profile header buttons. Shorter than the photo it
+  // replaced (340), since there's no picture to show.
+  wrap: { alignSelf: "stretch", marginTop: 22, marginBottom: -LOUNGE_SHEET_OVERLAP },
   panel: { height: 230, marginHorizontal: 10, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: "hidden" },
+  logo: { position: "absolute", top: 18, right: 20, height: 52 },
   byRow: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6 },
   by: { fontFamily: "HankenGrotesk-Medium", fontSize: 10, lineHeight: 14, letterSpacing: 5 },
   name: { position: "absolute", left: 6, right: 6, fontFamily: "LeagueGothic-Regular", textAlign: "center", letterSpacing: 0.5 },

@@ -835,6 +835,7 @@ export function ProfileHeroLayout({
           name={name}
           accent={accent}
           sheetColour={sheetColour ?? cardColour}
+          renderLogo={renderLogo}
           details={details}
           tick={tick}
         />
@@ -918,6 +919,36 @@ export function ProfileHeroLayout({
             </View>
             <View style={[layout.gridFoot, { borderTopColor: line }]}>{details}</View>
           </View>
+        </View>
+      );
+    }
+
+    case "slateHeader": {
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.slateWrap}>
+          <View style={layout.slateRow}>
+            <View style={layout.slateTitle}>{renderName({ scale: 1.12 })}</View>
+            <View style={layout.logoNoGap}>{renderLogo(56)}</View>
+          </View>
+          <View style={[layout.slateRule, { backgroundColor: heroAccent }]} />
+          {phrase ? <Text style={[layout.slatePhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+          <View style={layout.leftDetails}>{details}</View>
+        </View>
+      );
+    }
+
+    case "haloHeader": {
+      const phrase = [kickerPhrase(kicker), location].filter(Boolean).join(" · ");
+      return (
+        <View style={layout.haloWrap}>
+          <View style={[layout.haloRing, { borderColor: withAlpha(heroAccent, 0.65) }]}>
+            <View style={layout.logoNoGap}>{renderLogo(78)}</View>
+          </View>
+          <View style={layout.haloName}>{renderName({ scale: 0.96 })}</View>
+          {phrase ? <Text style={[layout.haloPhrase, { color: heroSub }, shadow]} numberOfLines={2}>{phrase}</Text> : null}
+          <View style={[layout.haloRule, { backgroundColor: heroAccent }]} />
+          <View style={layout.haloDetails}>{details}</View>
         </View>
       );
     }
@@ -1150,7 +1181,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont;
@@ -1206,10 +1237,21 @@ const layout = StyleSheet.create({
   appName: { fontFamily: "Manrope-Bold", fontSize: 26, lineHeight: 32, letterSpacing: -0.3, flexShrink: 1 },
   appPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 19, marginTop: 3 },
   gridWrap: { paddingHorizontal: 16, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },
-  gridBox: { borderWidth: 1 },
+  gridBox: { borderWidth: 1, borderRadius: 16 },
   gridTop: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
   gridName: { fontFamily: "Manrope-Bold", fontSize: 24, lineHeight: 30, letterSpacing: -0.4, flexShrink: 1 },
   gridFoot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "flex-start" },
+  slateWrap: { paddingHorizontal: 20, marginTop: 40, marginBottom: 28 },
+  slateRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  slateTitle: { flex: 1, minWidth: 0, alignItems: "flex-start" },
+  slateRule: { height: 2, borderRadius: 1, marginTop: 14, marginBottom: 12 },
+  slatePhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 20 },
+  haloWrap: { alignItems: "center", paddingHorizontal: 20, marginTop: 24, marginBottom: 28 },
+  haloRing: { width: 102, height: 102, borderWidth: 1, borderRadius: 51, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  haloName: { alignItems: "center", maxWidth: "100%" },
+  haloPhrase: { fontFamily: "HankenGrotesk-Medium", fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 6 },
+  haloRule: { width: 34, height: 2, borderRadius: 1, marginTop: 18, marginBottom: 4 },
+  haloDetails: { alignItems: "center", marginTop: 12 },
   // Custom · Cards and Big Name start on text, so they sit as low as Arch and Spa.
   // Retreat: the window starts below the header buttons, centred.
   archWrap: { alignItems: "center", paddingHorizontal: 20, marginTop: TEXT_FIRST_DROP, marginBottom: 26 },

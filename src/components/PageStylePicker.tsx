@@ -120,6 +120,8 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   bow: { text: 'The Services' },
   pure: { text: 'Services' },
   grid: { lead: '03', text: 'Services' },
+  slate: { text: 'SERVICES' },
+  halo: { text: 'SERVICES' },
   custom: { text: 'Services' },
   posy: { lead: 'the', text: 'Services' },
   riviera: { text: 'Services' },
@@ -538,6 +540,20 @@ function MiniProfile({
               <View style={[mini.heroBar, mini.heroBarShort]} />
             </View>
           </View>
+        ) : style.hero === 'slateHeader' ? (
+          <View style={mini.slateHero}>
+            <View style={mini.slateHeroRow}>
+              <Text style={[mini.slateHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
+              <View style={mini.smallLogo}>{logo}</View>
+            </View>
+            <View style={[mini.slateHeroRule, { backgroundColor: accent }]} />
+            <View style={[mini.heroBar, mini.heroBarShort]} />
+          </View>
+        ) : style.hero === 'haloHeader' ? (
+          <View style={mini.haloHero}>
+            <View style={[mini.haloHeroRing, { borderColor: withAlpha(accent, 0.8) }]}>{logo}</View>
+            <Text style={[mini.haloHeroName, { color: isDarkColor(heroColours[0]) ? '#FFFFFF' : '#1F1A1C' }]} numberOfLines={1}>Name</Text>
+          </View>
         ) : style.hero === 'spa' ? (
           // Spa: a quiet line, the name spaced out, the ringed logo.
           <>
@@ -843,6 +859,13 @@ const mini = StyleSheet.create({
   gridHero: { alignSelf: 'stretch', marginHorizontal: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)' },
   gridHeroTop: { paddingHorizontal: 4, paddingVertical: 3 },
   gridHeroFoot: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.8)', paddingHorizontal: 6, paddingVertical: 4 },
+  slateHero: { alignSelf: 'stretch', paddingHorizontal: 12, paddingTop: 10 },
+  slateHeroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  slateHeroName: { fontFamily: 'Manrope-Bold', fontSize: 16, lineHeight: 20 },
+  slateHeroRule: { height: 2, borderRadius: 1, marginTop: 7, marginBottom: 5 },
+  haloHero: { alignItems: 'center', gap: 3 },
+  haloHeroRing: { width: 39, height: 39, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  haloHeroName: { fontFamily: 'Manrope-Bold', fontSize: 10, lineHeight: 14 },
   groupedCard: { borderRadius: 7 },
   gridCard: { borderRadius: 0, borderWidth: 1 },
   sideLines: { flex: 1, gap: 4, alignItems: 'center' },
