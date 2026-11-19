@@ -180,6 +180,7 @@ export type PageHero =
   | 'slateHeader' // a large name and compact logo above one accent rule (Slate)
   | 'haloHeader' // a centred logo in a fine ring, name and details beneath (Halo)
   | 'prismHeader' // angled translucent colour planes frame the logo and name (Custom's Prism top)
+  | 'roseCampaign' // the name and a rule on a deep panel beside one chosen work photo, in a rose frame (Custom's Rose top)
   | 'customLeft' // the logo on the left, the name and what they do beside it (Custom: Cards)
   | 'customBig'  // no logo: what they do in small caps, then the name large on the left (Custom: Big Name)
   | 'archWindow' // their chosen photo in a tall arched window, the logo on its foot, the name centred under it (Retreat)
@@ -675,6 +676,7 @@ export function heroPhotoPickLimit(style: PageStyle): number {
     case 'archWindow': return 1; // Retreat's window
     case 'portfolioFront': return 1; // Portfolio's cover image
     case 'pinboardHeader': return 3; // Pinboard's board of pins
+    case 'roseCampaign': return 1; // Custom's Rose top: the photo beside the name
     default: return 0;
   }
 }
@@ -691,6 +693,7 @@ export function heroPhotoSlotAspect(hero: PageHero, index: number, count: number
     case 'split': return 0.62;              // Posy's left half
     case 'archWindow': return 196 / 236;    // Retreat's window
     case 'portfolioFront': return 358 / 230; // Portfolio's cover
+    case 'roseCampaign': return 156 / 248;  // Rose's photo, beside the name panel
     case 'pinboardHeader': {
       // Side by side at uneven heights (150, 124, 138); one photo is 156 across.
       if (count <= 1) return 358 / 156;

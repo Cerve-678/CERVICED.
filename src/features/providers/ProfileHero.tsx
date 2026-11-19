@@ -287,6 +287,39 @@ function ProfileHeroLayoutBody({
   const heroAccent = heroIsDark ? blend(accent, "#FFFFFF", 0.55) : accent;
 
   switch (pageStyle.hero) {
+    case "roseCampaign": {
+      // Custom's Rose top (owner, 2026-11-19: "keep rose hero, add to custom
+      // hero only"): a campaign block, the name and a rule on a deep panel
+      // beside one chosen work photo, framed in a soft rose line.
+      const photo = photoUris?.[0];
+      const rose = blend(accent, "#FFFFFF", heroIsDark ? 0.65 : 0.35);
+      return (
+        <View style={layout.roseWrap}>
+          <View style={layout.roseHeader}>
+            <Text style={[layout.roseOverline, { color: heroText }]}>A FRESH TAKE ON YOUR ROUTINE</Text>
+            {renderLogo(42)}
+          </View>
+          <View style={[layout.roseFeature, { borderColor: rose }]}>
+            <View style={[layout.roseCopy, { backgroundColor: withAlpha(heroColour, 0.92) }]}>
+              <Text style={[layout.roseEyebrow, { color: rose }]}>{kicker || "EXPERIENCE THE DIFFERENCE"}</Text>
+              <Text style={[layout.roseName, pickedName(31), { color: rose }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.62} accessibilityRole="header">{name}</Text>
+              {tick}
+              <View style={[layout.roseRule, { backgroundColor: rose }]} />
+              <Text style={[layout.roseSmall, { color: heroText }]}>{location || "DISCOVER THE SERVICES"}</Text>
+            </View>
+            <TouchableOpacity
+              style={[layout.rosePhoto, { backgroundColor: blend(heroColour, "#FFFFFF", 0.62) }]}
+              disabled={!photo || !onOpenHeroPhoto}
+              onPress={() => onOpenHeroPhoto?.(0)}
+              accessibilityRole={photo && onOpenHeroPhoto ? "imagebutton" : undefined}
+              accessibilityLabel={photo ? `${name} featured work` : undefined}
+              activeOpacity={0.88}
+            >{photo ? <HeroPhoto uri={photo} /> : null}</TouchableOpacity>
+          </View>
+          <View style={layout.roseFoot}>{meta}{details}</View>
+        </View>
+      );
+    }
     case "pinboardHeader": {
       // Pinboard: up to three of their photos side by side as rounded pins of
       // uneven heights, like a Pinterest board, then the logo beside the name
@@ -1285,7 +1318,7 @@ function SealRing({
 /** The heroes that draw the business name in the font picked in Branding →
  *  Name (through renderName). Every other style letters the name in its own
  *  type, so Branding switches the font picker off for it (owner, 2026-11-17). */
-const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader"];
+const BRAND_FONT_HEROES: readonly PageStyle["hero"][] = ["stacked", "cover", "masthead", "sideBySide", "poster", "spa", "customLeft", "customBig", "slateHeader", "haloHeader", "prismHeader", "roseCampaign"];
 
 export function heroUsesBrandFont(pageStyle: PageStyle): boolean {
   return (BRAND_FONT_HEROES.includes(pageStyle.hero) && !pageStyle.heroNameFont) || !!pageStyle.nameFontPickable;
@@ -1352,6 +1385,17 @@ export const DETAILS_ON_CARD_INK = { text: "#1F1A1C", sub: "#6A5A60" } as const;
 const TEXT_FIRST_DROP = 48;
 
 const layout = StyleSheet.create({
+  roseWrap: { paddingHorizontal: 18, paddingTop: 17, paddingBottom: 24 },
+  roseHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 52 },
+  roseOverline: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 1.4, flexShrink: 1 },
+  roseFeature: { flexDirection: "row", height: 248, borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  roseCopy: { width: "54%", paddingHorizontal: 14, paddingVertical: 16, justifyContent: "center", alignItems: "flex-start" },
+  roseEyebrow: { fontFamily: "Manrope-Bold", fontSize: 9, letterSpacing: 1.2, marginBottom: 9 },
+  roseName: { fontFamily: "Italiana_400Regular", fontSize: 31, lineHeight: 36 },
+  roseRule: { width: 44, height: 1, marginTop: 12, marginBottom: 10 },
+  roseSmall: { fontFamily: "Manrope-Bold", fontSize: 8, letterSpacing: 1.2 },
+  rosePhoto: { flex: 1, overflow: "hidden" },
+  roseFoot: { alignItems: "center", gap: 8, marginTop: 16 },
   shadow: { textShadowColor: "rgba(0,0,0,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 },
   infoCenter: { alignItems: "center", marginBottom: 30, paddingHorizontal: 20 },
   pinboardWrap: { paddingHorizontal: 16, marginBottom: 12 },
