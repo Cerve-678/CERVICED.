@@ -1575,6 +1575,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     Haptics.selectionAsync().catch(() => {});
     scrollToSection(servicesSectionRef.current);
   }, [scrollToSection]);
+  // Riviera's pinned Book bar goes once it's tapped: it has done its job of
+  // taking them to Services (owner, 2026-11-19). It comes back on the next
+  // provider's page.
+  const [pinnedBookBarDismissed, setPinnedBookBarDismissed] = useState(false);
+  useEffect(() => {
+    setPinnedBookBarDismissed(false);
+  }, [providerId]);
+  const pressPinnedBook = useCallback(() => {
+    setPinnedBookBarDismissed(true);
+    jumpToServices();
+  }, [jumpToServices]);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(
@@ -4382,9 +4393,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {canBookProvider && selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
 
         {/* Riviera's pinned bar: the name, the lowest price and Book, which
-            jumps to Services. Not while selecting several (that bar takes
-            this spot), and never for a link-only provider (no services here). */}
-        {pageStyle.pinnedBookBar && canBookProvider && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
+            jumps to Services and then goes. Not while selecting several (that
+            bar takes this spot), and never for a link-only provider (no
+            services here). */}
+        {pageStyle.pinnedBookBar && !pinnedBookBarDismissed && canBookProvider && !provider.isLinkOnly && !selectMode && lowestServicePrice ? (
           <View style={[styles.pinnedBookBar, squareButtons && styles.pinnedBookBarSquare, { bottom: FLOATING_TAB_BAR_CLEARANCE, backgroundColor: OP.card, borderColor: OP.border }]}>
             <View style={styles.pinnedBookText}>
               <Text style={[styles.pinnedBookName, { color: OP.text }, bodyFont]} numberOfLines={1}>{provider.displayName}</Text>
@@ -4392,7 +4404,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             </View>
             <TouchableOpacity
               style={[styles.pinnedBookButton, squareButtons && styles.squareButton, { backgroundColor: adaptiveAccentColor }]}
-              onPress={jumpToServices}
+              onPress={pressPinnedBook}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Book with ${provider.displayName}: go to the services`}
