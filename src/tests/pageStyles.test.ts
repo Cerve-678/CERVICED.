@@ -60,14 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-three picked styles plus Classic, each once', () => {
+  it('has the thirty-four picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
-      'posy', 'riviera', 'noir',
+      'posy', 'riviera', 'noir', 'muse',
     ]);
   });
 
@@ -479,5 +479,24 @@ describe('Noir', () => {
     expect(heroNameFontStyle({ fontFamily: 'Gloock-Regular' }, 40)).toEqual({ fontFamily: 'Gloock-Regular', fontSize: 40, lineHeight: 54 });
     expect(heroNameFontStyle({ fontFamily: 'X', scale: 0.8, transform: 'uppercase', letterSpacing: 2 }, 40))
       .toEqual({ fontFamily: 'X', fontSize: 32, lineHeight: 43, textTransform: 'uppercase', letterSpacing: 2 });
+  });
+});
+
+describe('Muse', () => {
+  const muse = getPageStyle('muse');
+
+  it('has its big name in Italiana, an Italianno script word, a printed menu, swiping photos, stars and text-link Book', () => {
+    expect(muse).toMatchObject({
+      hero: 'customBig', cards: 'paper', policies: 'gentleNotes',
+      serviceLayout: 'menu', photoLayout: 'swipe', divider: 'stars', buttonShape: 'textLink',
+    });
+    expect(muse.heroNameFont?.fontFamily).toBe('Italiana_400Regular');
+    expect(muse.custom).toMatchObject({ headingFont: 'Bellefair-Regular', textFont: 'Bellefair-Regular', headingStyle: 'script', scriptFont: 'Italianno-Regular' });
+    expect(heroUsesBrandFont(muse)).toBe(false);
+  });
+
+  it('opens on its About, so the stars sit above every section after it', () => {
+    expect(showsDividerAbove(muse, 'about')).toBe(false);
+    expect(showsDividerAbove(muse, 'portfolio')).toBe(true);
   });
 });

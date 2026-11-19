@@ -124,6 +124,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   posy: { lead: 'the', text: 'Services' },
   riviera: { text: 'Services' },
   noir: { text: 'Services' },
+  muse: { lead: 'the', text: 'Services' },
 };
 
 /** A tiny drawing of the profile top and one section in this style. */

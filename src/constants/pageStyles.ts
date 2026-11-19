@@ -40,6 +40,7 @@ export type PageStyleKey =
   | 'posy'
   | 'riviera'
   | 'noir'
+  | 'muse'
   | 'custom'; // built from the provider's own picks (constants/customPageStyle)
 
 /** How a section's title is drawn. */
@@ -275,20 +276,24 @@ export interface PageStyle {
 /** Service layouts beyond the usual row (owner, 2026-11-19, the parts canvas). */
 export type ServiceLayout =
   | 'tiles'      // two across: the photo on top, then the name, length and price, Book under them (Posy)
-  | 'photoCards'; // one across: a wide photo on top, then the name and price beside Book (Riviera)
+  | 'photoCards' // one across: a wide photo on top, then the name and price beside Book (Riviera)
+  | 'menu';      // a printed menu: no photos, the name, a dotted leader and the price, its length under (Muse)
 
 /** Portfolio layouts beyond the usual columns. */
 export type PhotoLayout =
   | 'arches'     // three across, each photo with a round arched top (Posy)
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
-  | 'feature';   // one big photo beside two small, then two more under them (Noir)
+  | 'feature'    // one big photo beside two small, then two more under them (Noir)
+  | 'swipe';     // one row of tall photos that scrolls sideways (Muse)
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
-  | 'line'; // a hairline across the page (Noir)
+  | 'line'  // a hairline across the page (Noir)
+  | 'stars'; // three small stars between two fine rules (Muse)
 
 export type ButtonShape =
-  | 'square'; // barely rounded, the word in spaced capitals (Noir)
+  | 'square'    // barely rounded, the word in spaced capitals (Noir)
+  | 'textLink'; // no button at all: the word underlined in the accent (Muse)
 
 export interface HeroNameFont {
   fontFamily: string;
@@ -552,6 +557,18 @@ export const PAGE_STYLES: readonly PageStyle[] = [
     heroNameFont: { fontFamily: 'Gloock-Regular' },
     photoLayout: 'feature', divider: 'line', buttonShape: 'square', pinnedBookBar: true, portfolioFirst: true,
     custom: { headingFont: 'Gloock-Regular', headingScale: 1, textFont: 'HankenGrotesk-Medium', headingStyle: 'underlined', centred: false },
+  },
+  {
+    key: 'muse', name: 'Muse', description: 'Wedding stationery: your name very large, a printed menu on paper cards, stars between',
+    heading: 'custom', cards: 'paper', policies: 'gentleNotes', logo: 'circle',
+    hero: 'customBig', aboutInHero: false,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    heroNameFont: { fontFamily: 'Italiana_400Regular', scale: 1.05 },
+    serviceLayout: 'menu', photoLayout: 'swipe', divider: 'stars', buttonShape: 'textLink',
+    custom: {
+      headingFont: 'Bellefair-Regular', headingScale: 1.05, textFont: 'Bellefair-Regular',
+      headingStyle: 'script', centred: true, scriptFont: 'Italianno-Regular',
+    },
   },
 ];
 

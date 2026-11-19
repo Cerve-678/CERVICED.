@@ -228,6 +228,8 @@ export function ProfileStylePreview({
   const surface = serviceCardSurface(pageStyle, { card: OP.card, accent, sheet: OP.bg });
   const tiles = pageStyle.serviceLayout === "tiles";
   const photoCards = pageStyle.serviceLayout === "photoCards";
+  const menu = pageStyle.serviceLayout === "menu";
+  const textLink = pageStyle.buttonShape === "textLink";
   const serviceInk = surface && sectionsSitOnPage(pageStyle) ? page : { text: OP.text, sub: OP.sub };
   const fontScale = resolveProviderFontScale(brandFont);
 
@@ -506,6 +508,7 @@ export function ProfileStylePreview({
               {surface ? null : <LinearGradient colors={highlight} style={StyleSheet.absoluteFill} />}
               {pageStyle.cards === "gloss" ? <GlossShine radius={squareCards ? 0 : 28} /> : null}
               <View style={[styles.serviceRow, tiles && styles.tileColumn, photoCards && styles.photoCardRow]}>
+                {menu ? null : (
                 <View style={[styles.serviceThumb, tiles && styles.tileThumb, photoCards && styles.photoCardThumb, { backgroundColor: withAlpha(accent, 0.11) }]}>
                   {services[index]?.imageUri && !pageStyle.numberedServices ? (
                     <Image source={{ uri: services[index]!.imageUri! }} style={tiles || photoCards ? StyleSheet.absoluteFill : styles.serviceThumbImage} fadeDuration={0} />
@@ -515,11 +518,23 @@ export function ProfileStylePreview({
                     </Text>
                   )}
                 </View>
+                )}
                 {services[index] ? (
                   <View style={styles.serviceText}>
-                    <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]} numberOfLines={1}>{services[index].name}</Text>
+                    {menu ? (
+                      // Muse: the printed menu line, as on the profile.
+                      <View style={styles.menuRow}>
+                        <Text style={[styles.serviceName, styles.menuName, { color: serviceInk.text }, bodyFont]} numberOfLines={1}>{services[index].name}</Text>
+                        <View style={[styles.menuLeader, { borderBottomColor: serviceInk.sub }]} />
+                        <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]}>{previewPrice(services[index].price)}</Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.serviceName, { color: serviceInk.text }, bodyFont]} numberOfLines={1}>{services[index].name}</Text>
+                    )}
                     <Text style={[styles.serviceMeta, { color: serviceInk.sub }, bodyFont]} numberOfLines={1}>
-                      {[formatDurationMinutes(services[index].minutes), previewPrice(services[index].price)].filter(Boolean).join(" · ")}
+                      {menu
+                        ? formatDurationMinutes(services[index].minutes)
+                        : [formatDurationMinutes(services[index].minutes), previewPrice(services[index].price)].filter(Boolean).join(" · ")}
                     </Text>
                   </View>
                 ) : (
@@ -528,8 +543,8 @@ export function ProfileStylePreview({
                     <View style={[styles.line, { width: "40%", backgroundColor: withAlpha(serviceInk.text, 0.12) }]} />
                   </View>
                 )}
-                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: accent }]}>
-                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: onAccentInk(accent).text }]}>Book</Text>
+                <View style={[styles.bookPill, pageStyle.buttonShape === "square" && styles.bookSquare, { backgroundColor: textLink ? "transparent" : accent }]}>
+                  <Text style={[styles.bookText, pageStyle.buttonShape === "square" && styles.bookSquareText, { color: textLink ? accent : onAccentInk(accent).text }, textLink && styles.bookLinkText]}>Book</Text>
                 </View>
               </View>
               {services[index]?.addOns?.length ? (
@@ -662,6 +677,11 @@ const styles = StyleSheet.create({
   bookText: { fontFamily: "BakbakOne-Regular", fontSize: 12 },
   // Noir: square Book buttons, the word in spaced capitals.
   bookSquare: { borderRadius: 2 },
+  bookLinkText: { textDecorationLine: "underline" },
+  // Muse's printed menu line.
+  menuRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  menuName: { flexShrink: 1 },
+  menuLeader: { flex: 1, minWidth: 12, borderBottomWidth: 1, borderStyle: "dotted", marginBottom: 4 },
   bookSquareText: { textTransform: "uppercase", letterSpacing: 1.4 },
   reviews: { marginTop: 12 },
   zone: { marginHorizontal: -8, paddingHorizontal: 6.5, paddingTop: 6, borderRadius: 20, marginBottom: 12 },

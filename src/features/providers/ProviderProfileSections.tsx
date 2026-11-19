@@ -440,6 +440,8 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const polaroids = palette.pageStyle?.photoLayout === "polaroids";
   // Noir: one big photo beside two small ones, then two more under them.
   const feature = palette.pageStyle?.photoLayout === "feature";
+  // Muse: one row of tall photos that scrolls sideways, every photo in it.
+  const swipe = palette.pageStyle?.photoLayout === "swipe";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
     <TouchableOpacity
       key={item.id}
@@ -474,13 +476,43 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         ) : (
           <Text style={[styles.plainTitle, { color: palette.text }]}>Portfolio</Text>
         )}
-        {items.length > (feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
+        {!swipe && items.length > (feature ? FEATURE_PHOTO_LIMIT : INLINE_PORTFOLIO_LIMIT) ? (
           <TouchableOpacity onPress={() => setShowAll(true)} hitSlop={10}>
             <Text style={[styles.portfolioSeeAll, { color: palette.accent }]}>See all {items.length}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
-      {feature ? (
+      {swipe ? (
+        <>
+          {/* A list, not a ScrollView: the whole portfolio is in this row, so
+              only the photos near the screen are drawn. */}
+          <FlatList
+            data={items}
+            horizontal
+            keyExtractor={item => item.id}
+            showsHorizontalScrollIndicator={false}
+            style={styles.swipeRow}
+            contentContainerStyle={styles.swipeContent}
+            nestedScrollEnabled
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={5}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => onOpenImage(images, index)}
+                disabled={!interactiveImages}
+                style={styles.swipeTile}
+                accessibilityRole="imagebutton"
+                accessibilityLabel={item.caption || `Portfolio photo ${index + 1} of ${items.length}`}
+              >
+                <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
+              </TouchableOpacity>
+            )}
+          />
+          {items.length > 2 ? <Text style={[styles.swipeHint, { color: palette.sub }]}>Swipe for more</Text> : null}
+        </>
+      ) : feature ? (
         <View style={styles.featureGrid}>
           <View style={styles.featureRow}>
             {items[0] ? featureTile(items[0], 0, items.length > 1 ? styles.featureBig : styles.featureOnly) : null}
@@ -706,6 +738,11 @@ const styles = StyleSheet.create({
   columns: { flexDirection: "row", gap: COLUMN_GAP },
   // Posy: three arched photos to a row. A corner radius past half the side is
   // drawn at half, so 999 gives a full round top whatever the tile's width.
+  // Muse: the row runs to the sheet's right edge, so the next photo peeks in.
+  swipeRow: { marginRight: -20 },
+  swipeContent: { gap: 8, paddingRight: 20 },
+  swipeTile: { width: 140, height: 188, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(0,0,0,0.06)" },
+  swipeHint: { fontSize: 11, marginTop: 8, textAlign: "center" },
   // Noir: a big photo two rows tall, then square-ish small ones beside and under it.
   featureGrid: { gap: 6 },
   featureRow: { flexDirection: "row", gap: 6 },
