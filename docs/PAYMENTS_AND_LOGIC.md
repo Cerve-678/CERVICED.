@@ -506,7 +506,7 @@ confirmed** (Part 6).
 Overview, Bookings, Payouts and Settings. A held payout is called
 **Processing** (an "i" beside the word explains the 24-hour hold), and one
 sent to their Stripe balance is **Sent for payday**. Tapping a booking payment
-opens its timeline: booked and paid, the appointment, any tip, processing
+opens its timeline: booked and paid, the appointment, any tip or charged late / no-show fee, processing
 until `release_after`, any refund request or bank dispute, then sent for
 payday and paid to the bank on their schedule. The timeline can't say which
 bank payout a booking went out in, because CERVICED doesn't match Stripe
@@ -722,7 +722,7 @@ stops a no-show being marked until it has passed.
 | The provider receives | The fee **minus Stripe's actual card fee**, held 24 hours, then sent, less any money they owe (section 2.8) |
 | CERVICED | Takes nothing |
 | Saved card | The client can't remove it until 24 hours after the appointment |
-| Where the provider charges it | **Payments & payouts → Bookings → Late & no-show fees** (since 18 November; it was on the booking page). Every fee that can still be charged is listed there, with the charged ones underneath; tapping one opens it to charge, refund or answer a dispute. The booking page also has a button for each late or no-show fee on the booking's policy (merged 18 November, #615; reaches providers with the next app build): greyed out until it can be charged (late fee from the start time; no-show fee once the client is marked a no-show), live for the 24 hours after the appointment, then gone. Once a fee is charged, the booking page shows a one-line status that links to Payments for refunds and disputes. Same rules and server checks either way |
+| Where the provider charges it | **Payments & payouts → Bookings → Late & no-show fees** (since 18 November; it was on the booking page). Every fee that can still be charged is listed there, with the charged ones underneath; tapping one opens it to charge, refund or answer a dispute. The booking page also has a button for each late or no-show fee on the booking's policy (merged 18 November, #615; reaches providers with the next app build): greyed out until it can be charged (late fee from the start time; no-show fee once the client is marked a no-show), live for the 24 hours after the appointment, then gone. Since 19 November the booking page shows only those buttons, with no heading, notes or link around them. Once a fee is charged, the booking page shows a one-line status that links to Payments for refunds and disputes, and the fee also shows on that booking's payment in Payments & payouts ("+ £x fee" on its row, and a line in the Booking payment sheet that's added to the total, unless it was refunded or taken back). Same rules and server checks either way |
 
 **If the card is declined** (or the bank wants the client to approve the
 payment):
