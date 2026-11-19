@@ -515,25 +515,30 @@ export function PageSectionHeading({
  * `bare` drops the surface but keeps the heading, for content that brings its
  * own tiles (the policy grids).
  */
-/** Which of Stripes' sections sit on a tinted strip, so the page alternates
- *  in its usual order (About, Services, Portfolio, Policies, Reviews) and
- *  ends on the hero's stronger shade. */
-const STRIPE_TINT: Record<PageSectionKey, "soft" | "strong" | null> = {
+/** Which of Stripes' sections sit on a tinted strip. Set by the order the
+ *  profile actually draws them in (ProviderPageSheet): About, Policies,
+ *  Services, Reviews, Contact, Hours, Portfolio, Additional Information, then
+ *  the provider's own sections. Services and Portfolio never sit on a strip
+ *  (they draw their own heading), so the tints step round them and the page
+ *  takes turns, plain then tinted, under the hero's stronger strip. Owner,
+ *  2026-11-19: the old table followed a different order, so two tinted
+ *  strips met and Reviews jumped to the hero's shade halfway down. */
+export const STRIPE_TINT: Record<PageSectionKey, "soft" | null> = {
   about: null,
-  services: "soft",
-  portfolio: null,
   policies: "soft",
+  services: null,
   policyPages: null,
-  reviews: "strong",
-  hours: null,
-  contact: "soft",
-  info: null,
+  reviews: "soft",
+  contact: null,
+  hours: "soft",
+  portfolio: null,
+  info: "soft",
   specialities: null,
-  keyInfo: "soft",
-  faq: null,
-  aftercare: "soft",
-  custom: null,
+  keyInfo: null,
+  faq: "soft",
+  aftercare: null,
   disclaimer: "soft",
+  custom: null,
 };
 
 export function PageSection({
@@ -611,8 +616,7 @@ export function PageSection({
     // 20pt side padding. Every other section is tinted, with fine rules along
     // its edges, so the page reads as bands; the content sits in an outlined box.
     const colours = stripeColours(palette.accent);
-    const tint = STRIPE_TINT[section];
-    const strip = tint === "strong" ? colours.strong : tint === "soft" ? colours.soft : null;
+    const strip = STRIPE_TINT[section] === "soft" ? colours.soft : null;
     return (
       <View
         style={[

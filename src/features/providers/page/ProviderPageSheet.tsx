@@ -524,6 +524,7 @@ export function ProviderPageSheet({
             style={[
               styles.styledServicesHeading,
               pageStyle.cards === "none" && [styles.styledServicesRule, { borderTopColor: pageInk.separator }],
+              pageStyle.cards === "stripes" && styles.stripesServicesHeading,
             ]}
           >
             <PageSectionHeading section="services" palette={sectionPalette} />
@@ -841,5 +842,11 @@ const styles = StyleSheet.create({
   styledServicesRule: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 22,
+  },
+  // Stripes: Services sits on the page between two strips, so its title
+  // gets the room above it the strips give theirs (and Portfolio has),
+  // instead of touching the foot of the Policies strip.
+  stripesServicesHeading: {
+    paddingTop: 18,
   },
 });

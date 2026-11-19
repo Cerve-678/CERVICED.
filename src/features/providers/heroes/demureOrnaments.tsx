@@ -102,8 +102,8 @@ export function BowGlyph({ width, accent, detailed = false }: { width: number; a
   );
 }
 
-/** Stripes' colours from the accent: `strong` for the hero's strip and the
- *  last section's, `soft` for the strips between, `line` for the fine rules
+/** Stripes' colours from the accent: `strong` for the hero's strip, `soft`
+ *  for the section strips under it (STRIPE_TINT), `line` for the fine rules
  *  along each strip's edges and round every box. */
 export function stripeColours(accent: string): { strong: string; soft: string; line: string } {
   return {
