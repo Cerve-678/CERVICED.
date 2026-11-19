@@ -179,19 +179,15 @@ export function PageSectionHeading({
     case "ticketPunch":
       return (
         <View {...a11y} accessible style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <View style={{ backgroundColor: accent, width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 6 }}>
-            <Text style={{ color: onAccentInk(accent).text, fontSize: 12, fontWeight: "800" }}>{SECTION_NUMBERS[section]}</Text>
-          </View>
-          <Text style={{ color: ink, fontSize: 16, fontWeight: "800", letterSpacing: 1.3, textTransform: "uppercase", flexShrink: 1 }}>{title}</Text>
-          <View style={{ height: 1, flex: 1, borderTopWidth: 1, borderStyle: "dashed", borderColor: withAlpha(accent, 0.6) }} />
+          <View style={{ width: 6, height: 20, borderRadius: 3, backgroundColor: accent }} />
+          <Text style={{ color: ink, fontSize: 16, fontWeight: "800", letterSpacing: 1.1, textTransform: "uppercase", flexShrink: 1 }}>{title}</Text>
         </View>
       );
     case "prismFacet":
       return (
         <View {...a11y} accessible style={{ flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 12 }}>
-          <Svg width={26} height={28} viewBox="0 0 26 28"><Path d="M1 8 19 0 26 15 8 28Z" fill={accent} /><Path d="M8 28 19 0 26 15Z" fill={withAlpha(ink, 0.24)} /></Svg>
           <Text style={{ color: ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.8, flexShrink: 1 }}>{title}</Text>
-          <View style={{ height: 3, flex: 1, backgroundColor: withAlpha(accent, 0.45), transform: [{ skewX: "-25deg" }] }} />
+          <View style={{ width: 28, height: 3, borderRadius: 2, backgroundColor: accent }} />
         </View>
       );
     case "bigLower":
@@ -695,7 +691,7 @@ function PageSectionSurface({
         {heading}
         {bare ? children : (
           <View style={{ backgroundColor: palette.cardBackground, borderRadius: ticket ? 12 : 4, borderWidth: 1, borderColor: withAlpha(palette.accent, ticket ? 0.45 : 0.3), overflow: "hidden", flexDirection: "row", shadowColor: palette.accent, shadowOpacity: ticket ? 0.08 : 0.18, shadowRadius: ticket ? 8 : 14, shadowOffset: { width: 0, height: 5 } }}>
-            {ticket ? <View style={{ width: 9, backgroundColor: palette.accent, borderRightWidth: 2, borderRightColor: palette.background, borderStyle: "dashed" }} /> : null}
+            {ticket ? <View style={{ width: 6, backgroundColor: palette.accent }} /> : null}
             <View style={{ flex: 1 }}>
               {!ticket ? <View pointerEvents="none" style={{ height: 9, flexDirection: "row" }}><View style={{ flex: 2, backgroundColor: palette.accent }} /><View style={{ flex: 1, backgroundColor: withAlpha(palette.accent, 0.36), transform: [{ skewX: "-30deg" }] }} /></View> : null}
               {children}
@@ -1301,10 +1297,9 @@ export function StyledPolicyList({
   const tf = customTextStyle(palette.pageStyle);
 
   if (layout === "ticketRules") {
-    return <View style={{ paddingLeft: 5 }}>
-      {rows.map((row, index) => <View key={row.label} style={{ flexDirection: "row", gap: 12, paddingVertical: 11, borderBottomWidth: index === rows.length - 1 ? 0 : 1, borderBottomColor: withAlpha(palette.accent, 0.35), borderStyle: "dashed" }}>
-        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: palette.accent, alignItems: "center", justifyContent: "center" }}><Text style={{ color: onAccentInk(palette.accent).text, fontWeight: "800", fontSize: 11 }}>{String(index + 1).padStart(2, "0")}</Text></View>
-        <View style={{ flex: 1 }}><Text style={{ color: ink.text, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>{row.label}</Text><Text style={{ color: ink.sub, marginTop: 3 }}>{row.value}</Text>{row.notes?.map(note => <Text key={note} style={{ color: ink.sub, marginTop: 3, fontSize: 12 }}>{note}</Text>)}{row.tag ? <Text style={{ color: palette.accent, marginTop: 4, fontSize: 11, fontWeight: "700" }}>{row.tag}</Text> : null}</View>
+    return <View style={{ gap: 14, paddingVertical: 4 }}>
+      {rows.map(row => <View key={row.label} style={{ paddingLeft: 10 }}>
+        <Text style={{ color: ink.text, fontSize: 12, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" }}>{row.label}</Text><Text style={{ color: ink.sub, marginTop: 3 }}>{row.value}</Text>{row.notes?.map(note => <Text key={note} style={{ color: ink.sub, marginTop: 3, fontSize: 12 }}>{note}</Text>)}{row.tag ? <Text style={{ color: palette.accent, marginTop: 4, fontSize: 11, fontWeight: "700" }}>{row.tag}</Text> : null}
       </View>)}
     </View>;
   }

@@ -126,7 +126,7 @@ const MINI_HEADING: Record<PageStyleKey, { lead?: string; text: string }> = {
   grid: { lead: '03', text: 'Services' },
   slate: { text: 'SERVICES' },
   halo: { text: 'SERVICES' },
-  ticket: { lead: '03', text: 'Services' },
+  ticket: { text: 'Services' },
   prism: { text: 'Services' },
   custom: { text: 'Services' },
   posy: { lead: 'the', text: 'Services' },
@@ -220,9 +220,9 @@ function MiniProfile({
           </View>
         );
       case 'ticketStrip':
-        return <View style={{ gap: 2 }}>{[0, 1].map(i => <View key={i} style={{ height: 13, flexDirection: 'row', borderRadius: 3, overflow: 'hidden', borderWidth: 0.5, borderColor: accent }}><View style={{ width: 12, backgroundColor: accent }} /><View style={{ flex: 1, backgroundColor: photoFill }} /></View>)}</View>;
+        return <View style={{ flexDirection: 'row', gap: 3 }}>{[0, 1].map(i => <View key={i} style={{ flex: 1, height: 27, borderRadius: 3, padding: 2, backgroundColor: cardColour }}><View style={{ flex: 1, borderRadius: 2, backgroundColor: photoFill }} /></View>)}</View>;
       case 'prismMosaic':
-        return <View style={{ flexDirection: 'row', gap: 3, height: 30 }}><View style={{ flex: 2, backgroundColor: photoFill, borderTopLeftRadius: 10, borderWidth: 3, borderColor: accent }} /><View style={{ flex: 1, backgroundColor: photoFill, borderBottomRightRadius: 10, borderWidth: 3, borderColor: blend(accent, '#FFFFFF', 0.55) }} /></View>;
+        return <View style={{ flexDirection: 'row', gap: 3, height: 30 }}>{[0, 1].map(i => <View key={i} style={{ flex: 1, padding: 2, borderRadius: 6, backgroundColor: i ? cardColour : accent }}><View style={{ flex: 1, borderRadius: 4, backgroundColor: photoFill }} /></View>)}</View>;
       case 'swipe':
         return (
           <View style={[mini.photoRow, mini.swipeRow]}>
@@ -382,9 +382,9 @@ function MiniProfile({
           </View>
         );
       case 'ticketPunch':
-        return <View style={mini.indexRow}><View style={{ backgroundColor: accent, paddingHorizontal: 4, borderRadius: 2 }}><Text style={{ color: '#FFFFFF', fontSize: 7, fontWeight: '800' }}>{heading.lead}</Text></View><Text style={[mini.indexTitle, { color: ink, textTransform: 'uppercase' }]}>{heading.text}</Text><View style={{ flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: accent }} /></View>;
+        return <View style={mini.indexRow}><View style={{ width: 3, height: 10, borderRadius: 2, backgroundColor: accent }} /><Text style={[mini.indexTitle, { color: ink, textTransform: 'uppercase' }]}>{heading.text}</Text></View>;
       case 'prismFacet':
-        return <View style={mini.indexRow}><View style={{ width: 9, height: 10, backgroundColor: accent, transform: [{ skewX: '-20deg' }] }} /><Text style={[mini.appBold, { color: ink }]}>{heading.text}</Text><View style={{ flex: 1, height: 2, backgroundColor: withAlpha(accent, 0.5) }} /></View>;
+        return <View style={mini.indexRow}><Text style={[mini.appBold, { color: ink }]}>{heading.text}</Text><View style={{ width: 12, height: 2, borderRadius: 1, backgroundColor: accent }} /></View>;
       case 'labelCaps':
         return <Text style={[mini.labelCaps, { color: ink }]}>{heading.text}</Text>;
       case 'quietCaps':
@@ -526,7 +526,7 @@ function MiniProfile({
       case 'stationery':
         return <View key={key} style={[mini.card, mini.paper, mini.stationeryCard, { borderColor: withAlpha(accent, 0.3) }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'ticketPass':
-        return <View key={key} style={[mini.card, { flexDirection: 'row', borderWidth: 1, borderColor: accent, borderRadius: 4, overflow: 'hidden', backgroundColor: cardColour }]}><View style={{ width: 6, backgroundColor: accent, borderRightWidth: 1, borderStyle: 'dashed', borderRightColor: sheet }} /><View style={[mini.bar, { backgroundColor: line, margin: 5, flex: 1 }]} /></View>;
+        return <View key={key} style={[mini.card, { flexDirection: 'row', borderWidth: 1, borderColor: accent, borderRadius: 4, overflow: 'hidden', backgroundColor: cardColour }]}><View style={{ width: 4, backgroundColor: accent }} /><View style={[mini.bar, { backgroundColor: line, margin: 5, flex: 1 }]} /></View>;
       case 'prismPlane':
         return <View key={key} style={[mini.card, { borderTopWidth: 5, borderTopColor: accent, borderRadius: 2, backgroundColor: blend(accent, cardColour, 0.9), shadowColor: accent, shadowOpacity: 0.25, shadowRadius: 4 }]}><View style={[mini.bar, { backgroundColor: line }]} /></View>;
       case 'sheer':

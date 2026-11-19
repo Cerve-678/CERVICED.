@@ -84,8 +84,8 @@ export type PageHeading =
   | 'bowSerif'   // a small satin bow over an italic serif title, centred (Bow)
   | 'appBold'    // a bold sans title on the left, like an app's section (Pure)
   | 'gridIndex' // the section's number in the accent, then a bold sans title (Grid)
-  | 'ticketPunch' // a numbered punch and perforated rule
-  | 'prismFacet' // an angular colour marker and strong title
+  | 'ticketPunch' // compact uppercase pass label
+  | 'prismFacet' // strong title with a subtle colour accent
   | 'custom';   // the title in the font the provider picked, as typed or in spaced caps (Custom)
 
 /** What a section sits on. */
@@ -133,7 +133,7 @@ export type PagePolicies =
   | 'divided'   // a two-up grid split by accent lines, each with its icon
   | 'stickers'  // two-up filled tiles, each tilted a little
   | 'definition' // a small caps label beside each value, between hairlines
-  | 'ticketRules' // numbered pass conditions on a dotted track
+  | 'ticketRules' // compact pass conditions without numbering
   | 'prismFacets' // staggered angular information panes
   | 'sealedNotes' // two-up folded notes, each closed with a wax seal of its first letter (Sealed)
   | 'outlined'   // two-up square hairline boxes, a fine icon over thin serif caps (Sheer)
@@ -304,8 +304,8 @@ export type PhotoLayout =
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
   | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir)
-  | 'ticketStrip' // numbered landscape frames like a strip of passes
-  | 'prismMosaic'; // offset image panes with angular corners
+  | 'ticketStrip' // quiet two-column photo gallery
+  | 'prismMosaic'; // soft colour-framed photo gallery
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
@@ -572,18 +572,18 @@ export const PAGE_STYLES: readonly PageStyle[] = [
   // Graphic concepts that still use only the provider's own name, categories
   // and colours, so the same layout works for every kind of service.
   {
-    key: 'ticket', name: 'Ticket', description: 'An appointment pass from cover to services, rules and numbered photo strip',
+    key: 'ticket', name: 'Ticket', description: 'A crisp appointment pass with clean sections and a quiet photo gallery',
     heading: 'ticketPunch', cards: 'ticketPass', policies: 'ticketRules', logo: 'rounded',
     hero: 'ticketHeader', aboutInHero: false,
-    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: true,
-    photoLayout: 'ticketStrip', divider: 'line', buttonShape: 'square', portfolioFirst: true,
+    heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
+    photoLayout: 'ticketStrip', buttonShape: 'square',
   },
   {
-    key: 'prism', name: 'Prism', description: 'A faceted page with layered sections, angular details and a colour framed mosaic',
+    key: 'prism', name: 'Prism', description: 'Layered colour planes with a clean, soft-framed photo gallery',
     heading: 'prismFacet', cards: 'prismPlane', policies: 'prismFacets', logo: 'sharp',
     hero: 'prismHeader', aboutInHero: false,
     heroPills: false, jumpBar: false, separateAboutAndPolicies: true, numberedServices: false,
-    photoLayout: 'prismMosaic', divider: 'dots', buttonShape: 'outline', portfolioFirst: true,
+    photoLayout: 'prismMosaic', divider: 'dots', buttonShape: 'outline',
   },
   // 2026-11-19: styles built from Custom's parts, each its own fixed mix
   // (owner picked all eight on https://claude.ai/artifact/3kCvU1EuLzUqpUaH9jBsCd).

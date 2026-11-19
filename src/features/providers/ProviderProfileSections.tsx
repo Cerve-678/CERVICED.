@@ -23,7 +23,6 @@ import { BulldogClip, CALLING_CARD_PAPER } from "./heroes/CallingCardHero";
 import {
   PageSection,
   PageSectionHeading,
-  onAccentInk,
   sectionInk,
   showsDividerAbove,
   type PageStylePalette,
@@ -486,19 +485,18 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
         ) : null}
       </View>
       {ticketStrip ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
-            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ height: 110, flexDirection: "row", borderRadius: 10, overflow: "hidden", backgroundColor: palette.cardBackground, borderWidth: 1, borderColor: palette.accent }}>
-              <View style={{ width: 43, backgroundColor: palette.accent, alignItems: "center", justifyContent: "center", borderRightWidth: 2, borderRightColor: palette.background, borderStyle: "dashed" }}><Text style={{ color: onAccentInk(palette.accent).text, fontSize: 14, fontWeight: "800" }}>{String(index + 1).padStart(2, "0")}</Text></View>
-              <Image source={{ uri: item.image_url }} style={{ flex: 1 }} contentFit="cover" transition={0} recyclingKey={item.id} />
+            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ width: "48.5%", height: 135, borderRadius: 8, overflow: "hidden", backgroundColor: palette.cardBackground, padding: 4 }}>
+              <Image source={{ uri: item.image_url }} style={{ flex: 1, borderRadius: 5 }} contentFit="cover" transition={0} recyclingKey={item.id} />
             </TouchableOpacity>
           ))}
         </View>
       ) : prismMosaic ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
-            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ width: index % 3 === 0 ? "62%" : "35%", height: index % 3 === 0 ? 150 : 110, padding: 5, backgroundColor: index % 2 ? palette.cardBackground : palette.accent, borderTopLeftRadius: index % 2 ? 30 : 2, borderBottomRightRadius: index % 2 ? 2 : 30, overflow: "hidden" }}>
-              <Image source={{ uri: item.image_url }} style={{ flex: 1, borderTopLeftRadius: index % 2 ? 24 : 0, borderBottomRightRadius: index % 2 ? 0 : 24 }} contentFit="cover" transition={0} recyclingKey={item.id} />
+            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ width: "48%", height: 150, padding: 4, backgroundColor: index % 2 ? palette.cardBackground : palette.accent, borderRadius: 16, overflow: "hidden" }}>
+              <Image source={{ uri: item.image_url }} style={{ flex: 1, borderRadius: 12 }} contentFit="cover" transition={0} recyclingKey={item.id} />
             </TouchableOpacity>
           ))}
         </View>
