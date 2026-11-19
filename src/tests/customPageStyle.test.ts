@@ -139,20 +139,19 @@ describe('Custom page style', () => {
   });
 });
 
-describe('Prism, kept in Custom (owner, 2026-11-19)', () => {
-  const prism = { ...DEFAULT_CUSTOM_CHOICES, layout: 'prism' as const, ...LAYOUT_PARTS.prism };
+describe('Prism\'s top, kept in Custom (owner, 2026-11-19: "just the hero from prism")', () => {
+  const withPrismTop = withPart(DEFAULT_CUSTOM_CHOICES, 'top', 'prism');
 
-  it('draws the Prism look from its own parts', () => {
-    expect(customPageStyle(prism)).toMatchObject({
-      hero: 'prismHeader', logo: 'sharp', cards: 'prismPlane', policies: 'prismFacets', photoLayout: 'prismMosaic',
-    });
-    expect(customPageStyle(prism).custom?.headingStyle).toBe('facet');
+  it('offers the Prism top and nothing else of Prism', () => {
+    expect(customPageStyle(withPrismTop)).toMatchObject({ hero: 'prismHeader', logo: 'sharp' });
+    expect(CUSTOM_LAYOUTS.map(look => look.key)).not.toContain('prism');
+    for (const part of CUSTOM_PARTS.filter(p => p.key !== 'top')) {
+      expect(part.options.map(o => o.name)).not.toEqual(expect.arrayContaining(['Colour Planes', 'Facet', 'Facets', 'Mosaic']));
+    }
   });
 
-  it('saves and reads back the Prism look and its Facet headings', () => {
-    expect(parseCustomChoices(encodeCustomChoices(prism))).toEqual(prism);
-    const mixed = withPart(prism, 'top', 'centred');
-    expect(parseCustomChoices(encodeCustomChoices(mixed))).toEqual(mixed);
+  it('saves and reads back the Prism top', () => {
+    expect(parseCustomChoices(encodeCustomChoices(withPrismTop))).toEqual(withPrismTop);
   });
 
   it('is no longer a fixed page style', () => {

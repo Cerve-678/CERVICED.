@@ -109,13 +109,11 @@ export type PageCards =
   | 'stripes' // each section on a full-width strip of colour, its content in a finely outlined box (Stripes)
   | 'bow'     // a solid card with round corners (Bow)
   | 'grouped' // a solid card with round corners and no shadow, like a phone's grouped settings rows (Pure)
-  | 'gridBox' // a square card in a fine ink outline, its heading inside (Grid)
-  | 'prismPlane'; // layered angular colour planes (Custom's Colour Planes)
+  | 'gridBox'; // a square card in a fine ink outline, its heading inside (Grid)
 
 /** How the policy rows are drawn. */
 export type PagePolicies =
   | 'rows'      // icon, label and value in a list (as it has always been)
-  | 'prismFacets' // staggered angular information panes (Custom's Facets)
   | 'boxes'     // two-up bordered boxes
   | 'discTiles' // two-up flat tiles, each with its icon in a filled disc
   | 'circles'   // two-up, each under an outlined circle icon
@@ -299,8 +297,7 @@ export type PhotoLayout =
   | 'portfolioWall' // three airy cover images with the middle print set higher
   | 'polaroids'  // three across as white-bordered prints, each tilted a little (Riviera)
   | 'feature'    // one big photo beside two small, then two more under them (Ledger)
-  | 'swipe'     // one row of tall photos that scrolls sideways (Muse, Noir)
-  | 'prismMosaic'; // soft colour-framed photo gallery (Custom's Mosaic)
+  | 'swipe';    // one row of tall photos that scrolls sideways (Muse, Noir)
 
 export type SectionDivider =
   | 'wave'  // a fine wavy line in the accent (Posy)
