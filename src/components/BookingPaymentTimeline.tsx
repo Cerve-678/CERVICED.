@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import { ProcessingLabel, StatusChip } from '../features/payments/PaymentsCardKit';
@@ -36,7 +37,7 @@ export default function BookingPaymentTimeline({ row, tips, scheduleSentence, on
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to payments" activeOpacity={0.7}
           onPress={() => { void Haptics.selectionAsync().catch(() => {}); onClose(); }}
           style={[st.back, { backgroundColor: C.card, borderColor: C.border }]}>
-          <Text style={[st.backText, { color: C.accentText }]}>Back</Text>
+          <Ionicons name="chevron-back" size={20} color={C.accentText} />
         </TouchableOpacity>
         <Text accessibilityRole="header" style={[st.headerTitle, { color: C.text }]}>Booking payment</Text>
       </View>
@@ -109,8 +110,7 @@ function Step({ step, last, nextDone }: { step: TimelineStep; last: boolean; nex
 const st = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 14 },
-  back: { minHeight: 44, paddingHorizontal: 16, borderRadius: 100, borderWidth: StyleSheet.hairlineWidth, justifyContent: 'center' },
-  backText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  back: { width: 40, height: 40, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 20, flex: 1 },
   card: { borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },

@@ -612,8 +612,8 @@ const styles = StyleSheet.create({
   plainRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 56 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   /** A little room between "Recent booking payments" and its first payment. */
-  headRowSpaced: { marginBottom: 8 },
-  sectionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
+  headRowSpaced: { marginBottom: 16 },
+  sectionTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 19 },
   listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 13 },
   rowRight: { alignItems: 'flex-end' },
   setupGrid: { flexDirection: 'row', gap: 8 },

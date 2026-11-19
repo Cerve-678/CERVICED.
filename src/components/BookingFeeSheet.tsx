@@ -5,6 +5,7 @@
 import React from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBusinessPalette } from '../features/business-details/BusinessDetailsKit';
 import BookingFeeCard from '../features/bookings/BookingFeeCard';
@@ -32,7 +33,7 @@ export default function BookingFeeSheet({ target, onClose }: { target: BookingFe
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to payments" activeOpacity={0.7}
           onPress={() => { void Haptics.selectionAsync().catch(() => {}); onClose(); }}
           style={[st.back, { backgroundColor: C.card, borderColor: C.border }]}>
-          <Text style={[st.backText, { color: C.accentText }]}>Back</Text>
+          <Ionicons name="chevron-back" size={20} color={C.accentText} />
         </TouchableOpacity>
         <Text accessibilityRole="header" style={[st.headerTitle, { color: C.text }]}>Late & no-show fee</Text>
       </View>
@@ -61,8 +62,7 @@ export default function BookingFeeSheet({ target, onClose }: { target: BookingFe
 const st = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 12 },
-  back: { minHeight: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  backText: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  back: { width: 40, height: 40, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17 },
   intro: { paddingHorizontal: 20, paddingTop: 8, gap: 2 },
   service: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
