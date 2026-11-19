@@ -16,7 +16,7 @@
 
 import type { PageCards, PageHero, PageLogoFrame, PagePolicies, PageStyle } from './pageStyles';
 
-export type CustomLayout = 'plain' | 'cards' | 'bigName' | 'banner' | 'soft' | 'bigBoxes' | 'prism';
+export type CustomLayout = 'plain' | 'cards' | 'bigName' | 'banner' | 'soft' | 'bigBoxes';
 
 export const CUSTOM_LAYOUTS: readonly { key: CustomLayout; name: string; description: string }[] = [
   { key: 'plain', name: 'Plain', description: 'Your logo and name, sections between fine lines' },
@@ -26,9 +26,6 @@ export const CUSTOM_LAYOUTS: readonly { key: CustomLayout; name: string; descrip
   // 2026-11-18 (owner: "add more to custom").
   { key: 'soft', name: 'Soft', description: 'Your logo and name, each section in a soft round card' },
   { key: 'bigBoxes', name: 'Bold Boxes', description: 'Your name large, sections in round outlined boxes' },
-  // 2026-11-19 (owner: "i like prism actually, add it to custom"): the Prism
-  // page style, kept as a look and parts here rather than a fixed style.
-  { key: 'prism', name: 'Prism', description: 'Angled colour planes round your name, a photo mosaic' },
 ];
 
 export interface CustomFont {
@@ -85,12 +82,12 @@ export const CUSTOM_TEXT_FONTS: readonly CustomFont[] = [
   { key: 'varela', name: 'Varela', fontFamily: 'VarelaRound_400Regular' },
 ];
 
-export type CustomHeadingStyle = 'typed' | 'caps' | 'numbered' | 'underlined' | 'script' | 'facet';
+export type CustomHeadingStyle = 'typed' | 'caps' | 'numbered' | 'underlined' | 'script';
 export type CustomTop = 'centred' | 'ringed' | 'side' | 'bigName' | 'cover' | 'arch' | 'polaroid' | 'calm' | 'prism';
-export type CustomSurface = 'open' | 'cards' | 'outlined' | 'roundBoxes' | 'soft' | 'paper' | 'planes';
-export type CustomPolicies = 'rows' | 'lines' | 'side' | 'boxes' | 'tiles' | 'discs' | 'notes' | 'open' | 'facets';
+export type CustomSurface = 'open' | 'cards' | 'outlined' | 'roundBoxes' | 'soft' | 'paper';
+export type CustomPolicies = 'rows' | 'lines' | 'side' | 'boxes' | 'tiles' | 'discs' | 'notes' | 'open';
 export type CustomServices = 'list' | 'numbered';
-export type CustomPhotos = 'plain' | 'rounded' | 'stamps' | 'pinned' | 'pressed' | 'newsprint' | 'mosaic';
+export type CustomPhotos = 'plain' | 'rounded' | 'stamps' | 'pinned' | 'pressed' | 'newsprint';
 
 /** One way a part of the page can look: what the provider sees, and the page switch it sets. */
 export interface CustomPartOption<K extends string> {
@@ -123,7 +120,6 @@ export const CUSTOM_SURFACES: readonly CustomPartOption<CustomSurface>[] = [
   { key: 'roundBoxes', name: 'Round Boxes', description: 'Dark outlines, big round corners' },
   { key: 'soft', name: 'Soft', description: 'Tinted cards, big round corners' },
   { key: 'paper', name: 'Paper', description: 'Cards lifted by a soft shadow' },
-  { key: 'planes', name: 'Colour Planes', description: 'Cards under an angled band of your colour' },
 ];
 
 export const CUSTOM_HEADING_STYLES: readonly CustomPartOption<CustomHeadingStyle>[] = [
@@ -132,7 +128,6 @@ export const CUSTOM_HEADING_STYLES: readonly CustomPartOption<CustomHeadingStyle
   { key: 'numbered', name: 'Numbered', description: '01, 02, 03 before each title' },
   { key: 'underlined', name: 'Underlined', description: 'A short bar of your colour' },
   { key: 'script', name: 'Script Word', description: 'A handwritten word over each title' },
-  { key: 'facet', name: 'Facet', description: 'A bold title, a short bar of your colour beside it' },
 ];
 
 export const CUSTOM_POLICY_LAYOUTS: readonly CustomPartOption<CustomPolicies>[] = [
@@ -144,7 +139,6 @@ export const CUSTOM_POLICY_LAYOUTS: readonly CustomPartOption<CustomPolicies>[] 
   { key: 'discs', name: 'Icons', description: 'Two across, each icon in a circle' },
   { key: 'notes', name: 'Notes', description: 'Centred, in soft italics' },
   { key: 'open', name: 'Tap to Open', description: 'Just the titles until tapped' },
-  { key: 'facets', name: 'Facets', description: 'Staggered panes of your colour' },
 ];
 
 export const CUSTOM_SERVICE_LAYOUTS: readonly CustomPartOption<CustomServices>[] = [
@@ -159,7 +153,6 @@ export const CUSTOM_PHOTO_LAYOUTS: readonly CustomPartOption<CustomPhotos>[] = [
   { key: 'pinned', name: 'Pinned', description: 'Prints held by a clip' },
   { key: 'pressed', name: 'Pressed', description: 'Pressed into the page like a print' },
   { key: 'newsprint', name: 'Newsprint', description: 'A fine frame and a dot screen' },
-  { key: 'mosaic', name: 'Mosaic', description: 'Two across in soft frames of your colours' },
 ];
 
 export type CustomPartKey = 'top' | 'surface' | 'headingStyle' | 'services' | 'photos' | 'policies';
@@ -206,7 +199,6 @@ export const LAYOUT_PARTS: Record<CustomLayout, CustomParts> = {
   banner: { top: 'ringed', surface: 'outlined', headingStyle: 'typed', policies: 'boxes', services: 'list', photos: 'plain' },
   soft: { top: 'centred', surface: 'soft', headingStyle: 'typed', policies: 'tiles', services: 'list', photos: 'rounded' },
   bigBoxes: { top: 'bigName', surface: 'roundBoxes', headingStyle: 'typed', policies: 'boxes', services: 'list', photos: 'plain' },
-  prism: { top: 'prism', surface: 'planes', headingStyle: 'facet', policies: 'facets', services: 'list', photos: 'mosaic' },
 };
 
 export const DEFAULT_CUSTOM_CHOICES: CustomChoices = { layout: 'plain', heading: 'prata', text: 'jura', ...LAYOUT_PARTS.plain };
@@ -293,7 +285,7 @@ function pick<K extends string>(options: readonly CustomPartOption<K>[], value: 
 
 /** The heading style's one-letter code. '0' and '1' are what "as typed" and
  *  "spaced caps" were saved as before there were more. */
-const HEADING_CODES: Record<CustomHeadingStyle, string> = { typed: '0', caps: '1', numbered: 'n', underlined: 'u', script: 's', facet: 'f' };
+const HEADING_CODES: Record<CustomHeadingStyle, string> = { typed: '0', caps: '1', numbered: 'n', underlined: 'u', script: 's' };
 
 /**
  * "plain~prata~jura~0" while the parts are still the look's own (so a page
@@ -344,11 +336,11 @@ const TOP_SWITCHES: Record<CustomTop, { hero: PageHero; logo: PageLogoFrame }> =
 };
 
 const SURFACE_CARDS: Record<CustomSurface, PageCards> = {
-  open: 'none', cards: 'flat', outlined: 'outline', roundBoxes: 'outlineRound', soft: 'soft', paper: 'paper', planes: 'prismPlane',
+  open: 'none', cards: 'flat', outlined: 'outline', roundBoxes: 'outlineRound', soft: 'soft', paper: 'paper',
 };
 
 const POLICY_LAYOUTS: Record<CustomPolicies, PagePolicies> = {
-  rows: 'rows', lines: 'hairline', side: 'definition', boxes: 'boxes', tiles: 'softTiles', discs: 'discTiles', notes: 'gentleNotes', open: 'accordion', facets: 'prismFacets',
+  rows: 'rows', lines: 'hairline', side: 'definition', boxes: 'boxes', tiles: 'softTiles', discs: 'discTiles', notes: 'gentleNotes', open: 'accordion',
 };
 
 const PHOTO_SWITCHES: Record<CustomPhotos, Partial<PageStyle>> = {
@@ -358,7 +350,6 @@ const PHOTO_SWITCHES: Record<CustomPhotos, Partial<PageStyle>> = {
   pinned: { clippedPhotos: true },
   pressed: { plateMarkPhotos: true },
   newsprint: { halftonePhotos: true },
-  mosaic: { photoLayout: 'prismMosaic' },
 };
 
 /** Tops that sit in the middle of the page, so the headings sit there with them on an open page. */

@@ -491,15 +491,6 @@ export function PageSectionHeading({
           </View>
         );
       }
-      if (picks.headingStyle === "facet") {
-        // Prism's facet: the title bold, a short bar of their colour beside it.
-        return (
-          <View {...a11y} accessible style={[headingStyles.custom, headingStyles.customRow, centred && headingStyles.centerRow, legend]}>
-            {text()}
-            <View style={[headingStyles.facetBar, { backgroundColor: accent }]} />
-          </View>
-        );
-      }
       if (picks.headingStyle === "script") {
         // The lead-in ("Meet", "The") handwritten in the accent, the rest in their font.
         const [lead, rest] = pair;
@@ -664,22 +655,6 @@ function PageSectionSurface({
       <PageSectionHeading section={section} palette={palette} title={title} />
     </HeadingLine>
   );
-
-  if (pageStyle.cards === "prismPlane") {
-    // Custom's Colour Planes: each section on a card under a band of the
-    // accent that breaks off at an angle.
-    return (
-      <View style={[surfaceStyles.block, style]}>
-        {heading}
-        {bare ? children : (
-          <View style={{ backgroundColor: palette.cardBackground, borderRadius: 4, borderWidth: 1, borderColor: withAlpha(palette.accent, 0.3), overflow: "hidden", shadowColor: palette.accent, shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 5 } }}>
-            <View pointerEvents="none" style={{ height: 9, flexDirection: "row" }}><View style={{ flex: 2, backgroundColor: palette.accent }} /><View style={{ flex: 1, backgroundColor: withAlpha(palette.accent, 0.36), transform: [{ skewX: "-30deg" }] }} /></View>
-            {children}
-          </View>
-        )}
-      </View>
-    );
-  }
 
   if (pageStyle.cards === "stripes") {
     // Stripes: the section on a full-width strip, bled out of the sheet's
@@ -963,8 +938,6 @@ export function serviceCardSurface(
 ): ViewStyle | null {
   const flat = { borderWidth: 0, shadowOpacity: 0 } as const;
   switch (style.cards) {
-    case "prismPlane":
-      return { backgroundColor: blend(colours.accent, colours.card, 0.9), borderWidth: 1, borderTopWidth: 6, borderColor: withAlpha(colours.accent, 0.38), borderTopColor: colours.accent, borderRadius: 4, shadowColor: colours.accent, shadowOpacity: 0.18, shadowRadius: 12 };
     case "none":
     case "open":
       return {
@@ -1225,8 +1198,7 @@ const bandStyles = StyleSheet.create({
 export function policiesBringOwnSurface(style: PageStyle | undefined): boolean {
   const layout = style?.policies;
   return (
-    layout === "prismFacets"
-    || layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
+    layout === "boxes" || layout === "discTiles" || layout === "bubbles" || layout === "band"
     || layout === "tiles" || layout === "divided" || layout === "stickers"
     || layout === "outlined" || layout === "recessed" || layout === "ribbon" || layout === "accordion" || layout === "columns"
     || layout === "membership" || layout === "loungeGrid" || layout === "ribbonBand"
@@ -1253,15 +1225,6 @@ export function StyledPolicyList({
   const page = sheetInk(palette.background);
   // Custom's text font, on the policy layouts Custom uses.
   const tf = customTextStyle(palette.pageStyle);
-
-  if (layout === "prismFacets") {
-    return <View style={{ gap: 9 }}>
-      {rows.map((row, index) => <View key={row.label} style={{ flexDirection: "row", borderRadius: 3, overflow: "hidden", backgroundColor: blend(palette.accent, palette.cardBackground, index % 2 ? 0.92 : 0.82), marginLeft: index % 2 ? 16 : 0, marginRight: index % 2 ? 0 : 16 }}>
-        <View style={{ width: 10, backgroundColor: index % 2 ? withAlpha(palette.accent, 0.55) : palette.accent, transform: [{ skewX: "-18deg" }] }} />
-        <View style={{ flex: 1, padding: 14 }}><Text style={{ color: palette.text, fontSize: 13, fontWeight: "800", letterSpacing: 0.6 }}>{row.label}</Text><Text style={{ color: palette.sub, marginTop: 4 }}>{row.value}</Text>{row.notes?.map(note => <Text key={note} style={{ color: palette.sub, marginTop: 3, fontSize: 12 }}>{note}</Text>)}{row.tag ? <Text style={{ color: palette.accent, marginTop: 5, fontWeight: "700", fontSize: 11 }}>{row.tag}</Text> : null}</View>
-      </View>)}
-    </View>;
-  }
 
   if (layout === "numerals") {
     // Heritage's House Rules (I, II…) and Apothecary's "Before your visit" (i., ii.).
@@ -1880,7 +1843,6 @@ const headingStyles = StyleSheet.create({
   customRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   customNumber: { fontFamily: "Jura-VariableFont_wght", fontWeight: "700", fontSize: 13, letterSpacing: 1 },
   customRule: { width: 22, height: 1 },
-  facetBar: { width: 28, height: 3, borderRadius: 2 },
   customBar: { width: 30, height: 3, borderRadius: 2, marginTop: 8 },
   customStackCentred: { alignItems: "center" },
   customScript: { fontFamily: "PinyonScript_400Regular", fontSize: 28, lineHeight: 40, paddingHorizontal: 6, marginBottom: -6 },

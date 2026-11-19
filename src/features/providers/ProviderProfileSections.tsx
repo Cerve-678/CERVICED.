@@ -444,8 +444,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
   const portfolioWall = palette.pageStyle?.photoLayout === "portfolioWall";
   // Muse: one row of tall photos that scrolls sideways, every photo in it.
   const swipe = palette.pageStyle?.photoLayout === "swipe";
-  // Custom's Mosaic: two across, each in a soft frame, the accent and the card colour in turn.
-  const prismMosaic = palette.pageStyle?.photoLayout === "prismMosaic";
   const featureTile = (item: DbPortfolioItem, index: number, style: object) => (
     <TouchableOpacity
       key={item.id}
@@ -499,14 +497,6 @@ export const ProviderPortfolioSection = React.memo(function ProviderPortfolioSec
               style={[styles.portfolioWallTile, index === 1 && styles.portfolioWallMiddle, { backgroundColor: palette.cardBackground }]}
             >
               <Image source={{ uri: item.image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} recyclingKey={item.id} />
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : prismMosaic ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          {items.slice(0, INLINE_PORTFOLIO_LIMIT).map((item, index) => (
-            <TouchableOpacity key={item.id} activeOpacity={0.88} onPress={() => onOpenImage(images, index)} disabled={!interactiveImages} accessibilityRole="imagebutton" accessibilityLabel={item.caption || `Portfolio photo ${index + 1}`} style={{ width: "48%", height: 150, padding: 4, backgroundColor: index % 2 ? palette.cardBackground : palette.accent, borderRadius: 16, overflow: "hidden" }}>
-              <Image source={{ uri: item.image_url }} style={{ flex: 1, borderRadius: 12 }} contentFit="cover" transition={0} recyclingKey={item.id} />
             </TouchableOpacity>
           ))}
         </View>
