@@ -54,6 +54,7 @@ const PATTERN_ALPHA: Record<PagePatternKey, { pale: number; dark: number }> = {
   gingham: { pale: 0.06, dark: 0.08 },
   glow: { pale: 0.16, dark: 0.22 },
   dots: { pale: 0.22, dark: 0.3 },
+  lined: { pale: 0.12, dark: 0.14 },
 };
 
 /**
@@ -84,6 +85,11 @@ export function PagePattern({
             <Pattern id={id} patternUnits="userSpaceOnUse" width={22} height={22}>
               <Rect x={0} y={0} width={11} height={22} fill={ink} />
               <Rect x={0} y={0} width={22} height={11} fill={ink} />
+            </Pattern>
+          ) : pattern === "lined" ? (
+            // A rule every 30pt, the full width of the page.
+            <Pattern id={id} patternUnits="userSpaceOnUse" width={30} height={30}>
+              <Rect x={0} y={29} width={30} height={1} fill={ink} />
             </Pattern>
           ) : pattern === "dots" ? (
             <Pattern id={id} patternUnits="userSpaceOnUse" width={16} height={16}>

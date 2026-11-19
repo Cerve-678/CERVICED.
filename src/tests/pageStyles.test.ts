@@ -60,14 +60,14 @@ describe('page style in the stored theme key', () => {
 });
 
 describe('page styles', () => {
-  it('has the thirty-seven picked styles plus Classic, each once', () => {
+  it('has the thirty-eight picked styles plus Classic, each once', () => {
     expect(PAGE_STYLES.map(s => s.key)).toEqual([
       'classic', 'cover', 'arch', 'framed', 'scrapbook', 'spa', 'glossy',
       'editorial', 'heritage', 'duet', 'groovy', 'gallery', 'apothecary',
       'snapshot', 'signature', 'quiet', 'sealed', 'sheer', 'embossed', 'callingCard', 'boutique', 'gazette', 'novel',
       'studio', 'lounge', 'softFocus', 'hush', 'stripes', 'bow',
       'pure', 'grid',
-      'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic',
+      'posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic', 'ledger',
     ]);
   });
 
@@ -546,5 +546,30 @@ describe('Clinic', () => {
     expect(clinic.custom).toMatchObject({ headingFont: 'LeagueSpartan-ExtraBold', textFont: 'Jura-VariableFont_wght', headingStyle: 'numbered' });
     expect(heroUsesBrandFont(clinic)).toBe(false);
     expect(clinic.divider).toBeUndefined();
+  });
+});
+
+describe('Ledger', () => {
+  const ledger = getPageStyle('ledger');
+
+  it('has its engraved capitals, paper cards, a printed menu, a feature grid, square buttons and a ruled page', () => {
+    expect(ledger).toMatchObject({
+      hero: 'stacked', cards: 'paper', policies: 'hairline',
+      serviceLayout: 'menu', photoLayout: 'feature', divider: 'line', buttonShape: 'square', pagePattern: 'lined',
+    });
+    expect(ledger.heroNameFont).toMatchObject({ fontFamily: 'LibreCaslonDisplay-Regular', transform: 'uppercase' });
+    expect(ledger.custom).toMatchObject({ headingFont: 'Oswald-Medium', textFont: 'OldStandardTT-Regular', headingStyle: 'caps' });
+    expect(heroUsesBrandFont(ledger)).toBe(false);
+  });
+
+  it('gives each of the eight parts styles a different mix of parts', () => {
+    const keys = ['posy', 'riviera', 'noir', 'muse', 'retreat', 'bonbon', 'clinic', 'ledger'];
+    const mixes = keys.map(key => {
+      const s = getPageStyle(key);
+      return [s.hero, s.heroNameFont?.fontFamily, s.cards, s.custom?.headingStyle, s.serviceLayout, s.photoLayout, s.divider, s.buttonShape, s.pagePattern].join('|');
+    });
+    expect(new Set(mixes).size).toBe(keys.length);
+    // Each has its own pair of heading and text fonts.
+    expect(new Set(keys.map(key => `${getPageStyle(key).custom?.headingFont}/${getPageStyle(key).custom?.textFont}`)).size).toBe(keys.length);
   });
 });
