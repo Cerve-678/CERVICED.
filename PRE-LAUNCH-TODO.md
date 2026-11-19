@@ -1476,3 +1476,56 @@ The fix:
 
 Parked by the user on 2026-11-18: "put it in to do". Needs a migration (check
 `supabase/MIGRATION_OWNER.md`) and a forced-rollback dry run before applying.
+
+## 34. To do — make the waitlist match the user's design (2026-11-19)
+
+The user says the waitlist that's built isn't the one they designed. The
+design board is the In-App Waitlist artifact:
+https://claude.ai/artifact/Nt2QjLCdj5etrvJ93zaTyh
+
+**Client side (the user's words, 2026-11-18):** "I am supposed to have a tick
+in the provider's page, it's not supposed to be in Bookings."
+
+What's built today (#474):
+
+- On the provider's page, a waitlisted service shows a "2nd in line ✕" chip
+  (✕ leaves the waitlist), or "Held for you" when a slot is being held. Since
+  #663 it is drawn in `src/features/providers/page/ProviderPageServices.tsx`;
+  the screen only passes `waitlistPlaces`, `onLeaveWaitlist`,
+  `onJoinWaitlist` and `onOpenHeldPlace`.
+- The client's Bookings tab has a "WAITING FOR" section of place cards
+  (`src/features/bookings/WaitlistPlaceCard.tsx`).
+
+On 2026-11-10 the user picked idea B, "Waiting lives in Bookings", from that
+artifact, which is why the Bookings section exists. No mockup on the board
+shows a tick on the provider page. So the request may reverse that pick.
+**Ask before building:**
+
+1. Is it only a tick ("✓ On the waitlist") on the service, with the Bookings
+   section kept? Or does the waitlist come out of Bookings completely, so the
+   provider page is the only place?
+2. If it leaves Bookings: where does a client see a slot being held for
+   them, and pay for it? Today that's the "Held for you" card in Bookings plus
+   the waitlist alert.
+3. How does a client leave the waitlist, if the ✕ is replaced by a tick?
+
+Offer a side-by-side mockup (light and dark) built from the current code,
+before writing any code.
+
+**Provider side drifts from design B too** (provider waitlist cards on the To
+Do tab, `ProviderBookingHistoryScreen.tsx`):
+
+- no countdown bar while a slot is held for someone;
+- the button says "Leave it open" where the design says "Open to everyone";
+- no next person's name ("Offer it to Jo");
+- no dates under the client's name.
+
+Fix these after the client side is settled, so both sides come from one
+pass over the same board.
+
+Context: the provider is told when someone joins (#636, "Mini Manicure ·
+3rd in line" / "Faith joined your waitlist."). Any wording change on the
+client side should stay consistent with that alert.
+
+Parked by the user on 2026-11-19: "put waitlist stuff in to do with artifact
+and all". No migration expected for the client tick alone.
